@@ -78,16 +78,10 @@ class Data:
     @property
     def SortedTrueEnergyMask(self) -> ak.Array:
         """ Returns index of shower pairs sorted by true energy (highest first).
-
-        Args:
-            primary (bool): sort index of primary pi0 decay photons (particle gun MC)
-
         Returns:
             ak.Array: sorted indices of true photons
         """
-        mask = self.trueParticles.pdg == 22
-        mask = np.logical_and(mask, self.trueParticles.mother == 1)
-        return ak.argsort(self.trueParticles.energy[mask], ascending=True)
+        return ak.argsort(self.trueParticles.energy[self.trueParticles.truePhotonMask], ascending=True)
 
     @timer
     def MCMatching(self, cut=0.25, applyFilters : bool = True, returnCopy : bool = False):
@@ -201,6 +195,8 @@ class Data:
             self.trueParticles.Filter(true_filters, returnCopy)
             self.recoParticles.Filter(reco_filters, returnCopy)
             GenericFilter(self, reco_filters) #? should true_filters also be applied?
+            self.trueParticles.events = self
+            self.recoParticles.events = self
         else:
             filtered = Data()
             filtered.eventNum = self.eventNum
@@ -244,12 +240,76 @@ class TrueParticleData:
             self.endPos = ak.zip({"x" : self.events.io.Get("g4_endX"),
                                   "y" : self.events.io.Get("g4_endY"),
                                   "z" : self.events.io.Get("g4_endZ")})
+            self.pi0_MC = ak.any(np.logical_and(self.number == 1, self.pdg == 111)) # check if we are looking at pure pi0 MC or beam MC
+
+    @property
+    def PrimaryPi0Mask(self):
+        if self.pi0_MC:
+            return np.logical_and(self.number == 1, self.pdg == 111)
+        else:
+            # assume we have beam MC
+            # get pi0s produced from beam interaction
+            return np.logical_and(self.mother == 1, self.pdg == 111)
 
     @property
     def truePhotonMask(self):
-        photons = self.mother == 1 # get only primary daughters
-        photons = np.logical_and(photons, self.pdg == 22)
+        if self.pi0_MC:
+            photons = self.mother == 1 # get only primary daughters
+            photons = np.logical_and(photons, self.pdg == 22)
+        else:
+            # assume we have beam MC, with potentially more than 1 pi0
+            primary_pi0 = self.PrimaryPi0Mask
+            primary_pi0_num = self.number[primary_pi0] # get particle number of each pi0
+            n = ak.max(ak.num(primary_pi0_num)) # get the largest number of primary pi0s per event
+            primary_pi0_num = ak.pad_none(primary_pi0_num, n) # pad empty elements with None so we can do index slicing
+            
+            #* loop through slices of pi0s per event, and get all particles which are their daughters
+            null = self.number == -1 # never should be negative so all values are false
+            primary_daughters = self.mother == primary_pi0_num[:, 0]
+            primary_daughters = ak.where(ak.is_none(primary_daughters), null, primary_daughters) # check none since boolean logic ignores None values
+            
+            i = 1
+            while i < n:
+                next_primaries = self.mother == primary_pi0_num[:, i]
+                next_primaries = ak.where(ak.is_none(next_primaries), null, next_primaries)
+                primary_daughters = np.logical_or(primary_daughters, next_primaries)
+                i += 1
+            photons = np.logical_and(primary_daughters, self.pdg == 22) # only want photons
         return photons
+
+    def CalculatePhotonPairProperties(self):
+        """ Calculate true shower pair quantities.
+        Args:
+            events (Master.Event): events to process
+
+        Returns:
+            tuple of ak.Array: calculated quantities
+        """
+        mask_pi0 = self.PrimaryPi0Mask
+        if ak.all(ak.num(mask_pi0[mask_pi0]) <= 1) == False:
+            raise ValueError("function currently only works for samples with 1 pi0 per event.")
+        photons = self.truePhotonMask
+        sortEnergy = self.events.SortedTrueEnergyMask
+        
+        #* compute start momentum of dauhters
+        p_daughter = self.momentum[photons]
+        sum_p = ak.sum(p_daughter, axis=1)
+        sum_p = vector.magntiude(sum_p)
+        p_daughter_mag = vector.magntiude(p_daughter)
+        p_daughter_mag = p_daughter_mag[sortEnergy]
+
+        #* compute true opening angle
+        angle = np.arccos(vector.dot(p_daughter[:, 1:], p_daughter[:, :-1]) / (p_daughter_mag[:, 1:] * p_daughter_mag[:, :-1]))
+
+        #* compute invariant mass
+        e_daughter = self.energy[photons]
+        inv_mass = (2 * e_daughter[:, 1:] * e_daughter[:, :-1] * (1 - np.cos(angle)))**0.5
+
+        #* pi0 momentum
+        p_pi0 = self.momentum[mask_pi0]
+        p_pi0 = vector.magntiude(p_pi0)
+        return inv_mass, angle, p_daughter_mag[:, 1:], p_daughter_mag[:, :-1], p_pi0
+
 
 
     def Filter(self, filters : list, returnCopy : bool = True):
@@ -406,40 +466,31 @@ def Pi0MCMask(events : Data, daughters : int = None):
     valid = np.logical_and(r_mask, t_mask) # events which have 2 reco daughters and correct pi0 decay
     return valid
 
-@timer
-def MCTruth(events : Data):
-    #? move functionality into trueParticleData class and have each value as an @property?
-    """ Calculate true shower pair quantities.
+
+def BeamMCFilter(events : Data, n_pi0 : int = 1):
+    """ Filters BeamMC data to get events with only 1 pi0 which originates from the beam particle interaction.
 
     Args:
-        events (Master.Event): events to process
+        events (Data): events to filter
 
     Returns:
-        tuple of ak.Array: calculated quantities
+        Data: selected events
     """
-    #* get the primary pi0
-    mask_pi0 = np.logical_and(events.trueParticles.number == 1, events.trueParticles.pdg == 111)
-    photons = events.trueParticles.truePhotonMask
-    sortEnergy = events.SortedTrueEnergyMask
+    #* remove events with no truth info aka beam filter
+    empty = ak.num(events.trueParticles.number) > 0 
+    filtered = events.Filter([empty], [empty])
 
-    #* compute start momentum of dauhters
-    p_daughter = events.trueParticles.momentum[photons]
-    sum_p = ak.sum(p_daughter, axis=1)
-    sum_p = vector.magntiude(sum_p)
-    p_daughter_mag = vector.magntiude(p_daughter)
-    p_daughter_mag = p_daughter_mag[sortEnergy]
+    #* only look at events with 1 primary pi0
+    pi0 = filtered.trueParticles.PrimaryPi0Mask
+    single_primary_pi0 = ak.num(pi0[pi0]) == n_pi0 # only look at events with 1 pi0
+    filtered.Filter([single_primary_pi0], [single_primary_pi0], False)
 
-    #* compute true opening angle
-    angle = np.arccos(vector.dot(p_daughter[:, 1:], p_daughter[:, :-1]) / (p_daughter_mag[:, 1:] * p_daughter_mag[:, :-1]))
-
-    #* compute invariant mass
-    e_daughter = events.trueParticles.energy[photons]
-    inv_mass = (2 * e_daughter[:, 1:] * e_daughter[:, :-1] * (1 - np.cos(angle)))**0.5
-
-    #* pi0 momentum
-    p_pi0 = events.trueParticles.momentum[mask_pi0]
-    p_pi0 = vector.magntiude(p_pi0)
-    return inv_mass, angle, p_daughter_mag[:, 1:], p_daughter_mag[:, :-1], p_pi0
+    #* remove true particles which aren't primaries
+    primary_pi0 = filtered.trueParticles.PrimaryPi0Mask
+    primary_daughter = filtered.trueParticles.truePhotonMask # this is fine so long as we only care about pi0->gamma gamma
+    primaries = np.logical_or(primary_pi0, primary_daughter)
+    filtered.Filter([], [primaries], False)
+    return filtered
 
 @timer
 def RecoQuantities(events : Data):
@@ -523,7 +574,7 @@ def CalculateQuantities(events : Data, names : str):
     Returns:
         tuple of np.arrays: quantities to plot
     """
-    mct = MCTruth(events)
+    mct = events.trueParticles.CalculatePhotonPairProperties()
     rmc = RecoQuantities(events)
 
     # keep track of events with no shower pairs

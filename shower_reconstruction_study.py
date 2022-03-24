@@ -161,7 +161,7 @@ def main():
     events.ApplyBeamFilter() # apply beam filter if possible
     
     if save is True: os.makedirs(outDir, exist_ok=True)
-    Plots.PlotHist(ak.count(events.recoParticles.nHits, -1), bins, "Number of particle flow objects per event")
+    Plots.PlotBar(ak.count(events.recoParticles.nHits, -1), xlabel="Number of particle flow objects per event")
     if save is True: Plots.Save(outDir + "n_objects")
     
     events_2_shower = SelectSample(events, 2, False)
