@@ -6,6 +6,7 @@ Author: Shyam Bhuller
 Description: Module containing core components of analysis code. 
 """
 
+from abc import ABC, abstractmethod
 import warnings
 import uproot
 import awkward as ak
@@ -34,7 +35,7 @@ def timer(func):
     return wrapper_function
 
 
-def GenericFilter(particleData, filters):
+def __GenericFilter__(particleData, filters):
     for f in filters:
             for var in vars(particleData):
                 if hasattr(getattr(particleData, var), "__getitem__"):
@@ -66,7 +67,7 @@ class IO:
 
 
 class Data:
-    def __init__(self, _filename : str = None) -> None:
+    def __init__(self, _filename : str = None, includeBackTrackedMC : bool = False) -> None:
         self.filename = _filename
         if self.filename != None:
             self.io = IO(self.filename)
@@ -74,6 +75,8 @@ class Data:
             self.subRun = self.io.Get("SubRun")
             self.trueParticles = TrueParticleData(self)
             self.recoParticles = RecoParticleData(self)
+            if includeBackTrackedMC is True:
+                self.trueParticlesBT = TrueParticleDataBT(self)
 
     @property
     def SortedTrueEnergyMask(self) -> ak.Array:
@@ -194,7 +197,7 @@ class Data:
         if returnCopy is False:
             self.trueParticles.Filter(true_filters, returnCopy)
             self.recoParticles.Filter(reco_filters, returnCopy)
-            GenericFilter(self, reco_filters) #? should true_filters also be applied?
+            __GenericFilter__(self, reco_filters) #? should true_filters also be applied?
             self.trueParticles.events = self
             self.recoParticles.events = self
         else:
@@ -203,7 +206,9 @@ class Data:
             filtered.subRun = self.subRun
             filtered.trueParticles = self.trueParticles.Filter(true_filters)
             filtered.recoParticles = self.recoParticles.Filter(reco_filters)
-            GenericFilter(filtered, reco_filters) #? should true_filters also be applied?
+            filtered.recoParticles.events = filtered
+            filtered.trueParticles.events = filtered
+            __GenericFilter__(filtered, reco_filters) #? should true_filters also be applied?
             return filtered
 
 
@@ -222,9 +227,36 @@ class Data:
         self.Filter([hasBeam, particle_mask[hasBeam]], [hasBeam], returnCopy=False) # filter data
 
 
-class TrueParticleData:
+class ParticleData(ABC):
+    @abstractmethod
     def __init__(self, events : Data) -> None:
-        self.events = events # parent of TrueParticles
+        self.events = events # keep reference of parent class
+        pass
+
+
+    def Filter(self, filters : list, returnCopy : bool = True):
+        """Filter reconstructed data.
+
+        Args:
+            filters (list): list of filters to apply to particle data.
+
+        Returns:
+            subClass(ParticleData): filtered data.
+        """
+        if returnCopy is False:
+            __GenericFilter__(self, filters)
+        else:
+            subclass = globals()[type(self).__name__] # get the class which is of type ParticleData
+            filtered = subclass(Data()) # create a new instance of the class
+            for var in vars(self):
+                setattr(filtered, var, getattr(self, var))
+            __GenericFilter__(filtered, filters)
+            return filtered
+
+
+class TrueParticleData(ParticleData):
+    def __init__(self, events : Data) -> None:
+        super().__init__(events)
         if hasattr(self.events, "io"):
             self.number = self.events.io.Get("g4_num")
             self.mother = self.events.io.Get("g4_mother")
@@ -311,30 +343,9 @@ class TrueParticleData:
         return inv_mass, angle, p_daughter_mag[:, 1:], p_daughter_mag[:, :-1], p_pi0
 
 
-
-    def Filter(self, filters : list, returnCopy : bool = True):
-        """Filter true particle data.
-
-        Args:
-            filters (list): list of filters to apply to true data.
-
-        Returns:
-            TrueParticles: filtered data.
-        """
-        if returnCopy is False:
-            GenericFilter(self, filters)
-        else:
-            filtered = TrueParticleData(Data())
-            for var in vars(self):
-                setattr(filtered, var, getattr(self, var))
-            GenericFilter(filtered, filters)
-            return filtered
-
-
-class RecoParticleData:
+class RecoParticleData(ParticleData):
     def __init__(self, events : Data) -> None:
-        self.events = events # parent of RecoParticles
-        print(events.filename)
+        super().__init__(events)
         if hasattr(self.events, "io"):
             self.beam_number = self.events.io.Get("beamNum")
             self.number = self.events.io.Get("reco_PFP_ID")
@@ -360,23 +371,52 @@ class RecoParticleData:
         return mom
 
 
-    def Filter(self, filters : list, returnCopy : bool = True):
-        """Filter reconstructed data.
-
-        Args:
-            filters (list): list of filters to apply to reconstructed data.
+    def CalculateShowerPairQuantities(self):
+        #? move functionality into recoParticleData class and have each value as an @property?
+        """ Calculate reconstructed shower pair quantities.
 
         Returns:
-            RecoParticles: filtered data.
+            tuple of ak.Array: calculated quantities + array which masks null shower pairs
         """
-        if returnCopy is False:
-            GenericFilter(self, filters)
-        else:
-            filtered = RecoParticleData(Data())
-            for var in vars(self):
-                setattr(filtered, var, getattr(self, var))
-            GenericFilter(filtered, filters)
-            return filtered
+        sortEnergy = self.events.SortedTrueEnergyMask
+        sortedPairs = ak.unflatten(self.energy[sortEnergy], 1, 0)
+        leading = sortedPairs[:, :, 1:]
+        secondary = sortedPairs[:, :, :-1]
+
+        #* opening angle
+        direction_pair = ak.unflatten(self.direction[sortEnergy], 1, 0)
+        direction_pair_mag = vector.magntiude(direction_pair)
+        angle = np.arccos(vector.dot(direction_pair[:, :, 1:], direction_pair[:, :, :-1]) / (direction_pair_mag[:, :, 1:] * direction_pair_mag[:, :, :-1]))
+
+        #* Invariant Mass
+        inv_mass = (2 * leading * secondary * (1 - np.cos(angle)))**0.5
+
+        #* pi0 momentum
+        pi0_momentum = vector.magntiude(ak.sum(self.momentum, axis=-1))/1000
+
+        null_dir = np.logical_or(direction_pair[:, :, 1:].x == -999, direction_pair[:, :, :-1].x == -999) # mask shower pairs with invalid direction vectors
+        null = np.logical_or(leading < 0, secondary < 0) # mask of shower pairs with invalid energy
+        
+        #* filter null data
+        pi0_momentum = np.where(null_dir, -999, pi0_momentum)
+        pi0_momentum = np.where(null, -999, pi0_momentum)
+
+        leading = leading/1000
+        secondary = secondary/1000
+
+        leading = np.where(null, -999, leading)
+        leading = np.where(null_dir, -999, leading)
+        secondary = np.where(null, -999, secondary)
+        secondary = np.where(null_dir, -999, secondary)
+
+        angle = np.where(null, -999, angle)
+        angle = np.where(null_dir, -999, angle)
+
+        inv_mass = inv_mass/1000
+        inv_mass = np.where(null, -999, inv_mass)
+        inv_mass = np.where(null_dir, -999, inv_mass)
+
+        return inv_mass, angle, leading, secondary, pi0_momentum
 
     @timer
     def GetPairValues(pairs, value) -> ak.Array:
@@ -437,8 +477,63 @@ class RecoParticleData:
         return ak.to_list(pairs)
 
 
+class TrueParticleDataBT(ParticleData):
+    def __init__(self, events: Data) -> None:
+        super().__init__(events)
+        if hasattr(self.events, "io"):
+            self.pdg = events.io.Get("reco_daughter_PFP_true_byHits_pdg")
+            self.startPos = ak.zip({"x" : events.io.Get("reco_daughter_PFP_true_byHits_startX"),
+                            "y" : events.io.Get("reco_daughter_PFP_true_byHits_startY"),
+                            "z" : events.io.Get("reco_daughter_PFP_true_byHits_startZ")})
+            self.endPos = ak.zip({"x" : events.io.Get("reco_daughter_PFP_true_byHits_endX"),
+                            "y" : events.io.Get("reco_daughter_PFP_true_byHits_endY"),
+                            "z" : events.io.Get("reco_daughter_PFP_true_byHits_endZ")})
+            self.momentum = ak.zip({"x" : events.io.Get("reco_daughter_PFP_true_byHits_pX"),
+                            "y" : events.io.Get("reco_daughter_PFP_true_byHits_pY"),
+                            "z" : events.io.Get("reco_daughter_PFP_true_byHits_pZ")})
+            self.direction = vector.normalize(self.momentum)
+            self.energy = events.io.Get("reco_daughter_PFP_true_byHits_startE")
+
+
+
+def NPFPMask(events : Data, daughters : int = None):
+    """ Create a boolean mask of events with a specific number of events.
+
+    Args:
+        events (Data): events to filter
+        daughters (int, optional): keep events with specific number of daughters. Defaults to None.
+
+    Returns:
+        ak.Array: mask of events to filter
+    """
+    nDaughter = events.recoParticles.direction.x != -999
+    nDaughter = ak.num(nDaughter[nDaughter]) # get number of showers which have a valid direction
+
+    if daughters == None:
+        r_mask = nDaughter > 1
+    elif daughters < 0:
+        r_mask = nDaughter > abs(daughters)
+    else:
+        r_mask = nDaughter == daughters
+    return r_mask
+
+
+def Pi0TwoBodyDecayMask(events : Data):
+    """ Create boolean mask of events where pi0's have decayed in their primary decay mode
+        i.e. pi0 -> gamma gamma
+
+    Args:
+        events (Data): events to filter
+
+    Returns:
+        ak.Array: mask of events to filter
+    """
+    mask = ak.num(events.trueParticles.truePhotonMask[events.trueParticles.truePhotonMask], -1) == 2 # exclude pi0 -> e+ + e- + photons
+    print(f"number of dalitz decays: {ak.count(mask[np.logical_not(mask)])}")
+    return mask
+
+
 def Pi0MCMask(events : Data, daughters : int = None):
-    #?do filtering within function i.e. return object of type Data or mutate events argument?
     """ A filter for Pi0 MC dataset, selects events with a specific number of daughters
         which have a valid direction vector and removes events with the 3 body pi0 decay.
 
@@ -450,20 +545,9 @@ def Pi0MCMask(events : Data, daughters : int = None):
         ak.Array: mask of events to filter
         ak.Array: mask of true photons to apply to true data
     """
-    nDaughter = events.recoParticles.direction.x != -999
-    nDaughter = ak.num(nDaughter[nDaughter]) # get number of showers which have a valid direction
-
-    if daughters == None:
-        r_mask = nDaughter > 1
-    elif daughters < 0:
-        r_mask = nDaughter > abs(daughters)
-    else:
-        r_mask = nDaughter == daughters
-    
-    t_mask = ak.num(events.trueParticles.truePhotonMask[events.trueParticles.truePhotonMask], -1) == 2 # exclude pi0 -> e+ + e- + photons
-    print(f"number of dalitz decays: {ak.count(t_mask[np.logical_not(t_mask)])}")
-
-    valid = np.logical_and(r_mask, t_mask) # events which have 2 reco daughters and correct pi0 decay
+    r_mask = NPFPMask(events, daughters)
+    t_mask = Pi0TwoBodyDecayMask(events)
+    valid = np.logical_and(r_mask, t_mask)
     return valid
 
 
@@ -491,57 +575,6 @@ def BeamMCFilter(events : Data, n_pi0 : int = 1):
     primaries = np.logical_or(primary_pi0, primary_daughter)
     filtered.Filter([], [primaries], False)
     return filtered
-
-@timer
-def RecoQuantities(events : Data):
-    #? move functionality into recoParticleData class and have each value as an @property?
-    """ Calculate reconstructed shower pair quantities.
-
-    Args:
-        events(Master.Event): events to process
-
-    Returns:
-        tuple of ak.Array: calculated quantities + array which masks null shower pairs
-    """
-    sortEnergy = events.SortedTrueEnergyMask
-    sortedPairs = ak.unflatten(events.recoParticles.energy[sortEnergy], 1, 0)
-    leading = sortedPairs[:, :, 1:]
-    secondary = sortedPairs[:, :, :-1]
-
-    #* opening angle
-    direction_pair = ak.unflatten(events.recoParticles.direction[sortEnergy], 1, 0)
-    direction_pair_mag = vector.magntiude(direction_pair)
-    angle = np.arccos(vector.dot(direction_pair[:, :, 1:], direction_pair[:, :, :-1]) / (direction_pair_mag[:, :, 1:] * direction_pair_mag[:, :, :-1]))
-
-    #* Invariant Mass
-    inv_mass = (2 * leading * secondary * (1 - np.cos(angle)))**0.5
-
-    #* pi0 momentum
-    pi0_momentum = vector.magntiude(ak.sum(events.recoParticles.momentum, axis=-1))/1000
-
-    null_dir = np.logical_or(direction_pair[:, :, 1:].x == -999, direction_pair[:, :, :-1].x == -999) # mask shower pairs with invalid direction vectors
-    null = np.logical_or(leading < 0, secondary < 0) # mask of shower pairs with invalid energy
-    
-    #* filter null data
-    pi0_momentum = np.where(null_dir, -999, pi0_momentum)
-    pi0_momentum = np.where(null, -999, pi0_momentum)
-
-    leading = leading/1000
-    secondary = secondary/1000
-
-    leading = np.where(null, -999, leading)
-    leading = np.where(null_dir, -999, leading)
-    secondary = np.where(null, -999, secondary)
-    secondary = np.where(null_dir, -999, secondary)
-
-    angle = np.where(null, -999, angle)
-    angle = np.where(null_dir, -999, angle)
-
-    inv_mass = inv_mass/1000
-    inv_mass = np.where(null, -999, inv_mass)
-    inv_mass = np.where(null_dir, -999, inv_mass)
-
-    return inv_mass, angle, leading, secondary, pi0_momentum, ak.unflatten(null, 1, 0)
 
 
 def FractionalError(reco : ak.Array, true : ak.Array, null : ak.Array):
@@ -575,7 +608,7 @@ def CalculateQuantities(events : Data, names : str):
         tuple of np.arrays: quantities to plot
     """
     mct = events.trueParticles.CalculatePhotonPairProperties()
-    rmc = RecoQuantities(events)
+    rmc = events.recoParticles.CalculateShowerPairQuantities()
 
     # keep track of events with no shower pairs
     null = ak.flatten(rmc[-1], -1)
