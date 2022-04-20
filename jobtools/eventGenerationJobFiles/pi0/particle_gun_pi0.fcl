@@ -1,0 +1,9 @@
+#include "protoDUNE_gensingle.fcl"
+services.TFileService.fileName: "gen_protoDune_pi0_spectrum_mono_hist.root"
+source.maxEvents: 100
+outputs.out1.fileName: "gen_protoDune_pi0_spectrum_mono.root"
+physics.producers.generator.PDG: [111]
+physics.producers.generator.P0: [3.75]
+physics.producers.generator.PDist: 0
+physics.producers.generator.SigmaP: [3.25]
+physics.producers.generator.PadOutVectors: true
