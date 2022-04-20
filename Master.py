@@ -197,9 +197,14 @@ class Data:
         if returnCopy is False:
             self.trueParticles.Filter(true_filters, returnCopy)
             self.recoParticles.Filter(reco_filters, returnCopy)
+            if hasattr(self, "trueParticlesBT"):
+                self.trueParticlesBT.Filter(reco_filters, returnCopy) # has same shape as reco data
+
             __GenericFilter__(self, reco_filters) #? should true_filters also be applied?
             self.trueParticles.events = self
             self.recoParticles.events = self
+            if hasattr(self, "trueParticlesBT"):
+                self.trueParticlesBT.events = self
         else:
             filtered = Data()
             filtered.eventNum = self.eventNum
@@ -208,6 +213,9 @@ class Data:
             filtered.recoParticles = self.recoParticles.Filter(reco_filters)
             filtered.recoParticles.events = filtered
             filtered.trueParticles.events = filtered
+            if hasattr(self, "trueParticlesBT"):
+                filtered.trueParticlesBT = self.trueParticlesBT.Filter(reco_filters)
+                filtered.trueParticlesBT.events = filtered
             __GenericFilter__(filtered, reco_filters) #? should true_filters also be applied?
             return filtered
 
@@ -493,6 +501,8 @@ class TrueParticleDataBT(ParticleData):
                             "z" : events.io.Get("reco_daughter_PFP_true_byHits_pZ")})
             self.direction = vector.normalize(self.momentum)
             self.energy = events.io.Get("reco_daughter_PFP_true_byHits_startE")
+            #! multiplying energy by 1000 seems to ruin everything?
+            #self.energy = ak.where(self.energy < 0, -999, self.energy*1000)
 
 
 
