@@ -123,7 +123,7 @@ def main():
 
         os.makedirs("eventDisplays/", exist_ok=True)
         Plots.Save(f"{events.subRun[n]}_{events.eventNum[n]}", "eventDisplays/")
-        plt.clf()
+        plt.close()
 
 
 if __name__ == "__main__":
