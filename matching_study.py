@@ -36,7 +36,6 @@ def Separation(shower : ak.Record, photon : ak.Record, null_shower_dir : ak.Reco
     # otherwise assign the separation
     return ak.where(null_shower_dir == True, 1E8, s)
 
-
 @Master.timer
 def GetMCMatchingFilters(events : Master.Data, cut=0.25):
     """ Matches Reconstructed showers to true photons and selected the best events
@@ -116,6 +115,7 @@ def GetMCMatchingFilters(events : Master.Data, cut=0.25):
 
     return matched_mask, unmatched_mask, selection, angles, dists, same_match_percentage
 
+
 def SpatialStudy(events : Master.Data):
     valid = Master.Pi0MCMask(events, None)
 
@@ -142,14 +142,15 @@ def SpatialStudy(events : Master.Data):
     if save is True: Plots.Save(outDir+"separation_z")
 
 
-def CreateFilteredEvents(events : Master.Data, nDaughters=None, cut : int = 0.25):
+def CreateFilteredEvents(events : Master.Data, nDaughters=None, cut : float = 0.25, invert : bool = False):
     valid = Master.Pi0MCMask(events, nDaughters)
 
     filtered = events.Filter([valid], [valid])
 
     print(f"Number of events: {ak.num(filtered.recoParticles.direction, 0)}")
     showers, _, selection_mask, _, _, _ = GetMCMatchingFilters(filtered, cut)
-
+    if invert is True:
+        selection_mask = np.logical_not(selection_mask)
     reco_filters = [showers, selection_mask]
     true_filters = [selection_mask]
 
@@ -174,7 +175,7 @@ def AnalyseMatching(events : Master.Data, nDaughters=None, cut : int = 0.25, tit
     return dists, angles, reco_mc_dist, reco_mc_angle, percentage
 
 
-def Plot1D(data : ak.Array, xlabels : list, subDir : str, plot_ranges = [[]]*5, legend_loc = ["upper right"]*5):
+def Plot1D(data : ak.Array, xlabels : list, labels : list, names : list, bins=50, plot_ranges = [[]]*5, density=True, legend_loc = ["upper right"]*5, save : bool = True, saveDir : str = ""):
     """ 1D histograms of data for each sample
 
     Args:
@@ -183,11 +184,11 @@ def Plot1D(data : ak.Array, xlabels : list, subDir : str, plot_ranges = [[]]*5, 
         subDir (str): subdirectiory to save in
         plot_range (list, optional): range to plot. Defaults to [].
     """
-    if save is True: os.makedirs(outDir + subDir, exist_ok=True)
+    if save is True: os.makedirs(saveDir, exist_ok=True)
     for i in range(len(names)):
-        Plots.PlotHistComparison(data[:, i], plot_ranges[i], bins=bins, xlabel=xlabels[i], histtype="step", labels=s_l, density=True)
+        Plots.PlotHistComparison(data[:, i], plot_ranges[i], bins=bins, xlabel=xlabels[i], histtype="step", labels=labels, density=density)
         plt.legend(loc=legend_loc[i])
-        if save is True: Plots.Save( names[i] , outDir + subDir)
+        if save is True: Plots.Save( names[i] , saveDir)
 
 
 def Pi0MomFilter(events : Master.Data, r : list = [0.5, 1]):
@@ -262,7 +263,6 @@ def main():
             if save is True: Plots.Save("reco_mc_angle", outDir+"matching/")
             Plots.PlotHist(rmd[rmd < 150], bins, "spatial separation between matched shower and photon (cm)")
             if save is True: Plots.Save("reco_mc_dist", outDir+"matching/")
-        
 
     if ana == "quantity":
         for i in range(len(filters)):
@@ -275,9 +275,9 @@ def main():
         ts = ak.Array(ts)
         rs = ak.Array(rs)
         es = ak.Array(es)
-        Plot1D(ts, t_l, "truth/", t_range, t_locs)
-        Plot1D(rs, r_l, "reco/", r_range, r_locs)
-        Plot1D(es, e_l, "fractional_error/", e_range, e_locs)
+        Plot1D(ts, t_l, s_l, names, bins, t_range, True, t_locs, save, outDir+"truth/")
+        Plot1D(rs, r_l, s_l, names, bins, r_range, True, r_locs, save, outDir+"reco/")
+        Plot1D(es, e_l, s_l, names, bins, e_range, True, e_locs, save, outDir+"fractional_error/")
 
         if save is True: os.makedirs(outDir + "2D/", exist_ok=True)
         plt.rcParams["figure.figsize"] = (6.4*3,4.8*1)
@@ -292,6 +292,35 @@ def main():
             if save is True: Plots.Save( names[j] , outDir + "2D/")
         plt.rcParams["figure.figsize"] = plt.rcParamsDefault["figure.figsize"]
 
+    if ana == "rejected":
+        accepted = CreateFilteredEvents(events, None, invert=False) # events which pass the angle cut
+        rejected = CreateFilteredEvents(events, None, invert=True) # events which don't pass the angle cut
+        for i in (accepted, rejected):
+            t, r, e = Master.CalculateQuantities(i, names)
+            ts.append(t)
+            rs.append(r)
+            es.append(e)
+
+        ts = ak.Array(ts)
+        rs = ak.Array(rs)
+        es = ak.Array(es)
+        Plot1D(ts, t_l, ["accepted", "rejected"], names, bins, t_range, True, t_locs, save, outDir+"truth/")
+        Plot1D(rs, r_l, ["accepted", "rejected"], names, bins, r_range, True, r_locs, save, outDir+"reco/")
+        Plot1D(es, e_l, ["accepted", "rejected"], names, bins, e_range, True, e_locs, save, outDir+"fractional_error/")
+
+        if save is True: os.makedirs(outDir + "2D/", exist_ok=True)
+        plt.rcParams["figure.figsize"] = (6.4*3,4.8*1)
+        for j in range(len(names)):
+            plt.figure()
+            for i in range(len(filters)):
+                plt.subplot(1, 3, i+1)
+                if i == 0:
+                    _, edges = Plots.PlotHist2D(ts[i][j], es[i][j], bins, x_range=t_range[j], y_range=e_range[j], xlabel=t_l[j], ylabel=e_l[j], title=["accepted", "rejected"][i], newFigure=False)
+                else:
+                    Plots.PlotHist2D(ts[i][j], es[i][j], edges, x_range=t_range[j], y_range=e_range[j], xlabel=t_l[j], ylabel=e_l[j], title=["accepted", "rejected"][i], newFigure=False)
+            if save is True: Plots.Save( names[j] , outDir + "2D/")
+        plt.rcParams["figure.figsize"] = plt.rcParamsDefault["figure.figsize"]
+
 
 if __name__ == "__main__":
     names = ["inv_mass", "angle", "lead_energy", "sub_energy", "pi0_mom"]
@@ -301,25 +330,28 @@ if __name__ == "__main__":
     r_l = ["Invariant mass (GeV)", "Opening angle (rad)", "Leading shower energy (GeV)", "Subleading shower energy (GeV)", "$\pi^{0}$ momentum (GeV)"]
     # plot ranges, order is invariant mass, angle, lead energy, sub energy, pi0 momentum
     e_range = [[-10, 10]] * 5
+    #e_range = [[]]*5
     r_range = [[]] * 5
-    r_range[0] = [0, 0.5]
+    #r_range[0] = [0, 0.5]
     t_range = [[]] * 5
     # legend location, order is invariant mass, angle, lead energy, sub energy, pi0 momentum
     r_locs = ["upper right", "upper right", "upper right", "upper right", "upper right"]
     t_locs = ["upper left", "upper right", "upper right", "upper right", "upper right"]
     e_locs = ["upper right", "upper right", "upper right", "upper right", "upper left"]
 
-    filters = [2, 3, -3]
-    s_l = ["2 daughters", "3 daughters", "> 3 daughters"]
+    #filters = [2, 3, -3]
+    #s_l = ["2 daughters", "3 daughters", "> 3 daughters"]
+    filters = [None]
+    s_l = ["all"]
 
     parser = argparse.ArgumentParser(description="Study shower-photon matching for pi0 decays.")
     parser.add_argument(dest="file", type=str, help="ROOT file to open.")
     parser.add_argument("-b", "--nbins", dest="bins", type=int, default=50, help="number of bins when plotting histograms.")
     parser.add_argument("-s", "--save", dest="save", action="store_true", help="whether to save the plots")
     parser.add_argument("-d", "--directory", dest="outDir", type=str, default="pi0_0p5GeV_100K/matching_study/", help="directory to save plots.")
-    parser.add_argument("-a", "--analysis", dest="ana", type=str, choices=["matching", "quantity"], default="quantity", help="what analysis to run.")
+    parser.add_argument("-a", "--analysis", dest="ana", type=str, choices=["matching", "quantity", "rejected"], default="quantity", help="what analysis to run.")
     parser.add_argument("--binned", dest="binned_analysis", action="store_true", help="do analysis binned in true pi0 momentum.")
-    #args = parser.parse_args("ROOTFiles/pi0_multi_9_3_22.root -a matching".split()) #! to run in Jutpyter notebook
+    #args = parser.parse_args("work/ROOTFiles/pi0_multi_9_3_22.root -a rejected".split()) #! to run in Jutpyter notebook
     args = parser.parse_args() #! run in command line
 
     file = args.file
