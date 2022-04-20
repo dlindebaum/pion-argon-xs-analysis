@@ -4,7 +4,9 @@ LArSoft module which retrieves and calculates some useful quantities to study re
 
 ## Helpful links:
 [DUNE doxygen page](https://internal.dunescience.org/doxygen/index.html)
+
 [DUNE computing page](https://wiki.dunescience.org/wiki/DUNE_Computing)
+
 [ProtoDUNE SP data/MC list](https://wiki.dunescience.org/wiki/Look_at_ProtoDUNE_SP_data)
 
 ## Installation
