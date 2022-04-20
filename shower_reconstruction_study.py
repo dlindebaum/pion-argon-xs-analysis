@@ -106,17 +106,26 @@ def Plot1D(data : ak.Array, xlabels : list, subDir : str, labels : list, plot_ra
     """
     if save is True: os.makedirs(outDir + subDir, exist_ok=True)
     for i in range(len(names)):
-        Plots.PlotHistComparison(data[:, i], plot_ranges[i], bins, xlabel=xlabels[i], histtype="step", labels=labels, x_scale=x_scale[i], y_scale=y_scale[i], density=True)
-        plt.legend(loc=legend_loc[i])
+        if len(s_l) == 1:
+            d = data[0][i]
+            if len(plot_ranges[i]) == 2:
+                d = d[d > plot_ranges[i][0]]
+                d = d[d < plot_ranges[i][1]]
+            else:
+                d = d[d > -999]
+            Plots.PlotHist(d, bins, xlabel=xlabels[i], x_scale=x_scale[i], y_scale=y_scale[i], density=True)
+        else:
+            Plots.PlotHistComparison(data[:, i], plot_ranges[i], bins, xlabel=xlabels[i], histtype="step", labels=labels, x_scale=x_scale[i], y_scale=y_scale[i], density=True)
+            plt.legend(loc=legend_loc[i])
         if save is True: Plots.Save( names[i] , outDir + subDir)
 
 
-def Plot2D(true_data : np.array, error_data : np.array):
+def Plot2D(true_data : ak.Array, error_data : ak.Array):
     """ Plots 2D histograms
 
     Args:
-        true_data (np.array): true quantities
-        error_data (np.array): fraction errors
+        true_data (ak.Array): true quantities
+        error_data (ak.Array): fraction errors
     """
     # plot 2D plots of all quantities
     if save is True: os.makedirs(outDir + "2D/", exist_ok=True)
@@ -126,10 +135,8 @@ def Plot2D(true_data : np.array, error_data : np.array):
         if save is True: os.makedirs(outDir + "2D/", exist_ok=True)
 
     # plot opening angle and invariant mass against pi0 momentum
-    t_awk = ak.Array(true_data)
-    e_awk = ak.Array(error_data)
-    Plot2DMulti(t_awk[:, 4], e_awk[:, 0], t_l[4], e_l[0], "inv_mass_vs_mom", t_range[4], e_range[0])
-    Plot2DMulti(t_awk[:, 4], e_awk[:, 1], t_l[4], e_l[1], "angle_vs_mom", t_range[4], e_range[0])
+    Plot2DMulti(true_data[:, 4], error_data[:, 0], t_l[4], e_l[0], "inv_mass_vs_mom", t_range[4], e_range[0])
+    Plot2DMulti(true_data[:, 4], error_data[:, 1], t_l[4], e_l[1], "angle_vs_mom", t_range[4], e_range[0])
 
 
 def SelectSample(events : Master.Data, nDaughters : int, merge : bool = False):
@@ -163,14 +170,13 @@ def main():
     if save is True: os.makedirs(outDir, exist_ok=True)
     Plots.PlotBar(ak.count(events.recoParticles.nHits, -1), xlabel="Number of particle flow objects per event")
     if save is True: Plots.Save(outDir + "n_objects")
-    
-    events_2_shower = SelectSample(events, 2, False)
-    events_3_shower = SelectSample(events, 3, False)
-    events_remaning = SelectSample(events, -3, False)
-    events_3_shower_merged = SelectSample(events, 3, True)
-    events_remaning_merged = SelectSample(events, -3, True)
-    samples = [events_2_shower, events_3_shower, events_remaning, events_3_shower_merged, events_remaning_merged]
-    
+
+    samples = []  
+    for i in range(len(s_l)):
+        print(f"number of objects: {n_obj[i]}")
+        print(f"merge?: {merge[i]}")
+        samples.append(SelectSample(events, n_obj[i], merge[i]))
+
     t = []
     r = []
     e = []
@@ -202,13 +208,20 @@ if __name__ == "__main__":
     r_range[0] = [0, 0.5]
     t_range = [[]] * 5
     # legend location, order is invariant mass, angle, lead energy, sub energy, pi0 momentum
-    r_locs = ["upper right", "upper right", "upper right", "upper right", "upper right"]
+    r_locs = ["upper right", "upper right", "upper left", "upper right", "upper left"]
     t_locs = ["upper left", "upper right", "upper right", "upper right", "upper right"]
     e_locs = ["upper right", "upper left", "upper right", "upper right", "upper left"]
 
-    r_ys = ["linear", "linear", "log", "log", "linear"] #? something like this?
-    r_xs = ["linear", "linear", "linear", "linear", "linear"] #? something like this?
+    r_xs = ["linear"]*5
+    r_ys = ["linear"]*5
+    #r_ys = ["linear", "linear", "log", "log", "linear"] #? something like this?
+    #r_xs = ["linear", "linear", "linear", "linear", "linear"] #? something like this?
 
+    #n_obj = [2, 3, -3]
+    #merge = [False, False, False]
+    #s_l = ["2 showers", "3 showers unmerged", ">3 showers unmerged"]
+    n_obj = [2, 3, -3, 3, -3]
+    merge = [False, False, False, True, True]
     s_l = ["2 showers", "3 showers unmerged", ">3 showers unmerged", "3 showers merged", ">3 showers merged"]
 
     parser = argparse.ArgumentParser(description="Plot quantities to study shower reconstruction")
@@ -217,7 +230,7 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--save", dest="save", action="store_true", help="whether to save the plots")
     parser.add_argument("-d", "--directory", dest="outDir", type=str, default="pi0_0p5GeV_100K/shower_merge/", help="directory to save plots")
     parser.add_argument("-p", "--plots", dest="plotsToMake", type=str, choices=["all", "truth", "reco", "error", "2D"], default="all", help="what plots we want to make")
-    #args = parser.parse_args("ROOTFiles/pi0_0p5GeV_100K_5_7_21.root -b 20".split()) #! to run in Jutpyter notebook
+    #args = parser.parse_args("work/ROOTFiles/pi0_0p5GeV_100K_5_7_21.root -b 20".split()) #! to run in Jutpyter notebook
     args = parser.parse_args() #! run in command line
 
     file = args.file
