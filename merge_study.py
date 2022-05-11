@@ -48,8 +48,8 @@ def AnalyzeReco(events : Master.Data, matched : ak.Array, unmatched : ak.Array):
         matched (ak.Array): indicies of matched showers
         unmatched (ak.Array): boolean mask of unmatched showers
     """
-    matched_reco = events.Filter([matched]).recoParticles # filter reco for matched/unmatched only
-    unmatched_reco = events.Filter([unmatched]).recoParticles
+    matched_reco = events.Filter([matched], returnCopy=True).recoParticles # filter reco for matched/unmatched only
+    unmatched_reco = events.Filter([unmatched], returnCopy=True).recoParticles
     null_dir = unmatched_reco.direction.x == -999 # should only be needed for unmatched sample
     valid = np.logical_not(null_dir)
 
@@ -131,9 +131,9 @@ def AnalyzeTruth(events : Master.Data):
     Args:
         events (Master.Events): events to look at
     """
-    pi0_vertex = events.Filter(true_filters=[ak.to_list(events.trueParticles.number == 1)]).trueParticles.endPos # decay vertex is where the particle trajectory ends
+    pi0_vertex = events.Filter(true_filters=[ak.to_list(events.trueParticles.number == 1)], returnCopy=True).trueParticles.endPos # decay vertex is where the particle trajectory ends
 
-    photons_true = events.Filter(true_filters=[events.trueParticles.truePhotonMask]).trueParticles
+    photons_true = events.Filter(true_filters=[events.trueParticles.truePhotonMask], returnCopy=True).trueParticles
 
     #* distance from each photon end point to the deacy vertex
     dist_to_vertex_0 = vector.dist(pi0_vertex, photons_true.endPos[:, 0]) # photon end points are the start of showers
@@ -212,14 +212,12 @@ def mergeShower(events : Master.Data, matched : ak.Array, unmatched : ak.Array, 
     Returns:
         Master.Events: events with matched reco showers after merging
     """
-    events_matched = events.Filter([matched])
-    unmatched_reco = events.Filter([unmatched]).recoParticles # filter reco for matched/unmatched only
+    events_matched = events.Filter([matched], returnCopy=True)
+    unmatched_reco = events.Filter([unmatched], returnCopy=True).recoParticles # filter reco for matched/unmatched only
     null_dir = unmatched_reco.direction.x == -999 # should only be needed for unmatched sample
 
     if mergeMethod == 2:
         #* distance from each matched to unmatched
-        #separation_0 = vector.dist(unmatched_reco.startPos, events_matched.recoParticles.startPos[:, 0])
-        #separation_1 = vector.dist(unmatched_reco.startPos, events_matched.recoParticles.startPos[:, 1])
         separation_0 = Separation(unmatched_reco.startPos, events_matched.recoParticles.startPos[:, 0], null_dir, "Spatial")
         separation_1 = Separation(unmatched_reco.startPos, events_matched.recoParticles.startPos[:, 1], null_dir, "Spatial")
         separation_0 = ak.unflatten(separation_0, 1, -1)
@@ -227,9 +225,7 @@ def mergeShower(events : Master.Data, matched : ak.Array, unmatched : ak.Array, 
         separation = ak.concatenate([separation_0, separation_1], -1)
         mergeMask = ak.min(separation, -1) == separation # get boolean mask to which matched shower to merge to
 
-    if mergeMethod == 1:
-        #angle_0 = vector.angle(unmatched_reco.direction, events_matched.recoParticles.direction[:, 0])
-        #angle_1 = vector.angle(unmatched_reco.direction, events_matched.recoParticles.direction[:, 1])        
+    if mergeMethod == 1:        
         angle_0 = Separation(unmatched_reco.direction, events_matched.recoParticles.direction[:, 0], null_dir, "Angular")
         angle_1 = Separation(unmatched_reco.direction, events_matched.recoParticles.direction[:, 1], null_dir, "Angular")
         angle_0 = ak.unflatten(angle_0, 1, -1)
@@ -268,7 +264,7 @@ def CreateFilteredEvents(events : Master.Data, nDaughters : int = None):
         Master.Event: events after filering 
     """
     valid = Master.Pi0MCMask(events, nDaughters)
-    filtered = events.Filter([valid], [valid])
+    filtered = events.Filter([valid], [valid], returnCopy=True)
     print(f"Number of showers events: {ak.num(filtered.recoParticles.direction, 0)}")
 
     filtered.MCMatching()
@@ -353,65 +349,45 @@ def Plot2DTest(ind, truths, errors, labels, xlabels, ylabels, nrows, ncols, bins
     plt.ylabel(ylabels, fontsize=14)
 
 
+def SelectSample(events : Master.Data, nDaughters : int):
+    valid = Master.Pi0MCMask(events, nDaughters)
+    filtered = events.Filter([valid], [valid], returnCopy=True)
+    singleMatchedEvents = filtered.trueParticlesBT.SingleMatch
+    filtered.Filter([singleMatchedEvents], [singleMatchedEvents])
+    best_match, selection = filtered.MatchByAngleBT()
+    filtered.Filter([selection], [selection])
+    best_match = best_match[selection]
+    return filtered, best_match
+
+
 @Master.timer
 def main():
-    events = Master.Data(file)
+    events = Master.Data(file, True)
     events.ApplyBeamFilter() # apply beam filter if possible
-    events_2 = CreateFilteredEvents(events, 2)
-    
-    valid = Master.Pi0MCMask(events, 3)
-    events_3 = events.Filter([valid], [valid])
-    matched, unmatched, selection_mask = events_3.MCMatching(applyFilters=False)
-    events_3 = events_3.Filter([selection_mask], [selection_mask]) # filter events based on MC matching
 
-    # filter masks
-    matched = matched[selection_mask]
-    unmatched = unmatched[selection_mask]
-
-    events_merged_a_scalar = mergeShower(events_3, matched, unmatched, 1, True)
-    events_merged_s_scalar = mergeShower(events_3, matched, unmatched, 2, True)
-    events_merged_a_vector = mergeShower(events_3, matched, unmatched, 1, False)
-    events_merged_s_vector = mergeShower(events_3, matched, unmatched, 2, False)
-    events_unmerged = events_3.Filter([matched])
-
-    q_2 = Master.CalculateQuantities(events_2, names)
-    q = Master.CalculateQuantities(events_unmerged, names)
-    q_a_vector = Master.CalculateQuantities(events_merged_a_vector, names)
-    q_s_vector = Master.CalculateQuantities(events_merged_s_vector, names)
-    q_a_scalar = Master.CalculateQuantities(events_merged_a_scalar, names)
-    q_s_scalar = Master.CalculateQuantities(events_merged_s_scalar, names)
-
-    f_l_vector = [s_l[0], s_l[1], "angular", "spatial"]
-    ts_vector = [q_2[0], q[0], q_a_vector[0], q_s_vector[0]]
-    rs_vector = [q_2[1], q[1], q_a_vector[1], q_s_vector[1]]
-    es_vector = [q_2[2], q[2], q_a_vector[2], q_s_vector[2]]
-
-    f_l_scalar = [s_l[0], s_l[1], "angular", "spatial"]
-    ts_scalar = [q_2[0], q[0], q_a_scalar[0], q_s_scalar[0]]
-    rs_scalar = [q_2[1], q[1], q_a_scalar[1], q_s_scalar[1]]
-    es_scalar = [q_2[2], q[2], q_a_scalar[2], q_s_scalar[2]]
-
-    f_l_angle = [s_l[0], s_l[1], s_l[2], s_l[4]]
-    ts_angle = [q_2[0], q[0], q_a_scalar[0], q_a_vector[0]]
-    rs_angle = [q_2[1], q[1], q_a_scalar[1], q_a_vector[1]]
-    es_angle = [q_2[2], q[2], q_a_scalar[2], q_a_vector[2]]
-
-    f_l_dist = [s_l[0], s_l[1], s_l[3], s_l[5]]
-    ts_dist = [q_2[0], q[0], q_s_scalar[0], q_s_vector[0]]
-    rs_dist = [q_2[1], q[1], q_s_scalar[1], q_s_vector[1]]
-    es_dist = [q_2[2], q[2], q_s_scalar[2], q_s_vector[2]]
-
-    if study == "merge":
-        AnalyseQuantities(ts_vector, rs_vector, es_vector, f_l_vector, outDir+"merge_comp/")
-    if study == "energy":
-        AnalyseQuantities(ts_angle, rs_angle, es_angle, f_l_angle, outDir+"angle/")
-        AnalyseQuantities(ts_dist, rs_dist, es_dist, f_l_dist, outDir+"dist/")
-    if study == "separation":
-        AnalyzeReco(events_3, matched, unmatched)
-        AnalyzeTruth(events_3)
+    if study == "performance":
+        
+        energy_differences = []
+        cm = []
+        for i in range(len(n_obj)):
+            sample, target_PFPs = SelectSample(events, n_obj[i])
+            cm.append(Master.ShowerMergePerformance(sample, target_PFPs))
+            merged_cheat, null = sample.mergePFPCheat()
+            merged_bt = sample.MergeShowerBT(target_PFPs)
+            energy_differences.append(ak.ravel(merged_bt.recoParticles.energy - merged_cheat.recoParticles.energy) / 1000)
+        
+        if save is True: os.makedirs(outDir, exist_ok=True)
+        if len(n_obj) > 1:
+            Plots.PlotHistComparison(energy_differences, [], bins, "merged shower energy difference (GeV)", labels=s_l, density=False)
+            if save is True: Plots.Save(outDir + "energy_difference")
+            Plots.Plot(s_l, cm, xlabel="sample", ylabel="percentage of showers correctly merged")
+            if save is True: Plots.Save(outDir + "correct_merge")
+        else:
+            Plots.PlotHist(energy_differences[0], bins, "merged shower energy difference (GeV)")
+            if save is True: Plots.Save(outDir + "energy_difference")
 
 if __name__ == "__main__":
-
+    plt.rcParams.update({'font.size': 12})
     names = ["inv_mass", "angle", "lead_energy", "sub_energy", "pi0_mom"]
     t_l = ["True invariant mass (GeV)", "True opening angle (rad)", "True leading photon energy (GeV)", "True Sub leading photon energy (GeV)", "True $\pi^{0}$ momentum (GeV)"]
     e_l = ["Invariant mass fractional error", "Opening angle fractional error", "Leading shower energy fractional error", "Sub leading shower energy fractional error", "$\pi^{0}$ momentum fractional error"]
@@ -422,14 +398,18 @@ if __name__ == "__main__":
     r_range[0] = [0, 0.5]
     t_range = [[]] * 5
 
+    n_obj = [-4]
+    s_l = ["all"]
+    #n_obj = [3, 4, 5, 6, 7, 8]
+    #s_l = [3, 4, 5, 6, 7, 8]
 
     parser = argparse.ArgumentParser(description="Study em shower merging for pi0 decays")
     parser.add_argument(dest="file", type=str, help="ROOT file to open.")
-    parser.add_argument("-b", "--nbins", dest="bins", type=int, default=50, help="number of bins when plotting histograms")
+    parser.add_argument("-b", "--nbins", dest="bins", type=int, default=25, help="number of bins when plotting histograms")
     parser.add_argument("-s", "--save", dest="save", action="store_true", help="whether to save the plots")
     parser.add_argument("-d", "--directory", dest="outDir", type=str, default="pi0_0p5GeV_100K/shower_merge/", help="directory to save plots")
-    parser.add_argument("-a", "--analysis", dest="study", type=str, choices=["separation", "merge", "energy"], default="merge", help="what plots we want to study")
-    #args = parser.parse_args("-f ROOTFiles/pi0_multi_9_3_22.root -a merge".split()) #! to run in Jutpyter notebook
+    parser.add_argument("-a", "--analysis", dest="study", type=str, choices=["performance"], default="performance", help="what plots we want to study")
+    #args = parser.parse_args("work/ROOTFiles/pi0_0p5GeV_100K_5_7_21.root".split()) #! to run in Jutpyter notebook
     args = parser.parse_args() #! run in command line
 
     file = args.file
