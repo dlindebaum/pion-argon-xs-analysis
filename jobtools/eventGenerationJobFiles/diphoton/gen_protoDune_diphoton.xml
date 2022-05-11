@@ -1,0 +1,156 @@
+<?xml version="1.0"?>
+
+<!-- Production Project -->
+<!DOCTYPE project [
+<!ENTITY relsim "v09_39_01">
+<!ENTITY file_type "mc">
+<!ENTITY run_type "physics">
+<!ENTITY name "diphoton">
+<!ENTITY num "_1">
+<!ENTITY tag "devel">
+<!ENTITY numevents "50000">
+<!ENTITY numjobs "1000">
+<!-- for reco, use 2200, for detsim use 1500? -->
+<!ENTITY memory_detsim "2000">
+<!ENTITY memory_reco "2800">
+<!ENTITY cpu "1">
+<!ENTITY disk_detsim "15GB">
+<!ENTITY disk_reco "6GB">
+<!ENTITY time_detsim "12h">
+<!ENTITY time_reco "8h">
+<!-- Misc -->
+<!ENTITY scratch "/pnfs/dune/scratch/users/sbhuller">
+<!ENTITY resilient "/pnfs/dune/resilient/users/sbhuller">
+]>
+
+<job>
+
+<project name="&name;">
+
+  <!-- Group -->
+  <group>dune</group>
+
+  <!-- Project size -->
+  <numevents>&numevents;</numevents>
+
+  <!-- Memory To Use -->
+  <memory>&memory_detsim;</memory>
+
+  <!-- Disk space -->
+  <disk>&disk_detsim;</disk>
+
+  <!-- CPUs To Use -->
+  <cpu>&cpu;</cpu>
+
+  <!-- Operating System -->
+  <os>SL7</os>
+
+  <!-- Batch resources -->
+  <resource>DEDICATED,OPPORTUNISTIC</resource>
+
+  <!-- metadata parameters -->
+
+  <parameter name ="MCName">&name;</parameter>
+  <parameter name ="MCDetectorType">protoDune</parameter>
+  <parameter name ="MCGenerators">SingleGen</parameter>
+
+  <!-- Larsoft information -->
+  <larsoft>
+    <tag>&relsim;</tag>
+    <qual>e20:prof</qual>
+    <!--<local>&resilient;/&relsim;/dunetpc_&relsim;.tar</local>-->
+  </larsoft>
+
+  <!-- Project stages -->
+
+  <stage name="detsim">
+    <maxfluxfilemb>0</maxfluxfilemb>
+    <jobsub>--expected-lifetime=&time_detsim;</jobsub>
+    <fcl>&resilient;/&relsim;/particle_gun_&name;.fcl</fcl>
+    <fcl>protoDUNE_refactored_g4_stage1.fcl</fcl>
+    <fcl>protoDUNE_refactored_g4_stage2_sce_datadriven.fcl</fcl>
+    <fcl>protoDUNE_refactored_detsim_stage1.fcl</fcl>
+    <fcl>protoDUNE_refactored_detsim_stage2.fcl</fcl>
+    <outdir>&scratch;/&relsim;/gen/&name;&num;/out</outdir>
+    <workdir>&scratch;/&relsim;/gen/&name;&num;/work</workdir>
+    <output>gen_protoDune_&name;_${PROCESS}_%tc_detsim.root</output>
+    <numjobs>&numjobs;</numjobs>
+    <datatier>detector-simulated</datatier>
+    <defname>&name;_&tag;_detsim</defname>
+    <schema>root</schema>
+  </stage>
+
+  <!-- file type -->
+  <filetype>&file_type;</filetype>
+
+  <!-- run type -->
+  <runtype>&run_type;</runtype>
+
+</project>
+
+<project name="&name;_reco">
+
+  <!-- Project size -->
+  <numevents>&numevents;</numevents>
+  
+  <!-- Operating System -->
+  <os>SL7</os>
+
+  <!-- Memory To Use -->
+  <memory>&memory_reco;</memory>
+
+  <!-- Disk space -->
+  <disk>&disk_reco;</disk>
+
+  <!-- CPUs To Use -->
+  <cpu>&cpu;</cpu>
+
+  <!-- Batch resources -->
+  <resource>DEDICATED,OPPORTUNISTIC</resource>
+
+  <!-- metadata parameters -->
+
+  <parameter name ="MCName">&name;</parameter>
+  <parameter name ="MCDetectorType">protoDune</parameter>
+  <parameter name ="MCGenerators">SingleGen</parameter>
+
+  <!-- Larsoft information -->
+  <larsoft>
+    <tag>&relsim;</tag>
+    <qual>e20:prof</qual>
+  </larsoft>
+
+  <!-- Project stages -->
+  <stage name="reco">
+    <maxfluxfilemb>0</maxfluxfilemb>
+    <jobsub>--expected-lifetime=&time_reco;</jobsub>
+    <fcl>protoDUNE_refactored_reco_35ms_sce_datadriven_stage1.fcl</fcl>
+    <fcl>protoDUNE_refactored_reco_35ms_sce_datadriven_stage2.fcl</fcl>
+    <outdir>&scratch;/&relsim;/reco/&name;&num;/out</outdir>
+    <workdir>&scratch;/&relsim;/reco/&name;&num;/work</workdir>
+    <numjobs>&numjobs;</numjobs>
+    <datatier>full-reconstructed</datatier>
+    <defname>&name;_&tag;_reco</defname>
+    <schema>root</schema>
+  </stage>
+
+  <stage name="mergeana">
+    <fcl>protoDUNE_ana.fcl</fcl>
+    <outdir>&scratch;/&relsim;/mergedreco/&name;&num;/out</outdir>
+    <output>&name;_${PROCESS}_%tc_merged.root</output>
+    <workdir>&scratch;/&relsim;/mergedreco/&name;&num;/out</workdir>
+    <numjobs>100</numjobs>
+    <targetsize>8000000000</targetsize>
+    <datatier>full-reconstructed</datatier>
+    <defname>&name;_&tag;</defname>
+  </stage>
+
+  <!-- file type -->
+  <filetype>&file_type;</filetype>
+
+  <!-- run type -->
+  <runtype>&run_type;</runtype>
+
+</project>
+</job>
+

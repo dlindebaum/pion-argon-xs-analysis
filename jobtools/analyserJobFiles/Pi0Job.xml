@@ -1,0 +1,77 @@
+<?xml version="1.0"?>
+
+<!-- Production project -->
+<!DOCTYPE project [
+<!ENTITY release "v09_39_01">
+<!ENTITY file_type "mc">
+<!ENTITY run_type "physics">
+<!ENTITY gen_fcl_file "runPi0_BeamSim.fcl">
+<!ENTITY name "sbhuller_Pi0TestAna">
+<!-- System Resources -->
+<!ENTITY memory "4000">
+<!ENTITY cpu "1">
+<!ENTITY disk "3.1GB">
+<!ENTITY time "2h">
+<!-- Misc -->
+<!ENTITY scratch "/pnfs/dune/scratch/users/sbhuller">
+<!ENTITY resilient "/pnfs/dune/resilient/users/sbhuller">
+]>
+
+<project name="&name;">
+
+  <!-- Group -->
+  <group>dune</group>
+
+  <!-- project size -->
+  <numevents>10000</numevents>
+  <numjobs>1000</numjobs>
+  <maxfilesperjob>1</maxfilesperjob>
+  <!-- Operating System -->
+  <os>SL7</os>
+
+  <!-- Batch resources -->
+  <resource>DEDICATED,OPPORTUNISTIC</resource>
+
+  <!-- Memory To Use -->
+  <memory>&memory;</memory>
+
+  <!-- CPUs To Use -->
+  <cpu>&cpu;</cpu>
+
+  <!-- Disk space -->
+  <disk>&disk;</disk>
+
+  <!-- job lifetime -->
+  <jobsub> --expected-lifetime=&time; </jobsub>
+
+  <!-- Jobsub commands -->
+  <jobsub>-e IFDH_CP_MAXRETRIES=2</jobsub>
+
+  <ups>protoduneana</ups>
+
+  <!-- Larsoft information -->
+  <larsoft>
+    <tag>&release;</tag>
+    <qual>e19:prof</qual>
+    <local>&resilient;/&release;/dunetpc_&release;.tar</local>
+  </larsoft>
+
+  <!-- project stages -->
+  <stage name="ana">
+    <fcl>&gen_fcl_file;</fcl>
+    <inputlist>file_list_4a_6GeV_BeamSim_00/xae</inputlist>
+    <outdir>&scratch;/&release;/4a_6GeV_BeamSim_00/out_4</outdir>
+    <workdir>&scratch;/&release;/4a_6GeV_BeamSim_00/work_4</workdir>
+		<schema>root</schema>
+		<datatier>physics</datatier>
+    <defname>&name;</defname>
+  </stage>
+
+  <!-- file type -->
+  <filetype>&file_type;</filetype>
+
+  <!-- run type -->
+  <runtype>&run_type;</runtype>
+
+</project>
+

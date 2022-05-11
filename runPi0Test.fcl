@@ -1,0 +1,66 @@
+#include "services_dune.fcl"
+#include "pi0TestConfig.fcl"
+#include "ProtoDUNETruthBeamFilter.fcl"
+
+process_name: pi0Test
+
+services:
+{
+  # Load the service that manages root files for histograms.
+  TFileService: { fileName: "pi0Test_output.root" }
+  TimeTracker:       {}
+  MemoryTracker:     {}
+  RandomNumberGenerator: {} #ART native random number generator
+  message:              @local::dune_message_services_prod_debug
+  FileCatalogMetadata:  @local::art_file_catalog_mc
+                        @table::protodune_services
+  PdspChannelMapService:@local::pdspchannelmap
+  ChannelStatusService: @local::pdsp_channel_status
+  BackTrackerService: {
+    BackTracker: {
+      SimChannelModuleLabel: "tpcrawdecoder:simpleSC"
+      G4ModuleLabel: "largeant"
+      MinimumHitEnergyFraction: 1e-1
+    }
+  }
+
+}
+services.message.destinations.LogStandardOut.threshold: "INFO"
+services.SpaceCharge.EnableSimEfieldSCE: true
+services.SpaceCharge.EnableSimSpatialSCE: true
+services.SpaceCharge.EnableSimulationSCE: true
+#services.Geometry: @local::protodunev6_geo
+
+#source is now a root file
+source:
+{
+  module_type: RootInput
+  maxEvents: -1
+  fileNames: ["input_file.root"]
+}
+
+physics:
+{
+
+ filters: {
+   fTruth: @local::beam_filter
+ }
+
+ fpath: [fTruth]
+
+ analyzers:
+ {
+  pduneana:          @local::pi0_test_selection
+  #beamtruth:        @local::ProtoDUNETruthBeamParticle_params
+ }
+
+ #ana2:  [ anaMod, beamtruth ]
+ pi0Ana: [pduneana]
+
+ end_paths:     [ pi0Ana ]
+}
+
+outputs: {}
+physics.filters.fTruth.PDG: [211, -13, 2212]
+physics.analyzers.pduneana.SelectEvents: ["fpath"]
+services.ParticleInventoryService.ParticleInventory.EveIdCalculator: "EmEveIdCalculator"
