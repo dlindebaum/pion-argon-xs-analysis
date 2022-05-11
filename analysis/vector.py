@@ -3,7 +3,7 @@ Created on: 26/01/2022 15:45
 
 Author: Shyam Bhuller
 
-Description: Contains vector operations, based of awkward array records.
+Description: contais vector operations, based of awkward array records.
 """
 
 import awkward as ak
@@ -23,7 +23,7 @@ def vector(x : ak.Array, y : ak.Array, z : ak.Array) -> ak.Record:
     return ak.zip({"x" : x, "y" : y, "z" : z})
 
 
-def magnitude(vec : ak.Record) -> ak.Array:
+def magntiude(vec : ak.Record) -> ak.Array:
     """magnitude of 3-vector
 
     Args:
@@ -44,12 +44,12 @@ def normalize(vec : ak.Record) -> ak.Record:
     Returns:
         ak.Record created by vector: norm of vector
     """
-    m = magnitude(vec)
+    m = magntiude(vec)
     return vector( vec.x / m, vec.y / m, vec.z / m )
 
 
 def dot(a : ak.Record, b : ak.Record) -> ak.Array:
-    """dot product of 3-vectors
+    """dot product of 3-vector
 
     Args:
         a (ak.Record created by vector): first vector
@@ -59,22 +59,6 @@ def dot(a : ak.Record, b : ak.Record) -> ak.Array:
         ak.Array: array of dot products
     """
     return (a.x * b.x) + (a.y * b.y) + (a.z * b.z)
-
-
-def cross(a : ak.Record, b : ak.Record) -> ak.Array:
-    """cross product of 3-vectors
-
-    Args:
-        a (ak.Record created by vector): first vector
-        b (ak.Record created by vector): second vector
-
-    Returns:
-        ak.Record: array of cross products
-    """
-    x = a.y*b.z - b.y*a.z
-    y = a.z*b.x - b.z*a.x
-    z = a.x*b.y - b.x*a.y
-    return ak.zip({"x": x, "y": y, "z": z})
 
 
 def prod(s, v : ak.Record) -> ak.Record:
@@ -100,7 +84,7 @@ def angle(a : ak.Record, b : ak.Record) -> ak.Array:
     Returns:
         ak.Array: angle between a and b
     """
-    return np.arccos(dot(a, b) / (magnitude(a) * magnitude(b)))
+    return np.arccos(dot(a, b) / (magntiude(a) * magntiude(b)))
 
 
 def dist(a : ak.Record, b : ak.Record):
@@ -113,10 +97,10 @@ def dist(a : ak.Record, b : ak.Record):
     Returns:
         ak.Array: distance between a and b
     """
-    return magnitude(ak.zip({"x": a.x - b.x, "y": a.y - b.y, "z": a.z - b.z}))
+    return magntiude(ak.zip({"x": a.x - b.x, "y": a.y - b.y, "z": a.z - b.z}))
 
 
-def add(a : ak.Record, b : ak.Record):
+def Add(a : ak.Record, b : ak.Record):
     """Compute vector addition of two vectors
 
     Args:
@@ -124,19 +108,6 @@ def add(a : ak.Record, b : ak.Record):
         b (ak.Record created by vector): another vector
 
     Returns:
-        ak.Array: addition of a and b
+        ak.Array: distance between a and b
     """
     return ak.zip({"x": a.x + b.x, "y": a.y + b.y, "z": a.z + b.z})
-
-
-def sub(a : ak.Record, b : ak.Record):
-    """Compute vector subtraction (displacement) of two vectors
-
-    Args:
-        a (ak.Record created by vector): a vector
-        b (ak.Record created by vector): another vector
-
-    Returns:
-        ak.Array: displacement between a and b
-    """
-    return ak.zip({"x": a.x - b.x, "y": a.y - b.y, "z": a.z - b.z})

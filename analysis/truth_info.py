@@ -26,7 +26,7 @@ def main():
         if sampleType == "beam":
             events = Master.BeamMCFilter(events)
 
-    t = events.trueParticles.CalculatePairQuantities() # calculate truth info
+    t = events.trueParticles.CalculatePhotonPairProperties() # calculate truth info
 
     #* plotting
     if save is True:

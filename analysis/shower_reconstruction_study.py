@@ -16,7 +16,7 @@ import numpy as np
 import Plots
 import Master
 import merge_study
-import pandas as pd
+import matching_study
 
 def Plot2DRatio(ind : int, truths : np.array, errors : np.array, labels : str, xlabels : str, ylabels : str, nrows : int, ncols : int, bins : int = 25):
     """ Plot ratio of 2D histograms
@@ -33,7 +33,7 @@ def Plot2DRatio(ind : int, truths : np.array, errors : np.array, labels : str, x
         bins (int, optional): number of bins per axes. Defaults to 25.
     """
     fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(6.4*ncols,4.8*nrows)) # make subplots
-    for i in range(len(s_l)):
+    for i in range(len(names)):
         x = truths[i][ind]
         y = errors[i][ind]
         if len(e_range[ind]) == 0:
@@ -60,6 +60,7 @@ def Plot2DRatio(ind : int, truths : np.array, errors : np.array, labels : str, x
             fig.colorbar(im, ax=axes.flat[i])
         axes.flat[i].set_aspect("auto")
         axes.flat[i].set_title(labels[i])
+    fig.delaxes(axes.flat[-1])
     # add common x and y axis labels
     fig.add_subplot(1, 1, 1, frame_on=False)
     # Hiding the axis ticks and tick labels of the bigger plot
@@ -105,7 +106,7 @@ def Plot1D(data : ak.Array, xlabels : list, subDir : str, labels : list, plot_ra
     """
     if save is True: os.makedirs(outDir + subDir, exist_ok=True)
     for i in range(len(names)):
-        if len(labels) == 1:
+        if len(s_l) == 1:
             d = data[0][i]
             if len(plot_ranges[i]) == 2:
                 d = d[d > plot_ranges[i][0]]
@@ -128,22 +129,17 @@ def Plot2D(true_data : ak.Array, error_data : ak.Array):
     """
     # plot 2D plots of all quantities
     if save is True: os.makedirs(outDir + "2D/", exist_ok=True)
-    if len(s_l) > 1:
-        for i in range(len(names)):
-            Plot2DRatio(i, true_data, error_data, s_l, t_l[i], e_l[i], figSize2D[0], figSize2D[1])
-            if save is True: Plots.Save(names[i], outDir + "2D/")
-            if save is True: os.makedirs(outDir + "2D/", exist_ok=True)
+    for i in range(len(names)):
+        Plot2DRatio(i, true_data, error_data, s_l, t_l[i], e_l[i], 3, 2)
+        if save is True: Plots.Save(names[i], outDir + "2D/")
+        if save is True: os.makedirs(outDir + "2D/", exist_ok=True)
 
-        # plot opening angle and invariant mass against pi0 momentum
-        #Plot2DMulti(true_data[:, 4], error_data[:, 0], t_l[4], e_l[0], "inv_mass_vs_mom", t_range[4], e_range[0])
-        #Plot2DMulti(true_data[:, 4], error_data[:, 1], t_l[4], e_l[1], "angle_vs_mom", t_range[4], e_range[0])
-    else:
-        for i in range(len(names)):
-            Plots.PlotHist2D(true_data[0, i], error_data[0, i], bins, t_range[i], e_range[i], t_l[i], e_l[i])
-            if save is True: Plots.Save(names[i], outDir + "2D/")
+    # plot opening angle and invariant mass against pi0 momentum
+    Plot2DMulti(true_data[:, 4], error_data[:, 0], t_l[4], e_l[0], "inv_mass_vs_mom", t_range[4], e_range[0])
+    Plot2DMulti(true_data[:, 4], error_data[:, 1], t_l[4], e_l[1], "angle_vs_mom", t_range[4], e_range[0])
 
 
-def SelectSample(events : Master.Data, nDaughters : int, merge : bool = False, backtracked : bool = False, cheatMerging : bool = False):
+def SelectSample(events : Master.Data, nDaughters : int, merge : bool = False):
     """ Applies MC matching and shower merging to events with
         specificed number of objects
 
@@ -155,123 +151,37 @@ def SelectSample(events : Master.Data, nDaughters : int, merge : bool = False, b
     Returns:
         Master.Data: selected sample
     """
-
     valid = Master.Pi0MCMask(events, nDaughters) # get mask of events
-    filtered = events.Filter([valid], [valid], True) # filter events with mask
-
-    if backtracked == False:
-        matched, unmatched, selection = filtered.MCMatching(applyFilters=False)
-        filtered.Filter([selection],[selection]) # apply the selection
-    else:
-        singleMatchedEvents = filtered.trueParticlesBT.SingleMatch
-        filtered.Filter([singleMatchedEvents], [singleMatchedEvents])
-        best_match, selection = filtered.MatchByAngleBT()
-        filtered.Filter([selection], [selection])
-
-    if merge is True and backtracked is False:
+    filtered = events.Filter([valid], [valid]) # filter events with mask
+    matched, unmatched, selection = filtered.MCMatching(applyFilters=False)
+    filtered.Filter([selection],[selection], returnCopy=False) # apply the selection
+    if merge is True:
         filtered = merge_study.mergeShower(filtered, matched[selection], unmatched[selection], 1, False)
-
-    if merge is True and backtracked is True:
-        if cheatMerging is True:
-            filtered, null = filtered.MergePFPCheat()
-            filtered.Filter([null], [null])
-        else:
-            filtered = filtered.MergeShowerBT(best_match[selection])
-
-    # if we don't merge showers, just get the showers matched to MC
-    if merge is False and backtracked is False:
-        filtered.Filter([matched[selection]])
-    if merge is False and backtracked is True:
-        filtered.Filter([best_match[selection]])
+    else:
+        # if we don't merge showers, just get the showers matched to MC
+        filtered.Filter([matched[selection]], returnCopy=False)
     return filtered
 
-
-def PlotFromCSV():
-    t = []
-    r = []
-    e = []
-    for f in file:
-        data = np.genfromtxt(f, delimiter=',')
-        data = data[1:, 1:]
-
-        t.append(np.transpose(data[:, 0:5]))
-        r.append(np.transpose(data[:, 5:10]))
-        e.append(np.transpose(data[:, 10:15]))
-    t = ak.Array(t)
-    r = ak.Array(r)
-    e = ak.Array(e)
-
-    print(f"number of pi0 decays: {len(t[0][0])}")
-
-    if plotsToMake in ["all", "truth"]: Plot1D(t, t_l, "truth/", s_l, t_range, t_locs) # MC truth for unmerged and merged are identical, so don't plot them
-    if plotsToMake in ["all", "reco"]: Plot1D(r, r_l, "reco/", s_l, r_range, r_locs, r_xs, r_ys)
-    if plotsToMake in ["all", "error"]: Plot1D(e, e_l, "error/", s_l, e_range, e_locs)
-    if plotsToMake in ["all", "2D"]: Plot2D(t, e)
-
-
-def AnalyseMultipleFiles():
-    nPFP = []
-    for f in file:
-        events = Master.Data(f, includeBackTrackedMC=True)
-        events.ApplyBeamFilter()
-
-        if ak.count(nPFP) == 0:
-            nPFP = ak.count(events.recoParticles.nHits, -1)
-        else:
-            nPFP = ak.concatenate([nPFP, ak.count(events.recoParticles.nHits, -1)])
-
-        # apply additional selection for beam MC events
-        print(f"beamMC : {events.trueParticles.pi0_MC}")
-        if events.trueParticles.pi0_MC == False:
-            print("apply beam MC filter")
-            events = Master.BeamMCFilter(events)
-
-        samples = []
-        for i in range(len(s_l)):
-            print(f"number of objects: {n_obj[i]}")
-            print(f"merge?: {merge[i]}")
-            samples.append(SelectSample(events, n_obj[i], merge[i], bt[i], cheat[i]))
-        label = ["true", "reco", "error"]
-        for k in range(len(s_l)):
-            q = Master.CalculateQuantities(samples[k])
-            for i in range(len(q)):
-                if i == 0:
-                    df = pd.concat([ak.to_pandas(q[i][j], anonymous=f"{label[i]} {names[j]}") for j in range(len(names))], axis=1)
-                else:
-                    df = pd.concat([df, pd.concat([ak.to_pandas(q[i][j], anonymous=f"{label[i]} {names[j]}") for j in range(len(names))], axis=1)], axis=1)
-            df.to_csv(f"output_{s_l[k]}.csv", mode="a")
-
-    if save is True: os.makedirs(outDir, exist_ok=True)
-    Plots.PlotBar(nPFP[nPFP>0], xlabel="Number of particle flow objects per event")
-    if save is True: Plots.Save(outDir + "n_objects")
-
-
-def AnalyseSingle():
-    events = Master.Data(file, includeBackTrackedMC=True)
+@Master.timer
+def main():
+    events = Master.Data(file)
     events.ApplyBeamFilter() # apply beam filter if possible
-
-    # apply additional selection for beam MC events
-    print(f"beamMC : {events.trueParticles.pi0_MC}")
-    if events.trueParticles.pi0_MC == False:
-        print("apply beam MC filter")
-        events = Master.BeamMCFilter(events)
-
+    
     if save is True: os.makedirs(outDir, exist_ok=True)
-    n = ak.count(events.recoParticles.nHits, -1)
-    Plots.PlotBar(n[n>0], xlabel="Number of particle flow objects per event")
+    Plots.PlotBar(ak.count(events.recoParticles.nHits, -1), xlabel="Number of particle flow objects per event")
     if save is True: Plots.Save(outDir + "n_objects")
 
-    samples = []
+    samples = []  
     for i in range(len(s_l)):
         print(f"number of objects: {n_obj[i]}")
         print(f"merge?: {merge[i]}")
-        samples.append(SelectSample(events, n_obj[i], merge[i], bt[i], cheat[i]))
+        samples.append(SelectSample(events, n_obj[i], merge[i]))
 
     t = []
     r = []
     e = []
     for sample in samples:
-        q = Master.CalculateQuantities(sample)
+        q = Master.CalculateQuantities(sample, names)
         t.append(q[0])
         r.append(q[1])
         e.append(q[2])
@@ -285,33 +195,15 @@ def AnalyseSingle():
     if plotsToMake in ["all", "error"]: Plot1D(e, e_l, "error/", s_l, e_range, e_locs)
     if plotsToMake in ["all", "2D"]: Plot2D(t, e)
 
-
-@Master.timer
-def main():
-    if isinstance(file, list):
-
-        if all("csv" == f.split('.')[-1] for f in file):
-            print("plot data")
-            PlotFromCSV()
-        elif all("root" == f.split('.')[-1] for f in file):
-            print("analyse data")
-            AnalyseMultipleFiles()
-        else:
-            print("bad file list, include either only root files or csv files")
-    else:
-        AnalyseSingle()
-
 if __name__ == "__main__":
-    plt.rcParams.update({'font.size': 12})
     names = ["inv_mass", "angle", "lead_energy", "sub_energy", "pi0_mom"]
     # plot labels
     t_l = ["True invariant mass (GeV)", "True opening angle (rad)", "True leading photon energy (GeV)", "True Sub leading photon energy (GeV)", "True $\pi^{0}$ momentum (GeV)"]
     e_l = ["Invariant mass fractional error", "Opening angle fractional error", "Leading shower energy fractional error", "Sub leading shower energy fractional error", "$\pi^{0}$ momentum fractional error"]
     r_l = ["Invariant mass (GeV)", "Opening angle (rad)", "Leading shower energy (GeV)", "Sub leading shower energy (GeV)", "$\pi^{0}$ momentum (GeV)"]
     # plot ranges, order is invariant mass, angle, lead energy, sub energy, pi0 momentum
-    #e_range = [[-10, 10], [-10, 10], [], [], [-1, 0]]
-    #e_range = [[-1, 5], [-1, 10], [-1, 1], [-1, 2], [-1, 0]] * 5
-    e_range = [[]] * 5
+    #e_range = [[], [], [-10, 10], [-10, 10], [-10, 0]]
+    e_range = [[-1, 1], [-1, 1], [-1, 1], [-1, 1], [-1, 0]] * 5
     r_range = [[]] * 5
     r_range[0] = [0, 0.5]
     t_range = [[]] * 5
@@ -325,26 +217,12 @@ if __name__ == "__main__":
     #r_ys = ["linear", "linear", "log", "log", "linear"] #? something like this?
     #r_xs = ["linear", "linear", "linear", "linear", "linear"] #? something like this?
 
-    # n_obj = [2, -2, -2, -2]
-    # bt = [True, True, True, True]
-    # merge = [True, False, True, True]
-    # cheat = [False, False, False, True]
-    # s_l = ["2 PFP's", "unmerged", "merged", "cheated merge"]
-    # figSize2D = [2, 2]
-
-    n_obj = [-1, -1, -1]
-    bt = [True] * 3
-    merge = [False, True, True]
-    cheat = [False, False, True]
-    s_l = ["unmerged", "merged", "cheated"]
-    figSize2D = [1, 3]
-
-    # n_obj = [-1]
-    # bt = [True]
-    # merge = [True]
-    # cheat = [True]
-    # s_l = [""]
-    # figSize2D = [1, 1]
+    #n_obj = [2, 3, -3]
+    #merge = [False, False, False]
+    #s_l = ["2 showers", "3 showers unmerged", ">3 showers unmerged"]
+    n_obj = [2, 3, -3, 3, -3]
+    merge = [False, False, False, True, True]
+    s_l = ["2 showers", "3 showers unmerged", ">3 showers unmerged", "3 showers merged", ">3 showers merged"]
 
     parser = argparse.ArgumentParser(description="Plot quantities to study shower reconstruction")
     parser.add_argument(dest="file", type=str, help="ROOT file to open.")
@@ -352,19 +230,12 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--save", dest="save", action="store_true", help="whether to save the plots")
     parser.add_argument("-d", "--directory", dest="outDir", type=str, default="pi0_0p5GeV_100K/shower_merge/", help="directory to save plots")
     parser.add_argument("-p", "--plots", dest="plotsToMake", type=str, choices=["all", "truth", "reco", "error", "2D"], default="all", help="what plots we want to make")
-    #args = parser.parse_args("csvfilelist.list -b 20 -p 2D".split()) #! to run in Jutpyter notebook
+    #args = parser.parse_args("work/ROOTFiles/pi0_0p5GeV_100K_5_7_21.root -b 20".split()) #! to run in Jutpyter notebook
     args = parser.parse_args() #! run in command line
 
-    if args.file.split('.')[-1] != "root":
-        files = []
-        with open(args.file) as filelist:
-            file = filelist.read().splitlines() 
-    else:
-        file = args.file
-
+    file = args.file
     bins = args.bins
     save = args.save
     outDir = args.outDir
     plotsToMake = args.plotsToMake
-    
     main()
