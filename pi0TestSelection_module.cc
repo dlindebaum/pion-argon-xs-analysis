@@ -124,6 +124,7 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   protoana::ProtoDUNETruthUtils truthUtil;
   protoana::ProtoDUNEShowerUtils showerUtil;
   protoana::ProtoDUNETrackUtils trackUtil;
+
   // local variables
   TTree *fOutTree = new TTree;
 
@@ -341,6 +342,7 @@ double protoana::pi0TestSelection::ShowerEnergyCalculator(const std::vector<art:
   return total_energy;
 }
 
+
 // track/shower identification done thorugh pandora, returns 11 for a shower and 13 for a track
 int protoana::pi0TestSelection::PandoraIdentification(const recob::PFParticle &daughterPFP, const art::Event &evt)
 {
@@ -360,6 +362,7 @@ int protoana::pi0TestSelection::PandoraIdentification(const recob::PFParticle &d
     }
     return -1;
 }
+
 
 // Calculates the CNN score of the event. Used to determine if a an event is track or shower like.
 std::vector<double> protoana::pi0TestSelection::CNNScoreCalculator(anab::MVAReader<recob::Hit,4> &hitResults, const std::vector< art::Ptr< recob::Hit > > &hits, unsigned int &n)
@@ -391,6 +394,7 @@ std::vector<double> protoana::pi0TestSelection::CNNScoreCalculator(anab::MVARead
 
   return output;
 }
+
 
 // calculates the quantities for determining hits close to the shower start
 std::vector<double> protoana::pi0TestSelection::StartHitQuantityCalculator(TVector3 &hitStart, TVector3 &hit, TVector3 &direction)
@@ -889,6 +893,7 @@ void protoana::pi0TestSelection::AnalyseMCTruthBeam(const art::Event &evt)
   trueBeamEndPosX = trueBeamEndPos.Y();
   trueBeamEndPosX = trueBeamEndPos.Z();
 }
+
 
 void protoana::pi0TestSelection::AnalyseFromBeam(art::Event const &evt, const detinfo::DetectorClocksData &clockData, const detinfo::DetectorPropertiesData &detProp, anab::MVAReader<recob::Hit,4> &hitResults, std::vector<recob::PFParticle> pfpVec)
 {
