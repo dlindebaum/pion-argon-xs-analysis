@@ -124,6 +124,7 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   protoana::ProtoDUNETruthUtils truthUtil;
   protoana::ProtoDUNEShowerUtils showerUtil;
   protoana::ProtoDUNETrackUtils trackUtil;
+
   // local variables
   TTree *fOutTree = new TTree;
 
@@ -362,6 +363,7 @@ int protoana::pi0TestSelection::PandoraIdentification(const recob::PFParticle &d
     return -1;
 }
 
+
 // Calculates the CNN score of the event. Used to determine if a an event is track or shower like.
 std::vector<double> protoana::pi0TestSelection::CNNScoreCalculator(anab::MVAReader<recob::Hit,4> &hitResults, const std::vector< art::Ptr< recob::Hit > > &hits, unsigned int &n)
 {
@@ -392,6 +394,7 @@ std::vector<double> protoana::pi0TestSelection::CNNScoreCalculator(anab::MVARead
 
   return output;
 }
+
 
 // calculates the quantities for determining hits close to the shower start
 std::vector<double> protoana::pi0TestSelection::StartHitQuantityCalculator(TVector3 &hitStart, TVector3 &hit, TVector3 &direction)
