@@ -3,7 +3,7 @@ Created on: 08/02/2022 17:00
 
 Author: Shyam Bhuller
 
-Description: Compare results of different filters for Pi0MC. 
+Description: Compare results of different filters for Pi0MC.
 """
 
 import argparse
@@ -175,7 +175,7 @@ def AnalyseMatching(events : Master.Data, nDaughters=None, cut : int = 0.25, tit
     return dists, angles, reco_mc_dist, reco_mc_angle, percentage
 
 
-def Plot1D(data : ak.Array, xlabels : list, labels : list, names : list, bins=50, plot_ranges = [[]]*5, density=True, legend_loc = ["upper right"]*5, save : bool = True, saveDir : str = ""):
+def Plot1D(data : ak.Array, xlabels : list, labels : list, names : list, bins=50, plot_ranges = [[]]*5, density=True, x_scale=["linear"]*5, y_scale=["linear"]*5, legend_loc = ["upper right"]*5, save : bool = True, saveDir : str = ""):
     """ 1D histograms of data for each sample
 
     Args:
@@ -186,7 +186,7 @@ def Plot1D(data : ak.Array, xlabels : list, labels : list, names : list, bins=50
     """
     if save is True: os.makedirs(saveDir, exist_ok=True)
     for i in range(len(names)):
-        Plots.PlotHistComparison(data[:, i], plot_ranges[i], bins=bins, xlabel=xlabels[i], histtype="step", labels=labels, density=density)
+        Plots.PlotHistComparison(data[:, i], plot_ranges[i], bins=bins, xlabel=xlabels[i], histtype="step", x_scale=x_scale[i], y_scale=y_scale[i], labels=labels, density=density)
         plt.legend(loc=legend_loc[i])
         if save is True: Plots.Save( names[i] , saveDir)
 
