@@ -255,7 +255,7 @@ if __name__ == "__main__":
     # merge = [False, True, True]
     # cheat = [False, False, True]
     # s_l = ["unmerged", "merged", "cheated merge"]
-    # figSize2D = [1, 3]
+    figSize2D = [1, 3]
 
     parser = argparse.ArgumentParser(description="Plot quantities to study shower reconstruction")
     parser.add_argument(dest="file", type=str, help="ROOT file to open.")
