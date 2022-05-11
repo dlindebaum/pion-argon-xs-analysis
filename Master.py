@@ -37,12 +37,12 @@ def timer(func):
 
 def __GenericFilter__(particleData, filters):
     for f in filters:
-            for var in vars(particleData):
-                if hasattr(getattr(particleData, var), "__getitem__"):
-                    try:
-                        setattr(particleData, var, getattr(particleData, var)[f])
-                    except:
-                        warnings.warn(f"Couldn't apply filters to {var}.")
+        for var in vars(particleData):
+            if hasattr(getattr(particleData, var), "__getitem__"):
+                try:
+                    setattr(particleData, var, getattr(particleData, var)[f])
+                except:
+                    warnings.warn(f"Couldn't apply filters to {var}.")
 
 
 class IO:
@@ -163,6 +163,52 @@ class Data:
         else:
             return matched_mask, unmatched_mask, selection
 
+    @timer
+    def MatchByAngleBT(self):
+        """ equivlant to shower matching/angluar closeness cut, but for backtracked MC.
+
+        Args:
+            events (Master.Data): events to look at
+
+        Raises:
+            Exception: if all reco PFP's backtracked to the same true particle
+
+        Returns:
+            ak.Array: angular closeness of "matched" particles
+            ak.Array: indices of reco particles with the smallest angular closeness
+            ak.Array: boolean mask of events which pass the angle cut
+        """
+        null_direction = self.recoParticles.direction.x == -999 # boolean mask of PFP's with undefined direction
+        null_momentum = self.recoParticles.momentum.x == -999 # boolean mask of PFP's with undefined momentum
+        null = np.logical_or(null_direction, null_momentum)
+        angle_error = vector.angle(self.recoParticles.direction, self.trueParticlesBT.direction) # calculate angular closeness
+        angle_error = ak.where(null, 999, angle_error) # if direction is undefined, angler error is massive (so not the best match)
+        ind = ak.local_index(angle_error, -1) # create index array of angles to use later
+
+        # get unique true particle numbers per event i.e. the photons which the reco PFP's backtrack to
+        mcIndex = self.trueParticlesBT.particleNumber
+        unqiueIndex = self.trueParticlesBT.GetUniqueParticleNumbers(mcIndex)
+
+        if(ak.any(ak.num(unqiueIndex) == 1)):
+            raise Exception("data contains events with reco particles matched to only one photon, did you forget to apply singleMatch filter?")
+
+        # get PFP's which match to the same true particle
+        mcp_0 = mcIndex == unqiueIndex[:, 0]
+        mcp_1 = mcIndex == unqiueIndex[:, 1]
+
+        # get the smallest angle error of each sorted PFP's
+        angle_error_0 = ak.min(angle_error[mcp_0], -1)
+        angle_error_1 = ak.min(angle_error[mcp_1], -1)
+
+        selection_bt = np.logical_and(angle_error_0 < 0.25, angle_error_1 < 0.25) # create boolean mask for the event selection
+
+        # get recoPFP indices which had the smallest angular closeness
+        indices_0 = ind[angle_error == angle_error_0]
+        indices_1 = ind[angle_error == angle_error_1]
+        best_match = ak.concatenate([indices_0, indices_1], -1)
+        best_match = best_match[:, 0:2]
+        return best_match, selection_bt
+
 
     def CreateSpecificEventFilter(self, eventNums : list):
         """ Create boolean mask which selects specific events and subruns to look at.
@@ -183,7 +229,7 @@ class Data:
         return f
 
 
-    def Filter(self, reco_filters : list = [], true_filters : list = [], returnCopy : bool = True):
+    def Filter(self, reco_filters : list = [], true_filters : list = [], returnCopy : bool = False):
         """ Filter events.
 
         Args:
@@ -232,13 +278,104 @@ class Data:
         beamParticleDaughters = self.recoParticles.mother == self.recoParticles.beam_number # get daugter of beam particle
         # combine masks
         particle_mask = np.logical_or(beamParticle, beamParticleDaughters)
-        self.Filter([hasBeam, particle_mask[hasBeam]], [hasBeam], returnCopy=False) # filter data
+        self.Filter([hasBeam, particle_mask[hasBeam]], [hasBeam]) # filter data
+    
+
+    def mergePFPCheat(self):
+        mcIndex = self.trueParticlesBT.particleNumber
+        unqiueIndex = self.trueParticlesBT.GetUniqueParticleNumbers(mcIndex) # get unique list of true particles
+        p_new = []
+        e_new = []
+        dir_new = []
+        truePFPMask = []
+        for i in range(2):
+            pfps = mcIndex == unqiueIndex[:, i] # sort pfps based on which true particle they back-track to
+            
+            # get single copy of true PFP
+            ind = ak.local_index(pfps, -1)
+            ind = ak.min(ind[pfps], -1)
+            truePFPMask.append(ak.unflatten(ind, 1, -1))
+
+            p = self.recoParticles.momentum[pfps]
+            p = ak.where(p.x == -999, {"x": 0,"y": 0,"z": 0}, p) # dont merge PFP's with null data
+            p_m = ak.sum(p, -1) # sum all momentum vectors
+            e_m = vector.magntiude(p_m)
+            dir_m = vector.normalize(p_m)
+            p_new.append(ak.unflatten(p_m, 1, -1))
+            e_new.append(ak.unflatten(e_m, 1, -1))
+            dir_new.append(ak.unflatten(dir_m, 1, -1))
+        
+        truePFPMask = ak.concatenate(truePFPMask, axis=-1)
+
+        events_merge = self.Filter(returnCopy=True) # easy way to make copies of the class
+        events_merge.recoParticles.momentum = ak.concatenate(p_new, axis=-1)
+        events_merge.recoParticles.energy = ak.concatenate(e_new, axis=-1)
+        events_merge.recoParticles.direction = ak.concatenate(dir_new, axis=-1)
+        
+        events_merge.trueParticlesBT.Filter([truePFPMask], False) # filter to get the true particles the merged PFP's relate to
+        null = np.logical_not(ak.any(events_merge.recoParticles.energy == 0, -1)) # exlucde events where all PFP's merged had no valid momentmum vector
+        print(f"Events where one merged PFP had undefined momentum: {ak.count(null[np.logical_not(null)])}")
+        return events_merge, null
+
+    def MergeShowerBT(self, best_match : ak.Array):
+        if bool(ak.all(ak.num(self.recoParticles.energy[self.recoParticles.energy != -999]) == 2)) is True:
+            counts = 0
+        else:
+            counts = 1
+        #* get boolean mask of PFP's to merge
+        index = ak.local_index(self.recoParticles.energy)
+        to_merge = [ ak.where(index == best_match[:, i], False, True) for i in range(2) ]
+        to_merge = np.logical_and(*to_merge)
+
+        #* calculate angle between each best matched shower and the showers to merge
+        best_match_dir = self.recoParticles.direction[best_match]
+        to_merge_dir = self.recoParticles.direction[to_merge]
+        not_null = to_merge_dir.x != -999
+        to_merge_dir = to_merge_dir[not_null]
+
+        angles = [ak.unflatten(vector.angle(to_merge_dir, best_match_dir[:, i]), counts, -1) for i in range(2)]
+        angles = ak.concatenate(angles, -1)
+        # check which angle is the smallest i.e. decide which main shower to merge to
+        minMask_angle = ak.min(angles, -1) == angles
+
+        #* merge momenta
+        momentumToMerge = self.recoParticles.momentum[to_merge]
+        momentumToMerge = momentumToMerge[not_null]
+        valid_mom = momentumToMerge.x != -999 # we don't want to merge invalid PFP's
+        momentumToMerge = momentumToMerge[valid_mom]
+        minMask_angle = minMask_angle[valid_mom]
+        minMask_angle = [minMask_angle[:, :, i] for i in range(2)]
+
+        momentumToMerge = [ak.sum(momentumToMerge[minMask_angle[i]], -1) for i in range(2)]
+        leading_momentum = self.recoParticles.momentum[best_match]
+
+        # add the merged momenta to their respective leading showers
+        mergedMomentum = [ak.unflatten(vector.Add(leading_momentum[:, i], momentumToMerge[i]), 1, -1) for i in range(2)]
+        mergedMomentum = ak.concatenate(mergedMomentum, -1)
+
+        mergedDirection = [ak.unflatten(vector.normalize(mergedMomentum[:, i]), 1, -1) for i in range(2)]
+        merged_direction = ak.concatenate(mergedDirection, -1)
+
+        merged_energy = [ak.unflatten(vector.magntiude(mergedMomentum[:, i]), 1, -1) for i in range(2)]
+        merged_energy = ak.concatenate(merged_energy, -1)
+
+        merged_events = self.Filter(returnCopy=True)
+        merged_events.recoParticles.momentum = mergedMomentum
+        merged_events.recoParticles.direction = merged_direction
+        merged_events.recoParticles.energy = merged_energy
+
+        merged_events.trueParticlesBT.Filter([best_match], returnCopy=False)
+        return merged_events
 
 
 class ParticleData(ABC):
     @abstractmethod
     def __init__(self, events : Data) -> None:
         self.events = events # keep reference of parent class
+        pass
+
+    @abstractmethod
+    def CalculatePairQuantities(self):
         pass
 
 
@@ -317,7 +454,8 @@ class TrueParticleData(ParticleData):
             photons = np.logical_and(primary_daughters, self.pdg == 22) # only want photons
         return photons
 
-    def CalculatePhotonPairProperties(self):
+
+    def CalculatePairQuantities(self):
         """ Calculate true shower pair quantities.
         Args:
             events (Master.Event): events to process
@@ -379,14 +517,17 @@ class RecoParticleData(ParticleData):
         return mom
 
 
-    def CalculateShowerPairQuantities(self):
-        #? move functionality into recoParticleData class and have each value as an @property?
+    def CalculatePairQuantities(self, useBT : bool = False):
+        #? have each value as an @property?
         """ Calculate reconstructed shower pair quantities.
 
         Returns:
             tuple of ak.Array: calculated quantities + array which masks null shower pairs
         """
-        sortEnergy = self.events.SortedTrueEnergyMask
+        if useBT is True:
+            sortEnergy = ak.argsort(self.events.trueParticlesBT.energy)
+        else:
+            sortEnergy = self.events.SortedTrueEnergyMask
         sortedPairs = ak.unflatten(self.energy[sortEnergy], 1, 0)
         leading = sortedPairs[:, :, 1:]
         secondary = sortedPairs[:, :, :-1]
@@ -503,7 +644,117 @@ class TrueParticleDataBT(ParticleData):
             self.energy = events.io.Get("reco_daughter_PFP_true_byHits_startE")
             #! multiplying energy by 1000 seems to ruin everything?
             #self.energy = ak.where(self.energy < 0, -999, self.energy*1000)
+    
+    @property
+    def particleNumber(self):
+        """ Gets the true particle number of each true particle batckracked to reco
 
+        Args:
+            events (Master.Data): events to look at
+
+        Returns:
+            ak.Array(): awkward array of true particle indices
+        """
+        photonEnergies = self.events.trueParticles.energy[self.events.trueParticles.truePhotonMask] # assign true particle number by comparing energies
+        photonNum = self.events.trueParticles.number[self.events.trueParticles.truePhotonMask]
+
+        photonEnergies = ak.pad_none(photonEnergies, 2) # pad these arrays since occasionaly we can get more than two particles from the photon mask 
+        photonNum = ak.pad_none(photonNum, 2)
+
+        # loop through all true photons and check the energy matches
+        index = None
+        for i in range(2):
+            matched = self.energy == photonEnergies[:, i] # mask which checked the backtracked MC is the same as the ith photon slice 
+            if i == 1:
+                index = ak.where(index == -1, ak.where(matched, photonNum[:, i], -1), index) # where -1, see below, else leave index unchanged
+            else:
+                index = ak.where(matched, photonNum[:, i], -1) # where true add slice, elseset indices to -1
+        return index
+
+
+    def GetUniqueParticleNumbers(self, index : ak.Array):
+        """ Gets the unique true particle numbers backtracked to each reco particle.
+            e.g. if indices are [1, 2, 1, 3, 3, 3], unique is [1, 2, 3] 
+
+        Args:
+            index (ak.Array): particle numbers of the true particles which were backtracked.
+
+        Returns:
+            ak.Array: unique particle numbers
+        """
+        maxNPFP = ak.max(ak.num(index)) # get the larget number of PFParticles in an event
+        index_padded = ak.pad_none(index, maxNPFP) # pad index array so all nested arrays are equal (can convert to numpy array)
+        index_padded = ak.fill_none(index_padded, -1) # fill None entries in nested arrays
+        index_padded = ak.fill_none(index_padded, [-1]*maxNPFP, 0) # fill events with no counts with [-1]*nPFP
+
+        index_padded_np = ak.to_numpy(index_padded)
+        #? can I do this without loops?
+        uniqueIndex = [np.unique(index_padded_np[i, :]) for i in range(len(index_padded_np))] # get the unique entries per event
+        uniqueIndex = ak.Array(uniqueIndex)
+
+        # remove -1 entries as these just represent padded entries
+        return uniqueIndex[uniqueIndex != -1]
+
+    @property
+    def SingleMatch(self):
+        """ Get a boolean mask of events with more than one tagged true particle
+            in the back tracker.
+
+        Returns:
+            ak.Array: boolean mask
+        """
+        unqiueIndex = self.GetUniqueParticleNumbers(self.particleNumber)
+        singleMatch = ak.num(unqiueIndex) != 2
+        return np.logical_not(singleMatch)
+
+
+    def CalculatePairQuantities(self):
+        #? have each value as an @property?
+        #? method is almost identical as reconsturected particleData equivilant. do we keep this function in the Data class?
+        """ Calculate reconstructed shower pair quantities.
+
+        Returns:
+            tuple of ak.Array: calculated quantities + array which masks null shower pairs
+        """
+        sortEnergy = ak.argsort(self.energy)
+        sortedPairs = ak.unflatten(self.energy[sortEnergy], 1, 0)
+        leading = sortedPairs[:, :, 1:]
+        secondary = sortedPairs[:, :, :-1]
+
+        #* opening angle
+        direction_pair = ak.unflatten(self.direction[sortEnergy], 1, 0)
+        direction_pair_mag = vector.magntiude(direction_pair)
+        angle = np.arccos(vector.dot(direction_pair[:, :, 1:], direction_pair[:, :, :-1]) / (direction_pair_mag[:, :, 1:] * direction_pair_mag[:, :, :-1]))
+
+        #* Invariant Mass
+        inv_mass = (2 * leading * secondary * (1 - np.cos(angle)))**0.5
+
+        #* pi0 momentum
+        pi0_momentum = vector.magntiude(ak.sum(self.momentum, axis=-1))/1000
+
+        null_dir = np.logical_or(direction_pair[:, :, 1:].x == -999, direction_pair[:, :, :-1].x == -999) # mask shower pairs with invalid direction vectors
+        null = np.logical_or(leading < 0, secondary < 0) # mask of shower pairs with invalid energy
+        
+        #* filter null data
+        pi0_momentum = np.where(null_dir, -999, pi0_momentum)
+        pi0_momentum = np.where(null, -999, pi0_momentum)
+
+        leading = leading/1000
+        secondary = secondary/1000
+
+        leading = np.where(null, -999, leading)
+        leading = np.where(null_dir, -999, leading)
+        secondary = np.where(null, -999, secondary)
+        secondary = np.where(null_dir, -999, secondary)
+
+        angle = np.where(null, -999, angle)
+        angle = np.where(null_dir, -999, angle)
+
+        inv_mass = inv_mass/1000
+        inv_mass = np.where(null, -999, inv_mass)
+        inv_mass = np.where(null_dir, -999, inv_mass)
+
+        return inv_mass, angle, leading, secondary, pi0_momentum
 
 
 def NPFPMask(events : Data, daughters : int = None):
@@ -599,7 +850,7 @@ def FractionalError(reco : ak.Array, true : ak.Array, null : ak.Array):
         tuple of np.array: flattened numpy array of errors, reco and truth
     """
     true = true[null]
-    true = ak.where( ak.num(true, 1) > 0, true, [np.nan]*len(true) )
+    true = ak.where( ak.num(true, 1) > 0, true, np.nan)
     reco = ak.flatten(reco, 1)[null]
     print(f"number of reco pairs: {len(reco)}")
     print(f"number of true pairs: {len(true)}")
@@ -617,8 +868,8 @@ def CalculateQuantities(events : Data, names : str):
     Returns:
         tuple of np.arrays: quantities to plot
     """
-    mct = events.trueParticles.CalculatePhotonPairProperties()
-    rmc = events.recoParticles.CalculateShowerPairQuantities()
+    mct = events.trueParticles.CalculatePairQuantities()
+    rmc = events.recoParticles.CalculatePairQuantities()
 
     # keep track of events with no shower pairs
     null = ak.flatten(rmc[-1], -1)
@@ -638,3 +889,47 @@ def CalculateQuantities(events : Data, names : str):
     reco = np.nan_to_num(reco, nan=-999)
     true = np.nan_to_num(true, nan=-999)
     return true, reco, error
+
+
+def ShowerMergePerformance(events : Data, best_match : ak.Array):
+    """ Checks the fraction of correctly merged showers. 
+        Does so by checking if the showers to merge have the 
+        same true particle number as the target shower.
+
+    Args:
+        events (Data): events to study
+        best_match (ak.Array): target PFP's to merge to.
+    """
+    if bool(ak.all(ak.num(events.recoParticles.energy[events.recoParticles.energy != -999]) == 2)) is True:
+        counts = 0
+    else:
+        counts = 1
+    index = ak.local_index(events.recoParticles.energy)
+    to_merge = [ ak.where(index == best_match[:, i], False, True) for i in range(2) ]
+    to_merge = np.logical_and(*to_merge)
+
+    #* calculate angle between each best matched shower and the showers to merge
+    best_match_dir = events.recoParticles.direction[best_match]
+    to_merge_dir = events.recoParticles.direction[to_merge]
+    not_null = to_merge_dir.x != -999
+    to_merge_dir = to_merge_dir[not_null]
+
+    angles = [ak.unflatten(vector.angle(to_merge_dir, best_match_dir[:, i]), counts, -1) for i in range(2)]
+    angles = ak.concatenate(angles, -1)
+    # check which angle is the smallest i.e. decide which main shower to merge to
+    minMask_angle = ak.min(angles, -1) == angles
+
+    index_to_merge = [(index[to_merge])[minMask_angle[:, :, i]] for i in range(2)]
+
+    targetParticleNumber = events.trueParticlesBT.particleNumber[best_match]
+
+    correct_merge = [events.trueParticlesBT.particleNumber[index_to_merge[i]] == targetParticleNumber[:, i] for i in range(2)]
+
+    correctlyMerged = ak.count(correct_merge[0][correct_merge[0]]) + ak.count(correct_merge[1][correct_merge[1]])
+    total = ak.count(correct_merge[0]) + ak.count(correct_merge[1])
+    if total > 0:
+        correct_merge = (correctlyMerged/total) * 100
+    else:
+        correct_merge = 100
+    print(f"nPFP's correctly merged: {correct_merge:.2f}%")
+    return correct_merge
