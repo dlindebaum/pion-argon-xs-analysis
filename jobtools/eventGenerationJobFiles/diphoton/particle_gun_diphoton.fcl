@@ -1,0 +1,24 @@
+#include "protoDUNE_gensingle.fcl"
+services.TFileService.fileName: "gen_protoDune_diphoton_hist.root"
+source.maxEvents: 100
+outputs.out1.fileName: "gen_protoDune_diphoton.root"
+physics.producers.generator.PadOutVectors: true
+physics.producers.generator.PDG: [22, 22]
+
+
+physics.producers.generator.PosDist: 0
+physics.producers.generator.X0: [0.0]
+physics.producers.generator.Z0: [-25.0]
+physics.producers.generator.SigmaX: [20.0]
+physics.producers.generator.SigmaY: [20.0]
+physics.producers.generator.SigmaZ: [20.0]
+
+
+physics.producers.generator.PDist: 0
+physics.producers.generator.P0: [5]
+physics.producers.generator.SigmaP: [2]
+
+
+physics.producers.generator.AngleDist: 0
+physics.producers.generator.SigmaThetaXZ: [60]
+physics.producers.generator.SigmaThetaYZ: [60]
