@@ -21,7 +21,7 @@ pi0_test_selection:
 
    SelectEvents: []
 
-   BeamlineUtils:        @local::standard_protodunebeamlineutils
+   BeamlineUtils: @local::standard_protodunebeamlineutils
    Pi0Only: true
    RetrieveSpacePoints: false
    # Retrieve G4 determines what truth information should be accessed has 4 options:
@@ -30,12 +30,8 @@ pi0_test_selection:
    # 2 : DIPHOTON, get the first two MC particles (and their daughters maybe?), only use when analysing diphoton MC.
    # 3 : ALL, NOT RECOMMENDED as it retrieves all MC particles from the truth table, and resulting file sizes will be significantly larger.
    RetrieveG4: 1
-   AnalyseFromBeam: true
    CalibrationParsSCE: @local::CalorimetryParameters_SPProd4_MC_SCE
-
-   #CalibrationParsSCE: @local::CalorimetryParameters_SPProd2_MC_SCE
-   #CalibrationParsSCE: @local::CalorimetryParameters_SPProd2_MC_35ms
-
+   Debug: false
 }
 
 services:
@@ -64,7 +60,6 @@ services.message.destinations.LogStandardOut.threshold: "INFO"
 services.SpaceCharge.EnableSimEfieldSCE: true
 services.SpaceCharge.EnableSimSpatialSCE: true
 services.SpaceCharge.EnableSimulationSCE: true
-#services.Geometry: @local::dune10kt_1x2x6_v2_geo
 
 #source is now a root file
 source:
