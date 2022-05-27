@@ -839,13 +839,13 @@ def BeamMCFilter(events : Data, n_pi0 : int = 1):
     #* only look at events with 1 primary pi0
     pi0 = filtered.trueParticles.PrimaryPi0Mask
     single_primary_pi0 = ak.num(pi0[pi0]) == n_pi0 # only look at events with 1 pi0
-    filtered.Filter([single_primary_pi0], [single_primary_pi0], False)
+    filtered.Filter([single_primary_pi0], [single_primary_pi0])
 
     #* remove true particles which aren't primaries
     primary_pi0 = filtered.trueParticles.PrimaryPi0Mask
     primary_daughter = filtered.trueParticles.truePhotonMask # this is fine so long as we only care about pi0->gamma gamma
     primaries = np.logical_or(primary_pi0, primary_daughter)
-    filtered.Filter([], [primaries], False)
+    filtered.Filter([], [primaries])
     return filtered
 
 
