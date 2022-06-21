@@ -41,9 +41,15 @@ To run grid jobs first run the following command on a dunegpvm:
 ```bash
 setup_fnal_security
 ```
-Which creates a new voms-proxy to let you submit jobs (note this will expire in 7 days so you should run this at least weekly). Now to run the analyser you need to create a tarball of the local products directory, as well as a bash script to setu the environment on the remote machine and a list of files you wish to process.
+Which creates a new voms-proxy to let you submit jobs (note this will expire in 7 days so you should run this at least weekly).
 
-Two bash scripts are needed to setup the environment, one called `setup-grid` and the other `setup-jobenv.sh`. Copy `setup-grid` into the localProducts directory and `setup-jobenv.sh` in the top directory of the environment.
+Then, setup jobtools:
+```bash
+source pi0-analysis/jobtools/setup_tools.sh
+```
+Now to run the analyser you need to create a tarball of the local products directory, as well as a bash script to setup the environment on the remote machine and a list of files you wish to process.
+
+The bash scripts in `jobsetup` are needed to setup the environment, one called `setup-grid` and the other `setup-jobenv.sh`. Copy `setup-grid` into the localProducts directory and `setup-jobenv.sh` in the top directory of the environment.
 
 First you need to create a list of root files to run (1 per job). Data/MC is stored on tape and prestaged to disk when people need to run an analysis. Typically most recent data/MC remains on disk but just in case, check the status of a dataset using cached_state.py
 
@@ -55,7 +61,7 @@ If a significant portion is on tape, you need to prestage a dataset so run the s
 Now, create a file list of prestaged data using `get_staged.py` for a given samweb definition i.e.:
 
 ```bash
-python get_staged.py PDSPProd4a_MC_6GeV_reco1_sce_datadriven_v1_00
+get_staged.py PDSPProd4a_MC_6GeV_reco1_sce_datadriven_v1_00
 ```
 
 To create a tarball which can run on the remote machines:
@@ -64,11 +70,25 @@ tar -czvf dunesw.tar.gz localProducts* setup-jobenv.sh <file-list>
 ```
 Ensure these files are on the top level directory.
 
-Now to run jobs:
+Now to run jobs you can use `submit_jobs.py` as follows:
 ```bash
-python submit_job.py <bash-file-to-run> -t <tarball>
+submit_job.py -s <configuration file>
 ```
-and more options can be found with --help.
+
+the configuration file (`.ini`) contains settings which can be changed for each gridjob such as file lists and resources. An example configuration is shown below:
+
+```ini
+[SETTINGS]
+numberOfJobs=1
+memory=2800MB
+disk=100MB
+lifetime=3h
+cpu=1
+tarball=/dune/app/users/sbhuller/dunesw/dunesw.tar.gz
+fhicl=runPi0_BeamSim.fcl
+outputDirectory=test ; relative file path, starts from /pnfs/dune/scratch/users/${USER}/
+fileList=/pnfs/dune/resilient/users/sbhuller/xaa.txt
+```
 
 To check the status of jobs you can use:
 ```bash
