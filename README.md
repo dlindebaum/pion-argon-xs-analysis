@@ -13,9 +13,9 @@ LArSoft module which retrieves and calculates some useful quantities to study re
 
 ---
 ## Installation
-Folder should be cloned in `src/protoduneana/`. The CMakeLists file that exists in the same directory as the cloned repo should be modified to include this line:
+Folder should be cloned in the top level directory and `pi0-analyser` should be copied into `srcs/protoduneana/protoduneana/`. The CMakeLists file that exists in the same directory as the cloned repo should be modified to include this line:
 ```
-add_subdirectory(pi0-analysis)
+add_subdirectory(pi0-analyser)
 ```
 
 Then, then rebuild the full environment by running `mrb i -j 16` in the build directory. Ensure you are doiing this on either `dunebuild01.fnal.gov` or `dunebuild02.fnal.gov` or else you will be shouted at.
@@ -49,7 +49,7 @@ source pi0-analysis/jobtools/setup_tools.sh
 ```
 Now to run the analyser you need to create a tarball of the local products directory, as well as a bash script to setup the environment on the remote machine and a list of files you wish to process.
 
-The bash scripts in `jobsetup` are needed to setup the environment, one called `setup-grid` and the other `setup-jobenv.sh`. Copy `setup-grid` into the localProducts directory and `setup-jobenv.sh` in the top directory of the environment.
+The bash scripts in `jobsetup` are needed to setup the environment, one called `setup-grid` and the other `setup-jobenv.sh`. Copy `setup-grid` into the localProducts directory and `setup-jobenv.sh` in the top directory of the environment. Note that lines 89, 94 and 96 in `setup-grid` need to be modified to include your dunesw version and the local products directory name. 
 
 First you need to create a list of root files to run (1 per job). Data/MC is stored on tape and prestaged to disk when people need to run an analysis. Typically most recent data/MC remains on disk but just in case, check the status of a dataset using cached_state.py
 
@@ -66,7 +66,7 @@ get_staged.py PDSPProd4a_MC_6GeV_reco1_sce_datadriven_v1_00
 
 To create a tarball which can run on the remote machines:
 ```bash
-tar -czvf dunesw.tar.gz localProducts* setup-jobenv.sh <file-list>
+tar -czvf dunesw.tar.gz localProducts* setup-jobenv.sh
 ```
 Ensure these files are on the top level directory.
 
@@ -113,7 +113,7 @@ output files produced by the job script should be in the specified out directory
 
 To merge multiple ROOT files, first get a file list, one way to do so is:
 ```bash
-ls <path to root files> > out.list
+ls <path to root files>/*.root > out.list
 ```
 
 then you can run the command `merge-ana.sh`:
@@ -126,6 +126,18 @@ hadd <foor file name> <ROOT files to merge>
 ```
 
 Note, that exceeding ~2000 root files will cause the process to crash, so merge files in batches and progressively merge the files.
+
+---
+
+## unfinished jobs
+
+It is normal for some jobs to fail or not complete, likely due to network errors with a specific node or other miscillaneous errors. A list of jobs which did not produce an output file can be found using `find-missing.py`:
+
+```bash
+find-missing.py <list of output files> <list of input files>
+```
+
+Note the list of output files can be found as shown in the previous section. With this new file list you can rerun the gridjobs.
 
 ***(Moving to hdfs storage?)***
 
