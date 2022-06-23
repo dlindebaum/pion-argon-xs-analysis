@@ -29,7 +29,6 @@ services.message.destinations.LogStandardOut.threshold: "INFO"
 services.SpaceCharge.EnableSimEfieldSCE: true
 services.SpaceCharge.EnableSimSpatialSCE: true
 services.SpaceCharge.EnableSimulationSCE: true
-#services.Geometry: @local::protodunev6_geo
 
 #source is now a root file
 source:
