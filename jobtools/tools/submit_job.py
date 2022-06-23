@@ -37,6 +37,7 @@ echo "Running on $(hostname) at ${GLIDEIN_Site}. GLIDEIN_DUNESite = ${GLIDEIN_DU
 
 # set the output location for copyback
 OUTDIR=/pnfs/dune/scratch/users/${GRID_USER}/${OUTDIR_NAME}/
+echo "Output directoty is ${OUTDIR}"
 
 #Let's rename the output file so it's unique in case we send multiple jobs.
 OUTFILE=pi0Test_output_${CLUSTER}_${PROCESS}_$(date -u +%Y%m%dT%H%M%SZ).root

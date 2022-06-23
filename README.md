@@ -86,7 +86,8 @@ lifetime=3h
 cpu=1
 tarball=/dune/app/users/sbhuller/dunesw/dunesw.tar.gz
 fhicl=runPi0_BeamSim.fcl
-outputDirectory=test ; relative file path, starts from /pnfs/dune/scratch/users/${USER}/
+; outputDirectory is a relative file path, starts from /pnfs/dune/scratch/users/${USER}/
+outputDirectory=test
 fileList=/pnfs/dune/resilient/users/sbhuller/xaa.txt
 ```
 
