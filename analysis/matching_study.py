@@ -160,7 +160,7 @@ def CreateFilteredEvents(events : Master.Data, nDaughters=None, cut : float = 0.
 def AnalyseMatching(events : Master.Data, nDaughters=None, cut : int = 0.25, title : str = ""):
     valid = Master.Pi0MCMask(events, nDaughters)
 
-    filtered = events.Filter([valid], [valid])
+    filtered = events.Filter([valid], [valid], returnCopy=True)
 
     print(f"Number of events: {ak.num(filtered.recoParticles.direction, 0)}")
     matched, _, selection, angles, dists, percentage = GetMCMatchingFilters(filtered, cut)
@@ -198,7 +198,7 @@ def Pi0MomFilter(events : Master.Data, r : list = [0.5, 1]):
     pi0_mom = vector.magntiude(events.trueParticles.momentum)[pi0]
     mask = np.logical_and(pi0_mom > r[0], pi0_mom < r[1])
     mask = ak.flatten(mask)
-    return events.Filter([mask], [mask])
+    return events.Filter([mask], [mask], returnCopy=True)
 
 @Master.timer
 def main():
