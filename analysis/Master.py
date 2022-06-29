@@ -64,6 +64,13 @@ class IO:
         except uproot.KeyInFileError:
             print(f"{item} not found in file, moving on...")
             return None
+    def List(self) -> list:
+        """Print the parameters in the uproot file.
+
+        Returns:
+            list: Top level parameters
+        """        
+        return self.file.keys()
 
 
 class Data:
@@ -423,6 +430,10 @@ class ParticleData(ABC):
             __GenericFilter__(filtered, filters)
             filtered.filters = list(self.filters + filters)
             return filtered
+    
+    def GetValues(self, value):
+        if hasattr(self.events, "io"):
+            return self.events.io.Get(value)
 
 
 class TrueParticleData(ParticleData):
@@ -526,7 +537,7 @@ class TrueParticleData(ParticleData):
         photons = self.truePhotonMask
         sortEnergy = self.events.SortedTrueEnergyMask
         
-        #* compute start momentum of dauhters
+        #* compute start momentum of daughters
         p_daughter = self.momentum[photons]
         sum_p = ak.sum(p_daughter, axis=1)
         sum_p = vector.magntiude(sum_p)
