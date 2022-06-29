@@ -65,6 +65,13 @@ class IO:
         except uproot.KeyInFileError:
             print(f"{item} not found in file, moving on...")
             return None
+    def List(self) -> list:
+        """Print the parameters in the uproot file.
+
+        Returns:
+            list: Top level parameters
+        """        
+        return self.file.keys()
 
 
 class Data:
@@ -397,6 +404,10 @@ class ParticleData(ABC):
                 setattr(filtered, var, getattr(self, var))
             __GenericFilter__(filtered, filters)
             return filtered
+    
+    def GetValues(self, value):
+        if hasattr(self.events, "io"):
+            return self.events.io.Get(value)
 
 
 class TrueParticleData(ParticleData):
@@ -469,7 +480,7 @@ class TrueParticleData(ParticleData):
         photons = self.truePhotonMask
         sortEnergy = self.events.SortedTrueEnergyMask
         
-        #* compute start momentum of dauhters
+        #* compute start momentum of daughters
         p_daughter = self.momentum[photons]
         sum_p = ak.sum(p_daughter, axis=1)
         sum_p = vector.magntiude(sum_p)
@@ -822,7 +833,7 @@ def BeamMCFilter(events : Data, n_pi0 : int = 1):
     """
     #* remove events with no truth info aka beam filter
     empty = ak.num(events.trueParticles.number) > 0 
-    filtered = events.Filter([empty], [empty])
+    filtered = events.Filter([empty], [empty], returnCopy=True)
 
     #* only look at events with 1 primary pi0
     pi0 = filtered.trueParticles.PrimaryPi0Mask
