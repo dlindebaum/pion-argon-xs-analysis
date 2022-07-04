@@ -3,7 +3,7 @@ Created on: 26/01/2022 15:45
 
 Author: Shyam Bhuller
 
-Description: contais vector operations, based of awkward array records.
+Description: Contains vector operations, based of awkward array records.
 """
 
 import awkward as ak
@@ -100,7 +100,7 @@ def dist(a : ak.Record, b : ak.Record):
     return magntiude(ak.zip({"x": a.x - b.x, "y": a.y - b.y, "z": a.z - b.z}))
 
 
-def Add(a : ak.Record, b : ak.Record):
+def add(a : ak.Record, b : ak.Record):
     """Compute vector addition of two vectors
 
     Args:
@@ -108,6 +108,19 @@ def Add(a : ak.Record, b : ak.Record):
         b (ak.Record created by vector): another vector
 
     Returns:
-        ak.Array: distance between a and b
+        ak.Array: addition of a and b
     """
     return ak.zip({"x": a.x + b.x, "y": a.y + b.y, "z": a.z + b.z})
+
+
+def sub(a : ak.Record, b : ak.Record):
+    """Compute vector subtraction (displacement) of two vectors
+
+    Args:
+        a (ak.Record created by vector): a vector
+        b (ak.Record created by vector): another vector
+
+    Returns:
+        ak.Array: displacement between a and b
+    """
+    return ak.zip({"x": a.x - b.x, "y": a.y - b.y, "z": a.z - b.z})
