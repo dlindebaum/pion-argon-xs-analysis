@@ -16,7 +16,6 @@ import itertools
 # custom modules
 import vector
 
-
 def timer(func):
     """Decorator which times a function.
 
@@ -48,8 +47,10 @@ def __GenericFilter__(particleData, filters):
 class IO:
     #? handle opening root file, and setting the ith event
     def __init__(self, _filename : str) -> None:
-        self.file = uproot.open(_filename)["pduneana/beamana"]
-        self.nEvents = len(self.file["EventID"].array())
+        #self.file = uproot.open(_filename)["pduneana/beamana"]
+        #self.nEvents = len(self.file["EventID"].array())
+        self.filename = _filename
+        nEvents = len(self.Get("EventID"))
     def Get(self, item : str) -> ak.Array:
         """Load nTuple from root file as awkward array.
 
@@ -60,7 +61,7 @@ class IO:
             ak.Array: nTuple loaded
         """        
         try:
-            return self.file[item].array()
+            return self.file["pduneana/beamana"][item].array()
         except uproot.KeyInFileError:
             print(f"{item} not found in file, moving on...")
             return None
@@ -70,7 +71,7 @@ class IO:
         Returns:
             list: Top level parameters
         """        
-        return self.file.keys()
+        return self.file["pduneana/beamana"].keys()
 
 
 class Data:
@@ -187,7 +188,9 @@ class Data:
         """
         null_direction = self.recoParticles.direction.x == -999 # boolean mask of PFP's with undefined direction
         null_momentum = self.recoParticles.momentum.x == -999 # boolean mask of PFP's with undefined momentum
+        null_position = self.recoParticles.startPos.x == -999
         null = np.logical_or(null_direction, null_momentum)
+        null = np.logical_or(null, null_position)
         angle_error = vector.angle(self.recoParticles.direction, self.trueParticlesBT.direction) # calculate angular closeness
         angle_error = ak.where(null, 999, angle_error) # if direction is undefined, angler error is massive (so not the best match)
         ind = ak.local_index(angle_error, -1) # create index array of angles to use later
@@ -274,7 +277,7 @@ class Data:
             __GenericFilter__(filtered, reco_filters) #? should true_filters also be applied?
             return filtered
 
-
+    @timer
     def ApplyBeamFilter(self):
         """ Applies a beam filter to the sample, which selects objects
             in events which are the beam particle, or daughters of the beam.
@@ -290,7 +293,7 @@ class Data:
         self.Filter([hasBeam, particle_mask[hasBeam]], [hasBeam]) # filter data
     
 
-    def mergePFPCheat(self):
+    def MergePFPCheat(self):
         mcIndex = self.trueParticlesBT.particleNumber
         unqiueIndex = self.trueParticlesBT.GetUniqueParticleNumbers(mcIndex) # get unique list of true particles
         p_new = []
@@ -329,6 +332,52 @@ class Data:
         print(f"Events where one merged PFP had undefined momentum: {ak.count(null[np.logical_not(null)])}")
         return events_merge, null
 
+    def MergeShower(self, matched : ak.Array, unmatched : ak.Array):
+        """Merge shower not matched to MC to the spatially closest matched shower.
+
+        Args:
+            events (Master.Event): events to study
+            matched (ak.Array): matched shower indicies
+            unmatched (ak.Array): boolean mask of unmatched showers
+            mergeMethod (int): method 1 merges by closest angular distance, method 2 merges by closest spatial distance
+            energyScalarSum (bool): False does a sum of momenta, then magnitude, True does magnitude of momenta, then sum
+
+        Returns:
+            Data: events with matched reco showers after merging
+        """
+
+        events_matched = self.Filter([matched], returnCopy=True)
+        unmatched_reco = self.Filter([unmatched], returnCopy=True).recoParticles # filter reco for matched/unmatched only
+        null_dir = unmatched_reco.direction.x == -999 # should only be needed for unmatched sample
+
+        angle_0 = ak.where(null_dir == True, 1E8, vector.angle(unmatched_reco.direction, events_matched.recoParticles.direction[:, 0]))
+        angle_1 = ak.where(null_dir == True, 1E8, vector.angle(unmatched_reco.direction, events_matched.recoParticles.direction[:, 1]))
+        angle_0 = ak.unflatten(angle_0, 1, -1)
+        angle_1 = ak.unflatten(angle_1, 1, -1)
+        angle = ak.concatenate([angle_0, angle_1], -1)
+        mergeMask = ak.min(angle, -1) == angle
+
+        #* create Array which contains the amount of energy to merge to the showers
+        #* will be zero for the shower we don't want to merge to
+        null = {"x": 0, "y": 0, "z": 0}
+        toMerge = ak.where(mergeMask, unmatched_reco.momentum, null)
+        toMerge = ak.where(toMerge.x != -999, toMerge, null)
+        merge_0 = ak.unflatten(ak.sum(toMerge[:, :, 0], -1), 1, -1)
+        merge_1 = ak.unflatten(ak.sum(toMerge[:, :, 1], -1), 1, -1)
+        momentumToMerge = ak.concatenate([merge_0, merge_1], -1)
+        momentumToMerge = ak.where(events_matched.recoParticles.momentum.x != -999, momentumToMerge, null)
+        new_momentum = vector.add(events_matched.recoParticles.momentum, momentumToMerge)
+        events_matched.recoParticles._RecoParticleData__momentum = new_momentum
+
+        new_direction = vector.normalize(events_matched.recoParticles.momentum)
+        new_direction = ak.where(events_matched.recoParticles.momentum.x != -999, new_direction, {"x": -999, "y": -999, "z": -999})
+        events_matched.recoParticles._RecoParticleData__direction = new_direction
+
+        new_energy = vector.magntiude(events_matched.recoParticles.momentum)
+        events_matched.recoParticles._RecoParticleData__energy = ak.where(events_matched.recoParticles.momentum.x != -999, new_energy, -999)
+
+        return events_matched
+
     def MergeShowerBT(self, best_match : ak.Array):
         if bool(ak.all(ak.num(self.recoParticles.energy[self.recoParticles.energy != -999]) == 2)) is True:
             counts = 0
@@ -362,7 +411,7 @@ class Data:
         leading_momentum = self.recoParticles.momentum[best_match]
 
         # add the merged momenta to their respective leading showers
-        mergedMomentum = [ak.unflatten(vector.Add(leading_momentum[:, i], momentumToMerge[i]), 1, -1) for i in range(2)]
+        mergedMomentum = [ak.unflatten(vector.add(leading_momentum[:, i], momentumToMerge[i]), 1, -1) for i in range(2)]
         mergedMomentum = ak.concatenate(mergedMomentum, -1)
 
         mergedDirection = [ak.unflatten(vector.normalize(mergedMomentum[:, i]), 1, -1) for i in range(2)]
@@ -627,13 +676,13 @@ class RecoParticleData(ParticleData):
 
     @property
     def showerLength(self):
-        self.LoadData("energy", "reco_daughter_allShower_length")
-        return getattr(self, f"_{type(self).__name__}__energy")
+        self.LoadData("showerLength", "reco_daughter_allShower_length")
+        return getattr(self, f"_{type(self).__name__}__showerLength")
 
     @property
     def showerConeAngle(self):
-        self.LoadData("energy", "reco_daughter_allShower_coneAngle")
-        return getattr(self, f"_{type(self).__name__}__energy")
+        self.LoadData("coneAngle", "reco_daughter_allShower_coneAngle")
+        return getattr(self, f"_{type(self).__name__}__coneAngle")
 
 
     def CalculatePairQuantities(self, useBT : bool = False):
@@ -748,30 +797,6 @@ class RecoParticleData(ParticleData):
 class TrueParticleDataBT(ParticleData):
     def __init__(self, events: Data) -> None:
         super().__init__(events)
-        #if hasattr(self.events, "io"):
-            #self.number = events.io.Get("reco_daughter_PFP_true_byHits_ID")
-            #self.mother = events.io.Get("reco_daughter_PFP_true_byHits_Mother")
-            #self.pdg = events.io.Get("reco_daughter_PFP_true_byHits_pdg")
-            #self.startPos = ak.zip({"x" : events.io.Get("reco_daughter_PFP_true_byHits_startX"),
-            #                "y" : events.io.Get("reco_daughter_PFP_true_byHits_startY"),
-            #                "z" : events.io.Get("reco_daughter_PFP_true_byHits_startZ")})
-            #self.endPos = ak.zip({"x" : events.io.Get("reco_daughter_PFP_true_byHits_endX"),
-            #                "y" : events.io.Get("reco_daughter_PFP_true_byHits_endY"),
-            #                "z" : events.io.Get("reco_daughter_PFP_true_byHits_endZ")})
-            #self.momentum = ak.zip({"x" : events.io.Get("reco_daughter_PFP_true_byHits_pX"),
-            #                "y" : events.io.Get("reco_daughter_PFP_true_byHits_pY"),
-            #                "z" : events.io.Get("reco_daughter_PFP_true_byHits_pZ")})
-            #self.direction = vector.normalize(self.momentum)
-            #self.energy = events.io.Get("reco_daughter_PFP_true_byHits_startE")
-            #! multiplying energy by 1000 seems to ruin everything?
-            #self.energy = ak.where(self.energy < 0, -999, self.energy*1000)
-
-            # purtiy
-            #self.matchedHits = self.events.io.Get("reco_daughter_PFP_true_byHits_matchedHits")
-            #self.hitsInRecoCluster = self.events.io.Get("reco_daughter_PFP_true_byHits_hitsInRecoCluster")
-            # completeness
-            #self.mcParticleHits = self.events.io.Get("reco_daughter_PFP_true_byHits_mcParticleHits")
-            #self.sharedHits = self.events.io.Get("reco_daughter_PFP_true_byHits_sharedHits")
 
     @property
     def number(self):
@@ -909,7 +934,7 @@ class TrueParticleDataBT(ParticleData):
             ak.Array: boolean mask
         """
         unqiueIndex = self.GetUniqueParticleNumbers(self.particleNumber)
-        singleMatch = ak.num(unqiueIndex) != 2
+        singleMatch = ak.num(unqiueIndex) != 2 #! this should be > 1!
         return np.logical_not(singleMatch)
 
 
@@ -998,7 +1023,7 @@ def Pi0TwoBodyDecayMask(events : Data):
     print(f"number of dalitz decays: {ak.count(mask[np.logical_not(mask)])}")
     return mask
 
-
+@timer
 def Pi0MCMask(events : Data, daughters : int = None):
     """ A filter for Pi0 MC dataset, selects events with a specific number of daughters
         which have a valid direction vector and removes events with the 3 body pi0 decay.
@@ -1016,8 +1041,8 @@ def Pi0MCMask(events : Data, daughters : int = None):
     valid = np.logical_and(r_mask, t_mask)
     return valid
 
-
-def BeamMCFilter(events : Data, n_pi0 : int = 1):
+@timer
+def BeamMCFilter(events : Data, n_pi0 : int = 1, returnCopy=True):
     """ Filters BeamMC data to get events with only 1 pi0 which originates from the beam particle interaction.
 
     Args:
@@ -1027,20 +1052,23 @@ def BeamMCFilter(events : Data, n_pi0 : int = 1):
         Data: selected events
     """
     #* remove events with no truth info aka beam filter
-    empty = ak.num(events.trueParticles.number) > 0 
-    filtered = events.Filter([empty], [empty], returnCopy=True)
+    empty = ak.num(events.trueParticles.number) > 0
+    if returnCopy is True:
+        events = events.Filter([empty], [empty], returnCopy=True)
+    else:
+        events.Filter([empty], [empty])
 
     #* only look at events with 1 primary pi0
-    pi0 = filtered.trueParticles.PrimaryPi0Mask
+    pi0 = events.trueParticles.PrimaryPi0Mask
     single_primary_pi0 = ak.num(pi0[pi0]) == n_pi0 # only look at events with 1 pi0
-    filtered.Filter([single_primary_pi0], [single_primary_pi0])
+    events.Filter([single_primary_pi0], [single_primary_pi0])
 
     #* remove true particles which aren't primaries
-    primary_pi0 = filtered.trueParticles.PrimaryPi0Mask
-    primary_daughter = filtered.trueParticles.truePhotonMask # this is fine so long as we only care about pi0->gamma gamma
+    primary_pi0 = events.trueParticles.PrimaryPi0Mask
+    primary_daughter = events.trueParticles.truePhotonMask # this is fine so long as we only care about pi0->gamma gamma
     primaries = np.logical_or(primary_pi0, primary_daughter)
-    filtered.Filter([], [primaries])
-    return filtered
+    events.Filter([], [primaries])
+    if returnCopy is True: return events
 
 
 def FractionalError(reco : ak.Array, true : ak.Array, null : ak.Array):
@@ -1142,3 +1170,45 @@ def ShowerMergePerformance(events : Data, best_match : ak.Array):
         correct_merge = 100
     print(f"nPFP's correctly merged: {correct_merge:.2f}%")
     return correct_merge
+
+@timer
+def SelectSample(events : Data, nDaughters : int, merge : bool = False, backtracked : bool = False, cheatMerging : bool = False):
+    """ Applies MC matching and shower merging to events with
+        specificed number of objects
+
+    Args:
+        events (Master.Data): events to look at
+        nDaughters (int): number of objects per event
+        merge (bool, optional): should we do shower merging?. Defaults to False.
+
+    Returns:
+        Master.Data: selected sample
+    """
+    valid = Pi0MCMask(events, nDaughters) # get mask of events
+    filtered = events.Filter([valid], [valid], True) # filter events with mask
+
+    if backtracked == False:
+        matched, unmatched, selection = filtered.MCMatching(applyFilters=False)
+        filtered.Filter([selection],[selection]) # apply the selection
+    else:
+        singleMatchedEvents = filtered.trueParticlesBT.SingleMatch
+        filtered.Filter([singleMatchedEvents], [singleMatchedEvents])
+        best_match, selection = filtered.MatchByAngleBT()
+        filtered.Filter([selection], [selection])
+
+    if merge is True and backtracked is False:
+        filtered = filtered.mergeShower(filtered, matched[selection], unmatched[selection], 1, False)
+
+    if merge is True and backtracked is True:
+        if cheatMerging is True:
+            filtered, null = filtered.MergePFPCheat()
+            filtered.Filter([null], [null])
+        else:
+            filtered = filtered.MergeShowerBT(best_match[selection])
+
+    # if we don't merge showers, just get the showers matched to MC
+    if merge is False and backtracked is False:
+        filtered.Filter([matched[selection]])
+    if merge is False and backtracked is True:
+        filtered.Filter([best_match[selection]])
+    return filtered
