@@ -236,7 +236,7 @@ def mergeShower(events : Master.Data, matched : ak.Array, unmatched : ak.Array, 
     #* create Array which contains the amount of energy to merge to the showers
     #* will be zero for the shower we don't want to merge to
     momentumToMerge = MergeQuantity(events_matched.recoParticles.momentum, unmatched_reco.momentum, mergeMask, "Vector3")
-    new_momentum = vector.Add(events_matched.recoParticles.momentum, momentumToMerge)
+    new_momentum = vector.add(events_matched.recoParticles.momentum, momentumToMerge)
     events_matched.recoParticles._RecoParticleData__momentum = new_momentum
 
     new_direction = vector.normalize(events_matched.recoParticles.momentum)
@@ -374,7 +374,7 @@ def main():
         for i in range(len(n_obj)):
             sample, target_PFPs = SelectSample(events, n_obj[i])
             cm.append(Master.ShowerMergePerformance(sample, target_PFPs))
-            merged_cheat, null = sample.mergePFPCheat()
+            merged_cheat, null = sample.MergePFPCheat()
             merged_bt = sample.MergeShowerBT(target_PFPs)
             energy_differences.append(ak.ravel(merged_bt.recoParticles.energy - merged_cheat.recoParticles.energy) / 1000)
         
