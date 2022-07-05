@@ -2,6 +2,7 @@ import os
 import argparse
 import awkward as ak
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from tabulate import tabulate
 
@@ -10,14 +11,34 @@ import vector
 import Plots
 
 class ShowerMergeQuantities:
-    def __init__(self, events : Master.Data, to_merge):
-        #* collect positions and directions of PFOs
-        self.to_merge_dir = events.recoParticles.direction[to_merge]
-        self.to_merge_pos = events.recoParticles.startPos[to_merge]
+    xlabels = [
+        "$\delta\phi$ (rad)",
+        "$\delta x$ (cm)",
+        "$\delta x_{l}$ (cm)",
+        "$\delta x_{t}$ (cm)",
+        "$\delta e$ (cm)",
+        "$\\alpha$ (rad)",
+        "$\delta\\alpha$ (rad)"
+    ]
+    names = [
+        "delta_phi",
+        "delta_x",
+        "delta_xl",
+        "delta_xt",
+        "delta_e",
+        "alpha",
+        "delta_alpha"
+    ]
 
-        self.null = np.logical_or(self.to_merge_dir.x != -999, self.to_merge_pos.x != -999)
-        self.to_merge_dir = self.to_merge_dir[self.null]
-        self.to_merge_pos = self.to_merge_pos[self.null]
+    def __init__(self, events : Master.Data = None, to_merge = None):
+        if events:
+            #* collect positions and directions of PFOs
+            self.to_merge_dir = events.recoParticles.direction[to_merge]
+            self.to_merge_pos = events.recoParticles.startPos[to_merge]
+
+            self.null = np.logical_or(self.to_merge_dir.x != -999, self.to_merge_pos.x != -999)
+            self.to_merge_dir = self.to_merge_dir[self.null]
+            self.to_merge_pos = self.to_merge_pos[self.null]
 
     @Master.timer
     def Evaluate(self, events : Master.Data, start_showers):
@@ -36,13 +57,37 @@ class ShowerMergeQuantities:
         start_shower_end = vector.add(start_shower_pos, vector.prod(start_shower_length, start_shower_dir))
 
         self.delta_phi = [vector.angle(start_shower_dir[:, i], self.to_merge_dir) for i in range(2)]
-        displacement = [vector.sub(start_shower_pos[:, i], self.to_merge_pos) for i in range(2)]
+        displacement = [vector.sub(self.to_merge_pos, start_shower_pos[:, i]) for i in range(2)]
         self.alpha = [vector.angle(displacement[i], start_shower_dir[:, i]) for i in range(2)]
         self.delta_alpha = [self.alpha[i] - start_shower_cone_angle[:, i] for i in range(2)]
         self.delta_x = [vector.dist(start_shower_pos[:, i], self.to_merge_pos) for i in range(2)]
         self.delta_xl = [self.delta_x[i] * np.abs(np.cos(self.alpha[i])) for i in range(2)]
         self.delta_xt = [self.delta_x[i] * np.abs(np.sin(self.alpha[i])) for i in range(2)]
         self.delta_e = [vector.dist(start_shower_end[:, i], self.to_merge_pos) for i in range(2)]
+
+
+    def SaveQuantitiesToCSV(self, signal, background, filename : str = "merge-quantities.csv"):
+        for i in range(len(self.names)):
+            if i == 0:
+                df = ak.to_pandas(getattr(self, self.names[i]), anonymous=self.names[i])
+            else:
+                df = pd.concat([df, ak.to_pandas(getattr(self, self.names[i]), anonymous=self.names[i])], 1)
+        df = pd.concat([df, ak.to_pandas(signal, anonymous="signal")], 1)
+        df = pd.concat([df, ak.to_pandas([background, background], anonymous="background")], 1)
+        df.to_csv(f"{outDir}/{filename}")
+
+    def LoadQuantitiesToCSV(self, filename):
+        data = pd.read_csv(filename)
+        for n in self.names:
+            d = ak.Array(data[n].values.tolist())
+            setattr(self, n, ak.unflatten(d, ak.count(d)//2))
+
+        signal = ak.Array(data["signal"].values.tolist())
+        background = ak.Array(data["background"].values.tolist())
+
+        self.signal = ak.unflatten(signal, ak.count(signal)//2)
+        self.background = ak.unflatten(background, ak.count(background)//2)[0]
+
 
     @Master.timer
     def PlotQuantities(self, signal : ak.Array, background : ak.Array):
@@ -61,26 +106,8 @@ class ShowerMergeQuantities:
         """
         #* plot and save
         labels = ["$b_{0}$", "$b_{1}$", "$s_{0}$", "$s_{1}$"]
-        xlabels = [
-            "$\delta\phi$ (rad)",
-            "$\delta x$ (cm)",
-            "$\delta x_{l}$ (cm)",
-            "$\delta x_{t}$ (cm)",
-            "$\delta e$ (cm)",
-            "$\\alpha$ (rad)",
-            "$\delta\\alpha$ (rad)"
-        ]
-        names = [
-            "delta_phi",
-            "delta_x",
-            "delta_xl",
-            "delta_xt",
-            "delta_e",
-            "alpha",
-            "delta_alpha"
-        ]
-        for i in range(len(names)):
-            data = getattr(self, names[i])
+        for i in range(len(self.names)):
+            data = getattr(self, self.names[i])
             print(data)
             #* collect signal PFOs
             s = [data[j][signal[j]] for j in range(2)]
@@ -88,9 +115,52 @@ class ShowerMergeQuantities:
             #* collect background PFOs
             b = [data[j][background] for j in range(2)]
 
-            Plots.PlotHistComparison([ak.ravel((b+s)[j]) for j in range(4)], bins=50, xlabel=xlabels[i], labels=labels, density=norm, y_scale=scale)
-            if save: Plots.Save(names[i], outDir)
+            Plots.PlotHistComparison([ak.ravel((b+s)[j]) for j in range(4)], bins=50, xlabel=self.xlabels[i], labels=labels, density=norm, y_scale=scale)
+            if save: Plots.Save(self.names[i], outDir)
 
+
+    def Plot2DQuantities(self, signal, background):
+        labels = ["$b_{0}$", "$b_{1}$", "$s_{0}$", "$s_{1}$"]
+        s_alpha = [self.alpha[i][signal[i]] for i in range(2)]
+        b_alpha = [self.alpha[i][background] for i in range(2)]
+        s_x= [self.delta_x[i][signal[i]] for i in range(2)]
+        b_x= [self.delta_x[i][background] for i in range(2)]
+        counts, xbins, ybins = np.histogram2d(ak.ravel(s_alpha[0]), ak.ravel(s_x[0]))
+        contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=["red"])
+        plt.clabel(contours, inline=True, fontsize=8)
+        counts, xbins, ybins = np.histogram2d(ak.ravel(s_alpha[1]), ak.ravel(s_x[1]))
+        contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=["purple"])
+        plt.clabel(contours, inline=True, fontsize=8)
+        counts, xbins, ybins = np.histogram2d(ak.ravel(b_alpha[0]), ak.ravel(b_x[0]))
+        contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=["blue"])
+        plt.clabel(contours, inline=True, fontsize=8)
+        counts, xbins, ybins = np.histogram2d(ak.ravel(b_alpha[1]), ak.ravel(b_x[1]))
+        contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=["green"])
+        plt.clabel(contours, inline=True, fontsize=8)
+        plt.xlabel(self.xlabels[5])
+        plt.ylabel(self.xlabels[1])
+        if save: Plots.Save(f"{self.names[5]}-{self.names[1]}", outDir)
+
+        s_xl= [self.delta_xl[i][signal[i]] for i in range(2)]
+        b_xl= [self.delta_xl[i][background] for i in range(2)]
+        s_xt= [self.delta_xt[i][signal[i]] for i in range(2)]
+        b_xt= [self.delta_xt[i][background] for i in range(2)]
+        counts, xbins, ybins = np.histogram2d(ak.ravel(s_xl[0]), ak.ravel(s_xt[0]))
+        contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=["red"])
+        plt.clabel(contours, inline=True, fontsize=8)
+        counts, xbins, ybins = np.histogram2d(ak.ravel(s_xl[1]), ak.ravel(s_xt[1]))
+        contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=["purple"])
+        plt.clabel(contours, inline=True, fontsize=8)
+        counts, xbins, ybins = np.histogram2d(ak.ravel(b_xl[0]), ak.ravel(b_xt[0]))
+        contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=["blue"])
+        plt.clabel(contours, inline=True, fontsize=8)
+        counts, xbins, ybins = np.histogram2d(ak.ravel(b_xl[1]), ak.ravel(b_xt[1]))
+        contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=["green"])
+        plt.clabel(contours, inline=True, fontsize=8)
+        plt.xlabel(self.xlabels[2])
+        plt.ylabel(self.xlabels[3])
+
+        if save: Plots.Save(f"{self.names[2]}-{self.names[3]}", outDir)
 
 def GetMin(quantity : ak.Array):
     """ Get smallest geometric quantitity wrt to a start shower
@@ -120,9 +190,13 @@ def EventSelection(events : Master.Data):
     Master.BeamMCFilter(events, returnCopy=False)
     n.append(["single pi0", ak.count(events.eventNum), Percentage(n[-1][1], ak.count(events.eventNum))])
 
-    f = Master.Pi0MCMask(events, -1) # get mask of events
+    f = Master.NPFPMask(events, -1)
     events.Filter([f], [f]) # filter events with mask
     n.append(["nPFP > 1", ak.count(events.eventNum), Percentage(n[-1][1], ak.count(events.eventNum))])
+
+    f = Master.Pi0TwoBodyDecayMask(events)
+    events.Filter([f], [f]) # filter events with mask
+    n.append(["diphoton decay", ak.count(events.eventNum), Percentage(n[-1][1], ak.count(events.eventNum))])
 
     f = events.trueParticlesBT.SingleMatch
     events.Filter([f], [f])
@@ -141,7 +215,7 @@ def EventSelection(events : Master.Data):
     n.append(["valid start shower", ak.count(events.eventNum), Percentage(n[-1][1], ak.count(events.eventNum))])
     start_showers = start_showers[f]
 
-    print(tabulate(n))
+    print(tabulate(n, tablefmt="fancy_grid"))
 
     return start_showers
 
@@ -163,7 +237,7 @@ def StartShowerByDistance(events : Master.Data):
     null_momentum = events.recoParticles.momentum.x == -999 # boolean mask of PFP's with undefined momentum
     null = np.logical_or(null_position, null_momentum)
     distance_error = vector.dist(events.recoParticles.startPos, events.trueParticlesBT.startPos) # calculate angular closeness
-    distance_error = ak.where(null, 999, distance_error) # if direction is undefined, angler error is massive (so not the best match)
+    distance_error = ak.where(null, 999999, distance_error) # if direction is undefined, angler error is massive (so not the best match)
     ind = ak.local_index(distance_error, -1) # create index array of angles to use later
 
     # get unique true particle numbers per event i.e. the photons which the reco PFP's backtrack to
@@ -187,14 +261,9 @@ def StartShowerByDistance(events : Master.Data):
     start_showers = start_showers[:, 0:2]
     return start_showers
 
-@Master.timer
-def main():
-    plt.rcParams.update({'font.size': 12})
-    if save:
-        os.makedirs(outDir, exist_ok=True)
 
+def ROOTWorkFlow():
     events = Master.Data(file, includeBackTrackedMC=True)
-
     start_showers = EventSelection(events)
 
     #* get boolean mask of PFP's to merge
@@ -233,9 +302,35 @@ def main():
         if save: Plots.Save("nPFO", outDir)
 
     #* calculate geometric quantities
+    if plotsToMake in ["all", "quantities", "2D"] or save is True: q.Evaluate(events, start_showers)
     if plotsToMake in ["all", "quantities"]:
-        q.Evaluate(events, start_showers)
         q.PlotQuantities(signal, background)
+    if plotsToMake in ["2D"]:
+        q.Plot2DQuantities(signal, background)
+
+    if save is True and plotsToMake is None:
+        q.SaveQuantitiesToCSV(signal, background)
+
+
+def CSVWorkFlow():
+    q = ShowerMergeQuantities()
+    q.LoadQuantitiesToCSV(file)
+    if plotsToMake in ["all", "quantities"]:
+        q.PlotQuantities(q.signal, q.background)
+    if plotsToMake in ["all", "2D"]:
+        q.Plot2DQuantities(q.signal, q.background)
+    return
+
+@Master.timer
+def main():
+    plt.rcParams.update({'font.size': 12})
+    if save:
+        os.makedirs(outDir, exist_ok=True)
+    fileFormat = file.split('.')[-1]
+    if fileFormat == "root":
+        ROOTWorkFlow()
+    if fileFormat == "csv":
+        CSVWorkFlow()
 
 
 if __name__ == "__main__":
@@ -247,18 +342,18 @@ if __name__ == "__main__":
     parser.add_argument("-l" "--log", dest="log", action="store_true", help="plot y axis on log scale")
     parser.add_argument("-s", "--save", dest="save", action="store_true", help="whether to save the plots")
     parser.add_argument("-d", "--directory", dest="outDir", type=str, default="prod4a_merge_study", help="directory to save plots")
-    parser.add_argument("-p", "--plots", dest="plotsToMake", type=str, choices=["all", "quantities", "multiplicity", "nPFO"], help="what plots we want to make")
+    parser.add_argument("-p", "--plots", dest="plotsToMake", type=str, choices=["all", "quantities", "multiplicity", "nPFO", "2D"], help="what plots we want to make")
     parser.add_argument("--start-showers", dest="matchBy", type=str, choices=["angular", "spatial"], default="angular", help="method to detemine start showers")
     #args = parser.parse_args("work/ROOTFiles/Prod4a_6GeV_BeamSim_00.root -p all".split()) #! to run in Jutpyter notebook
     args = parser.parse_args() #! run in command line
 
-    if args.file.split('.')[-1] != "root":
-        files = []
-        with open(args.file) as filelist:
-            file = filelist.read().splitlines() 
-    else:
-        file = args.file
-
+    # if args.file.split('.')[-1] != "root":
+    #     files = []
+    #     with open(args.file) as filelist:
+    #         file = filelist.read().splitlines() 
+    # else:
+    #     file = args.file
+    file = args.file
     save = args.save
     outDir = args.outDir
     plotsToMake = args.plotsToMake
