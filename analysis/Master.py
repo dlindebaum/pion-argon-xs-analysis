@@ -867,7 +867,7 @@ class TrueParticleDataBT(ParticleData):
 
     @property
     def particleNumber(self):
-        """ Gets the true particle number of each true particle batckracked to reco
+        """ Gets the true particle number of each true particle backtracked to reco
 
         Args:
             events (Master.Data): events to look at
@@ -924,7 +924,7 @@ class TrueParticleDataBT(ParticleData):
             ak.Array: boolean mask
         """
         unqiueIndex = self.GetUniqueParticleNumbers(self.particleNumber)
-        singleMatch = ak.num(unqiueIndex) != 2 #! this should be > 1!
+        singleMatch = ak.num(unqiueIndex) < 2 #!
         return np.logical_not(singleMatch)
 
 
@@ -987,7 +987,9 @@ def NPFPMask(events : Data, daughters : int = None):
     Returns:
         ak.Array: mask of events to filter
     """
-    nDaughter = events.recoParticles.direction.x != -999
+    null_dir = events.recoParticles.direction.x != -999
+    null_pos = events.recoParticles.startPos.x != -999
+    nDaughter = np.logical_and(null_dir, null_pos)
     nDaughter = ak.num(nDaughter[nDaughter]) # get number of showers which have a valid direction
 
     if daughters == None:
