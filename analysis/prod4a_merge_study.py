@@ -4,6 +4,7 @@ import awkward as ak
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 from tabulate import tabulate
 
 import Master
@@ -120,47 +121,46 @@ class ShowerMergeQuantities:
 
 
     def Plot2DQuantities(self, signal, background):
-        labels = ["$b_{0}$", "$b_{1}$", "$s_{0}$", "$s_{1}$"]
-        s_alpha = [self.alpha[i][signal[i]] for i in range(2)]
-        b_alpha = [self.alpha[i][background] for i in range(2)]
-        s_x= [self.delta_x[i][signal[i]] for i in range(2)]
-        b_x= [self.delta_x[i][background] for i in range(2)]
-        counts, xbins, ybins = np.histogram2d(ak.ravel(s_alpha[0]), ak.ravel(s_x[0]))
-        contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=["red"])
-        plt.clabel(contours, inline=True, fontsize=8)
-        counts, xbins, ybins = np.histogram2d(ak.ravel(s_alpha[1]), ak.ravel(s_x[1]))
-        contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=["purple"])
-        plt.clabel(contours, inline=True, fontsize=8)
-        counts, xbins, ybins = np.histogram2d(ak.ravel(b_alpha[0]), ak.ravel(b_x[0]))
-        contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=["blue"])
-        plt.clabel(contours, inline=True, fontsize=8)
-        counts, xbins, ybins = np.histogram2d(ak.ravel(b_alpha[1]), ak.ravel(b_x[1]))
-        contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=["green"])
-        plt.clabel(contours, inline=True, fontsize=8)
-        plt.xlabel(self.xlabels[5])
-        plt.ylabel(self.xlabels[1])
+        labels = ["background", "signal"]
+        colours = ["blue", "red"]
+
+        legend = []
+        for i in range(len(labels)):
+            legend.append(mpatches.Patch(color=colours[i], label=labels[i]))
+
+        s_alpha = ak.ravel([self.alpha[i][signal[i]] for i in range(2)])
+        b_alpha = ak.ravel([self.alpha[i][background] for i in range(2)])
+        s_x = ak.ravel([self.delta_x[i][signal[i]] for i in range(2)])
+        b_x = ak.ravel([self.delta_x[i][background] for i in range(2)])
+        s_xl = ak.ravel([self.delta_xl[i][signal[i]] for i in range(2)])
+        b_xl = ak.ravel([self.delta_xl[i][background] for i in range(2)])
+        s_xt = ak.ravel([self.delta_xt[i][signal[i]] for i in range(2)])
+        b_xt = ak.ravel([self.delta_xt[i][background] for i in range(2)])
+        s_phi = ak.ravel([self.delta_phi[i][signal[i]] for i in range(2)])
+        b_phi = ak.ravel([self.delta_phi[i][background] for i in range(2)])
+
+        PlotContour(s_alpha, s_x, b_alpha, b_x, colours, labels, legend, self.xlabels[5], self.xlabels[1])
         if save: Plots.Save(f"{self.names[5]}-{self.names[1]}", outDir)
 
-        s_xl= [self.delta_xl[i][signal[i]] for i in range(2)]
-        b_xl= [self.delta_xl[i][background] for i in range(2)]
-        s_xt= [self.delta_xt[i][signal[i]] for i in range(2)]
-        b_xt= [self.delta_xt[i][background] for i in range(2)]
-        counts, xbins, ybins = np.histogram2d(ak.ravel(s_xl[0]), ak.ravel(s_xt[0]))
-        contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=["red"])
-        plt.clabel(contours, inline=True, fontsize=8)
-        counts, xbins, ybins = np.histogram2d(ak.ravel(s_xl[1]), ak.ravel(s_xt[1]))
-        contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=["purple"])
-        plt.clabel(contours, inline=True, fontsize=8)
-        counts, xbins, ybins = np.histogram2d(ak.ravel(b_xl[0]), ak.ravel(b_xt[0]))
-        contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=["blue"])
-        plt.clabel(contours, inline=True, fontsize=8)
-        counts, xbins, ybins = np.histogram2d(ak.ravel(b_xl[1]), ak.ravel(b_xt[1]))
-        contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=["green"])
-        plt.clabel(contours, inline=True, fontsize=8)
-        plt.xlabel(self.xlabels[2])
-        plt.ylabel(self.xlabels[3])
-
+        PlotContour(s_xl, s_xt, b_xl, b_xt, colours, labels, legend, self.xlabels[2], self.xlabels[3])
         if save: Plots.Save(f"{self.names[2]}-{self.names[3]}", outDir)
+
+        PlotContour(s_alpha, s_phi, b_alpha, b_phi, colours, labels, legend, self.xlabels[5], self.xlabels[0])
+        if save: Plots.Save(f"{self.names[5]}-{self.names[0]}", outDir)
+
+
+def PlotContour(xs, ys, xb, yb, colours, labels, legend, xlabel, ylabel):
+    counts, xbins, ybins = np.histogram2d(xs, ys)
+    contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=colours[1], label=labels[1])
+    plt.clabel(contours, inline=True, fontsize=8)
+    counts, xbins, ybins = np.histogram2d(xb, yb)
+    contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=colours[0], label=labels[0])
+    plt.clabel(contours, inline=True, fontsize=8)
+    plt.legend(handles=legend)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.tight_layout()
+
 
 def GetMin(quantity : ak.Array):
     """ Get smallest geometric quantitity wrt to a start shower
@@ -282,7 +282,7 @@ def ROOTWorkFlow():
         Plots.PlotHist(ak.ravel(nSignal), xlabel="start shower multiplicity")
         if save: Plots.Save("shower-multiplicity", outDir)
 
-
+    events.recoParticles.nHits
     #* class to calculate quantities
     q = ShowerMergeQuantities(events, to_merge)
 
