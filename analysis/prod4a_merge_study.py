@@ -74,7 +74,14 @@ class ShowerMergeQuantities:
         self.delta_xt = [self.delta_x[i] * np.abs(np.sin(self.alpha[i])) for i in range(2)]
         self.delta_e = [vector.dist(start_shower_end[:, i], self.to_merge_pos) for i in range(2)]
 
-    def SaveQuantitiesToCSV(self, signal, background, filename : str = "merge-quantities.csv"):
+    def SaveQuantitiesToCSV(self, signal : ak.Array, background : ak.Array, filename : str = "merge-quantities.csv"):
+        """ Saves merge quantities as a pandas dataframe to file.
+
+        Args:
+            signal (ak.Array): signal PFO mask
+            background (ak.Array): background PFO mask
+            filename (str, optional): _description_. Defaults to "merge-quantities.csv".
+        """
         for i in range(len(self.names)):
             if i == 0:
                 df = ak.to_pandas(getattr(self, self.names[i]), anonymous=self.names[i])
@@ -84,7 +91,12 @@ class ShowerMergeQuantities:
         df = pd.concat([df, ak.to_pandas([background, background], anonymous="background")], 1)
         df.to_csv(f"{outDir}/{filename}")
 
-    def LoadQuantitiesToCSV(self, filename):
+    def LoadQuantitiesToCSV(self, filename : str):
+        """ Load merge quantities data and populate instance variables.
+
+        Args:
+            filename (str): compatible data file
+        """
         data = pd.read_csv(filename)
         for n in self.names:
             d = ak.Array(data[n].values.tolist())
@@ -96,7 +108,17 @@ class ShowerMergeQuantities:
         self.signal = ak.unflatten(signal, ak.count(signal)//2)
         self.background = ak.unflatten(background, ak.count(background)//2)
 
-    def SignalBackgroundRatio(self, signal, background, printMetrics=False):
+    def SignalBackgroundRatio(self, signal : ak.Array, background : ak.Array, printMetrics=False):
+        """ Calculate signal to bakground ratio.
+
+        Args:
+            signal (ak.Array): signal mask
+            background (ak.Array): background mask
+            printMetrics (bool, optional): option to print values. Defaults to False.
+
+        Returns:
+            _type_: _description_
+        """
         n_signal = ak.count(signal)
         n_background = ak.count(background)
         if n_background == 0:
@@ -111,6 +133,8 @@ class ShowerMergeQuantities:
         return sb, srootb
 
     def BruteForceScan(self):
+        """ Find cut values by probing a large combination of possible cut values.
+        """
         initial_signal = ak.flatten(self.signal)[ak.flatten(self.signal)]
         initial_background = ak.flatten(self.background)[ak.flatten(self.background)]
         self.SignalBackgroundRatio(initial_signal, initial_background)
@@ -210,7 +234,21 @@ class ShowerMergeQuantities:
 
 
 
-def CutBasedScan(quantities : ShowerMergeQuantities, initial_cuts, startPoint=0, stepSize=10, plot=False, plotFinal=False):
+def OptimizeCuts(quantities : ShowerMergeQuantities, initial_cuts : list, startPoint : int = 0, stepSize : int = 10, plot : bool = False, plotFinal : bool = False):
+    """ Optimise cuts for variables by scanning for an optimal set of cuts which all satisfy a certain criteria.
+        Can be run recusrively to converge to an "optimal" set of cuts. 
+
+    Args:
+        quantities (ShowerMergeQuantities): quantities to study
+        initial_cuts (list): initial cuts to try
+        startPoint (int, optional): which quantity to start with, number matches index of initial_cuts. Defaults to 0.
+        stepSize (int, optional): when scanning n-1 plots how many values should be tried. Defaults to 10.
+        plot (bool, optional): plot n-1 plots and other metrics (not recommended). Defaults to False.
+        plotFinal (bool, optional): plot quantities with the final cuts applied. Defaults to False.
+
+    Returns:
+        list : list of final cuts.
+    """
     if len(initial_cuts) != len(quantities.selectionVariables):
         raise Exception("lenth of initial_cuts must be equal to number of cut variables")
 
@@ -337,6 +375,14 @@ def Percentage(a, b):
 
 @Master.timer
 def EventSelection(events : Master.Data):
+    """ Applies the event selection for this study and plots a table of how each cut performs.
+
+    Args:
+        events (Master.Data): events to look at
+
+    Returns:
+        Master.Data: events that pass the selection
+    """
     n = [["event selection", "number of events", "percentage of events removed"]]
     n.append(["no selection",  ak.count(events.eventNum), "-"])
 
@@ -496,7 +542,7 @@ def StartShowerByDistance(events : Master.Data):
 
 
 def ROOTWorkFlow():
-    events = Master.Data(file, includeBackTrackedMC=True)
+    events = Master.Data(file, includeBackTrackedMC=True, nEvents=10000)
     start_showers = EventSelection(events)
 
     #* get boolean mask of PFP's to merge
@@ -560,10 +606,10 @@ def CSVWorkFlow():
         plot = False
         while passes < total:
             if passes == 0:
-                final_cuts = CutBasedScan(q, initial_cuts, startPoint=0, stepSize=15)
+                final_cuts = OptimizeCuts(q, initial_cuts, startPoint=0, stepSize=15)
             else:
                 if passes == total-1: plot=True
-                final_cuts = CutBasedScan(q, final_cuts, startPoint=0, stepSize=15, plotFinal=plot)
+                final_cuts = OptimizeCuts(q, final_cuts, startPoint=0, stepSize=15, plotFinal=plot)
             passes += 1
     return
 
@@ -591,8 +637,8 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--plots", dest="plotsToMake", type=str, choices=["all", "quantities", "multiplicity", "nPFO", "2D"], help="what plots we want to make")
     parser.add_argument("-c", "--cutScan", dest="cut", action="store_true", help="whether to do a cut based scan")
     parser.add_argument("--start-showers", dest="matchBy", type=str, choices=["angular", "spatial"], default="spatial", help="method to detemine start showers")
-    args = parser.parse_args("test/merge-quantities.csv -c".split()) #! to run in Jutpyter notebook
-    #args = parser.parse_args() #! run in command line
+    #args = parser.parse_args("test/merge-quantities.csv -c".split()) #! to run in Jutpyter notebook
+    args = parser.parse_args() #! run in command line
 
     # if args.file.split('.')[-1] != "root":
     #     files = []
