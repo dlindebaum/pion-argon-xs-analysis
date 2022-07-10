@@ -46,11 +46,10 @@ def __GenericFilter__(particleData, filters):
 
 class IO:
     #? handle opening root file, and setting the ith event
-    def __init__(self, _filename : str) -> None:
-        #self.file = uproot.open(_filename)["pduneana/beamana"]
-        #self.nEvents = len(self.file["EventID"].array())
+    def __init__(self, _filename : str, _nEvents : int=None, _start : int=None) -> None:
         self.filename = _filename
-        nEvents = len(self.Get("EventID"))
+        self.start = _start
+        self.nEvents = _nEvents
     def Get(self, item : str) -> ak.Array:
         """Load nTuple from root file as awkward array.
 
@@ -60,25 +59,36 @@ class IO:
         Returns:
             ak.Array: nTuple loaded
         """        
-        try:
-            return self.file["pduneana/beamana"][item].array()
-        except uproot.KeyInFileError:
-            print(f"{item} not found in file, moving on...")
-            return None
+        with uproot.open(self.filename) as file:
+            try:
+                if self.nEvents:
+                    for batch in file["pduneana/beamana"].iterate(entry_start=self.start, entry_stop=self.start+self.nEvents, step_size=self.nEvents, filter_name=item):
+                        return batch[item]
+                else:
+                    return file["pduneana/beamana"][item].array()
+            except uproot.KeyInFileError:
+                print(f"{item} not found in file, moving on...")
+                return None
     def List(self) -> list:
         """Print the parameters in the uproot file.
 
         Returns:
             list: Top level parameters
-        """        
-        return self.file["pduneana/beamana"].keys()
+        """
+        with uproot.open(self.filename) as file:  
+            return file["pduneana/beamana"].keys()
 
 
 class Data:
-    def __init__(self, _filename : str = None, includeBackTrackedMC : bool = False) -> None:
+    def __init__(self, _filename : str = None, includeBackTrackedMC : bool = False, nEvents : int = None, start : int = 0) -> None:
         self.filename = _filename
         if self.filename != None:
-            self.io = IO(self.filename)
+            if nEvents:
+                self.nEvents = nEvents
+                self.start = start
+                self.io = IO(self.filename, self.nEvents, self.start)
+            else:
+                self.io = IO(self.filename)
             self.eventNum = self.io.Get("EventID")
             self.subRun = self.io.Get("SubRun")
             self.trueParticles = TrueParticleData(self)
@@ -263,6 +273,8 @@ class Data:
                 self.trueParticlesBT.events = self
         else:
             filtered = Data()
+            filtered.filename = self.filename
+            filtered.io = IO(filtered.filename, filtered.nEvents, filtered.start)
             filtered.eventNum = self.eventNum
             filtered.subRun = self.subRun
             filtered.trueParticles = self.trueParticles.Filter(true_filters)
@@ -288,6 +300,8 @@ class Data:
         beamParticleDaughters = self.recoParticles.mother == self.recoParticles.beam_number # get daugter of beam particle
         # combine masks
         particle_mask = np.logical_or(beamParticle, beamParticleDaughters)
+        #? which one to do?
+        #self.Filter([hasBeam], [hasBeam]) # filter data
         self.Filter([hasBeam, particle_mask[hasBeam]], [hasBeam]) # filter data
     
 
