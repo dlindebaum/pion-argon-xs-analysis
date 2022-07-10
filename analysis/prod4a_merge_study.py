@@ -233,8 +233,48 @@ class ShowerMergeQuantities:
         if save: Plots.Save(f"{self.names[5]}-{self.names[0]}", outDir)
 
 
+def MaxSRootBRatio(cuts : np.array, srootb : np.array) -> float:
+    """ Select a cut which maximises signal/root background ratio
 
-def OptimizeCuts(quantities : ShowerMergeQuantities, initial_cuts : list, startPoint : int = 0, stepSize : int = 10, plot : bool = False, plotFinal : bool = False):
+    Args:
+        cuts (np.array): list of cuts
+        srootb (np.array): signal/root background at each cut
+
+    Returns:
+        float: Cut that matches criteria
+    """
+    return cuts[np.argmax(srootb)]
+
+
+def EqualSRootB(cuts : np.array, srootb : np.array, target : float) -> float:
+    """ Select a cut at specific signal/root background ratio
+        TODO fit a function to srootb as a fuction of cut and then get exact value
+    Args:
+        cuts (np.array): list of cuts
+        srootb (np.array): signal/root background at each cut
+        target (np.array): desired signal/root background to match to
+
+    Returns:
+        float: Cut that matches criteria
+    """
+    return cuts[np.argmin(np.abs(cuts - target))]
+
+
+def EqualSignalBackgroundEfficiency(cuts : np.array, signal_efficiency : np.array, background_rejection : np.array) -> float:
+    """ Select a cut where signal efficiency and background rejection are closest or equal
+        TODO fit a function to se and br as a fuction of cut and then get exact value at which they are the same
+    Args:
+        cuts (np.array): list of cuts
+        signal_efficiency (np.array): signal effiency at each cut
+        background_rejection (np.array): background rejection at each cut
+
+    Returns:
+        float: Cut that matches criteria
+    """
+    return cuts[np.argmin(np.abs(signal_efficiency - background_rejection))]
+
+
+def OptimizeCuts(quantities : ShowerMergeQuantities, initial_cuts : list, startPoint : int = 0, stepSize : int = 10, plot : bool = False, plotFinal : bool = False, criteria=MaxSRootBRatio, args=None):
     """ Optimise cuts for variables by scanning for an optimal set of cuts which all satisfy a certain criteria.
         Can be run recusrively to converge to an "optimal" set of cuts. 
 
@@ -312,7 +352,15 @@ def OptimizeCuts(quantities : ShowerMergeQuantities, initial_cuts : list, startP
             Plots.Plot(metrics["signal efficiency"], metrics["background rejection"], "signal efficiency", "background rejection")
         #* criteria to pick a starting shower should be something like, highest s/b or se == br
         #? make multiple criteria?
-        best_cut = cuts[np.argmax(metrics["s/rootb"])]
+        
+        if criteria.__name__ == "MaxSRootBRatio":
+            best_cut = criteria(cuts, metrics["s/rootb"])
+        if criteria.__name__ == "EqualSRootB":
+            best_cut = criteria(cuts, metrics["s/rootb"], *args)
+        if criteria.__name__ == "EqualSignalBackgroundEfficiency":
+            best_cut = criteria(cuts, metrics["signal efficiency"], metrics["background rejection"])
+        
+        #best_cut = cuts[np.argmax(metrics["s/rootb"])]
         print(f"best cut for {quantities.selectionVariables[nm1]} is {best_cut}")
         final_cuts[nm1] = best_cut # this is the new best cut for this variable
         
@@ -385,7 +433,7 @@ def EventSelection(events : Master.Data):
     """
     n = [["event selection", "number of events", "percentage of events removed"]]
     n.append(["no selection",  ak.count(events.eventNum), "-"])
-
+    
     events.ApplyBeamFilter() # apply beam filter if possible
     n.append(["beam particle", ak.count(events.eventNum), Percentage(n[-1][1], ak.count(events.eventNum))])
 
@@ -397,7 +445,7 @@ def EventSelection(events : Master.Data):
     n.append(["nPFP > 1", ak.count(events.eventNum), Percentage(n[-1][1], ak.count(events.eventNum))])
 
     f = Master.Pi0TwoBodyDecayMask(events)
-    events.Filter([f], [f]) # filter events with mask
+    events.Filter([f], [f])
     n.append(["diphoton decay", ak.count(events.eventNum), Percentage(n[-1][1], ak.count(events.eventNum))])
 
     unique = events.trueParticlesBT.GetUniqueParticleNumbers(events.trueParticlesBT.number)
@@ -433,7 +481,7 @@ def EventSelection(events : Master.Data):
 
 @Master.timer
 def GetStartShowers(events : Master.Data, method="spatial"):
-    #TODO fix a bug where occasionally a starting shower is a daughter of the pi0.
+    #TODO fix a bug where occasionally a starting shower is not a daughter of the pi0.
     """ Select starting showers to merge for the pi0 decay.
         The starting showers are guarenteed to originate 
         from the pi0 decay (using truth information).
@@ -640,12 +688,6 @@ if __name__ == "__main__":
     #args = parser.parse_args("test/merge-quantities.csv -c".split()) #! to run in Jutpyter notebook
     args = parser.parse_args() #! run in command line
 
-    # if args.file.split('.')[-1] != "root":
-    #     files = []
-    #     with open(args.file) as filelist:
-    #         file = filelist.read().splitlines() 
-    # else:
-    #     file = args.file
     file = args.file
     save = args.save
     outDir = args.outDir
