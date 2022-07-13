@@ -17,7 +17,7 @@ import itertools
 import vector
 
 def timer(func):
-    """Decorator which times a function.
+    """ Decorator which times a function.
 
     Args:
         func (function): function to time
@@ -34,24 +34,30 @@ def timer(func):
     return wrapper_function
 
 
-def __GenericFilter__(particleData, filters):
+def __GenericFilter__(data, filters : list):
+    """ Applies boolean masks (filters) to data.
+
+    Args:
+        data (any): data class which has instance variables with compatible shapes to the filters
+        filters (list): list of filters
+    """
     for f in filters:
-        for var in vars(particleData):
-            if hasattr(getattr(particleData, var), "__getitem__"):
+        for var in vars(data):
+            if hasattr(getattr(data, var), "__getitem__"):
                 try:
-                    setattr(particleData, var, getattr(particleData, var)[f])
+                    setattr(data, var, getattr(data, var)[f])
                 except:
                     warnings.warn(f"Couldn't apply filters to {var}.")
 
 
 class IO:
-    #? handle opening root file, and setting the ith event
     def __init__(self, _filename : str, _nEvents : int=None, _start : int=None) -> None:
         self.filename = _filename
         self.start = _start
         self.nEvents = _nEvents
+
     def Get(self, item : str) -> ak.Array:
-        """Load nTuple from root file as awkward array.
+        """ Load nTuple from root file as awkward array.
 
         Args:
             item (str): nTuple name in root file
@@ -80,12 +86,12 @@ class IO:
 
 
 class Data:
-    def __init__(self, _filename : str = None, includeBackTrackedMC : bool = False, nEvents : int = None, start : int = 0) -> None:
+    def __init__(self, _filename : str = None, includeBackTrackedMC : bool = False, _nEvents : int = None, _start : int = 0) -> None:
         self.filename = _filename
         if self.filename != None:
-            if nEvents:
-                self.nEvents = nEvents
-                self.start = start
+            if _nEvents:
+                self.nEvents = _nEvents
+                self.start = _start
                 self.io = IO(self.filename, self.nEvents, self.start)
             else:
                 self.io = IO(self.filename)
@@ -106,7 +112,7 @@ class Data:
 
     @timer
     def MCMatching(self, cut=0.25, applyFilters : bool = True, returnCopy : bool = False):
-        """ function which matched reco showers to true photons for pi0 decays.
+        """ Function which matched reco showers to true photons for pi0 decays.
             Does so by looking at angular separation, it will create masks which
             can be applied to self to select matched showers, or return them. ALso
             calculates mask of unmatched showers, needed for shower merging.
@@ -183,7 +189,7 @@ class Data:
 
     @timer
     def MatchByAngleBT(self):
-        """ equivlant to shower matching/angluar closeness cut, but for backtracked MC.
+        """ Equivlant to shower matching/angluar closeness cut, but for backtracked MC.
 
         Args:
             events (Master.Data): events to look at
@@ -344,8 +350,9 @@ class Data:
         print(f"Events where one merged PFP had undefined momentum: {ak.count(null[np.logical_not(null)])}")
         return events_merge, null
 
+
     def MergeShower(self, matched : ak.Array, unmatched : ak.Array):
-        """Merge shower not matched to MC to the spatially closest matched shower.
+        """ Merge shower not matched to MC to the spatially closest matched shower.
 
         Args:
             events (Master.Event): events to study
@@ -389,6 +396,7 @@ class Data:
         events_matched.recoParticles._RecoParticleData__energy = ak.where(events_matched.recoParticles.momentum.x != -999, new_energy, -999)
 
         return events_matched
+
 
     def MergeShowerBT(self, best_match : ak.Array):
         if bool(ak.all(ak.num(self.recoParticles.energy[self.recoParticles.energy != -999]) == 2)) is True:
@@ -454,7 +462,14 @@ class ParticleData(ABC):
 
 
     def LoadData(self, name : str, nTupleName):
-        var_name = f"_{type(self).__name__}__{name}"
+        """ Reads data from ntuple and assigns it to a hidden variable
+            which can then be called by the property method.
+
+        Args:
+            name (str): variable name
+            nTupleName (str, list): branch/es to read from root file
+        """
+        var_name = f"_{type(self).__name__}__{name}" # variable name which chose to be hidden
         if hasattr(self.events, "io") and not hasattr(self, var_name):
             if type(nTupleName) is list:
                 if len(nTupleName) != 3:
@@ -486,6 +501,7 @@ class ParticleData(ABC):
         else:
             subclass = globals()[type(self).__name__] # get the class which is of type ParticleData
             filtered = subclass(Data()) # create a new instance of the class
+            # populate new instance
             for var in vars(self):
                 setattr(filtered, var, getattr(self, var))
             __GenericFilter__(filtered, filters)
@@ -586,6 +602,7 @@ class TrueParticleData(ParticleData):
 
     def CalculatePairQuantities(self):
         """ Calculate true shower pair quantities.
+
         Args:
             events (Master.Event): events to process
 
@@ -749,7 +766,7 @@ class RecoParticleData(ParticleData):
 
     @timer
     def GetPairValues(pairs, value) -> ak.Array:
-        """get shower pair values, in pairs
+        """ Get shower pair values, in pairs
 
         Args:
             pairs (list): shower pairs per event
@@ -1106,7 +1123,8 @@ def FractionalError(reco : ak.Array, true : ak.Array, null : ak.Array):
 
 @timer
 def CalculateQuantities(events : Data, names : str, backtrackedTruth : bool = False):
-    """Calcaulte reco/ true quantities of shower pairs, and format them for plotting
+    #? add to Data class?
+    """ Calcaulte reco/ true quantities of shower pairs, and format them for plotting
 
     Args:
         events (Master.Event): events to look at

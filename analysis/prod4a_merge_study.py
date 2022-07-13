@@ -47,6 +47,7 @@ class ShowerMergeQuantities:
             self.to_merge_dir = events.recoParticles.direction[to_merge]
             self.to_merge_pos = events.recoParticles.startPos[to_merge]
 
+            # exclude null position/directions
             self.null = np.logical_or(self.to_merge_dir.x != -999, self.to_merge_pos.x != -999)
             self.to_merge_dir = self.to_merge_dir[self.null]
             self.to_merge_pos = self.to_merge_pos[self.null]
@@ -61,20 +62,22 @@ class ShowerMergeQuantities:
             start_shower_pos (_type_): _description_
             start_shower_dir (_type_): _description_
         """
+        # collect relavent parameters
         start_shower_pos = events.recoParticles.startPos[start_showers]
         start_shower_dir = events.recoParticles.direction[start_showers]
         start_shower_length = events.recoParticles.showerLength[start_showers]
         start_shower_cone_angle = events.recoParticles.showerConeAngle[start_showers]
         start_shower_end = vector.add(start_shower_pos, vector.prod(start_shower_length, start_shower_dir))
 
+        # calculate
         self.delta_phi = [vector.angle(start_shower_dir[:, i], self.to_merge_dir) for i in range(2)]
         displacement = [vector.sub(self.to_merge_pos, start_shower_pos[:, i]) for i in range(2)]
         self.alpha = [vector.angle(displacement[i], start_shower_dir[:, i]) for i in range(2)]
-        self.delta_alpha = [self.alpha[i] - start_shower_cone_angle[:, i] for i in range(2)]
+        self.delta_alpha = [self.alpha[i] - start_shower_cone_angle[:, i] for i in range(2)] #? keep?
         self.delta_x = [vector.dist(start_shower_pos[:, i], self.to_merge_pos) for i in range(2)]
         self.delta_xl = [self.delta_x[i] * np.abs(np.cos(self.alpha[i])) for i in range(2)]
         self.delta_xt = [self.delta_x[i] * np.abs(np.sin(self.alpha[i])) for i in range(2)]
-        self.delta_e = [vector.dist(start_shower_end[:, i], self.to_merge_pos) for i in range(2)]
+        self.delta_e = [vector.dist(start_shower_end[:, i], self.to_merge_pos) for i in range(2)] #? keep?
 
     def SaveQuantitiesToCSV(self, signal : ak.Array, background : ak.Array, filename : str = "merge-quantities.csv"):
         """ Saves merge quantities as a pandas dataframe to file.
@@ -84,11 +87,14 @@ class ShowerMergeQuantities:
             background (ak.Array): background PFO mask
             filename (str, optional): _description_. Defaults to "merge-quantities.csv".
         """
+        #* create dataframe and add all calculated quantities
         for i in range(len(self.names)):
             if i == 0:
                 df = ak.to_pandas(getattr(self, self.names[i]), anonymous=self.names[i])
             else:
                 df = pd.concat([df, ak.to_pandas(getattr(self, self.names[i]), anonymous=self.names[i])], 1)
+        
+        #* add signal and background boolean masks
         df = pd.concat([df, ak.to_pandas(signal, anonymous="signal")], 1)
         df = pd.concat([df, ak.to_pandas([background, background], anonymous="background")], 1)
         df.to_csv(f"{outDir}/{filename}")
@@ -99,6 +105,9 @@ class ShowerMergeQuantities:
         Args:
             filename (str): compatible data file
         """
+        #! data is flattened but indices and subindices are kept
+        #! so it should be possible to do per event studies
+        #* read data and populate instance variables
         data = pd.read_csv(filename)
         for n in self.names:
             d = ak.Array(data[n].values.tolist())
@@ -109,69 +118,6 @@ class ShowerMergeQuantities:
 
         self.signal = ak.unflatten(signal, ak.count(signal)//2)
         self.background = ak.unflatten(background, ak.count(background)//2)
-
-    def SignalBackgroundRatio(self, signal : ak.Array, background : ak.Array, printMetrics=False):
-        """ Calculate signal to bakground ratio.
-
-        Args:
-            signal (ak.Array): signal mask
-            background (ak.Array): background mask
-            printMetrics (bool, optional): option to print values. Defaults to False.
-
-        Returns:
-            _type_: _description_
-        """
-        n_signal = ak.count(signal)
-        n_background = ak.count(background)
-        if n_background == 0:
-            return -1, -1
-        sb = n_signal/n_background
-        srootb = n_signal/np.sqrt(n_background)
-        if printMetrics is True:
-            print(f"signal: {n_signal}")
-            print(f"background: {n_background}")
-            print(f"s/b {sb}")
-            print(f"s/sqrt(b) {srootb}")
-        return sb, srootb
-
-    def BruteForceScan(self):
-        """ Find cut values by probing a large combination of possible cut values.
-        """
-        initial_signal = ak.flatten(self.signal)[ak.flatten(self.signal)]
-        initial_background = ak.flatten(self.background)[ak.flatten(self.background)]
-        self.SignalBackgroundRatio(initial_signal, initial_background)
-
-        # first pick a baseline value for cuts
-        # define an initial range of values to cut
-        initial_cuts = []
-        for var in self.selectionVariables:
-            minVal = ak.min(getattr(self, var))
-            maxVal = ak.max(getattr(self, var))
-            initial_cuts.append(np.linspace(minVal, maxVal, 10))
-        print(tabulate((self.selectionVariables,initial_cuts), tablefmt="fancy_grid"))
-
-        ratios = []
-        rootRatios = []
-        permutations = itertools.product(*initial_cuts)
-        for p in permutations:
-            masks = []
-            for j in range(len(self.selectionVariables)):
-                masks.append(ak.flatten(getattr(self, self.selectionVariables[j])) < p[j])
-            for i in range(len(masks)):
-                if i == 0:
-                    passed = masks[i]
-                else:
-                    passed = np.logical_and(passed, masks[i])
-
-            signal = ak.flatten(self.signal)[passed]
-            background = ak.flatten(self.background)[passed]
-            sb, srootb = self.SignalBackgroundRatio(signal[signal], background[background])
-            ratios.append(sb)
-            rootRatios.append(srootb)
-        plt.figure()
-        plt.plot(ratios)
-        plt.figure()
-        plt.plot(rootRatios)
 
     @Master.timer
     def PlotQuantities(self, signal : ak.Array, background : ak.Array):
@@ -235,6 +181,7 @@ class ShowerMergeQuantities:
 
 
 def PlotContour(xs, ys, xb, yb, colours, labels, legend, xlabel, ylabel):
+    #TODO move to Plots and correctly document
     counts, xbins, ybins = np.histogram2d(xs, ys)
     contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=colours[1], label=labels[1])
     plt.clabel(contours, inline=True, fontsize=8)
@@ -433,7 +380,7 @@ def StartShowerByDistance(events : Master.Data):
 
 
 def ROOTWorkFlow():
-    events = Master.Data(file, includeBackTrackedMC=True, nEvents=10000)
+    events = Master.Data(file, includeBackTrackedMC=True)
     start_showers = EventSelection(events)
 
     #* get boolean mask of PFP's to merge
