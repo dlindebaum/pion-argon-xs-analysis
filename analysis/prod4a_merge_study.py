@@ -3,6 +3,7 @@ import argparse
 import awkward as ak
 import numpy as np
 import pandas as pd
+from pandas.plotting import scatter_matrix
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from tabulate import tabulate
@@ -11,6 +12,7 @@ import itertools
 import Master
 import vector
 import Plots
+import CutOptimization
 
 
 class ShowerMergeQuantities:
@@ -33,11 +35,11 @@ class ShowerMergeQuantities:
         "delta_alpha"
     ]
     selectionVariables = [
-        "delta_phi",
+        "alpha",        
         "delta_x",
         "delta_xl",
         "delta_xt",
-        "alpha",        
+        "delta_phi",
     ]
     def __init__(self, events : Master.Data = None, to_merge = None):
         if events:
@@ -202,7 +204,6 @@ class ShowerMergeQuantities:
             Plots.PlotHistComparison([b, s], bins=50, xlabel=self.xlabels[i], labels=labels, density=norm, y_scale=scale)
             if save: Plots.Save(self.names[i], outDir)
 
-
     def Plot2DQuantities(self, signal, background):
         background = background[0]
         labels = ["background", "signal"]
@@ -231,164 +232,6 @@ class ShowerMergeQuantities:
 
         PlotContour(s_alpha, s_phi, b_alpha, b_phi, colours, labels, legend, self.xlabels[5], self.xlabels[0])
         if save: Plots.Save(f"{self.names[5]}-{self.names[0]}", outDir)
-
-
-def MaxSRootBRatio(cuts : np.array, srootb : np.array) -> float:
-    """ Select a cut which maximises signal/root background ratio
-
-    Args:
-        cuts (np.array): list of cuts
-        srootb (np.array): signal/root background at each cut
-
-    Returns:
-        float: Cut that matches criteria
-    """
-    return cuts[np.argmax(srootb)]
-
-
-def EqualSRootB(cuts : np.array, srootb : np.array, target : float) -> float:
-    """ Select a cut at specific signal/root background ratio
-        TODO fit a function to srootb as a fuction of cut and then get exact value
-    Args:
-        cuts (np.array): list of cuts
-        srootb (np.array): signal/root background at each cut
-        target (np.array): desired signal/root background to match to
-
-    Returns:
-        float: Cut that matches criteria
-    """
-    return cuts[np.argmin(np.abs(cuts - target))]
-
-
-def EqualSignalBackgroundEfficiency(cuts : np.array, signal_efficiency : np.array, background_rejection : np.array) -> float:
-    """ Select a cut where signal efficiency and background rejection are closest or equal
-        TODO fit a function to se and br as a fuction of cut and then get exact value at which they are the same
-    Args:
-        cuts (np.array): list of cuts
-        signal_efficiency (np.array): signal effiency at each cut
-        background_rejection (np.array): background rejection at each cut
-
-    Returns:
-        float: Cut that matches criteria
-    """
-    return cuts[np.argmin(np.abs(signal_efficiency - background_rejection))]
-
-
-def OptimizeCuts(quantities : ShowerMergeQuantities, initial_cuts : list, startPoint : int = 0, stepSize : int = 10, plot : bool = False, plotFinal : bool = False, criteria=MaxSRootBRatio, args=None):
-    """ Optimise cuts for variables by scanning for an optimal set of cuts which all satisfy a certain criteria.
-        Can be run recusrively to converge to an "optimal" set of cuts. 
-
-    Args:
-        quantities (ShowerMergeQuantities): quantities to study
-        initial_cuts (list): initial cuts to try
-        startPoint (int, optional): which quantity to start with, number matches index of initial_cuts. Defaults to 0.
-        stepSize (int, optional): when scanning n-1 plots how many values should be tried. Defaults to 10.
-        plot (bool, optional): plot n-1 plots and other metrics (not recommended). Defaults to False.
-        plotFinal (bool, optional): plot quantities with the final cuts applied. Defaults to False.
-
-    Returns:
-        list : list of final cuts.
-    """
-    if len(initial_cuts) != len(quantities.selectionVariables):
-        raise Exception("lenth of initial_cuts must be equal to number of cut variables")
-
-    initial_signal = ak.flatten(quantities.signal)[ak.flatten(quantities.signal)]
-    initial_background = ak.flatten(quantities.background)[ak.flatten(quantities.background)]
-    quantities.SignalBackgroundRatio(initial_signal, initial_background, True)
-
-    final_cuts = list(initial_cuts)
-    nm1 = -1
-    while nm1 != startPoint:
-        if nm1 == -1: nm1 = startPoint # define the variable to produce n-1 plot
-    
-        #* first apply all but one cut
-        mask = [] # mask of entries passing the cuts
-        for i in range(len(final_cuts)):
-            if i == nm1: continue # dont cut on nth variable
-            if len(mask) == 0:
-                mask = ak.flatten(getattr(quantities, quantities.selectionVariables[i])) < final_cuts[i]
-            else:
-                mask = np.logical_and(mask, ak.flatten(getattr(quantities, quantities.selectionVariables[i])) < final_cuts[i])
-
-        #* make n-1 plot of variable
-        sig = ak.flatten(quantities.signal)[mask]
-        bkg = ak.flatten(quantities.background)[mask]
-        ns_i = ak.count(sig[sig])
-        nb_i = ak.count(bkg[bkg])
-        var = ak.flatten(getattr(quantities, quantities.selectionVariables[nm1]))[mask]
-
-        #* cut variable at various points, calculate s/b, s/rootb
-        cuts = np.linspace(ak.min(var), ak.max(var), stepSize)
-    
-        metrics = {
-            "s/b" : np.empty(shape=len(cuts)),
-            "s/rootb" : np.empty(shape=len(cuts)),
-            "signal efficiency" : np.empty(shape=len(cuts)),
-            "background rejection" : np.empty(shape=len(cuts))
-        }
-        for i in range(len(cuts)):
-            mask = var < cuts[i]
-            ns = ak.count(sig[mask][sig[mask]])
-            nb = ak.count(bkg[mask][bkg[mask]])
-            se = ns / ns_i
-            br = 1 - (nb / nb_i)
-            if(nb > 0):
-                sb = ns / nb
-                srootb = ns / np.sqrt(nb)
-            else:
-                sb = -1
-                srootb = -1
-            metrics["signal efficiency"][i] = se
-            metrics["background rejection"][i] = br
-            metrics["s/b"][i] = sb
-            metrics["s/rootb"][i] = srootb
-            print(f"signal: {ns}, background: {nb}, s/b: {sb:.3f}, s/sqrtb: {srootb:.3f}, signal efficiency: {se:.3f}, background rejection : {br:.3f}")
-        if plot:
-            Plots.PlotHistComparison([var[bkg], var[sig]], labels=["background", "signal"], bins=25, xlabel=quantities.selectionVariables[nm1], density=False)
-            Plots.Plot(cuts[metrics["s/b"]>0], metrics["s/b"][metrics["s/b"]>0], quantities.selectionVariables[nm1], "$s/b$")
-            Plots.Plot(cuts[metrics["s/rootb"]>0], metrics["s/rootb"][metrics["s/rootb"]>0], quantities.selectionVariables[nm1], "$s/\\sqrt{b}$")
-            Plots.Plot(cuts, metrics["signal efficiency"], quantities.selectionVariables[nm1], label="signal efficiency")
-            Plots.Plot(cuts, metrics["background rejection"], quantities.selectionVariables[nm1], label="background rejection", newFigure=False)
-            Plots.Plot(metrics["signal efficiency"], metrics["background rejection"], "signal efficiency", "background rejection")
-        #* criteria to pick a starting shower should be something like, highest s/b or se == br
-        #? make multiple criteria?
-        
-        if criteria.__name__ == "MaxSRootBRatio":
-            best_cut = criteria(cuts, metrics["s/rootb"])
-        if criteria.__name__ == "EqualSRootB":
-            best_cut = criteria(cuts, metrics["s/rootb"], *args)
-        if criteria.__name__ == "EqualSignalBackgroundEfficiency":
-            best_cut = criteria(cuts, metrics["signal efficiency"], metrics["background rejection"])
-        
-        #best_cut = cuts[np.argmax(metrics["s/rootb"])]
-        print(f"best cut for {quantities.selectionVariables[nm1]} is {best_cut}")
-        final_cuts[nm1] = best_cut # this is the new best cut for this variable
-        
-        nm1 = (nm1 + 1)%len(quantities.selectionVariables)
-        print(f"next look at : {quantities.selectionVariables[nm1]}")
-    print(f"final cuts are: {final_cuts}")
-    #* cut one final time to look at the results
-    mask = [] # mask of entries passing the cuts
-    for i in range(len(final_cuts)):
-        if len(mask) == 0:
-            mask = ak.flatten(getattr(quantities, quantities.selectionVariables[i])) < final_cuts[i]
-        else:
-            mask = np.logical_and(mask, ak.flatten(getattr(quantities, quantities.selectionVariables[i])) < final_cuts[i])
-    print(f"number of PFOs after cuts: {ak.count(mask[mask])}")
-
-    if plotFinal is True:
-        selected_quantities = []
-        for i in range(len(quantities.selectionVariables)):
-            selected_quantities.append(ak.flatten(getattr(quantities, quantities.selectionVariables[i]))[mask])
-        final_signal = ak.flatten(quantities.signal)[mask]
-        final_background = ak.flatten(quantities.background)[mask]
-        labels = ["background", "signal"]
-        for i in range(len(quantities.selectionVariables)):
-            data = selected_quantities[i]
-            print(data)
-            Plots.PlotHistComparison([data[final_background], data[final_signal]], bins=50, xlabel=quantities.selectionVariables[i], labels=labels, density=norm, y_scale=scale)
-            if save: Plots.Save(quantities.names[i], outDir)
-    return final_cuts
 
 
 def PlotContour(xs, ys, xb, yb, colours, labels, legend, xlabel, ylabel):
@@ -638,6 +481,34 @@ def ROOTWorkFlow():
     if save is True and plotsToMake is None:
         q.SaveQuantitiesToCSV(signal, background)
 
+def ShowerMergingCriteria(q):
+    initial_cuts = [ak.max(q.alpha), ak.max(q.delta_x), ak.max(q.delta_xl), ak.max(q.delta_xt), ak.max(q.delta_phi)]
+
+    min_val = np.array([ak.min(q.alpha), ak.min(q.delta_x), ak.min(q.delta_xl), ak.min(q.delta_xt), ak.min(q.delta_phi)])
+    max_val = np.array([ak.max(q.alpha), ak.max(q.delta_x), ak.max(q.delta_xl), ak.max(q.delta_xt), ak.max(q.delta_phi)])
+    values = np.linspace(min_val+(0.1*max_val), max_val-(0.1*max_val), 2, True)
+    output = []
+    metric_labels = ["s", "b", "s/b", "$s\\sqrt{b}$", "purity", "$\\epsilon_{s}$", "$\\epsilon_{b}$", "$\\epsilon$"]
+    for initial_cuts in itertools.product(*values.T):
+        cutOptimization = CutOptimization.OptimizeSingleCut(q, initial_cuts)
+        c, m = cutOptimization.Optimize(10, CutOptimization.MaxSRootBRatio)
+        o = [c[i] + m[i] for i in range(len(c))]
+        output.extend(o)
+    print(tabulate([*output], headers=q.selectionVariables+metric_labels, floatfmt=".3f", tablefmt="fancy_grid"))
+    
+    output = pd.DataFrame(output, columns=q.selectionVariables+metric_labels)
+    metrics = output[metric_labels]
+    metrics = metrics[metrics["$\\epsilon$"] > 0.25]
+    metrics = metrics[metrics["$\\epsilon_{s}$"] > 0.5]
+
+    best_cuts = metrics["$\\epsilon_{b}$"].idxmin()
+    best_cuts = metrics[metrics.index == best_cuts]
+    print(best_cuts.to_markdown())
+    #! efficeincy > 0.25
+    #! signal efficiency > 0.5
+    #! min background efficiency
+    #! max s/rootb
+
 
 def CSVWorkFlow():
     q = ShowerMergeQuantities()
@@ -647,18 +518,7 @@ def CSVWorkFlow():
     if plotsToMake in ["all", "2D"]:
         q.Plot2DQuantities(q.signal, q.background)
     if args.cut is True:
-        initial_cuts = [0.7, 100, 50, 50, 1.5]
-        #initial_cuts = [9999]*5
-        passes = 0
-        total = 10
-        plot = False
-        while passes < total:
-            if passes == 0:
-                final_cuts = OptimizeCuts(q, initial_cuts, startPoint=0, stepSize=15)
-            else:
-                if passes == total-1: plot=True
-                final_cuts = OptimizeCuts(q, final_cuts, startPoint=0, stepSize=15, plotFinal=plot)
-            passes += 1
+        ShowerMergingCriteria(q)
     return
 
 @Master.timer
@@ -685,8 +545,8 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--plots", dest="plotsToMake", type=str, choices=["all", "quantities", "multiplicity", "nPFO", "2D"], help="what plots we want to make")
     parser.add_argument("-c", "--cutScan", dest="cut", action="store_true", help="whether to do a cut based scan")
     parser.add_argument("--start-showers", dest="matchBy", type=str, choices=["angular", "spatial"], default="spatial", help="method to detemine start showers")
-    #args = parser.parse_args("test/merge-quantities.csv -c".split()) #! to run in Jutpyter notebook
-    args = parser.parse_args() #! run in command line
+    args = parser.parse_args("test/merge-quantities.csv -c -n".split()) #! to run in Jutpyter notebook
+    #args = parser.parse_args() #! run in command line
 
     file = args.file
     save = args.save
