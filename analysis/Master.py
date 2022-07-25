@@ -51,7 +51,7 @@ def __GenericFilter__(data, filters : list):
 
 
 class IO:
-    def __init__(self, _filename : str, _nEvents : int=None, _start : int=None) -> None:
+    def __init__(self, _filename : str, _nEvents : int=-1, _start : int=None) -> None:
         self.filename = _filename
         self.start = _start
         self.nEvents = _nEvents
@@ -67,7 +67,7 @@ class IO:
         """        
         with uproot.open(self.filename) as file:
             try:
-                if self.nEvents:
+                if self.nEvents > 0:
                     for batch in file["pduneana/beamana"].iterate(entry_start=self.start, entry_stop=self.start+self.nEvents, step_size=self.nEvents, filter_name=item):
                         return batch[item]
                 else:
@@ -86,15 +86,12 @@ class IO:
 
 
 class Data:
-    def __init__(self, _filename : str = None, includeBackTrackedMC : bool = False, _nEvents : int = None, _start : int = 0) -> None:
+    def __init__(self, _filename : str = None, includeBackTrackedMC : bool = False, _nEvents : int = -1, _start : int = 0) -> None:
         self.filename = _filename
         if self.filename != None:
-            if _nEvents:
-                self.nEvents = _nEvents
-                self.start = _start
-                self.io = IO(self.filename, self.nEvents, self.start)
-            else:
-                self.io = IO(self.filename)
+            self.nEvents = _nEvents
+            self.start = _start
+            self.io = IO(self.filename, self.nEvents, self.start)
             self.eventNum = self.io.Get("EventID")
             self.subRun = self.io.Get("SubRun")
             self.trueParticles = TrueParticleData(self)
@@ -280,6 +277,8 @@ class Data:
         else:
             filtered = Data()
             filtered.filename = self.filename
+            filtered.nEvents = self.nEvents
+            filtered.start = self.start
             filtered.io = IO(filtered.filename, filtered.nEvents, filtered.start)
             filtered.eventNum = self.eventNum
             filtered.subRun = self.subRun
@@ -329,7 +328,7 @@ class Data:
             p = self.recoParticles.momentum[pfps]
             p = ak.where(p.x == -999, {"x": 0,"y": 0,"z": 0}, p) # dont merge PFP's with null data
             p_m = ak.sum(p, -1) # sum all momentum vectors
-            e_m = vector.magntiude(p_m)
+            e_m = vector.magnitude(p_m)
             dir_m = vector.normalize(p_m)
             p_new.append(ak.unflatten(p_m, 1, -1))
             e_new.append(ak.unflatten(e_m, 1, -1))
@@ -392,7 +391,7 @@ class Data:
         new_direction = ak.where(events_matched.recoParticles.momentum.x != -999, new_direction, {"x": -999, "y": -999, "z": -999})
         events_matched.recoParticles._RecoParticleData__direction = new_direction
 
-        new_energy = vector.magntiude(events_matched.recoParticles.momentum)
+        new_energy = vector.magnitude(events_matched.recoParticles.momentum)
         events_matched.recoParticles._RecoParticleData__energy = ak.where(events_matched.recoParticles.momentum.x != -999, new_energy, -999)
 
         return events_matched
@@ -437,7 +436,7 @@ class Data:
         mergedDirection = [ak.unflatten(vector.normalize(mergedMomentum[:, i]), 1, -1) for i in range(2)]
         merged_direction = ak.concatenate(mergedDirection, -1)
 
-        merged_energy = [ak.unflatten(vector.magntiude(mergedMomentum[:, i]), 1, -1) for i in range(2)]
+        merged_energy = [ak.unflatten(vector.magnitude(mergedMomentum[:, i]), 1, -1) for i in range(2)]
         merged_energy = ak.concatenate(merged_energy, -1)
 
         merged_events = self.Filter(returnCopy=True)
@@ -618,8 +617,8 @@ class TrueParticleData(ParticleData):
         #* compute start momentum of daughters
         p_daughter = self.momentum[photons]
         sum_p = ak.sum(p_daughter, axis=1)
-        sum_p = vector.magntiude(sum_p)
-        p_daughter_mag = vector.magntiude(p_daughter)
+        sum_p = vector.magnitude(sum_p)
+        p_daughter_mag = vector.magnitude(p_daughter)
         p_daughter_mag = p_daughter_mag[sortEnergy]
 
         #* compute true opening angle
@@ -631,7 +630,7 @@ class TrueParticleData(ParticleData):
 
         #* pi0 momentum
         p_pi0 = self.momentum[mask_pi0]
-        p_pi0 = vector.magntiude(p_pi0)
+        p_pi0 = vector.magnitude(p_pi0)
         return inv_mass, angle, p_daughter_mag[:, 1:], p_daughter_mag[:, :-1], p_pi0
 
 
@@ -731,14 +730,14 @@ class RecoParticleData(ParticleData):
 
         #* opening angle
         direction_pair = ak.unflatten(self.direction[sortEnergy], 1, 0)
-        direction_pair_mag = vector.magntiude(direction_pair)
+        direction_pair_mag = vector.magnitude(direction_pair)
         angle = np.arccos(vector.dot(direction_pair[:, :, 1:], direction_pair[:, :, :-1]) / (direction_pair_mag[:, :, 1:] * direction_pair_mag[:, :, :-1]))
 
         #* Invariant Mass
         inv_mass = (2 * leading * secondary * (1 - np.cos(angle)))**0.5
 
         #* pi0 momentum
-        pi0_momentum = vector.magntiude(ak.sum(self.momentum, axis=-1))/1000
+        pi0_momentum = vector.magnitude(ak.sum(self.momentum, axis=-1))/1000
 
         null_dir = np.logical_or(direction_pair[:, :, 1:].x == -999, direction_pair[:, :, :-1].x == -999) # mask shower pairs with invalid direction vectors
         null = np.logical_or(leading < 0, secondary < 0) # mask of shower pairs with invalid energy
@@ -982,14 +981,14 @@ class TrueParticleDataBT(ParticleData):
 
         #* opening angle
         direction_pair = ak.unflatten(self.direction[sortEnergy], 1, 0)
-        direction_pair_mag = vector.magntiude(direction_pair)
+        direction_pair_mag = vector.magnitude(direction_pair)
         angle = np.arccos(vector.dot(direction_pair[:, :, 1:], direction_pair[:, :, :-1]) / (direction_pair_mag[:, :, 1:] * direction_pair_mag[:, :, :-1]))
 
         #* Invariant Mass
         inv_mass = (2 * leading * secondary * (1 - np.cos(angle)))**0.5
 
         #* pi0 momentum
-        pi0_momentum = vector.magntiude(ak.sum(self.momentum, axis=-1))/1000
+        pi0_momentum = vector.magnitude(ak.sum(self.momentum, axis=-1))
 
         null_dir = np.logical_or(direction_pair[:, :, 1:].x == -999, direction_pair[:, :, :-1].x == -999) # mask shower pairs with invalid direction vectors
         null = np.logical_or(leading < 0, secondary < 0) # mask of shower pairs with invalid energy
@@ -998,8 +997,8 @@ class TrueParticleDataBT(ParticleData):
         pi0_momentum = np.where(null_dir, -999, pi0_momentum)
         pi0_momentum = np.where(null, -999, pi0_momentum)
 
-        leading = leading/1000
-        secondary = secondary/1000
+        leading = leading
+        secondary = secondary
 
         leading = np.where(null, -999, leading)
         leading = np.where(null_dir, -999, leading)
@@ -1009,7 +1008,7 @@ class TrueParticleDataBT(ParticleData):
         angle = np.where(null, -999, angle)
         angle = np.where(null_dir, -999, angle)
 
-        inv_mass = inv_mass/1000
+        inv_mass = inv_mass
         inv_mass = np.where(null, -999, inv_mass)
         inv_mass = np.where(null_dir, -999, inv_mass)
 
@@ -1122,7 +1121,7 @@ def FractionalError(reco : ak.Array, true : ak.Array, null : ak.Array):
     return ak.to_numpy(ak.ravel(error)), ak.to_numpy(ak.ravel(reco)), ak.to_numpy(ak.ravel(true))
 
 @timer
-def CalculateQuantities(events : Data, names : str, backtrackedTruth : bool = False):
+def CalculateQuantities(events : Data, backtrackedTruth : bool = False):
     #? add to Data class?
     """ Calcaulte reco/ true quantities of shower pairs, and format them for plotting
 
@@ -1134,11 +1133,12 @@ def CalculateQuantities(events : Data, names : str, backtrackedTruth : bool = Fa
     Returns:
         tuple of np.arrays: quantities to plot
     """
+    names = ["inv_mass", "angle", "lead_energy", "sub_energy", "pi0_mom"]
     if backtrackedTruth is True:
         mct = events.trueParticlesBT.CalculatePairQuantities()
     else:
         mct = events.trueParticles.CalculatePairQuantities()
-    rmc = events.recoParticles.CalculatePairQuantities()
+    rmc = events.recoParticles.CalculatePairQuantities(useBT=True)
 
     # keep track of events with no shower pairs
     null = ak.flatten(rmc[-1], -1)
