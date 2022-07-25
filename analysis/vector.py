@@ -23,7 +23,7 @@ def vector(x : ak.Array, y : ak.Array, z : ak.Array) -> ak.Record:
     return ak.zip({"x" : x, "y" : y, "z" : z})
 
 
-def magntiude(vec : ak.Record) -> ak.Array:
+def magnitude(vec : ak.Record) -> ak.Array:
     """magnitude of 3-vector
 
     Args:
@@ -44,7 +44,7 @@ def normalize(vec : ak.Record) -> ak.Record:
     Returns:
         ak.Record created by vector: norm of vector
     """
-    m = magntiude(vec)
+    m = magnitude(vec)
     return vector( vec.x / m, vec.y / m, vec.z / m )
 
 
@@ -84,7 +84,7 @@ def angle(a : ak.Record, b : ak.Record) -> ak.Array:
     Returns:
         ak.Array: angle between a and b
     """
-    return np.arccos(dot(a, b) / (magntiude(a) * magntiude(b)))
+    return np.arccos(dot(a, b) / (magnitude(a) * magnitude(b)))
 
 
 def dist(a : ak.Record, b : ak.Record):
@@ -97,7 +97,7 @@ def dist(a : ak.Record, b : ak.Record):
     Returns:
         ak.Array: distance between a and b
     """
-    return magntiude(ak.zip({"x": a.x - b.x, "y": a.y - b.y, "z": a.z - b.z}))
+    return magnitude(ak.zip({"x": a.x - b.x, "y": a.y - b.y, "z": a.z - b.z}))
 
 
 def add(a : ak.Record, b : ak.Record):

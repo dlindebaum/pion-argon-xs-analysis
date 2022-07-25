@@ -105,7 +105,7 @@ def Plot1D(data : ak.Array, xlabels : list, subDir : str, labels : list, plot_ra
     """
     if save is True: os.makedirs(outDir + subDir, exist_ok=True)
     for i in range(len(names)):
-        if len(s_l) == 1:
+        if len(labels) == 1:
             d = data[0][i]
             if len(plot_ranges[i]) == 2:
                 d = d[d > plot_ranges[i][0]]
@@ -233,7 +233,7 @@ def AnalyseMultipleFiles():
             samples.append(SelectSample(events, n_obj[i], merge[i], bt[i], cheat[i]))
         label = ["true", "reco", "error"]
         for k in range(len(s_l)):
-            q = Master.CalculateQuantities(samples[k], names)
+            q = Master.CalculateQuantities(samples[k])
             for i in range(len(q)):
                 if i == 0:
                     df = pd.concat([ak.to_pandas(q[i][j], anonymous=f"{label[i]} {names[j]}") for j in range(len(names))], axis=1)
@@ -271,7 +271,7 @@ def AnalyseSingle():
     r = []
     e = []
     for sample in samples:
-        q = Master.CalculateQuantities(sample, names)
+        q = Master.CalculateQuantities(sample)
         t.append(q[0])
         r.append(q[1])
         e.append(q[2])
@@ -352,8 +352,8 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--save", dest="save", action="store_true", help="whether to save the plots")
     parser.add_argument("-d", "--directory", dest="outDir", type=str, default="pi0_0p5GeV_100K/shower_merge/", help="directory to save plots")
     parser.add_argument("-p", "--plots", dest="plotsToMake", type=str, choices=["all", "truth", "reco", "error", "2D"], default="all", help="what plots we want to make")
-    args = parser.parse_args("csvfilelist.list -b 20 -p 2D".split()) #! to run in Jutpyter notebook
-    #args = parser.parse_args() #! run in command line
+    #args = parser.parse_args("csvfilelist.list -b 20 -p 2D".split()) #! to run in Jutpyter notebook
+    args = parser.parse_args() #! run in command line
 
     if args.file.split('.')[-1] != "root":
         files = []
