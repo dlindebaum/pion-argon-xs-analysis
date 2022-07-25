@@ -105,7 +105,7 @@ def Plot1D(data : ak.Array, xlabels : list, subDir : str, labels : list, plot_ra
     """
     if save is True: os.makedirs(outDir + subDir, exist_ok=True)
     for i in range(len(names)):
-        if len(s_l) == 1:
+        if len(labels) == 1:
             d = data[0][i]
             if len(plot_ranges[i]) == 2:
                 d = d[d > plot_ranges[i][0]]
@@ -182,8 +182,68 @@ def SelectSample(events : Master.Data, nDaughters : int, merge : bool = False, b
         filtered.Filter([best_match[selection]])
     return filtered
 
-@Master.timer
-def main():
+
+def PlotFromCSV():
+    t = []
+    r = []
+    e = []
+    for f in file:
+        data = np.genfromtxt(f, delimiter=',')
+        data = data[1:, 1:]
+
+        t.append(np.transpose(data[:, 0:5]))
+        r.append(np.transpose(data[:, 5:10]))
+        e.append(np.transpose(data[:, 10:15]))
+    t = ak.Array(t)
+    r = ak.Array(r)
+    e = ak.Array(e)
+
+    print(f"number of pi0 decays: {len(t[0][0])}")
+
+    if plotsToMake in ["all", "truth"]: Plot1D(t, t_l, "truth/", s_l, t_range, t_locs) # MC truth for unmerged and merged are identical, so don't plot them
+    if plotsToMake in ["all", "reco"]: Plot1D(r, r_l, "reco/", s_l, r_range, r_locs, r_xs, r_ys)
+    if plotsToMake in ["all", "error"]: Plot1D(e, e_l, "error/", s_l, e_range, e_locs)
+    if plotsToMake in ["all", "2D"]: Plot2D(t, e)
+
+
+def AnalyseMultipleFiles():
+    nPFP = []
+    for f in file:
+        events = Master.Data(f, includeBackTrackedMC=True)
+        events.ApplyBeamFilter()
+
+        if ak.count(nPFP) == 0:
+            nPFP = ak.count(events.recoParticles.nHits, -1)
+        else:
+            nPFP = ak.concatenate([nPFP, ak.count(events.recoParticles.nHits, -1)])
+
+        # apply additional selection for beam MC events
+        print(f"beamMC : {events.trueParticles.pi0_MC}")
+        if events.trueParticles.pi0_MC == False:
+            print("apply beam MC filter")
+            events = Master.BeamMCFilter(events)
+
+        samples = []
+        for i in range(len(s_l)):
+            print(f"number of objects: {n_obj[i]}")
+            print(f"merge?: {merge[i]}")
+            samples.append(SelectSample(events, n_obj[i], merge[i], bt[i], cheat[i]))
+        label = ["true", "reco", "error"]
+        for k in range(len(s_l)):
+            q = Master.CalculateQuantities(samples[k])
+            for i in range(len(q)):
+                if i == 0:
+                    df = pd.concat([ak.to_pandas(q[i][j], anonymous=f"{label[i]} {names[j]}") for j in range(len(names))], axis=1)
+                else:
+                    df = pd.concat([df, pd.concat([ak.to_pandas(q[i][j], anonymous=f"{label[i]} {names[j]}") for j in range(len(names))], axis=1)], axis=1)
+            df.to_csv(f"output_{s_l[k]}.csv", mode="a")
+
+    if save is True: os.makedirs(outDir, exist_ok=True)
+    Plots.PlotBar(nPFP[nPFP>0], xlabel="Number of particle flow objects per event")
+    if save is True: Plots.Save(outDir + "n_objects")
+
+
+def AnalyseSingle():
     events = Master.Data(file, includeBackTrackedMC=True)
     events.ApplyBeamFilter() # apply beam filter if possible
     
@@ -207,7 +267,7 @@ def main():
     r = []
     e = []
     for sample in samples:
-        q = Master.CalculateQuantities(sample, names)
+        q = Master.CalculateQuantities(sample)
         t.append(q[0])
         r.append(q[1])
         e.append(q[2])
@@ -263,8 +323,15 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--save", dest="save", action="store_true", help="whether to save the plots")
     parser.add_argument("-d", "--directory", dest="outDir", type=str, default="pi0_0p5GeV_100K/shower_merge/", help="directory to save plots")
     parser.add_argument("-p", "--plots", dest="plotsToMake", type=str, choices=["all", "truth", "reco", "error", "2D"], default="all", help="what plots we want to make")
-    #args = parser.parse_args("work/ROOTFiles/pi0_0p5GeV_100K_5_7_21.root -b 20".split()) #! to run in Jutpyter notebook
+    #args = parser.parse_args("csvfilelist.list -b 20 -p 2D".split()) #! to run in Jutpyter notebook
     args = parser.parse_args() #! run in command line
+
+    if args.file.split('.')[-1] != "root":
+        files = []
+        with open(args.file) as filelist:
+            file = filelist.read().splitlines() 
+    else:
+        file = args.file
 
     file = args.file
     bins = args.bins
