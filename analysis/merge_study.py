@@ -248,7 +248,7 @@ def mergeShower(events : Master.Data, matched : ak.Array, unmatched : ak.Array, 
         events_matched.recoParticles._RecoParticleData__energy = events_matched.recoParticles.energy + energyToMerge # merge energies
         events_matched.recoParticles._RecoParticleData__momentum = vector.prod(events_matched.recoParticles.energy, events_matched.recoParticles.direction)
     else:
-        new_energy = vector.magntiude(events_matched.recoParticles.momentum)
+        new_energy = vector.magnitude(events_matched.recoParticles.momentum)
         events_matched.recoParticles._RecoParticleData__energy = ak.where(events_matched.recoParticles.momentum.x != -999, new_energy, -999)
 
     return events_matched
