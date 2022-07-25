@@ -18,7 +18,7 @@ from tabulate import tabulate
 def main():
     names = ["inv_mass", "angle", "lead_energy", "sub_energy", "pi0_mom"]
     def PrintStats(event):
-        t, r, e = Master.CalculateQuantities(events, names)
+        t, r, e = Master.CalculateQuantities(events)
         for i in range(ak.count(events.eventNum)):
             if i > 100: break
             print(f"subrun {events.subRun[i]}, event {events.eventNum[i]}")

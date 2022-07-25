@@ -195,7 +195,7 @@ def Pi0MomFilter(events : Master.Data, r : list = [0.5, 1]):
     if len(r) != 2: r = [0.5, 1]
     pi0 = events.trueParticles.pdg == 111
     pi0 = np.logical_and(pi0, events.trueParticles.number == 1)
-    pi0_mom = vector.magntiude(events.trueParticles.momentum)[pi0]
+    pi0_mom = vector.magnitude(events.trueParticles.momentum)[pi0]
     mask = np.logical_and(pi0_mom > r[0], pi0_mom < r[1])
     mask = ak.flatten(mask)
     return events.Filter([mask], [mask], returnCopy=True)
@@ -267,7 +267,7 @@ def main():
     if ana == "quantity":
         for i in range(len(filters)):
             filtered = CreateFilteredEvents(events, filters[i])
-            t, r, e = Master.CalculateQuantities(filtered, names)
+            t, r, e = Master.CalculateQuantities(filtered)
             ts.append(t)
             rs.append(r)
             es.append(e)
@@ -296,7 +296,7 @@ def main():
         accepted = CreateFilteredEvents(events, None, invert=False) # events which pass the angle cut
         rejected = CreateFilteredEvents(events, None, invert=True) # events which don't pass the angle cut
         for i in (accepted, rejected):
-            t, r, e = Master.CalculateQuantities(i, names)
+            t, r, e = Master.CalculateQuantities(i)
             ts.append(t)
             rs.append(r)
             es.append(e)
