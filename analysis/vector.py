@@ -49,7 +49,7 @@ def normalize(vec : ak.Record) -> ak.Record:
 
 
 def dot(a : ak.Record, b : ak.Record) -> ak.Array:
-    """dot product of 3-vector
+    """dot product of 3-vectors
 
     Args:
         a (ak.Record created by vector): first vector
@@ -59,6 +59,22 @@ def dot(a : ak.Record, b : ak.Record) -> ak.Array:
         ak.Array: array of dot products
     """
     return (a.x * b.x) + (a.y * b.y) + (a.z * b.z)
+
+
+def cross(a : ak.Record, b : ak.Record) -> ak.Array:
+    """cross product of 3-vectors
+
+    Args:
+        a (ak.Record created by vector): first vector
+        b (ak.Record created by vector): second vector
+
+    Returns:
+        ak.Record: array of cross products
+    """
+    x = a.y*b.z - b.y*a.z
+    y = a.z*b.x - b.z*a.x
+    z = a.x*b.y - b.x*a.y
+    return ak.zip({"x": x, "y": y, "z": z})
 
 
 def prod(s, v : ak.Record) -> ak.Record:
