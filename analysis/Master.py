@@ -482,7 +482,10 @@ class ParticleData(ABC):
                 setattr(self, var_name, self.events.io.Get(nTupleName))
             # apply any filters to data when loading
             for f in self.filters:
-                setattr(self, var_name, getattr(self, var_name)[f])
+                try:
+                    setattr(self, var_name, getattr(self, var_name)[f])
+                except:
+                    Warning(f"couldn't apply a filter to {var_name}")
 
 
     def Filter(self, filters : list, returnCopy : bool = True):
@@ -711,6 +714,16 @@ class RecoParticleData(ParticleData):
     def showerConeAngle(self):
         self.LoadData("coneAngle", "reco_daughter_allShower_coneAngle")
         return getattr(self, f"_{type(self).__name__}__coneAngle")
+
+    @property
+    def beamVertex(self):
+        nTuples = [
+            "reco_beam_endX",
+            "reco_beam_endY",
+            "reco_beam_endZ",
+        ]
+        self.LoadData("beamVertex", nTuples)
+        return getattr(self, f"_{type(self).__name__}__beamVertex")
 
 
     def CalculatePairQuantities(self, useBT : bool = False):
