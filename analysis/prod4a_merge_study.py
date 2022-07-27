@@ -15,32 +15,41 @@ import Plots
 import CutOptimization
 
 
+def BestCut(cuts, q_names : list, type="purity"):
+    print("finding best cut")
+    c = cuts[cuts["$\\epsilon$"] > 0.1]
+    c = c[c["$\\epsilon_{s}$"] > 0.5]
+
+    if type == "purity":
+        max_index = c["purity"].idxmax()
+    if type == "efficiency":
+        max_index = c["$\\epsilon$"].idxmax()
+    best_cuts = c[c.index == max_index]
+    
+    print(best_cuts.to_markdown())
+    return best_cuts[q_names].values.tolist()[0]
+
+
 class ShowerMergeQuantities:
     xlabels = [
-        "$\delta\phi$ (rad)",
+        "$\\alpha$ (rad)",
         "$\delta x$ (cm)",
         "$\delta x_{l}$ (cm)",
         "$\delta x_{t}$ (cm)",
-        "$\delta e$ (cm)",
-        "$\\alpha$ (rad)",
-        "$\delta\\alpha$ (rad)"
-    ]
-    names = [
-        "delta_phi",
-        "delta_x",
-        "delta_xl",
-        "delta_xt",
-        "delta_e",
-        "alpha",
-        "delta_alpha"
+        "$\delta\phi$ (rad)",
+        "$d (cm)$",
+        "t (cm)"
     ]
     selectionVariables = [
-        "alpha",        
+        "alpha",    
         "delta_x",
         "delta_xl",
         "delta_xt",
         "delta_phi",
     ]
+    
+    bestCut = "purity"
+
     def __init__(self, events : Master.Data = None, to_merge = None):
         if events:
             #* collect positions and directions of PFOs
@@ -53,31 +62,58 @@ class ShowerMergeQuantities:
             self.to_merge_pos = self.to_merge_pos[self.null]
 
     @Master.timer
-    def Evaluate(self, events : Master.Data, start_showers):
+    def Evaluate(self, events : Master.Data, start_showers : ak.Array):
         """ Calculate quantities which may help select PFOs to merge
 
         Args:
             events (Master.Data): events to study
-            start_showers (_type_): initial showers to merge to
-            start_shower_pos (_type_): _description_
-            start_shower_dir (_type_): _description_
+            start_showers (ak.Array): initial showers to merge to
         """
         # collect relavent parameters
         start_shower_pos = events.recoParticles.startPos[start_showers]
         start_shower_dir = events.recoParticles.direction[start_showers]
-        start_shower_length = events.recoParticles.showerLength[start_showers]
-        start_shower_cone_angle = events.recoParticles.showerConeAngle[start_showers]
-        start_shower_end = vector.add(start_shower_pos, vector.prod(start_shower_length, start_shower_dir))
 
         # calculate
-        self.delta_phi = [vector.angle(start_shower_dir[:, i], self.to_merge_dir) for i in range(2)]
-        displacement = [vector.sub(self.to_merge_pos, start_shower_pos[:, i]) for i in range(2)]
-        self.alpha = [vector.angle(displacement[i], start_shower_dir[:, i]) for i in range(2)]
-        self.delta_alpha = [self.alpha[i] - start_shower_cone_angle[:, i] for i in range(2)] #? keep?
-        self.delta_x = [vector.dist(start_shower_pos[:, i], self.to_merge_pos) for i in range(2)]
-        self.delta_xl = [self.delta_x[i] * np.abs(np.cos(self.alpha[i])) for i in range(2)]
-        self.delta_xt = [self.delta_x[i] * np.abs(np.sin(self.alpha[i])) for i in range(2)]
-        self.delta_e = [vector.dist(start_shower_end[:, i], self.to_merge_pos) for i in range(2)] #? keep?
+        self.t = [vector.magnitude(vector.cross(vector.sub(start_shower_pos[:, i], self.to_merge_pos), self.to_merge_dir)) for i in range(2)]
+
+        v3 = ak.Array([vector.normalize(vector.cross(start_shower_dir[:, i], self.to_merge_dir)) for i in range(2)])
+        self.d = ak.Array([vector.dot(vector.sub(start_shower_pos[:, i], self.to_merge_pos), v3[i]) for i in range(2)])
+
+        self.delta_phi = ak.Array([vector.angle(start_shower_dir[:, i], self.to_merge_dir) for i in range(2)])
+        displacement = ak.Array([vector.sub(self.to_merge_pos, start_shower_pos[:, i]) for i in range(2)])
+        self.alpha = ak.Array([vector.angle(displacement[i], start_shower_dir[:, i]) for i in range(2)])
+        self.delta_x = ak.Array([vector.dist(start_shower_pos[:, i], self.to_merge_pos) for i in range(2)])
+        self.delta_xl = ak.Array([self.delta_x[i] * np.abs(np.cos(self.alpha[i])) for i in range(2)])
+        self.delta_xt = ak.Array([self.delta_x[i] * np.abs(np.sin(self.alpha[i])) for i in range(2)])
+        if args.applyCuts is True:
+            self.mask = self.SelectPFOsToMerge(BestCut(pd.read_csv(args.analysedCuts), self.selectionVariables, self.bestCut), False)
+
+
+    def SelectPFOsToMerge(self, cuts : list, applyCuts : bool) -> ak.Array:
+        """ Get mask of PFOs which pass a set of cuts.
+
+        Args:
+            cuts (list): list of cuts to apply in order of selectionVariables
+            applyCuts (bool): apply cuts to quantities?
+
+        Returns:
+            ak.Array: boolean mask
+        """
+        for v in range(len(self.selectionVariables)):
+            if v == 0:
+                mask = getattr(self, self.selectionVariables[v]) < cuts[v]
+            else:
+                mask = np.logical_and(mask, getattr(self, self.selectionVariables[v]) < cuts[v])
+        if(hasattr(self, "signal")):
+            new_list = self.selectionVariables + ["signal", "background"]
+        else:
+            new_list = self.selectionVariables
+        if applyCuts:
+            for v in range(len(new_list)):
+                d = getattr(self, new_list[v])
+                setattr(self, new_list[v], [d[i][mask[i]] for i in range(2)])
+        return mask
+
 
     def SaveQuantitiesToCSV(self, signal : ak.Array, background : ak.Array, filename : str = "merge-quantities.csv"):
         """ Saves merge quantities as a pandas dataframe to file.
@@ -88,16 +124,17 @@ class ShowerMergeQuantities:
             filename (str, optional): _description_. Defaults to "merge-quantities.csv".
         """
         #* create dataframe and add all calculated quantities
-        for i in range(len(self.names)):
+        for i in range(len(self.selectionVariables)):
             if i == 0:
-                df = ak.to_pandas(getattr(self, self.names[i]), anonymous=self.names[i])
+                df = ak.to_pandas(getattr(self, self.selectionVariables[i]), anonymous=self.selectionVariables[i])
             else:
-                df = pd.concat([df, ak.to_pandas(getattr(self, self.names[i]), anonymous=self.names[i])], 1)
+                df = pd.concat([df, ak.to_pandas(getattr(self, self.selectionVariables[i]), anonymous=self.selectionVariables[i])], 1)
         
         #* add signal and background boolean masks
         df = pd.concat([df, ak.to_pandas(signal, anonymous="signal")], 1)
         df = pd.concat([df, ak.to_pandas([background, background], anonymous="background")], 1)
-        df.to_csv(f"{outDir}/{filename}")
+        df.to_csv(f"{outDir}{filename}")
+
 
     def LoadQuantitiesToCSV(self, filename : str):
         """ Load merge quantities data and populate instance variables.
@@ -109,7 +146,7 @@ class ShowerMergeQuantities:
         #! so it should be possible to do per event studies
         #* read data and populate instance variables
         data = pd.read_csv(filename)
-        for n in self.names:
+        for n in self.selectionVariables:
             d = ak.Array(data[n].values.tolist())
             setattr(self, n, ak.unflatten(d, ak.count(d)//2))
 
@@ -118,27 +155,21 @@ class ShowerMergeQuantities:
 
         self.signal = ak.unflatten(signal, ak.count(signal)//2)
         self.background = ak.unflatten(background, ak.count(background)//2)
+        if args.applyCuts is True:
+            self.SelectPFOsToMerge(BestCut(pd.read_csv(args.analysedCuts), self.selectionVariables, self.bestCut), applyCuts=True)
 
-    @Master.timer
+
     def PlotQuantities(self, signal : ak.Array, background : ak.Array):
         """ Plot geometric quantities to cosndier for shower merging
 
         Args:
-            phi (ak.Array): angle between PFO and shower
-            x (ak.Array): distance between PFO and shower start 
-            xl (ak.Array): distance along axis of shower
-            xt (ak.Array): distance transverse to shower
-            e (ak.Array): distance between PFO and shower end
-            alpha (ak.array): angle from axis of start shower to x
-            dalpha (ak.Array): difference betweeen alpha and cone angle
             signal (ak.Array): signal PFOs
             background (ak.Array): background PFOs
         """
         #* plot and save
-        #labels = ["$b_{0}$", "$b_{1}$", "$s_{0}$", "$s_{1}$"]
         labels = ["background", "signal"]
-        for i in range(len(self.names)):
-            data = getattr(self, self.names[i])
+        for i in range(len(self.selectionVariables)):
+            data = getattr(self, self.selectionVariables[i])
             print(data)
             #* collect signal PFOs
             s = ak.ravel([data[j][signal[j]] for j in range(2)])
@@ -148,7 +179,8 @@ class ShowerMergeQuantities:
 
             #Plots.PlotHistComparison([ak.ravel((b+s)[j]) for j in range(4)], bins=50, xlabel=self.xlabels[i], labels=labels, density=norm, y_scale=scale)
             Plots.PlotHistComparison([b, s], bins=50, xlabel=self.xlabels[i], labels=labels, density=norm, y_scale=scale)
-            if save: Plots.Save(self.names[i], outDir)
+            if save: Plots.Save(self.selectionVariables[i], outDir)
+
 
     def Plot2DQuantities(self, signal, background):
         background = background[0]
@@ -170,18 +202,19 @@ class ShowerMergeQuantities:
         s_phi = ak.ravel([self.delta_phi[i][signal[i]] for i in range(2)])
         b_phi = ak.ravel([self.delta_phi[i][background] for i in range(2)])
 
-        PlotContour(s_alpha, s_x, b_alpha, b_x, colours, labels, legend, self.xlabels[5], self.xlabels[1])
-        if save: Plots.Save(f"{self.names[5]}-{self.names[1]}", outDir)
+        PlotContour(s_alpha, s_x, b_alpha, b_x, colours, labels, legend, self.xlabels[0], self.xlabels[1])
+        if save: Plots.Save(f"{self.selectionVariables[0]}-{self.selectionVariables[1]}", outDir)
 
         PlotContour(s_xl, s_xt, b_xl, b_xt, colours, labels, legend, self.xlabels[2], self.xlabels[3])
-        if save: Plots.Save(f"{self.names[2]}-{self.names[3]}", outDir)
+        if save: Plots.Save(f"{self.selectionVariables[2]}-{self.selectionVariables[3]}", outDir)
 
-        PlotContour(s_alpha, s_phi, b_alpha, b_phi, colours, labels, legend, self.xlabels[5], self.xlabels[0])
-        if save: Plots.Save(f"{self.names[5]}-{self.names[0]}", outDir)
+        PlotContour(s_alpha, s_phi, b_alpha, b_phi, colours, labels, legend, self.xlabels[0], self.xlabels[4])
+        if save: Plots.Save(f"{self.selectionVariables[0]}-{self.selectionVariables[4]}", outDir)
 
 
 def PlotContour(xs, ys, xb, yb, colours, labels, legend, xlabel, ylabel):
     #TODO move to Plots and correctly document
+    plt.figure()
     counts, xbins, ybins = np.histogram2d(xs, ys)
     contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=colours[1], label=labels[1])
     plt.clabel(contours, inline=True, fontsize=8)
@@ -224,8 +257,15 @@ def EventSelection(events : Master.Data):
     n = [["event selection", "number of events", "percentage of events removed"]]
     n.append(["no selection",  ak.count(events.eventNum), "-"])
     
+
     events.ApplyBeamFilter() # apply beam filter if possible
     n.append(["beam particle", ak.count(events.eventNum), Percentage(n[-1][1], ak.count(events.eventNum))])
+
+    #* pi+ beam selection!
+    true_beam = events.trueParticlesBT.pdg[events.recoParticles.beam_number == events.recoParticles.number]
+    f = ak.all(true_beam == 211, -1)
+    events.Filter([f], [f])
+    n.append(["pi+ beam", ak.count(events.eventNum), Percentage(n[-1][1], ak.count(events.eventNum))])
 
     Master.BeamMCFilter(events, returnCopy=False)
     n.append(["single pi0", ak.count(events.eventNum), Percentage(n[-1][1], ak.count(events.eventNum))])
@@ -264,7 +304,7 @@ def EventSelection(events : Master.Data):
     n.append(["valid start shower", ak.count(events.eventNum), Percentage(n[-1][1], ak.count(events.eventNum))])
     start_showers = start_showers[f]
 
-    print(tabulate(n, tablefmt="fancy_grid"))
+    print(tabulate(n, tablefmt="latex"))
 
     return start_showers
 
@@ -285,7 +325,6 @@ def GetStartShowers(events : Master.Data, method="spatial"):
     Returns:
         ak.Array: indices of reco particles with the smallest angular closeness
     """
-    global mcID, uniqueID, mcp, mother, pi0, indices
     if method not in ["angular", "spatial"]:
         raise Exception('method for selecting start showers must be either "angular" or "spatial"')
 
@@ -302,7 +341,6 @@ def GetStartShowers(events : Master.Data, method="spatial"):
         separation = vector.dist(events.recoParticles.startPos, events.trueParticlesBT.startPos) # calculate spatial closeness
     separation = ak.where(null, 9999999, separation) # if direction is undefined, separation is massive (so is never picked as a starting shower)
     ind = ak.local_index(separation, -1) # create index array of separations to use later
-
 
     mcID = events.trueParticlesBT.number
     uniqueID = events.trueParticlesBT.GetUniqueParticleNumbers(mcID[pi0_daughters]) # get unique true particle IDs
@@ -379,8 +417,35 @@ def StartShowerByDistance(events : Master.Data):
     return start_showers
 
 
+def Plot1D(data : ak.Array, xlabels : list, subDir : str, labels : list, plot_ranges = [[]]*5, legend_loc = ["upper right"]*5, x_scale=["linear"]*5, y_scale=["linear"]*5):
+    """ 1D histograms of data for each sample
+
+    Args:
+        data (ak.Array): list of samples data to plot
+        xlabels (list): x labels
+        subDir (str): subdirectiory to save in
+        plot_range (list, optional): range to plot. Defaults to [].
+    """
+    names = ["inv_mass", "angle", "lead_energy", "sub_energy", "pi0_mom"]
+    bins = 20
+    if save is True: os.makedirs(outDir + subDir, exist_ok=True)
+    for i in range(len(names)):
+        if len(labels) == 1:
+            d = data[0][i]
+            if len(plot_ranges[i]) == 2:
+                d = d[d > plot_ranges[i][0]]
+                d = d[d < plot_ranges[i][1]]
+            else:
+                d = d[d > -999]
+            Plots.PlotHist(d, bins, xlabel=xlabels[i], x_scale=x_scale[i], y_scale=y_scale[i], density=True)
+        else:
+            Plots.PlotHistComparison(data[:, i], plot_ranges[i], bins, xlabel=xlabels[i], histtype="step", labels=labels, x_scale=x_scale[i], y_scale=y_scale[i], density=norm)
+            plt.legend(loc=legend_loc[i])
+        if save is True: Plots.Save( names[i] , outDir + subDir)
+
+
 def ROOTWorkFlow():
-    events = Master.Data(file, includeBackTrackedMC=True)
+    events = Master.Data(file, includeBackTrackedMC=True, _nEvents=args.nEvents)
     start_showers = EventSelection(events)
 
     #* get boolean mask of PFP's to merge
@@ -388,73 +453,105 @@ def ROOTWorkFlow():
     to_merge = [ ak.where(index == start_showers[:, i], False, True) for i in range(2) ]
     to_merge = np.logical_and(*to_merge)
 
-    #* get boolean mask of PFP's which are actual fragments of the starting showers
-    start_shower_ID = events.trueParticlesBT.number[start_showers]
-    to_merge_ID = events.trueParticlesBT.number[to_merge]
-    signal = [to_merge_ID == start_shower_ID[:, i] for i in range(2)] # signal are the PFOs which is a fragment of the ith starting shower
-    nSignal = [ak.count(signal[i][signal[i]], -1) for i in range(2)]
-
-    if plotsToMake in ["all", "multiplicity"]:
-        #* plot shower multiplicity
-        Plots.PlotHist(ak.ravel(nSignal), xlabel="start shower multiplicity")
-        if save: Plots.Save("shower-multiplicity", outDir)
-
-    events.recoParticles.nHits
     #* class to calculate quantities
     q = ShowerMergeQuantities(events, to_merge)
 
-    #* define signal and background
-    signal_all = np.logical_or(*signal)
-    signal_all = signal_all[q.null]
-    background = np.logical_not(signal_all) # background is all other PFOs unrelated to the pi0 decay
-    signal = [signal[i][q.null] for i in range(2)]
+    if args.merge:
+        q.bestCut = "purity"
+        merged_p = ShowerMerging(events, start_showers, to_merge, q)
+        q.bestCut = "efficiency"
+        merged_e = ShowerMerging(events, start_showers, to_merge, q)
+        unmerged = events.Filter([start_showers], returnCopy=True)
+        print(unmerged.recoParticles.momentum)
+        t = []
+        r = []
+        e = []
+        for s in (unmerged, merged_p, merged_e):
+            p = Master.CalculateQuantities(s, True)
+            t.append(p[0])
+            r.append(p[1])
+            e.append(p[2])
 
-    #* plot number of signal and background per event
-    nSignal = ak.count(signal_all[signal_all], -1)
-    nBackground = ak.count(background[background], -1)
+        t_l = ["True invariant mass (GeV)", "True opening angle (rad)", "True leading photon energy (GeV)", "True Sub leading photon energy (GeV)", "True $\pi^{0}$ momentum (GeV)"]
+        e_l = ["Invariant mass fractional error", "Opening angle fractional error", "Leading shower energy fractional error", "Sub leading shower energy fractional error", "$\pi^{0}$ momentum fractional error"]
+        r_l = ["Invariant mass (GeV)", "Opening angle (rad)", "Leading shower energy (GeV)", "Sub leading shower energy (GeV)", "$\pi^{0}$ momentum (GeV)"]
+        e_range = [[-1, 10]] * 5
+        r_range = [[]] * 5
+        r_range[0] = [0, 0.5]
+        t_range = [[]] * 5
 
-    if plotsToMake in ["all", "nPFO"]:
-        labels = ["background", "signal"]
-        Plots.PlotHistComparison([nBackground, nSignal], xlabel="number of PFOs per event", bins=20, labels=labels, density=False)
-        if save: Plots.Save("nPFO", outDir)
+        labels = ["unmerged", "merged_MaxPurity", "merged_MaxEfficiency"]
+        if plotsToMake in ["all", "truth"]: Plot1D(ak.Array(t), t_l, "truth/", labels, t_range)
+        if plotsToMake in ["all", "reco"]: Plot1D(ak.Array(r), r_l, "reco/", labels, r_range)
+        if plotsToMake in ["all", "error"]: Plot1D(ak.Array(e), e_l, "error/", labels, e_range)
+    else:
+        #* get boolean mask of PFP's which are actual fragments of the starting showers
+        start_shower_ID = events.trueParticlesBT.number[start_showers]
+        to_merge_ID = events.trueParticlesBT.number[to_merge]
+        signal = [to_merge_ID == start_shower_ID[:, i] for i in range(2)] # signal are the PFOs which is a fragment of the ith starting shower
+        nSignal = [ak.count(signal[i][signal[i]], -1) for i in range(2)]
 
-    #* calculate geometric quantities
-    if plotsToMake in ["all", "quantities", "2D"] or save is True: q.Evaluate(events, start_showers)
-    if plotsToMake in ["all", "quantities"]:
-        q.PlotQuantities(signal, background)
-    if plotsToMake in ["2D"]:
-        q.Plot2DQuantities(signal, background)
+        if plotsToMake in ["all", "multiplicity"]:
+            #* plot shower multiplicity
+            Plots.PlotHist(ak.ravel(nSignal), xlabel="start shower multiplicity")
+            if save: Plots.Save("shower-multiplicity", outDir)
 
-    if save is True and plotsToMake is None:
-        q.SaveQuantitiesToCSV(signal, background)
+        #* define signal and background
+        signal_all = np.logical_or(*signal)
+        signal_all = signal_all[q.null]
+        background = np.logical_not(signal_all) # background is all other PFOs unrelated to the pi0 decay
+        signal = [signal[i][q.null] for i in range(2)]
+
+        #* plot number of signal and background per event
+        nSignal = ak.count(signal_all[signal_all], -1)
+        nBackground = ak.count(background[background], -1)
+
+        if plotsToMake in ["all", "nPFO"]:
+            labels = ["background", "signal"]
+            Plots.PlotHistComparison([nBackground, nSignal], xlabel="number of PFOs per event", bins=20, labels=labels, density=False)
+            if save: Plots.Save("nPFO", outDir)
+
+        #* calculate geometric quantities
+        if plotsToMake in ["all", "quantities", "2D"] or save is True: q.Evaluate(events, start_showers)
+        if plotsToMake in ["all", "quantities"]:
+            q.PlotQuantities(signal, background)
+        if plotsToMake in ["2D"]:
+            q.Plot2DQuantities(signal, background)
+
+        if save is True and plotsToMake is None:
+            q.SaveQuantitiesToCSV(signal, background)
 
 def ShowerMergingCriteria(q):
+    def progessBar(counter, spinner="lines"):
+        spinners = {
+            "lines" : "-\|/",
+            "box"   : "⠦⠆⠖⠒⠲⠰⠴⠤",
+        }
+        return spinners[spinner][counter % len(spinners[spinner])]
     initial_cuts = [ak.max(q.alpha), ak.max(q.delta_x), ak.max(q.delta_xl), ak.max(q.delta_xt), ak.max(q.delta_phi)]
 
     min_val = np.array([ak.min(q.alpha), ak.min(q.delta_x), ak.min(q.delta_xl), ak.min(q.delta_xt), ak.min(q.delta_phi)])
     max_val = np.array([ak.max(q.alpha), ak.max(q.delta_x), ak.max(q.delta_xl), ak.max(q.delta_xt), ak.max(q.delta_phi)])
-    values = np.linspace(min_val+(0.1*max_val), max_val-(0.1*max_val), 2, True)
+    values = np.linspace(min_val+(0.1*max_val), max_val-(0.1*max_val), 4, True)
     output = []
     metric_labels = ["s", "b", "s/b", "$s\\sqrt{b}$", "purity", "$\\epsilon_{s}$", "$\\epsilon_{b}$", "$\\epsilon$"]
+    counter = 0
     for initial_cuts in itertools.product(*values.T):
         cutOptimization = CutOptimization.OptimizeSingleCut(q, initial_cuts)
-        c, m = cutOptimization.Optimize(10, CutOptimization.MaxSRootBRatio)
+        c, m = cutOptimization.Optimize(15, CutOptimization.MaxSRootBRatio)
         o = [c[i] + m[i] for i in range(len(c))]
         output.extend(o)
+        counter += 1
+        end = '\n' if counter == 0 else '\r'
+        print(f" {progessBar(counter, 'box')} progess: {counter/(len(values)**len(initial_cuts))*100:.3f}", end=end)
     print(tabulate([*output], headers=q.selectionVariables+metric_labels, floatfmt=".3f", tablefmt="fancy_grid"))
-    
-    output = pd.DataFrame(output, columns=q.selectionVariables+metric_labels)
-    metrics = output[metric_labels]
-    metrics = metrics[metrics["$\\epsilon$"] > 0.25]
-    metrics = metrics[metrics["$\\epsilon_{s}$"] > 0.5]
 
-    best_cuts = metrics["$\\epsilon_{b}$"].idxmin()
-    best_cuts = metrics[metrics.index == best_cuts]
-    print(best_cuts.to_markdown())
-    #! efficeincy > 0.25
-    #! signal efficiency > 0.5
-    #! min background efficiency
-    #! max s/rootb
+    output = pd.DataFrame(output, columns=q.selectionVariables+metric_labels)
+    if plotsToMake == "all":
+        scatter_matrix(output[metric_labels], figsize=(20, 20), diagonal="kde")
+    if save is True:
+        Plots.Save("scatter_matrix", outDir)
+    output.to_csv(f"{outDir}{args.analysedCuts}")
 
 
 def CSVWorkFlow():
@@ -466,7 +563,70 @@ def CSVWorkFlow():
         q.Plot2DQuantities(q.signal, q.background)
     if args.cut is True:
         ShowerMergingCriteria(q)
-    return
+    
+@Master.timer
+def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array, quantities : ShowerMergeQuantities):
+    global mask, scores, momentum, energy, direction, dummy, alpha, alpha_to_merge
+
+    def sortByStartingShower(data):
+        data = [ak.unflatten(data[i], 1, -1) for i in range(2)]
+        return ak.concatenate(data, -1)
+
+    #* retrieve quantities
+    quantities.Evaluate(events, start_showers)
+    mask = sortByStartingShower(quantities.mask) # PFOs we want to merge after cut based study is done
+    alpha = sortByStartingShower(quantities.alpha) # can use this to determine which starting shower the PFO is closest to in angle
+    x = sortByStartingShower(quantities.delta_x) # can use this to determine which starting shower the PFO is closest to in space
+    phi = sortByStartingShower(quantities.delta_phi) # can use this to determine which starting shower the PFO direction is most aligned to
+    print(mask)
+
+    #* find which start shower is closest to each PFO for each variable     
+    alpha = ak.where(mask, alpha, 9999999)
+    alpha_to_merge = ak.argmin(alpha, -1, keepdims=True)
+    alpha_to_merge = ak.where(ak.min(alpha, -1, keepdims=True) == 9999999, -1, alpha_to_merge)
+    x = ak.where(mask, x, 9999999)
+    x_to_merge = ak.argmin(x, -1, keepdims=True)
+    x_to_merge = ak.where(ak.min(x, -1, keepdims=True) == 9999999, -1, x_to_merge)
+    phi = ak.where(mask, phi, 9999999)
+    phi_to_merge = ak.argmin(phi, -1, keepdims=True)
+    phi_to_merge = ak.where(ak.min(phi, -1, keepdims=True) == 9999999, -1, phi_to_merge)
+
+    #dummy = ak.to_list(dummy)
+    #alpha_to_merge = ak.to_list(alpha_to_merge)
+
+    #* figure out which is the common start shower between all variables
+    # if min phi, alpha and x are all the same then merge to that shower
+    # if two are the same, merge to the most common shower
+    # if none agree (shouldn't be possible)
+    #! should replace this with calculating the mode of the scores
+    scores = ak.sum(ak.concatenate([phi_to_merge, x_to_merge, alpha_to_merge], -1), -1)
+    scores = ak.where(scores == 1, 0, scores) # [1, 0, 0]
+    scores = ak.where(scores == 2, 1, scores) # [1, 1, 0]
+    scores = ak.where(scores == 3, 1, scores) # [1, 1, 1]
+
+    #* get momenta of PFOs to merge
+    momentum = events.recoParticles.momentum[to_merge][quantities.null]
+    #* use this for actually merging momenta
+    max_index = ak.max(scores)
+    sorted_momentum_to_merge = []
+    for i in range(max_index + 1):
+        val = momentum[scores == i]
+        sorted_momentum_to_merge.append(ak.sum(val, -1))
+
+    #* merge momenta and select only start showers in the event
+    momentum = [ak.unflatten(vector.add(events.recoParticles.momentum[start_showers][:, i], sorted_momentum_to_merge[i]), 1, -1) for i in range(2)]
+    energy = [vector.magnitude(momentum[i]) for i in range(2)]
+    direction = [vector.normalize(momentum[i]) for i in range(2)]
+    
+    momentum = ak.concatenate(momentum, -1)
+    energy = ak.concatenate(energy, -1)
+    direction = ak.concatenate(direction, -1)
+
+    merged = events.Filter([start_showers], returnCopy=True)
+    merged.recoParticles._RecoParticleData__momentum = momentum
+    merged.recoParticles._RecoParticleData__energy = energy
+    merged.recoParticles._RecoParticleData__direction = direction
+    return merged
 
 @Master.timer
 def main():
@@ -481,19 +641,22 @@ def main():
 
 
 if __name__ == "__main__":
-    plt.rcParams.update({'font.size': 12})
-
     parser = argparse.ArgumentParser(description="Shower merging study for beamMC, plots quantities used to decide which showers to merge.")
     parser.add_argument(dest="file", type=str, help="ROOT file to open.")
+    parser.add_argument("-e", "--events", type=int, dest="nEvents", default=-1, help="number of events to analyse (-1 is all)")
     parser.add_argument("-n", "--normalize", dest="norm", action="store_true", help="normalise plots to compare shape")
     parser.add_argument("-l" "--log", dest="log", action="store_true", help="plot y axis on log scale")
     parser.add_argument("-s", "--save", dest="save", action="store_true", help="whether to save the plots")
-    parser.add_argument("-d", "--directory", dest="outDir", type=str, default="prod4a_merge_study", help="directory to save plots")
+    parser.add_argument("-d", "--directory", dest="outDir", type=str, default="prod4a_merge_study/", help="directory to save plots")
     parser.add_argument("-p", "--plots", dest="plotsToMake", type=str, choices=["all", "quantities", "multiplicity", "nPFO", "2D"], help="what plots we want to make")
     parser.add_argument("-c", "--cutScan", dest="cut", action="store_true", help="whether to do a cut based scan")
     parser.add_argument("--start-showers", dest="matchBy", type=str, choices=["angular", "spatial"], default="spatial", help="method to detemine start showers")
-    args = parser.parse_args("test/merge-quantities.csv -c -n".split()) #! to run in Jutpyter notebook
-    #args = parser.parse_args() #! run in command line
+    parser.add_argument("--cuts", dest="analysedCuts", default="analysedCuts.csv", type=str, help="data produced by ShowerMergingCriteria i.e. use the -c option")
+    parser.add_argument("-a", "--apply-cuts", dest="applyCuts", action="store_true", help="apply cuts to shower merge quantities")
+    parser.add_argument("-m", "--merge", dest="merge", action="store_true", help="Do shower merging (cuts required)")
+    #args = parser.parse_args("test/merge-quantities.csv --cuts test/analysedCuts.csv -a -p all".split()) #! to run in Jutpyter notebook
+    #args = parser.parse_args("work/ROOTFiles/Prod4a_6GeV_BeamSim_00.root --cuts prod4a_merge_study/analysedCuts.csv -a -m -p all -n".split())
+    args = parser.parse_args() #! run in command line
 
     file = args.file
     save = args.save
