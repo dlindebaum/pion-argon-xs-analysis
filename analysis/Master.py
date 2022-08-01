@@ -871,7 +871,7 @@ class TrueParticleDataBT(ParticleData):
             "reco_daughter_PFP_true_byHits_endY",
             "reco_daughter_PFP_true_byHits_endZ"
         ]
-        self.LoadData("direction", nTuples)
+        self.LoadData("endPos", nTuples)
         return getattr(self, f"_{type(self).__name__}__endPos")
 
     @property
