@@ -1189,6 +1189,38 @@ void protoana::pi0TestSelection::analyze(art::Event const & evt)
 
   //-------------------------------------------------------------------------------------------------------------//
   // main code
+
+  // get track-like beam info, not for pi0 only MC events
+  if(!fPi0Only && beamParticles.size() != 0)
+  {
+    AnalyseBeamPFP(*beamParticles[0], evt);
+    if(!evt.isRealData())
+    {
+      AnalyseMCTruthBeam(evt);
+    }
+    else
+    {
+      trueBeamPdg = -999;
+      trueBeamMass = -999;
+      trueBeamEnergy = -999;
+      trueBeamStartPosX = -999; 
+      trueBeamStartPosX = -999;
+      trueBeamStartPosX = -999;
+      trueBeamEndPosX = -999;
+      trueBeamEndPosX = -999;
+      trueBeamEndPosX = -999;
+    }
+  }
+  else
+  {
+    beamStartPosX = -999;
+    beamStartPosY = -999;
+    beamStartPosZ = -999;
+    beamEndPosX = -999;
+    beamEndPosY = -999;
+    beamEndPosZ = -999;
+  }
+
   for(recob::PFParticle pfp : *pfpVec)
   {
     const int self = pfp.Self();
