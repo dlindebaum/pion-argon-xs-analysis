@@ -237,7 +237,13 @@ class CutOptimization(ABC):
 
         if len(var) == 0:
             print(f"cuts {mcuts}, results in no events being selected!")
-            return
+            return icuts[n]
+        if ns_i == 0:
+            print(f"cuts {mcuts}, results in no signal events being selected, doing nothing...")
+            return icuts[n]
+        if nb_i == 0:
+            print(f"cuts {mcuts}, results in no background events being selected, doing nothing...")
+            return icuts[n]
 
         #* cut variable at various points, calculate s/b, s/rootb
         cuts = np.linspace(ak.min(var), ak.max(var), stepSize)
