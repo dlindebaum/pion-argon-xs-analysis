@@ -1,0 +1,793 @@
+import os
+import argparse
+import awkward as ak
+import numpy as np
+import pandas as pd
+from pandas.plotting import scatter_matrix
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from tabulate import tabulate
+import itertools
+from scipy import linalg
+
+import Master
+import vector
+import Plots
+import CutOptimization
+
+
+def SolveLinAlg(a, b):
+    # solve using singular value decomposition
+    u,s,vt = linalg.svd(b)
+
+    r = np.linalg.matrix_rank(b)
+    s[:r] = 1/s[:r]
+    m,n= np.shape(b)
+    s_inv = linalg.diagsvd(s,m,n).T
+    x = vt.T.dot(s_inv).dot(u.T).dot(a)
+    return x
+
+
+def FindVertex(x1, x2, n1, n2):
+    nShowers = ak.count(x1.x)
+    # re-write arrays into list of vectors rather than vector of lists
+    a = vector.sub(x2, x1)
+    a = ak.Array([a.x, a.y, a.z])
+    a = ak.Array([a[:, i] for i in range(nShowers)])
+
+    # create matrices for each set of start shower pairs
+    b = ak.Array([[n1.x, -1* n2.x], [n1.y, -1* n2.y], [n1.z, -1* n2.z]])
+    b = ak.Array([b[:, :, i] for i in range(nShowers)])
+
+    # loop through each start shower pair and solve
+    x = [SolveLinAlg(a[i], b[i]) for i in range(nShowers)]
+    print(x)
+
+    # calculate the vertex using both lines (if the lines actually intersect they should be equal?)
+    vertex_1 = [vector.add(x1[i], vector.prod(x[i][0], n1[i])) for i in range(nShowers)]
+    vertex_2 = [vector.add(x2[i], vector.prod(x[i][1], n2[i])) for i in range(nShowers)]
+    print(vertex_1)
+    print(vertex_2)
+    return vertex_1, vertex_2
+
+
+def BestCut(cuts, q_names : list, type="purity"):
+    print("finding best cut")
+    c = cuts[cuts["$\\epsilon$"] > 0]
+    c = c[c["$\\epsilon_{s}$"] > 0.5]
+
+    if type == "purity":
+        max_index = c["purity"].idxmax()
+    if type == "efficiency":
+        max_index = c["$\\epsilon$"].idxmax()
+    best_cuts = c[c.index == max_index]
+    
+    print(best_cuts.to_markdown())
+    return best_cuts[q_names].values.tolist()[0]
+
+
+class ShowerMergeQuantities:
+    xlabels = [
+        "$\\alpha$ (rad)",
+        "$\delta x$ (cm)",
+        "$\delta x_{l}$ (cm)",
+        "$\delta x_{t}$ (cm)",
+        "$\delta\phi$ (rad)",
+        "d (cm)",
+        "t (cm)",
+        "p (cm)",
+    ]
+    selectionVariables = [
+        "alpha",    
+        "delta_x",
+        "delta_xl",
+        "delta_xt",
+        "delta_phi",
+        "d",
+        "t",
+        "p",
+    ]
+
+    bestCut = "purity"
+
+    def __init__(self, events : Master.Data = None, to_merge = None):
+        if events:
+            #* collect positions and directions of PFOs
+            self.to_merge_dir = events.recoParticles.direction[to_merge]
+            self.to_merge_pos = events.recoParticles.startPos[to_merge]
+
+            # exclude null position/directions
+            self.null = np.logical_or(self.to_merge_dir.x != -999, self.to_merge_pos.x != -999)
+            self.to_merge_dir = self.to_merge_dir[self.null]
+            self.to_merge_pos = self.to_merge_pos[self.null]
+
+    @Master.timer
+    def Evaluate(self, events : Master.Data, start_showers : ak.Array):
+        global vertex_1, vertex_2
+        """ Calculate quantities which may help select PFOs to merge
+
+        Args:
+            events (Master.Data): events to study
+            start_showers (ak.Array): initial showers to merge to
+        """
+        # collect relavent parameters
+        start_shower_pos = events.recoParticles.startPos[start_showers]
+        start_shower_dir = events.recoParticles.direction[start_showers]
+
+        # calculate
+        self.t = ak.Array([vector.magnitude(vector.cross(vector.sub(start_shower_pos[:, i], self.to_merge_pos), self.to_merge_dir)) for i in range(2)])
+
+        v3 = ak.Array([vector.normalize(vector.cross(start_shower_dir[:, i], self.to_merge_dir)) for i in range(2)])
+        self.d = np.abs(ak.Array([vector.dot(vector.sub(start_shower_pos[:, i], self.to_merge_pos), v3[i]) for i in range(2)]))
+
+        pi0_vertex = events.recoParticles.beamVertex # assume the pi0 lifetime is short so these are approximately the same (should be even at 6GeV beam energy)
+        self.p = ak.Array([vector.magnitude(vector.cross(vector.sub(pi0_vertex, self.to_merge_pos), self.to_merge_dir)) for i in range(2)])
+
+        self.delta_phi = ak.Array([vector.angle(start_shower_dir[:, i], self.to_merge_dir) for i in range(2)])
+        displacement = ak.Array([vector.sub(self.to_merge_pos, start_shower_pos[:, i]) for i in range(2)])
+        self.alpha = ak.Array([vector.angle(displacement[i], start_shower_dir[:, i]) for i in range(2)])
+        self.delta_x = ak.Array([vector.dist(start_shower_pos[:, i], self.to_merge_pos) for i in range(2)])
+        self.delta_xl = ak.Array([self.delta_x[i] * np.abs(np.cos(self.alpha[i])) for i in range(2)])
+        self.delta_xt = ak.Array([self.delta_x[i] * np.abs(np.sin(self.alpha[i])) for i in range(2)])
+        if args.applyCuts is True:
+            self.mask = self.SelectPFOsToMerge(BestCut(pd.read_csv(args.analysedCuts), self.selectionVariables, self.bestCut), False)
+
+
+    def SelectPFOsToMerge(self, cuts : list, applyCuts : bool) -> ak.Array:
+        """ Get mask of PFOs which pass a set of cuts.
+
+        Args:
+            cuts (list): list of cuts to apply in order of selectionVariables
+            applyCuts (bool): apply cuts to quantities?
+
+        Returns:
+            ak.Array: boolean mask
+        """
+        for v in range(len(self.selectionVariables)):
+            if v == 0:
+                mask = getattr(self, self.selectionVariables[v]) < cuts[v]
+            else:
+                mask = np.logical_and(mask, getattr(self, self.selectionVariables[v]) < cuts[v])
+        if(hasattr(self, "signal")):
+            new_list = self.selectionVariables + ["signal", "background"]
+        else:
+            new_list = self.selectionVariables
+        if applyCuts:
+            for v in range(len(new_list)):
+                d = getattr(self, new_list[v])
+                setattr(self, new_list[v], [d[i][mask[i]] for i in range(2)])
+        return mask
+
+
+    def SaveQuantitiesToCSV(self, signal : ak.Array, background : ak.Array, filename : str = "merge-quantities.csv"):
+        """ Saves merge quantities as a pandas dataframe to file.
+
+        Args:
+            signal (ak.Array): signal PFO mask
+            background (ak.Array): background PFO mask
+            filename (str, optional): _description_. Defaults to "merge-quantities.csv".
+        """
+        #* create dataframe and add all calculated quantities
+        for i in range(len(self.selectionVariables)):
+            if i == 0:
+                df = ak.to_pandas(getattr(self, self.selectionVariables[i]), anonymous=self.selectionVariables[i])
+            else:
+                df = pd.concat([df, ak.to_pandas(getattr(self, self.selectionVariables[i]), anonymous=self.selectionVariables[i])], 1)
+        
+        #* add signal and background boolean masks
+        df = pd.concat([df, ak.to_pandas(signal, anonymous="signal")], 1)
+        df = pd.concat([df, ak.to_pandas([background, background], anonymous="background")], 1)
+        df.to_csv(f"{outDir}{filename}")
+
+
+    def LoadQuantitiesToCSV(self, filename : str):
+        """ Load merge quantities data and populate instance variables.
+
+        Args:
+            filename (str): compatible data file
+        """
+        #! data is flattened but indices and subindices are kept
+        #! so it should be possible to do per event studies
+        #* read data and populate instance variables
+        data = pd.read_csv(filename)
+        for n in self.selectionVariables:
+            d = ak.Array(data[n].values.tolist())
+            setattr(self, n, ak.unflatten(d, ak.count(d)//2))
+
+        signal = ak.Array(data["signal"].values.tolist())
+        background = ak.Array(data["background"].values.tolist())
+
+        self.signal = ak.unflatten(signal, ak.count(signal)//2)
+        self.background = ak.unflatten(background, ak.count(background)//2)
+        if args.applyCuts is True:
+            self.SelectPFOsToMerge(BestCut(pd.read_csv(args.analysedCuts), self.selectionVariables, self.bestCut), applyCuts=True)
+
+
+    def PlotQuantities(self, signal : ak.Array, background : ak.Array):
+        """ Plot geometric quantities to cosndier for shower merging
+
+        Args:
+            signal (ak.Array): signal PFOs
+            background (ak.Array): background PFOs
+        """
+        #* plot and save
+        labels = ["background", "signal"]
+        for i in range(len(self.selectionVariables)):
+            data = getattr(self, self.selectionVariables[i])
+            print(data)
+            #* collect signal PFOs
+            s = ak.ravel([data[j][signal[j]] for j in range(2)])
+
+            #* collect background PFOs
+            b = ak.ravel([data[j][background[0]] for j in range(2)])
+
+            #Plots.PlotHistComparison([ak.ravel((b+s)[j]) for j in range(4)], bins=50, xlabel=self.xlabels[i], labels=labels, density=norm, y_scale=scale)
+            Plots.PlotHistComparison([b, s], bins=50, xlabel=self.xlabels[i], labels=labels, density=norm, y_scale=scale)
+            if save: Plots.Save(self.selectionVariables[i], outDir)
+
+
+    def Plot2DQuantities(self, signal, background):
+        background = background[0]
+        labels = ["background", "signal"]
+        colours = ["blue", "red"]
+
+        legend = []
+        for i in range(len(labels)):
+            legend.append(mpatches.Patch(color=colours[i], label=labels[i]))
+
+        s_alpha = ak.ravel([self.alpha[i][signal[i]] for i in range(2)])
+        b_alpha = ak.ravel([self.alpha[i][background] for i in range(2)])
+        s_x = ak.ravel([self.delta_x[i][signal[i]] for i in range(2)])
+        b_x = ak.ravel([self.delta_x[i][background] for i in range(2)])
+        s_xl = ak.ravel([self.delta_xl[i][signal[i]] for i in range(2)])
+        b_xl = ak.ravel([self.delta_xl[i][background] for i in range(2)])
+        s_xt = ak.ravel([self.delta_xt[i][signal[i]] for i in range(2)])
+        b_xt = ak.ravel([self.delta_xt[i][background] for i in range(2)])
+        s_phi = ak.ravel([self.delta_phi[i][signal[i]] for i in range(2)])
+        b_phi = ak.ravel([self.delta_phi[i][background] for i in range(2)])
+        s_phi = ak.ravel([self.delta_phi[i][signal[i]] for i in range(2)])
+        b_phi = ak.ravel([self.delta_phi[i][background] for i in range(2)])
+        s_d = ak.ravel([self.d[i][signal[i]] for i in range(2)])
+        b_d = ak.ravel([self.d[i][background] for i in range(2)])
+        s_t = ak.ravel([self.t[i][signal[i]] for i in range(2)])
+        b_t = ak.ravel([self.t[i][background] for i in range(2)])
+
+
+        PlotContour(s_alpha[s_alpha < 0.5], s_x[s_alpha < 0.5], b_alpha[b_alpha < 0.5], b_x[b_alpha < 0.5], colours, labels, legend, self.xlabels[0], self.xlabels[1])
+        if save: Plots.Save(f"{self.selectionVariables[0]}-{self.selectionVariables[1]}", outDir)
+
+        PlotContour(s_xl, s_xt, b_xl, b_xt, colours, labels, legend, self.xlabels[2], self.xlabels[3])
+        if save: Plots.Save(f"{self.selectionVariables[2]}-{self.selectionVariables[3]}", outDir)
+
+        PlotContour(s_alpha, s_phi, b_alpha, b_phi, colours, labels, legend, self.xlabels[0], self.xlabels[4])
+        if save: Plots.Save(f"{self.selectionVariables[0]}-{self.selectionVariables[4]}", outDir)
+
+        PlotContour(s_alpha[s_alpha < 0.5], s_d[s_alpha < 0.5], b_alpha[b_alpha < 0.5], b_d[b_alpha < 0.5], colours, labels, legend, self.xlabels[0], self.xlabels[5])
+        if save: Plots.Save(f"{self.selectionVariables[0]}-{self.selectionVariables[5]}", outDir)
+
+        PlotContour(s_alpha[s_t < 200], s_t[s_t < 200], b_alpha[b_t < 200], b_t[b_t < 200], colours, labels, legend, self.xlabels[0], self.xlabels[6])
+        if save: Plots.Save(f"{self.selectionVariables[0]}-{self.selectionVariables[6]}", outDir)
+
+        PlotContour(s_d[s_t < 100], s_t[s_t < 100], b_d[b_t < 100], b_t[b_t < 100], colours, labels, legend, self.xlabels[5], self.xlabels[6])
+        if save: Plots.Save(f"{self.selectionVariables[5]}-{self.selectionVariables[6]}", outDir)
+
+
+def PlotContour(xs, ys, xb, yb, colours, labels, legend, xlabel, ylabel):
+    #TODO move to Plots and correctly document
+    plt.figure()
+    counts, xbins, ybins = np.histogram2d(xs, ys, 10)
+    contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=colours[1], label=labels[1])
+    plt.clabel(contours, inline=True, fontsize=8)
+    counts, xbins, ybins = np.histogram2d(xb, yb, 10)
+    contours = plt.contour(counts,extent=[xbins.min(),xbins.max(),ybins.min(),ybins.max()],linewidths=0.5, colors=colours[0], label=labels[0])
+    plt.clabel(contours, inline=True, fontsize=8)
+    plt.legend(handles=legend)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.tight_layout()
+
+
+def GetMin(quantity : ak.Array):
+    """ Get smallest geometric quantitity wrt to a start shower
+
+    Args:
+        quantity (ak.Array): geometric quantity
+
+    Returns:
+        ak.Array: smallest quantity per event
+    """
+    min_q = [ak.unflatten(quantity[i], 1, -1) for i in range(2)]
+    min_q = ak.concatenate(min_q, -1)
+    return ak.min(min_q, -1)
+
+
+def Percentage(a, b):
+    return  100 * (a - b)/ a
+
+@Master.timer
+def EventSelection(events : Master.Data):
+    """ Applies the event selection for this study and plots a table of how each cut performs.
+
+    Args:
+        events (Master.Data): events to look at
+
+    Returns:
+        Master.Data: events that pass the selection
+    """
+    n = [["event selection", "number of events", "percentage of events removed"]]
+    n.append(["no selection",  ak.count(events.eventNum), "-"])
+    
+
+    events.ApplyBeamFilter() # apply beam filter if possible
+    n.append(["beam particle", ak.count(events.eventNum), Percentage(n[-1][1], ak.count(events.eventNum))])
+
+    #* pi+ beam selection!
+    true_beam = events.trueParticlesBT.pdg[events.recoParticles.beam_number == events.recoParticles.number]
+    f = ak.all(true_beam == 211, -1)
+    events.Filter([f], [f])
+    n.append(["pi+ beam", ak.count(events.eventNum), Percentage(n[-1][1], ak.count(events.eventNum))])
+
+    Master.BeamMCFilter(events, returnCopy=False)
+    n.append(["single pi0", ak.count(events.eventNum), Percentage(n[-1][1], ak.count(events.eventNum))])
+
+    f = Master.NPFPMask(events, -1)
+    events.Filter([f], [f]) # filter events with mask
+    n.append(["nPFP > 1", ak.count(events.eventNum), Percentage(n[-1][1], ak.count(events.eventNum))])
+
+    f = Master.Pi0TwoBodyDecayMask(events)
+    events.Filter([f], [f])
+    n.append(["diphoton decay", ak.count(events.eventNum), Percentage(n[-1][1], ak.count(events.eventNum))])
+
+    unique = events.trueParticlesBT.GetUniqueParticleNumbers(events.trueParticlesBT.number)
+    f = ak.num(unique) > 1
+    events.Filter([f], [f])
+    n.append(["nUnique > 1", ak.count(events.eventNum), Percentage(n[-1][1], ak.count(events.eventNum))])
+
+    pi0 = ak.flatten(events.trueParticles.number[events.trueParticles.PrimaryPi0Mask])
+    f = events.trueParticlesBT.mother == pi0
+    not_null = np.logical_or(events.recoParticles.startPos.x != -999, events.recoParticles.direction.x != -999)
+    f = np.logical_and(f, not_null)
+    daughters = events.trueParticlesBT.number[f]
+    unique_daughters = events.trueParticlesBT.GetUniqueParticleNumbers(daughters)
+    unique_daughters = ak.count(unique_daughters, -1)
+    f = unique_daughters == 2
+    events.Filter([f], [f])
+    n.append(["unique pi0 daughters == 2", ak.count(events.eventNum), Percentage(n[-1][1], ak.count(events.eventNum))])
+
+    start_showers = GetStartShowers(events, args.matchBy)
+
+    start_shower_pos = events.recoParticles.startPos[start_showers]
+    start_shower_dir = events.recoParticles.direction[start_showers]
+    f = ak.all(np.logical_or(start_shower_dir.x != -999, start_shower_pos.x != -999), -1) # ignore null directions/positions for starting showers
+
+    events.Filter([f], [f])
+    n.append(["valid start shower", ak.count(events.eventNum), Percentage(n[-1][1], ak.count(events.eventNum))])
+    start_showers = start_showers[f]
+
+    print(tabulate(n, tablefmt="latex"))
+
+    return start_showers
+
+
+@Master.timer
+def GetStartShowers(events : Master.Data, method="spatial"):
+    #TODO fix a bug where occasionally a starting shower is not a daughter of the pi0.
+    """ Select starting showers to merge for the pi0 decay.
+        The starting showers are guarenteed to originate 
+        from the pi0 decay (using truth information).
+
+    Args:
+        events (Master.Data): events to look at
+
+    Raises:
+        Exception: if all reco PFP's backtracked to the same true particle
+
+    Returns:
+        ak.Array: indices of reco particles with the smallest angular closeness
+    """
+    if method not in ["angular", "spatial"]:
+        raise Exception('method for selecting start showers must be either "angular" or "spatial"')
+
+    pi0 = ak.flatten(events.trueParticles.number[events.trueParticles.PrimaryPi0Mask]) # get pi0 id
+    pi0_daughters = events.trueParticlesBT.mother == pi0 # get taggged daughters by matching pi0 pdg id to mother id
+
+    null_position = events.recoParticles.startPos.x == -999 # boolean mask of PFP's with undefined position
+    null_momentum = events.recoParticles.momentum.x == -999 # boolean mask of PFP's with undefined momentum
+    null = np.logical_or(null_position, null_momentum)
+    
+    if method == "angular":
+        separation = vector.angle(events.recoParticles.direction, events.trueParticlesBT.direction) # calculate angular closeness
+    else:
+        separation = vector.dist(events.recoParticles.startPos, events.trueParticlesBT.startPos) # calculate spatial closeness
+    separation = ak.where(null, 9999999, separation) # if direction is undefined, separation is massive (so is never picked as a starting shower)
+    ind = ak.local_index(separation, -1) # create index array of separations to use later
+
+    mcID = events.trueParticlesBT.number
+    uniqueID = events.trueParticlesBT.GetUniqueParticleNumbers(mcID[pi0_daughters]) # get unique true particle IDs
+
+    if(ak.any(ak.num(uniqueID) == 1)):
+        raise Exception("data contains events with reco particles matched to only one photon, did you forget to apply singleMatch filter?")
+    print(ak.any(ak.count(uniqueID, -1) != 2))
+
+    # get PFP's which match to the same true particle
+    mcp = [mcID == uniqueID[:, i] for i in range(2)]
+    [print(ak.count(mcp[i], -1)) for i in range(2)]
+    print(ak.any(ak.count(separation, -1) != ak.count(mcp[0], -1)))
+    print(ak.any(ak.count(separation, -1) != ak.count(mcp[1], -1)))
+    
+    mother = [events.trueParticlesBT.GetUniqueParticleNumbers(events.trueParticlesBT.mother[mcp[i]]) for i in range(2)]
+    print(ak.all(mother[0] == pi0))
+    print(ak.all(mother[1] == pi0))
+    print(ak.all(events.trueParticles.pdg[events.trueParticles.PrimaryPi0Mask] == 111))
+
+    min_sorted_spearation = [ak.min(separation[mcp[i]], -1) for i in range(2)] # get minimum separation sorted by ID
+
+    # select start showers by minimum separation
+    indices = [ind[separation == min_sorted_spearation[i]] for i in range(2)]
+    [print(ak.count(indices[i], -1)) for i in range(2)]
+    indices = [ak.unflatten(indices[i][:, 0], 1, -1) for i in range(2)]
+    
+
+    start_showers = ak.concatenate(indices, -1)
+    particle = events.trueParticlesBT.pdg[start_showers]
+    Plots.PlotBar(ak.ravel(particle))
+    #start_showers = start_showers[:, 0:2] # only get the smallest separations, not the second smallest etc.
+    return start_showers 
+
+
+def StartShowerByDistance(events : Master.Data):
+    """ Select a PFO per photon shower to us as a start for merging.
+        Based on PFOs which have the smallest spatial separation.
+
+    Args:
+        events (Master.Data): events to look at
+
+    Raises:
+        Exception: if all reco PFP's backtracked to the same true particle
+
+    Returns:
+        ak.Array: indices of reco particles with the smallest spatial closeness
+    """
+    null_position = events.recoParticles.startPos.x == -999 # boolean mask of PFP's with undefined position
+    null_momentum = events.recoParticles.momentum.x == -999 # boolean mask of PFP's with undefined momentum
+    null = np.logical_or(null_position, null_momentum)
+    distance_error = vector.dist(events.recoParticles.startPos, events.trueParticlesBT.startPos) # calculate angular closeness
+    distance_error = ak.where(null, 999999, distance_error) # if direction is undefined, angler error is massive (so not the best match)
+    ind = ak.local_index(distance_error, -1) # create index array of angles to use later
+
+    # get unique true particle numbers per event i.e. the photons which the reco PFP's backtrack to
+    mcIndex = events.trueParticlesBT.number
+    unqiueIndex = events.trueParticlesBT.GetUniqueParticleNumbers(mcIndex)
+
+    if(ak.any(ak.num(unqiueIndex) == 1)):
+        raise Exception("data contains events with reco particles matched to only one photon, did you forget to apply singleMatch filter?")
+
+    # get PFP's which match to the same true particle
+    mcp = [mcIndex == unqiueIndex[:, i] for i in range(2)]
+
+    # get the smallest distance error of each sorted PFP's
+    distance_error_0 = ak.min(distance_error[mcp[0]], -1)
+    distance_error_1 = ak.min(distance_error[mcp[1]], -1)
+
+    # get recoPFP indices which had the smallest spatial closeness
+    indices_0 = ind[distance_error == distance_error_0]
+    indices_1 = ind[distance_error == distance_error_1]
+    start_showers = ak.concatenate([indices_0, indices_1], -1)
+    start_showers = start_showers[:, 0:2]
+    return start_showers
+
+
+def Plot1D(data : ak.Array, xlabels : list, subDir : str, labels : list, plot_ranges = [[]]*5, legend_loc = ["upper right"]*5, x_scale=["linear"]*5, y_scale=["linear"]*5):
+    """ 1D histograms of data for each sample
+
+    Args:
+        data (ak.Array): list of samples data to plot
+        xlabels (list): x labels
+        subDir (str): subdirectiory to save in
+        plot_range (list, optional): range to plot. Defaults to [].
+    """
+    names = ["inv_mass", "angle", "lead_energy", "sub_energy", "pi0_mom"]
+    bins = 20
+    if save is True: os.makedirs(outDir + subDir, exist_ok=True)
+    for i in range(len(names)):
+        if len(labels) == 1:
+            d = data[0][i]
+            if len(plot_ranges[i]) == 2:
+                d = d[d > plot_ranges[i][0]]
+                d = d[d < plot_ranges[i][1]]
+            else:
+                d = d[d > -999]
+            Plots.PlotHist(d, bins, xlabel=xlabels[i], x_scale=x_scale[i], y_scale=y_scale[i], density=True)
+        else:
+            Plots.PlotHistComparison(data[:, i], plot_ranges[i], bins, xlabel=xlabels[i], histtype="step", labels=labels, x_scale=x_scale[i], y_scale=y_scale[i], density=norm)
+            plt.legend(loc=legend_loc[i])
+        if save is True: Plots.Save( names[i] , outDir + subDir)
+
+
+def ROOTWorkFlow():
+    events = Master.Data(file, includeBackTrackedMC=True, _nEvents=args.nEvents)
+    start_showers = EventSelection(events)
+
+    #* get boolean mask of PFP's to merge
+    index = ak.local_index(events.recoParticles.energy)
+    to_merge = [ ak.where(index == start_showers[:, i], False, True) for i in range(2) ]
+    to_merge = np.logical_and(*to_merge)
+
+    #* class to calculate quantities
+    q = ShowerMergeQuantities(events, to_merge)
+
+    if args.merge:
+        q.bestCut = "purity"
+        #merged_p = ShowerMerging(events, start_showers, to_merge, q)
+        #q.bestCut = "efficiency"
+        #merged_e = ShowerMerging(events, start_showers, to_merge, q)
+        t = []
+        r = []
+        e = []
+        #for s in (unmerged, merged_p, merged_e):
+        labels = ["unmerged", "merged_1", "merged_2", "merged_3", "merged_all"]
+        n_merge = [0, 1, 2, 3, -1]
+        for n in n_merge:
+            if n == 0:
+                s = events.Filter([start_showers], returnCopy=True)
+            else:
+                s = ShowerMerging(events, start_showers, to_merge, q, n)
+            p = Master.CalculateQuantities(s, True)
+            t.append(p[0])
+            r.append(p[1])
+            e.append(p[2])
+
+        t_l = ["True invariant mass (GeV)", "True opening angle (rad)", "True leading photon energy (GeV)", "True Sub leading photon energy (GeV)", "True $\pi^{0}$ momentum (GeV)"]
+        e_l = ["Invariant mass fractional error", "Opening angle fractional error", "Leading shower energy fractional error", "Sub leading shower energy fractional error", "$\pi^{0}$ momentum fractional error"]
+        r_l = ["Invariant mass (GeV)", "Opening angle (rad)", "Leading shower energy (GeV)", "Sub leading shower energy (GeV)", "$\pi^{0}$ momentum (GeV)"]
+        e_range = [[-1, 10]] * 5
+        r_range = [[]] * 5
+        r_range[0] = [0, 0.5]
+        t_range = [[]] * 5
+
+        #labels = ["unmerged", "merged_MaxPurity", "merged_MaxEfficiency"]
+        if plotsToMake in ["all", "truth"]: Plot1D(ak.Array(t), t_l, "truth/", labels, t_range)
+        if plotsToMake in ["all", "reco"]: Plot1D(ak.Array(r), r_l, "reco/", labels, r_range)
+        if plotsToMake in ["all", "error"]: Plot1D(ak.Array(e), e_l, "error/", labels, e_range)
+    else:
+        #* get boolean mask of PFP's which are actual fragments of the starting showers
+        start_shower_ID = events.trueParticlesBT.number[start_showers]
+        to_merge_ID = events.trueParticlesBT.number[to_merge]
+        signal = [to_merge_ID == start_shower_ID[:, i] for i in range(2)] # signal are the PFOs which is a fragment of the ith starting shower
+        nSignal = [ak.count(signal[i][signal[i]], -1) for i in range(2)]
+
+        if plotsToMake in ["all", "multiplicity"]:
+            #* plot shower multiplicity
+            Plots.PlotHist(ak.ravel(nSignal), xlabel="start shower multiplicity")
+            if save: Plots.Save("shower-multiplicity", outDir)
+
+        #* define signal and background
+        signal_all = np.logical_or(*signal)
+        signal_all = signal_all[q.null]
+        background = np.logical_not(signal_all) # background is all other PFOs unrelated to the pi0 decay
+        signal = [signal[i][q.null] for i in range(2)]
+
+        #* plot number of signal and background per event
+        nSignal = ak.count(signal_all[signal_all], -1)
+        nBackground = ak.count(background[background], -1)
+
+        print(f"Total number of Signal PFOs :{ak.sum(nSignal)}")
+        print(f"Total number of background PFOs :{ak.sum(nBackground)}")
+
+        if plotsToMake in ["all", "nPFO"]:
+            labels = ["background", "signal"]
+            Plots.PlotHistComparison([nBackground, nSignal], xlabel="number of PFOs per event", bins=20, labels=labels, density=False)
+            if save: Plots.Save("nPFO", outDir)
+
+        #* calculate geometric quantities
+        if plotsToMake in ["all", "quantities", "2D"] or save is True: q.Evaluate(events, start_showers)
+        if plotsToMake in ["all", "quantities"]:
+            q.PlotQuantities(signal, background)
+        if plotsToMake in ["2D"]:
+            q.Plot2DQuantities(signal, background)
+
+        if save is True and plotsToMake is None:
+            q.SaveQuantitiesToCSV(signal, background)
+
+
+def ShowerMergingCriteria(q : ShowerMergeQuantities):
+    def progessBar(counter, spinner="lines"):
+        spinners = {
+            "lines" : "-\|/",
+            "box"   : "⠦⠆⠖⠒⠲⠰⠴⠤",
+        }
+        return spinners[spinner][counter % len(spinners[spinner])]
+    # initial_cuts = [ak.max(q.alpha), ak.max(q.delta_x), ak.max(q.delta_xl), ak.max(q.delta_xt), ak.max(q.delta_phi)]
+    # min_val = np.array([ak.min(q.alpha), ak.min(q.delta_x), ak.min(q.delta_xl), ak.min(q.delta_xt), ak.min(q.delta_phi)])
+    # max_val = np.array([ak.max(q.alpha), ak.max(q.delta_x), ak.max(q.delta_xl), ak.max(q.delta_xt), ak.max(q.delta_phi)])
+
+    initial_cuts = [ak.max(q.alpha), ak.max(q.delta_x), ak.max(q.delta_xl), ak.max(q.delta_xt), ak.max(q.delta_phi), ak.max(q.d), ak.max(q.t), ak.max(q.p)]
+    min_val = np.array([ak.min(q.alpha), ak.min(q.delta_x), ak.min(q.delta_xl), ak.min(q.delta_xt), ak.min(q.delta_phi), ak.min(q.d), ak.min(q.t), ak.min(q.p)])
+    max_val = np.array([ak.max(q.alpha), ak.max(q.delta_x), ak.max(q.delta_xl), ak.max(q.delta_xt), ak.max(q.delta_phi), ak.max(q.d), ak.max(q.t), ak.max(q.p)])
+
+    values = np.linspace(min_val+(0.05*max_val), max_val-(0.05*max_val), 3, True)
+    output = []
+    metric_labels = ["s", "b", "s/b", "$s\\sqrt{b}$", "purity", "$\\epsilon_{s}$", "$\\epsilon_{b}$", "$\\epsilon$"]
+    counter = 0
+    for initial_cuts in itertools.product(*values.T):
+        cutOptimization = CutOptimization.OptimizeSingleCut(q, initial_cuts)
+        c, m = cutOptimization.Optimize(15, CutOptimization.MaxSRootBRatio)
+        o = [c[i] + m[i] for i in range(len(c))]
+        output.extend(o)
+        counter += 1
+        end = '\n' if counter == 0 else '\r'
+        print(f" {progessBar(counter, 'box')} progess: {counter/(len(values)**len(initial_cuts))*100:.3f}% | {counter} | {len(values)**len(initial_cuts)}", end=end)
+    print(tabulate([*output], headers=q.selectionVariables+metric_labels, floatfmt=".3f", tablefmt="fancy_grid"))
+
+    output = pd.DataFrame(output, columns=q.selectionVariables+metric_labels)
+    if plotsToMake == "all":
+        scatter_matrix(output[metric_labels], figsize=(20, 20), diagonal="kde")
+    if save is True:
+        Plots.Save("scatter_matrix", outDir)
+    output.to_csv(f"{outDir}{args.analysedCuts}")
+
+
+def CSVWorkFlow():
+    q = ShowerMergeQuantities()
+    q.LoadQuantitiesToCSV(file)
+    if args.cut is True:
+        ShowerMergingCriteria(q)
+        return
+    if plotsToMake in ["all", "quantities"]:
+        q.PlotQuantities(q.signal, q.background)
+    if plotsToMake in ["all", "2D"]:
+        q.Plot2DQuantities(q.signal, q.background)
+    
+@Master.timer
+def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array, quantities : ShowerMergeQuantities, n_merge : int = -1):
+
+    def sortByStartingShower(data):
+        data = [ak.unflatten(data[i], 1, -1) for i in range(2)]
+        return ak.concatenate(data, -1)
+
+    #* retrieve quantities
+    quantities.Evaluate(events, start_showers)
+    mask = sortByStartingShower(quantities.mask) # PFOs we want to merge after cut based study is done
+    alpha = sortByStartingShower(quantities.alpha) # can use this to determine which starting shower the PFO is closest to in angle
+    x = sortByStartingShower(quantities.delta_x) # can use this to determine which starting shower the PFO is closest to in space
+    phi = sortByStartingShower(quantities.delta_phi) # can use this to determine which starting shower the PFO direction is most aligned to
+    print(mask)
+
+    #* find which start shower is closest to each PFO for each variable     
+    alpha = ak.where(mask, alpha, 9999999)
+    alpha_to_merge = ak.argmin(alpha, -1, keepdims=True)
+    alpha_to_merge = ak.where(ak.min(alpha, -1, keepdims=True) == 9999999, -1, alpha_to_merge)
+    x = ak.where(mask, x, 9999999)
+    x_to_merge = ak.argmin(x, -1, keepdims=True)
+    x_to_merge = ak.where(ak.min(x, -1, keepdims=True) == 9999999, -1, x_to_merge)
+    phi = ak.where(mask, phi, 9999999)
+    phi_to_merge = ak.argmin(phi, -1, keepdims=True)
+    phi_to_merge = ak.where(ak.min(phi, -1, keepdims=True) == 9999999, -1, phi_to_merge)
+
+    #* figure out which is the common start shower between all variables
+    # if min phi, alpha and x are all the same then merge to that shower
+    # if two are the same, merge to the most common shower
+    # if none agree (shouldn't be possible)
+    #! should replace this with calculating the mode of the scores
+    scores = ak.sum(ak.concatenate([phi_to_merge, x_to_merge, alpha_to_merge], -1), -1)
+    scores = ak.where(scores == 1, 0, scores) # [1, 0, 0]
+    scores = ak.where(scores == 2, 1, scores) # [1, 1, 0]
+    scores = ak.where(scores == 3, 1, scores) # [1, 1, 1]
+
+    #* get momenta of PFOs to merge
+    momentum = events.recoParticles.momentum[to_merge][quantities.null]
+    if n_merge > 0:
+        momentum = ak.pad_none(momentum, ak.max(ak.count(momentum, -1)), -1)
+        momentum = ak.fill_none(momentum, {"x": 0, "y": 0, "z": 0}, 1)
+        momentum = momentum[:, :n_merge]
+
+        scores = ak.pad_none(scores, ak.max(ak.count(scores, -1)), -1)
+        scores = ak.fill_none(scores, -1)
+        scores = scores[:, :n_merge]
+    #* use this for actually merging momenta
+    sorted_momentum_to_merge = []
+    for i in range(2):
+        val = scores == i
+        val = ak.where(val, momentum, vector.prod(0, momentum))
+        print(val)
+        sorted_momentum_to_merge.append(ak.sum(val, -1))
+
+    #* merge momenta and select only start showers in the event
+    momentum = [ak.unflatten(vector.add(events.recoParticles.momentum[start_showers][:, i], sorted_momentum_to_merge[i]), 1, -1) for i in range(2)]
+    energy = [vector.magnitude(momentum[i]) for i in range(2)]
+    direction = [vector.normalize(momentum[i]) for i in range(2)]
+    
+    momentum = ak.concatenate(momentum, -1)
+    energy = ak.concatenate(energy, -1)
+    direction = ak.concatenate(direction, -1)
+
+    merged = events.Filter([start_showers], returnCopy=True)
+    merged.recoParticles._RecoParticleData__momentum = momentum
+    merged.recoParticles._RecoParticleData__energy = energy
+    merged.recoParticles._RecoParticleData__direction = direction
+    return merged
+
+@Master.timer
+def main():
+    plt.rcParams.update({'font.size': 12})
+    if save:
+        os.makedirs(outDir, exist_ok=True)
+    fileFormat = file.split('.')[-1]
+    if fileFormat == "root":
+        ROOTWorkFlow()
+    if fileFormat == "csv":
+        CSVWorkFlow()
+
+
+def DebugDecayVertex():
+    global beamVertex, start_showers_pos, start_showers_dir, x1, x2, n1, n2, v1, v2
+    events = Master.Data(file, includeBackTrackedMC=True, _nEvents=args.nEvents)
+    start_showers = EventSelection(events)
+    start_showers_pos = events.recoParticles.startPos[start_showers]
+    start_showers_dir = events.recoParticles.direction[start_showers]
+    t_start_showers_pos = events.trueParticlesBT.endPos[start_showers]
+    t_start_showers_dir = events.trueParticlesBT.direction[start_showers]
+
+    x1 = start_showers_pos[:, 0]
+    x2 = start_showers_pos[:, 1]
+    n1 = start_showers_dir[:, 0]
+    n2 = start_showers_dir[:, 1]
+    t_x1 = t_start_showers_pos[:, 0]
+    t_x2 = t_start_showers_pos[:, 1]
+    t_n1 = t_start_showers_dir[:, 0]
+    t_n2 = t_start_showers_dir[:, 1]
+    v1, v2 = FindVertex(x1, x2, n1, n2)
+
+    beamVertex = events.recoParticles.beamVertex
+
+    from mpl_toolkits.mplot3d import Axes3D
+    fig = plt.figure()
+    ax = Axes3D(fig)
+    i = 0
+    ax.scatter([v1[i].x, v2[i].x], [v1[i].z, v2[i].z], [v1[i].y, v2[i].y])
+    
+    ax.scatter([x1[i].x, x2[i].x], [x1[i].z, x2[i].z], [x1[i].y, x2[i].y], color=["blue", "red"])
+    ax.plot([x1[i].x, x1[i].x + (10 * n1[i].x)], [x1[i].z, x1[i].z + (10 * n1[i].z)], [x1[i].y, x1[i].y + (10 * n1[i].y)], color="blue")
+    ax.plot([x2[i].x, x2[i].x + (10 * n2[i].x)], [x2[i].z, x2[i].z + (10 * n2[i].z)], [x2[i].y, x2[i].y + (10 * n2[i].y)], color="red")
+
+    ax.scatter([t_x1[i].x, t_x2[i].x], [t_x1[i].z, t_x2[i].z], [t_x1[i].y, t_x2[i].y], color=["green", "purple"])
+    ax.plot([t_x1[i].x, t_x1[i].x + (10 * t_n1[i].x)], [t_x1[i].z, t_x1[i].z + (10 * t_n1[i].z)], [t_x1[i].y, t_x1[i].y + (10 * t_n1[i].y)], color="green")
+    ax.plot([t_x2[i].x, t_x2[i].x + (10 * t_n2[i].x)], [t_x2[i].z, t_x2[i].z + (10 * t_n2[i].z)], [t_x2[i].y, t_x2[i].y + (10 * t_n2[i].y)], color="purple")
+
+    ax.scatter(beamVertex[i].x, beamVertex[i].z, beamVertex[i].y, color="black")
+
+    ax.set_xlabel("x")
+    ax.set_ylabel("z")
+    ax.set_zlabel("y")
+    beamVertex = ak.to_list(beamVertex)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Shower merging study for beamMC, plots quantities used to decide which showers to merge.")
+    parser.add_argument(dest="file", type=str, help="ROOT file to open.")
+    parser.add_argument("-e", "--events", type=int, dest="nEvents", default=-1, help="number of events to analyse (-1 is all)")
+    parser.add_argument("-n", "--normalize", dest="norm", action="store_true", help="normalise plots to compare shape")
+    parser.add_argument("-l" "--log", dest="log", action="store_true", help="plot y axis on log scale")
+    parser.add_argument("-s", "--save", dest="save", action="store_true", help="whether to save the plots")
+    parser.add_argument("-d", "--directory", dest="outDir", type=str, default="prod4a_merge_study/", help="directory to save plots")
+    parser.add_argument("-p", "--plots", dest="plotsToMake", type=str, choices=["all", "quantities", "multiplicity", "nPFO", "2D"], help="what plots we want to make")
+    parser.add_argument("-c", "--cutScan", dest="cut", action="store_true", help="whether to do a cut based scan")
+    parser.add_argument("--start-showers", dest="matchBy", type=str, choices=["angular", "spatial"], default="spatial", help="method to detemine start showers")
+    parser.add_argument("--cuts", dest="analysedCuts", default="analysedCuts.csv", type=str, help="data produced by ShowerMergingCriteria i.e. use the -c option")
+    parser.add_argument("-a", "--apply-cuts", dest="applyCuts", action="store_true", help="apply cuts to shower merge quantities")
+    parser.add_argument("-m", "--merge", dest="merge", action="store_true", help="Do shower merging (cuts required)")
+    #args = parser.parse_args("test/merge-quantities.csv --cuts test/analysedCuts.csv -a -p all".split()) #! to run in Jutpyter notebook
+    #args = parser.parse_args("work/ROOTFiles/Prod4a_6GeV_BeamSim_00.root --cuts test/prod4a_merge_study_initial/analysedCuts.csv -a -m -p all -n -e 1000".split())
+    #args = parser.parse_args("work/ROOTFiles/Prod4a_6GeV_BeamSim_00.root".split())
+    args = parser.parse_args() #! run in command line
+
+    file = args.file
+    save = args.save
+    outDir = args.outDir
+    plotsToMake = args.plotsToMake
+    norm = args.norm
+    if args.log is True:
+        scale="log"
+    else:
+        scale="linear"
+
+    main()

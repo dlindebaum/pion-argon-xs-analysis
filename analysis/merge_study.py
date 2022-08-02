@@ -236,18 +236,20 @@ def mergeShower(events : Master.Data, matched : ak.Array, unmatched : ak.Array, 
     #* create Array which contains the amount of energy to merge to the showers
     #* will be zero for the shower we don't want to merge to
     momentumToMerge = MergeQuantity(events_matched.recoParticles.momentum, unmatched_reco.momentum, mergeMask, "Vector3")
-    events_matched.recoParticles.momentum = vector.Add(events_matched.recoParticles.momentum, momentumToMerge)
+    new_momentum = vector.add(events_matched.recoParticles.momentum, momentumToMerge)
+    events_matched.recoParticles._RecoParticleData__momentum = new_momentum
 
     new_direction = vector.normalize(events_matched.recoParticles.momentum)
-    events_matched.recoParticles.direction = ak.where(events_matched.recoParticles.momentum.x != -999, new_direction, {"x": -999, "y": -999, "z": -999})
+    new_direction = ak.where(events_matched.recoParticles.momentum.x != -999, new_direction, {"x": -999, "y": -999, "z": -999})
+    events_matched.recoParticles._RecoParticleData__direction = new_direction
 
     if energyScalarSum is True:
         energyToMerge = MergeQuantity(events_matched.recoParticles.energy, unmatched_reco.energy, mergeMask, "Scalar")
-        events_matched.recoParticles.energy = events_matched.recoParticles.energy + energyToMerge # merge energies
-        events_matched.recoParticles.momentum = vector.prod(events_matched.recoParticles.energy, events_matched.recoParticles.direction)
+        events_matched.recoParticles._RecoParticleData__energy = events_matched.recoParticles.energy + energyToMerge # merge energies
+        events_matched.recoParticles._RecoParticleData__momentum = vector.prod(events_matched.recoParticles.energy, events_matched.recoParticles.direction)
     else:
-        new_energy = vector.magntiude(events_matched.recoParticles.momentum)
-        events_matched.recoParticles.energy = ak.where(events_matched.recoParticles.momentum.x != -999, new_energy, -999)
+        new_energy = vector.magnitude(events_matched.recoParticles.momentum)
+        events_matched.recoParticles._RecoParticleData__energy = ak.where(events_matched.recoParticles.momentum.x != -999, new_energy, -999)
 
     return events_matched
 
@@ -372,7 +374,7 @@ def main():
         for i in range(len(n_obj)):
             sample, target_PFPs = SelectSample(events, n_obj[i])
             cm.append(Master.ShowerMergePerformance(sample, target_PFPs))
-            merged_cheat, null = sample.mergePFPCheat()
+            merged_cheat, null = sample.MergePFPCheat()
             merged_bt = sample.MergeShowerBT(target_PFPs)
             energy_differences.append(ak.ravel(merged_bt.recoParticles.energy - merged_cheat.recoParticles.energy) / 1000)
         
@@ -398,7 +400,7 @@ if __name__ == "__main__":
     r_range[0] = [0, 0.5]
     t_range = [[]] * 5
 
-    n_obj = [-4]
+    n_obj = [-2]
     s_l = ["all"]
     #n_obj = [3, 4, 5, 6, 7, 8]
     #s_l = [3, 4, 5, 6, 7, 8]
