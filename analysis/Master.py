@@ -84,8 +84,9 @@ class Data:
             self.nEvents = _nEvents
             self.start = _start
             self.io = IO(self.filename, self.nEvents, self.start)
-            self.eventNum = self.io.Get("EventID")
+            self.run = self.io.Get("Run")            
             self.subRun = self.io.Get("SubRun")
+            self.eventNum = self.io.Get("EventID")
             self.trueParticles = TrueParticleData(self)
             self.recoParticles = RecoParticleData(self)
             if includeBackTrackedMC is True:
@@ -274,6 +275,7 @@ class Data:
             filtered.io = IO(filtered.filename, filtered.nEvents, filtered.start)
             filtered.eventNum = self.eventNum
             filtered.subRun = self.subRun
+            filtered.run = self.run
             filtered.trueParticles = self.trueParticles.Filter(true_filters)
             filtered.recoParticles = self.recoParticles.Filter(reco_filters)
             filtered.recoParticles.events = filtered
@@ -703,6 +705,11 @@ class RecoParticleData(ParticleData):
     def showerConeAngle(self):
         self.LoadData("coneAngle", "reco_daughter_allShower_coneAngle")
         return getattr(self, f"_{type(self).__name__}__coneAngle")
+
+    @property
+    def cnnScore(self):
+        self.LoadData("cnnScore", "CNNScore_collection")
+        return getattr(self, f"_{type(self).__name__}__cnnScore")
 
     @property
     def beamVertex(self):
