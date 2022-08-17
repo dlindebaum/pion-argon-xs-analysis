@@ -296,13 +296,7 @@ class Data:
             return
         hasBeam = self.recoParticles.beam_number != -999 # check if event has a beam particle
         hasBeam = np.logical_and(self.recoParticles.beamVertex.x != -999, hasBeam)
-        beamParticle = self.recoParticles.number == self.recoParticles.beam_number # get beam particle
-        beamParticleDaughters = self.recoParticles.mother == self.recoParticles.beam_number # get daugter of beam particle
-        # combine masks
-        particle_mask = np.logical_or(beamParticle, beamParticleDaughters)
-        #? which one to do?
-        #self.Filter([hasBeam], [hasBeam]) # filter data
-        self.Filter([hasBeam, particle_mask[hasBeam]], [hasBeam]) # filter data
+        self.Filter([hasBeam], [hasBeam]) # filter data
     
 
     def MergePFPCheat(self):
@@ -548,7 +542,7 @@ class TrueParticleData(ParticleData):
 
     @property
     def endPos(self):
-        self.LoadData("startPos", ["g4_endX", "g4_endY", "g4_endZ"])
+        self.LoadData("endPos", ["g4_endX", "g4_endY", "g4_endZ"])
         return getattr(self, f"_{type(self).__name__}__endPos")
 
     @property
@@ -1090,7 +1084,7 @@ def BeamMCFilter(events : Data, n_pi0 : int = 1, returnCopy=True):
     Returns:
         Data: selected events
     """
-    #* remove events with no truth info aka beam filter
+    #* remove events with no truth info
     empty = ak.num(events.trueParticles.number) > 0
     if returnCopy is True:
         events = events.Filter([empty], [empty], returnCopy=True)
