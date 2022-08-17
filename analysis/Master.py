@@ -13,8 +13,10 @@ import awkward as ak
 import time
 import numpy as np
 import itertools
+import sys
 # custom modules
-import vector
+sys.path.insert(1, "../")
+import analysis.vector as vector
 
 def timer(func):
     """ Decorator which times a function.
