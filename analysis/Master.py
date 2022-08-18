@@ -304,13 +304,7 @@ class Data:
             return
         hasBeam = self.recoParticles.beam_number != -999 # check if event has a beam particle
         hasBeam = np.logical_and(self.recoParticles.beamVertex.x != -999, hasBeam)
-        beamParticle = self.recoParticles.number == self.recoParticles.beam_number # get beam particle
-        beamParticleDaughters = self.recoParticles.mother == self.recoParticles.beam_number # get daugter of beam particle
-        # combine masks
-        particle_mask = np.logical_or(beamParticle, beamParticleDaughters)
-        #? which one to do?
-        #self.Filter([hasBeam], [hasBeam]) # filter data
-        self.Filter([hasBeam, particle_mask[hasBeam]], [hasBeam]) # filter data
+        self.Filter([hasBeam], [hasBeam]) # filter data
     
 
     def MergePFPCheat(self):
