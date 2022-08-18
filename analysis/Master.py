@@ -295,13 +295,8 @@ class Data:
             print("data doesn't contain beam number, can't apply filter.")
             return
         hasBeam = self.recoParticles.beam_number != -999 # check if event has a beam particle
-        beamParticle = self.recoParticles.number == self.recoParticles.beam_number # get beam particle
-        beamParticleDaughters = self.recoParticles.mother == self.recoParticles.beam_number # get daugter of beam particle
-        # combine masks
-        particle_mask = np.logical_or(beamParticle, beamParticleDaughters)
-        #? which one to do?
-        #self.Filter([hasBeam], [hasBeam]) # filter data
-        self.Filter([hasBeam, particle_mask[hasBeam]], [hasBeam]) # filter data
+        hasBeam = np.logical_and(self.recoParticles.beamVertex.x != -999, hasBeam)
+        self.Filter([hasBeam], [hasBeam]) # filter data
     
 
     def MergePFPCheat(self):
