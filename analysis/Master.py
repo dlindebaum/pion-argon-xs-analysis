@@ -1092,11 +1092,8 @@ def BeamMCFilter(events : Data, n_pi0 : int = 1, returnCopy=True):
         Data: selected events
     """
     #* remove events with no truth info aka beam filter
-    empty = ak.num(events.trueParticles.number) > 0
-    if returnCopy is True:
-        events = events.Filter([empty], [empty], returnCopy=True)
-    else:
-        events.Filter([empty], [empty])
+    empty = ak.num(events.trueParticles.number) > 0 
+    filtered = events.Filter([empty], [empty], returnCopy=True)
 
     #* only look at events with 1 primary pi0
     pi0 = events.trueParticles.PrimaryPi0Mask
