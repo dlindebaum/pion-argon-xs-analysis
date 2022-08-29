@@ -298,40 +298,53 @@ class Data:
         hasBeam = np.logical_and(self.recoParticles.beamVertex.x != -999, hasBeam)
         self.Filter([hasBeam], [hasBeam]) # filter data
     
-
+    @timer
     def MergePFPCheat(self):
-        mcIndex = self.trueParticlesBT.particleNumber
+        """ Merges all PFPs which backtrack to the same True particle.
+
+        Returns:
+            Tuple: Data class with merged PFOs and a list of PFOs which have underfined momentum after merging 
+        """
+        mcIndex = self.trueParticlesBT.number
+        if mcIndex is None:
+            mcIndex = self.trueParticlesBT.particleNumber # required for data missing backtracked number (pure pi0 sample)
+
         unqiueIndex = self.trueParticlesBT.GetUniqueParticleNumbers(mcIndex) # get unique list of true particles
-        p_new = []
-        e_new = []
-        dir_new = []
-        truePFPMask = []
-        for i in range(2):
+
+        maxPFPs = ak.max(ak.num(unqiueIndex))
+        unqiueIndex = ak.pad_none(unqiueIndex, maxPFPs)
+        for i in range(maxPFPs):
             pfps = mcIndex == unqiueIndex[:, i] # sort pfps based on which true particle they back-track to
             
-            # get single copy of true PFP
+            # get index of backtracked particle
             ind = ak.local_index(pfps, -1)
             ind = ak.min(ind[pfps], -1)
-            truePFPMask.append(ak.unflatten(ind, 1, -1))
 
+            # sum momenta of PFPs to merge
             p = self.recoParticles.momentum[pfps]
             p = ak.where(p.x == -999, {"x": 0,"y": 0,"z": 0}, p) # dont merge PFP's with null data
             p_m = ak.sum(p, -1) # sum all momentum vectors
             e_m = vector.magnitude(p_m)
             dir_m = vector.normalize(p_m)
-            p_new.append(ak.unflatten(p_m, 1, -1))
-            e_new.append(ak.unflatten(e_m, 1, -1))
-            dir_new.append(ak.unflatten(dir_m, 1, -1))
-        
-        truePFPMask = ak.concatenate(truePFPMask, axis=-1)
+
+            if i == 0:
+                truePFPMask = ak.unflatten(ind, 1, -1)
+                p_new = ak.unflatten(p_m, 1, -1)
+                e_new = ak.unflatten(e_m, 1, -1)
+                dir_new = ak.unflatten(dir_m, 1, -1)
+            else:
+                truePFPMask = ak.concatenate([truePFPMask, ak.unflatten(ind, 1, -1)], axis=-1)
+                p_new = ak.concatenate([p_new, ak.unflatten(p_m, 1, -1)], axis=-1)
+                e_new = ak.concatenate([e_new, ak.unflatten(e_m, 1, -1)], axis=-1)
+                dir_new = ak.concatenate([dir_new, ak.unflatten(dir_m, 1, -1)], axis=-1)        
+
+        truePFPMask = ak.fill_none(truePFPMask, -999)
+        truePFPMask = truePFPMask[truePFPMask != -999]
 
         events_merge = self.Filter(returnCopy=True) # easy way to make copies of the class
-        mergedMomentum = ak.concatenate(p_new, axis=-1)
-        mergedEnergy = ak.concatenate(e_new, axis=-1)
-        mergedDirection = ak.concatenate(dir_new, axis=-1)
-        events_merge.recoParticles._RecoParticleData__momentum = mergedMomentum
-        events_merge.recoParticles._RecoParticleData__energy = mergedEnergy
-        events_merge.recoParticles._RecoParticleData__direction = mergedDirection
+        events_merge.recoParticles._RecoParticleData__momentum = p_new
+        events_merge.recoParticles._RecoParticleData__energy = e_new
+        events_merge.recoParticles._RecoParticleData__direction = dir_new
         
         events_merge.trueParticlesBT.Filter([truePFPMask], False) # filter to get the true particles the merged PFP's relate to
         null = np.logical_not(ak.any(events_merge.recoParticles.energy == 0, -1)) # exlucde events where all PFP's merged had no valid momentmum vector
