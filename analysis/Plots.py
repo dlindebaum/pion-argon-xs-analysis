@@ -26,7 +26,7 @@ def Save(name : str = "plot", directory : str = ""):
     plt.close()
 
 
-def Plot(x, y, xlabel : str = "", ylabel : str = "", title : str = "", label : str = "", marker : str = "", newFigure : bool = True):
+def Plot(x, y, xlabel : str = "", ylabel : str = "", title : str = "", label : str = "", marker : str = "", newFigure : bool = True, annotation : str = None):
     """ Make scatter plot.
     """
     if newFigure is True: plt.figure()
@@ -35,10 +35,12 @@ def Plot(x, y, xlabel : str = "", ylabel : str = "", title : str = "", label : s
     plt.ylabel(ylabel)
     plt.title(title)
     if label != "": plt.legend()
+    if annotation is not None:
+        plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
     plt.tight_layout()
 
 
-def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label : str = "", alpha : int = 1, histtype : str = "bar", sf : int = 2, density : bool = False, x_scale : str = "linear", y_scale : str = "linear", newFigure : bool = True):
+def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label : str = "", alpha : int = 1, histtype : str = "bar", sf : int = 2, density : bool = False, x_scale : str = "linear", y_scale : str = "linear", newFigure : bool = True, annotation : str = None):
     """ Plot 1D histograms.
 
     Returns:
@@ -57,11 +59,13 @@ def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label : str 
     plt.yscale(y_scale)
     plt.title(title)
     if label != "": plt.legend()
+    if annotation is not None:
+        plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
     plt.tight_layout()
     return height, edges
 
 
-def PlotHist2D(data_x, data_y, bins : int = 100, x_range : list = [], y_range : list = [], xlabel : str = "", ylabel : str = "", title : str = "", label : str = "", x_scale : str = "linear", y_scale : str = "linear", newFigure : bool = True):
+def PlotHist2D(data_x, data_y, bins : int = 100, x_range : list = [], y_range : list = [], xlabel : str = "", ylabel : str = "", title : str = "", label : str = "", x_scale : str = "linear", y_scale : str = "linear", newFigure : bool = True, annotation : str = None):
     """ Plot 2D histograms.
 
     Returns:
@@ -94,11 +98,13 @@ def PlotHist2D(data_x, data_y, bins : int = 100, x_range : list = [], y_range : 
     plt.yscale(y_scale)
     plt.title(title)
     if label != "": plt.legend()
+    if annotation is not None:
+        plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
     plt.tight_layout()
     return height, [xedges, yedges]
 
 
-def PlotHistComparison(datas, xRange=[], bins : int = 100, xlabel : str = "", title : str = "", labels : list = [], alpha : int = 1, histtype : str = "step", x_scale : str = "linear", y_scale : str = "linear", sf : int = 2, density : bool = True):
+def PlotHistComparison(datas, xRange=[], bins : int = 100, xlabel : str = "", title : str = "", labels : list = [], alpha : int = 1, histtype : str = "step", x_scale : str = "linear", y_scale : str = "linear", sf : int = 2, density : bool = True, annotation : str = None):
     """ Plots multiple histograms on one plot
 
     Args:
@@ -119,6 +125,8 @@ def PlotHistComparison(datas, xRange=[], bins : int = 100, xlabel : str = "", ti
             PlotHist(data, edges, xlabel, title, labels[i], alpha, histtype, sf, density, newFigure=False)
     plt.xscale(x_scale)
     plt.yscale(y_scale)
+    if annotation is not None:
+        plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
 def UniqueData(data):
@@ -135,7 +143,7 @@ def UniqueData(data):
     return unique_labels, counts
 
 
-def PlotBar(data, width=0.4, xlabel="", title="", label="", alpha=1, newFigure=True):
+def PlotBar(data, width=0.4, xlabel="", title="", label="", alpha=1, newFigure=True, annotation : str = None):
     """ Plot a bar graph or unique items in data.
     """
     if newFigure is True: plt.figure()
@@ -146,10 +154,12 @@ def PlotBar(data, width=0.4, xlabel="", title="", label="", alpha=1, newFigure=T
     plt.xlabel(xlabel)
     plt.title(title)
     if label != "": plt.legend()
+    if annotation is not None:
+        plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
     plt.tight_layout()
     return unique, counts
 
-def PlotBarComparision(data_1, data_2, width=0.4, xlabel="", title="", label_1="", label_2="", newFigure=True):
+def PlotBarComparision(data_1, data_2, width=0.4, xlabel="", title="", label_1="", label_2="", newFigure=True, annotation : str = None):
     """ Plot two bar plots of the same data type side-by-side.
     """
     if newFigure is True: plt.figure()
@@ -192,6 +202,8 @@ def PlotBarComparision(data_1, data_2, width=0.4, xlabel="", title="", label_1="
     plt.ylabel("Counts")
     plt.title(title)
     plt.legend()
+    if annotation is not None:
+        plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
     plt.tight_layout()
     return [unique_1, counts_1], [unique_2, counts_2]
 
