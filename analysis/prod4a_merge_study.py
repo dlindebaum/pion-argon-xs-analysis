@@ -87,6 +87,7 @@ def BestCut(cuts : pd.DataFrame, q_names : list, type="balanced"):
         max_index = c["$\\epsilon$"].idxmax()
     best_cuts = c[c.index == max_index]
     
+    print("Best cut: ")
     print(best_cuts.to_markdown())
     return best_cuts[q_names].values.tolist()[0]
 
@@ -361,6 +362,12 @@ def EventSelection(events : Master.Data, matchBy : str = "spatial", invertFinal 
     Master.BeamMCFilter(events, returnCopy=False)
     n.append(["beam -> pi0 + X", "truth", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100])
 
+    #* pi+ beam selection!
+    true_beam = events.trueParticlesBT.pdg[events.recoParticles.beam_number == events.recoParticles.number]
+    f = ak.all(true_beam == 211, -1)
+    events.Filter([f], [f])
+    n.append(["pi+ beam", "backtracked", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100-Percentage(n[2][2], ak.count(events.eventNum))])
+
     #* select only two body decay
     f = Master.Pi0TwoBodyDecayMask(events)
     events.Filter([f], [f])
@@ -377,12 +384,6 @@ def EventSelection(events : Master.Data, matchBy : str = "spatial", invertFinal 
     n.append(["nPFP > 1", "reco", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100-Percentage(n[2][2], ak.count(events.eventNum))])
 
     #################### SELECTION USING BACKTRACKED INFORMATION #################### 
-    #* pi+ beam selection!
-    true_beam = events.trueParticlesBT.pdg[events.recoParticles.beam_number == events.recoParticles.number]
-    f = ak.all(true_beam == 211, -1)
-    events.Filter([f], [f])
-    n.append(["pi+ beam", "backtracked", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100-Percentage(n[2][2], ak.count(events.eventNum))])
-
     #* select events with more than one backtracked true particle
     unique = events.trueParticlesBT.GetUniqueParticleNumbers(events.trueParticlesBT.number)
     f = ak.num(unique) > 1
@@ -545,7 +546,7 @@ def PairQuantitiesToCSV(p):
     df = pd.DataFrame(np.transpose(np.vstack(p)), columns=headers)
     if save is True:
         if args.csv is None:
-            df.to_csv(f"{outDir}shower-quantities.csv")
+            df.to_csv(f"{outDir}shower-quantities")
         else:
             df.to_csv(f"{outDir}{args.csv}")
 
@@ -569,7 +570,7 @@ def ROOTWorkFlow():
 
     if args.merge == "reco":
         q.bestCut = args.cut_type
-        n_merge = 0
+        n_merge = -1
         if n_merge == 0:
             s = events.Filter([np.logical_or(*start_showers)], returnCopy=True)
         else:
@@ -616,10 +617,10 @@ def ROOTWorkFlow():
             Plots.PlotHistComparison([nBackground, nSignal], xlabel="Number of PFOs", bins=20, labels=labels, density=norm, y_scale=scale, annotation=dataset)
             if save: Plots.Save("nPFO", outDir+subDir)
 
-            Plots.PlotHist2D(ak.ravel(vector.magnitude(events.trueParticles.momentum[events.trueParticles.PrimaryPi0Mask])), nSignal, 50, xlabel = "True $\pi^{0}}$ momentum (GeV)", ylabel="Number of signal PFO")
+            Plots.PlotHist2D(ak.ravel(vector.magnitude(events.trueParticles.momentum[events.trueParticles.PrimaryPi0Mask])), nSignal, 50, xlabel = "True $\pi^{0}}$ momentum (GeV)", ylabel="Number of signal PFO", annotation=dataset)
             if save: Plots.Save("pi0_p_vs_nPFO_signal", outDir+subDir)
 
-            Plots.PlotHist2D(ak.ravel(vector.magnitude(events.trueParticles.momentum[events.trueParticles.PrimaryPi0Mask])), nBackground, 50, xlabel = "True $\pi^{0}}$ momentum (GeV)", ylabel="Number of background PFO")
+            Plots.PlotHist2D(ak.ravel(vector.magnitude(events.trueParticles.momentum[events.trueParticles.PrimaryPi0Mask])), nBackground, 50, xlabel = "True $\pi^{0}}$ momentum (GeV)", ylabel="Number of background PFO", annotation=dataset)
             if save: Plots.Save("pi0_p_vs_nPFO_background", outDir+subDir)
 
             Plots.PlotHist(nSignal, xlabel="Number of signal PFOs", bins=20, density=norm, y_scale=scale, annotation=dataset)
@@ -803,7 +804,7 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--out-csv", dest="csv", type=str, default=None, help="output csv filename (will default to whatever type of data is produced)")
     args = parser.parse_args() #! run in command line
 
-    dataset = "PDSPProd4a_MC_6GeV_reco1_sce_datadriven_v1_00"
+    dataset = "PDSPProd4a_MC_1GeV_reco1_sce_datadriven_v1_00"
 
     file = args.file
     save = args.save
