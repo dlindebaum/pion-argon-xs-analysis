@@ -71,15 +71,16 @@ def PlotDiff(data : ak.Array, labels : list, control : str, xlabels : list, lege
     if save is True: os.makedirs(outDir + subDir, exist_ok=True)
     c = labels.index(control)
     l = labels[:c] + labels[c+1:]
-    for j in range(quantities):
+    for j in range(len(quantities)):
         diff = []
         for i in range(len(data)):
             if i == c: continue
             d = data[i][j] - data[c][j]
             d = d[data[i][j] != -999]
             diff.append(d[data[c][j] != -999])
-        Plots.PlotHistComparison(diff, bins = bins, xlabel=f"difference in {xlabels[j]} wrt {control}", labels=l, x_scale=x_scale[j], y_scale=y_scale[j], density=norm)
+        Plots.PlotHistComparison(diff, bins = bins, xlabel=f"difference in {xlabels[j]} wrt {control}", labels=l, x_scale=x_scale[j], y_scale=y_scale[j], density=norm, annotation=annotation)
         plt.legend(loc=legend_loc[j])
+        if save is True: Plots.Save(f"diff_{quantities[j]}", outDir + subDir)
 
 
 def main(args):
@@ -105,6 +106,13 @@ def main(args):
 
     if args.qq[1] not in quantities:
         raise ValueError(f"qq quantity mst be in {quantities}")
+
+
+    if args.diff is None:
+        args.diff = labels[0]
+    else:
+        if args.diff not in labels:
+            raise ValueError(f"control group must be in labels, {labels}")
 
     if args.diff is not None and args.diff not in labels:
         raise ValueError(f"control sample must be {labels}")
@@ -145,11 +153,11 @@ def main(args):
         if args.dataType in ["all", "truth"]: Plot1D(t, t_l, "truth/", labels, t_range, save = args.save, outDir=args.outDir, norm=args.norm, y_scale=scale, bins=args.bins, annotation=args.annotation)
         if args.dataType in ["all", "reco"]: Plot1D(r, r_l, "reco/", labels, r_range, save = args.save, outDir=args.outDir, norm=args.norm, y_scale=scale, bins=args.bins, annotation=args.annotation)
         if args.dataType in ["all", "error"]: Plot1D(e, e_l, "error/", labels, e_range, save = args.save, outDir=args.outDir, norm=args.norm, y_scale=scale, bins=args.bins, annotation=args.annotation)
-    if args.plotsToMake == "qq" or (args.plotsToMake == "all" and len(args.files > 1)):
+    if args.plotsToMake == "qq" or (args.plotsToMake == "all" and len(args.files) > 1):
         if args.dataType in ["all", "truth"]: PlotQQ(t, labels, args.qq[0], t_l, args.qq[1], args.save, args.outDir, "truth/", args.annotation)
         if args.dataType in ["all", "reco"]: PlotQQ(r, labels, args.qq[0], r_l, args.qq[1], args.save, args.outDir, "reco/", args.annotation)
         if args.dataType in ["all", "error"]: PlotQQ(e, labels, args.qq[0], e_l, args.qq[1], args.save, args.outDir, "error/", args.annotation)
-    if args.plotsToMake == "diff" or (args.plotsToMake == "all" and len(args.files > 1)):
+    if args.plotsToMake == "diff" or (args.plotsToMake == "all" and len(args.files) > 1):
         if args.dataType in ["all", "truth"]: PlotDiff(t, labels, args.diff, t_l, save = args.save, outDir=args.outDir, subDir="truth/", norm=args.norm, y_scale=scale, bins=args.bins, annotation=args.annotation)
         if args.dataType in ["all", "reco"]:  PlotDiff(r, labels, args.diff, r_l, save = args.save, outDir=args.outDir, subDir="reco/", norm=args.norm, y_scale=scale, bins=args.bins, annotation=args.annotation)
         if args.dataType in ["all", "error"]: PlotDiff(e, labels, args.diff, e_l, save = args.save, outDir=args.outDir, subDir="error/", norm=args.norm, y_scale=scale, bins=args.bins, annotation=args.annotation)
@@ -159,7 +167,7 @@ if __name__ == "__main__":
     plt.rcParams.update({'font.size': 12})
     parser = argparse.ArgumentParser(description="Plot Shower pair quantities produced from ParticleData classes (in csv format)")
     parser.add_argument(dest="files", nargs="+", help="csv file/s to open.")
-    parser.add_argument("-p", "--plots", dest="plotsToMake", type=str, choices=["all", "truth", "reco", "error", "qq"], help="what plots we want to make")
+    parser.add_argument("-p", "--plots", dest="plotsToMake", type=str, choices=["all", "diff", "hist", "qq"], help="what plots we want to make")
     parser.add_argument("-t", "--type", dest="dataType", type=str, choices=["all", "reco", "truth", "error"], default="all", help="type of data to plot")
     parser.add_argument("-s", "--save", dest="save", action="store_true", help="whether to save the plots")
     parser.add_argument("-d", "--directory", dest="outDir", type=str, default="shower_quantities/", help="directory to save plots")
