@@ -6,6 +6,7 @@ Author: Shyam Bhuller
 Description: Create Event Display for Prod4a Shower merging study 
 """
 
+from types import SimpleNamespace
 import matplotlib
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -19,7 +20,7 @@ import vector
 from prod4a_merge_study import EventSelection, ShowerMergeQuantities
 
 class EventDisplay:
-    xlim = (-300, 300)
+    xlim = (-350, 350)
     ylim = (0, 600)
     zlim = (0, 600)
     def __init__(self, eventID : str, run : str, subrun : str, plotOrtho : bool = True, plot3D : bool = True):
@@ -96,10 +97,11 @@ class EventDisplay:
 
     def PlotText(self, point : ak.Record, text : str, fontsize : int = 16):
         if self.fig2D:
-            self.xy.text(point.x, point.y, str(text), fontsize = fontsize)
-            self.xz.text(point.x, point.z, str(text), fontsize = fontsize)
+            self.xy.text(point.x, point.y, str(text), fontsize = fontsize, clip_on = True)
+            self.xz.text(point.x, point.z, str(text), fontsize = fontsize, clip_on = True)
         if self.fig3D:
-            self.ax3D.text(point.x, point.z, point.y, str(text), fontsize = fontsize)
+            self.ax3D.text(point.x, point.z, point.y, str(text), fontsize = fontsize, clip_on = True)
+            self.ax3D.set_clip_on(True)
         return
 
 
@@ -217,7 +219,22 @@ def RenderEventDisplay(n):
     display.xy.legend(custom_lines, ["beam particle", "start shower 1", "signal 1", "start shower 2", "signal 2", "background", "decay vertex"])
     display.xy.grid()
     display.xz.grid()
-    display.DetectorBounds()
+
+    #* plot some information about the event:
+    text =  "$E_{\pi^{+}}$: "  + str(events.trueParticlesBT.energy[n][events.recoParticles.beam_number[n] == events.recoParticles.number[n]][0])[0:4] + "GeV \n"
+    text += "$E_{\pi^{0}}$: "  + str(events.trueParticles.energy[n][events.trueParticles.pdg[n] == 111][0])[0:4] + "GeV \n"
+    text += "$E_{\gamma 0}$: " + str(events.trueParticlesBT.energy[start_showers_merged][n][0])[0:4] + "GeV \n"
+    text += "$E_{\gamma 1}$: " + str(events.trueParticlesBT.energy[start_showers_merged][n][1])[0:4] + "GeV "
+    
+    props = dict(boxstyle='round', facecolor='grey', alpha=0.5)
+    display.xz.text(0.01, 0.85, text, transform=display.xz.transAxes, fontsize=14, bbox=props)
+
+    roi = SimpleNamespace(**{
+        "x": [events.recoParticles.beamVertex[n].x-100, events.recoParticles.beamVertex[n].x+100],
+        "y": [events.recoParticles.beamVertex[n].y-100, events.recoParticles.beamVertex[n].y+100],
+        "z": [events.recoParticles.beamVertex[n].z-100, events.recoParticles.beamVertex[n].z+100]
+    })
+    display.DetectorBounds(roi.x, roi.y, roi.z)
 
     name = f"{events.eventNum[n]}_{events.run[n]}_{events.subRun[n]}"
 
@@ -261,7 +278,7 @@ def main():
     ##################################################################################################
 
     nEvents = ak.num(events.recoParticles.spacePoints.x, 0)
-    eventNum = 0 # 11 and 13 identical??
+    eventNum = -1 # 11 and 13 identical??
     nPFO = ak.num(events.recoParticles.spacePoints.x)
     showSignal = True
     showBackground = True
@@ -269,6 +286,7 @@ def main():
     if eventNum == -1:
         for i in range(len(events.eventNum)):
             print(f"rendering {i+1} out of {len(events.eventNum)}")
+            print(f"event: {events.eventNum[n]}_{events.run[n]}_{events.subRun[n]}")
             try:
                 RenderEventDisplay(i)
             except:
