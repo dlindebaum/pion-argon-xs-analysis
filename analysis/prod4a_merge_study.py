@@ -555,12 +555,20 @@ def ROOTWorkFlow():
     events = Master.Data(file, includeBackTrackedMC = True, _nEvents = args.nEvents[0], _start = args.nEvents[1])
     start_showers = EventSelection(events, args.matchBy, False)
 
+    ######################### PFO Selection #########################
+    print(f"Total number of PFOs: {ak.count(events.recoParticles.nHits)}")
+    mask = np.logical_or(events.recoParticles.startPos.x != -999, events.recoParticles.momentum.x != -999)
+    events.Filter([mask])
+    start_showers = [start_showers[i][mask] for i in range(2)]
+    print(f"Total number of PFOs after cut: {ak.count(events.recoParticles.nHits)}")
+
     # CNN score selection on PFOs
     #! from Dennis: 0.36, 0.64, 0.84
     if args.cnn_cut is not None:
         mask = np.logical_or(events.recoParticles.cnnScore > args.cnn_cut, np.logical_or(*start_showers)) # select PFOs which pass CNN selection or are start showers
         events.Filter([mask])
         start_showers = [start_showers[i][mask] for i in range(2)]
+    #################################################################
 
     #* get boolean mask of PFP's to merge
     to_merge = np.logical_not(np.logical_or(*start_showers))
@@ -707,35 +715,29 @@ def CSVWorkFlow():
 @Master.timer
 def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array, quantities : ShowerMergeQuantities, n_merge : int = -1):
 
-    def sortByStartingShower(data):
+    def SortByStartingShower(data):
         data = [ak.unflatten(data[i], 1, -1) for i in range(2)]
         return ak.concatenate(data, -1)
 
-    #* retrieve quantities
-    quantities.Evaluate(events, start_showers)
-    mask = sortByStartingShower(quantities.mask) # PFOs we want to merge after cut based study is done
-    alpha = sortByStartingShower(quantities.alpha) # can use this to determine which starting shower the PFO is closest to in angle
-    x = sortByStartingShower(quantities.delta_x) # can use this to determine which starting shower the PFO is closest to in space
-    phi = sortByStartingShower(quantities.delta_phi) # can use this to determine which starting shower the PFO direction is most aligned to
-    print(mask)
+    def ClosestQuantity(q : ak.Array, mask : ak.Array):
+        masked_q = ak.where(mask, q, 9999999)
+        q_to_merge = ak.argmin(masked_q, -1, keepdims=True)
+        return ak.where(ak.min(masked_q, -1, keepdims=True) == 9999999, -1, q_to_merge)
 
-    #* find which start shower is closest to each PFO for each variable     
-    alpha = ak.where(mask, alpha, 9999999)
-    alpha_to_merge = ak.argmin(alpha, -1, keepdims=True)
-    alpha_to_merge = ak.where(ak.min(alpha, -1, keepdims=True) == 9999999, -1, alpha_to_merge)
-    x = ak.where(mask, x, 9999999)
-    x_to_merge = ak.argmin(x, -1, keepdims=True)
-    x_to_merge = ak.where(ak.min(x, -1, keepdims=True) == 9999999, -1, x_to_merge)
-    phi = ak.where(mask, phi, 9999999)
-    phi_to_merge = ak.argmin(phi, -1, keepdims=True)
-    phi_to_merge = ak.where(ak.min(phi, -1, keepdims=True) == 9999999, -1, phi_to_merge)
+    #* retrieve quantities and find which start shower is closest to each PFO for each variable
+    quantities.Evaluate(events, start_showers)
+    mask = SortByStartingShower(quantities.mask) # PFOs we want to merge after cut based study is done
+    alpha = ClosestQuantity(SortByStartingShower(quantities.alpha), mask) # can use this to determine which starting shower the PFO is closest to in angle
+    x = ClosestQuantity(SortByStartingShower(quantities.delta_x), mask) # can use this to determine which starting shower the PFO is closest to in space
+    phi = ClosestQuantity(SortByStartingShower(quantities.delta_phi), mask) # can use this to determine which starting shower the PFO direction is most aligned to
+    print(mask)
 
     #* figure out which is the common start shower between all variables
     # if min phi, alpha and x are all the same then merge to that shower
     # if two are the same, merge to the most common shower
     # if none agree (shouldn't be possible)
     #! should replace this with calculating the mode of the scores
-    scores = ak.sum(ak.concatenate([phi_to_merge, x_to_merge, alpha_to_merge], -1), -1)
+    scores = ak.sum(ak.concatenate([phi, x, alpha], -1), -1)
     scores = ak.where(scores == 1, 0, scores) # [1, 0, 0]
     scores = ak.where(scores == 2, 1, scores) # [1, 1, 0]
     scores = ak.where(scores == 3, 1, scores) # [1, 1, 1]
