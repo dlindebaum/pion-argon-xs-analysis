@@ -56,6 +56,7 @@ class IO:
         self.start = _start
         self.nEvents = _nEvents
 
+
     def Get(self, item : str) -> ak.Array:
         """ Load nTuple from root file as awkward array.
 
@@ -75,6 +76,17 @@ class IO:
             except uproot.KeyInFileError:
                 print(f"{item} not found in file, moving on...")
                 return None
+
+
+    def ListNTuples(self, search : str = ""):
+        """ list all NTuples produced by the analyser.
+
+        Args:
+            search (str, optional): filter NTuple by name (not case sensitive). Defaults to "".
+        """
+        with uproot.open(self.filename) as file:
+            names = file["pduneana/beamana"].keys()
+            print([x for x in names if search.casefold() in x.casefold()])
 
 
 class Data:
