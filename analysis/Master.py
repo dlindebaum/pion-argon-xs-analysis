@@ -1097,7 +1097,7 @@ class TrueParticleDataBT(ParticleData):
             ak.Array: boolean mask
         """
         unqiueIndex = self.GetUniqueParticleNumbers(self.particleNumber)
-        singleMatch = ak.num(unqiueIndex) < 2 #!
+        singleMatch = ak.num(unqiueIndex) < 2
         return np.logical_not(singleMatch)
 
 
