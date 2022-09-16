@@ -517,7 +517,7 @@ def ROOTWorkFlow():
          - geometric quantities for signal/background discrimination
          - pair quantities and shower merging
     """
-    events = Master.Data(file, includeBackTrackedMC = True, _nEvents = args.nEvents[0], _start = args.nEvents[1])
+    events = Master.Data(file, includeBackTrackedMC = True, nEvents = args.nEvents[0], start = args.nEvents[1])
     start_showers = EventSelection(events, args.matchBy, False)
 
     ######################### PFO Selection #########################
