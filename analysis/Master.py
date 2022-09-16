@@ -849,7 +849,6 @@ class RecoParticleData(ParticleData):
 
 
     def CalculatePairQuantities(self, useBT : bool = False) -> tuple:
-        #? have each value as an @property?
         """ Calculate reconstructed shower pair quantities.
 
         Returns:
@@ -942,7 +941,7 @@ class RecoParticleData(ParticleData):
         """ Pair reconstructed showers in an event by the number of hits.
             Pairs the two largest showers per event.
             TODO figure out a way to do this without sorting events (or re-sort events?)
-            ! not used
+            #! not used
 
         Args:
             hits (ak.Array): number of collection plane hits of daughters per event
@@ -1125,8 +1124,6 @@ class TrueParticleDataBT(ParticleData):
 
 
     def CalculatePairQuantities(self) -> tuple:
-        #? have each value as an @property?
-        #? method is almost identical as reconsturected particleData equivilant. do we keep this function in the Data class?
         """ Calculate reconstructed shower pair quantities.
 
         Returns:
