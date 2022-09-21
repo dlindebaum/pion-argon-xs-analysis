@@ -89,7 +89,7 @@ def PlotHist2D(data_x, data_y, bins : int = 100, x_range : list = [], y_range : 
         data_y = data_y[data_y <= y_range[1]]
 
     # plot data with a logarithmic color scale
-    height, xedges, yedges, _ = plt.hist2d(data_x, data_y, bins, norm=matplotlib.colors.LogNorm(), label=label)
+    height, xedges, yedges, _ = plt.hist2d(data_x, data_y, bins, norm = matplotlib.colors.LogNorm(), label = label)
     plt.colorbar()
 
     plt.xlabel(xlabel)
@@ -104,7 +104,7 @@ def PlotHist2D(data_x, data_y, bins : int = 100, x_range : list = [], y_range : 
     return height, [xedges, yedges]
 
 
-def PlotHistComparison(datas, xRange=[], bins : int = 100, xlabel : str = "", title : str = "", labels : list = [], alpha : int = 1, histtype : str = "step", x_scale : str = "linear", y_scale : str = "linear", sf : int = 2, density : bool = True, annotation : str = None):
+def PlotHistComparison(datas, xRange : list = [], bins : int = 100, xlabel : str = "", title : str = "", labels : list = [], alpha : int = 1, histtype : str = "step", x_scale : str = "linear", y_scale : str = "linear", sf : int = 2, density : bool = True, annotation : str = None):
     """ Plots multiple histograms on one plot
 
     Args:
@@ -143,7 +143,7 @@ def UniqueData(data):
     return unique_labels, counts
 
 
-def PlotBar(data, width=0.4, xlabel="", title="", label="", alpha=1, newFigure=True, annotation : str = None):
+def PlotBar(data, width : float = 0.4, xlabel : str = "", title : str = "", label : str = "", alpha : float = 1, newFigure : bool = True, annotation : str = None):
     """ Plot a bar graph or unique items in data.
     """
     if newFigure is True: plt.figure()
@@ -159,7 +159,7 @@ def PlotBar(data, width=0.4, xlabel="", title="", label="", alpha=1, newFigure=T
     plt.tight_layout()
     return unique, counts
 
-def PlotBarComparision(data_1, data_2, width=0.4, xlabel="", title="", label_1="", label_2="", newFigure=True, annotation : str = None):
+def PlotBarComparision(data_1, data_2, width : float = 0.4, xlabel : str = "", title : str = "", label_1 : str = "", label_2 : str = "", newFigure : bool = True, annotation : str = None):
     """ Plot two bar plots of the same data type side-by-side.
     """
     if newFigure is True: plt.figure()
@@ -192,7 +192,6 @@ def PlotBarComparision(data_1, data_2, width=0.4, xlabel="", title="", label_1="
     for i in loc:
         counts_2.insert(i, 0)
 
-
     x = np.arange(len(unique_1))
 
     plt.bar(x - (width/2), counts_1, width, label = label_1)
@@ -208,7 +207,7 @@ def PlotBarComparision(data_1, data_2, width=0.4, xlabel="", title="", label_1="
     return [unique_1, counts_1], [unique_2, counts_2]
 
 
-def BW(x, A, M, T):
+def BW(x, A : float, M : float, T : float):
     """ Breit Wigner distribution.
     
     Args:
@@ -223,7 +222,7 @@ def BW(x, A, M, T):
     return k/((x**2 - M**2)**2 + (M*T)**2)
 
 
-def Gaussian(x, A, mu, sigma):
+def Gaussian(x, A : float, mu : float, sigma : float):
     """ Gaussain distribution (not normalised).
     Args:
         x : sample data
@@ -234,7 +233,7 @@ def Gaussian(x, A, mu, sigma):
     return A * np.exp( -0.5 * ((x-mu) / sigma)**2 )
 
 
-def ChiSqrPDF(x, ndf):
+def ChiSqrPDF(x, ndf : int):
     """ Chi Squared PDF.
     Args:
         x : sample data
@@ -249,7 +248,7 @@ def ChiSqrPDF(x, ndf):
     return scale * poly * exponent
 
 
-def LeastSqrFit(data, nbins=25, function=Gaussian, pinit=None, xlabel="", sf=3, interpolation=500, capsize=1):
+def LeastSqrFit(data, nbins : int = 25, function = Gaussian, pinit : list = None, xlabel : str = "", sf : int = 3, interpolation : int = 500, capsize : float = 1):
     """ Fit a function to binned data using the least squares method, implemented in Scipy.
         Plots the fitted function and histogram with y error bars.
     Args:

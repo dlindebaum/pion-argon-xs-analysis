@@ -293,10 +293,10 @@ def main():
                 print(f"Something went wrong with {i+1}, you should look into it")
 
     else:
-        # try:
-        RenderEventDisplay(eventNum)
-        # except:
-        #     print(f"Something went wrong with {eventNum}, you should look into it")
+        try:
+            RenderEventDisplay(eventNum)
+        except:
+            print(f"Something went wrong with {eventNum}, you should look into it")
 
 if __name__ == "__main__":
     main()

@@ -3,7 +3,7 @@ Created on: 30/03/2022 19:32
 
 Author: Shyam Bhuller
 
-Description: 
+Description: Old event display code for Pi0 MC.
 """
 import argparse
 import os

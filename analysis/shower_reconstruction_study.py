@@ -322,8 +322,8 @@ if __name__ == "__main__":
 
     r_xs = ["linear"]*5
     r_ys = ["linear"]*5
-    #r_ys = ["linear", "linear", "log", "log", "linear"] #? something like this?
-    #r_xs = ["linear", "linear", "linear", "linear", "linear"] #? something like this?
+    #r_ys = ["linear", "linear", "log", "log", "linear"]
+    #r_xs = ["linear", "linear", "linear", "linear", "linear"]
 
     # n_obj = [2, -2, -2, -2]
     # bt = [True, True, True, True]

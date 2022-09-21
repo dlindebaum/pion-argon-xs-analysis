@@ -9,8 +9,8 @@ Description: Contains vector operations, based of awkward array records.
 import awkward as ak
 import numpy as np
 
-def vector(x : ak.Array, y : ak.Array, z : ak.Array) -> ak.Record:
-    """Creates a vector like record, not really meant to be called outside of module.
+def vector(x, y, z) -> ak.Record:
+    """ Creates a vector like record.
 
     Args:
         x (Any): x component
@@ -24,7 +24,7 @@ def vector(x : ak.Array, y : ak.Array, z : ak.Array) -> ak.Record:
 
 
 def magnitude(vec : ak.Record) -> ak.Array:
-    """magnitude of 3-vector
+    """ Magnitude of 3-vector.
 
     Args:
         vec (ak.Record created by vector): vector
@@ -36,24 +36,24 @@ def magnitude(vec : ak.Record) -> ak.Array:
 
 
 def normalize(vec : ak.Record) -> ak.Record:
-    """Normalize a vector (get direction)
+    """ Normalize a vector (get direction).
 
     Args:
-        vec (ak.Record created by vector): a vector
+        vec (ak.Record): a vector
 
     Returns:
-        ak.Record created by vector: norm of vector
+        ak.Record: norm of vector
     """
     m = magnitude(vec)
     return vector( vec.x / m, vec.y / m, vec.z / m )
 
 
 def dot(a : ak.Record, b : ak.Record) -> ak.Array:
-    """dot product of 3-vectors
+    """dot product of 3-vectors.
 
     Args:
-        a (ak.Record created by vector): first vector
-        b (ak.Record created by vector): second vector
+        a (ak.Record): first vector
+        b (ak.Record): second vector
 
     Returns:
         ak.Array: array of dot products
@@ -62,11 +62,11 @@ def dot(a : ak.Record, b : ak.Record) -> ak.Array:
 
 
 def cross(a : ak.Record, b : ak.Record) -> ak.Array:
-    """cross product of 3-vectors
+    """cross product of 3-vectors.
 
     Args:
-        a (ak.Record created by vector): first vector
-        b (ak.Record created by vector): second vector
+        a (ak.Record): first vector
+        b (ak.Record): second vector
 
     Returns:
         ak.Record: array of cross products
@@ -78,11 +78,11 @@ def cross(a : ak.Record, b : ak.Record) -> ak.Array:
 
 
 def prod(s, v : ak.Record) -> ak.Record:
-    """product of scalar and vector
+    """ Product of scalar and vector.
 
     Args:
         s (ak.Array or single number): scalar
-        v (ak.Record created by vector): vector
+        v (ak.Record): vector
 
     Returns:
         ak.Record created by vector: s * v
@@ -91,11 +91,11 @@ def prod(s, v : ak.Record) -> ak.Record:
 
 
 def angle(a : ak.Record, b : ak.Record) -> ak.Array:
-    """Compute angle between two vectors
+    """ Compute angle between two vectors.
 
     Args:
-        a (ak.Record created by vector): a vector
-        b (ak.Record created by vector): another vector
+        a (ak.Record): a vector
+        b (ak.Record): another vector
 
     Returns:
         ak.Array: angle between a and b
@@ -104,11 +104,11 @@ def angle(a : ak.Record, b : ak.Record) -> ak.Array:
 
 
 def dist(a : ak.Record, b : ak.Record):
-    """Compute cartesian distance between two vectors
+    """ Compute cartesian distance between two vectors.
 
     Args:
-        a (ak.Record created by vector): a vector
-        b (ak.Record created by vector): another vector
+        a (ak.Record): a vector
+        b (ak.Record): another vector
 
     Returns:
         ak.Array: distance between a and b
@@ -117,11 +117,11 @@ def dist(a : ak.Record, b : ak.Record):
 
 
 def add(a : ak.Record, b : ak.Record):
-    """Compute vector addition of two vectors
+    """ Compute vector addition of two vectors.
 
     Args:
-        a (ak.Record created by vector): a vector
-        b (ak.Record created by vector): another vector
+        a (ak.Record): a vector
+        b (ak.Record): another vector
 
     Returns:
         ak.Array: addition of a and b
@@ -130,11 +130,11 @@ def add(a : ak.Record, b : ak.Record):
 
 
 def sub(a : ak.Record, b : ak.Record):
-    """Compute vector subtraction (displacement) of two vectors
+    """ Compute vector subtraction (displacement) of two vectors.
 
     Args:
-        a (ak.Record created by vector): a vector
-        b (ak.Record created by vector): another vector
+        a (ak.Record): a vector
+        b (ak.Record): another vector
 
     Returns:
         ak.Array: displacement between a and b

@@ -19,7 +19,7 @@ import Plots
 import Master
 import vector
 
-def Separation(shower_1 : ak.Record, shower_2 : ak.Record, null : ak.Record, typeof : str):
+def Separation(shower_1 : ak.Record, shower_2 : ak.Record, null : ak.Record, typeof : str) -> ak.Array:
     """ Calculate angular or spatial separation, acocunting for null values
 
     Args:
@@ -29,7 +29,7 @@ def Separation(shower_1 : ak.Record, shower_2 : ak.Record, null : ak.Record, typ
         typeof (str): "Angular" or "Spatial"
 
     Returns:
-        _type_: _description_
+        ak.Array: separation
     """
     if typeof == "Angular":
         s = vector.angle(shower_1, shower_2)
@@ -54,16 +54,12 @@ def AnalyzeReco(events : Master.Data, matched : ak.Array, unmatched : ak.Array):
     valid = np.logical_not(null_dir)
 
     #* calculate separation of matched to unmatched
-    #separation_0 = vector.dist(unmatched_reco.startPos, matched_reco.startPos[:, 0])
-    #separation_1 = vector.dist(unmatched_reco.startPos, matched_reco.startPos[:, 1])
     separation_0 = Separation(unmatched_reco.startPos, matched_reco.startPos[:, 0], null_dir, "Spatial")[valid]
     separation_1 = Separation(unmatched_reco.startPos, matched_reco.startPos[:, 1], null_dir, "Spatial")[valid]
     separation = ak.concatenate([separation_0, separation_1], -1)
     minMask_dist = ak.min(separation, -1) == separation # get closest matched shower to matched to study various combinations
 
     #* same as above but for angular distance
-    #angle_0 = vector.angle(unmatched_reco.direction, matched_reco.direction[:, 0])
-    #angle_1 = vector.angle(unmatched_reco.direction, matched_reco.direction[:, 1])
     angle_0 = Separation(unmatched_reco.direction, matched_reco.direction[:, 0], null_dir, "Angular")[valid]
     angle_1 = Separation(unmatched_reco.direction, matched_reco.direction[:, 1], null_dir, "Angular")[valid]
     angle = ak.concatenate([angle_0, angle_1], -1)
@@ -84,8 +80,6 @@ def AnalyzeReco(events : Master.Data, matched : ak.Array, unmatched : ak.Array):
     min_separation_by_angle = ak.ravel(min_separation_by_angle)
     min_angle_by_dist = ak.ravel(min_angle_by_dist)
     min_angle_by_angle = ak.ravel(min_angle_by_angle)
-    #separation = ak.ravel(vector.dist(matched_reco.startPos[:, 0], matched_reco.startPos[:, 1]))
-    #opening_angle = ak.ravel(vector.dist(matched_reco.direction[:, 0], matched_reco.direction[:, 1]))
 
     #* plots
     directory = outDir + "merging/"
@@ -172,14 +166,24 @@ def MakePlots(dist : ak.Array, angle : ak.Array, dist_label : str, angle_label :
     if save is True: Plots.Save( "2D" , _dir)
 
 
-def MergeQuantity(matched, unmatched, mask, type):
+def MergeQuantity(matched : ak.Array, unmatched : ak.Array, mask : ak.Array, type : str) -> ak.Array:
+    """ Merge a shower quantity
+
+    Args:
+        matched (ak.Array): start showers
+        unmatched (ak.Array): PFOs to merge
+        mask (ak.Array): mask of events to not merge
+        type (str): type of quantity we are merging
+
+    Returns:
+        ak.Array: merged quantity
+    """
     if type == "Vector3":
         null = {"x": 0, "y": 0, "z": 0}
     elif type == "Scalar":
         null = 0
     else:
-        # print error message
-        print("not a mergable type")
+        raise Exception(f"{type} not a mergable type")
     toMerge = ak.where(mask, unmatched, null)
     if type == "Vector3":
          toMerge = ak.where(toMerge.x != -999, toMerge, null)
@@ -200,7 +204,7 @@ def MergeQuantity(matched, unmatched, mask, type):
 
 @Master.timer
 def mergeShower(events : Master.Data, matched : ak.Array, unmatched : ak.Array, mergeMethod : int = 1, energyScalarSum : bool = False):
-    """Merge shower not matched to MC to the spatially closest matched shower.
+    """ Merge shower not matched to MC to the spatially closest matched shower.
 
     Args:
         events (Master.Event): events to study
@@ -255,7 +259,7 @@ def mergeShower(events : Master.Data, matched : ak.Array, unmatched : ak.Array, 
 
 
 def CreateFilteredEvents(events : Master.Data, nDaughters : int = None):
-    """Filter events with specific number of daughters, then match the showers to
+    """ Filter events with specific number of daughters, then match the showers to
        MC truth.
 
     Args:
@@ -289,7 +293,7 @@ def Plot1D(data : ak.Array, xlabels : list, subDir : str, labels : list = [""]*5
 
 
 def AnalyseQuantities(truths : np.array, recos : np.array, errors : np.array, labels : list, directory : str):
-    """Plot calculated quantities for given events
+    """ Plot calculated quantities for given events
 
     Args:
         truths (np.array): true quantities
@@ -315,43 +319,16 @@ def AnalyseQuantities(truths : np.array, recos : np.array, errors : np.array, la
     plt.rcParams["figure.figsize"] = plt.rcParamsDefault["figure.figsize"]
 
 
-def Plot2DTest(ind, truths, errors, labels, xlabels, ylabels, nrows, ncols, bins=25):
-    fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=(6.4*nrows,4.8*ncols))
+def SelectSample(events : Master.Data, nDaughters : int) -> tuple:
+    """ Perform an event selection and get starting showers
 
-    for i in range(len(axes.flat)):
-        x = truths[i][ind]
-        y = errors[i][ind]
+    Args:
+        events (Master.Data): events to look at
+        nDaughters (int): select events by number of PFOs 
 
-        if len(np.unique(x)) == 1:
-            x_range = [min(x)-0.01, max(x)+0.01]
-        else:
-            x_range = [min(x), max(x)]
-        if i == 0:
-            h0, xedges, yedges = np.histogram2d(x, y, bins=bins, range=[x_range, fe_range[ind] ], density=True)
-            h0[h0==0] = np.nan
-            h0T = h0.T
-            im = axes.flat[i].imshow(np.flip(h0T, 0), extent=[x_range[0], x_range[1], fe_range[ind][0], fe_range[ind][1]], norm=matplotlib.colors.LogNorm())#, norm=norm, cmap=cmap)
-            fig.colorbar(im, ax=axes.flat[i])
-        else:
-            h, _, _ = np.histogram2d(x, y, bins=[xedges, yedges], range=[x_range, fe_range[ind]], density=True)
-            h = h / h0
-            h[h==0] = np.nan
-            im = axes.flat[i].imshow(np.flip(h.T, 0), extent=[x_range[0], x_range[1], fe_range[ind][0], fe_range[ind][1]], norm=matplotlib.colors.LogNorm())#, norm=norm, cmap=cmap)
-            fig.colorbar(im, ax=axes.flat[i])
-        axes.flat[i].set_aspect("auto")
-        axes.flat[i].set_title(labels[i])
-
-    # add common x and y axis labels
-    fig.add_subplot(1, 1, 1, frame_on=False)
-    plt.tight_layout()
-    # Hiding the axis ticks and tick labels of the bigger plot
-    plt.tick_params(labelcolor="none", bottom=False, left=False)
-    # Adding the x-axis and y-axis labels for the bigger plot
-    plt.xlabel(xlabels, fontsize=14)
-    plt.ylabel(ylabels, fontsize=14)
-
-
-def SelectSample(events : Master.Data, nDaughters : int):
+    Returns:
+        tuple: filtered events and start showers
+    """
     valid = Master.Pi0MCMask(events, nDaughters)
     filtered = events.Filter([valid], [valid], returnCopy=True)
     singleMatchedEvents = filtered.trueParticlesBT.SingleMatch
@@ -360,7 +337,6 @@ def SelectSample(events : Master.Data, nDaughters : int):
     filtered.Filter([selection], [selection])
     best_match = best_match[selection]
     return filtered, best_match
-
 
 @Master.timer
 def main():
@@ -400,10 +376,8 @@ if __name__ == "__main__":
     r_range[0] = [0, 0.5]
     t_range = [[]] * 5
 
-    n_obj = [-2]
-    s_l = ["all"]
-    #n_obj = [3, 4, 5, 6, 7, 8]
-    #s_l = [3, 4, 5, 6, 7, 8]
+    n_obj = [-2] # nPFOs
+    s_l = ["all"] # sample label
 
     parser = argparse.ArgumentParser(description="Study em shower merging for pi0 decays")
     parser.add_argument(dest="file", type=str, help="ROOT file to open.")
