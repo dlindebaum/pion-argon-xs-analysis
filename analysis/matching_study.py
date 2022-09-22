@@ -37,14 +37,14 @@ def Separation(shower : ak.Record, photon : ak.Record, null_shower_dir : ak.Reco
     return ak.where(null_shower_dir == True, 1E8, s)
 
 @Master.timer
-def GetMCMatchingFilters(events : Master.Data, cut=0.25):
+def GetMCMatchingFilters(events : Master.Data, cut : float = 0.25) -> tuple:
     """ Matches Reconstructed showers to true photons and selected the best events
         i.e. ones which have both errors of less than 0.25 radians. Only works for
         events with two reconstructed showers and two true photons per event.
 
     Args:
-        photon_dir (ak.Record created by vector): direction of true photons
-        shower_dir (ak.Record created by vector): direction of reco showers
+        events (Master.Data): events to study
+        cut (float): value to cut angle
 
     Returns:
         ak.Array: shower indices in order of true photon number
@@ -52,6 +52,7 @@ def GetMCMatchingFilters(events : Master.Data, cut=0.25):
         ak.Array: mask which indicates which pi0 decays are "good"
         ak.Array: minimum angle between showers and each true photon
         ak.Array: minimum distance between showers and each true photon
+        float: percentage of PFOs matched to same true photon
     """
     null_shower_dir = events.recoParticles.direction.x == -999 # keep track of showers which don't have a valid direction vector
     # angle of all reco showers wrt to each true photon per event i.e. error
@@ -117,6 +118,11 @@ def GetMCMatchingFilters(events : Master.Data, cut=0.25):
 
 
 def SpatialStudy(events : Master.Data):
+    """ Plot quantities about separation of start showers and PFO.
+
+    Args:
+        events (Master.Data): events to look at
+    """
     valid = Master.Pi0MCMask(events, None)
 
     filtered = events.Filter([valid], [valid])
@@ -142,7 +148,18 @@ def SpatialStudy(events : Master.Data):
     if save is True: Plots.Save(outDir+"separation_z")
 
 
-def CreateFilteredEvents(events : Master.Data, nDaughters=None, cut : float = 0.25, invert : bool = False):
+def CreateFilteredEvents(events : Master.Data, nDaughters : int = None, cut : float = 0.25, invert : bool = False) -> Master.Data:
+    """ Select events with specific number of PFOs.
+
+    Args:
+        events (Master.Data): events to look at
+        nDaughters (int, optional): number of PFOs in the event. Defaults to None.
+        cut (float, optional): cut on angular separation. Defaults to 0.25.
+        invert (bool, optional): invert event selection. Defaults to False.
+
+    Returns:
+        Master.Data: selected events
+    """
     valid = Master.Pi0MCMask(events, nDaughters)
 
     filtered = events.Filter([valid], [valid])
@@ -154,10 +171,24 @@ def CreateFilteredEvents(events : Master.Data, nDaughters=None, cut : float = 0.
     reco_filters = [showers, selection_mask]
     true_filters = [selection_mask]
 
-    return filtered.Filter(reco_filters, true_filters)
+    return filtered.Filter(reco_filters, true_filters, True)
 
 
-def AnalyseMatching(events : Master.Data, nDaughters=None, cut : int = 0.25, title : str = ""):
+def AnalyseMatching(events : Master.Data, nDaughters : int = None, cut : int = 0.25) -> tuple:
+    """ Calculate quantities about starting showers.
+
+    Args:
+        events (Master.Data): events to look at
+        nDaughters (_type_, optional): number of PFOs in an event. Defaults to None.
+        cut (int, optional): cut on angular separation. Defaults to 0.25.
+
+    Returns:
+        ak.Array: spatial separation between reco start showers
+        ak.Array: angular separation between reco start showers
+        ak.Array: spatial separation between reco/mc photons
+        ak.Array: angular separation between reco/mc photons
+        float: percentage of PFOs matched to same true photon
+    """
     valid = Master.Pi0MCMask(events, nDaughters)
 
     filtered = events.Filter([valid], [valid])
@@ -175,7 +206,7 @@ def AnalyseMatching(events : Master.Data, nDaughters=None, cut : int = 0.25, tit
     return dists, angles, reco_mc_dist, reco_mc_angle, percentage
 
 
-def Plot1D(data : ak.Array, xlabels : list, labels : list, names : list, bins=50, plot_ranges = [[]]*5, density=True, x_scale=["linear"]*5, y_scale=["linear"]*5, legend_loc = ["upper right"]*5, save : bool = True, saveDir : str = ""):
+def Plot1D(data : ak.Array, xlabels : list, labels : list, names : list, bins = 50, plot_ranges = [[]]*5, density = True, x_scale = ["linear"]*5, y_scale = ["linear"]*5, legend_loc = ["upper right"]*5, save : bool = True, saveDir : str = ""):
     """ 1D histograms of data for each sample
 
     Args:
@@ -191,7 +222,16 @@ def Plot1D(data : ak.Array, xlabels : list, labels : list, names : list, bins=50
         if save is True: Plots.Save( names[i] , saveDir)
 
 
-def Pi0MomFilter(events : Master.Data, r : list = [0.5, 1]):
+def Pi0MomFilter(events : Master.Data, r : list = [0.5, 1]) -> Master.Data:
+    """ Select events in bin of pi0 momentum.
+
+    Args:
+        events (Master.Data): events to look at
+        r (list, optional): momentum bins. Defaults to [0.5, 1].
+
+    Returns:
+        Master.Data: events in bin
+    """
     if len(r) != 2: r = [0.5, 1]
     pi0 = events.trueParticles.pdg == 111
     pi0 = np.logical_and(pi0, events.trueParticles.number == 1)

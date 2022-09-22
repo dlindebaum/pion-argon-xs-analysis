@@ -205,7 +205,7 @@ class CutOptimization(ABC):
 
 
     def EvaluateCuts(self, cuts : list):
-        """ Calculate signal matrics after applying a set of cuts.
+        """ Calculate signal metrics after applying a set of cuts.
 
         Args:
             cuts (list): cuts to apply

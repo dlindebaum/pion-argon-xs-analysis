@@ -3,7 +3,7 @@ Created on: 30/03/2022 19:32
 
 Author: Shyam Bhuller
 
-Description: 
+Description: Old event display code for Pi0 MC.
 """
 import argparse
 import os
@@ -62,7 +62,7 @@ def main():
         yz = plt.subplot(G[1])
 
         # loop through each PFP, plot hit spacepoints (collection) in each orthographic view
-        # resemles the orthographic event displays made in LArSoft
+        # resembles the orthographic event displays made in LArSoft
         for i in range(nPFP):
             startPos = events.recoParticles.startPos[n][i]
             if startPos.x == -999: continue # ensure the PFP has a valid start point to plot
