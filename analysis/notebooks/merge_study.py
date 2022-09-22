@@ -4,9 +4,6 @@ Created on: 15/02/2022 17:37
 Author: Shyam Bhuller
 
 Description: A script studying pi0 decay geometry and shower merging.
-TODO Move shower merging algorithm to Master.Data
-TODO optimise main()
-TODO calculated quantities should be in ak.Array format
 """
 import argparse
 import os
@@ -15,9 +12,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 # custom modules
-import Plots
-import Master
-import vector
+from python.analysis import Master, Plots, vector
 
 def Separation(shower_1 : ak.Record, shower_2 : ak.Record, null : ak.Record, typeof : str) -> ak.Array:
     """ Calculate angular or spatial separation, acocunting for null values

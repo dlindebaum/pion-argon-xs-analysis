@@ -13,9 +13,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 # custom modules
-import Plots
-import Master
-import merge_study
+from python.analysis import Master, Plots
+from notebooks import merge_study
 import pandas as pd
 
 def Plot2DRatio(ind : int, truths : np.array, errors : np.array, labels : str, xlabels : str, ylabels : str, nrows : int, ncols : int, bins : int = 25):

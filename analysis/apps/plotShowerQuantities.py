@@ -12,7 +12,7 @@ import pandas as pd
 import numpy as np
 import awkward as ak
 import matplotlib.pyplot as plt
-import Plots
+from python.analysis import Plots
 
 quantities = ["inv_mass", "angle", "lead_energy", "sub_energy", "pi0_mom"]
 

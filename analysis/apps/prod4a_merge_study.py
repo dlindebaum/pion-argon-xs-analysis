@@ -9,10 +9,8 @@ import matplotlib.patches as mpatches
 from tabulate import tabulate
 import itertools
 
-import Master
-import vector
-import Plots
-import CutOptimization
+from python.analysis import Master, Plots, vector
+from apps import CutOptimization
 
 def BestCut(cuts : pd.DataFrame, q_names : list, type="balanced"):
     """ Select a cut from the cut based scan using signal/background metrics.

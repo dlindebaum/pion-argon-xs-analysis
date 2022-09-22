@@ -14,10 +14,9 @@ from tabulate import tabulate
 import awkward as ak
 import numpy as np
 
-import Master
-import vector
+from python.analysis import Master, vector
 
-from prod4a_merge_study import EventSelection, ShowerMergeQuantities
+from apps.prod4a_merge_study import EventSelection, ShowerMergeQuantities
 
 class EventDisplay:
     xlim = (-350, 350)

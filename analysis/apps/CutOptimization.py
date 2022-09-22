@@ -5,7 +5,7 @@ Author: Shyam Bhuller
 
 Description: Code to optimize a a set of cuts made on data.
 """
-import Plots
+from python.analysis import Plots
 from abc import ABC, abstractmethod
 
 import awkward as ak

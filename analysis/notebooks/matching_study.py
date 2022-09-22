@@ -12,9 +12,7 @@ import awkward as ak
 import matplotlib.pyplot as plt
 import numpy as np
 # custom modules
-import Plots
-import Master
-import vector
+from python.analysis import Master, Plots, vector
 
 def Separation(shower : ak.Record, photon : ak.Record, null_shower_dir : ak.Record, typeof : str):
     """ Calculate angular or spatial separation,

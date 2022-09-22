@@ -10,8 +10,7 @@ import awkward as ak
 import os
 import matplotlib.pyplot as plt
 # custom imports
-import Master
-import Plots
+from python.analysis import Master, Plots
 
 @Master.timer
 def main():
