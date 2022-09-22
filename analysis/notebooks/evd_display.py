@@ -5,10 +5,9 @@ Author: Shyam Bhuller
 
 Description: Old event display code for Pi0 MC.
 """
+from python.analysis import Master, Plots
 import argparse
 import os
-import Master
-import Plots
 from matplotlib import colors
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
