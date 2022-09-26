@@ -14,7 +14,7 @@ import time
 import numpy as np
 import itertools
 # custom modules
-import vector
+from python.analysis import vector
 
 def timer(func):
     """ Decorator which times a function.
