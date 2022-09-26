@@ -84,6 +84,9 @@ def PlotDiff(data : ak.Array, labels : list, control : str, xlabels : list, lege
 
 
 def main(args):
+    plt.style.use('ggplot')
+    plt.rcParams.update({'patch.linewidth': 1})
+    plt.rcParams.update({'font.size': 10})
     print(f"Files: {args.files}")
     print(f"Labels: {args.labels}")
     print(f"Save: {args.save}")
@@ -164,7 +167,6 @@ def main(args):
 
 
 if __name__ == "__main__":
-    plt.rcParams.update({'font.size': 12})
     parser = argparse.ArgumentParser(description="Plot Shower pair quantities produced from ParticleData classes (in csv format)")
     parser.add_argument(dest="files", nargs="+", help="csv file/s to open.")
     parser.add_argument("-p", "--plots", dest="plotsToMake", type=str, choices=["all", "diff", "hist", "qq"], help="what plots we want to make")
