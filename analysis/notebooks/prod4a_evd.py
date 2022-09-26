@@ -15,94 +15,9 @@ import awkward as ak
 import numpy as np
 
 from python.analysis import Master, vector
+from python.analysis.EventDisplay import EventDisplay
 
 from apps.prod4a_merge_study import EventSelection, ShowerMergeQuantities
-
-class EventDisplay:
-    xlim = (-350, 350)
-    ylim = (0, 600)
-    zlim = (0, 600)
-    def __init__(self, eventID : str, run : str, subrun : str, plotOrtho : bool = True, plot3D : bool = True):
-        plt.rcParams.update({'font.size': 14})
-        title = f"event: {eventID}, run: {run}, subrun: {subrun}"
-        if plotOrtho:
-            plt.figure(1).clf()
-            self.fig2D, (self.xy, self.xz) = plt.subplots(nrows=2, ncols=1, figsize=(6.4*20, 4.8*20), num=1)
-            self.xy.set_xlabel("x (cm)")
-            self.xz.set_xlabel("x (cm)")
-            self.xy.set_ylabel("y (cm)")
-            self.xz.set_ylabel("z (cm)")
-            self.xy.set_title(title)
-
-        if plot3D:
-            plt.figure(2).clf()
-            self.fig3D = plt.figure(num=2)
-            self.ax3D = Axes3D(self.fig3D)
-            self.ax3D.set_xlabel("x (cm)")
-            self.ax3D.set_ylabel("z (cm)")
-            self.ax3D.set_zlabel("y (cm)")
-            self.ax3D.set_title(title, y = 1, pad = -10)
-        return
-
-    def DetectorBounds(self, x=xlim, y=ylim, z=zlim):
-        self.xy.set_xlim(x)
-        self.xy.set_ylim(y)
-        self.xz.set_xlim(x)
-        self.xz.set_ylim(z)
-        self.ax3D.set_xlim3d(x)
-        self.ax3D.set_ylim3d(z)
-        self.ax3D.set_zlim3d(y)
-
-    def PlotPFO(self, points : ak.Array, marker : str, colour : str, pointSize : int = 2, startPoint : ak.Record = None, direction : ak.Record = None, pdg : int = None):
-        points = points[points.x != -999] # don't plot null space point values
-
-        x_mask = np.logical_and(points.x < self.xlim[1], points.x > self.xlim[0])
-        y_mask = np.logical_and(points.y < self.ylim[1], points.y > self.ylim[0])
-        z_mask = np.logical_and(points.z < self.zlim[1], points.z > self.zlim[0])
-        fudicial_cut = np.logical_or(np.logical_or(x_mask, y_mask), z_mask)
-        points = points[fudicial_cut]
-
-        if self.fig2D:
-            self.xy.scatter(points.x, points.y, pointSize, marker=marker, color=colour)
-            self.xz.scatter(points.x, points.z, pointSize, marker=marker, color=colour)
-            if startPoint is not None:
-                self.xy.scatter(startPoint.x, startPoint.y, pointSize * 30, marker="x", color=colour)
-                self.xz.scatter(startPoint.x, startPoint.z, pointSize * 30, marker="x", color=colour)
-        if self.fig3D:
-            self.ax3D.scatter(points.x, points.z, points.y, s=pointSize, marker=marker, color=colour)
-            if startPoint is not None:
-                self.ax3D.scatter(startPoint.x, startPoint.z, startPoint.y, s=pointSize * 30, marker="x", color=colour)
-        if direction is not None and startPoint is not None:
-            self.PlotLine(startPoint, vector.add(startPoint, vector.prod(10, direction)), colour, lineStyle="-")
-        if pdg is not None and startPoint is not None:
-            self.PlotText(startPoint, str(pdg))
-        return
-
-    def PlotPoint(self, point : ak.Record, marker : str, colour : str, pointSize : int = 2):
-        if self.fig2D:
-            self.xy.scatter(point.x, point.y, pointSize, marker=marker, color=colour)
-            self.xz.scatter(point.x, point.z, pointSize, marker=marker, color=colour)
-        if self.fig3D:
-            self.ax3D.scatter(point.x, point.z, point.y, s=pointSize, marker=marker, color=colour)
-        return
-
-    def PlotLine(self, start : ak.Record, end : ak.Record, colour : str, lineStyle="-"):
-        if self.fig2D:
-            self.xy.plot([start.x, end.x], [start.y, end.y], lineStyle, color = colour)
-            self.xz.plot([start.x, end.x], [start.z, end.z], lineStyle, color = colour)
-        if self.fig3D:
-            self.ax3D.plot([start.x, end.x], [start.z, end.z], [start.y, end.y], lineStyle, color = colour)
-        return
-
-    def PlotText(self, point : ak.Record, text : str, fontsize : int = 16):
-        if self.fig2D:
-            self.xy.text(point.x, point.y, str(text), fontsize = fontsize, clip_on = True)
-            self.xz.text(point.x, point.z, str(text), fontsize = fontsize, clip_on = True)
-        if self.fig3D:
-            self.ax3D.text(point.x, point.z, point.y, str(text), fontsize = fontsize, clip_on = True)
-            self.ax3D.set_clip_on(True)
-        return
-
 
 def PlotImpactParameter(eventDisplay : EventDisplay, startPoint, target, direction):
     l = np.abs(vector.dot(vector.sub(target, startPoint), direction))
@@ -178,8 +93,8 @@ def RenderEventDisplay(n):
     startPoints = events.recoParticles.startPos[start_showers_merged][n]
     directions = events.recoParticles.direction[start_showers_merged][n]
     pdgs = events.trueParticlesBT.pdg[start_showers_merged][n]
-    display.PlotPFO(points[0], marker = "x", colour = "green", startPoint = startPoints[0], direction = directions[0], pdg=pdgs[0])
-    display.PlotPFO(points[1], marker = "x", colour = "blue", startPoint = startPoints[1], direction = directions[1], pdg=pdgs[1])
+    display.PlotPFO(points[0], marker = "x", colour = "green", startPoint = startPoints[0], direction = directions[0])#, pdg=pdgs[0])
+    display.PlotPFO(points[1], marker = "x", colour = "blue", startPoint = startPoints[1], direction = directions[1])#, pdg=pdgs[1])
 
 
     points = events.recoParticles.spacePoints[to_merge][n]
@@ -188,19 +103,19 @@ def RenderEventDisplay(n):
     pdgs = events.trueParticlesBT.pdg[to_merge][n]
     beam_mask = np.logical_not(events.recoParticles.number == events.recoParticles.beam_number)[to_merge][q.null]
     #* Plot background PFOs
-    if showBackground: PlotBackgroundPFO(display, n, background, beam_mask, points, startPoints, directions, pdgs, i = -1, plotIP = False)
+    if showBackground: PlotBackgroundPFO(display, n, background, beam_mask, points, startPoints, directions, pdg=None, i = -1, plotIP = False)
 
     #* Plot Signal PFOs
     if showSignal:
-        PlotSignalPFO(display, n, signal, points, startPoints, directions, pdgs, 0, i = -1, plotIP = False) # green
-        PlotSignalPFO(display, n, signal, points, startPoints, directions, pdgs, 1, i = -1, plotIP = False) # blue
+        PlotSignalPFO(display, n, signal, points, startPoints, directions, None, 0, i = -1, plotIP = False) # green
+        PlotSignalPFO(display, n, signal, points, startPoints, directions, None, 1, i = -1, plotIP = False) # blue
 
 
     #* Plot BeamParticle:
     beam_mask = events.recoParticles.number == events.recoParticles.beam_number
     points = events.recoParticles.spacePoints[beam_mask][n]
     pdg = events.trueParticlesBT.pdg[beam_mask][n]
-    display.PlotPFO(points, marker="o", colour="black", startPoint = events.recoParticles.beamVertex[n], pdg=pdg)
+    display.PlotPFO(points, marker="o", colour="black", startPoint = events.recoParticles.beamVertex[n], pdg=None)
 
     #* Plot beam vertex
     display.PlotPoint(events.recoParticles.beamVertex[n], marker="x", colour="red", pointSize=100)
@@ -222,10 +137,10 @@ def RenderEventDisplay(n):
     #* plot some information about the event:
     text =  "$E_{\pi^{+}}$: "  + str(events.trueParticlesBT.energy[n][events.recoParticles.beam_number[n] == events.recoParticles.number[n]][0])[0:4] + "GeV \n"
     text += "$E_{\pi^{0}}$: "  + str(events.trueParticles.energy[n][events.trueParticles.pdg[n] == 111][0])[0:4] + "GeV \n"
-    text += "$E_{\gamma 0}$: " + str(events.trueParticlesBT.energy[start_showers_merged][n][0])[0:4] + "GeV \n"
-    text += "$E_{\gamma 1}$: " + str(events.trueParticlesBT.energy[start_showers_merged][n][1])[0:4] + "GeV "
+    text += "$E_{\gamma_{0}}$: " + str(events.trueParticlesBT.energy[start_showers_merged][n][0])[0:4] + "GeV \n"
+    text += "$E_{\gamma_{1}}$: " + str(events.trueParticlesBT.energy[start_showers_merged][n][1])[0:4] + "GeV "
     
-    props = dict(boxstyle='round', facecolor='grey', alpha=0.5)
+    props = dict(boxstyle='round', facecolor='grey', alpha=1)
     display.xz.text(0.01, 0.85, text, transform=display.xz.transAxes, fontsize=14, bbox=props)
 
     roi = SimpleNamespace(**{
@@ -240,9 +155,9 @@ def RenderEventDisplay(n):
     display.fig2D.set_size_inches(6.4*3, 4.8*3)
     display.fig3D.set_size_inches(6.4*3, 4.8*3)
     display.fig2D.tight_layout()
-    display.fig2D.savefig(f"prod4a_merging_evd/{name}-2D.png", dpi=400)
+    display.fig2D.savefig(f"prod4a_merging_evd/{name}-2D.png", dpi=500)
     plt.close(display.fig2D)
-    display.fig3D.savefig(f"prod4a_merging_evd/{name}-3D.png", dpi=400)
+    display.fig3D.savefig(f"prod4a_merging_evd/{name}-3D.png", dpi=500)
     plt.close(display.fig3D)
 
 
@@ -277,7 +192,7 @@ def main():
     ##################################################################################################
 
     nEvents = ak.num(events.recoParticles.spacePoints.x, 0)
-    eventNum = -1 # 11 and 13 identical??
+    eventNum = 69 # 11 and 13 identical??
     nPFO = ak.num(events.recoParticles.spacePoints.x)
     showSignal = True
     showBackground = True
@@ -285,17 +200,14 @@ def main():
     if eventNum == -1:
         for i in range(len(events.eventNum)):
             print(f"rendering {i+1} out of {len(events.eventNum)}")
-            print(f"event: {events.eventNum[n]}_{events.run[n]}_{events.subRun[n]}")
+            print(f"event: {events.eventNum[i]}_{events.run[i]}_{events.subRun[i]}")
             try:
                 RenderEventDisplay(i)
             except:
                 print(f"Something went wrong with {i+1}, you should look into it")
 
     else:
-        try:
-            RenderEventDisplay(eventNum)
-        except:
-            print(f"Something went wrong with {eventNum}, you should look into it")
+        RenderEventDisplay(eventNum)
 
 if __name__ == "__main__":
     main()
