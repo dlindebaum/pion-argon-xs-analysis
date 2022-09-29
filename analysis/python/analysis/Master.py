@@ -14,7 +14,7 @@ import time
 import numpy as np
 import itertools
 # custom modules
-import vector
+from python.analysis import vector
 
 def timer(func):
     """ Decorator which times a function.
@@ -1043,23 +1043,23 @@ class TrueParticleDataBT(ParticleData):
 
     @property
     def matchedHits(self) -> ak.Array:
-        self.LoadData("energy", "reco_daughter_PFP_true_byHits_matchedHits")
-        return getattr(self, f"_{type(self).__name__}__energy")
+        self.LoadData("matchedHits", "reco_daughter_PFP_true_byHits_matchedHits")
+        return getattr(self, f"_{type(self).__name__}__matchedHits")
 
     @property
     def hitsInRecoCluster(self) -> ak.Array:
-        self.LoadData("energy", "reco_daughter_PFP_true_byHits_hitsInRecoCluster")
-        return getattr(self, f"_{type(self).__name__}__energy")
+        self.LoadData("hitsInRecoCluster", "reco_daughter_PFP_true_byHits_hitsInRecoCluster")
+        return getattr(self, f"_{type(self).__name__}__hitsInRecoCluster")
 
     @property
     def mcParticleHits(self) -> ak.Array:
-        self.LoadData("energy", "reco_daughter_PFP_true_byHits_mcParticleHits")
-        return getattr(self, f"_{type(self).__name__}__energy")
+        self.LoadData("mcParticleHits", "reco_daughter_PFP_true_byHits_mcParticleHits")
+        return getattr(self, f"_{type(self).__name__}__mcParticleHits")
 
     @property
     def sharedHits(self) -> ak.Array:
-        self.LoadData("energy", "reco_daughter_PFP_true_byHits_sharedHits")
-        return getattr(self, f"_{type(self).__name__}__energy")
+        self.LoadData("sharedHits", "reco_daughter_PFP_true_byHits_sharedHits")
+        return getattr(self, f"_{type(self).__name__}__sharedHits")
 
     @property
     def particleNumber(self) -> ak.Array:
