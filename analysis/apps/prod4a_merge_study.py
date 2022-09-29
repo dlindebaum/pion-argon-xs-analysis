@@ -595,7 +595,7 @@ def ROOTWorkFlow():
             if save: Plots.Save("pi0_p_vs_nPFO_background", outDir+subDir)
 
             nbins =  max(nSignal) - min(nSignal)
-            Plots.PlotHist(nSignal, xlabel="Number of signal PFOs", bins=nbins, y_scale=scale, annotation=dataset)
+            Plots.PlotHist(nSignal, xlabel="Number of signal PFOs", bins=np.arange(nbins)-0.5, y_scale=scale, annotation=dataset)
             if save: Plots.Save("nPFO_signal", outDir+subDir)
 
             Plots.PlotHist(nBackground, xlabel="Number of background PFOs", bins=20, y_scale=scale, annotation=dataset)
