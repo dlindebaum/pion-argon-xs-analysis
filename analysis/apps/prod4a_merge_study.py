@@ -594,10 +594,11 @@ def ROOTWorkFlow():
             Plots.PlotHist2D(ak.ravel(vector.magnitude(events.trueParticles.momentum[events.trueParticles.PrimaryPi0Mask])), nBackground, 50, xlabel = "True $\pi^{0}}$ momentum (GeV)", ylabel="Number of background PFO", annotation=dataset)
             if save: Plots.Save("pi0_p_vs_nPFO_background", outDir+subDir)
 
-            Plots.PlotHist(nSignal, xlabel="Number of signal PFOs", bins=20, density=norm, y_scale=scale, annotation=dataset)
+            nbins =  max(nSignal) - min(nSignal)
+            Plots.PlotHist(nSignal, xlabel="Number of signal PFOs", bins=nbins, y_scale=scale, annotation=dataset)
             if save: Plots.Save("nPFO_signal", outDir+subDir)
 
-            Plots.PlotHist(nBackground, xlabel="Number of background PFOs", bins=20, density=norm, y_scale=scale, annotation=dataset)
+            Plots.PlotHist(nBackground, xlabel="Number of background PFOs", bins=20, y_scale=scale, annotation=dataset)
             if save: Plots.Save("nPFO_background", outDir+subDir)
 
             Plots.PlotHistComparison([ak.ravel(events.recoParticles.energy[to_merge][q.null][background]), ak.ravel(events.recoParticles.energy[to_merge][q.null][np.logical_or(*signal)])], xlabel="Energy (MeV)", bins=20, labels=labels, density = norm, y_scale = scale, annotation=dataset)
@@ -608,6 +609,23 @@ def ROOTWorkFlow():
 
             Plots.PlotHistComparison([ak.ravel(events.recoParticles.cnnScore[to_merge][q.null][background]), ak.ravel(events.recoParticles.cnnScore[to_merge][q.null][np.logical_or(*signal)])], xlabel="CNN score", bins=20, labels=labels, density = norm, y_scale = scale, annotation=dataset)
             if save: Plots.Save("cnn", outDir+subDir)
+
+            purity = events.trueParticlesBT.matchedHits / events.trueParticlesBT.hitsInRecoCluster
+            completeness = events.trueParticlesBT.sharedHits / events.trueParticlesBT.mcParticleHits
+
+            start_showers_all = np.logical_or(*start_showers)
+            Plots.PlotHist(ak.ravel(purity[start_showers_all]), xlabel="start shower purity", annotation=dataset)
+            if save: Plots.Save("ss-purity", outDir+subDir)
+            Plots.PlotHist(ak.ravel(completeness[start_showers_all]), xlabel="start shower completeness", annotation=dataset)
+            if save: Plots.Save("ss-completeness", outDir+subDir)
+
+            Plots.PlotHistComparison([ak.ravel(purity[to_merge][q.null][background]), ak.ravel(purity[to_merge][q.null][np.logical_or(*signal)])], labels=labels, xlabel="purity", annotation=dataset)
+            if save: Plots.Save("purity", outDir+subDir)
+            Plots.PlotHistComparison([ak.ravel(completeness[to_merge][q.null][background]), ak.ravel(completeness[to_merge][q.null][np.logical_or(*signal)])], labels=labels, xlabel="completeness", annotation=dataset)
+            if save: Plots.Save("completeness", outDir+subDir)
+
+            Plots.PlotHist2D(ak.ravel(purity), ak.ravel(completeness), xlabel="purity", ylabel="completeness")
+            if save: Plots.Save("purity_vs_completeness", outDir+subDir)
 
         #* calculate geometric quantities
         if save is True and plotsToMake is None:
@@ -788,9 +806,11 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.
 
 @Master.timer
 def main():
-    plt.rcParams.update({'font.size': 12})
+    plt.style.use('ggplot')
+    plt.rcParams.update({'patch.linewidth': 1})
+    plt.rcParams.update({'font.size': 10})
     if save:
-        os.makedirs(outDir, exist_ok=True)
+        os.makedirs(outDir, exist_ok = True)
     fileFormat = file.split('.')[-1]
     if fileFormat == "root":
         ROOTWorkFlow()
@@ -816,7 +836,7 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--out-csv", dest="csv", type=str, default=None, help="output csv filename (will default to whatever type of data is produced)")
     args = parser.parse_args() #! run in command line
 
-    dataset = "PDSPProd4a_MC_1GeV_reco1_sce_datadriven_v1_00"
+    dataset = "PDSPProd4a_MC_6GeV_reco1_sce_datadriven_v1_00"
 
     file = args.file
     save = args.save
