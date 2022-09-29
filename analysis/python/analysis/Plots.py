@@ -26,11 +26,11 @@ def Save(name : str = "plot", directory : str = ""):
     plt.close()
 
 
-def Plot(x, y, xlabel : str = "", ylabel : str = "", title : str = "", label : str = "", marker : str = "", newFigure : bool = True, annotation : str = None):
+def Plot(x, y, xlabel : str = "", ylabel : str = "", title : str = "", label : str = "", marker : str = "", linestyle : str = "-", newFigure : bool = True, annotation : str = None):
     """ Make scatter plot.
     """
     if newFigure is True: plt.figure()
-    plt.plot(x, y, marker=marker, label=label)
+    plt.plot(x, y, marker=marker, linestyle=linestyle, label=label)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.title(title)
