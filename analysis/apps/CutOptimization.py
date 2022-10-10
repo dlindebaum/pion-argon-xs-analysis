@@ -15,7 +15,7 @@ from tabulate import tabulate
 
 
 class Operator(str, Enum):
-    """ Enum for types of cuts
+    """ Enum for types of cuts.
     """
     LESS = "<"
     GREATER = ">"
@@ -40,6 +40,14 @@ class Cuts():
         pass
 
     def cut(self, data):
+        """ Cuts data.
+
+        Args:
+            data (ak.Array): data to cut
+
+        Returns:
+            ak.Array: cut data
+        """
         if self.operator == Operator.LESS:
             return data < self.value
         elif self.operator == Operator.GREATER:
@@ -52,11 +60,13 @@ class Cuts():
             Exception(f"{self.operator} is not a valid Operator")
 
     def __repr__(self) -> str:
+        """ Pretty printing of cut.
+        """
         return f"{self.variable} {self.operator.value} {self.value}"
 
 
 def MaxSRootBRatio(cuts : np.array, metrics : dict) -> float:
-    """ Select a cut which maximises signal/root background ratio
+    """ Select a cut which maximises signal/root background ratio.
 
     Args:
         cuts (np.array): list of cuts
@@ -69,7 +79,7 @@ def MaxSRootBRatio(cuts : np.array, metrics : dict) -> float:
 
 
 def Fit(x : np.array, y : np.array):
-    """ Least squares fit of 1D data
+    """ Least squares fit of 1D data.
 
     Args:
         x (np.array): x data
@@ -88,7 +98,7 @@ def Fit(x : np.array, y : np.array):
 
 
 def EqualSRootB(cuts : np.array, metrics : dict, target : float) -> float:
-    """ Select a cut at specific signal/root background ratio
+    """ Select a cut at specific signal/root background ratio.
     Args:
         cuts (np.array): list of cuts
         metrics (dict): metrics used to define the criteria
@@ -105,7 +115,7 @@ def EqualSRootB(cuts : np.array, metrics : dict, target : float) -> float:
 
 
 def EqualSignalBackgroundEfficiency(cuts : np.array, metrics : dict) -> float:
-    """ Select a cut where signal efficiency and background rejection are closest or equal
+    """ Select a cut where signal efficiency and background rejection are closest or equal.
         TODO fit a function to se and br as a fuction of cut and then get exact value at which they are the same
     Args:
         cuts (np.array): list of cuts
@@ -131,7 +141,7 @@ def MaxPurity(cuts : np.array, metrics : dict) -> float:
 
 
 def SetPurity(cuts : np.array, metrics : dict, target : float) -> float:
-    """ Select cut at specific purity
+    """ Select cut at specific purity.
 
     Args:
         cuts (np.array): list of cuts
@@ -159,6 +169,27 @@ def Metrics(nEntires):
 
 
 class CutOptimization(ABC):
+    """ Class which takes a data object and will produce a set of cuts which finds a
+        value which optimizes some working point e.g. signal/background
+    Attributes:
+        quantities: a class which satifies the following criteria:
+            - contains attributes which resemble data
+            - contains a selectionVariables attribute which lists which attributes are the selection variables
+            - contains boolean masks which defines a signal and background sample
+        initial_cuts (list[Cut]): list of initial cuts to try
+        debug (bool): enable for verbose output
+    Abstract Methods:
+        Optimize: method which defines how you want to optimize the cuts see examples below
+    Methods:
+        __init__:
+        PrintSignalMetrics: Print various metrics for data.
+        InitialChecks: Calculate initial signal and bacgkround counts and print metrics.
+        CreateMask: Create a mask of events which pass the cuts on each variable, or skip one.
+        EvaluateCuts: Calculate signal metrics after applying a set of cuts.
+        NMinus1Study: optimizes nth cut value.
+        
+
+    """
     def __init__(self, _quantities, _initial_cuts : list, _debug : bool = False):
         self.quantities = _quantities
         self.initial_cuts = _initial_cuts
@@ -169,6 +200,42 @@ class CutOptimization(ABC):
     def Optimize(self):
         self.InitialChecks()
         pass
+
+
+    def PrintSignalMetrics(self, signal : ak.Array, background : ak.Array, initial_signal : ak.Array = [], initial_background : ak.Array = []):
+        """ Print various metrics for data.
+
+        Args:
+            signal (ak.Array): signal mask
+            background (ak.Array): background mask
+            initial_signal (ak.Array, optional): initial signal mask
+            initial_background (ak.Array, optional): initial background mask
+
+        Returns:
+            tuple: calculated metrics
+        """
+        s = ak.count(signal)
+        b = ak.count(background)
+        if b == 0:
+            sb = -1
+            srb = -1
+        else:
+            sb = s/b
+            srb = s/np.sqrt(b)
+        if s != 0 or b != 0:
+            p = s/(s+b)
+        else:
+            p = -1
+        if self.debug: print(f"signal: {s} | background: {b} | s/b {sb:.3f} | s/rootb {srb:.3f} | purity: {p:.3f}")
+        if ak.count(initial_signal) > 0 and ak.count(initial_background) > 0:
+            si = ak.count(initial_signal)
+            bi = ak.count(initial_background)
+            se = s/si
+            be = b/bi
+            e = (s+b) / (si+bi)
+            return s, b, sb, srb, p, se, be, e
+        else:
+            return s, b, sb, srb, p
 
 
     def InitialChecks(self):
@@ -211,42 +278,6 @@ class CutOptimization(ABC):
         return mask
 
 
-    def PrintSignalMetrics(self, signal : ak.Array, background : ak.Array, initial_signal : ak.Array = [], initial_background : ak.Array = []):
-        """ Print various metrics for data.
-
-        Args:
-            signal (ak.Array): signal mask
-            background (ak.Array): background mask
-            initial_signal (ak.Array, optional): initial signal mask
-            initial_background (ak.Array, optional): initial background mask
-
-        Returns:
-            tuple: calculated metrics
-        """
-        s = ak.count(signal)
-        b = ak.count(background)
-        if b == 0:
-            sb = -1
-            srb = -1
-        else:
-            sb = s/b
-            srb = s/np.sqrt(b)
-        if s != 0 or b != 0:
-            p = s/(s+b)
-        else:
-            p = -1
-        if self.debug: print(f"signal: {s} | background: {b} | s/b {sb:.3f} | s/rootb {srb:.3f} | purity: {p:.3f}")
-        if ak.count(initial_signal) > 0 and ak.count(initial_background) > 0:
-            si = ak.count(initial_signal)
-            bi = ak.count(initial_background)
-            se = s/si
-            be = b/bi
-            e = (s+b) / (si+bi)
-            return s, b, sb, srb, p, se, be, e
-        else:
-            return s, b, sb, srb, p
-
-
     def EvaluateCuts(self, cuts : list):
         """ Calculate signal metrics after applying a set of cuts.
 
@@ -265,6 +296,18 @@ class CutOptimization(ABC):
 
 
     def NMinus1Study(self, icuts : list, n : int, stepSize : int, criteria = MaxSRootBRatio, args : list = []):
+        """ Finds the best cut for the nth variable after applying the existing cuts to the n-1th variables.
+
+        Args:
+            icuts (list): initial cuts
+            n (int): nth variable
+            stepSize (int): number of new cuts to try
+            criteria (_type_, optional): which working point to optimize. Defaults to MaxSRootBRatio.
+            args (list, optional): arguements for criteria. Defaults to [].
+
+        Returns:
+            any: best cut value
+        """
         mcuts = list(icuts)
         nm1 = icuts[n]
 
