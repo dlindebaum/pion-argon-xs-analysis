@@ -76,8 +76,8 @@ def PlotDiff(data : ak.Array, labels : list, control : str, xlabels : list, lege
         for i in range(len(data)):
             if i == c: continue
             d = data[i][j] - data[c][j]
-            d = d[data[i][j] != -999]
-            diff.append(d[data[c][j] != -999])
+            d = d[(data[i][j] != -999) & (data[c][j] != -999)]
+            diff.append(d)
         Plots.PlotHistComparison(diff, bins = bins, xlabel=f"difference in {xlabels[j]} wrt {control}", labels=l, x_scale=x_scale[j], y_scale=y_scale[j], density=norm, annotation=annotation)
         plt.legend(loc=legend_loc[j])
         if save is True: Plots.Save(f"diff_{quantities[j]}", outDir + subDir)
@@ -162,7 +162,7 @@ def main(args):
         if args.dataType in ["all", "error"]: PlotQQ(e, labels, args.qq[0], e_l, args.qq[1], args.save, args.outDir, "error/", args.annotation)
     if args.plotsToMake == "diff" or (args.plotsToMake == "all" and len(args.files) > 1):
         if args.dataType in ["all", "truth"]: PlotDiff(t, labels, args.diff, t_l, save = args.save, outDir=args.outDir, subDir="truth/", norm=args.norm, y_scale=scale, bins=args.bins, annotation=args.annotation)
-        if args.dataType in ["all", "reco"]:  PlotDiff(r, labels, args.diff, r_l, save = args.save, outDir=args.outDir, subDir="reco/", norm=args.norm, y_scale=scale, bins=args.bins, annotation=args.annotation)
+        if args.dataType in ["all", "reco"]:  PlotDiff(r, labels, args.diff, r_l, save = args.save, outDir=args.outDir, subDir="reco/", norm=args.norm, y_scale=scale, bins=args.bins, annotation=args.annotation, legend_loc=["upper left"]*5)
         if args.dataType in ["all", "error"]: PlotDiff(e, labels, args.diff, e_l, save = args.save, outDir=args.outDir, subDir="error/", norm=args.norm, y_scale=scale, bins=args.bins, annotation=args.annotation)
 
 
