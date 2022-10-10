@@ -187,7 +187,7 @@ class CutOptimization(ABC):
         CreateMask: Create a mask of events which pass the cuts on each variable, or skip one.
         EvaluateCuts: Calculate signal metrics after applying a set of cuts.
         NMinus1Study: optimizes nth cut value.
-        
+
 
     """
     def __init__(self, _quantities, _initial_cuts : list, _debug : bool = False):
@@ -423,14 +423,4 @@ class OptimizeAllCuts(CutOptimization):
         #* cut one final time to look at the results
         final_metrics = list(self.EvaluateCuts(final_cuts))
 
-        # if plotFinal is True:
-        #     selected_quantities = []
-        #     for i in range(len(self.quantities.selectionVariables)):
-        #         selected_quantities.append(ak.flatten(getattr(self.quantities, self.quantities.selectionVariables[i]))[mask])
-        #     labels = ["background", "signal"]
-        #     for i in range(len(quantities.selectionVariables)):
-        #         data = selected_quantities[i]
-        #         print(data)
-        #         Plots.PlotHistComparison([data[final_background], data[final_signal]], bins=50, xlabel=quantities.selectionVariables[i], labels=labels, density=norm, y_scale=scale)
-        #         if save: Plots.Save(quantities.names[i], outDir)
         return final_cuts, final_metrics
