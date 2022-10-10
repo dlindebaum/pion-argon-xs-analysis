@@ -735,6 +735,7 @@ class RecoParticleData(ParticleData):
         beam_number (ak.Array): beam PFO number
         sliceID (ak.Array): slice the PFO corresponds to
         beamCosmicScore (ak.Array): whether the reconstruction chain used was for a neutrino vertex (beam) or cosmics
+        pandoraTag (ak.Array): label given to particles by pandora; track, shower or -999
         number (ak.Array): PFO number
         mother (ak.Array): number of mother PFO
         nHits (ak.Array): number of collection plane hits
@@ -772,6 +773,11 @@ class RecoParticleData(ParticleData):
     def beamCosmicScore(self) -> ak.Array:
         self.LoadData("beamCosmicScore", "reco_daughter_allShower_beamCosmicScore")
         return getattr(self, f"_{type(self).__name__}__beamCosmicScore")
+
+    @property
+    def pandoraTag(self) -> ak.Array:
+        self.LoadData("pandoraTag", "pandoraTag")
+        return getattr(self, f"_{type(self).__name__}__pandoraTag")
 
     @property
     def number(self) -> ak.Array:
