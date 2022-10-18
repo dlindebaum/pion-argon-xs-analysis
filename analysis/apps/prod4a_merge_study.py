@@ -75,7 +75,6 @@ class ShowerMergeQuantities:
         "d",
         "t",
         "p",
-        "cnn",
     ]
 
     bestCut = "purity"
@@ -385,6 +384,28 @@ def EventSelection(events : Master.Data, matchBy : str = "spatial", invertFinal 
         f = ak.all(np.logical_or(start_shower_mom.x != -999, start_shower_pos.x != -999), -1) # ignore null directions/positions for starting showers
         return start_showers
 
+@Master.timer
+def PFOSelection(events : Master.Data, start_showers : list):
+    #* null momentum,start position PFOs
+    print(f"Total number of PFOs: {ak.count(events.recoParticles.nHits)}")
+    mask = np.logical_or(events.recoParticles.startPos.x != -999, events.recoParticles.momentum.x != -999)
+    events.Filter([mask])
+    new_start_showers = [start_showers[i][mask] for i in range(2)]
+    print(f"Total number of PFOs after cut: {ak.count(events.recoParticles.nHits)}")
+
+    #* null cnn score
+    print(f"Total number of PFOs: {ak.count(events.recoParticles.nHits)}")
+    mask = events.recoParticles.cnnScore != -999
+    events.Filter([mask])
+    new_start_showers = [new_start_showers[i][mask] for i in range(2)]
+    print(f"Total number of PFOs after cut: {ak.count(events.recoParticles.nHits)}")
+
+    #! CNN score selection on PFOs will be done with the other geomtric quantities
+    # if args.cnn_cut is not None:
+    #     mask = np.logical_or(events.recoParticles.cnnScore > args.cnn_cut, np.logical_or(*start_showers)) # select PFOs which pass CNN selection or are start showers
+    #     events.Filter([mask])
+    #     start_showers = [start_showers[i][mask] for i in range(2)]
+    return new_start_showers
 
 @Master.timer
 def GetStartShowers(events : Master.Data, method="spatial") -> ak.Array:
@@ -521,27 +542,7 @@ def ROOTWorkFlow():
     """
     events = Master.Data(file, includeBackTrackedMC = True, nEvents = args.nEvents[0], start = args.nEvents[1])
     start_showers = EventSelection(events, args.matchBy, False)
-
-    ######################### PFO Selection #########################
-    #* null momentum,start position PFOs
-    print(f"Total number of PFOs: {ak.count(events.recoParticles.nHits)}")
-    mask = np.logical_or(events.recoParticles.startPos.x != -999, events.recoParticles.momentum.x != -999)
-    events.Filter([mask])
-    start_showers = [start_showers[i][mask] for i in range(2)]
-    print(f"Total number of PFOs after cut: {ak.count(events.recoParticles.nHits)}")
-    #* null cnn score
-    print(f"Total number of PFOs: {ak.count(events.recoParticles.nHits)}")
-    mask = events.recoParticles.cnnScore != -999
-    events.Filter([mask])
-    start_showers = [start_showers[i][mask] for i in range(2)]
-    print(f"Total number of PFOs after cut: {ak.count(events.recoParticles.nHits)}")
-
-    #! CNN score selection on PFOs will be done with the other geomtric quantities
-    # if args.cnn_cut is not None:
-    #     mask = np.logical_or(events.recoParticles.cnnScore > args.cnn_cut, np.logical_or(*start_showers)) # select PFOs which pass CNN selection or are start showers
-    #     events.Filter([mask])
-    #     start_showers = [start_showers[i][mask] for i in range(2)]
-    #################################################################
+    start_showers = PFOSelection(events, start_showers)
 
     #* get boolean mask of PFP's to merge
     to_merge = np.logical_not(np.logical_or(*start_showers))
@@ -553,7 +554,7 @@ def ROOTWorkFlow():
         q.bestCut = args.cut_type
         n_merge = -1
         if n_merge == 0:
-            s = events.Filter([np.logical_or(*start_showers)], returnCopy=True) # no shower merging, should be configurable
+            s = events.Filter([np.logical_or(*start_showers)], returnCopy=True) # no shower merging, #TODO should be configurable
         else:
             s = ShowerMerging(events, start_showers, to_merge, q, n_merge)
         p = Master.CalculateQuantities(s, True)
@@ -822,8 +823,8 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.
 
     #* add correction to each starting shower and calculate shower properties
     momentum = [ak.unflatten(vector.add(events.recoParticles.momentum[np.logical_or(*start_showers)][:, i], sorted_momentum_to_merge[i]), 1, -1) for i in range(2)]
-    energy = ak.concatenate([vector.magnitude(momentum[i]) for i in range(2)])
-    direction = ak.concatenate([vector.normalize(momentum[i]) for i in range(2)])    
+    energy = ak.concatenate([vector.magnitude(momentum[i]) for i in range(2)], -1)
+    direction = ak.concatenate([vector.normalize(momentum[i]) for i in range(2)], -1)
     momentum = ak.concatenate(momentum, -1)
 
     merged = events.Filter([np.logical_or(*start_showers)], returnCopy=True) # filter events to only keep starting shower quantities
