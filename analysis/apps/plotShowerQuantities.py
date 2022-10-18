@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Created on: 09/08/2022 14:41
 
@@ -129,10 +130,11 @@ def main(args):
     r_l = ["Invariant mass (GeV)", "Opening angle (rad)", "Leading shower energy (GeV)", "Sub leading shower energy (GeV)", "$\pi^{0}$ momentum (GeV)"]
 
     #* plot ranges
-    e_range = [[-1, 10]] * 5
+    e_range = [[-1, 1]] * 5
     #e_range = [[]] * 5
     r_range = [[]] * 5
     r_range[0] = [0, 0.5]
+    r_range[3] = [0, 0.5]
     t_range = [[]] * 5
 
     #* data to plot
