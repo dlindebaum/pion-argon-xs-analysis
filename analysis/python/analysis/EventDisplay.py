@@ -3,7 +3,7 @@ Created on: 25/09/2022 11:14
 
 Author: Shyam Bhuller
 
-Description: Event display object
+Description: Event display object.
 """
 
 import matplotlib.pyplot as plt
@@ -26,6 +26,11 @@ class EventDisplay:
         ax3D (mpl_toolkits.mplot3d.axes3d.Axes3D): 3D plot.
 
     Methods:
+        DetectorBounds: Set axes range to dectector bounds.
+        PFO: Plot a PFO in the event display.
+        Point: Draw a single point.
+        Line: Draw a line.
+        Text: Draw text.
     """
     xlim = (-350, 350)
     ylim = (0, 600)
@@ -80,8 +85,8 @@ class EventDisplay:
         self.ax3D.set_ylim3d(z)
         self.ax3D.set_zlim3d(y)
 
-    def PlotPFO(self, points : ak.Array, marker : str, colour : str, pointSize : int = 2, startPoint : ak.Record = None, direction : ak.Record = None, pdg : int = None):
-        """ Plot a PFO in the Event display
+    def PFO(self, points : ak.Array, marker : str, colour : str, pointSize : int = 2, startPoint : ak.Record = None, direction : ak.Record = None, pdg : int = None):
+        """ Plot a PFO in the event display.
 
         Args:
             points (ak.Array): hit space point positions
@@ -114,14 +119,14 @@ class EventDisplay:
                 self.ax3D.scatter(startPoint.x, startPoint.z, startPoint.y, s=pointSize * 30, marker="x", color=colour)
         
         if direction is not None and startPoint is not None:
-            self.PlotLine(startPoint, vector.add(startPoint, vector.prod(10, direction)), colour, lineStyle="-")
+            self.Line(startPoint, vector.add(startPoint, vector.prod(10, direction)), colour, lineStyle="-")
         
         if pdg is not None and startPoint is not None:
-            self.PlotText(startPoint, str(pdg))
+            self.Text(startPoint, str(pdg))
         
         return
 
-    def PlotPoint(self, point : ak.Record, marker : str, colour : str, pointSize : int = 2):
+    def Point(self, point : ak.Record, marker : str, colour : str, pointSize : int = 2):
         """ Draw a single point.
 
         Args:
@@ -139,7 +144,7 @@ class EventDisplay:
         
         return
 
-    def PlotLine(self, start : ak.Record, end : ak.Record, colour : str, lineStyle="-"):
+    def Line(self, start : ak.Record, end : ak.Record, colour : str, lineStyle="-"):
         """ Draw a line.
 
         Args:
@@ -157,7 +162,7 @@ class EventDisplay:
         
         return
 
-    def PlotText(self, point : ak.Record, text : str, fontsize : int = 16):
+    def Text(self, point : ak.Record, text : str, fontsize : int = 16):
         """ Draw text.
 
         Args:

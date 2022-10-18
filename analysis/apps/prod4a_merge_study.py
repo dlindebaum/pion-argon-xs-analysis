@@ -1,3 +1,10 @@
+"""
+Created on: 09/08/2022 14:41
+
+Author: Shyam Bhuller
+
+Description: Process both ROOT and csv data for the shower merging analysis with production 4a MC.
+"""
 import os
 import argparse
 import awkward as ak

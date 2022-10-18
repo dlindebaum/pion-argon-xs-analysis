@@ -23,10 +23,10 @@ def PlotImpactParameter(eventDisplay : EventDisplay, startPoint, target, directi
     l = np.abs(vector.dot(vector.sub(target, startPoint), direction))
     t = vector.magnitude(vector.cross(vector.sub(target, startPoint), direction))
     point = vector.add(startPoint, vector.prod(-l, direction))
-    eventDisplay.PlotPoint(point, "x", "purple", 40)
-    eventDisplay.PlotLine(startPoint, target, "purple", "-") # d
-    eventDisplay.PlotLine(startPoint, point, "purple", "-") # l
-    eventDisplay.PlotLine(point, target, "purple", "--") # impact parameter (t)
+    eventDisplay.Point(point, "x", "purple", 40)
+    eventDisplay.Line(startPoint, target, "purple", "-") # d
+    eventDisplay.Line(startPoint, point, "purple", "-") # l
+    eventDisplay.Line(point, target, "purple", "--") # impact parameter (t)
     print(f"plotted impact parameter: {vector.magnitude(vector.sub(point, target))} cm")
     print(f"calculated impact parameter: {t} cm")
     return
@@ -52,10 +52,10 @@ def PlotBackgroundPFO(display : EventDisplay, eventNum : int, background : ak.Ar
         background_pdg = [None]*ak.num(background_points, 0)
     if i == -1:
         for p in range(ak.num(background_points, 0)):
-            display.PlotPFO(background_points[p], marker = "x", colour = background_colours[p % len(background_colours)], startPoint = background_startPoints[p], pdg = background_pdg[p])
+            display.PFO(background_points[p], marker = "x", colour = background_colours[p % len(background_colours)], startPoint = background_startPoints[p], pdg = background_pdg[p])
             if plotIP: PlotImpactParameter(display, background_startPoints[p], events.recoParticles.beamVertex[i], background_direction[p])
     else:
-        display.PlotPFO(background_points[i], marker = "x", colour = background_colours[i % len(background_colours)], startPoint = background_startPoints[i], pdg = background_pdg[i])
+        display.PFO(background_points[i], marker = "x", colour = background_colours[i % len(background_colours)], startPoint = background_startPoints[i], pdg = background_pdg[i])
         if plotIP: PlotImpactParameter(display, background_startPoints[i], events.recoParticles.beamVertex[i], background_direction[i])
     return
 
@@ -76,10 +76,10 @@ def PlotSignalPFO(display : EventDisplay, eventNum : int, signal : ak.Array, poi
     if i == -1:
         print(f"Number of signal PFOs for start shower {start_shower}: {ak.num(signal_points, 0)}")
         for p in range(ak.num(signal_points, 0)):
-            display.PlotPFO(signal_points[p], marker = "x", colour = colours[p % len(colours)], startPoint = signal_startPoints[p], direction = signal_direction[p], pdg = signal_pdg[p])
+            display.PFO(signal_points[p], marker = "x", colour = colours[p % len(colours)], startPoint = signal_startPoints[p], direction = signal_direction[p], pdg = signal_pdg[p])
             if plotIP: PlotImpactParameter(display, signal_startPoints[p], events.recoParticles.beamVertex[i], signal_direction[p])
     else:
-        display.PlotPFO(signal_points[i], marker = "x", colour = colours[i % len(colours)], startPoint = signal_startPoints[i], direction = signal_direction[i], pdg = signal_pdg[p])
+        display.PFO(signal_points[i], marker = "x", colour = colours[i % len(colours)], startPoint = signal_startPoints[i], direction = signal_direction[i], pdg = signal_pdg[p])
         if plotIP:
             PlotImpactParameter(display, signal_startPoints[i], events.recoParticles.beamVertex[i], signal_direction[i])
 
@@ -93,8 +93,8 @@ def RenderEventDisplay(n):
     startPoints = events.recoParticles.startPos[start_showers_merged][n]
     directions = events.recoParticles.direction[start_showers_merged][n]
     pdgs = events.trueParticlesBT.pdg[start_showers_merged][n]
-    display.PlotPFO(points[0], marker = "x", colour = "green", startPoint = startPoints[0], direction = directions[0])#, pdg=pdgs[0])
-    display.PlotPFO(points[1], marker = "x", colour = "blue", startPoint = startPoints[1], direction = directions[1])#, pdg=pdgs[1])
+    display.PFO(points[0], marker = "x", colour = "green", startPoint = startPoints[0], direction = directions[0])#, pdg=pdgs[0])
+    display.PFO(points[1], marker = "x", colour = "blue", startPoint = startPoints[1], direction = directions[1])#, pdg=pdgs[1])
 
 
     points = events.recoParticles.spacePoints[to_merge][n]
@@ -115,10 +115,10 @@ def RenderEventDisplay(n):
     beam_mask = events.recoParticles.number == events.recoParticles.beam_number
     points = events.recoParticles.spacePoints[beam_mask][n]
     pdg = events.trueParticlesBT.pdg[beam_mask][n]
-    display.PlotPFO(points, marker="o", colour="black", startPoint = events.recoParticles.beamVertex[n], pdg=None)
+    display.PFO(points, marker="o", colour="black", startPoint = events.recoParticles.beamVertex[n], pdg=None)
 
     #* Plot beam vertex
-    display.PlotPoint(events.recoParticles.beamVertex[n], marker="x", colour="red", pointSize=100)
+    display.Point(events.recoParticles.beamVertex[n], marker="x", colour="red", pointSize=100)
 
     custom_lines = [matplotlib.lines.Line2D([0], [0], color="black", lw=2),
                     matplotlib.lines.Line2D([0], [0], color="green", lw=2),
