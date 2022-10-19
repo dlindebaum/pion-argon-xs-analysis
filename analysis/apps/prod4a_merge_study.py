@@ -1,3 +1,10 @@
+"""
+Created on: 09/08/2022 14:41
+
+Author: Shyam Bhuller
+
+Description: Process both ROOT and csv data for the shower merging analysis with production 4a MC.
+"""
 import os
 import argparse
 import awkward as ak
@@ -8,6 +15,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from tabulate import tabulate
 import itertools
+from rich import print
 
 from python.analysis import Master, Plots, vector
 from apps import CutOptimization
@@ -63,6 +71,7 @@ class ShowerMergeQuantities:
         "d (cm)",
         "t (cm)",
         "p (cm)",
+        "CNN score"
     ]
     selectionVariables = [
         "alpha",    
@@ -118,7 +127,7 @@ class ShowerMergeQuantities:
         self.delta_x = ak.Array([vector.dist(start_shower_pos[:, i], self.to_merge_pos) for i in range(2)])
         self.delta_xl = ak.Array([self.delta_x[i] * np.abs(np.cos(self.alpha[i])) for i in range(2)])
         self.delta_xt = ak.Array([self.delta_x[i] * np.abs(np.sin(self.alpha[i])) for i in range(2)])
-        self.cnn = [self.cnn for i in range(2)]
+        self.cnn = ak.Array([self.cnn for i in range(2)])
         if self.analysedCuts is not None:
             self.mask = self.SelectPFOsToMerge(BestCut(pd.read_csv(self.analysedCuts), self.selectionVariables, self.bestCut), False)
 
@@ -134,6 +143,7 @@ class ShowerMergeQuantities:
             ak.Array: boolean mask
         """
         for v in range(len(self.selectionVariables)):
+            print(f"cutting on: {self.selectionVariables[v]}")
             if v == 0:
                 mask = getattr(self, self.selectionVariables[v]) < cuts[v]
             else:
@@ -381,6 +391,28 @@ def EventSelection(events : Master.Data, matchBy : str = "spatial", invertFinal 
         f = ak.all(np.logical_or(start_shower_mom.x != -999, start_shower_pos.x != -999), -1) # ignore null directions/positions for starting showers
         return start_showers
 
+@Master.timer
+def PFOSelection(events : Master.Data, start_showers : list):
+    #* null momentum,start position PFOs
+    print(f"Total number of PFOs: {ak.count(events.recoParticles.nHits)}")
+    mask = np.logical_or(events.recoParticles.startPos.x != -999, events.recoParticles.momentum.x != -999)
+    events.Filter([mask])
+    new_start_showers = [start_showers[i][mask] for i in range(2)]
+    print(f"Total number of PFOs after cut: {ak.count(events.recoParticles.nHits)}")
+
+    #* null cnn score
+    print(f"Total number of PFOs: {ak.count(events.recoParticles.nHits)}")
+    mask = events.recoParticles.cnnScore != -999
+    events.Filter([mask])
+    new_start_showers = [new_start_showers[i][mask] for i in range(2)]
+    print(f"Total number of PFOs after cut: {ak.count(events.recoParticles.nHits)}")
+
+    #! CNN score selection on PFOs will be done with the other geomtric quantities
+    # if args.cnn_cut is not None:
+    #     mask = np.logical_or(events.recoParticles.cnnScore > args.cnn_cut, np.logical_or(*start_showers)) # select PFOs which pass CNN selection or are start showers
+    #     events.Filter([mask])
+    #     start_showers = [start_showers[i][mask] for i in range(2)]
+    return new_start_showers
 
 @Master.timer
 def GetStartShowers(events : Master.Data, method="spatial") -> ak.Array:
@@ -517,21 +549,7 @@ def ROOTWorkFlow():
     """
     events = Master.Data(file, includeBackTrackedMC = True, nEvents = args.nEvents[0], start = args.nEvents[1])
     start_showers = EventSelection(events, args.matchBy, False)
-
-    ######################### PFO Selection #########################
-    print(f"Total number of PFOs: {ak.count(events.recoParticles.nHits)}")
-    mask = np.logical_or(events.recoParticles.startPos.x != -999, events.recoParticles.momentum.x != -999)
-    events.Filter([mask])
-    start_showers = [start_showers[i][mask] for i in range(2)]
-    print(f"Total number of PFOs after cut: {ak.count(events.recoParticles.nHits)}")
-
-    # CNN score selection on PFOs
-    #! from Dennis: 0.36, 0.64, 0.84
-    if args.cnn_cut is not None:
-        mask = np.logical_or(events.recoParticles.cnnScore > args.cnn_cut, np.logical_or(*start_showers)) # select PFOs which pass CNN selection or are start showers
-        events.Filter([mask])
-        start_showers = [start_showers[i][mask] for i in range(2)]
-    #################################################################
+    start_showers = PFOSelection(events, start_showers)
 
     #* get boolean mask of PFP's to merge
     to_merge = np.logical_not(np.logical_or(*start_showers))
@@ -543,7 +561,7 @@ def ROOTWorkFlow():
         q.bestCut = args.cut_type
         n_merge = -1
         if n_merge == 0:
-            s = events.Filter([np.logical_or(*start_showers)], returnCopy=True) # no shower merging, should be configurable
+            s = events.Filter([np.logical_or(*start_showers)], returnCopy=True) # no shower merging, #TODO should be configurable
         else:
             s = ShowerMerging(events, start_showers, to_merge, q, n_merge)
         p = Master.CalculateQuantities(s, True)
@@ -627,6 +645,12 @@ def ROOTWorkFlow():
             Plots.PlotHist2D(ak.ravel(purity), ak.ravel(completeness), xlabel="purity", ylabel="completeness")
             if save: Plots.Save("purity_vs_completeness", outDir+subDir)
 
+            Plots.PlotHist2D(ak.ravel(purity[to_merge][q.null][np.logical_or(*signal)]), ak.ravel(completeness[to_merge][q.null][np.logical_or(*signal)]), xlabel="purity", ylabel="completeness", title = "signal")
+            if save: Plots.Save("purity_vs_completeness_s", outDir+subDir)
+
+            Plots.PlotHist2D(ak.ravel(purity[to_merge][q.null][background]), ak.ravel(completeness[to_merge][q.null][background]), xlabel="purity", ylabel="completeness", title = "background")
+            if save: Plots.Save("purity_vs_completeness_b", outDir+subDir)
+
         #* calculate geometric quantities
         if save is True and plotsToMake is None:
             q.Evaluate(events, start_showers)
@@ -659,7 +683,7 @@ def ShowerMergingCriteria(q : ShowerMergeQuantities):
         return spinners[spinner][counter % len(spinners[spinner])]
 
     min_val = [] # min range of each variable
-    max_val = [] # max range 
+    max_val = [] # max range
     for i in range(len(q.selectionVariables)):
         min_val.append(0)
         max_val.append(ak.max(getattr(q, q.selectionVariables[i])))
@@ -670,21 +694,34 @@ def ShowerMergingCriteria(q : ShowerMergeQuantities):
     values = np.linspace(min_val+(0.1*max_val), max_val-(0.1*max_val), 3, True) # values that are used to create combinations of cuts to optimize
     output = []
     metric_labels = ["s", "b", "s/b", "$s\\sqrt{b}$", "purity", "$\\epsilon_{s}$", "$\\epsilon_{b}$", "$\\epsilon$"] # performance metrics to choose cuts #? add purity*efficiency?
-    
-    #* loop through all combination of values for each parameter and optmize the final cut
+
+    #* create input data strutcure
     counter = 0
+
+    cuts = []
+    for v in q.selectionVariables:
+        operator = CutOptimization.Operator.GREATER if v is "cnn" else CutOptimization.Operator.LESS
+        cuts.append(CutOptimization.Cuts(v, operator, None))
+
+    print("list of cut types:")
+    print(cuts)
+
+    #* loop through all combination of values for each parameter and optmize the final cut
     for initial_cuts in itertools.product(*values.T):
-        cutOptimization = CutOptimization.OptimizeSingleCut(q, initial_cuts)
+        for i in range(len(cuts)):
+            cuts[i].value = initial_cuts[i]
+        cutOptimization = CutOptimization.OptimizeSingleCut(q, cuts, False)
         c, m = cutOptimization.Optimize(10, CutOptimization.MaxSRootBRatio) # scan over 10 bins and optimize cut by looking for max s/sqrt(b)
         o = [c[i] + m[i] for i in range(len(c))] # combine output
         output.extend(o)
         counter += 1
         end = '\n' if counter == 0 else '\r'
         print(f" {Spinner(counter, 'box')} progess: {counter/(len(values)**len(initial_cuts))*100:.3f}% | {counter} | {len(values)**len(initial_cuts)}", end=end)
-    print(tabulate([*output], headers=q.selectionVariables+metric_labels, floatfmt=".3f", tablefmt="fancy_grid")) # should probably remove this
 
     #* save results
     output = pd.DataFrame(output, columns=q.selectionVariables+metric_labels)
+    # print(tabulate(output, showindex=False, headers=output.columns, floatfmt=".3f", tablefmt="fancy"))
+    print(output)
     if plotsToMake == "all":
         scatter_matrix(output[metric_labels], figsize=(20, 20), diagonal="kde")
     if save is True:
@@ -793,8 +830,8 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.
 
     #* add correction to each starting shower and calculate shower properties
     momentum = [ak.unflatten(vector.add(events.recoParticles.momentum[np.logical_or(*start_showers)][:, i], sorted_momentum_to_merge[i]), 1, -1) for i in range(2)]
-    energy = ak.concatenate([vector.magnitude(momentum[i]) for i in range(2)])
-    direction = ak.concatenate([vector.normalize(momentum[i]) for i in range(2)])    
+    energy = ak.concatenate([vector.magnitude(momentum[i]) for i in range(2)], -1)
+    direction = ak.concatenate([vector.normalize(momentum[i]) for i in range(2)], -1)
     momentum = ak.concatenate(momentum, -1)
 
     merged = events.Filter([np.logical_or(*start_showers)], returnCopy=True) # filter events to only keep starting shower quantities
@@ -818,7 +855,27 @@ def main():
         CSVWorkFlow()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Shower merging study for beamMC, plots quantities used to decide which showers to merge.")
+    example_usage = """Example Uasge:
+    Open a ROOT file and plot basic quantities:
+        python prod4a_merge_study.py <ROOT file> -s -p <plot type> -d <out directory> -n
+
+    Open a ROOT file and save merge quantities to file:
+        python prod4a_merge_study.py <ROOT file> -s -d <out directory>
+
+    Open a csv file with merge quantities and plot them:
+        python prod4a_merge_study.py <merge quantity csv> -p <plot type> -s -d <out directory> -n
+
+    Open a csv file with merge quantities and scan for cut values:
+        python prod4a_merge_study.py <merge quantity csv> -p <plot type> -s -d <out directory> -c
+
+    Open a ROOT file and csv with list of cuts and merge PFOs based on the cut type:
+        python prod4a_merge_study.py <ROOT file> --cuts <cuts csv> --cut-type <cut type> -m reco -s -o <output filename> -d <out directory> -a
+
+    Open a ROOT file, merge PFOs based on truth information and save shower pair quantities to file:
+        python prod4a_merge_study.py <ROOT file> -m cheat -s -o <output filename> -d <out directory>
+    """
+
+    parser = argparse.ArgumentParser(description="Shower merging study for beamMC, plots quantities used to decide which showers to merge.", formatter_class=argparse.RawDescriptionHelpFormatter, epilog=example_usage)
     parser.add_argument(dest="file", type=str, help="ROOT file to open.")
     parser.add_argument("-e", "--events", dest="nEvents", type=int, nargs=2, default=[-1, 0], help="number of events to analyse and number to skip (-1 is all)")
     parser.add_argument("-n", "--normalize", dest="norm", action="store_true", help="normalise plots to compare shape")
@@ -831,7 +888,7 @@ if __name__ == "__main__":
     parser.add_argument("--cuts", dest="analysedCuts", default=None, type=str, help="data produced by ShowerMergingCriteria i.e. use the -c option")
     parser.add_argument("-a", "--apply-cuts", dest="applyCuts", action="store_true", help="apply cuts to shower merge quantities")
     parser.add_argument("-m", "--merge", dest="merge", type=str, choices=["reco", "cheat", None], default=None, help="Do shower merging (cuts required)")
-    parser.add_argument("--cnn", dest="cnn_cut", type=float, default=None, help="cnn score cut")
+    # parser.add_argument("--cnn", dest="cnn_cut", type=float, default=None, help="cnn score cut")
     parser.add_argument("--cut-type", dest="cut_type", type=str, choices=["purity", "balanced", "efficiency"], default="balanced", help="type of cut to pick from cut scan.")
     parser.add_argument("-o", "--out-csv", dest="csv", type=str, default=None, help="output csv filename (will default to whatever type of data is produced)")
     args = parser.parse_args() #! run in command line

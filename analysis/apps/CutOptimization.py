@@ -6,14 +6,67 @@ Author: Shyam Bhuller
 Description: Code to optimize a a set of cuts made on data.
 """
 from python.analysis import Plots
-from abc import ABC, abstractmethod
 
+from enum import Enum
+from abc import ABC, abstractmethod
 import awkward as ak
 import numpy as np
 from tabulate import tabulate
 
+
+class Operator(str, Enum):
+    """ Enum for types of cuts.
+    """
+    LESS = "<"
+    GREATER = ">"
+    EQUAL = "=="
+    NOT_EQUAL = "!="
+
+
+class Cuts():
+    """ Struct for defining cuts.
+    Attributes:
+        variable (str): variable to cut
+        operator (Operator): condition of the cut
+        value (Any): cut value
+
+    Methods:
+        cut: cuts data provided
+    """
+    def __init__(self, variable : str, operator : Operator, value) -> None:
+        self.variable = variable
+        self.operator = operator
+        self.value = value
+        pass
+
+    def cut(self, data):
+        """ Cuts data.
+
+        Args:
+            data (ak.Array): data to cut
+
+        Returns:
+            ak.Array: cut data
+        """
+        if self.operator == Operator.LESS:
+            return data < self.value
+        elif self.operator == Operator.GREATER:
+            return data > self.value
+        elif self.operator == Operator.EQUAL:
+            return data == self.value
+        elif self.operator == Operator.NOT_EQUAL:
+            return data != self.value
+        else:
+            Exception(f"{self.operator} is not a valid Operator")
+
+    def __repr__(self) -> str:
+        """ Pretty printing of cut.
+        """
+        return f"{self.variable} {self.operator.value} {self.value}"
+
+
 def MaxSRootBRatio(cuts : np.array, metrics : dict) -> float:
-    """ Select a cut which maximises signal/root background ratio
+    """ Select a cut which maximises signal/root background ratio.
 
     Args:
         cuts (np.array): list of cuts
@@ -26,7 +79,7 @@ def MaxSRootBRatio(cuts : np.array, metrics : dict) -> float:
 
 
 def Fit(x : np.array, y : np.array):
-    """ Least squares fit of 1D data
+    """ Least squares fit of 1D data.
 
     Args:
         x (np.array): x data
@@ -45,7 +98,7 @@ def Fit(x : np.array, y : np.array):
 
 
 def EqualSRootB(cuts : np.array, metrics : dict, target : float) -> float:
-    """ Select a cut at specific signal/root background ratio
+    """ Select a cut at specific signal/root background ratio.
     Args:
         cuts (np.array): list of cuts
         metrics (dict): metrics used to define the criteria
@@ -62,7 +115,7 @@ def EqualSRootB(cuts : np.array, metrics : dict, target : float) -> float:
 
 
 def EqualSignalBackgroundEfficiency(cuts : np.array, metrics : dict) -> float:
-    """ Select a cut where signal efficiency and background rejection are closest or equal
+    """ Select a cut where signal efficiency and background rejection are closest or equal.
         TODO fit a function to se and br as a fuction of cut and then get exact value at which they are the same
     Args:
         cuts (np.array): list of cuts
@@ -88,7 +141,7 @@ def MaxPurity(cuts : np.array, metrics : dict) -> float:
 
 
 def SetPurity(cuts : np.array, metrics : dict, target : float) -> float:
-    """ Select cut at specific purity
+    """ Select cut at specific purity.
 
     Args:
         cuts (np.array): list of cuts
@@ -116,6 +169,27 @@ def Metrics(nEntires):
 
 
 class CutOptimization(ABC):
+    """ Class which takes a data object and will produce a set of cuts which finds a
+        value which optimizes some working point e.g. signal/background
+    Attributes:
+        quantities: a class which satifies the following criteria:
+            - contains attributes which resemble data
+            - contains a selectionVariables attribute which lists which attributes are the selection variables
+            - contains boolean masks which defines a signal and background sample
+        initial_cuts (list[Cut]): list of initial cuts to try
+        debug (bool): enable for verbose output
+    Abstract Methods:
+        Optimize: method which defines how you want to optimize the cuts see examples below
+    Methods:
+        __init__:
+        PrintSignalMetrics: Print various metrics for data.
+        InitialChecks: Calculate initial signal and bacgkround counts and print metrics.
+        CreateMask: Create a mask of events which pass the cuts on each variable, or skip one.
+        EvaluateCuts: Calculate signal metrics after applying a set of cuts.
+        NMinus1Study: optimizes nth cut value.
+
+
+    """
     def __init__(self, _quantities, _initial_cuts : list, _debug : bool = False):
         self.quantities = _quantities
         self.initial_cuts = _initial_cuts
@@ -126,28 +200,6 @@ class CutOptimization(ABC):
     def Optimize(self):
         self.InitialChecks()
         pass
-
-
-    def CreateMask(self, cuts : list, skip : int = -1) -> ak.Array:
-        """ Create a mask of events which pass the cuts on each variable, or skip one.
-
-        Args:
-            quantities (any): quantities class
-            cuts (list): list of cuts
-            skip (int, optional): index to skip. Defaults to -1 (skip none).
-
-        Returns:
-            ak.Array: mask
-        """
-        mask = [] # mask of entries passing the cuts
-        for i in range(len(cuts)):
-            if i == skip: continue # dont cut on nth variable
-            if len(mask) == 0:
-                mask = ak.flatten(getattr(self.quantities, self.quantities.selectionVariables[i])) < cuts[i]
-            else:
-                mask = np.logical_and(mask, ak.flatten(getattr(self.quantities, self.quantities.selectionVariables[i])) < cuts[i])
-        if self.debug: print(f"number of PFOs after cuts: {ak.count(mask[mask])}")
-        return mask
 
 
     def PrintSignalMetrics(self, signal : ak.Array, background : ak.Array, initial_signal : ak.Array = [], initial_background : ak.Array = []):
@@ -204,6 +256,28 @@ class CutOptimization(ABC):
         return self.PrintSignalMetrics(initial_signal, initial_background)
 
 
+    def CreateMask(self, cuts : list, skip : str = None) -> ak.Array:
+        """ Create a mask of events which pass the cuts on each variable, or skip one.
+
+        Args:
+            quantities (any): quantities class
+            cuts (list): list of Cuts
+            skip (int, optional): index to skip. Defaults to -1 (skip none).
+
+        Returns:
+            ak.Array: mask
+        """
+        mask = [] # mask of entries passing the cuts
+        for c in cuts:
+            if c.variable == skip: continue  # dont cut on nth variable
+            if (len(mask) == 0):
+                mask = c.cut(ak.flatten(getattr(self.quantities, c.variable)))
+            else:
+                mask = np.logical_and(mask, c.cut(ak.flatten(getattr(self.quantities, c.variable))))
+        if self.debug: print(f"number of PFOs after cuts: {ak.count(mask[mask])}")
+        return mask
+
+
     def EvaluateCuts(self, cuts : list):
         """ Calculate signal metrics after applying a set of cuts.
 
@@ -222,28 +296,40 @@ class CutOptimization(ABC):
 
 
     def NMinus1Study(self, icuts : list, n : int, stepSize : int, criteria = MaxSRootBRatio, args : list = []):
+        """ Finds the best cut for the nth variable after applying the existing cuts to the n-1th variables.
+
+        Args:
+            icuts (list): initial cuts
+            n (int): nth variable
+            stepSize (int): number of new cuts to try
+            criteria (_type_, optional): which working point to optimize. Defaults to MaxSRootBRatio.
+            args (list, optional): arguements for criteria. Defaults to [].
+
+        Returns:
+            any: best cut value
+        """
         mcuts = list(icuts)
-        n_name = self.quantities.selectionVariables[n]
+        nm1 = icuts[n]
 
         #* first apply all but one cut
-        mask = self.CreateMask(mcuts, n)
+        mask = self.CreateMask(mcuts, nm1.variable)
 
         #* get data that passes n-1 cuts for nth variable 
         sig = ak.flatten(self.quantities.signal)[mask]
         bkg = ak.flatten(self.quantities.background)[mask]
         ns_i = ak.count(sig[sig])
         nb_i = ak.count(bkg[bkg])
-        var = ak.flatten(getattr(self.quantities, n_name))[mask]
+        var = ak.flatten(getattr(self.quantities, nm1.variable))[mask]
 
         if len(var) == 0:
             print(f"cuts {mcuts}, results in no events being selected!")
-            return icuts[n]
+            return icuts[n].value
         if ns_i == 0:
             print(f"cuts {mcuts}, results in no signal events being selected, doing nothing...")
-            return icuts[n]
+            return icuts[n].value
         if nb_i == 0:
             print(f"cuts {mcuts}, results in no background events being selected, doing nothing...")
-            return icuts[n]
+            return icuts[n].value
 
         #* cut variable at various points, calculate s/b, s/rootb
         cuts = np.linspace(ak.min(var), ak.max(var), stepSize)
@@ -263,22 +349,22 @@ class CutOptimization(ABC):
                 for key, metric in cut_metrics.items():
                     string += f"{key} : {metric[i]:.3f} | "
                 print(string[:-1])
-        if self.debug:
-            Plots.PlotHistComparison([var[bkg], var[sig]], labels=["background", "signal"], bins=25, xlabel=n_name, density=False)
-            Plots.Plot(cuts[cut_metrics["s/b"]>0], cut_metrics["s/b"][cut_metrics["s/b"]>0], n_name, "$s/b$")
-            Plots.Plot(cuts[cut_metrics["s/rootb"]>0], cut_metrics["s/rootb"][cut_metrics["s/rootb"]>0], n_name, "$s/\\sqrt{b}$")
-            Plots.Plot(cuts, cut_metrics["signal efficiency"], n_name, label="signal efficiency")
-            Plots.Plot(cuts, cut_metrics["background rejection"], n_name, label="background rejection", newFigure=False)
-            Plots.Plot(cut_metrics["signal efficiency"], cut_metrics["background rejection"], "signal efficiency", "background rejection")
+        # if self.debug:
+        #     Plots.PlotHistComparison([var[bkg], var[sig]], labels=["background", "signal"], bins=25, xlabel=nm1.variable, density=False)
+        #     Plots.Plot(cuts[cut_metrics["s/b"]>0], cut_metrics["s/b"][cut_metrics["s/b"]>0], nm1.variable, "$s/b$")
+        #     Plots.Plot(cuts[cut_metrics["s/rootb"]>0], cut_metrics["s/rootb"][cut_metrics["s/rootb"]>0], nm1.variable, "$s/\\sqrt{b}$")
+        #     Plots.Plot(cuts, cut_metrics["signal efficiency"], nm1.variable, label="signal efficiency")
+        #     Plots.Plot(cuts, cut_metrics["background rejection"], nm1.variable, label="background rejection", newFigure=False)
+        #     Plots.Plot(cut_metrics["signal efficiency"], cut_metrics["background rejection"], "signal efficiency", "background rejection")
         #* criteria to pick a starting shower should be something like, highest s/b or se == br
         best_cut = criteria(cuts, cut_metrics, *args)
-        if self.debug: print(f"best cut for {n_name} is {best_cut}")
+        if self.debug: print(f"best cut for {nm1.variable} is {best_cut}")
         
         return best_cut
 
 
 class OptimizeSingleCut(CutOptimization):
-    def Optimize(self : CutOptimization, stepSize : int = 10, criteria=MaxSRootBRatio, args=[]):
+    def Optimize(self : CutOptimization, stepSize : int = 10, criteria = MaxSRootBRatio, args = []):
         """ Apply n-1 cuts and iteratively optimize a single cut. 
 
         Args:
@@ -294,21 +380,21 @@ class OptimizeSingleCut(CutOptimization):
         final_metrics = []
         nm1 = 0
         while nm1 < len(self.initial_cuts):
-            if self.debug: print(f"next look at : {self.quantities.selectionVariables[nm1]}")
+            nm1_cut = self.initial_cuts[nm1]
+            if self.debug: print(f"look at : {nm1_cut}")
             best_cut = self.NMinus1Study(list(self.initial_cuts), nm1, stepSize, criteria, args)
 
             modified_cuts = list(self.initial_cuts)
-            modified_cuts[nm1] = best_cut # this is the new best cut for this variable
-            final_cuts.append(modified_cuts)
+            modified_cuts[nm1].value = best_cut # this is the new best cut for this variable
+            final_cuts.append([c.value for c in modified_cuts])
             final_metrics.append(list(self.EvaluateCuts(modified_cuts)))
-            
             nm1 += 1
 
         return final_cuts, final_metrics
 
 
 class OptimizeAllCuts(CutOptimization):
-    def Optimize(self : CutOptimization, startPoint : int = 0, stepSize : int = 10, criteria=MaxSRootBRatio, args=[]):
+    def Optimize(self : CutOptimization, startPoint : int = 0, stepSize : int = 10, criteria = MaxSRootBRatio, args = []):
         """ Optimise cuts for variables by scanning for an optimal set of cuts which all satisfy a certain criteria.
             Can be run recusrively to converge to an "optimal" set of cuts. 
 
@@ -329,22 +415,12 @@ class OptimizeAllCuts(CutOptimization):
             best_cut = self.NMinus1Study(final_cuts, nm1, stepSize, criteria, args)
 
             final_cuts[nm1] = best_cut # this is the new best cut for this variable
-            nm1 = (nm1 + 1)%len(self.quantities.selectionVariables)
-            print(f"next look at : {self.quantities.selectionVariables[nm1]}")
+            nm1 = (nm1 + 1)%len(final_cuts)
+            print(f"next look at : {final_cuts[nm1]}")
 
         print(f"final cuts are:")
-        print(tabulate([self.quantities.selectionVariables] + [final_cuts], tablefmt="fancy_grid"))
+        print(tabulate([self.quantities.selectionVariables] + [final_cuts.value], tablefmt="fancy_grid"))
         #* cut one final time to look at the results
         final_metrics = list(self.EvaluateCuts(final_cuts))
 
-        # if plotFinal is True:
-        #     selected_quantities = []
-        #     for i in range(len(self.quantities.selectionVariables)):
-        #         selected_quantities.append(ak.flatten(getattr(self.quantities, self.quantities.selectionVariables[i]))[mask])
-        #     labels = ["background", "signal"]
-        #     for i in range(len(quantities.selectionVariables)):
-        #         data = selected_quantities[i]
-        #         print(data)
-        #         Plots.PlotHistComparison([data[final_background], data[final_signal]], bins=50, xlabel=quantities.selectionVariables[i], labels=labels, density=norm, y_scale=scale)
-        #         if save: Plots.Save(quantities.names[i], outDir)
         return final_cuts, final_metrics

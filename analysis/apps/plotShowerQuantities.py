@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Created on: 09/08/2022 14:41
 
@@ -67,17 +68,35 @@ def PlotQQ(data : ak.Array, labels : list, control : str, axisLabels : list, qua
     if save is True: Plots.Save(f"qq_{quantity}", outDir + subDir)
 
 
-def PlotDiff(data : ak.Array, labels : list, control : str, xlabels : list, legend_loc = ["upper right"]*5, x_scale=["linear"]*5, y_scale=["linear"]*5, norm : bool = True, save : bool = False, outDir : str = "", subDir : str = "", annotation : str = None, bins : int = 20):
+def PlotDiff(datas : ak.Array, labels : list, control : str, xlabels : list, legend_loc = ["upper right"]*5, x_scale=["linear"]*5, y_scale=["linear"]*5, norm : bool = True, save : bool = False, outDir : str = "", subDir : str = "", annotation : str = None, bins : int = 20):
+    """ Plot the difference between two samples from the same data source:
+        x - y
+
+    Args:
+        datas (ak.Array): samples of data (x)
+        labels (list): labels for each sample
+        control (str): which sample is the control (y) 
+        xlabels (list): x label for plots
+        legend_loc (_type_, optional): location of legend. Defaults to ["upper right"]*5.
+        x_scale (_type_, optional): x axis scale. Defaults to ["linear"]*5.
+        y_scale (_type_, optional): y axis scale. Defaults to ["linear"]*5.
+        norm (bool, optional): normalise distribution. Defaults to True.
+        save (bool, optional): save to file. Defaults to False.
+        outDir (str, optional): output directory. Defaults to "".
+        subDir (str, optional): subDirectory. Defaults to "".
+        annotation (str, optional): annonation on plot. Defaults to None.
+        bins (int, optional): number of bins. Defaults to 20.
+    """
     if save is True: os.makedirs(outDir + subDir, exist_ok=True)
     c = labels.index(control)
     l = labels[:c] + labels[c+1:]
     for j in range(len(quantities)):
         diff = []
-        for i in range(len(data)):
+        for i in range(len(datas)):
             if i == c: continue
-            d = data[i][j] - data[c][j]
-            d = d[data[i][j] != -999]
-            diff.append(d[data[c][j] != -999])
+            d = datas[i][j] - datas[c][j]
+            d = d[(datas[i][j] != -999) & (datas[c][j] != -999)]
+            diff.append(d)
         Plots.PlotHistComparison(diff, bins = bins, xlabel=f"difference in {xlabels[j]} wrt {control}", labels=l, x_scale=x_scale[j], y_scale=y_scale[j], density=norm, annotation=annotation)
         plt.legend(loc=legend_loc[j])
         if save is True: Plots.Save(f"diff_{quantities[j]}", outDir + subDir)
@@ -129,10 +148,11 @@ def main(args):
     r_l = ["Invariant mass (GeV)", "Opening angle (rad)", "Leading shower energy (GeV)", "Sub leading shower energy (GeV)", "$\pi^{0}$ momentum (GeV)"]
 
     #* plot ranges
-    e_range = [[-1, 10]] * 5
+    e_range = [[-1, 1]] * 5
     #e_range = [[]] * 5
     r_range = [[]] * 5
     r_range[0] = [0, 0.5]
+    r_range[3] = [0, 0.5]
     t_range = [[]] * 5
 
     #* data to plot
@@ -162,7 +182,7 @@ def main(args):
         if args.dataType in ["all", "error"]: PlotQQ(e, labels, args.qq[0], e_l, args.qq[1], args.save, args.outDir, "error/", args.annotation)
     if args.plotsToMake == "diff" or (args.plotsToMake == "all" and len(args.files) > 1):
         if args.dataType in ["all", "truth"]: PlotDiff(t, labels, args.diff, t_l, save = args.save, outDir=args.outDir, subDir="truth/", norm=args.norm, y_scale=scale, bins=args.bins, annotation=args.annotation)
-        if args.dataType in ["all", "reco"]:  PlotDiff(r, labels, args.diff, r_l, save = args.save, outDir=args.outDir, subDir="reco/", norm=args.norm, y_scale=scale, bins=args.bins, annotation=args.annotation)
+        if args.dataType in ["all", "reco"]:  PlotDiff(r, labels, args.diff, r_l, save = args.save, outDir=args.outDir, subDir="reco/", norm=args.norm, y_scale=scale, bins=args.bins, annotation=args.annotation, legend_loc=["upper left"]*5)
         if args.dataType in ["all", "error"]: PlotDiff(e, labels, args.diff, e_l, save = args.save, outDir=args.outDir, subDir="error/", norm=args.norm, y_scale=scale, bins=args.bins, annotation=args.annotation)
 
 
