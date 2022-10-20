@@ -5,14 +5,16 @@ Author: Shyam Bhuller
 
 Description: Compare results of different filters for Pi0MC.
 """
-
 import argparse
 import os
+
 import awkward as ak
 import matplotlib.pyplot as plt
 import numpy as np
+
 # custom modules
 from python.analysis import Master, Plots, vector
+
 
 def Separation(shower : ak.Record, photon : ak.Record, null_shower_dir : ak.Record, typeof : str):
     """ Calculate angular or spatial separation,

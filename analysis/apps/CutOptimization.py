@@ -5,13 +5,14 @@ Author: Shyam Bhuller
 
 Description: Code to optimize a a set of cuts made on data.
 """
-from python.analysis import Plots
-
-from enum import Enum
 from abc import ABC, abstractmethod
+from enum import Enum
+
 import awkward as ak
 import numpy as np
 from tabulate import tabulate
+
+from python.analysis import Plots
 
 
 class Operator(str, Enum):

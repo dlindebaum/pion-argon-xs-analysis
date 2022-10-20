@@ -5,16 +5,18 @@ Author: Shyam Bhuller
 
 Description: Module containing core components of analysis code. 
 """
-
-from abc import ABC, abstractmethod
-import warnings
-import uproot
-import awkward as ak
-import time
-import numpy as np
 import itertools
+import time
+import warnings
+from abc import ABC, abstractmethod
+
+import awkward as ak
+import numpy as np
+import uproot
+
 # custom modules
 from python.analysis import vector
+
 
 def timer(func):
     """ Decorator which times a function.

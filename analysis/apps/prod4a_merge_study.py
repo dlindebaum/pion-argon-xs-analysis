@@ -5,20 +5,22 @@ Author: Shyam Bhuller
 
 Description: Process both ROOT and csv data for the shower merging analysis with production 4a MC.
 """
-import os
 import argparse
+import itertools
+import os
+
 import awkward as ak
+import matplotlib.patches as mpatches
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from pandas.plotting import scatter_matrix
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-from tabulate import tabulate
-import itertools
 from rich import print
+from tabulate import tabulate
 
-from python.analysis import Master, Plots, vector
 from apps import CutOptimization
+from python.analysis import Master, Plots, vector
+
 
 def BestCut(cuts : pd.DataFrame, q_names : list, type="balanced"):
     """ Select a cut from the cut based scan using signal/background metrics.

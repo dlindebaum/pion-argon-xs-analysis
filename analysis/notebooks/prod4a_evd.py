@@ -5,19 +5,19 @@ Author: Shyam Bhuller
 
 Description: Create Event Display for Prod4a Shower merging study 
 """
-
 from types import SimpleNamespace
+
+import awkward as ak
 import matplotlib
 import matplotlib.pyplot as plt
+import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 from tabulate import tabulate
-import awkward as ak
-import numpy as np
 
+from apps.prod4a_merge_study import EventSelection, ShowerMergeQuantities
 from python.analysis import Master, vector
 from python.analysis.EventDisplay import EventDisplay
 
-from apps.prod4a_merge_study import EventSelection, ShowerMergeQuantities
 
 def PlotImpactParameter(eventDisplay : EventDisplay, startPoint, target, direction):
     l = np.abs(vector.dot(vector.sub(target, startPoint), direction))

@@ -5,17 +5,19 @@ Author: Shyam Bhuller
 
 Description: Script which will read an ntuple ROOT file of MC and analyse reconstructed shower properties.
 """
-
 import argparse
 import os
+
 import awkward as ak
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+
+from notebooks import merge_study
 # custom modules
 from python.analysis import Master, Plots
-from notebooks import merge_study
-import pandas as pd
+
 
 def Plot2DRatio(ind : int, truths : np.array, errors : np.array, labels : str, xlabels : str, ylabels : str, nrows : int, ncols : int, bins : int = 25):
     """ Plot ratio of 2D histograms
