@@ -1070,6 +1070,16 @@ class TrueParticleDataBT(ParticleData):
         return getattr(self, f"_{type(self).__name__}__sharedHits")
 
     @property
+    def trueBeamVertex(self) -> ak.Array:
+        nTuples = [
+            "reco_beam_PFP_true_byHits_endX"
+            "reco_beam_PFP_true_byHits_endY"
+            "reco_beam_PFP_true_byHits_endZ"
+        ]
+        self.LoadData("trueBeamVertex", nTuples)
+        return getattr(self, f"_{type(self).__name__}__trueBeamVertex")
+
+    @property
     def particleNumber(self) -> ak.Array:
         """ Gets the true particle number of each true particle backtracked to reco
 
