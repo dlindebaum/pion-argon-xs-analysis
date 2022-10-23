@@ -149,7 +149,7 @@ def main(args):
     r_l = ["Invariant mass (GeV)", "Opening angle (rad)", "Leading shower energy (GeV)", "Sub leading shower energy (GeV)", "$\pi^{0}$ momentum (GeV)"]
 
     #* plot ranges
-    e_range = [[-1, 1]] * 5
+    e_range = [[-1, 10]] * 5
     #e_range = [[]] * 5
     r_range = [[]] * 5
     r_range[0] = [0, 0.5]

@@ -14,7 +14,7 @@ import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 from tabulate import tabulate
 
-from apps.prod4a_merge_study import EventSelection, ShowerMergeQuantities
+from apps.prod4a_merge_study import EventSelection, PFOSelection, SplitSample, ShowerMergeQuantities
 from python.analysis import Master, vector
 from python.analysis.EventDisplay import EventDisplay
 
@@ -170,7 +170,9 @@ def main():
     events.recoParticles.spacePoints = ak.zip({"x" : events.io.Get("reco_daughter_allShower_spacePointX"), 
                                             "y" : events.io.Get("reco_daughter_allShower_spacePointY"),
                                             "z" : events.io.Get("reco_daughter_allShower_spacePointZ")})
-    start_showers = EventSelection(events)
+    EventSelection(events)
+    PFOSelection(events)
+    start_showers, to_merge = SplitSample(events)
 
     #* get boolean mask of PFP's to merge
     to_merge = np.logical_not(np.logical_or(*start_showers))
