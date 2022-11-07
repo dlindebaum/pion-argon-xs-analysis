@@ -8,6 +8,7 @@ Description: Process both ROOT and csv data for the shower merging analysis with
 import argparse
 import itertools
 import os
+import warnings
 
 import awkward as ak
 import matplotlib.patches as mpatches
@@ -97,10 +98,15 @@ class ShowerMergeQuantities:
             self.cnn = events.recoParticles.cnnScore[to_merge]
 
             # exclude null position/directions
-            self.null = np.logical_or(self.to_merge_dir.x != -999, self.to_merge_pos.x != -999)
-            self.to_merge_dir = self.to_merge_dir[self.null]
-            self.to_merge_pos = self.to_merge_pos[self.null]
-            self.cnn = self.cnn[self.null]
+            # self.to_merge_dir = self.to_merge_dir[self.null]
+            # self.to_merge_pos = self.to_merge_pos[self.null]
+            # self.cnn = self.cnn[self.null]
+
+            # check null positions/directions, throw warning if this is the case
+            null = np.logical_or(self.to_merge_dir.x != -999, self.to_merge_pos.x != -999)
+            if not (ak.all(null == True) and not ak.any(null == False)):
+                warnings.warn("events passed to ShowerMergeQuantities contains PFOs with undefined positions or directions!", RuntimeWarning)
+
 
     @Master.timer
     def Evaluate(self, events : Master.Data, start_showers : ak.Array):
@@ -475,6 +481,30 @@ def SplitSample(events : Master.Data, method="spatial") -> ak.Array:
     return start_showers, to_merge
 
 
+def SignalBackground(events : Master.Data, start_showers : list, to_merge : ak.Array) -> tuple:
+    """ Get boolean masks of events classified as signal and background.
+        Signal are defined as PFOs which backtrack to the same true particle as the start showers
+        Background are all other PFOs
+
+    Args:
+        events (Master.Data): events to look at
+        start_showers (list): starting photon showers
+        to_merge (ak.Array): PFOs to merge 
+
+    Returns:
+        tuple: signal mask, background mask and signal mask not accounting for which start shower the signal PFO relates to.
+    """
+    #* get boolean mask of PFP's which are actual fragments of the starting showers
+    start_shower_ID = events.trueParticlesBT.number[np.logical_or(*start_showers)]
+    to_merge_ID = events.trueParticlesBT.number[to_merge]
+    signal = [start_shower_ID[:, i] == to_merge_ID for i in range(2)] # signal are the PFOs which is a fragment of the ith starting shower
+
+    #* define signal and background
+    signal_all = np.logical_or(*signal)
+    background = np.logical_not(signal_all) # background is all other PFOs unrelated to the pi0 decay
+    return signal, background, signal_all
+
+
 def StartShowerByDistance(events : Master.Data) -> ak.Array:
     """ Select a PFO per photon shower to us as a start for merging.
         Based on PFOs which have the smallest spatial separation.
@@ -548,8 +578,6 @@ def ROOTWorkFlow():
          - pair quantities and shower merging
     """
     events = Master.Data(file, includeBackTrackedMC = True, nEvents = args.nEvents[0], start = args.nEvents[1])
-    # start_showers = EventSelection(events)
-    # start_showers = PFOSelection(events, start_showers)
     EventSelection(events)
     PFOSelection(events)
     start_showers, to_merge = SplitSample(events, args.matchBy)
@@ -564,16 +592,7 @@ def ROOTWorkFlow():
     q = ShowerMergeQuantities(events, to_merge, args.analysedCuts)
 
     if args.merge == None:
-        #* get boolean mask of PFP's which are actual fragments of the starting showers
-        start_shower_ID = events.trueParticlesBT.number[np.logical_or(*start_showers)]
-        to_merge_ID = events.trueParticlesBT.number[to_merge]
-        signal = [start_shower_ID[:, i] == to_merge_ID for i in range(2)] # signal are the PFOs which is a fragment of the ith starting shower
-
-        #* define signal and background
-        signal_all = np.logical_or(*signal)
-        signal_all = signal_all[q.null]
-        background = np.logical_not(signal_all) # background is all other PFOs unrelated to the pi0 decay
-        signal = [signal[i][q.null] for i in range(2)]
+        signal, background, signal_all = SignalBackground(events, start_showers, to_merge)
 
         #* plot number of signal and background per event
         nSignal = ak.count(signal_all[signal_all], -1)
@@ -606,13 +625,13 @@ def ROOTWorkFlow():
             Plots.PlotHist(nBackground, xlabel="Number of background PFOs", bins=20, y_scale=scale, annotation=args.dataset)
             if save: Plots.Save("nPFO_background", outDir+subDir)
 
-            Plots.PlotHistComparison([ak.ravel(events.recoParticles.energy[to_merge][q.null][background]), ak.ravel(events.recoParticles.energy[to_merge][q.null][np.logical_or(*signal)])], xlabel="Energy (MeV)", bins=20, labels=labels, density = norm, y_scale = scale, annotation=args.dataset)
+            Plots.PlotHistComparison([ak.ravel(events.recoParticles.energy[to_merge][background]), ak.ravel(events.recoParticles.energy[to_merge][np.logical_or(*signal)])], xlabel="Energy (MeV)", bins=20, labels=labels, density = norm, y_scale = scale, annotation=args.dataset)
             if save: Plots.Save("energy", outDir+subDir)
 
-            Plots.PlotHistComparison([ak.ravel(events.recoParticles.nHits[to_merge][q.null][background]), ak.ravel(events.recoParticles.nHits[to_merge][q.null][np.logical_or(*signal)])], xlabel="Number of hits", bins=20, labels=labels, density = norm, y_scale = scale, annotation=args.dataset)
+            Plots.PlotHistComparison([ak.ravel(events.recoParticles.nHits[to_merge][background]), ak.ravel(events.recoParticles.nHits[to_merge][np.logical_or(*signal)])], xlabel="Number of hits", bins=20, labels=labels, density = norm, y_scale = scale, annotation=args.dataset)
             if save: Plots.Save("hits", outDir+subDir)
 
-            Plots.PlotHistComparison([ak.ravel(events.recoParticles.cnnScore[to_merge][q.null][background]), ak.ravel(events.recoParticles.cnnScore[to_merge][q.null][np.logical_or(*signal)])], xlabel="CNN score", bins=20, labels=labels, density = norm, y_scale = scale, annotation=args.dataset)
+            Plots.PlotHistComparison([ak.ravel(events.recoParticles.cnnScore[to_merge][background]), ak.ravel(events.recoParticles.cnnScore[to_merge][np.logical_or(*signal)])], xlabel="CNN score", bins=20, labels=labels, density = norm, y_scale = scale, annotation=args.dataset)
             if save: Plots.Save("cnn", outDir+subDir)
 
             purity = events.trueParticlesBT.matchedHits / events.trueParticlesBT.hitsInRecoCluster
@@ -624,18 +643,18 @@ def ROOTWorkFlow():
             Plots.PlotHist(ak.ravel(completeness[start_showers_all]), xlabel="start shower completeness", annotation=args.dataset)
             if save: Plots.Save("ss-completeness", outDir+subDir)
 
-            Plots.PlotHistComparison([ak.ravel(purity[to_merge][q.null][background]), ak.ravel(purity[to_merge][q.null][np.logical_or(*signal)])], labels=labels, xlabel="purity", annotation=args.dataset)
+            Plots.PlotHistComparison([ak.ravel(purity[to_merge][background]), ak.ravel(purity[to_merge][np.logical_or(*signal)])], labels=labels, xlabel="purity", annotation=args.dataset)
             if save: Plots.Save("purity", outDir+subDir)
-            Plots.PlotHistComparison([ak.ravel(completeness[to_merge][q.null][background]), ak.ravel(completeness[to_merge][q.null][np.logical_or(*signal)])], labels=labels, xlabel="completeness", annotation=args.dataset)
+            Plots.PlotHistComparison([ak.ravel(completeness[to_merge][background]), ak.ravel(completeness[to_merge][np.logical_or(*signal)])], labels=labels, xlabel="completeness", annotation=args.dataset)
             if save: Plots.Save("completeness", outDir+subDir)
 
             Plots.PlotHist2D(ak.ravel(purity), ak.ravel(completeness), xlabel="purity", ylabel="completeness")
             if save: Plots.Save("purity_vs_completeness", outDir+subDir)
 
-            Plots.PlotHist2D(ak.ravel(purity[to_merge][q.null][np.logical_or(*signal)]), ak.ravel(completeness[to_merge][q.null][np.logical_or(*signal)]), xlabel="purity", ylabel="completeness", title = "signal")
+            Plots.PlotHist2D(ak.ravel(purity[to_merge][np.logical_or(*signal)]), ak.ravel(completeness[to_merge][np.logical_or(*signal)]), xlabel="purity", ylabel="completeness", title = "signal")
             if save: Plots.Save("purity_vs_completeness_s", outDir+subDir)
 
-            Plots.PlotHist2D(ak.ravel(purity[to_merge][q.null][background]), ak.ravel(completeness[to_merge][q.null][background]), xlabel="purity", ylabel="completeness", title = "background")
+            Plots.PlotHist2D(ak.ravel(purity[to_merge][background]), ak.ravel(completeness[to_merge][background]), xlabel="purity", ylabel="completeness", title = "background")
             if save: Plots.Save("purity_vs_completeness_b", outDir+subDir)
 
         #* calculate geometric quantities
@@ -648,12 +667,7 @@ def ROOTWorkFlow():
     else:
         if args.merge == "reco":
             q.bestCut = args.cut_type
-            # if n_merge == 0:
-            #     s = events.Filter([np.logical_or(*start_showers)], returnCopy=True) # no shower merging, #TODO should be configurable
-            # else:
             s = ShowerMerging(events, start_showers, to_merge, q, -1)
-            # p = Master.CalculateQuantities(s, True)
-            # PairQuantitiesToCSV(p)
 
         elif args.merge == "unmerged":
             s = events.Filter([np.logical_or(*start_showers)], returnCopy=True)
@@ -664,10 +678,10 @@ def ROOTWorkFlow():
             pi0_PFOs = np.logical_or(*pi0_PFOs)
             events.Filter([pi0_PFOs])
             s, null = events.MergePFPCheat()
-            # p = Master.CalculateQuantities(s, True)
-            # PairQuantitiesToCSV(p)
+
         else:
             raise Exception("Don't understand the merge type")
+
         p = Master.CalculateQuantities(s, True)
         PairQuantitiesToCSV(p)
 
