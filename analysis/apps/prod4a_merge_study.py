@@ -417,7 +417,7 @@ def PFOSelection(events : Master.Data, start_showers : list = None):
     if start_showers is not None: return new_start_showers
 
 @Master.timer
-def SplitSample(events : Master.Data, method="spatial") -> ak.Array:
+def SplitSample(events : Master.Data, method="spatial") -> tuple:
     """ Select starting showers to merge for the pi0 decay.
         The starting showers are guarenteed to originate 
         from the pi0 decay (using truth information).
@@ -433,7 +433,7 @@ def SplitSample(events : Master.Data, method="spatial") -> ak.Array:
         Exception: if all reco PFP's backtracked to the same true particle
 
     Returns:
-        ak.Array: starting showers
+        tuple: starting showers and PFOs to merge
     """
     #TODO fix a bug where occasionally a starting shower is not a daughter of the pi0.
     if method not in ["angular", "spatial"]:

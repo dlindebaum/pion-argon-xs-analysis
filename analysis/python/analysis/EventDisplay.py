@@ -14,7 +14,8 @@ from python.analysis import vector
 
 
 class EventDisplay:
-    """ Description.
+    """ Event display class, an object which produces figures and allows the user.
+        to draw various objects on the plot (see methods).
     Attributes:
         xlim (tuple): xRange of plots.
         ylim (tuple): yRange of plots.
@@ -77,13 +78,15 @@ class EventDisplay:
             y (tuple, optional): y bound. Defaults to ylim.
             z (tuple, optional): z bound. Defaults to zlim.
         """
-        self.xy.set_xlim(x)
-        self.xy.set_ylim(y)
-        self.xz.set_xlim(x)
-        self.xz.set_ylim(z)
-        self.ax3D.set_xlim3d(x)
-        self.ax3D.set_ylim3d(z)
-        self.ax3D.set_zlim3d(y)
+        if hasattr(self, "fig2D"):
+            self.xy.set_xlim(x)
+            self.xy.set_ylim(y)
+            self.xz.set_xlim(x)
+            self.xz.set_ylim(z)
+        if hasattr(self, "fig3D"):
+            self.ax3D.set_xlim3d(x)
+            self.ax3D.set_ylim3d(z)
+            self.ax3D.set_zlim3d(y)
 
     def PFO(self, points : ak.Array, marker : str, colour : str, pointSize : int = 2, startPoint : ak.Record = None, direction : ak.Record = None, pdg : int = None):
         """ Plot a PFO in the event display.
@@ -106,14 +109,14 @@ class EventDisplay:
         fudicial_cut = np.logical_or(np.logical_or(x_mask, y_mask), z_mask)
         points = points[fudicial_cut]
 
-        if self.fig2D:
+        if hasattr(self, "fig2D"):
             self.xy.scatter(points.x, points.y, pointSize, marker=marker, color=colour)
             self.xz.scatter(points.x, points.z, pointSize, marker=marker, color=colour)
             if startPoint is not None:
                 self.xy.scatter(startPoint.x, startPoint.y, pointSize * 30, marker="x", color=colour)
                 self.xz.scatter(startPoint.x, startPoint.z, pointSize * 30, marker="x", color=colour)
         
-        if self.fig3D:
+        if hasattr(self, "fig3D"):
             self.ax3D.scatter(points.x, points.z, points.y, s=pointSize, marker=marker, color=colour)
             if startPoint is not None:
                 self.ax3D.scatter(startPoint.x, startPoint.z, startPoint.y, s=pointSize * 30, marker="x", color=colour)
@@ -135,11 +138,11 @@ class EventDisplay:
             colour (str): point colour
             pointSize (int, optional): point size. Defaults to 2.
         """
-        if self.fig2D:
+        if hasattr(self, "fig2D"):
             self.xy.scatter(point.x, point.y, pointSize, marker=marker, color=colour)
             self.xz.scatter(point.x, point.z, pointSize, marker=marker, color=colour)
         
-        if self.fig3D:
+        if hasattr(self, "fig3D"):
             self.ax3D.scatter(point.x, point.z, point.y, s=pointSize, marker=marker, color=colour)
         
         return
@@ -153,11 +156,11 @@ class EventDisplay:
             colour (str): colour of line
             lineStyle (str, optional): line style. Defaults to "-".
         """
-        if self.fig2D:
+        if hasattr(self, "fig2D"):
             self.xy.plot([start.x, end.x], [start.y, end.y], lineStyle, color = colour)
             self.xz.plot([start.x, end.x], [start.z, end.z], lineStyle, color = colour)
         
-        if self.fig3D:
+        if hasattr(self, "fig3D"):
             self.ax3D.plot([start.x, end.x], [start.z, end.z], [start.y, end.y], lineStyle, color = colour)
         
         return
@@ -170,11 +173,11 @@ class EventDisplay:
             text (str): the text.
             fontsize (int, optional): font size. Defaults to 16.
         """
-        if self.fig2D:
+        if hasattr(self, "fig2D"):
             self.xy.text(point.x, point.y, str(text), fontsize = fontsize, clip_on = True)
             self.xz.text(point.x, point.z, str(text), fontsize = fontsize, clip_on = True)
 
-        if self.fig3D:
+        if hasattr(self, "fig3D"):
             self.ax3D.text(point.x, point.z, point.y, str(text), fontsize = fontsize, clip_on = True)
             self.ax3D.set_clip_on(True) # prevents text objects from being rendered outside of the axes bounds
 
