@@ -23,6 +23,10 @@ from apps import CutOptimization
 from python.analysis import Master, Plots, vector
 
 
+def Percentage(a, b):
+    return  100 * (a - b)/ a
+
+
 def BestCut(cuts : pd.DataFrame, q_names : list, type="balanced"):
     """ Select a cut from the cut based scan using signal/background metrics.
         Currently has three types of cut it will pick: high purity, balanced and high efficiency
@@ -189,7 +193,7 @@ class ShowerMergeQuantities:
         df.to_csv(f"{outDir}{filename}")
 
 
-    def LoadQuantitiesToCSV(self, filename : str):
+    def LoadQuantitiesFromCSV(self, filename : str):
         """ Load merge quantities data and populate instance variables.
 
         Args:
@@ -333,11 +337,8 @@ def EventSelection(events : Master.Data, matchBy : str = "spatial", invertFinal 
         ak.Array: starting showers
     """    
 
-    def Percentage(a, b):
-        return  100 * (a - b)/ a
-
     n = [["event selection", "type", "number of events", "percentage of events removed", "percentage of events remaining"]]
-    n.append(["no selection", "-",  ak.count(events.eventNum), "-"])
+    n.append(["no selection", "-",  ak.count(events.eventNum), "-", "-"])
 
     #################### SELECTION USING TRUTH INFORMATION #################### 
     #* select events with 1 pi0 from the pi+
@@ -390,31 +391,36 @@ def EventSelection(events : Master.Data, matchBy : str = "spatial", invertFinal 
 
     print(tabulate(n, tablefmt="latex"))
 
-    # if invertFinal is False:
-        # start_showers = SplitSample(events, matchBy) # start showers is an array of two boolean masks per event, each one representing the mask to select one of the start showers.
-        # f = np.logical_or(*start_showers)
-
-        # start_shower_pos = events.recoParticles.startPos[f]
-        # start_shower_mom = events.recoParticles.momentum[f]
-        # f = ak.all(np.logical_or(start_shower_mom.x != -999, start_shower_pos.x != -999), -1) # ignore null directions/positions for starting showers
-        # return start_showers
-
 @Master.timer
 def PFOSelection(events : Master.Data, start_showers : list = None):
-    #* null momentum,start position PFOs
-    print(f"Total number of PFOs: {ak.count(events.recoParticles.nHits)}")
-    mask = np.logical_or(events.recoParticles.startPos.x != -999, events.recoParticles.momentum.x != -999)
-    events.Filter([mask])
-    if start_showers is not None: new_start_showers = [start_showers[i][mask] for i in range(2)]
-    print(f"Total number of PFOs after cut: {ak.count(events.recoParticles.nHits)}")
+    # TODO: documentation
 
-    #* null cnn score
-    print(f"Total number of PFOs: {ak.count(events.recoParticles.nHits)}")
-    mask = events.recoParticles.cnnScore != -999
-    events.Filter([mask])
+    # create table
+    n = [["PFO selection", "type", "number of PFOs", "percentage of PFOs removed", "percentage of PFOs remaining"]]
+    n.append(["no selection", "-",  ak.count(events.recoParticles.number), "-", 100])
+
+    def ApplySelection(mask : ak.Array, mask_name : str, data_type : str):
+        events.Filter([mask])
+        count = ak.count(events.recoParticles.number)
+        n.append([mask_name, data_type, count, Percentage(n[-1][2], count), 100-Percentage(n[1][2], count)])    
+
+    # selections 
+    mask = events.recoParticles.startPos.x != -999
+    ApplySelection(mask, "valid start position", "reco")
+    if start_showers is not None: new_start_showers = [start_showers[i][mask] for i in range(2)]
+
+    mask = events.recoParticles.momentum.x != -999
+    ApplySelection(mask, "valid momentum", "reco")
     if start_showers is not None: new_start_showers = [new_start_showers[i][mask] for i in range(2)]
-    print(f"Total number of PFOs after cut: {ak.count(events.recoParticles.nHits)}")
-    if start_showers is not None: return new_start_showers
+
+    mask = events.recoParticles.cnnScore != -999
+    ApplySelection(mask, "valid CNN score", "reco")
+    if start_showers is not None: new_start_showers = [new_start_showers[i][mask] for i in range(2)]
+
+    print(tabulate(n, tablefmt="latex"))
+
+    if start_showers is not None:
+        return new_start_showers
 
 @Master.timer
 def SplitSample(events : Master.Data, method="spatial") -> tuple:
@@ -583,10 +589,10 @@ def ROOTWorkFlow():
     start_showers, to_merge = SplitSample(events, args.matchBy)
 
     #! CNN score selection on PFOs will be done with the other geomtric quantities
-    mask = np.logical_or(events.recoParticles.cnnScore > 0.64, np.logical_or(*start_showers)) # select PFOs which pass CNN selection or are start showers
-    events.Filter([mask])
-    start_showers = [start_showers[i][mask] for i in range(2)]
-    to_merge = to_merge[mask]
+    # mask = np.logical_or(events.recoParticles.cnnScore > 0.64, np.logical_or(*start_showers)) # select PFOs which pass CNN selection or are start showers
+    # events.Filter([mask])
+    # start_showers = [start_showers[i][mask] for i in range(2)]
+    # to_merge = to_merge[mask]
     
     #* class to calculate quantities
     q = ShowerMergeQuantities(events, to_merge, args.analysedCuts)
@@ -764,7 +770,7 @@ def CSVWorkFlow():
     """ Analysis that can be done with the csv files produced by this program
     """
     q = ShowerMergeQuantities(analysedCuts=args.analysedCuts) # can apply cuts to shower quantities
-    q.LoadQuantitiesToCSV(file)
+    q.LoadQuantitiesFromCSV(file)
     if args.cut is True:
         ShowerMergingCriteria(q)
         return
