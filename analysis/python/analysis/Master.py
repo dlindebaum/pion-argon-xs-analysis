@@ -87,7 +87,7 @@ class IO:
                 return None
 
 
-    def ListNTuples(self, search : str = ""):
+    def ListNTuples(self, search : str = "", return_keys = False):
         """ list all NTuple entries produced by the analyser.
 
         Args:
@@ -95,7 +95,12 @@ class IO:
         """
         with uproot.open(self.filename) as file:
             names = file["pduneana/beamana"].keys()
-            print([x for x in names if search.casefold() in x.casefold()])
+            keys = [x for x in names if search.casefold() in x.casefold()]
+            if return_keys:
+                return keys
+            else:
+                print(keys)
+                return
 
 
 class Data:
@@ -705,7 +710,7 @@ class TrueParticleData(ParticleData):
         photons = self.truePhotonMask
         sortEnergy = self.events.SortedTrueEnergyMask
         
-        #* compute start momentum of dauhters
+        #* compute start momentum of daughters
         p_daughter = self.momentum[photons]
         sum_p = ak.sum(p_daughter, axis=1)
         sum_p = vector.magnitude(sum_p)
