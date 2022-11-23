@@ -249,6 +249,7 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   std::vector<int> hitsInRecoCluster;
 
   std::vector<double> mcParticleEnergyByHits;
+  int beamSliceID;
 
   unsigned int eventID;
   unsigned int run;
@@ -352,8 +353,6 @@ std::vector<art::Ptr<recob::Hit> > protoana::pi0TestSelection::GetMCParticleHits
   art::fill_ptr_vector(hits, hitHandle); // this might be fairly taxing to do for every mcParticle we look at, so perhaps do it one time and pass to method
   
   // Backtrack all hits to verify whether they belong to the current MCParticle.
-  art::ServiceHandle<cheat::BackTrackerService> bt_serv;
-  art::ServiceHandle<cheat::ParticleInventoryService> pi_serv;
   for(const art::Ptr<recob::Hit> hit : hits)
   {
     if (use_eve) {
@@ -786,6 +785,8 @@ void protoana::pi0TestSelection::AnalyseBeamPFP(const recob::PFParticle &beam, c
   
   if(fDebug) std::cout << "Pandora ID of beam particle: " << PandoraIdentification(beam, evt) << std::endl;
 
+  beamSliceID = pfpUtil.GetPFParticleSliceIndex(beam, evt, fPFParticleTag);
+
   // store beam track info
   if(!beamTrack)
   {
@@ -827,11 +828,14 @@ void protoana::pi0TestSelection::AnalyseMCTruth(const recob::PFParticle &daughte
   protoana::MCParticleSharedHits match = truthUtil.GetMCParticleByHits( clockData, daughter, evt, fPFParticleTag, fHitTag );
   if(fDebug) std::cout << "got shared hits" << std::endl;
   
-  const simb::MCParticle* mcParticle = match.particle; // get the MCParticle object from the match
-  const sim::ParticleList & plist = pi_serv->ParticleList(); // get particle list, g4?
-  int number = -1;
-  if(mcParticle)
+  if(match.particle != 0x0) // check null pointer
   {
+    const sim::ParticleList & plist = pi_serv->ParticleList(); // get particle list, g4?
+    const simb::MCParticle* mcParticle = match.particle; // get the MCParticle object from the match
+    
+    int number = -1;
+    int mother = mcParticle->Mother();
+    
     // get particle number
     for(auto part = plist.begin(); part != plist.end(); part ++)
     {
@@ -846,13 +850,23 @@ void protoana::pi0TestSelection::AnalyseMCTruth(const recob::PFParticle &daughte
     {
       std::cout << "we have matched the MC particle!" << std::endl;
       std::cout << "Particle number: " << number << std::endl;
-      std::cout << "Mother: " << mcParticle->Mother() << std::endl;
+      std::cout << "Mother: " << mother << std::endl;
     }
 
     // particle numbers
     matchedNum.push_back(number);
-    matchedMother.push_back(mcParticle->Mother());
-    matchedMotherPDG.push_back(plist[mcParticle->Mother()]->PdgCode());
+    matchedMother.push_back(mother);
+    if(mother == 0)
+    {
+      if (fDebug){std::cout << "Particle has no mother" << std::endl;}
+      matchedMotherPDG.push_back(0);
+    }
+    else
+    {
+      int mother_pdg = plist.find(mother)->second->PdgCode();
+      if (fDebug){std::cout << "Mother pdg code: " << mother_pdg << std::endl;}
+      matchedMotherPDG.push_back(mother_pdg);
+    }
     trueDaughterPDG.push_back(mcParticle->PdgCode());
 
     // kinematics
@@ -891,9 +905,11 @@ void protoana::pi0TestSelection::AnalyseMCTruth(const recob::PFParticle &daughte
     sharedHits.push_back(truthUtil.GetSharedHits( clockData, *match.particle, daughter, evt, fPFParticleTag).size());
     mcParticleHits.push_back(truthUtil.GetMCParticleHits( clockData, *match.particle, evt, fHitTag).size());
 
+    std::cout << "calculating MC particle energy by hits" << std::endl;
     std::vector<art::Ptr<recob::Hit> > mcHits  = GetMCParticleHits( evt, fHitTag, clockData, *match.particle);
     art::FindManyP<recob::SpacePoint> spFromHits(mcHits, evt, fHitTag);
     mcParticleEnergyByHits.push_back(ShowerEnergyCalculator(mcHits, detProp, spFromHits));
+    std::cout << "calculated MC particle energy by hits" << std::endl;
   }
   else
   {
@@ -1152,6 +1168,7 @@ void protoana::pi0TestSelection::beginJob()
 
   fOutTree->Branch("reco_daughter_PFP_true_byHits_EnergyByHits", &mcParticleEnergyByHits);
   fOutTree->Branch("reco_daughter_PFP_true_byHits_Mother_pdg", &matchedMotherPDG);
+  fOutTree->Branch("reco_beam_sliceID", &beamSliceID);
 }
 
 
