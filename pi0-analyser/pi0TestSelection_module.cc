@@ -125,7 +125,6 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   protoana::ProtoDUNETruthUtils truthUtil;
   protoana::ProtoDUNEShowerUtils showerUtil;
   protoana::ProtoDUNETrackUtils trackUtil;
-
   // local variables
   TTree *fOutTree = new TTree;
 
@@ -340,7 +339,7 @@ double protoana::pi0TestSelection::ShowerEnergyCalculator(const std::vector<art:
   return total_energy;
 }
 
-std::vector<art::Ptr<recob::Hit> > protoana::pi0TestSelection::GetMCParticleHits(const art::Event &evt, std::string hitModule, detinfo::DetectorClocksData const& clockData, const simb::MCParticle &mcpart, bool use_eve)
+std::vector<art::Ptr<recob::Hit> > protoana::pi0TestSelection::GetMCParticleHits(const art::Event &evt, std::string hitModule, detinfo::DetectorClocksData const& clockData, const simb::MCParticle &mcpart, bool use_eve = false)
 {
   art::Handle<std::vector<recob::Hit> > hitHandle = evt.getHandle<std::vector<recob::Hit> >(hitModule);
   std::vector<art::Ptr<recob::Hit> > outVec;
@@ -553,6 +552,9 @@ void protoana::pi0TestSelection::reset()
   hitsInRecoCluster.clear();
   mcParticleHits.clear();
   sharedHits.clear();
+
+  mcParticleEnergyByHits.clear();
+  matchedMotherPDG.clear();
 }
 
 
@@ -888,85 +890,17 @@ void protoana::pi0TestSelection::AnalyseMCTruth(const recob::PFParticle &daughte
     //calcuate metrics for completeness (sharedHits / mcParticleHits)
     sharedHits.push_back(truthUtil.GetSharedHits( clockData, *match.particle, daughter, evt, fPFParticleTag).size());
     mcParticleHits.push_back(truthUtil.GetMCParticleHits( clockData, *match.particle, evt, fHitTag).size());
-    
-    // std::vector<const recob::Hit*> mc_Hits = truthUtil.GetMCParticleHits( clockData, *match.particle, evt, fHitTag);
-    // art::FindManyP<recob::SpacePoint> spFromHits(mc_Hits, evt, fHitTag);
-    
-    // std::vector<double> x_vec, y_vec, z_vec; // parameterised hit position vector for each hit
-    // double total_y = 0;
-    // int n_good_y = 0;
-    // std::vector<const recob::Hit*> good_hits;
-    // for(unsigned int i = 0; i < mc_Hits.size(); i++)
-    // {
-    //   auto hit = mc_Hits[i];
-    //   // skip any hits not on the collection plane (shouldn't be anyways)
-    //   if(hit->View() != 2)
-    //   {
-    //     continue;
-    //   }
 
-    //   good_hits.push_back(hit);
-
-    //   double shower_hit_x = detProp.ConvertTicksToX(hit->PeakTime(), hit->WireID().Plane, hit->WireID().TPC, 0);
-    //   double shower_hit_z = geom->Wire(hit->WireID()).GetCenter().Z();
-
-    //   x_vec.push_back(shower_hit_x);
-    //   z_vec.push_back(shower_hit_z);
-
-    //   std::vector<art::Ptr<recob::SpacePoint>> sps = spFromHits.at(i);
-    //   if (!sps.empty())
-    //   {
-    //     y_vec.push_back(sps[0]->XYZ()[1]);
-    //     total_y += y_vec.back();
-    //     n_good_y++;
-    //   }
-    //   else
-    //   {
-    //     y_vec.push_back(-999.);
-    //   }
-    // }
-
-    // double total_energy = 0;
-    // if(n_good_y < 1)
-    // {
-    //   if(fDebug) std::cout << "could not reconstruct energy" << std::endl;
-    //   total_energy = -999;
-    // }
-    // else
-    // {
-    //   for(unsigned int j = 0; j < good_hits.size(); j++)
-    //   {
-    //     const art::Ptr<recob::Hit> good_hit_ptr = *good_hits[j];
-        
-    //     if(good_hits[j]->View() != 2)
-    //     {
-    //       continue;
-    //     }
-
-    //     if (y_vec[j] < -100.)
-    //     {
-    //       y_vec[j] = total_y / n_good_y;
-    //     }
-    //     total_energy += calibration_SCE.HitToEnergy(good_hit_ptr, x_vec[j], y_vec[j], z_vec[j]);
-    //   }
-    // }
-    
-    // std::vector<art::Ptr<recob::Hit> > art_mcParticleHits;
-    
-    // art::fill_ptr_vector(art_mcParticleHits, mc_Hits);
-    // for(size_t i = 0; i < mc_Hits.size(); ++i)
-    // {
-    //   art_mcParticleHits.emplace_back(mc_Hits, i);
-    // }
-
-    // ShowerEnergyCalculator(art_mcParticleHits, detProp, spFromHits);
-    //double mcParticleEnergyByHits;
+    std::vector<art::Ptr<recob::Hit> > mcHits  = GetMCParticleHits( evt, fHitTag, clockData, *match.particle);
+    art::FindManyP<recob::SpacePoint> spFromHits(mcHits, evt, fHitTag);
+    mcParticleEnergyByHits.push_back(ShowerEnergyCalculator(mcHits, detProp, spFromHits));
   }
   else
   {
     if (fDebug) std::cout << "MC particle not matched" << std::endl;
     matchedNum.push_back(-999);
     matchedMother.push_back(-999);
+    matchedMotherPDG.push_back(-999);
     trueDaughterStartPosX.push_back(-999);
     trueDaughterStartPosY.push_back(-999);
     trueDaughterStartPosZ.push_back(-999);
@@ -983,6 +917,7 @@ void protoana::pi0TestSelection::AnalyseMCTruth(const recob::PFParticle &daughte
     hitsInRecoCluster.push_back(-999);
     mcParticleHits.push_back(-999);
     sharedHits.push_back(-999);
+    mcParticleEnergyByHits.push_back(-999);
   }
 }
 
@@ -1168,24 +1103,6 @@ void protoana::pi0TestSelection::beginJob()
   fOutTree->Branch("reco_daughter_PFP_true_byHits_pY", &trueDaughterMomentumY);
   fOutTree->Branch("reco_daughter_PFP_true_byHits_pZ", &trueDaughterMomentumZ);
 
-  // // true start position
-  // fOutTree->Branch("reco_daughter_PFP_true_byHits_parent_startX", &trueParentStartPosX);
-  // fOutTree->Branch("reco_daughter_PFP_true_byHits_parent_startY", &trueParentStartPosY);
-  // fOutTree->Branch("reco_daughter_PFP_true_byHits_parent_startZ", &trueParentStartPosZ);
-
-  // // true end position
-  // fOutTree->Branch("reco_daughter_PFP_true_byHits_parent_endX", &trueParentEndPosX);
-  // fOutTree->Branch("reco_daughter_PFP_true_byHits_parent_endY", &trueParentEndPosY);
-  // fOutTree->Branch("reco_daughter_PFP_true_byHits_parent_endZ", &trueParentEndPosZ);
-
-  // fOutTree->Branch("reco_daughter_PFP_true_byHits_parent_startE", &trueParentEnergy);
-  // fOutTree->Branch("reco_daughter_PFP_true_byHits_parent_pdg", &trueParentPdg);
-  // fOutTree->Branch("reco_daughter_PFP_true_byHits_parent_mass", &trueParentMass);
-
-  // fOutTree->Branch("reco_daughter_PFP_true_byHits_parent_pX", &trueParentMomentumX);
-  // fOutTree->Branch("reco_daughter_PFP_true_byHits_parent_pY", &trueParentMomentumY);
-  // fOutTree->Branch("reco_daughter_PFP_true_byHits_parent_pZ", &trueParentMomentumZ);
-
   // true start position
   fOutTree->Branch("reco_beam_PFP_true_byHits_startX", &trueBeamStartPosX);
   fOutTree->Branch("reco_beam_PFP_true_byHits_startY", &trueBeamStartPosY);
@@ -1232,6 +1149,9 @@ void protoana::pi0TestSelection::beginJob()
   fOutTree->Branch("reco_daughter_PFP_true_byHits_hitsInRecoCluster", &hitsInRecoCluster);
   fOutTree->Branch("reco_daughter_PFP_true_byHits_mcParticleHits", &mcParticleHits);
   fOutTree->Branch("reco_daughter_PFP_true_byHits_sharedHits", &sharedHits);
+
+  fOutTree->Branch("reco_daughter_PFP_true_byHits_EnergyByHits", &mcParticleEnergyByHits);
+  fOutTree->Branch("reco_daughter_PFP_true_byHits_Mother_pdg", &matchedMotherPDG);
 }
 
 
