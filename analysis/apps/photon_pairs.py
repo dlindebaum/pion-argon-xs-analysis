@@ -1564,7 +1564,7 @@ def paired_opening_angle(events, pair_coords):
 
 if __name__ == "__main__":
 
-    evts = load_and_cut_data("/scratch/wx21978/pi0/root_files/6GeV_beam_v1/Prod4a_6GeV_BeamSim_00.root", batch_size = 24000, batch_start = 0)
+    evts = load_and_cut_data("/scratch/wx21978/pi0/root_files/6GeV_beam_v1/Prod4a_6GeV_BeamSim_00.root", batch_size = 2000, batch_start = 0)
 
     # print("Locals:")
     # local_vars = list(locals().items())
@@ -1594,6 +1594,7 @@ if __name__ == "__main__":
     truth_pair_indicies, valid_events = get_best_pairs(evts, method="mom", return_type="mask")
 
     evts.Filter([valid_events], [valid_events])
+    truth_pair_indicies = truth_pair_indicies[valid_events]
     del valid_events
 
 
@@ -1606,7 +1607,7 @@ if __name__ == "__main__":
     pair_coords = ak.argcombinations(evts.recoParticles.number, 2)
 
 
-    sig_count = pair_sig_counts(truth_pair_indicies[valid_events], pair_coords[valid_events])
+    sig_count = pair_sig_counts(truth_pair_indicies, pair_coords)
     del truth_pair_indicies
 
     plot_directory = "/users/wx21978/projects/pion-phys/plots/photon_pairs/"
