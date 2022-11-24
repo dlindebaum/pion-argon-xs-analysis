@@ -48,99 +48,6 @@ def del_prop(obj, property_name):
     return
 
 
-# # Load the events and performs cuts
-# def load_and_cut_data(path, batch_size = -1, batch_start = -1, cnn_cut = True):
-#     # Load the events (ETA ~1min for a single 6GeV beam v2 sample). ETA ~10s
-#     events = PairData(path, includeBackTrackedMC=True, _nEvents=batch_size, _start=batch_start)
-
-#     # Apply cuts:
-#     n = [["Event selection", "Number of PFOs", "Average PFOs per event", "Number of events", "Percentage of events removed"]]
-#     n.append(["no selection", ak.count(events.trueParticlesBT.pdg), ak.count(events.eventNum), 0])
-
-#     plt.figure(figsize=(8,6))
-#     plt.hist(ak.count(events.trueParticlesBT.pdg, axis=-1), bins=100)
-#     plt.xlabel("Number of PFOs in event")
-#     plt.ylabel("Count")
-#     plt.title("No cut")
-#     plt.savefig("/users/wx21978/projects/pion-phys/plots/photon_pairs/PFO_dist_no_cut.png")
-#     plt.close()
-
-#     # # Require a beam particle to exist. ETA ~60s:
-#     # ts = time.time()
-#     # events.ApplyBeamTypeFilter(211)
-#     # print(f"pi+ beam done in {time.time()  - ts}s")
-#     # evt_remaining = ak.count(events.eventNum)
-#     # n.append(["pi+ beam", ak.count(events.trueParticlesBT.pdg), evt_remaining, 100*(n[-1][2] - evt_remaining)/n[-1][2]])
-
-#     # Require a beam particle to exist. ETA ~15s:
-#     ts = time.time()
-#     events.ApplyBeamFilter() # apply beam filter if possible
-#     print(f"beam done in {time.time()  - ts}s")
-#     evt_remaining = ak.count(events.eventNum)
-#     n.append([ "beam", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(n[-1][3] - evt_remaining)/n[-1][2] ])
-
-#     plt.figure(figsize=(8,6))
-#     plt.hist(ak.count(events.trueParticlesBT.pdg, axis=-1), bins=100)
-#     plt.xlabel("Number of PFOs in event")
-#     plt.ylabel("Count")
-#     plt.title("Beam")
-#     plt.savefig("/users/wx21978/projects/pion-phys/plots/photon_pairs/PFO_dist_beam_particle.png")
-#     plt.close()
-
-#     # Require pi+ beam. ETA ~10s
-#     ts = time.time()
-#     true_beam = events.trueParticlesBT.pdg[events.recoParticles.beam_number == events.recoParticles.number]
-#     f = ak.all(true_beam == 211, -1)
-#     events.Filter([f], [f])
-#     del(true_beam)
-#     print(f"pi+ beam done in {time.time()  - ts}s")
-#     evt_remaining = ak.count(events.eventNum)
-#     n.append(["pi+ beam", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(n[-1][3] - evt_remaining)/n[-1][2]])
-
-#     plt.figure(figsize=(8,6))
-#     plt.hist(ak.count(events.trueParticlesBT.pdg, axis=-1), bins=100)
-#     plt.xlabel("Number of PFOs in event")
-#     plt.ylabel("Count")
-#     plt.title("(beam) pi+ beam")
-#     plt.savefig("/users/wx21978/projects/pion-phys/plots/photon_pairs/PFO_dist_pi+_beam.png")
-#     plt.close()
-
-#     # # Only look at PFOs with > 50 hits. ETA ~30s:
-#     # ts = time.time()
-#     # events.Filter([events.recoParticles.nHits > 50], [])
-#     # del_prop(events.recoParticles, "nHits")
-#     # print(f"Hits > 50 done in {time.time()  - ts}s")
-#     # evt_remaining = ak.count(events.eventNum)
-#     # n.append(["nHits >= 51", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(n[-1][3] - evt_remaining)/n[-1][2]])
-
-#     if cnn_cut:
-#         # Take CNNScore > 0.36. ETA ~15s:
-#         cnn_cut = 0.36
-#         ts = time.time()
-#         events.Filter([events.recoParticles.cnnScore > cnn_cut], [])
-#         del_prop(events.recoParticles, "cnnScore")
-#         print(f"CNNScore > 0.36 done in {time.time()  - ts}s")
-#         evt_remaining = ak.count(events.eventNum)
-#         n.append([f"CNNScore > {cnn_cut}", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(n[-1][3] - evt_remaining)/n[-1][2]])
-
-#         plt.figure(figsize=(8,6))
-#         plt.hist(ak.count(events.trueParticlesBT.pdg, axis=-1), bins=100)
-#         plt.xlabel("Number of PFOs in event")
-#         plt.ylabel("Count")
-#         plt.title("(beam, pi+) CNNScore>0.36")
-#         plt.savefig("/users/wx21978/projects/pion-phys/plots/photon_pairs/PFO_dist_cnn_0.36.png")
-#         plt.close()
-
-#     # Require >= 2 PFOs. ETA ~90s:
-#     ts = time.time()
-#     f = Master.NPFPMask(events, -1)
-#     del_prop(events.recoParticles, "direction")
-#     del_prop(events.recoParticles, "startPos")
-#     events.Filter([f], [f])
-#     print(f"PFOs >= 2 done in {time.time()  - ts}s")
-#     evt_remaining = ak.count(events.eventNum)
-#     n.append(["nPFP >= 2", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(n[-1][3] - evt_remaining)/n[-1][2]])
-
 #     plt.figure(figsize=(8,6))
 #     plt.hist(ak.count(events.trueParticlesBT.pdg, axis=-1), bins=100)
 #     plt.xlabel("Number of PFOs in event")
@@ -149,13 +56,7 @@ def del_prop(obj, property_name):
 #     plt.savefig("/users/wx21978/projects/pion-phys/plots/photon_pairs/PFO_dist_nPFPs>2.png")
 #     plt.close()
 
-#     print("\n".join([str(l) for l in n]))
-    
-#     plt.close()
-
-#     return events
-
-def load_and_cut_data_two_photon(path, batch_size = -1, batch_start = -1, cnn_cut=True, valid_momenta=True, beam_slice_cut=True):
+def load_and_cut_data(path, batch_size = -1, batch_start = -1, two_photon=True, cnn_cut=True, valid_momenta=True, beam_slice_cut=True):
     """
     Loads the ntuple file from `path` and performs the initial cuts,
     returning the result as a `PairData` instance.
@@ -163,8 +64,8 @@ def load_and_cut_data_two_photon(path, batch_size = -1, batch_start = -1, cnn_cu
     A single batch of data can be loaded an cut on by changing `batch_size`
     and `batch_start`.
 
-    The cuts used can be partially controlled by the `cnn_cut`,
-    `valid_momenta` and `beam_slice_cut`.
+    The cuts used can be partially controlled by the `two_photon`, `cnn_cut`,
+    `valid_momenta` and `beam_slice_cut` arguments.
 
     Parameters
     ----------
@@ -175,6 +76,9 @@ def load_and_cut_data_two_photon(path, batch_size = -1, batch_start = -1, cnn_cu
     batch_start : int, optional
         Sets which event to start reading from. Default is -1
         (first event).
+    two_photon : bool, optional
+        If true, only accepts events with 1 pi0 which decays to two
+        photons. Default is True.
     cnn_cut : bool, optional
         Whether to perform a cut on PFOs requiring the CNN score to
         be > 0.36. Default is True.
@@ -197,20 +101,21 @@ def load_and_cut_data_two_photon(path, batch_size = -1, batch_start = -1, cnn_cu
     n = [["Event selection", "Number of PFOs", "Average PFOs per event", "Number of events", "Percentage of events remaining"]]
     n.append(["no selection", ak.count(events.trueParticlesBT.pdg),ak.count(events.trueParticlesBT.pdg)/ak.count(events.eventNum), ak.count(events.eventNum), 100])
 
-    # Single pi0
-    ts = time.time()
-    Master.BeamMCFilter(events, returnCopy=False)
-    print(f"single pi0 done in {time.time()  - ts}s")
-    evt_remaining = ak.count(events.eventNum)
-    n.append([ "beam -> pi0 + X", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
+    if two_photon:
+        # Single pi0
+        ts = time.time()
+        Master.BeamMCFilter(events, returnCopy=False)
+        print(f"single pi0 done in {time.time()  - ts}s")
+        evt_remaining = ak.count(events.eventNum)
+        n.append([ "beam -> pi0 + X", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
 
-    # Require diphoton decay from the pi0
-    ts = time.time()
-    f = Master.Pi0TwoBodyDecayMask(events)
-    events.Filter([f], [f])
-    print(f"pi+ beam done in {time.time()  - ts}s")
-    evt_remaining = ak.count(events.eventNum)
-    n.append(["diphoton decay", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
+        # Require diphoton decay from the pi0
+        ts = time.time()
+        f = Master.Pi0TwoBodyDecayMask(events)
+        events.Filter([f], [f])
+        print(f"pi+ beam done in {time.time()  - ts}s")
+        evt_remaining = ak.count(events.eventNum)
+        n.append(["diphoton decay", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
 
     # Require a beam particle to exist. ETA ~15s:
     ts = time.time()
@@ -276,6 +181,15 @@ def load_and_cut_data_two_photon(path, batch_size = -1, batch_start = -1, cnn_cu
     evt_remaining = ak.count(events.eventNum)
     n.append(["nPFP >= 2", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
     
+    # Used to have plots of the distribution of PFOs per event after each cut. Example code:
+    # plt.figure(figsize=(8,6))
+    # plt.hist(ak.count(events.trueParticlesBT.pdg, axis=-1), bins=100)
+    # plt.xlabel("Number of PFOs in event")
+    # plt.ylabel("Count")
+    # plt.title("(beam, pi+, CNNScore) NPFPs >=2")
+    # plt.savefig("/users/wx21978/projects/pion-phys/plots/photon_pairs/PFO_dist_nPFPs>2.png")
+    # plt.close()
+
 
     print(pd.DataFrame(n[1:], columns = n[0]))
     # print("\n".join([str(l) for l in n]))
@@ -346,7 +260,7 @@ def simple_sig_bkg_hist(
     Other Parameters
     ----------------
     **kwargs
-        Any additional keyword arguments to be passed to the `plt.hist`
+        Any additional keyword arguments to be passed to the ``plt.hist``
         calls. The same arguments will be passed to all plots.
     """
 
@@ -443,11 +357,11 @@ def plot_pair_hists(
     unique_save_id : str, optional
         Extra string to add into the save name to avoid
         overwriting. Default is ''.
-    inc_stacked : bool
+    inc_stacked : bool, optional
         Whether to include a stacked histogram plot. Default is False.
-    inc_norm : bool
+    inc_norm : bool, optional
         Whether to include a normalised histogram. Default is True.
-    inc_log : bool
+    inc_log : bool, optional
         Whether to include logarithmic scale histograms. Will
         also produce a logarithmic normalised plot if `inc_norm`
         is True. Default is True.
@@ -467,7 +381,7 @@ def plot_pair_hists(
     Other Parameters
     ----------------
     **kwargs
-        Any additional keyword arguments to be passed to the `plt.hist`
+        Any additional keyword arguments to be passed to the ``plt.hist``
         calls. The same arguments will be passed to all plots.
     """
     
@@ -613,7 +527,7 @@ def plot_rank_hist(
     Other Parameters
     ----------------
     **kwargs
-        Any additional keyword arguments to be passed to the `plt.hist`
+        Any additional keyword arguments to be passed to the ``plt.hist``
         calls. The same arguments will be passed to all plots.
     """
 
@@ -637,16 +551,201 @@ def plot_rank_hist(
     
     return
 
+def make_truth_comparison_plots(
+        events, photon_indicies,
+        valid_events=None,
+        prop_label=None, inc_log=True,
+        path="/users/wx21978/projects/pion-phys/plots/photon_pairs/truth_method_comparisions/",
+        **kwargs
+    ):
+    """
+    Produces a set of plots displaying the errors of a set of PFOs with respect to the truth
+    PFO they are representing. Errors in energy for the leading (highest energy) and sub-
+    leading (lowest energy) photon are displayed in separate plots, and the cosine of the
+    angular differences between the PFOs and truth particles is displayed for both photons
+    on the same plot.
+
+    `photons_indicies` can be a dictionary to allow comparision of multiple methods of generating
+    truth photons to be compared on the same plot.
+
+    Parameters
+    ----------
+    events : PairData
+        Events from which data is gathered.
+    photon_indicies : dict or np.ndarray
+        Indicies of the selected best particles. May be passed as a dictionary containing
+        numpy arrays labelled by the method used to generate the indicies for comparision.
+    valid_events : list, np.ndarray, ak.Array(), or None
+        1D set of boolean values to optionally excluded known invalid events. Default is
+        None.
+    prop_label : str or None, optional
+        Optional name of property to appear in legend if `photons_indicies` is not a
+        dictionary.
+    inc_log : bool, optional
+        Whether to include logarithmically scaled plots. Default is True.
+    path : str, optional
+        Directory in which to save the final plots. Default is
+        '/users/wx21978/projects/pion-phys/plots/photon_pairs/truth_method_comparisions/'.
+    
+    Other Parameters
+    ----------------
+    **kwargs
+        Any additional keyword arguments to be passed to the ``plt.hist`` calls. The same
+        arguments will be passed to all plots.
+    """
+    if path[-1] != '/':
+        path += '/'
+    
+    # If we don't specify valid events, assume all events are OK, so convert valid events into a
+    #   slice which selects all events
+    if valid_events is None:
+        valid_events = slice(None)
+
+    # Ideally, we can use the trueParticle (not trueparticleBT} data, since trueParticle is likely
+    #   already loaded, and trueParticleBT likely hasn't been
+    true_energies = events.trueParticlesBT.energy[valid_events] * 1000
+    # true_energies_mom = vector.magnitude(events.trueParticlesBT.momentum)[valid_events] * 1000
+    true_dirs = events.trueParticlesBT.direction[valid_events]
+
+    reco_energies = events.recoParticles.energy[valid_events]
+    reco_dirs = events.recoParticles.direction[valid_events]
+
+    # Warning - not sure this has been tested without photon_indicies as a dictionary...
+    if not isinstance(photon_indicies, dict):
+        photon_indicies = {prop_label:photon_indicies}
+        
+    
+    fig_e_i, energy_i_axis    = plt.subplots(figsize=(16,12), layout="tight")
+    fig_e_ii, energy_ii_axis  = plt.subplots(figsize=(16,12), layout="tight")
+    fig_dirs, directions_axis = plt.subplots(figsize=(16,12), layout="tight")
+    
+    if inc_log:
+        fig_e_i_log, energy_i_axis_log    = plt.subplots(figsize=(16,12), layout="tight")
+        fig_e_ii_log, energy_ii_axis_log  = plt.subplots(figsize=(16,12), layout="tight")
+        fig_dirs_log, directions_axis_log = plt.subplots(figsize=(16,12), layout="tight")
+
+
+    for i, prop in enumerate(list(photon_indicies.keys())):
+        if isinstance(prop, str):
+            y1_label = "y1 " + prop
+            y2_label = "y2 " + prop
+        else:
+            y1_label = None
+            y2_label = None
+
+        photon_i_indicies  = np_to_ak_indicies(photon_indicies[prop][:,0][valid_events])
+        photon_ii_indicies = np_to_ak_indicies(photon_indicies[prop][:,1][valid_events])
+        
+        # This might contain some useful stuff for moving to trueParticle informatio, rather than trueParticleBT
+        # err_true_photon_i = np.zeros(np.sum(valid_events))
+        # photon_i_ids = events.trueParticlesBT.number[valid_events][photon_i_indicies]
+        # reco_energy_full = reco_energies[photon_i_indicies]
+        # index = np.arange(photon_indicies[prop][:,0].shape[0])[valid_events]
+        # for j in range(np.sum(valid_events)):
+        #     true_ids = events.trueParticles.number[index[j]].to_numpy()
+        #     true_energy = events.trueParticles.energy[index[j]].to_numpy() * 1000
+            
+        #     true_energy_i = true_energy[true_ids == photon_i_ids[j]]
+        #     # true_energy_ii = true_energy[true_ids == pfo_truth_ids[photon_ii_indicies]]
+        #     err_true_photon_i[j] = (reco_energy_full[j] / true_energy_i )[0] -1
+
+
+        err_energy_photon_i  = (reco_energies[photon_i_indicies ] / true_energies[photon_i_indicies ]) -1
+        err_energy_photon_ii = (reco_energies[photon_ii_indicies] / true_energies[photon_ii_indicies]) -1
+    
+        err_direction_photon_i  = vector.dot(reco_dirs[photon_i_indicies ], true_dirs[photon_i_indicies ])
+        err_direction_photon_ii = vector.dot(reco_dirs[photon_ii_indicies], true_dirs[photon_ii_indicies])
+
+        # Linear
+        energy_i_axis.hist( err_energy_photon_i,  label=y1_label, histtype="step", bins=100**kwargs)
+        energy_ii_axis.hist(err_energy_photon_ii, label=y2_label, histtype="step", bins=100**kwargs)
+
+        directions_axis.hist(err_direction_photon_i,  label=y1_label, histtype="step", bins=80, color=f"C{i}"**kwargs)
+        directions_axis.hist(err_direction_photon_ii, label=y2_label, histtype="step", bins=80, color=f"C{i}", ls="--"**kwargs)
+
+        if inc_log:
+            # Log
+            energy_i_axis_log.hist( err_energy_photon_i,  label=y1_label, histtype="step", bins=100**kwargs)
+            energy_ii_axis_log.hist(err_energy_photon_ii, label=y2_label, histtype="step", bins=100**kwargs)
+
+            directions_axis_log.hist(err_direction_photon_i,  label=y1_label, histtype="step", bins=50, color=f"C{i}"**kwargs)
+            directions_axis_log.hist(err_direction_photon_ii, label=y2_label, histtype="step", bins=50, color=f"C{i}", ls="--"**kwargs)
+
+    # Linear
+    energy_i_axis.set_xlabel("Fractional energy error")
+    energy_i_axis.set_ylabel("Count")
+    energy_i_axis.legend()
+
+    energy_ii_axis.set_xlabel("Fractional energy error")
+    energy_ii_axis.set_ylabel("Count")
+    energy_ii_axis.legend()
+
+    directions_axis.set_xlabel("Best photon vs. truth dot product")
+    directions_axis.set_ylabel("Count")
+    directions_axis.legend(loc="upper left")
+
+    if inc_log:
+        # Log
+        energy_i_axis_log.set_xlabel("Fractional energy error")
+        energy_i_axis_log.set_ylabel("Count")
+        energy_i_axis_log.set_yscale("log")
+        energy_i_axis_log.legend()
+
+        energy_ii_axis_log.set_xlabel("Fractional energy error")
+        energy_ii_axis_log.set_ylabel("Count")
+        energy_i_axis_log.set_yscale("log")
+        energy_ii_axis_log.legend()
+
+        directions_axis_log.set_xlabel("Best photon vs. truth dot product")
+        directions_axis_log.set_ylabel("Count")
+        energy_i_axis_log.set_yscale("log")
+        directions_axis_log.legend(loc="upper left")
+
+    fig_e_i.savefig(path + "leading_photon_energy.png")
+    fig_e_ii.savefig(path + "subleading_photon_energy.png")
+    fig_dirs.savefig(path + "directions.png")
+    if inc_log:
+        fig_e_i_log.savefig(path + "leading_photon_energy_log.png")
+        fig_e_ii_log.savefig(path + "subleading_photon_energy_log.png")
+        fig_dirs_log.savefig(path + "directions_log.png")
+    
+    plt.close()
+    return
+
 
 ######################################################################################################
 ######################################################################################################
-##########                              NOT PLOTTING FUCNTIONS                              ##########
+##########                                EVENT MANIPULATION                                ##########
 ######################################################################################################
 ######################################################################################################
 
 
 def get_mother_pdgs(events):
-    # ETA ~30mins:
+    """
+    Loops through each event (warning: slow) and creates a reco-type array of PDG codes
+    of mother particle. E.g. a photon from a pi0 will be assigned a PDG code 111.
+
+    Mother particle is defined as the mother of the truth particle which the PFO was
+    backtracked to.
+
+    Beam particle is hard-coded to have a PDG code of 211.
+    
+    Anything which cannot have a mother PDG code assigned is given 0.
+
+    Future warning: Mother PDG codes are planned to be added into the ntuple data
+    making this function redundant.
+
+    Parameters
+    ----------
+    events : PairData
+        Set of events to produce the mother PDG codes for.
+
+    Returns
+    -------
+    mother_pdgs : ak.Array
+        PDG code of the mother of the truth particle that backtrackd to the PFO.
+    """
+
     # This loops through every event and assigned the pdg code of the mother.
     # Assigns 211 (pi+) to daughters of the beam, and 0 to everything which is not found
     mother_ids = events.trueParticlesBT.mother
@@ -654,9 +753,10 @@ def get_mother_pdgs(events):
     truth_pdgs = events.trueParticles.pdg
     mother_pdgs = mother_ids.to_list()
     ts = time.time()
-    for i in range(ak.count(events.eventNum)):
+    for i in range(ak.num(mother_ids, axis=0)):
         true_pdg_lookup = {truth_ids[i][d]:truth_pdgs[i][d] for d in range(ak.count(truth_ids[i]))}
-        true_pdg_lookup.update({0:0, 1:211})
+        true_pdg_lookup.update({0:0, 1:211}) # I have no idea why the hell I did this
+                                             # Presumably the beam particle gets a strange pdg code??
         for j in range(ak.count(mother_ids[i])):
             try:
                 mother_pdgs[i][j] = true_pdg_lookup[mother_ids[i][j]]
@@ -667,8 +767,455 @@ def get_mother_pdgs(events):
     mother_pdgs = ak.Array(mother_pdgs)
     return mother_pdgs
 
-# Number of signals in a pair
-def paired_sig_count(events, pair_coords, mother_pdgs):
+def get_MC_truth_beam_mask(event_mothers, event_ids, beam_id=1):
+    """
+    Loops through all PFOs in an event and generates a mask which selects all PFOs
+    which have been backtracked to have been produced by the beam particle, or any
+    particles in the daughter tree of the beam particle (i.e. a PFO from a
+    daughter of a daughter of the beam particle is selected).
+
+    Parameters
+    ----------
+    event_mothers : ak.Array
+        1D array of all mother ids of the backtracked PFOs in a single event.
+    event_ids : ak.Array
+        1D array of all truth particle ids of the backtracked PFOs in a single event.
+    beam_id : int
+        ID code of the truth particle corresponding to the beam particle. Default is 1.
+
+    Returns
+    -------
+    beam_mask : list
+        List of boolean values which select all beam generated PFOs when used as a mask.
+    """
+    # IDs for particles related to the beam
+    beam_ids = np.array([beam_id])
+    # IDs of particles which correspond added compnents to beam_ids
+    new_ids = event_ids[event_mothers == beam_ids[0]]
+
+    while len(new_ids) != 0:
+        # Add new ids into the beam related ids
+        beam_ids = np.append(beam_ids, new_ids)
+        # Loop through events and create a mask of daughters of the newly added ids
+        #   Could be made more efficient by somehow removing PFOs that already exist
+        #   in the beam_ids list, another mask?
+        mask = [e in new_ids for e in event_mothers]
+        # Flag the newly added PFOs as "to be added" and loop, unless no new PFOs are found
+        new_ids = event_ids[mask]
+
+    return [e in beam_ids for e in event_ids]
+
+def np_to_ak_indicies(indicies):
+    """
+    Takes a numpy array of indicies for slicing and converts them to a format
+    compatible with awkward arrays which selected PFOs in an event base on the
+    index, rather than events themselves based on the index.
+
+    Parameters
+    ----------
+    indicies: np.ndarray
+        Array of indicies for conversion.
+
+    Returns
+    -------
+    ak_indicies : ak.Array
+        Array of indicies which selected PFOs when slicing an awkward array.
+    """
+    # 1. Expands the dimensions to ensure you hit one index per event
+    # 2. Convert to list - this is necessary to ensure the final awkward array has variable size.
+    #     Without variable size arrays, it tries to gather the event of the index, not the PFO at the index in the event.
+    # 3. Convert to awkward array
+    return ak.Array(np.expand_dims(indicies,1).tolist())
+
+
+######################################################################################################
+######################################################################################################
+##########                                  EVENT PAIRING                                   ##########
+######################################################################################################
+######################################################################################################
+
+def truth_pfos_in_two_photon_decay(events, sort=True):
+    """
+    Returns the truth IDs of the two photons in each event which come from
+    pi0 -> yy decay. Requires a mask on `events` to select only events
+    which contain exactly pion which decays into two photons.
+
+    The IDs are return as a (num_events, 2) numpy nparray.
+
+    The optional `sort` argument will cause the photons to be sorted by
+    energy, such that index 0 of each event contains the leading (higher
+    energy) photon.
+
+    Parameters
+    ----------
+    events : PairData
+        Set of events in which to look for photons.
+    sort : bool, optional
+        Defines whether the photon IDs are sorted by energy or not.
+        Default is True.
+    
+    Returns
+    -------
+    photon_ids : np.ndarray
+        Array containing the truth IDs of the two photons created by
+        pion decay in each event.
+    """
+    num_events = ak.num(events.trueParticlesBT.mother, axis=0)
+
+    # This is only valid for the 1 pi0 in event, 2 photon decay cut
+    photon_ids = np.zeros((num_events, 2))
+
+    for i in range(num_events):
+        truth_mothers = events.trueParticles.mother[i]
+        truth_ids = events.trueParticles.number[i]
+        truth_pdgs = events.trueParticles.pdg[i]
+        truth_energy = events.trueParticles.energy[i].to_numpy()
+        
+        beam_mask = get_MC_truth_beam_mask(truth_mothers, truth_ids, beam_id=1)
+        
+        beam_photons_ids = truth_ids[(truth_pdgs == 22) & beam_mask]
+
+        sorted_energies = np.flip(np.argsort(truth_energy[(truth_pdgs == 22) & beam_mask])) if sort else [0, 1]
+        photon_ids[i,:] = beam_photons_ids[sorted_energies]
+    
+    return photon_ids
+
+def get_best_pairs(
+        events,
+        # truth_photon_ids,
+        method='mom', return_type="mask", valid_mom_cut=False, report=False, verbosity=0
+    ):
+    """
+    Finds the 'best' pair of PFOs in `events` which match the truth
+    photons assuming 1 pi0->yy in each event. The method to select the
+    'best is chosen by `method`.
+
+    The avaiable methods are as follows:
+    - mom : Momentum method - best PFO is that with the greatest momentum
+    projection along the direction of the true photon.
+    - energy : Energy method - best PFO is that with the largest energy.
+    - dir : Direction method - best PFO is that which is closest aligned
+    to the direction of the true photon.
+    - purity : Purity method - best PFO is that with the highest purity,
+    i.e. is made up of the greatest fraction of hits which come from
+    the true photon.
+    - completeness : Completeness method - best PFO is that with the
+    highest completeness, i.e. the PFO which contains the greatest
+    number of hits generated by the true photon.
+    
+    Multiple methods may be used simulatenously by passing a list of
+    desired methods. If more than one method is selected, the output PFOs
+    will be contained in a dictionary labelled by the method used.
+
+    The `return_type` argument allows selection of the format of the
+    output pairs. Available formats are as follows:
+    - mask : Returns a awkward boolean mask which picks out the two best
+    PFOs for each event when applied to reco data in `events`. Note that
+    this results in a loss of information regarding the sorting of
+    values from `truth_photon_ids`.
+    - id : Returns the reco IDs of the PFOs corresponding to the best
+    PFOs in each event as a numpy array.
+    - index : Returns the indicies corresponding to the best matching
+    PFOs in each event as a numpy array.
+
+    Additionally the function will note any events for which a best pair
+    cannot be created due to one or both of the true photons not having
+    any associated PFOs. A `valid_event_mask` is returned which will
+    select only the events in which each true photon has at least one
+    backtracked PFO when applied to `events`. Additionally the `report`
+    argument will cause the function to print out a notice detailing the
+    number of events dropped.
+
+    `valid_mom_cut` will cause a cut to be made on objects which have an
+    invalid momentum value (-999., -999., -999.). This is necessary if
+    this cut hasn't yet been applied to `events`, and the method used is
+    one of "mom", "energy", or "dir".
+
+    Parameters
+    ----------
+    events : PairData
+        Set of events for which the pairs should be found.
+    method : {'mom', 'energy', 'dir', 'purity', 'completeness', 'all'} or \
+list, optional
+        Method(s) to use to find the best PFOs. If passed as a list,
+        multiple methods will be used. Default is 'mom'
+    return_type : {'mask', 'id', 'index', str}, optional
+        Format to output the best PFOs. If a non-matching string is passed,
+        'index' will be used by default. Default is 'mask'.
+    valid_mom_cut : bool, optional
+        Whether to filter out PFOs which have an invalid momentum. Default
+        is False.
+    report : bool, optional
+        Whether to print out two lines detailing how many events were
+        dropped due to lack of backtracked PFOs. Default is False.
+    verbosity : int, optional
+        Controls the amount of information printed at each step for
+        debugging purposes from none at 0, to full at 6. Default is 0.
+    
+    Returns
+    -------
+    truth_indicies_photon_beam : np.ndarray, ak.Array, or dict
+        Best PFOs in each event formatted as specified by `return_type`.
+        if `method` a list, a dictionary of results indexed by the values
+        in `method` is returned.
+    valid_event_mask : np.ndarray
+        Boolean mask which selects events where both truth photons have
+        backtracked PFOs when applied to `events`.
+    """
+    # Work out the method of determining the best pair to use. The dictionary allows for
+    # aliasing of methods, but currently this is removed to avoid potential confusion
+    known_methods = {
+        # "momentum"      : "mom",
+        "mom"           : "mom",
+        # "e"             : "energy",
+        "energy"        : "energy",
+        # "d"             : "dir",
+        "dir"           : "dir",
+        # "direction"     : "dir",
+        "purity"        : "purity",
+        "completeness"  : "completeness",
+        # "comp"          : "completeness",
+        "all"           : "all"
+    }
+    if not isinstance(method, list):
+        method = [method]
+    bad_methods = []
+    for i, m in enumerate(method):
+        try:
+            method[i] = known_methods[m]
+        except(KeyError):
+            bad_methods += [m]
+            print(f'Method(s) "{m}" not found, please use one of:\nmomentum, energy, direction, purity, completeness')
+    if len(bad_methods) != 0:
+        join_str = '", "'
+        raise ValueError(f'Method(s): "{join_str.join(bad_methods)}"\nnot found, please use:\n"mom", "energy", "dir", "purity", "completeness", or "all"')
+
+    # Parse which methods to use
+    if "all" in method:
+        methods_to_use = ["mom", "energy", "dir", "purity", "completeness"]
+    else:
+        methods_to_use = method
+
+
+    # Work out the number of events we have
+    num_events = ak.num(events.trueParticlesBT.number, axis=0)
+
+    # Currently only worrying about single pi0->yy in each event. In future, we could extent this by allowing
+    # `truth_photon_ids` as an argument, and then iterating over each photon in each event, but that's a later problem!
+    truth_photon_ids = truth_pfos_in_two_photon_decay(events, sort=return_type!="mask")
+
+    # Definitions of what each method involves
+    #   - testing_methods: The test to be performed between the true and reco data to get the pair ordering
+    #   - reco_props: The reco data of the candidate PFOs
+    #   - truth_props: The truth data to be tested against
+
+    testing_methods = {
+        "mom": lambda reco, true: np.argsort([ vector.dot(r, true)[0] for r in reco ]), # This is want enforces looping 
+        "dir": lambda reco, true: np.argsort([ vector.dot(r, true)[0] for r in reco ]), # per event at the moment
+        "energy": lambda reco, true: np.argsort(reco),
+        "purity": lambda reco, true: np.argsort(reco),
+        "completeness": lambda reco, true: np.argsort(reco)
+    }
+    # TODO Swap to lambda functions for we don't fetch these unless we actually need them
+    reco_props = {
+        "mom": events.recoParticles.momentum,
+        "dir": events.recoParticles.direction,
+        "energy": events.recoParticles.energy,
+        "purity": events.trueParticlesBT.matchedHits / events.trueParticlesBT.hitsInRecoCluster,
+        "completeness": events.trueParticlesBT.sharedHits / events.trueParticlesBT.mcParticleHits
+    }
+    # TODO Change energy ... to use a smaller zeros/like (events.trueParticles.number ?)
+    true_props = {
+        "mom": events.trueParticles.momentum,
+        "dir": events.trueParticles.direction,
+        "energy": ak.zeros_like(events.trueParticles.number),
+        "purity": ak.zeros_like(events.trueParticles.number),
+        "completeness": ak.zeros_like(events.trueParticles.number)
+    }
+
+
+    # Other properties which must be set up ahead of the loop
+    valid_event_mask = np.full(num_events, True, dtype=bool)
+
+    truth_indicies_photon_beam = {}
+    if return_type == "mask":
+        for m in methods_to_use:
+            truth_indicies_photon_beam.update({m : [[]] * num_events})
+    else:
+        # This is only valid for the 1 pi0 in event, 2 photon decay cut
+        for m in methods_to_use:
+            truth_indicies_photon_beam.update({m : np.zeros((num_events, 2), dtype=int)})
+
+    zero_count = 0
+    one_count = 0
+
+
+    # Loop over each event to determine the best pair
+    for i in range(num_events):
+        bt_ids = events.trueParticlesBT.number[i]
+        indicies = np.arange(len(bt_ids))
+
+        true_ids = events.trueParticles.number[i]
+
+        # Sorted ids should be supplied as an argument generated by truth_pfos_in_two_photon_decay(evts)
+        photon_i, photon_ii = truth_photon_ids[i]
+
+
+        if verbosity >= 1:
+            true_momenta = events.trueParticles.momentum[i]
+            if verbosity >= 2:
+                print("\nTrue particle energies (GeV)")
+                print(vector.magnitude(true_momenta[true_ids == photon_i ]))
+                print(vector.magnitude(true_momenta[true_ids == photon_ii]))
+                print("True particle directions")
+                print(vector.normalize(true_momenta[true_ids == photon_i ]))
+                print(vector.normalize(true_momenta[true_ids == photon_ii]))
+            else:
+                print(true_momenta[true_ids == photon_i ])
+                print(true_momenta[true_ids == photon_ii])
+
+
+        if valid_mom_cut:
+            # Maybe want to look at what happens when we use purity/completeness with no good data cut?
+            reco_momenta = events.recoParticles.momentum[i]
+            good_data = np.logical_and(np.logical_and(reco_momenta.x != -999., reco_momenta.y != -999.), reco_momenta.z != -999.)
+        else:
+            good_data = slice(None)
+
+        # Count how many events are cut with no photons/only one photon having at least one daughter
+        photon_i_exists = photon_i in bt_ids[good_data]
+        photon_ii_exists = photon_ii in bt_ids[good_data]
+        if (not photon_i_exists) or (not photon_ii_exists):
+            if not (photon_i_exists or photon_ii_exists):
+                zero_count += 1
+            else:
+                one_count += 1
+            valid_event_mask[i] = False
+            continue # Skips to next iteration if not both phhotons have daughters
+
+        for m in methods_to_use:
+            # Get the data to use
+            reco_prop = reco_props[m][i]
+            true_prop = true_props[m][i]
+
+            # Get the truth property of each photon
+            true_prop_i  = true_prop[true_ids == photon_i ]
+            true_prop_ii = true_prop[true_ids == photon_ii]
+
+            # Get a mask indicating the daughters of each photon in the reco data
+            photon_i_mask  = [ bt_ids[good_data] == photon_i  ][0]
+            photon_ii_mask = [ bt_ids[good_data] == photon_ii ][0]
+            # Need the [0] because bt_ids[good_data] == photon_i is an array, so returns an array (one element)
+
+
+            # Order the PFOs by the selected method
+            reco_prop_ordering_i  = testing_methods[m](reco_prop[ indicies[good_data][photon_i_mask ] ], true_prop_i )
+            reco_prop_ordering_ii = testing_methods[m](reco_prop[ indicies[good_data][photon_ii_mask] ], true_prop_ii)
+
+            # Returns the index of the PFO selected as the best selection for each photon
+            photon_i_index  = indicies[good_data][photon_i_mask ][ reco_prop_ordering_i[-1]]
+            photon_ii_index = indicies[good_data][photon_ii_mask][reco_prop_ordering_ii[-1]]
+
+
+            if verbosity >= 6:
+                print(f"List of reco values {m} with good data:")
+                print(*reco_props[m][good_data])
+
+            if verbosity >= 4:
+                print(f"Values of {m}:")
+                print("Leading photon")
+                print(reco_props[indicies[good_data][photon_i_mask ]])
+                print("Sub-leading photon")
+                print(reco_props[indicies[good_data][photon_ii_mask]])
+
+            if verbosity >= 5:
+                print(f"Index ordering of {m} values")
+                print("Leading photon")
+                print(reco_prop_ordering_i)
+                print("Sub-leading photon")
+                print(reco_prop_ordering_ii)
+
+            if verbosity >= 3:
+                print(f"Selected {m}:")
+                print("Leading photon")
+                print(reco_prop[photon_i_index])
+                print("Sub-leading photon")
+                print(reco_prop[photon_ii_index])
+
+
+            # If we are returning IDs, we need to find the corresponding reco ID
+            if return_type == "id":
+                reco_ids = events.recoParticles.number[i]
+                truth_indicies_photon_beam[m][i,:] = [reco_ids[photon_i_index], reco_ids[photon_ii_index]]
+            # If returning a mask we need to construct the mask
+            elif return_type == "mask":
+                event_mask = [False] * (indicies[-1] + 1)
+                event_mask[photon_i_index] = True
+                event_mask[photon_ii_index] = True
+                truth_indicies_photon_beam[m][i] = event_mask
+            # Otherwise, we just return the reco indicies of the selected PFOs
+            else:
+                truth_indicies_photon_beam[m][i,:] = [photon_i_index, photon_ii_index]
+    
+
+    if report:
+        print(f"{zero_count} events discarded due to no true photons having matched PFOs.")
+        print(f"{one_count} events discarded due to only one true photon having matched PFOs.")
+
+    if return_type == "mask":
+        truth_indicies_photon_beam = ak.Array(truth_indicies_photon_beam)
+
+    if len(methods_to_use) == 1:
+        return truth_indicies_photon_beam[method[0]], valid_event_mask
+    else:
+        return truth_indicies_photon_beam, valid_event_mask
+
+def pair_sig_counts(truth_mask, pair_coords):
+    """
+    Returns a count of the number of PFOs which exist in `truth_mask` for
+    each pair in a set of pairs defined by `pair_coords`.
+
+    Parameters
+    ----------
+    truth_mask : ak.Array
+        Array of boolean values masking a set of signal PFOs.
+    pair_coords : ak.zip({'0':ak.Array, '1':ak.Array})
+        Inidicies to construct the pairs.
+    
+    Returns
+    -------
+    sig_counts : ak.Array()
+        Number of signal PFOs in each pair.
+    """
+    # Convert the mask to integers
+    true_counts = np.multiply(truth_mask, 1)
+
+    # Add the results
+    return true_counts[pair_coords["0"]] + true_counts[pair_coords["1"]]
+
+def pair_photon_counts(events, pair_coords, mother_pdgs):
+    """
+    Returns a count of the number of PFOs which have been backtracked
+    to photons which are daughters of pi0s for each pair in a set of
+    pairs defined by `pair_coords`.
+
+    Future warning: `mother_pdgs` will be removed in later version, as
+    mother PDG codes are planned to be added into ntuple data.
+
+    Parameters
+    ----------
+    events : PairData
+        Events used to generate the pairs.
+    pair_coords : ak.zip({'0':ak.Array, '1':ak.Array})
+        Inidicies to construct the pairs.
+    mother_pdgs : ak.Array
+        PDG codes of the mother of the backtracked truth particles.
+
+    Returns
+    -------
+    sig_counts : ak.Array()
+        Number of photons produced by pi0s in each pair.
+    """
     true_photons = events.trueParticlesBT.pdg == 22
 
     # Get the locations wehere the pdg is 22 and mother pdg is 111
@@ -684,9 +1231,13 @@ def paired_sig_count(events, pair_coords, mother_pdgs):
     return first_sigs + second_sigs
 
 
-# Hopefully this is correct, not tested yet though!
-# I fear it may require iterating through events to calculate though
-def get_beam_impact_point(direction, start_pos, beam_vertex):
+######################################################################################################
+######################################################################################################
+##########                                   CALCULATIONS                                   ##########
+######################################################################################################
+######################################################################################################
+
+def get_impact_parameter(direction, start_pos, beam_vertex):
     """
     Finds the impact parameter between a PFO and beam vertex.
 
@@ -737,9 +1288,78 @@ def closest_approach(dir1, dir2, start1, start2):
 
     return vector.magnitude(d)
 
+def get_shared_vertex(mom1, mom2, start1, start2):
+    """
+    Estimates a shared vertex for two vectors and starting positions
+    by taking the midpoint of the line of closest approach.
+
+    This is a projected point, not the difference between positions.
+
+    Momenta are used instead of directions to allow for potential
+    updates which weight the position of the vertex along the line
+    of closest approach based on the relative momenta.
+
+    Parameters
+    ----------
+    mom1 : ak.zip({'x':ak.Array, 'y':ak.Array, 'z':ak.Array})
+        Momentum of first PFO.
+    mom2 : ak.zip({'x':ak.Array, 'y':ak.Array, 'z':ak.Array})
+        Momentum of second PFO.
+    start1 : ak.zip({'x':ak.Array, 'y':ak.Array, 'z':ak.Array})
+        Initial point of first PFO.
+    start2 : ak.zip({'x':ak.Array, 'y':ak.Array, 'z':ak.Array})
+        Initial point of second PFO.
+    
+    Returns
+    -------
+    vertex : ak.zip({'x':ak.Array, 'y':ak.Array, 'z':ak.Array})
+        Shared vertex between the PFOs.
+    """
+    # We estimate the shared vertex by taking the midpoint of the line of closest approch
+    # This is a projected point, NOT the difference between the reconstructed starts
+
+    joining_dir = vector.normalize( vector.cross(mom1, mom2) )
+    separation = vector.dot(vector.sub(start1, start2), joining_dir)
+
+    dir1_selector = vector.cross(joining_dir, mom2)
+
+    # We don't use the normalised momentum, because we later multiply by the momentum, so it cancels
+    start1_offset = vector.dot( vector.sub(start2, start1), dir1_selector ) / vector.dot(mom1, dir1_selector)
+
+    pos1 = vector.add(start1, vector.prod(start1_offset, mom1))
+
+    return vector.add(pos1, vector.prod(separation/2, joining_dir))
+
+def get_midpoints(x1, x2):
+    """
+    Returns the midpoint of the starting positions:
+        ``mp = (x1 + x2)/2``
+
+    Parameters
+    ----------
+    x1 : ak.zip({'x':ak.Array, 'y':ak.Array, 'z':ak.Array})
+        Position of first point.
+    x2 : ak.zip({'x':ak.Array, 'y':ak.Array, 'z':ak.Array})
+        Position of second point.
+
+    Returns
+    -------
+    mp : ak.zip({'x':ak.Array, 'y':ak.Array, 'z':ak.Array})
+        Midpoint of `x1` and `x2`.
+    """
+    return vector.prod(0.5, vector.add(x1, x2))
+
+
+######################################################################################################
+######################################################################################################
+##########                                 PAIR PROPERTIES                                  ##########
+######################################################################################################
+######################################################################################################
+
 def paired_mass(events, pair_coords):
     """
-    Finds the mass of the pairs given by `pair_coords` from `events`.
+    Finds the mass of the pairs given by `pair_coords` from `events` assuming
+    relativistic limit.
 
     Parameters
     ----------
@@ -832,6 +1452,85 @@ def paired_closest_approach(events, pair_coords):
 
     return closest_approach(first_dir,second_dir,first_pos,second_pos)
 
+def paired_beam_impact(events, pair_coords):
+    """
+    Finds the impact parameter between the beam and the combined momentum
+    traced back from the midpoint of the closest approach of each pair in
+    `pair_coords` for each event in `events`.
+
+    Parameters
+    ----------
+    events : PairData
+        Events from which the pairs are drawn.
+    pair_coords : ak.zip({'0':ak.Array, '1':ak.Array})
+        Inidicies to construct the pairs.
+
+    Returns
+    -------
+    impact_parameter : ak.Array
+        Impact parameter between the beam vertex and each pairs.
+    """
+    first_mom = events.recoParticles.momentum[pair_coords["0"]]
+    first_pos = events.recoParticles.startPos[pair_coords["0"]]
+    second_mom = events.recoParticles.momentum[pair_coords["1"]]
+    second_pos = events.recoParticles.startPos[pair_coords["1"]]
+
+    # Direction of the summed momenta of the PFOs
+    paired_direction = vector.normalize(vector.add(first_mom, second_mom))
+
+    # Midpoint of the line of closest approach between the PFOs
+    shared_vertex = get_shared_vertex(first_mom, second_mom, first_pos, second_pos)
+
+    # Impact parameter between the PFOs and corresponding beam vertex
+    return get_impact_parameter(paired_direction, shared_vertex, events.recoParticles.beamVertex)
+
+def paired_separation(events, pair_coords):
+    """
+    Finds the separations between start positions of the pairs given
+    by `pair_coords` from `events`.
+
+    Parameters
+    ----------
+    events : PairData
+        Events from which the pairs are drawn.
+    pair_coords : ak.zip({'0':ak.Array, '1':ak.Array})
+        Inidicies to construct the pairs.
+
+    Returns
+    -------
+    separation : ak.Array
+        Separation between start points of the pairs.
+    """
+    # Get the positions via the pair indicies
+    first_pos = events.recoParticles.startPos[pair_coords["0"]]
+    second_pos = events.recoParticles.startPos[pair_coords["1"]]
+
+    return vector.magnitude(vector.sub(first_pos, second_pos))
+
+def paired_beam_slice(events, pair_coords):
+    """
+    Finds the detector slice that both PFOs in the the pairs given
+    by `pair_coords` from `events`. If they do not have a shared
+    slice, returns -1 for the pair.
+
+    Parameters
+    ----------
+    events : PairData
+        Events from which the pairs are drawn.
+    pair_coords : ak.zip({'0':ak.Array, '1':ak.Array})
+        Inidicies to construct the pairs.
+
+    Returns
+    -------
+    slice : ak.Array
+        Slice shared by the PFOs in the pairs.
+    """
+    # Get the positions via the pair indicies
+    first_slice = events.recoParticles.sliceID[pair_coords["0"]]
+    second_slice = events.recoParticles.sliceID[pair_coords["1"]]
+
+    return (first_slice == second_slice) * (first_slice + 1) - 1
+
 # N.B. this is phi in Shyam's scheme
 def paired_opening_angle(events, pair_coords):
     """
@@ -856,9 +1555,16 @@ def paired_opening_angle(events, pair_coords):
     # Calculate
     return np.arccos(vector.dot(first_dir, second_dir))
 
+
+######################################################################################################
+######################################################################################################
+##########                                     RUNNING                                      ##########
+######################################################################################################
+######################################################################################################
+
 if __name__ == "__main__":
 
-    evts = load_and_cut_data_two_photon("/scratch/wx21978/pi0/root_files/6GeV_beam_v1/Prod4a_6GeV_BeamSim_00.root", batch_size = 8000, batch_start = 0)
+    evts = load_and_cut_data("/scratch/wx21978/pi0/root_files/6GeV_beam_v1/Prod4a_6GeV_BeamSim_00.root", batch_size = 24000, batch_start = 0)
 
     # print("Locals:")
     # local_vars = list(locals().items())
@@ -873,45 +1579,66 @@ if __name__ == "__main__":
     # Argcombinations give the results as indicies, so we don't have to worry about
     # making sure combinations is consistent  between calls.
     # Now we just need to use these pair indicies to locate our pairs and do stuff with them
-    @profile
-    def get_pair_coords():
-        return ak.argcombinations(evts.recoParticles.number, 2)
-    # pair_coords = ak.argcombinations(evts.recoParticles.number, 2)
-    pair_coords = get_pair_coords
 
-    mother_pdgs = get_mother_pdgs(evts)
 
-    print("\nPlotting nHits...")
-    simple_sig_bkg_hist(
-        "nHits", "Count", evts.recoParticles.nHits, np.logical_and(evts.trueParticlesBT.pdg == 22, mother_pdgs == 111),
-        range=[None, 100], bins = [200, 100], histtype='step', density=True
-    )
-    del_prop(evts.recoParticles, "nHits")
+    # mother_pdgs = get_mother_pdgs(evts)
 
-    sig_count = paired_sig_count(evts, pair_coords, mother_pdgs)
-    del mother_pdgs
+    # print("\nPlotting nHits...")
+    # simple_sig_bkg_hist(
+    #     "nHits", "Count", evts.recoParticles.nHits, np.logical_and(evts.trueParticlesBT.pdg == 22, mother_pdgs == 111),
+    #     range=[None, 100], bins = [200, 100], histtype='step', density=True
+    # )
+    # del_prop(evts.recoParticles, "nHits")
+
+
+    truth_pair_indicies, valid_events = get_best_pairs(evts, method="mom", return_type="mask")
+
+    evts.Filter([valid_events], [valid_events])
+    del valid_events
+
+
+    # # Trying to profile the memory useage
+    # @profile
+    # def get_pair_coords():
+    #     return ak.argcombinations(evts.recoParticles.number, 2)
+    # pair_coords = get_pair_coords
+
+    pair_coords = ak.argcombinations(evts.recoParticles.number, 2)
+
+
+    sig_count = pair_sig_counts(truth_pair_indicies[valid_events], pair_coords[valid_events])
+    del truth_pair_indicies
+
+    plot_directory = "/users/wx21978/projects/pion-phys/plots/photon_pairs/"
 
     print("Plotting masses...")
     # masses = paired_mass(evts, pair_coords)
-    plot_pair_hists("mass", "MeV(?)", paired_mass(evts, pair_coords), sig_count, range=[None, 1000, 100], bins=[1000, 1000, 200])
+    plot_pair_hists("mass", "MeV", paired_mass(evts, pair_coords), sig_count, range=[None, 1000, 100], bins=[1000, 1000, 200], path=plot_directory)
 
     print("Plotting momenta...")
     # momentum = paired_momentum(evts, pair_coords)
     # mom_mag = vector.magnitude(momentum)
-    plot_pair_hists("momentum", "MeV(?)", vector.magnitude(paired_momentum(evts, pair_coords)), sig_count, range=[None, 4000, 200], bins=[1000,1000,200])
+    plot_pair_hists("momentum", "MeV", vector.magnitude(paired_momentum(evts, pair_coords)), sig_count, range=[None, 4000, 200], bins=[1000,1000,200], path=plot_directory)
     
-    # TODO Energies go -ve??
     print("Plotting energies...")
     # energies = paired_energy(evts, pair_coords)
-    plot_pair_hists("energy", "MeV(?)", paired_energy(evts, pair_coords), sig_count, range=[None, 4000, 200], bins=[1000,1000,200])
+    plot_pair_hists("energy", "MeV", paired_energy(evts, pair_coords), sig_count, range=[None, 4000, 200], bins=[1000,1000,200], path=plot_directory)
 
-    print("Plotting cloest approaches...")
+    print("Plotting closest approaches...")
     # approaches = paired_closest_approach(evts, pair_coords)
-    plot_pair_hists("closest approach", "cm", paired_closest_approach(evts, pair_coords), sig_count, range=[None, (-1000, 500)], bins=[100,150])
+    plot_pair_hists("closest approach", "cm", paired_closest_approach(evts, pair_coords), sig_count, range=[None, (-1000, 500)], bins=[100,150], path=plot_directory)
+
+    print("Plotting separations...")
+    # separations = paired_separation(evts, pair_coords)
+    plot_pair_hists("pfo separation", "cm", paired_separation(evts, pair_coords), sig_count, bins=100, path=plot_directory)
+
+    print("Plotting beam impact parameters...")
+    # impacts = paired_beam_impact(evts, pair_coords)
+    plot_pair_hists("beam impact", "cm", paired_beam_impact(evts, pair_coords), sig_count, bins=100, path=plot_directory)
 
     print("Plotting opening angles...")
     angles = paired_opening_angle(evts, pair_coords)
-    plot_pair_hists("angle", "rad", angles, sig_count, range=None, bins=100, bin_size="(pi/50)rad")
+    plot_pair_hists("angle", "rad", angles, sig_count, range=None, bins=100, bin_size="(pi/50)rad", path=plot_directory)
 
     # Weight the bin widths to keep then with equal area on a sphere
     # Area cover over angle dTheta is r sin(Theta) dTheta (with r=1)
@@ -927,8 +1654,9 @@ if __name__ == "__main__":
         bins[i+1] = np.arccos(np.max([np.cos(bins[i]) - 2/n_bins, -1]))
     
     print("Plotting opening angles in bins of equal arcradians...")
-    # TODO Need to fix the normailisation, currently it's not working!
-    plot_pair_hists("angle", "rad", angles, sig_count, range=None, bins=bins, bin_size="(pi/25)arcrad", unique_save_id = "_sphere")
+    # TODO Need to fix the normailisation, I don't think it's currently working!
+    plot_pair_hists("angle", "rad", angles, sig_count, range=None, bins=bins, bin_size="(pi/25)arcrad", unique_save_id = "_sphere", inc_norm=False, path=plot_directory)
+    plot_pair_hists("angle", "rad", angles, sig_count, range=None, bins=bins, bin_size="(pi/25)arcrad", unique_save_id = "_sphere_norm", inc_norm=False, weights=ak.full_like(angles, 1/(0.04*np.pi)), path=plot_directory)
     del angles
 
     print("All plots made.")
