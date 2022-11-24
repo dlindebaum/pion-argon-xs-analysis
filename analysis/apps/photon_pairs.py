@@ -1286,7 +1286,7 @@ def closest_approach(dir1, dir2, start1, start2):
     # Separation between the lines
     d = vector.dot(rel_start, cross)
 
-    return vector.magnitude(d)
+    return d
 
 def get_shared_vertex(mom1, mom2, start1, start2):
     """
@@ -1421,7 +1421,7 @@ def paired_energy(events, pair_coords):
     energy : ak.Array
         Summed energies of the pairs.
     """
-    # Get the momenta via the pair indicies
+    # Get the energies via the pair indicies
     first_mom = events.recoParticles.momentum[pair_coords["0"]]
     second_mom = events.recoParticles.momentum[pair_coords["1"]]
 
@@ -1444,7 +1444,6 @@ def paired_closest_approach(events, pair_coords):
     closest_approach : ak.Array
         Distance of closest approach of the pairs.
     """
-    # Get the momenta via the pair indicies
     first_dir = events.recoParticles.direction[pair_coords["0"]]
     first_pos = events.recoParticles.startPos[pair_coords["0"]]
     second_dir = events.recoParticles.direction[pair_coords["1"]]
