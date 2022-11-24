@@ -125,7 +125,7 @@ merge-ana.sh <root file name> <file list>
 ```
 or `hadd` (used in `merge-ana.sh`)
 ```bash
-hadd <foor file name> <ROOT files to merge>
+hadd <root file name> <ROOT files to merge>
 ```
 
 Note, that exceeding ~2000 root files will cause the process to crash, so merge files in batches and progressively merge the files.
