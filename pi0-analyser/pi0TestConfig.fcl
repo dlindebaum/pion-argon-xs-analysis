@@ -19,13 +19,10 @@ pi0_test_selection:
 
    SelectEvents: []
 
-   BeamlineUtils:        @local::standard_protodunebeamlineutils
-   Pi0Only:    true
-   AnalyseFromBeam:   true
+   BeamlineUtils: @local::standard_protodunebeamlineutils
+   Pi0Only: true
    CalibrationParsSCE: @local::CalorimetryParameters_SPProd4_MC_SCE
-
-   #CalibrationParsSCE: @local::CalorimetryParameters_SPProd2_MC_SCE
-   #CalibrationParsSCE: @local::CalorimetryParameters_SPProd2_MC_35ms
+   Debug: false
 
 }
 
