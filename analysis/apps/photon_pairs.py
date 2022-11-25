@@ -191,7 +191,7 @@ def load_and_cut_data(path, batch_size = -1, batch_start = -1, two_photon=True, 
     # plt.close()
 
 
-    print(pd.DataFrame(n[1:], columns = n[0]))
+    print(pd.DataFrame(n[1:], columns = n[0]).to_string())
     # print("\n".join([str(l) for l in n]))
     
     plt.close()
@@ -317,7 +317,7 @@ def simple_sig_bkg_hist(
 def plot_pair_hists(
         prop_name, units, property, sig_count,
         path="/users/wx21978/projects/pion-phys/plots/photon_pairs/", unique_save_id = "",
-        inc_stacked=True, inc_norm=True, inc_log=True,
+        inc_stacked=False, inc_norm=True, inc_log=True,
         bin_size = None, bins = 100,
         range=None, weights=None, **kwargs
     ):
@@ -397,11 +397,15 @@ def plot_pair_hists(
 
     # There is definitely a better way to do this...
     if not isinstance(weights, list):
+        if inc_stacked: # Need to keep track of the raw weights if producing a stacked plot
+            raw_weights = [weights] * len(range)
         if weights is None:
             weights = [{2:None, 1:None, 0:None}] * len(range)
         else:
             weights = [{2:ak.ravel(weights[sig_count == 2]), 1:ak.ravel(weights[sig_count == 1]), 0:ak.ravel(weights[sig_count == 0])}] * len(range)
     else:
+        if inc_stacked: # Need to keep track of the raw weights if producing a stacked plot
+            raw_weights = weights
         for i in np.arange(len(weights)):
             if weights[i] is None:
                 weights[i] = {2:None, 1:None, 0:None}
@@ -432,10 +436,18 @@ def plot_pair_hists(
                 bin_size = f"{hist_range/len(bins[i]):.2g}" + units
 
         if inc_stacked:
+            # Whoever wrote this disgusting way to deal with stacked weights ought to be shot...
+            if raw_weights[i] is not None:
+                all_weights = ak.ravel(raw_weights[i])
+                no_bkg_weights = ak.ravel(raw_weights[i][sig_count != 0])
+            else: 
+                all_weights = None
+                no_bkg_weights = None
+            
             plt.figure(figsize=(12,9))
-            plt.hist(ak.ravel(property),                 label="0 signal", bins = bins[i], weights=weights[i][2], color="C2", **kwargs)
-            plt.hist(ak.ravel(property[sig_count != 0]), label="1 signal", bins = bins[i], weights=weights[i][1], color="C1", **kwargs)
-            plt.hist(ak.ravel(property[sig_count == 2]), label="2 signal", bins = bins[i], weights=weights[i][0], color="C0", **kwargs)
+            plt.hist(ak.ravel(property),                 label="0 signal", bins = bins[i], weights=all_weights,    color="C2", **kwargs)
+            plt.hist(ak.ravel(property[sig_count != 0]), label="1 signal", bins = bins[i], weights=no_bkg_weights, color="C1", **kwargs)
+            plt.hist(sig_2,                              label="2 signal", bins = bins[i], weights=weights[i][2],  color="C0", **kwargs)
             plt.legend()
             plt.xlabel(prop_name.title() + "/" + units)
             plt.ylabel("Count/" + bin_size)
@@ -471,7 +483,7 @@ def plot_pair_hists(
             plt.hist(sig_0, histtype='step', density=True, label="0 signal", bins = bins[i], weights=weights[i][0], **kwargs)
             plt.legend()
             plt.xlabel(prop_name.title() + "/" + units)
-            plt.ylabel("Count/" + bin_size)
+            plt.ylabel("Density/" + bin_size)
             plt.savefig(path + "paired_" + prop_name.replace(" ", "_") + path_end + "_norm.png")
             plt.close()
 
@@ -483,7 +495,7 @@ def plot_pair_hists(
             plt.legend()
             plt.yscale('log')
             plt.xlabel(prop_name.title() + "/" + units)
-            plt.ylabel("Count/" + bin_size)
+            plt.ylabel("Density/" + bin_size)
             plt.savefig(path + "paired_" + prop_name.replace(" ", "_") + path_end + "_norm_log.png")
             plt.close()
     
@@ -1563,7 +1575,7 @@ def paired_opening_angle(events, pair_coords):
 
 if __name__ == "__main__":
 
-    evts = load_and_cut_data("/scratch/wx21978/pi0/root_files/6GeV_beam_v1/Prod4a_6GeV_BeamSim_00.root", batch_size = 2000, batch_start = 0)
+    evts = load_and_cut_data("/scratch/wx21978/pi0/root_files/6GeV_beam_v1/Prod4a_6GeV_BeamSim_00.root", batch_size = -1, batch_start = -1)
 
     # print("Locals:")
     # local_vars = list(locals().items())
@@ -1590,7 +1602,7 @@ if __name__ == "__main__":
     # del_prop(evts.recoParticles, "nHits")
 
 
-    truth_pair_indicies, valid_events = get_best_pairs(evts, method="mom", return_type="mask")
+    truth_pair_indicies, valid_events = get_best_pairs(evts, method="mom", return_type="mask", report=True)
 
     evts.Filter([valid_events], [valid_events])
     truth_pair_indicies = truth_pair_indicies[valid_events]
@@ -1613,28 +1625,28 @@ if __name__ == "__main__":
 
     print("Plotting masses...")
     # masses = paired_mass(evts, pair_coords)
-    plot_pair_hists("mass", "MeV", paired_mass(evts, pair_coords), sig_count, range=[None, 1000, 100], bins=[1000, 1000, 200], path=plot_directory)
+    plot_pair_hists("mass", "MeV", paired_mass(evts, pair_coords), sig_count, range=[None, 1000, 400], bins=[500, 100, 40], path=plot_directory)
 
     print("Plotting momenta...")
     # momentum = paired_momentum(evts, pair_coords)
     # mom_mag = vector.magnitude(momentum)
-    plot_pair_hists("momentum", "MeV", vector.magnitude(paired_momentum(evts, pair_coords)), sig_count, range=[None, 4000, 200], bins=[1000,1000,200], path=plot_directory)
+    plot_pair_hists("momentum", "MeV", vector.magnitude(paired_momentum(evts, pair_coords)), sig_count, range=[None, 2000, 500], bins=[500,200,60], path=plot_directory)
     
     print("Plotting energies...")
     # energies = paired_energy(evts, pair_coords)
-    plot_pair_hists("energy", "MeV", paired_energy(evts, pair_coords), sig_count, range=[None, 4000, 200], bins=[1000,1000,200], path=plot_directory)
+    plot_pair_hists("energy", "MeV", paired_energy(evts, pair_coords), sig_count, range=[None, 2000, 500], bins=[500,200,60], path=plot_directory)
 
     print("Plotting closest approaches...")
     # approaches = paired_closest_approach(evts, pair_coords)
-    plot_pair_hists("closest approach", "cm", paired_closest_approach(evts, pair_coords), sig_count, range=[None, (-1000, 500)], bins=[100,150], path=plot_directory)
+    plot_pair_hists("closest approach", "cm", paired_closest_approach(evts, pair_coords), sig_count, range=[None, (-100, 50)], bins=[100,50], path=plot_directory)
 
     print("Plotting separations...")
     # separations = paired_separation(evts, pair_coords)
-    plot_pair_hists("pfo separation", "cm", paired_separation(evts, pair_coords), sig_count, bins=100, path=plot_directory)
+    plot_pair_hists("pfo separation", "cm", paired_separation(evts, pair_coords), sig_count, range=[None, 200], bins=[100,30], path=plot_directory)
 
     print("Plotting beam impact parameters...")
     # impacts = paired_beam_impact(evts, pair_coords)
-    plot_pair_hists("beam impact", "cm", paired_beam_impact(evts, pair_coords), sig_count, bins=100, path=plot_directory)
+    plot_pair_hists("beam impact", "cm", paired_beam_impact(evts, pair_coords), sig_count, range=[None, 200], bins=[100,30], path=plot_directory)
 
     print("Plotting opening angles...")
     angles = paired_opening_angle(evts, pair_coords)
