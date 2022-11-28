@@ -54,6 +54,7 @@
 #include "lardata/ArtDataHelper/MVAReader.h"
 
 #include <algorithm>
+#include <chrono>
 
 namespace protoana {
   class pi0TestSelection;
@@ -80,7 +81,7 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   void analyze(art::Event const & e) override;
 
   // Custom functions.
-  std::vector<art::Ptr<recob::Hit>> GetMCParticleHits(const art::Event &evt, std::string hitModule, detinfo::DetectorClocksData const& clockData, const simb::MCParticle &mcpart, bool use_eve);
+  std::vector<art::Ptr<recob::Hit>> GetMCParticleArtHits(const art::Event &evt, detinfo::DetectorClocksData const& clockData, const simb::MCParticle &mcpart, const std::vector<art::Ptr<recob::Hit> > &hitVec, bool use_eve = true) const;
   int PandoraIdentification(const recob::PFParticle &daughterPFP, const art::Event &evt);
   std::vector<double> CNNScoreCalculator(anab::MVAReader<recob::Hit,4> &hitResults, const std::vector< art::Ptr< recob::Hit > > &hits, unsigned int &n);
   std::vector<double> StartHitQuantityCalculator(TVector3 &hitStart, TVector3 &hit, TVector3 &direction);
@@ -90,7 +91,7 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
 
   void AnalyseDaughterPFP(const recob::PFParticle &daughterPFP, const art::Event &evt, const detinfo::DetectorPropertiesData &detProp, anab::MVAReader<recob::Hit,4> &hitResults);
   void AnalyseBeamPFP(const recob::PFParticle &beam, const art::Event &evt);
-  void AnalyseMCTruth(const recob::PFParticle &daughter, const art::Event &evt, const detinfo::DetectorPropertiesData &detProp, const detinfo::DetectorClocksData &clockData);
+  void AnalyseMCTruth(const recob::PFParticle &daughter, const art::Event &evt, const detinfo::DetectorPropertiesData &detProp, const detinfo::DetectorClocksData &clockData, const std::vector<art::Ptr<recob::Hit> > &hitVec);
   void AnalyseMCTruthBeam(const art::Event &evt);
   void FillG4NTuple(const simb::MCParticle* &particle, const int &number);
   void CollectG4Particle(const int &Pdg, const int start, const int stop);
@@ -244,8 +245,6 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
 
   std::vector<int> sharedHits;
   std::vector<int> mcParticleHits;
-
-  std::vector<int> matchedHits;
   std::vector<int> hitsInRecoCluster;
 
   std::vector<double> mcParticleEnergyByHits;
@@ -340,20 +339,11 @@ double protoana::pi0TestSelection::ShowerEnergyCalculator(const std::vector<art:
   return total_energy;
 }
 
-std::vector<art::Ptr<recob::Hit> > protoana::pi0TestSelection::GetMCParticleHits(const art::Event &evt, std::string hitModule, detinfo::DetectorClocksData const& clockData, const simb::MCParticle &mcpart, bool use_eve = false)
+std::vector<art::Ptr<recob::Hit> > protoana::pi0TestSelection::GetMCParticleArtHits(const art::Event &evt, detinfo::DetectorClocksData const& clockData, const simb::MCParticle &mcpart, const std::vector<art::Ptr<recob::Hit> > &hitVec, bool use_eve) const
 {
-  art::Handle<std::vector<recob::Hit> > hitHandle = evt.getHandle<std::vector<recob::Hit> >(hitModule);
-  std::vector<art::Ptr<recob::Hit> > outVec;
-  if (!hitHandle)
-  {
-    std::cout << "protoana::ProtoDUNETruthUtils::GetMCParticleHits: could not find hits in event.\n";
-    return outVec;
-  }
-  std::vector<art::Ptr<recob::Hit> > hits;
-  art::fill_ptr_vector(hits, hitHandle); // this might be fairly taxing to do for every mcParticle we look at, so perhaps do it one time and pass to method
-  
   // Backtrack all hits to verify whether they belong to the current MCParticle.
-  for(const art::Ptr<recob::Hit> hit : hits)
+  std::vector<art::Ptr<recob::Hit> > outVec;
+  for(const art::Ptr<recob::Hit> hit : hitVec)
   {
     if (use_eve) {
       for(const sim::TrackIDE & ide : bt_serv->HitToEveTrackIDEs(clockData, *hit.get())) {
@@ -377,6 +367,7 @@ std::vector<art::Ptr<recob::Hit> > protoana::pi0TestSelection::GetMCParticleHits
   }
   return outVec;
 }
+
 
 // track/shower identification done thorugh pandora, returns 11 for a shower and 13 for a track
 int protoana::pi0TestSelection::PandoraIdentification(const recob::PFParticle &daughterPFP, const art::Event &evt)
@@ -547,7 +538,6 @@ void protoana::pi0TestSelection::reset()
   sliceID.clear();
   beamCosmicScore.clear();
 
-  matchedHits.clear();
   hitsInRecoCluster.clear();
   mcParticleHits.clear();
   sharedHits.clear();
@@ -632,6 +622,7 @@ void protoana::pi0TestSelection::CollectG4Particle(const int &pdg=0, const int s
 
 void protoana::pi0TestSelection::AnalyseDaughterPFP(const recob::PFParticle &daughterPFP, const art::Event &evt, const detinfo::DetectorPropertiesData &detProp, anab::MVAReader<recob::Hit,4> &hitResults)
 {
+  std::chrono::time_point start = std::chrono::high_resolution_clock::now();
   // get what pandora thinks the pdg code is
   pdgCodes.push_back(daughterPFP.PdgCode());
 
@@ -775,6 +766,11 @@ void protoana::pi0TestSelection::AnalyseDaughterPFP(const recob::PFParticle &dau
     coneAngle.push_back(-999);
     energy.push_back(-999);
   }
+  if(fDebug)
+  {
+    std::chrono::time_point stop = std::chrono::high_resolution_clock::now();
+    std::cout << "analyzing PFP took: " << std::chrono::duration_cast<std::chrono::milliseconds>(stop - start).count() << " ms." << std::endl;
+  }
 }
 
 
@@ -821,8 +817,10 @@ void protoana::pi0TestSelection::AnalyseBeamPFP(const recob::PFParticle &beam, c
 }
 
 
-void protoana::pi0TestSelection::AnalyseMCTruth(const recob::PFParticle &daughter, const art::Event &evt, const detinfo::DetectorPropertiesData &detProp, const detinfo::DetectorClocksData &clockData)
+void protoana::pi0TestSelection::AnalyseMCTruth(const recob::PFParticle &daughter, const art::Event &evt, const detinfo::DetectorPropertiesData &detProp, const detinfo::DetectorClocksData &clockData, const std::vector<art::Ptr<recob::Hit> > &hitVec)
 {
+  std::chrono::time_point start = std::chrono::high_resolution_clock::now();
+
   // match the MC particle assosiated to the daughter PFParticle by comparing the hit objects
   if(fDebug) std::cout << "getting shared hits" << std::endl;
   protoana::MCParticleSharedHits match = truthUtil.GetMCParticleByHits( clockData, daughter, evt, fPFParticleTag, fHitTag );
@@ -887,29 +885,27 @@ void protoana::pi0TestSelection::AnalyseMCTruth(const recob::PFParticle &daughte
     trueDaughterMomentumX.push_back(trueDaughterMomentum.X());
     trueDaughterMomentumY.push_back(trueDaughterMomentum.Y());
     trueDaughterMomentumZ.push_back(trueDaughterMomentum.Z());
-    
-    //calcuate metrics for purity (matchedHits / total)
+
+    //purity (sharedHits / recoHitsInCluster)
+    //completeness (sharedHits / mcParticleHits)
     std::vector<MCParticleSharedHits> list = truthUtil.GetMCParticleListByHits(clockData, daughter, evt, fPFParticleTag, fHitTag);
     int cluster_hits = 0;
-    int matched_hits = 0;
+    int shared_hits = 0;
     for( size_t j = 0; j < list.size(); ++j ){
       if( list[j].particle == match.particle ){
-         matched_hits = list[j].nSharedHits + list[j].nSharedDeltaRayHits;
+         shared_hits = list[j].nSharedHits + list[j].nSharedDeltaRayHits;
       }
       cluster_hits += list[j].nSharedHits + list[j].nSharedDeltaRayHits;
     }
-    matchedHits.push_back(matched_hits);
     hitsInRecoCluster.push_back(cluster_hits);
 
-    //calcuate metrics for completeness (sharedHits / mcParticleHits)
-    sharedHits.push_back(truthUtil.GetSharedHits( clockData, *match.particle, daughter, evt, fPFParticleTag).size());
-    mcParticleHits.push_back(truthUtil.GetMCParticleHits( clockData, *match.particle, evt, fHitTag).size());
+    sharedHits.push_back(shared_hits);
+    
+    std::vector<art::Ptr<recob::Hit> > mc_art_hits = GetMCParticleArtHits( evt, clockData, *match.particle, hitVec);
+    mcParticleHits.push_back(mc_art_hits.size());
 
-    std::cout << "calculating MC particle energy by hits" << std::endl;
-    std::vector<art::Ptr<recob::Hit> > mcHits  = GetMCParticleHits( evt, fHitTag, clockData, *match.particle);
-    art::FindManyP<recob::SpacePoint> spFromHits(mcHits, evt, fHitTag);
-    mcParticleEnergyByHits.push_back(ShowerEnergyCalculator(mcHits, detProp, spFromHits));
-    std::cout << "calculated MC particle energy by hits" << std::endl;
+    art::FindManyP<recob::SpacePoint> spFromHits(mc_art_hits, evt, fHitTag);    
+    mcParticleEnergyByHits.push_back(ShowerEnergyCalculator(mc_art_hits, detProp, spFromHits));
   }
   else
   {
@@ -929,11 +925,15 @@ void protoana::pi0TestSelection::AnalyseMCTruth(const recob::PFParticle &daughte
     trueDaughterEnergy.push_back(-999);
     trueDaughterPDG.push_back(-999);
     trueDaughterMass.push_back(-999);
-    matchedHits.push_back(-999);
     hitsInRecoCluster.push_back(-999);
     mcParticleHits.push_back(-999);
     sharedHits.push_back(-999);
     mcParticleEnergyByHits.push_back(-999);
+  }
+  if(fDebug)
+  {
+    std::chrono::time_point stop = std::chrono::high_resolution_clock::now();
+    std::cout << "analyzing backtracked PFP took: " << std::chrono::duration_cast<std::chrono::milliseconds>(stop - start).count() << " ms." << std::endl;
   }
 }
 
@@ -967,81 +967,6 @@ void protoana::pi0TestSelection::AnalyseMCTruthBeam(const art::Event &evt)
   trueBeamEndPosX = trueBeamEndPos.X();
   trueBeamEndPosX = trueBeamEndPos.Y();
   trueBeamEndPosX = trueBeamEndPos.Z();
-}
-
-//! function is depreciated
-void protoana::pi0TestSelection::AnalyseFromBeam(art::Event const &evt, const detinfo::DetectorClocksData &clockData, const detinfo::DetectorPropertiesData &detProp, anab::MVAReader<recob::Hit,4> &hitResults, std::vector<recob::PFParticle> pfpVec)
-{
-  // Get only Beam particle by checking the Beam slices
-  std::vector<const recob::PFParticle*> beamParticles = pfpUtil.GetPFParticlesFromBeamSlice(evt, fPFParticleTag);
-  
-  if(beamParticles.size() == 0)
-  {
-    if(fDebug) std::cout << "no beam particle, moving on..." << std::endl;
-    totalEvents ++;
-    return;
-  }
-  if(beamParticles.size() > 1)
-  {
-    if(fDebug) std::cout << "there shouldn't be more than one beam particle" << std::endl;
-  }
-  auto beamParticle = beamParticles[0]; // get the first beam particle
-  beamEvents ++;
-
-  // get track-like beam info, not for pi0 only MC events
-  if(!fPi0Only)
-  {
-    AnalyseBeamPFP(*beamParticle, evt);
-  }
-  else
-  {
-    // we want to process the beam like a daughter event for pi0 only particle gun tests
-    AnalyseDaughterPFP(*beamParticle, evt, detProp, hitResults);
-    beamStartPosX = -999;
-    beamStartPosY = -999;
-    beamStartPosZ = -999;
-    beamEndPosX = -999;
-    beamEndPosY = -999;
-    beamEndPosZ = -999;
-  }
-
-  std::cout << beamParticle->Daughters().size() << std::endl;
-
-  // analyse each daughter PFParticle from the beam
-  for( size_t daughterID : beamParticle->Daughters() )
-  {
-    const recob::PFParticle * daughterPFP = &(pfpVec.at( daughterID ));
-    AnalyseDaughterPFP(*daughterPFP, evt, detProp, hitResults);
-  }
-
-  // store any MC reated information here i.e. MC truth info
-  if(!evt.isRealData())
-  {
-    if(!fPi0Only)
-    {
-      AnalyseMCTruthBeam(evt);
-    }
-    else
-    {
-      AnalyseMCTruth(*beamParticle, evt, detProp, clockData);
-      trueBeamPdg = -999;
-      trueBeamMass = -999;
-      trueBeamEnergy = -999;
-      trueBeamStartPosX = -999; 
-      trueBeamStartPosX = -999;
-      trueBeamStartPosX = -999;
-      trueBeamEndPosX = -999;
-      trueBeamEndPosX = -999;
-      trueBeamEndPosX = -999;
-    }
-
-    // backtrack each daughter PFParticle from the beam
-    for( size_t daughterID : beamParticle->Daughters() )
-    {
-      const recob::PFParticle * daughterPFP = &(pfpVec.at( daughterID ));
-      AnalyseMCTruth(*daughterPFP, evt, detProp, clockData);
-    }
-  }
 }
 
 
@@ -1161,9 +1086,8 @@ void protoana::pi0TestSelection::beginJob()
   fOutTree->Branch("reco_daughter_allShower_sliceID", &sliceID);
   fOutTree->Branch("reco_daughter_allShower_beamCosmicScore", &beamCosmicScore);
 
-  fOutTree->Branch("reco_daughter_PFP_true_byHits_matchedHits", &matchedHits);
   fOutTree->Branch("reco_daughter_PFP_true_byHits_hitsInRecoCluster", &hitsInRecoCluster);
-  fOutTree->Branch("reco_daughter_PFP_true_byHits_mcParticleHits", &mcParticleHits);
+  fOutTree->Branch("reco_daughter_PFP_true_byHits_nHits", &mcParticleHits);
   fOutTree->Branch("reco_daughter_PFP_true_byHits_sharedHits", &sharedHits);
 
   fOutTree->Branch("reco_daughter_PFP_true_byHits_EnergyByHits", &mcParticleEnergyByHits);
@@ -1174,6 +1098,7 @@ void protoana::pi0TestSelection::beginJob()
 
 void protoana::pi0TestSelection::analyze(art::Event const & evt)
 {
+  std::chrono::time_point analyze_start = std::chrono::high_resolution_clock::now();
   //-----------------------------------------------//
   std::cout << "module running..." << std::endl;
   reset(); // clear any outputs that are lists
@@ -1189,10 +1114,21 @@ void protoana::pi0TestSelection::analyze(art::Event const & evt)
 
   //-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------//
   // get various information needed to retrieve necessary data
-  if(fDebug) std::cout << "getting handle" << std::endl;
+  if(fDebug) std::cout << "getting PFP handle" << std::endl;
   art::ValidHandle<std::vector<recob::PFParticle> > pfpVec = evt.getValidHandle<std::vector<recob::PFParticle> >( fPFParticleTag ); // object to allow us to reference the PFParticles in the event
   std::cout << "number of PFParticles: " << pfpVec->size() << std::endl;
-  if(fDebug) std::cout << "got handle" << std::endl;
+  if(fDebug) std::cout << "got PFP handle" << std::endl;
+
+  if(fDebug) std::cout << "getting hit handle" << std::endl;
+  art::Handle<std::vector<recob::Hit> > hitHandle = evt.getHandle<std::vector<recob::Hit> >(fHitTag); // handle takes no PFParticle in reference, so is the same for each MCParticle, move outside loop into main function
+  if (!hitHandle)
+  {
+    std::cout << "could not find hits in event." << std::endl;
+  }
+  std::vector<art::Ptr<recob::Hit> > hitVec;
+  art::fill_ptr_vector(hitVec, hitHandle); // this might be fairly taxing to do for every mcParticle we look at, so perhaps do it one time and pass to method
+  if(fDebug) std::cout << "got hit handle" << std::endl;
+
 
   if(fDebug) std::cout << "getting clockData" << std::endl;
   auto const clockData = art::ServiceHandle<detinfo::DetectorClocksService>()->DataFor(evt); // use timing to match PFP to MC
@@ -1308,7 +1244,7 @@ void protoana::pi0TestSelection::analyze(art::Event const & evt)
     AnalyseDaughterPFP(pfp, evt, detProp, hitResults);
     if(!evt.isRealData())
     {
-      AnalyseMCTruth(pfp, evt, detProp, clockData);
+      AnalyseMCTruth(pfp, evt, detProp, clockData, hitVec);
     }
     if(fDebug) std::cout << "----------------------------------------" << std::endl;
   }
@@ -1346,6 +1282,8 @@ void protoana::pi0TestSelection::analyze(art::Event const & evt)
 
   totalEvents++;
   fOutTree->Fill(); // fill the root tree with the outputs
+  std::chrono::time_point analyze_stop = std::chrono::high_resolution_clock::now();
+  std::cout << "analyze took: " << std::chrono::duration_cast<std::chrono::seconds>(analyze_stop - analyze_start).count() << " seconds." << std::endl;
 }
 
 // Maybe do some stuff here???
