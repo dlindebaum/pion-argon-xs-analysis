@@ -157,7 +157,7 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
 
   // hit/energy quantities
   std::vector<int> nHits; // number of collection plane hits
-  std::vector<double> energy; // reco shower energy in ???
+  std::vector<double> energy; // reco shower energy in MeV
 
   // quantity used to calculate the number of start hits
   std::vector<std::vector<double>> hitRadial;
@@ -207,7 +207,7 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   std::vector<double> trueDaughterMomentumY;
   std::vector<double> trueDaughterMomentumZ;
 
-  std::vector<double> trueDaughterEnergy; // mc shower energy in GeV
+  std::vector<double> trueDaughterEnergy; // mc shower energy in MeV
   std::vector<double> trueDaughterMass;
 
   std::vector<int> G4ParticlePdg;
@@ -557,8 +557,8 @@ void protoana::pi0TestSelection::FillG4NTuple(const simb::MCParticle* &particle,
     std::cout << "Energy: " << particle->E() << std::endl;
   }
   G4ParticlePdg.push_back(particle->PdgCode());
-  G4ParticleEnergy.push_back(particle->E());
-  G4ParticleMass.push_back(particle->Mass());
+  G4ParticleEnergy.push_back(particle->E() * 1000);
+  G4ParticleMass.push_back(particle->Mass() * 1000);
 
   TLorentzVector StartPos = particle->Position(0);
   G4ParticleStartPosX.push_back(StartPos.X());
@@ -571,9 +571,9 @@ void protoana::pi0TestSelection::FillG4NTuple(const simb::MCParticle* &particle,
   G4ParticleEndPosZ.push_back(EndPos.Z());
 
   TLorentzVector momentum = particle->Momentum();
-  G4ParticleMomX.push_back(momentum.X());
-  G4ParticleMomY.push_back(momentum.Y());
-  G4ParticleMomZ.push_back(momentum.Z());
+  G4ParticleMomX.push_back(momentum.X() * 1000);
+  G4ParticleMomY.push_back(momentum.Y() * 1000);
+  G4ParticleMomZ.push_back(momentum.Z() * 1000);
 
   G4ParticleNum.push_back(number);
   G4ParticleMother.push_back(particle->Mother());
@@ -868,8 +868,8 @@ void protoana::pi0TestSelection::AnalyseMCTruth(const recob::PFParticle &daughte
     trueDaughterPDG.push_back(mcParticle->PdgCode());
 
     // kinematics
-    trueDaughterEnergy.push_back(mcParticle->E());
-    trueDaughterMass.push_back(mcParticle->Mass());
+    trueDaughterEnergy.push_back(mcParticle->E() * 1000);
+    trueDaughterMass.push_back(mcParticle->Mass() * 1000);
     
     TLorentzVector trueDaughterStartPos = mcParticle->Position(0);
     trueDaughterStartPosX.push_back(trueDaughterStartPos.X());
@@ -882,9 +882,9 @@ void protoana::pi0TestSelection::AnalyseMCTruth(const recob::PFParticle &daughte
     trueDaughterEndPosZ.push_back(trueDaughterEndPos.Z());
     
     TLorentzVector trueDaughterMomentum = mcParticle->Momentum();
-    trueDaughterMomentumX.push_back(trueDaughterMomentum.X());
-    trueDaughterMomentumY.push_back(trueDaughterMomentum.Y());
-    trueDaughterMomentumZ.push_back(trueDaughterMomentum.Z());
+    trueDaughterMomentumX.push_back(trueDaughterMomentum.X() * 1000);
+    trueDaughterMomentumY.push_back(trueDaughterMomentum.Y() * 1000);
+    trueDaughterMomentumZ.push_back(trueDaughterMomentum.Z() * 1000);
 
     //purity (sharedHits / recoHitsInCluster)
     //completeness (sharedHits / mcParticleHits)
@@ -953,8 +953,8 @@ void protoana::pi0TestSelection::AnalyseMCTruthBeam(const art::Event &evt)
   }
 
   trueBeamPdg = true_beam_particle->PdgCode();
-  trueBeamMass = true_beam_particle->Mass();
-  trueBeamEnergy = true_beam_particle->E();
+  trueBeamMass = true_beam_particle->Mass() * 1000;
+  trueBeamEnergy = true_beam_particle->E() * 1000;
 
   TLorentzVector trueBeamStartPos = true_beam_particle->Position(0);
   
