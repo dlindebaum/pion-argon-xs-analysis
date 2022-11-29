@@ -637,8 +637,8 @@ def ROOTWorkFlow():
             Plots.PlotHistComparison([ak.ravel(events.recoParticles.cnnScore[to_merge][background]), ak.ravel(events.recoParticles.cnnScore[to_merge][np.logical_or(*signal)])], xlabel="CNN score", bins=20, labels=labels, density = norm, y_scale = scale, annotation=args.dataset)
             if save: Plots.Save("cnn", outDir+subDir)
 
-            purity = events.trueParticlesBT.matchedHits / events.trueParticlesBT.hitsInRecoCluster
-            completeness = events.trueParticlesBT.sharedHits / events.trueParticlesBT.mcParticleHits
+            purity = events.trueParticlesBT.purity
+            completeness = events.trueParticlesBT.completeness
 
             start_showers_all = np.logical_or(*start_showers)
             Plots.PlotHist(ak.ravel(purity[start_showers_all]), xlabel="start shower purity", annotation=args.dataset)
