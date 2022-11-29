@@ -13,6 +13,7 @@ from abc import ABC, abstractmethod
 import awkward as ak
 import numpy as np
 import uproot
+from rich import print
 
 # custom modules
 from python.analysis import vector
@@ -753,6 +754,7 @@ class RecoParticleData(ParticleData):
     Property Methods:
         beam_number (ak.Array): beam PFO number
         sliceID (ak.Array): slice the PFO corresponds to
+        beamSliceID (ak.Array): slice the beam PFO corresponds to
         beamCosmicScore (ak.Array): whether the reconstruction chain used was for a neutrino vertex (beam) or cosmics
         pandoraTag (ak.Array): label given to particles by pandora; track, shower or -999
         number (ak.Array): PFO number
@@ -787,6 +789,11 @@ class RecoParticleData(ParticleData):
     def sliceID(self) -> ak.Array:
         self.LoadData("sliceID", "reco_daughter_allShower_sliceID")
         return getattr(self, f"_{type(self).__name__}__sliceID")
+
+    @property
+    def beamSliceID(self) -> ak.Array:
+        self.LoadData("beamSliceID", "reco_beam_sliceID")
+        return getattr(self, f"_{type(self).__name__}__beamSliceID")
 
     @property
     def beamCosmicScore(self) -> ak.Array:
@@ -991,15 +998,19 @@ class TrueParticleDataBT(ParticleData):
         number (ak.Array): backtracked particle number
         mother (ak.Array): backtracked particle number of mother
         pdg (ak.Array): pdg code of backtracked particle
+        motherPdg (ak.Array): pdg code of mother of backtracked particle
         startPos (ak.Record):
         endPos (ak.Record):
         momentum (ak.Record):
         energy (ak.Array):
+        energyByHits (ak.Array): energy of the true particle, calculated from the true hits
         direction (ak.Record):
-        matchedHits (ak.Array): true hits matched to reco hits
         hitsInRecoCluster (ak.Array): total hits in a reco cluster
-        mcParticleHits (ak.Array): true particle hits
-        sharedHits (ak.Array): true hits shared by other particles (i think?)
+        nHits (ak.Array): true particle hits
+        sharedHits (ak.Array): hits shared by both reco and backtracked true particle
+        trueBeamVertex (ak.Record): end poisition of backtracked true beam particle
+        purity (ak.Array): fraction of shared hits in reconstructed object
+        completeness (ak.Array): fraction of shared hits in the backtrackted true particle
         particleNumber: placeholder for ROOT files which don't have the particle number stored as NTuples
         SingleMatch (ak.Array): mask of events with only 1 unique backtracked particle
 
@@ -1024,6 +1035,11 @@ class TrueParticleDataBT(ParticleData):
     def pdg(self) -> ak.Array:
         self.LoadData("pdg", "reco_daughter_PFP_true_byHits_pdg")
         return getattr(self, f"_{type(self).__name__}__pdg")
+
+    @property
+    def motherPdg(self) -> ak.Array:
+        self.LoadData("motherPdg", "reco_daughter_PFP_true_byHits_Mother_pdg")
+        return getattr(self, f"_{type(self).__name__}__motherPdg")
 
     @property
     def startPos(self) -> ak.Record:
@@ -1067,9 +1083,9 @@ class TrueParticleDataBT(ParticleData):
         return getattr(self, f"_{type(self).__name__}__energy")
 
     @property
-    def matchedHits(self) -> ak.Array:
-        self.LoadData("matchedHits", "reco_daughter_PFP_true_byHits_matchedHits")
-        return getattr(self, f"_{type(self).__name__}__matchedHits")
+    def energyByHits(self) -> ak.Array:
+        self.LoadData("energyByHits", "reco_daughter_PFP_true_byHits_EnergyByHits")
+        return getattr(self, f"_{type(self).__name__}__energyByHits")
 
     @property
     def hitsInRecoCluster(self) -> ak.Array:
@@ -1077,9 +1093,9 @@ class TrueParticleDataBT(ParticleData):
         return getattr(self, f"_{type(self).__name__}__hitsInRecoCluster")
 
     @property
-    def mcParticleHits(self) -> ak.Array:
-        self.LoadData("mcParticleHits", "reco_daughter_PFP_true_byHits_mcParticleHits")
-        return getattr(self, f"_{type(self).__name__}__mcParticleHits")
+    def nHits(self) -> ak.Array:
+        self.LoadData("nHits", "reco_daughter_PFP_true_byHits_nHits")
+        return getattr(self, f"_{type(self).__name__}__nHits")
 
     @property
     def sharedHits(self) -> ak.Array:
@@ -1087,7 +1103,7 @@ class TrueParticleDataBT(ParticleData):
         return getattr(self, f"_{type(self).__name__}__sharedHits")
 
     @property
-    def trueBeamVertex(self) -> ak.Array:
+    def trueBeamVertex(self) -> ak.Record:
         nTuples = [
             "reco_beam_PFP_true_byHits_endX"
             "reco_beam_PFP_true_byHits_endY"
@@ -1095,6 +1111,18 @@ class TrueParticleDataBT(ParticleData):
         ]
         self.LoadData("trueBeamVertex", nTuples)
         return getattr(self, f"_{type(self).__name__}__trueBeamVertex")
+
+    @property
+    def purity(self) -> ak.Array:
+        if not hasattr(self, f"_{type(self).__name__}__purity"):
+            self.__purity = self.sharedHits / self.hitsInRecoCluster
+        return self.__purity
+
+    @property
+    def completeness(self) -> ak.Array:
+        if not hasattr(self, f"_{type(self).__name__}__completeness"):
+            self.__completeness = self.sharedHits / self.nHits
+        return self.__completeness
 
     @property
     def particleNumber(self) -> ak.Array:
