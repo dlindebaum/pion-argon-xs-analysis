@@ -115,8 +115,6 @@ def PlotHistComparison(datas, xRange : list = [], bins : int = 100, xlabel : str
         if len(xRange) == 2:
             data = data[data > xRange[0]]
             data = data[data < xRange[1]]
-        else:
-            data = data[data > -900]
         if i == 0:
             _, edges = PlotHist(data, bins, xlabel, title, labels[i], alpha, histtype, sf, density, newFigure=False)
         else:

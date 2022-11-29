@@ -78,7 +78,6 @@ class ShowerMergeQuantities:
         "d (cm)",
         "t (cm)",
         "p (cm)",
-        "CNN score"
     ]
     selectionVariables = [
         "alpha",    
@@ -325,7 +324,7 @@ def GetMin(quantity : ak.Array) -> ak.Array:
 
 
 @Master.timer
-def EventSelection(events : Master.Data, matchBy : str = "spatial", invertFinal : bool = False) -> ak.Array:
+def EventSelection(events : Master.Data, matchBy : str = "spatial", invertFinal : bool = False):
     """ Applies the event selection for this study and plots a table of how each cut performs.
 
     Args:
@@ -333,8 +332,6 @@ def EventSelection(events : Master.Data, matchBy : str = "spatial", invertFinal 
         matchBy (str, optional): how to determine start showers. Defaults to "spatial".
         invertFinal (bool, optional): invert last selections boolean mask. Defaults to False.
 
-    Returns:
-        ak.Array: starting showers
     """    
 
     n = [["event selection", "type", "number of events", "percentage of events removed", "percentage of events remaining"]]
