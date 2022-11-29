@@ -15,6 +15,7 @@ class Options:
         self.fhicl = ""
         self.outputDirectory = ""
         self.fileList = ""
+        self.blacklist = ""
     def ReadConfig(self, config):
         for var in vars(self):
             if var in config["SETTINGS"]:
@@ -168,7 +169,8 @@ def main(options, debug=False):
     bashCommand += f"--expected-lifetime={options.lifetime} " # 3h
     bashCommand += f"--cpu={options.cpu} " # 1
     bashCommand += f"--tar_file_name=dropbox://{options.tarball} "
-    bashCommand += f"file:///tmp/job_script.sh"
+    bashCommand += f"file:///tmp/job_script.sh "
+    bashCommand += f"{options.blacklist}"
 
     print(bashCommand.split())
     if debug is False:
@@ -190,6 +192,7 @@ if __name__ == "__main__":
     parser.add_argument("-f", "--fhicl", dest="fhicl", type=str, default="", help="fhicl file to run")
     parser.add_argument("-o", "--outdir-name", dest="outputDirectory", type=str, default="output", help="name of output directory (will automatically create in scratch directory)")
     parser.add_argument("-i", "--input-file-list", dest="fileList", type=str, default="file_list.txt", help="file list name (should be in the tarfile!)")
+    parser.add_argument("-b", "--blacklist", dest="blacklist", type=str, default="", help="sites to blacklist")
     parser.add_argument("--debug", dest="debug", action="store_true", help="debug code without sumbitting a job")
     args = parser.parse_args()
     options = Options()
