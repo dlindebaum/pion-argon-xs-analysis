@@ -903,7 +903,7 @@ class RecoParticleData(ParticleData):
         inv_mass = (2 * leading * secondary * (1 - np.cos(angle)))**0.5
 
         #* pi0 momentum
-        pi0_momentum = vector.magnitude(ak.sum(self.momentum, axis=-1))/1000
+        pi0_momentum = vector.magnitude(ak.sum(self.momentum, axis=-1))
 
         null_dir = np.logical_or(direction_pair[:, :, 1:].x == -999, direction_pair[:, :, :-1].x == -999) # mask shower pairs with invalid direction vectors
         null = np.logical_or(leading < 0, secondary < 0) # mask of shower pairs with invalid energy
@@ -911,9 +911,6 @@ class RecoParticleData(ParticleData):
         #* filter null data
         pi0_momentum = np.where(null_dir, -999, pi0_momentum)
         pi0_momentum = np.where(null, -999, pi0_momentum)
-
-        leading = leading/1000
-        secondary = secondary/1000
 
         leading = np.where(null, -999, leading)
         leading = np.where(null_dir, -999, leading)
@@ -923,7 +920,6 @@ class RecoParticleData(ParticleData):
         angle = np.where(null, -999, angle)
         angle = np.where(null_dir, -999, angle)
 
-        inv_mass = inv_mass/1000
         inv_mass = np.where(null, -999, inv_mass)
         inv_mass = np.where(null_dir, -999, inv_mass)
 
