@@ -5,14 +5,12 @@ Author: Shyam Bhuller
 
 Description: A script conatining boiler plate code for creating plots with matplotlib.
 """
-
-import numpy as np
-from scipy.special import gamma
-from scipy.integrate import quad
-from scipy.optimize import curve_fit
-
 import matplotlib
 import matplotlib.pyplot as plt
+import numpy as np
+from scipy.integrate import quad
+from scipy.optimize import curve_fit
+from scipy.special import gamma
 
 
 def Save(name : str = "plot", directory : str = ""):
@@ -117,8 +115,6 @@ def PlotHistComparison(datas, xRange : list = [], bins : int = 100, xlabel : str
         if len(xRange) == 2:
             data = data[data > xRange[0]]
             data = data[data < xRange[1]]
-        else:
-            data = data[data > -900]
         if i == 0:
             _, edges = PlotHist(data, bins, xlabel, title, labels[i], alpha, histtype, sf, density, newFigure=False)
         else:

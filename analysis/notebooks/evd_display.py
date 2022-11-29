@@ -5,14 +5,17 @@ Author: Shyam Bhuller
 
 Description: Old event display code for Pi0 MC.
 """
-from python.analysis import Master, Plots
 import argparse
 import os
-from matplotlib import colors
+
+import awkward as ak
 import matplotlib.gridspec as gridspec
 import matplotlib.pyplot as plt
-import awkward as ak
+from matplotlib import colors
 from tabulate import tabulate
+
+from python.analysis import Master, Plots
+
 
 def main():
     names = ["inv_mass", "angle", "lead_energy", "sub_energy", "pi0_mom"]

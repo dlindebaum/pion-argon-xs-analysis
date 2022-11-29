@@ -5,9 +5,9 @@ Author: Shyam Bhuller
 
 Description: Contains vector operations, based of awkward array records.
 """
-
 import awkward as ak
 import numpy as np
+
 
 def vector(x, y, z) -> ak.Record:
     """ Creates a vector like record.
