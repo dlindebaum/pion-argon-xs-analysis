@@ -7,12 +7,15 @@ Description: A script studying pi0 decay geometry and shower merging.
 """
 import argparse
 import os
+
 import awkward as ak
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+
 # custom modules
 from python.analysis import Master, Plots, vector
+
 
 def Separation(shower_1 : ak.Record, shower_2 : ak.Record, null : ak.Record, typeof : str) -> ak.Array:
     """ Calculate angular or spatial separation, acocunting for null values

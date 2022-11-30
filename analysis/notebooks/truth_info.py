@@ -6,11 +6,14 @@ Author: Shyam Bhuller
 Description: Plot basic Truth information of data sample
 """
 import argparse
-import awkward as ak
 import os
+
+import awkward as ak
 import matplotlib.pyplot as plt
+
 # custom imports
 from python.analysis import Master, Plots
+
 
 @Master.timer
 def main():

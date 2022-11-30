@@ -5,19 +5,19 @@ Author: Shyam Bhuller
 
 Description: Create Event Display for Prod4a Shower merging study 
 """
-
 from types import SimpleNamespace
+
+import awkward as ak
 import matplotlib
 import matplotlib.pyplot as plt
+import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 from tabulate import tabulate
-import awkward as ak
-import numpy as np
 
+from apps.prod4a_merge_study import EventSelection, PFOSelection, SignalBackground, SplitSample, ShowerMergeQuantities
 from python.analysis import Master, vector
 from python.analysis.EventDisplay import EventDisplay
 
-from apps.prod4a_merge_study import EventSelection, ShowerMergeQuantities
 
 def PlotImpactParameter(eventDisplay : EventDisplay, startPoint, target, direction):
     l = np.abs(vector.dot(vector.sub(target, startPoint), direction))
@@ -101,7 +101,7 @@ def RenderEventDisplay(n):
     startPoints = events.recoParticles.startPos[to_merge][n]
     directions = events.recoParticles.direction[to_merge][n]
     pdgs = events.trueParticlesBT.pdg[to_merge][n]
-    beam_mask = np.logical_not(events.recoParticles.number == events.recoParticles.beam_number)[to_merge][q.null]
+    beam_mask = np.logical_not(events.recoParticles.number == events.recoParticles.beam_number)[to_merge]
     #* Plot background PFOs
     if showBackground: PlotBackgroundPFO(display, n, background, beam_mask, points, startPoints, directions, pdg=None, i = -1, plotIP = False)
 
@@ -170,7 +170,9 @@ def main():
     events.recoParticles.spacePoints = ak.zip({"x" : events.io.Get("reco_daughter_allShower_spacePointX"), 
                                             "y" : events.io.Get("reco_daughter_allShower_spacePointY"),
                                             "z" : events.io.Get("reco_daughter_allShower_spacePointZ")})
-    start_showers = EventSelection(events)
+    EventSelection(events)
+    PFOSelection(events)
+    start_showers, to_merge = SplitSample(events)
 
     #* get boolean mask of PFP's to merge
     to_merge = np.logical_not(np.logical_or(*start_showers))
@@ -178,17 +180,8 @@ def main():
     q = ShowerMergeQuantities(events, to_merge)
     q.Evaluate(events, start_showers)
 
-    #* get boolean mask of PFP's which are actual fragments of the starting showers
-    start_shower_ID = events.trueParticlesBT.number[np.logical_or(*start_showers)]
-    to_merge_ID = events.trueParticlesBT.number[to_merge]
-    signal = [to_merge_ID == start_shower_ID[:, i] for i in range(2)] # signal are the PFOs which is a fragment of the ith starting shower
-
-    #* define signal and background
-    signal_all = np.logical_or(*signal)
-    signal_all = signal_all[q.null]
-    background = np.logical_not(signal_all) # background is all other PFOs unrelated to the pi0 decay
-    signal = [signal[i][q.null] for i in range(2)]
-
+    signal, background, signal_all = SignalBackground(events, start_showers, to_merge)
+    
     ##################################################################################################
 
     nEvents = ak.num(events.recoParticles.spacePoints.x, 0)
