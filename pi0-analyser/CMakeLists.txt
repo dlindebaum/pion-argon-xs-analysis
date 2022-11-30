@@ -22,8 +22,6 @@ art_make(Pi0Analyser "module"
   larsim_MCCheater_ParticleInventoryService_service
   larreco_RecoAlg
   ${ROOT_BASIC_LIB_LIST}
-  #ProtoDUNEAnaUtils
-  ProtoDUNEDataUtils
   ProtoDUNEUtilities
   )
 install_headers()

@@ -158,6 +158,7 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   // hit/energy quantities
   std::vector<int> nHits; // number of collection plane hits
   std::vector<double> energy; // reco shower energy in MeV
+  std::vector<double> calibrated_energy; // reco shower calibrated energy in MeV?
 
   // quantity used to calculate the number of start hits
   std::vector<std::vector<double>> hitRadial;
@@ -484,6 +485,7 @@ void protoana::pi0TestSelection::reset()
   length.clear();
 
   energy.clear();
+  calibrated_energy.clear();
   nHits.clear();
 
   hitRadial.clear();
@@ -730,6 +732,25 @@ void protoana::pi0TestSelection::AnalyseDaughterPFP(const recob::PFParticle &dau
       spacePointY.push_back(spy);
       spacePointZ.push_back(spz);
 
+      //std::cout << "Getting calibrated shower energy" << std::endl;
+      auto calo = showerUtil.GetRecoShowerCalorimetry(
+          *shower, evt, "pandora2Shower", fCalorimetryTag);
+      bool found_calo = false;
+      size_t index = 0;
+      for (index = 0; index < calo.size(); ++index) {
+        if (calo[index].PlaneID().Plane == 2) {
+          found_calo = true;
+          break;
+        }
+      }
+      
+      if (!found_calo) {
+        calibrated_energy.push_back(-999.);
+      }
+      else {
+        calibrated_energy.push_back(calo[index].KineticEnergy());
+      }
+
       // calculate and push back shower energy
       energy.push_back(ShowerEnergyCalculator(showerHits, detProp, spFromHits));
     }
@@ -751,6 +772,7 @@ void protoana::pi0TestSelection::AnalyseDaughterPFP(const recob::PFParticle &dau
       length.push_back(-999);
       coneAngle.push_back(-999);
       energy.push_back(-999);
+      calibrated_energy.push_back(-999.);
     }
   }
   catch( const cet::exception &e )
@@ -759,12 +781,19 @@ void protoana::pi0TestSelection::AnalyseDaughterPFP(const recob::PFParticle &dau
     startPosX.push_back(-999);
     startPosY.push_back(-999);
     startPosZ.push_back(-999);
+    std::vector<double> null (1, -999);
+    hitRadial.push_back( null );
+    hitLongitudinal.push_back( null );
+    spacePointX.push_back( null );
+    spacePointY.push_back( null );
+    spacePointZ.push_back( null );
     dirX.push_back(-999);
     dirY.push_back(-999);
     dirZ.push_back(-999);
     length.push_back(-999);
     coneAngle.push_back(-999);
     energy.push_back(-999);
+    calibrated_energy.push_back(-999.);
   }
   if(fDebug)
   {
@@ -1008,6 +1037,7 @@ void protoana::pi0TestSelection::beginJob()
   // hit/energy quantities
   fOutTree->Branch("reco_daughter_PFP_nHits_collection", &nHits);
   fOutTree->Branch("reco_daughter_allShower_energy", &energy);
+  fOutTree->Branch("reco_daughter_allShower_calibrated_energy", &calibrated_energy);
 
   // quantity used to calculate the number of start hits
   fOutTree->Branch("hitRadial", &hitRadial);
