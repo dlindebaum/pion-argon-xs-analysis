@@ -144,9 +144,9 @@ def main(args):
         raise Exception(f"{args.plotsToMake} plots require at least two samples")
 
     #* plot labels
-    t_l = ["True invariant mass (GeV)", "True opening angle (rad)", "True leading photon energy (GeV)", "True Sub leading photon energy (GeV)", "True $\pi^{0}$ momentum (GeV)"]
+    t_l = ["True invariant mass (MeV)", "True opening angle (rad)", "True leading photon energy (MeV)", "True Sub leading photon energy (MeV)", "True $\pi^{0}$ momentum (MeV)"]
     e_l = ["Invariant mass fractional error", "Opening angle fractional error", "Leading shower energy fractional error", "Sub leading shower energy fractional error", "$\pi^{0}$ momentum fractional error"]
-    r_l = ["Invariant mass (GeV)", "Opening angle (rad)", "Leading shower energy (GeV)", "Sub leading shower energy (GeV)", "$\pi^{0}$ momentum (GeV)"]
+    r_l = ["Invariant mass (MeV)", "Opening angle (rad)", "Leading shower energy (MeV)", "Sub leading shower energy (MeV)", "$\pi^{0}$ momentum (MeV)"]
 
     #* plot ranges
     e_range = [[-1, 10]] * 5
