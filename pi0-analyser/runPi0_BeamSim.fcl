@@ -1,5 +1,9 @@
 #include "services_dune.fcl"
-#include "pi0TestConfig.fcl"
+#include "filters.fcl"
+#include "triggeralgo_service.fcl"
+#include "ProtoDUNEBeamCuts.fcl"
+#include "ProtoDUNECalibration.fcl"
+#include "ProtoDUNEBeamlineUtils.fcl"
 #include "ProtoDUNETruthBeamFilter.fcl"
 
 process_name: pi0BeamMC
@@ -7,14 +11,12 @@ process_name: pi0BeamMC
 pi0_test_selection:
 {
    module_type:             "pi0TestSelection"
-   CalorimetryTag:          "pandoracalo"
+   CalorimetryTag:          "pandora2Showercalo"
    TrackerTag:              "pandoraTrack"
    ShowerTag:               "pandoraShower"
    HitTag:                  "hitpdune"
    PFParticleTag:           "pandora"
    GeneratorTag:            "generator"
-   CalorimetryTagSCE:       "pandoracalinoxyzt"
-
    SelectEvents: []
 
    BeamlineUtils: @local::standard_protodunebeamlineutils

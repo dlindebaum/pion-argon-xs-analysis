@@ -17,7 +17,6 @@ pi0_test_selection:
    HitTag:                  "hitpdune"
    PFParticleTag:           "pandora"
    GeneratorTag:            "generator"
-   CalorimetryTagSCE:       "pandoracalinoxyzt"
 
    SelectEvents: []
 

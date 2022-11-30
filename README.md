@@ -63,7 +63,7 @@ If a significant portion is on tape, you need to prestage a dataset so run the s
 Now, create a file list of prestaged data using `get_staged.py` for a given samweb definition i.e.:
 
 ```bash
-get_staged.py PDSPProd4a_MC_6GeV_reco1_sce_datadriven_v1_00
+get-staged.py PDSPProd4a_MC_6GeV_reco1_sce_datadriven_v1_00
 ```
 
 To create a tarball which can run on the remote machines:
@@ -125,7 +125,7 @@ merge-ana.sh <root file name> <file list>
 ```
 or `hadd` (used in `merge-ana.sh`)
 ```bash
-hadd <foor file name> <ROOT files to merge>
+hadd <root file name> <ROOT files to merge>
 ```
 
 Note, that exceeding ~2000 root files will cause the process to crash, so merge files in batches and progressively merge the files.
