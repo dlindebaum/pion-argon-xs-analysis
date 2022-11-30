@@ -169,7 +169,7 @@ def main(options, debug=False):
     bashCommand += f"--expected-lifetime={options.lifetime} " # 3h
     bashCommand += f"--cpu={options.cpu} " # 1
     bashCommand += f"--tar_file_name=dropbox://{options.tarball} "
-    bashCommand += f"--blacklist={options.blacklist}"
+    bashCommand += f"--blacklist={options.blacklist} "
     bashCommand += f"file:///tmp/job_script.sh "
 
     print(bashCommand.split())
