@@ -558,12 +558,12 @@ def PairQuantitiesToCSV(p : tuple):
     """    
     q_names = [
         "mass",
-        "opening angle",
-        "leading energy",
-        "sub leading energy",
-        "momentum",
+        "angle",
+        "lead_energy",
+        "sub_energy",
+        "pi0_mom",
     ]
-    headers = ["true " + q_names[i] for i in range(len(q_names))] + ["reco " + q_names[i] for i in range(len(q_names))] + ["error " + q_names[i] for i in range(len(q_names))]
+    headers = ["true_" + q_names[i] for i in range(len(q_names))] + ["reco_" + q_names[i] for i in range(len(q_names))] + ["error_" + q_names[i] for i in range(len(q_names))]
     print(headers)
     df = pd.DataFrame(np.transpose(np.vstack(p)), columns=headers)
     if save is True:
@@ -687,6 +687,9 @@ def ROOTWorkFlow():
 
         p = Master.CalculateQuantities(s, True)
         PairQuantitiesToCSV(p)
+        #* this is what it should be, but this will fail as we filter out all other PFOs in the shower merging
+        #* so for now stick with the legacy approach to shower merging
+        #p = Master.ShowerPairs(events, np.logical_or(*start_showers))
 
 
                 
