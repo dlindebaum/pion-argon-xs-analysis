@@ -5,16 +5,18 @@ Author: Shyam Bhuller
 
 Description: Module containing core components of analysis code. 
 """
-
-from abc import ABC, abstractmethod
-import warnings
-import uproot
-import awkward as ak
-import time
-import numpy as np
 import itertools
+import time
+import warnings
+from abc import ABC, abstractmethod
+
+import awkward as ak
+import numpy as np
+import uproot
+
 # custom modules
 from python.analysis import vector
+
 
 def timer(func):
     """ Decorator which times a function.
@@ -119,6 +121,7 @@ class Data:
 
     Methods:
         #? should the objects which apply to specific samples be moved? 
+        FindEvents (dict): Returns the run, subrun and event number for events which pass a particlular filter.
         MCMatching (object): truth-reco matching algorithm for pure pi0 sample.
         MatchByAngleBT (tuple): shower matching algorithm using bracktracked info for pure pi0 sample.
         CreateSpecificEventFilter (ak.Array): boolean mask which selects events based on the event number/run number.
@@ -128,7 +131,7 @@ class Data:
         MergeShower (Data): merge PFOs using reco information for pure pi0 sample.
         MergeShowerBT (Data): Merge showers using bactacked matching for pure pi0 sample.
     """
-    def __init__(self, filename : str = None, includeBackTrackedMC : bool = False, nEvents : int = -1, start : int = 0):
+    def __init__(self, filename : str = None, includeBackTrackedMC : bool = True, nEvents : int = -1, start : int = 0):
         self.filename = filename
         if self.filename != None:
             self.nEvents = nEvents
@@ -149,6 +152,22 @@ class Data:
             ak.Array: sorted indices of true photons
         """
         return ak.argsort(self.trueParticles.energy[self.trueParticles.truePhotonMask], ascending=True)
+
+                
+    def FindEvents(self, event_filter : ak.Array = None) -> dict:
+        """ Returns the run, subrun and event number for events which pass a particlular filter.
+
+        Args:
+            event_filter (ak.Array): mask which selects events (1D array)
+
+        Returns:
+            dict: event, subrun and run.
+        """
+        if ak.ravel(event_filter).type.type != ak.types.PrimitiveType("bool"):
+            raise TypeError(f'event_filter must have primitive type "bool", but has primitive type {event_filter.type.type}')
+        if ak.count(event_filter) != ak.count(self.eventNum):
+            raise Exception(f"event_fitler doesn't have an array length equal to the number of events")
+        return {"event" : self.eventNum[event_filter], "subrun" : self.subRun[event_filter], "run" : self.run[event_filter]}
 
     @timer
     def MCMatching(self, cut=0.25, applyFilters : bool = True, returnCopy : bool = False):
@@ -1066,6 +1085,16 @@ class TrueParticleDataBT(ParticleData):
     def sharedHits(self) -> ak.Array:
         self.LoadData("sharedHits", "reco_daughter_PFP_true_byHits_sharedHits")
         return getattr(self, f"_{type(self).__name__}__sharedHits")
+
+    @property
+    def trueBeamVertex(self) -> ak.Array:
+        nTuples = [
+            "reco_beam_PFP_true_byHits_endX"
+            "reco_beam_PFP_true_byHits_endY"
+            "reco_beam_PFP_true_byHits_endZ"
+        ]
+        self.LoadData("trueBeamVertex", nTuples)
+        return getattr(self, f"_{type(self).__name__}__trueBeamVertex")
 
     @property
     def particleNumber(self) -> ak.Array:

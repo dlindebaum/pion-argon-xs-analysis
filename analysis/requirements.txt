@@ -1,0 +1,9 @@
+uproot
+awkward
+numpy
+pandas
+matplotlib
+rich
+tabulate
+xgboost
+ipykernel

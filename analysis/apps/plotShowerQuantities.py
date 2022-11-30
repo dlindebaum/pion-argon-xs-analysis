@@ -6,13 +6,14 @@ Author: Shyam Bhuller
 
 Description: Plot Shower pair quantities produced from ParticleData classes (in csv format)
 """
-
-import os
 import argparse
-import pandas as pd
-import numpy as np
+import os
+
 import awkward as ak
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+
 from python.analysis import Plots
 
 quantities = ["inv_mass", "angle", "lead_energy", "sub_energy", "pi0_mom"]
@@ -148,7 +149,7 @@ def main(args):
     r_l = ["Invariant mass (GeV)", "Opening angle (rad)", "Leading shower energy (GeV)", "Sub leading shower energy (GeV)", "$\pi^{0}$ momentum (GeV)"]
 
     #* plot ranges
-    e_range = [[-1, 1]] * 5
+    e_range = [[-1, 10]] * 5
     #e_range = [[]] * 5
     r_range = [[]] * 5
     r_range[0] = [0, 0.5]
