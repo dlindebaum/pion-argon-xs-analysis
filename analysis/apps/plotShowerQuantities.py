@@ -13,10 +13,39 @@ import awkward as ak
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from rich import print
 
 from python.analysis import Plots
 
-quantities = ["inv_mass", "angle", "lead_energy", "sub_energy", "pi0_mom"]
+#* plot labels
+t_l = [
+    "True leading photon energy (MeV)",
+    "True sub leading photon energy (MeV)",
+    "True opening angle (rad)",
+    "True invariant mass (MeV)",
+    "True $\pi^{0}$ momentum (MeV)"]
+e_l = [
+    "Leading shower energy fractional error",
+    "Sub leading shower energy fractional error",
+    "Opening angle fractional error",
+    "Invariant mass fractional error",
+    "$\pi^{0}$ momentum fractional error"]
+r_l = [
+    "Leading shower energy (MeV)",
+    "Sub leading shower energy (MeV)",
+    "Opening angle (rad)",
+    "Invariant mass (MeV)",
+    "$\pi^{0}$ momentum (MeV)"
+    ]
+
+quantities = [
+    "lead_energy",
+    "sub_energy",
+    "angle", 
+    "inv_mass",
+    "pi0_mom"
+    ]
+
 
 def Plot1D(data : ak.Array, xlabels : list, subDir : str, labels : list, plot_ranges = [[]]*5, legend_loc = ["upper right"]*5, x_scale=["linear"]*5, y_scale=["linear"]*5, norm : bool = True, save : bool = False, outDir : str = "", bins : int = 20, annotation : str = None):
     """ 1D histograms of data for each sample
@@ -143,17 +172,12 @@ def main(args):
     if args.plotsToMake in ["qq", "diff"] and len(args.files) == 1:
         raise Exception(f"{args.plotsToMake} plots require at least two samples")
 
-    #* plot labels
-    t_l = ["True invariant mass (MeV)", "True opening angle (rad)", "True leading photon energy (MeV)", "True Sub leading photon energy (MeV)", "True $\pi^{0}$ momentum (MeV)"]
-    e_l = ["Invariant mass fractional error", "Opening angle fractional error", "Leading shower energy fractional error", "Sub leading shower energy fractional error", "$\pi^{0}$ momentum fractional error"]
-    r_l = ["Invariant mass (MeV)", "Opening angle (rad)", "Leading shower energy (MeV)", "Sub leading shower energy (MeV)", "$\pi^{0}$ momentum (MeV)"]
-
     #* plot ranges
-    e_range = [[-1, 10]] * 5
-    #e_range = [[]] * 5
+    #e_range = [[-1, 10]] * 5
+    e_range = [[]] * 5
     r_range = [[]] * 5
-    r_range[0] = [0, 0.5]
-    r_range[3] = [0, 0.5]
+    #r_range[0] = [0, 500]
+    #r_range[3] = [0, 500]
     t_range = [[]] * 5
 
     #* data to plot
@@ -164,10 +188,10 @@ def main(args):
     for file in args.files:
         print(file)
         data = pd.read_csv(file)
-        data = np.transpose(data.values[:, 1:])
-        t.append(data[0:5, :])
-        r.append(data[5:10, :])
-        e.append(data[10:15, :])
+        print(data)
+        t.append(data.filter(regex=("true.*")).T.values)
+        r.append(data.filter(regex=("reco.*")).T.values)
+        e.append(data.filter(regex=("error.*")).T.values)
 
     t = ak.Array(t)
     r = ak.Array(r)
