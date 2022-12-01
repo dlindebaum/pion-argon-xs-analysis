@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 Created on: 09/08/2022 14:41
 
@@ -240,73 +241,6 @@ class ShowerMergeQuantities:
 
             Plots.PlotHistComparison([b, s], bins=50, xlabel=self.xlabels[i], labels=labels, density=norm, y_scale=scale, annotation=args.dataset)
             if save: Plots.Save(self.selectionVariables[i], outDir)
-
-
-    def Plot2DQuantities(self, signal : ak.Array, background : ak.Array):
-        """ Plot 2D plots for certain quantities
-
-        Args:
-            signal (ak.Array): signal PFOs
-            background (ak.Array): background PFOs
-        """
-        background = background[0]
-        labels = ["background", "signal"]
-        colours = ["blue", "red"]
-
-        legend = []
-        for i in range(len(labels)):
-            legend.append(mpatches.Patch(color=colours[i], label=labels[i]))
-
-        s_alpha = ak.ravel([self.alpha[i][signal[i]] for i in range(2)])
-        b_alpha = ak.ravel([self.alpha[i][background] for i in range(2)])
-        s_x = ak.ravel([self.delta_x[i][signal[i]] for i in range(2)])
-        b_x = ak.ravel([self.delta_x[i][background] for i in range(2)])
-        s_xl = ak.ravel([self.delta_xl[i][signal[i]] for i in range(2)])
-        b_xl = ak.ravel([self.delta_xl[i][background] for i in range(2)])
-        s_xt = ak.ravel([self.delta_xt[i][signal[i]] for i in range(2)])
-        b_xt = ak.ravel([self.delta_xt[i][background] for i in range(2)])
-        s_phi = ak.ravel([self.delta_phi[i][signal[i]] for i in range(2)])
-        b_phi = ak.ravel([self.delta_phi[i][background] for i in range(2)])
-        s_phi = ak.ravel([self.delta_phi[i][signal[i]] for i in range(2)])
-        b_phi = ak.ravel([self.delta_phi[i][background] for i in range(2)])
-        s_d = ak.ravel([self.d[i][signal[i]] for i in range(2)])
-        b_d = ak.ravel([self.d[i][background] for i in range(2)])
-        s_t = ak.ravel([self.t[i][signal[i]] for i in range(2)])
-        b_t = ak.ravel([self.t[i][background] for i in range(2)])
-
-
-        PlotContour(s_alpha[s_alpha < 0.5], s_x[s_alpha < 0.5], b_alpha[b_alpha < 0.5], b_x[b_alpha < 0.5], colours, labels, legend, self.xlabels[0], self.xlabels[1])
-        if save: Plots.Save(f"{self.selectionVariables[0]}-{self.selectionVariables[1]}", outDir)
-
-        PlotContour(s_xl, s_xt, b_xl, b_xt, colours, labels, legend, self.xlabels[2], self.xlabels[3])
-        if save: Plots.Save(f"{self.selectionVariables[2]}-{self.selectionVariables[3]}", outDir)
-
-        PlotContour(s_alpha, s_phi, b_alpha, b_phi, colours, labels, legend, self.xlabels[0], self.xlabels[4])
-        if save: Plots.Save(f"{self.selectionVariables[0]}-{self.selectionVariables[4]}", outDir)
-
-        PlotContour(s_alpha[s_alpha < 0.5], s_d[s_alpha < 0.5], b_alpha[b_alpha < 0.5], b_d[b_alpha < 0.5], colours, labels, legend, self.xlabels[0], self.xlabels[5])
-        if save: Plots.Save(f"{self.selectionVariables[0]}-{self.selectionVariables[5]}", outDir)
-
-        PlotContour(s_alpha[s_t < 200], s_t[s_t < 200], b_alpha[b_t < 200], b_t[b_t < 200], colours, labels, legend, self.xlabels[0], self.xlabels[6])
-        if save: Plots.Save(f"{self.selectionVariables[0]}-{self.selectionVariables[6]}", outDir)
-
-        PlotContour(s_d[s_t < 100], s_t[s_t < 100], b_d[b_t < 100], b_t[b_t < 100], colours, labels, legend, self.xlabels[5], self.xlabels[6])
-        if save: Plots.Save(f"{self.selectionVariables[5]}-{self.selectionVariables[6]}", outDir)
-
-
-def PlotContour(xs, ys, xb, yb, colours, labels, legend, xlabel, ylabel):
-    #TODO move to Plots and correctly document
-    plt.figure()
-    counts, xbins, ybins = np.histogram2d(xs, ys, 10)
-    contours = plt.contour(counts,extent=[xbins.min(), xbins.max(), ybins.min(), ybins.max()], linewidths = 0.5, colors = colours[1], label = labels[1])
-    plt.clabel(contours, inline=True, fontsize=8)
-    counts, xbins, ybins = np.histogram2d(xb, yb, 10)
-    contours = plt.contour(counts,extent=[xbins.min(), xbins.max(), ybins.min(), ybins.max()], linewidths = 0.5, colors = colours[0], label = labels[0])
-    plt.clabel(contours, inline=True, fontsize=8)
-    plt.legend(handles=legend)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.tight_layout()
 
 
 def GetMin(quantity : ak.Array) -> ak.Array:
@@ -776,8 +710,7 @@ def CSVWorkFlow():
         return
     if plotsToMake in ["all", "quantities"]:
         q.PlotQuantities(q.signal, q.background, False)
-    if plotsToMake in ["all", "2D"]:
-        q.Plot2DQuantities(q.signal, q.background)
+
 
 @Master.timer
 def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array, quantities : ShowerMergeQuantities, n_merge : int = -1) -> Master.Data:
