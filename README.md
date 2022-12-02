@@ -9,6 +9,7 @@ LArSoft module which retrieves and calculates some useful quantities to study re
 
 [ProtoDUNE SP data/MC list](https://wiki.dunescience.org/wiki/Look_at_ProtoDUNE_SP_data)
 
+---
 ## Installation
 Repository should be cloned in either `src/dunetpc` or `src/protoduneana`. The CMakeLists file that exists in the same directory as the cloned repo should be modified to include this line:
 ```
