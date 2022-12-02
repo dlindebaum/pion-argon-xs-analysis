@@ -14,37 +14,23 @@ from memory_profiler import profile
 
 print("Running pair analysis")
 
-# Edit the base classes to fit what we want to be doing with pairs
-class RecoPairData(Master.RecoParticleData):
-    @property
-    def pandoraTag(self):
-        self.LoadData("pandoraTag", "pandoraTag")
-        return getattr(self, f"_{type(self).__name__}__pandoraTag")
-
-class PairData(Master.Data):
-    def __init__(self, _filename : str = None, includeBackTrackedMC : bool = False, _nEvents : int = -1, _start : int = 0) -> None:
-        super().__init__(_filename, includeBackTrackedMC, _nEvents, _start)
-        if self.filename != None:
-            self.recoParticles = RecoPairData(self) # Set the reco particles as Pairs to inlucde pandora tag and CNN score
-    
-
 # Functions
 
 # This is a memory management tool, currently not really necessary
 def del_prop(obj, property_name):
     """
-    Deletes a properties from the supplied `RecoPairData` object.
+    Deletes a properties from the supplied `RecoPaticleData` type object.
 
-    Requires the `obj` to have a property ``_RecoPairData__{property_name}``.
+    Requires the `obj` to have a property ``_RecoPaticleData__{property_name}``.
 
     Parameters
     ----------
-    obj : RecoPairData
+    obj : RecoPaticleData
         Object from which to remove the property.
     property_name : str
         Property to be deleted (should match the name of the property).
     """
-    del(obj.__dict__["_RecoPairData__" + property_name])
+    del(obj.__dict__["_RecoPaticleData__" + property_name])
     return
 
 
@@ -59,7 +45,7 @@ def del_prop(obj, property_name):
 def load_and_cut_data(path, batch_size = -1, batch_start = -1, two_photon=True, cnn_cut=True, valid_momenta=True, beam_slice_cut=True):
     """
     Loads the ntuple file from `path` and performs the initial cuts,
-    returning the result as a `PairData` instance.
+    returning the result as a `Data` instance.
 
     A single batch of data can be loaded an cut on by changing `batch_size`
     and `batch_start`.
@@ -91,11 +77,11 @@ def load_and_cut_data(path, batch_size = -1, batch_start = -1, two_photon=True, 
 
     Returns
     -------
-    events : PairData
-        A PairData instance containing the cut events.
+    events : Data
+        A Data instance containing the cut events.
     """
 
-    events = PairData(path, includeBackTrackedMC=True, _nEvents=batch_size, _start=batch_start)
+    events = Master.Data(path, includeBackTrackedMC=True, nEvents=batch_size, start=batch_start)
 
     # Apply cuts:
     n = [["Event selection", "Number of PFOs", "Average PFOs per event", "Number of events", "Percentage of events remaining"]]
@@ -582,7 +568,7 @@ def make_truth_comparison_plots(
 
     Parameters
     ----------
-    events : PairData
+    events : Data
         Events from which data is gathered.
     photon_indicies : dict or np.ndarray
         Indicies of the selected best particles. May be passed as a dictionary containing
@@ -734,6 +720,9 @@ def make_truth_comparison_plots(
 
 def get_mother_pdgs(events):
     """
+    DEPRECATED
+    Use trueParticleBT.motherPdg
+
     Loops through each event (warning: slow) and creates a reco-type array of PDG codes
     of mother particle. E.g. a photon from a pi0 will be assigned a PDG code 111.
 
@@ -749,7 +738,7 @@ def get_mother_pdgs(events):
 
     Parameters
     ----------
-    events : PairData
+    events : Data
         Set of events to produce the mother PDG codes for.
 
     Returns
@@ -860,7 +849,7 @@ def truth_pfos_in_two_photon_decay(events, sort=True):
 
     Parameters
     ----------
-    events : PairData
+    events : Data
         Set of events in which to look for photons.
     sort : bool, optional
         Defines whether the photon IDs are sorted by energy or not.
@@ -945,7 +934,7 @@ def get_best_pairs(
 
     Parameters
     ----------
-    events : PairData
+    events : Data
         Set of events for which the pairs should be found.
     method : {'mom', 'energy', 'dir', 'purity', 'completeness', 'all'} or \
 list, optional
@@ -1033,8 +1022,8 @@ list, optional
         "mom": events.recoParticles.momentum,
         "dir": events.recoParticles.direction,
         "energy": events.recoParticles.energy,
-        "purity": events.trueParticlesBT.matchedHits / events.trueParticlesBT.hitsInRecoCluster,
-        "completeness": events.trueParticlesBT.sharedHits / events.trueParticlesBT.mcParticleHits
+        "purity": events.trueParticlesBT.purity,
+        "completeness": events.trueParticlesBT.completeness
     }
     # TODO Change energy ... to use a smaller zeros/like (events.trueParticles.number ?)
     true_props = {
@@ -1216,7 +1205,7 @@ def pair_photon_counts(events, pair_coords, mother_pdgs):
 
     Parameters
     ----------
-    events : PairData
+    events : Data
         Events used to generate the pairs.
     pair_coords : ak.zip({'0':ak.Array, '1':ak.Array})
         Inidicies to construct the pairs.
@@ -1375,7 +1364,7 @@ def paired_mass(events, pair_coords):
 
     Parameters
     ----------
-    events : PairData
+    events : Data
         Events from which the pairs are drawn.
     pair_coords : ak.zip({'0':ak.Array, '1':ak.Array})
         Inidicies to construct the pairs.
@@ -1400,7 +1389,7 @@ def paired_momentum(events, pair_coords):
 
     Parameters
     ----------
-    events : PairData
+    events : Data
         Events from which the pairs are drawn.
     pair_coords : ak.zip({'0':ak.Array, '1':ak.Array})
         Inidicies to construct the pairs.
@@ -1423,7 +1412,7 @@ def paired_energy(events, pair_coords):
 
     Parameters
     ----------
-    events : PairData
+    events : Data
         Events from which the pairs are drawn.
     pair_coords : ak.zip({'0':ak.Array, '1':ak.Array})
         Inidicies to construct the pairs.
@@ -1446,7 +1435,7 @@ def paired_closest_approach(events, pair_coords):
 
     Parameters
     ----------
-    events : PairData
+    events : Data
         Events from which the pairs are drawn.
     pair_coords : ak.zip({'0':ak.Array, '1':ak.Array})
         Inidicies to construct the pairs.
@@ -1471,7 +1460,7 @@ def paired_beam_impact(events, pair_coords):
 
     Parameters
     ----------
-    events : PairData
+    events : Data
         Events from which the pairs are drawn.
     pair_coords : ak.zip({'0':ak.Array, '1':ak.Array})
         Inidicies to construct the pairs.
@@ -1502,7 +1491,7 @@ def paired_separation(events, pair_coords):
 
     Parameters
     ----------
-    events : PairData
+    events : Data
         Events from which the pairs are drawn.
     pair_coords : ak.zip({'0':ak.Array, '1':ak.Array})
         Inidicies to construct the pairs.
@@ -1526,7 +1515,7 @@ def paired_beam_slice(events, pair_coords):
 
     Parameters
     ----------
-    events : PairData
+    events : Data
         Events from which the pairs are drawn.
     pair_coords : ak.zip({'0':ak.Array, '1':ak.Array})
         Inidicies to construct the pairs.
@@ -1549,7 +1538,7 @@ def paired_opening_angle(events, pair_coords):
 
     Parameters
     ----------
-    events : PairData
+    events : Data
         Events from which the pairs are drawn.
     pair_coords : ak.zip({'0':ak.Array, '1':ak.Array})
         Inidicies to construct the pairs.
@@ -1575,7 +1564,7 @@ def paired_opening_angle(events, pair_coords):
 
 if __name__ == "__main__":
 
-    evts = load_and_cut_data("/scratch/wx21978/pi0/root_files/1GeV_beam_v3/Prod4a_6GeV_BeamSim_00_a.root", batch_size = -1, batch_start = -1)
+    evts = load_and_cut_data("/scratch/wx21978/pi0/root_files/1GeV_beam_v3/Prod4a_1GeV_BeamSim_00_a.root", batch_size = 800, batch_start = 0)
 
     # print("Locals:")
     # local_vars = list(locals().items())
@@ -1592,11 +1581,9 @@ if __name__ == "__main__":
     # Now we just need to use these pair indicies to locate our pairs and do stuff with them
 
 
-    # mother_pdgs = get_mother_pdgs(evts)
-
     # print("\nPlotting nHits...")
     # simple_sig_bkg_hist(
-    #     "nHits", "Count", evts.recoParticles.nHits, np.logical_and(evts.trueParticlesBT.pdg == 22, mother_pdgs == 111),
+    #     "nHits", "Count", evts.recoParticles.nHits, np.logical_and(evts.trueParticlesBT.pdg == 22, evts.trueParticlesBT.motherPdg == 111),
     #     range=[None, 100], bins = [200, 100], histtype='step', density=True
     # )
     # del_prop(evts.recoParticles, "nHits")
@@ -1621,7 +1608,7 @@ if __name__ == "__main__":
     sig_count = pair_sig_counts(truth_pair_indicies, pair_coords)
     del truth_pair_indicies
 
-    plot_directory = "/users/wx21978/projects/pion-phys/plots/photon_pairs_1GeV/"
+    plot_directory = "/users/wx21978/projects/pion-phys/plots/test_plots/"
 
     print("Plotting masses...")
     # masses = paired_mass(evts, pair_coords)
