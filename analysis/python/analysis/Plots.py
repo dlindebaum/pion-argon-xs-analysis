@@ -112,7 +112,7 @@ def PlotHistComparison(datas, xRange : list = [], bins : int = 100, xlabel : str
     plt.figure()
     for i in range(len(labels)):
         data = datas[i]
-        if len(xRange) == 2:
+        if xRange and len(xRange) == 2:
             data = data[data > xRange[0]]
             data = data[data < xRange[1]]
         if i == 0:
