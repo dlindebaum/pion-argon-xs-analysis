@@ -174,7 +174,7 @@ def SelectSample(events : Master.Data, nDaughters : int, merge : bool = False, b
 
     if merge is True and backtracked is True:
         if cheatMerging is True:
-            filtered, null = filtered.MergePFPCheat()
+            filtered, null = filtered.MergePFOCheat()
             filtered.Filter([null], [null])
         else:
             filtered = filtered.MergeShowerBT(best_match[selection])
