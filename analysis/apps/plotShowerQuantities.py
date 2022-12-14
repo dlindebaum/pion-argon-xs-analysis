@@ -149,10 +149,10 @@ def main(args):
             "True $\pi^{0}$ momentum (MeV)"
         ),
         "error": info(
+            "Invariant mass fractional error",
+            "Opening angle fractional error",
             "Leading shower energy fractional error",
             "Sub leading shower energy fractional error",
-            "Opening angle fractional error",
-            "Invariant mass fractional error",
             "$\pi^{0}$ momentum fractional error"
         ),
     }
@@ -204,6 +204,13 @@ if __name__ == "__main__":
     parser.parse_args()
     args = parser.parse_args()
 
+    if "all" in args.type:
+        args.type = ["reco", "true", "error"]
+    if "all" in args.quantity:
+        args.quantity = ["mass", "angle", "lead_energy", "sub_energy", "pi0_mom"]
+    if "all" in args.plots:
+        args.plots = ["diff", "hist", "qq"]
+
     #* check and format arguements
     CheckArguement(args.type, "specify the type of data to plot with '-t/--type'")
     CheckArguement(args.quantity, "specify the quantitiy to plot with '-q/--quantity'")
@@ -226,12 +233,5 @@ if __name__ == "__main__":
         args.log = "log"
     else:
         args.log = "linear"
-
-    if "all" in args.type:
-        args.type = ["reco", "true", "error"]
-    if "all" in args.quantity:
-        args.quantity = ["mass", "angle", "lead_energy", "sub_energy", "pi0_mom"]
-    if "all" in args.plots:
-        args.plots = ["diff", "hist", "qq"]
 
     main(args)
