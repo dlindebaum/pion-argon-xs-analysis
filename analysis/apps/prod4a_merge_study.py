@@ -647,7 +647,6 @@ def ShowerMergingCriteria(q : ShowerMergeQuantities):
     max_val = np.array(max_val)
 
     values = np.linspace(min_val+(0.1*max_val), max_val-(0.1*max_val), 3, True) # values that are used to create combinations of cuts to optimize
-    output = []
     metric_labels = ["s", "b", "s/b", "$s\\sqrt{b}$", "purity", "$\\epsilon_{s}$", "$\\epsilon_{b}$", "$\\epsilon$"] # performance metrics to choose cuts #? add purity*efficiency?
 
     #* create input data strutcure
@@ -661,30 +660,30 @@ def ShowerMergingCriteria(q : ShowerMergeQuantities):
     print("list of cut types:")
     print(cuts)
 
+    if args.csv is None:
+        output_path = f"{outDir}analysedCuts.csv"
+    else:
+        output_path = f"{outDir}{args.csv}"
+
     #* loop through all combination of values for each parameter and optmize the final cut
     for initial_cuts in itertools.product(*values.T):
         for i in range(len(cuts)):
             cuts[i].value = initial_cuts[i]
         cutOptimization = CutOptimization.OptimizeSingleCut(q, cuts, False)
         c, m = cutOptimization.Optimize(10, CutOptimization.MaxSRootBRatio) # scan over 10 bins and optimize cut by looking for max s/sqrt(b)
+
         o = [c[i] + m[i] for i in range(len(c))] # combine output
-        output.extend(o)
+        o = pd.DataFrame(o, columns = q.selectionVariables + metric_labels)
+        o.to_csv(output_path, mode = "a", header = not os.path.exists(output_path))
+
         counter += 1
         end = '\n' if counter == 0 else '\r'
         print(f" {Spinner(counter, 'box')} progess: {counter/(len(values)**len(initial_cuts))*100:.3f}% | {counter} | {len(values)**len(initial_cuts)}", end=end)
 
-    #* save results
-    output = pd.DataFrame(output, columns=q.selectionVariables+metric_labels)
-    # print(tabulate(output, showindex=False, headers=output.columns, floatfmt=".3f", tablefmt="fancy"))
-    print(output)
-    if plotsToMake == "all":
-        scatter_matrix(output[metric_labels], figsize=(20, 20), diagonal="kde")
-    if save is True:
-        Plots.Save("scatter_matrix", outDir)
-    if args.csv is None:
-        output.to_csv(f"{outDir}analysedCuts.csv")
-    else:
-        output.to_csv(f"{outDir}{args.csv}")
+    # if plotsToMake == "all":
+    #     scatter_matrix(output[metric_labels], figsize=(20, 20), diagonal="kde")
+    # if save is True:
+    #     Plots.Save("scatter_matrix", outDir)
 
 
 def CSVWorkFlow():
@@ -872,7 +871,8 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--out-csv", dest="csv", type=str, default=None, help="output csv filename (will default to whatever type of data is produced)")
     parser.add_argument("--annotation", dest="dataset", type=str, help="annotation for plots.")
     args = parser.parse_args() #! run in command line
-
+    print(vars(args))
+    
     # args.dataset = "PDSPProd4a_MC_6GeV_reco1_sce_datadriven_v1_00"
 
     file = args.file
