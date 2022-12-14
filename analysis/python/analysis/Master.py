@@ -372,9 +372,6 @@ class Data:
     @timer
     def MergePFOCheat(self):
         """ Merges all PFPs which backtrack to the same True particle.
-
-        Returns:
-            Tuple: Data class with merged PFOs and a list of PFOs which have underfined momentum after merging 
         """
         mcIndex = self.trueParticlesBT.number
         if mcIndex is None:
