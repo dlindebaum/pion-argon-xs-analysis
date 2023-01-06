@@ -204,17 +204,17 @@ if __name__ == "__main__":
     parser.parse_args()
     args = parser.parse_args()
 
+    #* check and format arguements
+    CheckArguement(args.type, "specify the type of data to plot with '-t/--type'")
+    CheckArguement(args.quantity, "specify the quantitiy to plot with '-q/--quantity'")
+    CheckArguement(args.plots, "specify the type of plot to make '-p/--plots'")
+
     if "all" in args.type:
         args.type = ["reco", "true", "error"]
     if "all" in args.quantity:
         args.quantity = ["mass", "angle", "lead_energy", "sub_energy", "pi0_mom"]
     if "all" in args.plots:
         args.plots = ["diff", "hist", "qq"]
-
-    #* check and format arguements
-    CheckArguement(args.type, "specify the type of data to plot with '-t/--type'")
-    CheckArguement(args.quantity, "specify the quantitiy to plot with '-q/--quantity'")
-    CheckArguement(args.plots, "specify the type of plot to make '-p/--plots'")
 
     if any(x in args.plots for x in ["qq", "diff"]):
         if len(args.files) == 1:

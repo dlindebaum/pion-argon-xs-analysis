@@ -66,6 +66,12 @@ def main(args : argparse.Namespace):
 
 if __name__ == "__main__":
     example_usage = """Example Uasge:
+        Produce geometric quantities:
+        python run-analysis-batches.py <root file/s> -a quantities
+
+        Produce shower pairs:
+        python run-analysis-batches.py <root file/s> -a shower-pairs -c <file of cuts>
+        
     """
     parser = argparse.ArgumentParser(description = "Run shower merging analysis in batches", formatter_class = argparse.RawDescriptionHelpFormatter, epilog = example_usage)
     parser.add_argument(dest = "files", type = str, nargs = "+", help = "ROOT file to open.")

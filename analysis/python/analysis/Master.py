@@ -370,8 +370,10 @@ class Data:
         self.Filter([hasBeam], [hasBeam]) # filter data
     
     @timer
-    def MergePFOCheat(self):
+    def MergePFOCheat(self, merge_method : int = 0):
         """ Merges all PFPs which backtrack to the same True particle.
+        Args:
+            merge_method (int, optional): method to calculate merged momenta/energy
         """
         mcIndex = self.trueParticlesBT.number
         if mcIndex is None:
@@ -383,28 +385,57 @@ class Data:
         uniqueIndex = ak.pad_none(uniqueIndex, maxPFOs)
         for i in range(maxPFOs):
             pfos = mcIndex == uniqueIndex[:, i] # sort pfps based on which true particle they back-track to
-            
             # get index of backtracked particle
             ind = ak.local_index(pfos, -1)
             ind = ak.min(ind[pfos], -1)
 
-            # sum momenta of PFPs to merge
             p = self.recoParticles.momentum[pfos]
             p = ak.where(p.x == -999, {"x": 0,"y": 0,"z": 0}, p) # dont merge PFP's with null data
-            p_m = ak.sum(p, -1) # sum all momentum vectors
-            e_m = vector.magnitude(p_m)
-            dir_m = vector.normalize(p_m)
+            if merge_method == 0:
+                # sum momenta and use magitude as energy and norm as direction
+                p_m = ak.sum(p, -1) # sum all momentum vectors
+                e_m = vector.magnitude(p_m)
+                dir_m = vector.normalize(p_m)
+            if merge_method == 1:
+                # sum energy, sum momenta, use norm as direction and summed energy * direction as summed momenta
+                e = self.recoParticles.energy[pfos]
+                e = ak.where(e < 0, 0, e)
+                e_m = ak.sum(e, -1)
+                dir_m = vector.normalize(ak.sum(p, -1))
+                p_m = vector.prod(e_m, dir_m)
+
+            # recompute the purity/completeness of the PFO
+            true_hits = self.trueParticlesBT.nHits[pfos][:, 0] # true hits for all PFOs are the same
+            shared_hits = self.trueParticlesBT.sharedHits[pfos]
+            shared_hits = ak.where(shared_hits < 0, 0, shared_hits) # exclude null data
+            shared_hits = ak.sum(shared_hits, -1)
+            reco_cluster_hits = self.trueParticlesBT.hitsInRecoCluster[pfos]
+            reco_cluster_hits = ak.where(reco_cluster_hits < 0, 0, reco_cluster_hits) # exclude null data
+            reco_cluster_hits = ak.sum(reco_cluster_hits, -1)
+
+            purity = shared_hits / reco_cluster_hits
+            completeness = shared_hits / true_hits
 
             if i == 0:
                 truePFPMask = ak.unflatten(ind, 1, -1)
                 p_new = ak.unflatten(p_m, 1, -1)
                 e_new = ak.unflatten(e_m, 1, -1)
                 dir_new = ak.unflatten(dir_m, 1, -1)
+                true_hits_new = ak.unflatten(true_hits, 1, -1)
+                shared_hits_new = ak.unflatten(shared_hits, 1, -1)
+                reco_cluster_hits_new = ak.unflatten(reco_cluster_hits, 1, -1)
+                purity_new = ak.unflatten(purity, 1, -1)
+                completeness_new = ak.unflatten(completeness, 1, -1)
             else:
                 truePFPMask = ak.concatenate([truePFPMask, ak.unflatten(ind, 1, -1)], axis=-1)
                 p_new = ak.concatenate([p_new, ak.unflatten(p_m, 1, -1)], axis=-1)
                 e_new = ak.concatenate([e_new, ak.unflatten(e_m, 1, -1)], axis=-1)
                 dir_new = ak.concatenate([dir_new, ak.unflatten(dir_m, 1, -1)], axis=-1)        
+                true_hits_new = ak.concatenate([true_hits_new, ak.unflatten(true_hits, 1, -1)], axis=-1)
+                shared_hits_new = ak.concatenate([shared_hits_new, ak.unflatten(shared_hits, 1, -1)], axis=-1)
+                reco_cluster_hits_new = ak.concatenate([reco_cluster_hits_new, ak.unflatten(reco_cluster_hits, 1, -1)], axis=-1)
+                purity_new = ak.concatenate([purity_new, ak.unflatten(purity, 1, -1)], axis=-1)
+                completeness_new = ak.concatenate([completeness_new, ak.unflatten(completeness, 1, -1)], axis=-1)
 
         truePFPMask = ak.fill_none(truePFPMask, -999)
         truePFPMask = truePFPMask[truePFPMask != -999]
@@ -413,6 +444,14 @@ class Data:
         self.recoParticles._RecoParticleData__momentum = p_new
         self.recoParticles._RecoParticleData__energy = e_new
         self.recoParticles._RecoParticleData__direction = dir_new
+
+        self.trueParticlesBT._TrueParticleDataBT__nHits = true_hits_new
+        self.trueParticlesBT._TrueParticleDataBT__sharedHits = shared_hits_new
+        self.trueParticlesBT._TrueParticleDataBT__hitsInRecoCluster = reco_cluster_hits_new
+        self.trueParticlesBT._TrueParticleDataBT__purity = purity_new
+        self.trueParticlesBT._TrueParticleDataBT__completeness = completeness_new
+
+        print(f"{truePFPMask=}")
         self.Filter([truePFPMask]) # filter to get the merged PFOs only
         
         null = np.logical_not(ak.any(self.recoParticles.energy == 0, -1)) # exlucde events where all PFP's merged had no valid momentmum vector
@@ -1081,6 +1120,15 @@ class TrueParticleDataBT(ParticleData):
         return getattr(self, f"_{type(self).__name__}__energyByHits")
 
     @property
+    def momentumByHits(self) -> ak.Record:
+        if not hasattr(self, f"_{type(self).__name__}__momentumByHits"):
+            mom = vector.prod(self.energyByHits, self.direction)
+            mom = ak.where(self.direction.x == -999, {"x": -999,"y": -999,"z": -999}, mom)
+            mom = ak.where(self.energy < 0, {"x": -999,"y": -999,"z": -999}, mom)
+            self.__momentumByHits = mom
+        return self.__momentumByHits
+
+    @property
     def hitsInRecoCluster(self) -> ak.Array:
         self.LoadData("hitsInRecoCluster", "reco_daughter_PFP_true_byHits_hitsInRecoCluster")
         return getattr(self, f"_{type(self).__name__}__hitsInRecoCluster")
@@ -1373,6 +1421,27 @@ class ShowerPairs:
     @property
     def true_pi0_mom(self):
         return ShowerPairs.Pi0Mom(self.events.trueParticlesBT.momentum[self.pairs])
+    
+    ##############################################################################################
+    @property
+    def cheated_lead_energy(self):
+        return self.events.trueParticlesBT.energyByHits[self.leading]
+    
+    @property
+    def cheated_sub_energy(self):
+        return self.events.trueParticlesBT.energyByHits[self.subleading]
+
+    @property
+    def cheated_angle(self):
+        return ShowerPairs.OpeningAngle(self.events.trueParticlesBT.direction[self.pairs]) # same as true_angle
+    
+    @property
+    def cheated_mass(self):
+        return ShowerPairs.Mass(self.events.trueParticlesBT.energyByHits[self.pairs], self.cheated_angle)
+
+    @property
+    def cheated_pi0_mom(self):
+        return ShowerPairs.Pi0Mom(self.events.trueParticlesBT.momentumByHits[self.pairs])
 
     ##############################################################################################
     @property
@@ -1401,7 +1470,7 @@ class ShowerPairs:
             pd.DataFrame: dataframe.
         """
         #* search terms are based on the prefix (sace sensitive) of the property methods, when adding new quantities they should conform to this standard
-        search_terms = ["reco", "true", "error"]
+        search_terms = ["reco", "true", "cheated", "error"]
         
         df = {}
         for search in search_terms:

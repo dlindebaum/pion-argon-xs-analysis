@@ -475,29 +475,6 @@ def StartShowerByDistance(events : Master.Data) -> ak.Array:
     return start_showers
 
 
-def PairQuantitiesToCSV(p : tuple):
-    """ Save Shower pair quantities to a csv.
-
-    Args:
-        p (tuple): tuple of pair quantities
-    """    
-    q_names = [
-        "mass",
-        "angle",
-        "lead_energy",
-        "sub_energy",
-        "pi0_mom",
-    ]
-    headers = ["true_" + q_names[i] for i in range(len(q_names))] + ["reco_" + q_names[i] for i in range(len(q_names))] + ["error_" + q_names[i] for i in range(len(q_names))]
-    print(headers)
-    df = pd.DataFrame(np.transpose(np.vstack(p)), columns=headers)
-    if save is True:
-        if args.csv is None:
-            df.to_csv(f"{outDir}shower-quantities.csv")
-        else:
-            df.to_csv(f"{outDir}{args.csv}")
-
-
 def ROOTWorkFlow():
     """ Analysis that can be done when supplied a NTuple file.
         Can calculate:
@@ -560,23 +537,23 @@ def ROOTWorkFlow():
             completeness = events.trueParticlesBT.completeness
 
             start_showers_all = np.logical_or(*start_showers)
-            Plots.PlotHist(ak.ravel(purity[start_showers_all]), xlabel="start shower purity", annotation=args.dataset)
+            Plots.PlotHist(ak.ravel(purity[start_showers_all]), xlabel="start shower purity", y_scale = scale, annotation=args.dataset)
             if save: Plots.Save("ss-purity", outDir+subDir)
-            Plots.PlotHist(ak.ravel(completeness[start_showers_all]), xlabel="start shower completeness", annotation=args.dataset)
+            Plots.PlotHist(ak.ravel(completeness[start_showers_all]), xlabel="start shower completeness", y_scale = scale, annotation=args.dataset)
             if save: Plots.Save("ss-completeness", outDir+subDir)
 
-            Plots.PlotHistComparison([ak.ravel(purity[to_merge][background]), ak.ravel(purity[to_merge][np.logical_or(*signal)])], labels=labels, xlabel="purity", annotation=args.dataset)
+            Plots.PlotHistComparison([ak.ravel(purity[to_merge][background]), ak.ravel(purity[to_merge][np.logical_or(*signal)])], labels=labels, xlabel="purity", y_scale = scale, annotation=args.dataset)
             if save: Plots.Save("purity", outDir+subDir)
-            Plots.PlotHistComparison([ak.ravel(completeness[to_merge][background]), ak.ravel(completeness[to_merge][np.logical_or(*signal)])], labels=labels, xlabel="completeness", annotation=args.dataset)
+            Plots.PlotHistComparison([ak.ravel(completeness[to_merge][background]), ak.ravel(completeness[to_merge][np.logical_or(*signal)])], labels=labels, xlabel="completeness", y_scale = scale, annotation=args.dataset)
             if save: Plots.Save("completeness", outDir+subDir)
 
             Plots.PlotHist2D(ak.ravel(purity), ak.ravel(completeness), xlabel="purity", ylabel="completeness")
             if save: Plots.Save("purity_vs_completeness", outDir+subDir)
 
-            Plots.PlotHist2D(ak.ravel(purity[to_merge][np.logical_or(*signal)]), ak.ravel(completeness[to_merge][np.logical_or(*signal)]), xlabel="purity", ylabel="completeness", title = "signal")
+            Plots.PlotHist2D(ak.ravel(purity[to_merge][np.logical_or(*signal)]), ak.ravel(completeness[to_merge][np.logical_or(*signal)]), bins = 25, xlabel="purity", ylabel="completeness", title = "signal")
             if save: Plots.Save("purity_vs_completeness_s", outDir+subDir)
 
-            Plots.PlotHist2D(ak.ravel(purity[to_merge][background]), ak.ravel(completeness[to_merge][background]), xlabel="purity", ylabel="completeness", title = "background")
+            Plots.PlotHist2D(ak.ravel(purity[to_merge][background]), ak.ravel(completeness[to_merge][background]), bins = 25, xlabel="purity", ylabel="completeness", title = "background")
             if save: Plots.Save("purity_vs_completeness_b", outDir+subDir)
 
         #* calculate geometric quantities
@@ -591,7 +568,7 @@ def ROOTWorkFlow():
             q.bestCut = args.cut_type
             q.to_merge_dir = events.recoParticles.direction
             q.to_merge_pos = events.recoParticles.startPos
-            start_showers = ShowerMerging(events, start_showers, to_merge, q, -1)
+            start_showers = ShowerMerging(events, start_showers, q, -1)
             start_showers_all = np.logical_or(*start_showers)
 
         elif args.merge == "unmerged":
@@ -603,7 +580,7 @@ def ROOTWorkFlow():
             # pi0_PFOs = [events.trueParticlesBT.number == start_shower_ID[:, i] for i in range(2)]
             # pi0_PFOs = np.logical_or(*pi0_PFOs)
             # events.Filter([pi0_PFOs])
-            events.MergePFOCheat()
+            events.MergePFOCheat(1)
             start_showers_all = events.trueParticlesBT.mother == ak.flatten(events.trueParticles.number[events.trueParticles.PrimaryPi0Mask])
 
         else:
@@ -680,11 +657,6 @@ def ShowerMergingCriteria(q : ShowerMergeQuantities):
         end = '\n' if counter == 0 else '\r'
         print(f" {Spinner(counter, 'box')} progess: {counter/(len(values)**len(initial_cuts))*100:.3f}% | {counter} | {len(values)**len(initial_cuts)}", end=end)
 
-    # if plotsToMake == "all":
-    #     scatter_matrix(output[metric_labels], figsize=(20, 20), diagonal="kde")
-    # if save is True:
-    #     Plots.Save("scatter_matrix", outDir)
-
 
 def CSVWorkFlow():
     """ Analysis that can be done with the csv files produced by this program
@@ -699,15 +671,15 @@ def CSVWorkFlow():
 
 
 @Master.timer
-def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array, quantities : ShowerMergeQuantities, n_merge : int = -1) -> Master.Data:
+def ShowerMerging(events : Master.Data, start_showers : ak.Array, quantities : ShowerMergeQuantities, n_merge : int = -1, merge_method : int = 0) -> Master.Data:
     """ Shower merging algorithm based on reco data.
 
     Args:
         events (Master.Data): events to study
         start_showers (ak.Array): mask of starting showers
-        to_merge (ak.Array): mask of PFOs to merge
         quantities (ShowerMergeQuantities): quantities to determine which PFOs to merge to which starting shower
-        n_merge (int, optional): maximum number of PFOs to merge per event. Defaults to -1 (no maximum).
+        n_merge (int, optional): maximum number of PFOs to merge per event. Defaults to -1 (no maximum)
+        merge_method (int, optional): how to compute the new values of momentum/energy
 
     Returns:
         Master.Data: events with PFOs merged to start showers (so PFOs merged are removed from the events and start shower values are updated accordingly)
@@ -786,11 +758,18 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.
     scores = ak.where(scores == 3, 1, scores) # [1, 1, 1]
 
     #* get momenta of PFOs to merge
-    momentum = events.recoParticles.momentum#[to_merge]
+    momentum = events.recoParticles.momentum
+    if merge_method == 1:
+        energy = events.recoParticles.energy
     if n_merge > 0:
-        momentum = ak.pad_none(momentum, ak.max(ak.count(momentum, -1)), -1) # pad jagged array for easier slicing 
+        momentum = ak.pad_none(momentum, ak.max(ak.count(momentum, -1)), -1) # pad jagged array for easier slicing
         momentum = ak.fill_none(momentum, {"x": 0, "y": 0, "z": 0}, 1) # None -> zero momentum
         momentum = momentum[:, :n_merge] # get max PFO number to merge
+
+        if merge_method == 1:
+            energy = ak.pad_none(energy, ak.max(ak.count(energy, -1)), -1) 
+            energy = ak.fill_none(energy, 0, 1)
+            energy = energy[:, :n_merge]
 
         scores = ak.pad_none(scores, ak.max(ak.count(scores, -1)), -1)
         scores = ak.fill_none(scores, -1) # padded scores are -1 i.e. not considered for merging
@@ -798,17 +777,34 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.
  
     #* merge all PFOs based on which starting shower they should be merged with i.e. this value is the total amount we correct the shower momenta by
     sorted_momentum_to_merge = []
+    if merge_method == 1:
+        sorted_energy_to_merge = []
     for i in range(2): #? is this always 2? What happens when we want to study events with > 1 pi0?
         val = scores == i
-        val = ak.where(val, momentum, vector.prod(0, momentum))
-        sorted_momentum_to_merge.append(ak.sum(val, -1))
+        sorted_momenta = ak.where(val, momentum, vector.prod(0, momentum))
+        sorted_momentum_to_merge.append(ak.sum(sorted_momenta, -1))
+        if merge_method == 1:
+            sorted_energy = ak.where(val, energy, 0)
+            sorted_energy_to_merge.append(ak.sum(sorted_energy, -1))
 
     #* add correction to each starting shower and calculate shower properties
-    # momentum = [ak.unflatten(vector.add(events.recoParticles.momentum[start_showers_all][:, i], sorted_momentum_to_merge[i]), 1, -1) for i in range(2)]
-    momentum = [vector.add(events.recoParticles.momentum[start_showers[i]], sorted_momentum_to_merge[i]) for i in range(2)]
-    energy = ak.concatenate([vector.magnitude(momentum[i]) for i in range(2)], -1)
-    direction = ak.concatenate([vector.normalize(momentum[i]) for i in range(2)], -1)
-    momentum = ak.concatenate(momentum, -1)
+    #* merge via momentum sum
+    if merge_method == 0:
+        momentum = [vector.add(events.recoParticles.momentum[start_showers[i]], sorted_momentum_to_merge[i]) for i in range(2)]
+        energy = ak.concatenate([vector.magnitude(momentum[i]) for i in range(2)], -1)
+        direction = ak.concatenate([vector.normalize(momentum[i]) for i in range(2)], -1)
+        momentum = ak.concatenate(momentum, -1)
+
+    #* merge using energy i.e. summing hits, direction calculation is unchanged
+    if merge_method == 1:
+        momentum = [vector.add(events.recoParticles.momentum[start_showers[i]], sorted_momentum_to_merge[i]) for i in range(2)]
+        energy = [events.recoParticles.energy[start_showers[i]] + sorted_energy_to_merge[i] for i in range(2)]
+        direction = [vector.normalize(momentum[i]) for i in range(2)]
+        momentum = [vector.prod(energy[i], direction[i]) for i in range(2)]
+
+        energy = ak.concatenate(energy, -1)
+        direction = ak.concatenate(direction, -1)
+        momentum = ak.concatenate(momentum, -1)
 
     events.recoParticles._RecoParticleData__momentum = ReplaceShowerPairValue(start_showers, events.recoParticles.momentum, momentum)
     events.recoParticles._RecoParticleData__energy = ReplaceShowerPairValue(start_showers, events.recoParticles.energy, energy)
@@ -873,8 +869,6 @@ if __name__ == "__main__":
     args = parser.parse_args() #! run in command line
     print(vars(args))
     
-    # args.dataset = "PDSPProd4a_MC_6GeV_reco1_sce_datadriven_v1_00"
-
     file = args.file
     save = args.save
     outDir = args.outDir
