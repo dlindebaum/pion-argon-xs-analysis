@@ -87,6 +87,9 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   std::vector<double> StartHitQuantityCalculator(TVector3 &hitStart, TVector3 &hit, TVector3 &direction);
   std::vector<std::vector<double> > StartHits(unsigned int n_hits, art::FindManyP<recob::SpacePoint> spFromHits, TVector3 &showerStart, TVector3 &direction);
   double ShowerEnergyCalculator(const std::vector<art::Ptr<recob::Hit> > &hits, const detinfo::DetectorPropertiesData &detProp, art::FindManyP<recob::SpacePoint> &spFromHits);
+  int CountHitsInPlane(std::vector<const recob::Hit *> &hits, int plane);
+  std::vector<recob::PFParticle*> HitToPFParticle(const recob::Hit &hit, const art::Event &evt);
+
   void reset();
 
   void AnalyseDaughterPFP(const recob::PFParticle &daughterPFP, const art::Event &evt, const detinfo::DetectorPropertiesData &detProp, anab::MVAReader<recob::Hit,4> &hitResults);
@@ -120,7 +123,7 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   G4Mode fRetrieveG4;
   bool fDebug;
 
-  //Initialise protodune analysis utility classes
+  // Initialise protodune analysis utility classes
   protoana::ProtoDUNEPFParticleUtils pfpUtil;
   protoana::ProtoDUNETrackUtils trkUtil;
   protoana::ProtoDUNETruthUtils truthUtil;
@@ -245,8 +248,13 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   std::vector<int> beamCosmicScore;
 
   std::vector<int> sharedHits;
+  std::vector<int> sharedHits_collection;
   std::vector<int> mcParticleHits;
+  std::vector<int> mcParticleHits_collection;
   std::vector<int> hitsInRecoCluster;
+  std::vector<int> hitsInRecoCluster_collection;
+
+  std::vector<int> hit_multiplicity;
 
   std::vector<double> mcParticleEnergyByHits;
   int beamSliceID;
@@ -463,6 +471,48 @@ std::vector<std::vector<double> > protoana::pi0TestSelection::StartHits(unsigned
   return out;
 }
 
+
+int protoana::pi0TestSelection::CountHitsInPlane(std::vector<const recob::Hit *> &hits, int plane)
+{
+  int n = 0;
+  for(size_t i = 0; i < hits.size(); i++)
+  {
+    if(hits[i]->View() == plane)
+    {
+      n++;
+    }
+  }
+  return n;
+}
+
+
+std::vector<recob::PFParticle*> protoana::pi0TestSelection::HitToPFParticle(const recob::Hit &hit, const art::Event &evt)
+{
+  std::vector<recob::PFParticle*> particles;
+
+  art::ValidHandle<std::vector<recob::PFParticle> > pfpVec = evt.getValidHandle<std::vector<recob::PFParticle> >( fPFParticleTag ); // object to allow us to reference the PFParticles in the event
+  
+  std::chrono::time_point start = std::chrono::high_resolution_clock::now();
+  
+  for(recob::PFParticle pfp : *pfpVec)
+  {
+    std::vector< art::Ptr< recob::Hit > > hits = pfpUtil.GetPFParticleHits_Ptrs(pfp, evt, fPFParticleTag);
+    for(art::Ptr<recob::Hit> h : hits)
+    {
+      if(h->PeakTime() == hit.PeakTime() && h->WireID() == hit.WireID() && h->View() == hit.View())
+      {
+        particles.push_back(&pfp);
+        break;
+      }
+    }
+  }
+  
+  std::chrono::time_point stop = std::chrono::high_resolution_clock::now();
+  std::cout << "iterating over PFPs took: " << std::chrono::duration_cast<std::chrono::milliseconds>(stop - start).count() << " ms." << std::endl;
+  
+  return particles;
+}
+
 // Clears the various analyser outputs at the start of a new event to remove the previous events contents
 void protoana::pi0TestSelection::reset()
 {
@@ -541,11 +591,17 @@ void protoana::pi0TestSelection::reset()
   beamCosmicScore.clear();
 
   hitsInRecoCluster.clear();
+  hitsInRecoCluster_collection.clear();
   mcParticleHits.clear();
+  mcParticleHits_collection.clear();
   sharedHits.clear();
+  sharedHits_collection.clear();
+
 
   mcParticleEnergyByHits.clear();
   matchedMotherPDG.clear();
+
+  hit_multiplicity.clear();
 }
 
 
@@ -919,19 +975,47 @@ void protoana::pi0TestSelection::AnalyseMCTruth(const recob::PFParticle &daughte
     //completeness (sharedHits / mcParticleHits)
     std::vector<MCParticleSharedHits> list = truthUtil.GetMCParticleListByHits(clockData, daughter, evt, fPFParticleTag, fHitTag);
     int cluster_hits = 0;
+    int cluster_collection_hits = 0;
     int shared_hits = 0;
-    for( size_t j = 0; j < list.size(); ++j ){
-      if( list[j].particle == match.particle ){
-         shared_hits = list[j].nSharedHits + list[j].nSharedDeltaRayHits;
+    int shared_collection_hits = 0;
+    // for( size_t j = 0; j < list.size(); ++j ){
+    //   if( list[j].particle == match.particle ){
+    //      shared_hits = list[j].nSharedHits + list[j].nSharedDeltaRayHits;
+    //   }
+    //   cluster_hits += list[j].nSharedHits + list[j].nSharedDeltaRayHits;
+    // }
+    for(size_t i = 0; i < list.size(); i++)
+    {
+      std::vector<const recob::Hit*> hits = truthUtil.GetSharedHits(clockData, *list[i].particle, daughter, evt, fPFParticleTag, false);
+      std::vector<const recob::Hit*> delta_ray_hits = truthUtil.GetSharedHits(clockData, *list[i].particle, daughter, evt, fPFParticleTag, true);
+      int count = CountHitsInPlane(hits, 2) + CountHitsInPlane(delta_ray_hits, 2);
+      if(list[i].particle == match.particle)
+      {
+        shared_hits = hits.size() + delta_ray_hits.size();
+        shared_collection_hits = count;
       }
-      cluster_hits += list[j].nSharedHits + list[j].nSharedDeltaRayHits;
+      cluster_hits += hits.size() + delta_ray_hits.size();
+      cluster_collection_hits += count;
     }
     hitsInRecoCluster.push_back(cluster_hits);
-
+    hitsInRecoCluster_collection.push_back(cluster_collection_hits);
     sharedHits.push_back(shared_hits);
-    
+    sharedHits_collection.push_back(shared_collection_hits);
+
     std::vector<art::Ptr<recob::Hit> > mc_art_hits = GetMCParticleArtHits( evt, clockData, *match.particle, hitVec);
+    int mc_art_collection_hits = 0;
+    for(size_t i = 0; i < mc_art_hits.size(); i++)
+    {
+      std::vector<recob::PFParticle*> particles = HitToPFParticle(*mc_art_hits[i], evt);
+      hit_multiplicity.push_back(particles.size());
+      std::cout << "number of PFParticles this hit assosiates to: " << particles.size() << std::endl;
+      if(mc_art_hits[i]->View() == 2)
+      {
+        mc_art_collection_hits++;
+      }
+    }
     mcParticleHits.push_back(mc_art_hits.size());
+    mcParticleHits_collection.push_back(mc_art_collection_hits);
 
     art::FindManyP<recob::SpacePoint> spFromHits(mc_art_hits, evt, fHitTag);    
     mcParticleEnergyByHits.push_back(ShowerEnergyCalculator(mc_art_hits, detProp, spFromHits));
@@ -957,6 +1041,9 @@ void protoana::pi0TestSelection::AnalyseMCTruth(const recob::PFParticle &daughte
     hitsInRecoCluster.push_back(-999);
     mcParticleHits.push_back(-999);
     sharedHits.push_back(-999);
+    hitsInRecoCluster_collection.push_back(-999);
+    mcParticleHits_collection.push_back(-999);
+    sharedHits_collection.push_back(-999);
     mcParticleEnergyByHits.push_back(-999);
   }
   if(fDebug)
@@ -1120,9 +1207,15 @@ void protoana::pi0TestSelection::beginJob()
   fOutTree->Branch("reco_daughter_PFP_true_byHits_nHits", &mcParticleHits);
   fOutTree->Branch("reco_daughter_PFP_true_byHits_sharedHits", &sharedHits);
 
+  fOutTree->Branch("reco_daughter_PFP_true_byHits_hitsInRecoCluster_collection", &hitsInRecoCluster_collection);
+  fOutTree->Branch("reco_daughter_PFP_true_byHits_nHits_collection", &mcParticleHits_collection);
+  fOutTree->Branch("reco_daughter_PFP_true_byHits_sharedHits_collection", &sharedHits_collection);
+
   fOutTree->Branch("reco_daughter_PFP_true_byHits_EnergyByHits", &mcParticleEnergyByHits);
   fOutTree->Branch("reco_daughter_PFP_true_byHits_Mother_pdg", &matchedMotherPDG);
   fOutTree->Branch("reco_beam_sliceID", &beamSliceID);
+
+  fOutTree->Branch("hit_multiplicity", &hit_multiplicity);
 }
 
 
