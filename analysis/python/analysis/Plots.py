@@ -47,10 +47,11 @@ def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label : str 
     if newFigure is True: plt.figure()
     height, edges, _ = plt.hist(data, bins, label=label, alpha=alpha, density=density, histtype=histtype)
     binWidth = round((edges[-1] - edges[0]) / len(edges), sf)
+    # TODO: make ylabel a parameter
     if density == False:
-        yl = "Number of events (bin width=" + str(binWidth) + ")"
+        yl = "Number of entries (bin width=" + str(binWidth) + ")"
     else:
-        yl = "Normalized number of events (bin width=" + str(binWidth) + ")"
+        yl = "Normalized number of entries (bin width=" + str(binWidth) + ")"
     plt.ylabel(yl)
     plt.xlabel(xlabel)
     plt.xscale(x_scale)
