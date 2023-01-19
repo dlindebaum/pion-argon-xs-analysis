@@ -7,6 +7,7 @@ Description: Event display object.
 """
 import awkward as ak
 import matplotlib.pyplot as plt
+import matplotlib.patheffects as pe
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 
@@ -165,7 +166,7 @@ class EventDisplay:
         
         return
 
-    def Text(self, point : ak.Record, text : str, fontsize : int = 16):
+    def Text(self, point : ak.Record, text : str, fontsize : int = 16, colour = "black"):
         """ Draw text.
 
         Args:
@@ -174,11 +175,11 @@ class EventDisplay:
             fontsize (int, optional): font size. Defaults to 16.
         """
         if hasattr(self, "fig2D"):
-            self.xy.text(point.x, point.y, str(text), fontsize = fontsize, clip_on = True)
-            self.xz.text(point.x, point.z, str(text), fontsize = fontsize, clip_on = True)
+            self.xy.text(point.x, point.y, str(text), fontsize = fontsize, clip_on = True, color = colour, path_effects = [pe.withStroke(linewidth = 1, foreground = "black")])
+            self.xz.text(point.x, point.z, str(text), fontsize = fontsize, clip_on = True, color = colour, path_effects = [pe.withStroke(linewidth = 1, foreground = "black")])
 
         if hasattr(self, "fig3D"):
-            self.ax3D.text(point.x, point.z, point.y, str(text), fontsize = fontsize, clip_on = True)
+            self.ax3D.text(point.x, point.z, point.y, str(text), fontsize = fontsize, clip_on = True, color = colour, path_effects = [pe.withStroke(linewidth = 1, foreground = "black")])
             self.ax3D.set_clip_on(True) # prevents text objects from being rendered outside of the axes bounds
 
         return
