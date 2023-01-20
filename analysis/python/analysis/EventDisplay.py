@@ -9,7 +9,6 @@ import awkward as ak
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
 import numpy as np
-from mpl_toolkits.mplot3d import Axes3D
 
 from python.analysis import vector
 
