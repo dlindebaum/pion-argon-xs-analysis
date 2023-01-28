@@ -6,8 +6,8 @@ Author: Shyam Bhuller
 Description: Event display object.
 """
 import awkward as ak
-import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
+import matplotlib.pyplot as plt
 import numpy as np
 
 from python.analysis import vector
