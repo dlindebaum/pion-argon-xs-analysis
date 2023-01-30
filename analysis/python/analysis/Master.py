@@ -834,7 +834,12 @@ class RecoParticleData(ParticleData):
         showerLength (ak.Array): length of shower (if applicable)
         showerConeAngle (ak.Array): width of shower (if applicable)
         cnnScore (ak.Array): shower-track like score.
-        beamVertex (ak.Record): end point of the beam particle     
+        beamVertex (ak.Record): end point of the beam particle
+        spacePoints (ak.Record): hit space points
+        channel (ak.Array): hit channel
+        peakTime (ak.Array): hit peak time
+        integral (ak.Array): hit integral
+        hit_energy (ak.Array): hit energy
 
         
     Methods:
@@ -946,6 +951,35 @@ class RecoParticleData(ParticleData):
         self.LoadData("beamVertex", nTuples)
         return getattr(self, f"_{type(self).__name__}__beamVertex")
 
+    @property
+    def spacePoints(self) -> ak.Record:
+        nTuples = [
+            "reco_daughter_allShower_spacePointX",
+            "reco_daughter_allShower_spacePointY",
+            "reco_daughter_allShower_spacePointZ"
+        ]
+        self.LoadData("spacePoints", nTuples)
+        return getattr(self, f"_{type(self).__name__}__spacePoints")
+
+    @property
+    def channel(self) -> ak.Array:
+        self.LoadData("channel", "reco_daughter_allShower_hit_channel")
+        return getattr(self, f"_{type(self).__name__}__channel")
+
+    @property
+    def peakTime(self) -> ak.Array:
+        self.LoadData("peakTime", "reco_daughter_allShower_hit_peakTime")
+        return getattr(self, f"_{type(self).__name__}__peakTime")
+
+    @property
+    def integral(self) -> ak.Array:
+        self.LoadData("integral", "reco_daughter_allSHower_hit_integral")
+        return getattr(self, f"_{type(self).__name__}__integral")
+
+    @property
+    def hit_energy(self) -> type:
+        self.LoadData("hit_energy", "reco_daughter_allShower_hit_energy")
+        return getattr(self, f"_{type(self).__name__}__hit_energy")
 
     def CalculatePairQuantities(self, useBT : bool = False) -> tuple:
         """ Calculate reconstructed shower pair quantities.
@@ -1074,7 +1108,19 @@ class TrueParticleDataBT(ParticleData):
         trueBeamVertex (ak.Record): end poisition of backtracked true beam particle
         purity (ak.Array): fraction of shared hits in reconstructed object
         completeness (ak.Array): fraction of shared hits in the backtrackted true particle
-        particleNumber: placeholder for ROOT files which don't have the particle number stored as NTuples
+        hitsInRecoCluster_collection (ak.Array): total hits in a reco cluster
+        nHits_collection (ak.Array): true particle hits
+        sharedHits_collection (ak.Array): hits shared by both reco and backtracked true particle
+        trueBeamVertex_collection (ak.Record): end poisition of backtracked true beam particle
+        purity_collection (ak.Array): fraction of shared hits in reconstructed object
+        completeness_collection (ak.Array): fraction of shared hits in the backtrackted true particle
+        spacePoints (ak.Record): hit space points
+        channel (ak.Array): hit channel
+        peakTime (ak.Array): hit peak time
+        integral (ak.Array): hit integral
+        hit_energy (ak.Array): hit energy
+        
+        particleNumber (ak.Array): placeholder for ROOT files which don't have the particle number stored as NTuples
         SingleMatch (ak.Array): mask of events with only 1 unique backtracked particle
 
     Methods:
@@ -1222,6 +1268,36 @@ class TrueParticleDataBT(ParticleData):
         if not hasattr(self, f"_{type(self).__name__}__completeness_collection"):
             self.__completeness_collection = self.sharedHits_collection / self.nHits_collection
         return self.__completeness_collection
+
+    @property
+    def spacePoint(self) -> type:
+        nTuples = [
+            "reco_daughter_PFP_true_byHits_spacePointX",
+            "reco_daughter_PFP_true_byHits_spacePointY",
+            "reco_daughter_PFP_true_byHits_spacePointZ"
+        ]
+        self.LoadData("spacePoint", "nTuples")
+        return getattr(self, f"_{type(self).__name__}__spacePoint")
+
+    @property
+    def channel(self) -> ak.Array:
+        self.LoadData("channel", "reco_daughter_PFP_true_byHits_hit_channel")
+        return getattr(self, f"_{type(self).__name__}__channel")
+
+    @property
+    def peakTime(self) -> ak.Array:
+        self.LoadData("peakTime", "reco_daughter_PFP_true_byHits_hit_peakTime")
+        return getattr(self, f"_{type(self).__name__}__peakTime")
+
+    @property
+    def integral(self) -> ak.Array:
+        self.LoadData("integral", "reco_daughter_PFP_true_byHits_hit_integral")
+        return getattr(self, f"_{type(self).__name__}__integral")
+
+    @property
+    def hit_energy(self) -> ak.Array:
+        self.LoadData("hit_energy", "reco_daughter_PFP_true_byHits_hit_energy")
+        return getattr(self, f"_{type(self).__name__}__hit_energy")
 
     @property
     def particleNumber(self) -> ak.Array:
