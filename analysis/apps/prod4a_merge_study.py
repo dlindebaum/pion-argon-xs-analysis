@@ -671,7 +671,7 @@ def CSVWorkFlow():
 
 
 @Master.timer
-def ShowerMerging(events : Master.Data, start_showers : ak.Array, quantities : ShowerMergeQuantities, n_merge : int = -1, merge_method : int = 0) -> Master.Data:
+def ShowerMerging(events : Master.Data, start_showers : ak.Array, quantities : ShowerMergeQuantities, n_merge : int = -1, merge_method : int = 0, make_copy : bool = False) -> Master.Data:
     """ Shower merging algorithm based on reco data.
 
     Args:
@@ -680,6 +680,7 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, quantities : S
         quantities (ShowerMergeQuantities): quantities to determine which PFOs to merge to which starting shower
         n_merge (int, optional): maximum number of PFOs to merge per event. Defaults to -1 (no maximum)
         merge_method (int, optional): how to compute the new values of momentum/energy
+        merge_copy (bool, optional): return a copy of the events class or modify the existing object
 
     Returns:
         Master.Data: events with PFOs merged to start showers (so PFOs merged are removed from the events and start shower values are updated accordingly)
@@ -731,6 +732,11 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, quantities : S
         new = ak.where(mask[0], values[:, 0], quantity)
         new = ak.where(mask[1], values[:, 1], new)
         return new
+
+    def AssignQuantities(events : Master.Data):
+        events.recoParticles._RecoParticleData__momentum = ReplaceShowerPairValue(start_showers, events.recoParticles.momentum, momentum)
+        events.recoParticles._RecoParticleData__energy = ReplaceShowerPairValue(start_showers, events.recoParticles.energy, energy)
+        events.recoParticles._RecoParticleData__direction = ReplaceShowerPairValue(start_showers, events.recoParticles.direction, direction)
 
     #* retrieve quantities and find which start shower is closest to each PFO for each variable
     quantities.Evaluate(events, start_showers)
@@ -806,14 +812,17 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, quantities : S
         direction = ak.concatenate(direction, -1)
         momentum = ak.concatenate(momentum, -1)
 
-    events.recoParticles._RecoParticleData__momentum = ReplaceShowerPairValue(start_showers, events.recoParticles.momentum, momentum)
-    events.recoParticles._RecoParticleData__energy = ReplaceShowerPairValue(start_showers, events.recoParticles.energy, energy)
-    events.recoParticles._RecoParticleData__direction = ReplaceShowerPairValue(start_showers, events.recoParticles.direction, direction)
-
-
     # now we need to remove the merged PFOs from the data
-    events.Filter([~mask_all])
-    return [events.recoParticles.number == start_showers_ID[:, i] for i in range(2)]
+    if make_copy:
+        merged = events.Filter(returnCopy = True)
+        AssignQuantities(merged)
+        merged.Filter([~mask_all])
+        new_start_showers = [merged.recoParticles.number == start_showers_ID[:, i] for i in range(2)]
+        return merged, new_start_showers
+    else:
+        AssignQuantities(events)
+        events.Filter([~mask_all])
+        return [events.recoParticles.number == start_showers_ID[:, i] for i in range(2)]
 
 
 @Master.timer
