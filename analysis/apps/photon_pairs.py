@@ -3,16 +3,13 @@
 # Imports
 import sys
 sys.path.insert(1, '/users/wx21978/projects/pion-phys/pi0-analysis/analysis/')
+import os
 import numpy as np
 import awkward as ak
 import pandas as pd
 import matplotlib.pyplot as plt
-import pickle
-from python.analysis import Master, vector
+from python.analysis import Master, vector, PairPlots
 import time
-from memory_profiler import profile
-
-print("Running pair analysis")
 
 # Functions
 
@@ -42,7 +39,7 @@ def del_prop(obj, property_name):
 #     plt.savefig("/users/wx21978/projects/pion-phys/plots/photon_pairs/PFO_dist_nPFPs>2.png")
 #     plt.close()
 
-def load_and_cut_data(path, batch_size = -1, batch_start = -1, two_photon=True, cnn_cut=True, valid_momenta=True, beam_slice_cut=True):
+def load_and_cut_data(path, batch_size = -1, batch_start = -1, pion_count='one', two_photon=True, cnn_cut=True, valid_momenta=True, beam_slice_cut=True):
     """
     Loads the ntuple file from `path` and performs the initial cuts,
     returning the result as a `Data` instance.
@@ -51,7 +48,7 @@ def load_and_cut_data(path, batch_size = -1, batch_start = -1, two_photon=True, 
     and `batch_start`.
 
     The cuts used can be partially controlled by the `two_photon`, `cnn_cut`,
-    `valid_momenta` and `beam_slice_cut` arguments.
+    `valid_momenta`, `beam_slice_cut`, and `no_pi0` arguments.
 
     Parameters
     ----------
@@ -62,6 +59,12 @@ def load_and_cut_data(path, batch_size = -1, batch_start = -1, two_photon=True, 
     batch_start : int, optional
         Sets which event to start reading from. Default is -1
         (first event).
+    pion_count : str {zero, one, both, all}, optional
+        Sets the number of pi0s created by the beam that must be
+        present in the final events. `'zero'` selects only events
+        with no pi0s, `'one'` selects only 1 pi0, `'both'` selects
+        events with 0 or 1 pi0s, and `'all'` removes the cut.
+        Default is `'one'`.
     two_photon : bool, optional
         If true, only accepts events with 1 pi0 which decays to two
         photons. Default is True.
@@ -87,14 +90,44 @@ def load_and_cut_data(path, batch_size = -1, batch_start = -1, two_photon=True, 
     n = [["Event selection", "Number of PFOs", "Average PFOs per event", "Number of events", "Percentage of events remaining"]]
     n.append(["no selection", ak.count(events.trueParticlesBT.pdg),ak.count(events.trueParticlesBT.pdg)/ak.count(events.eventNum), ak.count(events.eventNum), 100])
 
-    if two_photon:
+    if pion_count == 'one':
         # Single pi0
         ts = time.time()
         Master.BeamMCFilter(events, returnCopy=False)
         print(f"single pi0 done in {time.time()  - ts}s")
         evt_remaining = ak.count(events.eventNum)
         n.append([ "beam -> pi0 + X", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
+    elif pion_count == 'zero':
+        # No pi0s
+        ts = time.time()
+        Master.BeamMCFilter(events, n_pi0=0, returnCopy=False)
+        print(f"no pi0s done in {time.time()  - ts}s")
+        evt_remaining = ak.count(events.eventNum)
+        n.append([ "no pi0s from beam", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
+    elif pion_count == 'both':
+        # 0 or 1 pi0s
+        ts = time.time()
+        
+        # Copying the BeamMCFitler here to allow multiple valid numbers
+        empty = ak.num(events.trueParticles.number) > 0
+        events.Filter([empty], [empty])
 
+        #* only look at events with 0 or 1 primary pi0s
+        pi0 = events.trueParticles.PrimaryPi0Mask
+        single_primary_pi0 = np.logical_or(ak.num(pi0[pi0]) == 0, ak.num(pi0[pi0]) == 1)
+        events.Filter([single_primary_pi0], [single_primary_pi0])
+
+        #* remove true particles which aren't primaries
+        primary_pi0 = events.trueParticles.PrimaryPi0Mask
+        primary_daughter = events.trueParticles.truePhotonMask # this is fine so long as we only care about pi0->gamma gamma
+        primaries = np.logical_or(primary_pi0, primary_daughter)
+        events.Filter([], [primaries])
+
+        print(f"0 or 1 pi0s done in {time.time()  - ts}s")
+        evt_remaining = ak.count(events.eventNum)
+        n.append([ "0/1 pi0s from beam", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
+
+    if two_photon:
         # Require diphoton decay from the pi0
         ts = time.time()
         f = Master.Pi0TwoBodyDecayMask(events)
@@ -102,6 +135,15 @@ def load_and_cut_data(path, batch_size = -1, batch_start = -1, two_photon=True, 
         print(f"pi+ beam done in {time.time()  - ts}s")
         evt_remaining = ak.count(events.eventNum)
         n.append(["diphoton decay", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
+
+    # if no_pi0:
+    #     # Require no pi0s presenet
+    #     ts = time.time()
+    #     f = Master.Pi0TwoBodyDecayMask(events)
+    #     events.Filter([f], [f])
+    #     print(f"pi+ beam done in {time.time()  - ts}s")
+    #     evt_remaining = ak.count(events.eventNum)
+    #     n.append(["diphoton decay", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
 
     # Require a beam particle to exist. ETA ~15s:
     ts = time.time()
@@ -111,6 +153,7 @@ def load_and_cut_data(path, batch_size = -1, batch_start = -1, two_photon=True, 
     n.append([ "beam", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
 
     # Require pi+ beam. ETA ~10s
+    # Check with reco pi+? (Currently cheating the pi+ selection)
     ts = time.time()
     true_beam = events.trueParticlesBT.pdg[events.recoParticles.beam_number == events.recoParticles.number]
     f = ak.all(true_beam == 211, -1)
@@ -128,6 +171,7 @@ def load_and_cut_data(path, batch_size = -1, batch_start = -1, two_photon=True, 
     # evt_remaining = ak.count(events.eventNum)
     # n.append(["nHits >= 51", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
 
+    # Cheat this?
     if beam_slice_cut:
         slice_mask = [[]] * ak.num(events.recoParticles.beam_number, axis=0)
         ts = time.time()
@@ -601,8 +645,8 @@ def make_truth_comparison_plots(
 
     # Ideally, we can use the trueParticle (not trueparticleBT} data, since trueParticle is likely
     #   already loaded, and trueParticleBT likely hasn't been
-    true_energies = events.trueParticlesBT.energy[valid_events] * 1000
-    # true_energies_mom = vector.magnitude(events.trueParticlesBT.momentum)[valid_events] * 1000
+    true_energies = events.trueParticlesBT.energy[valid_events]
+    # true_energies_mom = vector.magnitude(events.trueParticlesBT.momentum)[valid_events]
     true_dirs = events.trueParticlesBT.direction[valid_events]
 
     reco_energies = events.recoParticles.energy[valid_events]
@@ -641,7 +685,7 @@ def make_truth_comparison_plots(
         # index = np.arange(photon_indicies[prop][:,0].shape[0])[valid_events]
         # for j in range(np.sum(valid_events)):
         #     true_ids = events.trueParticles.number[index[j]].to_numpy()
-        #     true_energy = events.trueParticles.energy[index[j]].to_numpy() * 1000
+        #     true_energy = events.trueParticles.energy[index[j]].to_numpy()
             
         #     true_energy_i = true_energy[true_ids == photon_i_ids[j]]
         #     # true_energy_ii = true_energy[true_ids == pfo_truth_ids[photon_ii_indicies]]
@@ -1171,7 +1215,7 @@ list, optional
     else:
         return truth_indicies_photon_beam, valid_event_mask
 
-def pair_sig_counts(truth_mask, pair_coords):
+def pair_apply_sig_mask(truth_mask, pair_coords):
     """
     Returns a count of the number of PFOs which exist in `truth_mask` for
     each pair in a set of pairs defined by `pair_coords`.
@@ -1193,6 +1237,83 @@ def pair_sig_counts(truth_mask, pair_coords):
 
     # Add the results
     return true_counts[pair_coords["0"]] + true_counts[pair_coords["1"]]
+
+def gen_pair_sig_counts(events, pair_coords):
+    """
+    Returns a count of the number of PFOs in a pair which
+    contribute to a good signal:
+    - 2 means the PFOs come from different photons produced
+    by the same pi0
+    - 1 means 1 PFO of a photon from a pi0 exists, or both
+    PFOs were from the same photon
+    - No photons from pi0s
+
+    Parameters
+    ----------
+    truth_mask : ak.Array
+        Array of boolean values masking a set of signal PFOs.
+    pair_coords : ak.zip({'0':ak.Array, '1':ak.Array})
+        Inidicies to construct the pairs.
+    
+    Returns
+    -------
+    sig_counts : ak.Array()
+        Number of signal PFOs in each pair.
+    """
+    photon_from_pions = np.logical_and(events.trueParticlesBT.pdg == 22, events.trueParticlesBT.motherPdg == 111)
+
+
+    different_daughter = events.trueParticlesBT.number[pair_coords["0"]] != events.trueParticlesBT.number[pair_coords["1"]]
+    same_mother = events.trueParticlesBT.mother[pair_coords["0"]] == events.trueParticlesBT.mother[pair_coords["1"]]
+
+    same_mother_and_different_daughter = np.logical_and(same_mother, different_daughter)
+    del same_mother
+    del different_daughter
+
+    both_photons = np.logical_and(photon_from_pions[pair_coords["0"]], photon_from_pions[pair_coords["1"]])
+
+    photons_form_pi0 = np.logical_and(both_photons, same_mother_and_different_daughter)
+    del same_mother_and_different_daughter
+    del both_photons
+
+
+    at_least_one_photon = np.logical_or(photon_from_pions[pair_coords["0"]], photon_from_pions[pair_coords["1"]])
+
+    # Add the results
+    return np.multiply(at_least_one_photon, 1) + np.multiply(photons_form_pi0, 1)
+
+def get_sig_count(events, pair_coordinates, single_best=False, **kwargs):
+    """
+    Generates an awkward array matching the size of `pair_coordinates` indicating
+    how many good signal PFOs are in the indexed pair.
+
+    If `single_best` is set to `True`, a maximum of one pair may have two signal
+    PFOs per event. This is determined by the `get_best_pairs()` function, and
+    can take additional keyword arguments. See `get_best_pairs` for details.
+
+    Parameters
+    ----------
+    events : Data
+        Events used to generate the pairs.
+    pair_coords : ak.zip({'0':ak.Array, '1':ak.Array})
+        Inidicies to construct the pairs.
+    single_best : bool, optional
+        Whether to select only one best pair per event, or if multiple
+        pairs can have a signal count of 2. Default is False.
+    kwargs
+        Additional keyword arguments to be passed to the `get_best_pairs`
+        function if `single_best` is set to `True`.
+    """
+    if single_best:
+        truth_pair_indicies, valid_events = get_best_pairs(events, **kwargs)
+
+        events.Filter([valid_events], [valid_events])
+        truth_pair_indicies = truth_pair_indicies[valid_events]
+        del valid_events
+
+        return pair_apply_sig_mask(truth_pair_indicies, pair_coordinates)
+    else:
+        return gen_pair_sig_counts(events, pair_coordinates)
 
 def pair_photon_counts(events, pair_coords, mother_pdgs):
     """
@@ -1564,82 +1685,21 @@ def paired_opening_angle(events, pair_coords):
 
 if __name__ == "__main__":
 
-    evts = load_and_cut_data("/scratch/wx21978/pi0/root_files/1GeV_beam_v3/Prod4a_1GeV_BeamSim_00_a.root", batch_size = 800, batch_start = 0)
+    print("Running pair analysis")
 
-    # print("Locals:")
-    # local_vars = list(locals().items())
-    # for var, obj in local_vars:
-    #     print(f"{var}: {sys.getsizeof(obj)}")
-    # print("Globals:")
-    # global_vars = list(globals().items())
-    # for var, obj in global_vars:
-    #     print(f"{var}: {sys.getsizeof(obj)}")
+    plot_config = PairPlots.PlotConfig()
+    plot_config.SAVE_FOLDER = "/users/wx21978/projects/pion-phys/plots/photon_pairs_1GeV_multi_sig/"
 
-    # Basic method: We come up with a set of pairs.
-    # Argcombinations give the results as indicies, so we don't have to worry about
-    # making sure combinations is consistent  between calls.
-    # Now we just need to use these pair indicies to locate our pairs and do stuff with them
+    # Setting up the batch plotters:
+    mass_plotter        = PairPlots.PairHistsBatchPlotter("mass", "MeV",            plot_config=plot_config, range=[None, 1000, 400], bins=[500, 100, 40])
+    momentum_plotter    = PairPlots.PairHistsBatchPlotter("momentum", "MeV",        plot_config=plot_config, range=[None, 2000, 500], bins=[500,200,60])
+    energy_plotter      = PairPlots.PairHistsBatchPlotter("energy", "MeV",          plot_config=plot_config, range=[None, 2000, 500], bins=[500,200,60])
+    approach_plotter    = PairPlots.PairHistsBatchPlotter("closest approach", "cm", plot_config=plot_config, range=[None, (-100, 50)], bins=[100,50])
+    separations_plotter = PairPlots.PairHistsBatchPlotter("pfo separation", "cm",   plot_config=plot_config, range=[None, 200], bins=[100,30])
+    impact_plotter      = PairPlots.PairHistsBatchPlotter("beam impact", "cm",      plot_config=plot_config, range=[None, 200], bins=[100,30])
+    angles_plotter      = PairPlots.PairHistsBatchPlotter("angle", "rad",           plot_config=plot_config, range=None, bins=100)
 
-
-    # print("\nPlotting nHits...")
-    # simple_sig_bkg_hist(
-    #     "nHits", "Count", evts.recoParticles.nHits, np.logical_and(evts.trueParticlesBT.pdg == 22, evts.trueParticlesBT.motherPdg == 111),
-    #     range=[None, 100], bins = [200, 100], histtype='step', density=True
-    # )
-    # del_prop(evts.recoParticles, "nHits")
-
-
-    truth_pair_indicies, valid_events = get_best_pairs(evts, method="mom", return_type="mask", report=True)
-
-    evts.Filter([valid_events], [valid_events])
-    truth_pair_indicies = truth_pair_indicies[valid_events]
-    del valid_events
-
-
-    # # Trying to profile the memory useage
-    # @profile
-    # def get_pair_coords():
-    #     return ak.argcombinations(evts.recoParticles.number, 2)
-    # pair_coords = get_pair_coords
-
-    pair_coords = ak.argcombinations(evts.recoParticles.number, 2)
-
-
-    sig_count = pair_sig_counts(truth_pair_indicies, pair_coords)
-    del truth_pair_indicies
-
-    plot_directory = "/users/wx21978/projects/pion-phys/plots/test_plots/"
-
-    print("Plotting masses...")
-    # masses = paired_mass(evts, pair_coords)
-    plot_pair_hists("mass", "MeV", paired_mass(evts, pair_coords), sig_count, range=[None, 1000, 400], bins=[500, 100, 40], path=plot_directory)
-
-    print("Plotting momenta...")
-    # momentum = paired_momentum(evts, pair_coords)
-    # mom_mag = vector.magnitude(momentum)
-    plot_pair_hists("momentum", "MeV", vector.magnitude(paired_momentum(evts, pair_coords)), sig_count, range=[None, 2000, 500], bins=[500,200,60], path=plot_directory)
-    
-    print("Plotting energies...")
-    # energies = paired_energy(evts, pair_coords)
-    plot_pair_hists("energy", "MeV", paired_energy(evts, pair_coords), sig_count, range=[None, 2000, 500], bins=[500,200,60], path=plot_directory)
-
-    print("Plotting closest approaches...")
-    # approaches = paired_closest_approach(evts, pair_coords)
-    plot_pair_hists("closest approach", "cm", paired_closest_approach(evts, pair_coords), sig_count, range=[None, (-100, 50)], bins=[100,50], path=plot_directory)
-
-    print("Plotting separations...")
-    # separations = paired_separation(evts, pair_coords)
-    plot_pair_hists("pfo separation", "cm", paired_separation(evts, pair_coords), sig_count, range=[None, 200], bins=[100,30], path=plot_directory)
-
-    print("Plotting beam impact parameters...")
-    # impacts = paired_beam_impact(evts, pair_coords)
-    plot_pair_hists("beam impact", "cm", paired_beam_impact(evts, pair_coords), sig_count, range=[None, 200], bins=[100,30], path=plot_directory)
-
-    print("Plotting opening angles...")
-    angles = paired_opening_angle(evts, pair_coords)
-    plot_pair_hists("angle", "rad", angles, sig_count, range=None, bins=100, bin_size="(pi/50)rad", path=plot_directory)
-
-    # Weight the bin widths to keep then with equal area on a sphere
+    # Make the bin widths that keep equal area on a sphere
     # Area cover over angle dTheta is r sin(Theta) dTheta (with r=1)
     # So we need constant sin(Theta) dTheta
     # In the range Theta = [0, pi), we have
@@ -1648,14 +1708,75 @@ if __name__ == "__main__":
     # \int^{\theta_new}_{\theta_old} sin(\theta) d\theta = 2/100
     # So 0.2 = cons(theta_old) - cos(theta_new)
     n_bins = 100
-    bins = np.zeros(n_bins+1)
+    sphere_bins = np.zeros(n_bins+1)
     for i in range(n_bins):
-        bins[i+1] = np.arccos(np.max([np.cos(bins[i]) - 2/n_bins, -1]))
-    
-    print("Plotting opening angles in bins of equal arcradians...")
-    # TODO Need to fix the normailisation, I don't think it's currently working!
-    plot_pair_hists("angle", "rad", angles, sig_count, range=None, bins=bins, bin_size="(pi/25)arcrad", unique_save_id = "_sphere", inc_norm=False, path=plot_directory)
-    plot_pair_hists("angle", "rad", angles, sig_count, range=None, bins=bins, bin_size="(pi/25)arcrad", unique_save_id = "_sphere_norm", inc_norm=False, weights=ak.full_like(angles, 1/(0.04*np.pi)), path=plot_directory)
-    del angles
+        sphere_bins[i+1] = np.arccos(np.max([np.cos(sphere_bins[i]) - 2/n_bins, -1]))
+
+    angles_sphere_plotter =      PairPlots.PairHistsBatchPlotter("angle", "arcrad", plot_config=plot_config, range=None, bins=sphere_bins, unique_save_id = "_sphere", inc_norm=False)
+    angles_sphere_norm_plotter = PairPlots.PairHistsBatchPlotter("angle", "arcrad", plot_config=plot_config, range=None, bins=sphere_bins, unique_save_id = "_sphere_norm", inc_norm=False)
+
+
+    # Get the batches
+    batch_folder = "/scratch/wx21978/pi0/root_files/1GeV_beam_v3/"
+
+    batch_names = os.listdir(batch_folder)
+
+    for batch in batch_names:
+        print("Beginning batch: " + batch)
+
+        evts = load_and_cut_data(batch_folder + batch, batch_size = -1, batch_start = -1)
+
+        # truth_pair_indicies, valid_events = get_best_pairs(evts, method="mom", return_type="mask", report=True)
+
+        # evts.Filter([valid_events], [valid_events])
+        # truth_pair_indicies = truth_pair_indicies[valid_events]
+        # del valid_events
+
+
+        pair_coords = ak.argcombinations(evts.recoParticles.number, 2)
+
+
+        # sig_count = pair_apply_sig_mask(truth_pair_indicies, pair_coords)
+        # del truth_pair_indicies
+        sig_count = get_sig_count(evts, pair_coords)
+
+
+        print("Plotting masses...")
+        mass_plotter.add_batch(paired_mass(evts, pair_coords), sig_count)
+
+        print("Plotting momenta...")
+        momentum_plotter.add_batch(vector.magnitude(paired_momentum(evts, pair_coords)), sig_count)
+        
+        print("Plotting energies...")
+        energy_plotter.add_batch(paired_energy(evts, pair_coords), sig_count)
+
+        print("Plotting closest approaches...")
+        approach_plotter.add_batch(paired_closest_approach(evts, pair_coords), sig_count)
+
+        print("Plotting separations...")
+        separations_plotter.add_batch(paired_separation(evts, pair_coords), sig_count)
+
+        print("Plotting beam impact parameters...")
+        impact_plotter.add_batch(paired_beam_impact(evts, pair_coords), sig_count)
+
+        print("Plotting opening angles...")
+        angles = paired_opening_angle(evts, pair_coords)
+        angles_plotter.add_batch(angles, sig_count)
+
+        print("Plotting opening angles in bins of equal arcradians...")
+        angles_sphere_plotter.add_batch(angles, sig_count)
+        angles_sphere_norm_plotter.add_batch(angles, sig_count, weights=ak.full_like(angles, 1/(0.04*np.pi)))
+        del angles
+
+    print("Making plots...")
+    mass_plotter.make_figures()
+    momentum_plotter.make_figures()
+    energy_plotter.make_figures()
+    approach_plotter.make_figures()
+    separations_plotter.make_figures()
+    impact_plotter.make_figures()
+    angles_plotter.make_figures()
+    angles_sphere_plotter.make_figures()
+    angles_sphere_norm_plotter.make_figures()
 
     print("All plots made.")
