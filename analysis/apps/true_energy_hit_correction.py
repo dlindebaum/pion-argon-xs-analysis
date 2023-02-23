@@ -38,14 +38,13 @@ def TrueParticleIndices(events, event, particle_number):
     index = ak.local_index(events.trueParticlesBT.number[event])
     return index[events.trueParticlesBT.number[event] == particle_number]
 
-
-def GetAllSharedEnergy(events : Master.Data, event : int, a : int):
+@Master.timer
+def GetAllSharedEnergy(events : Master.Data, event : int, a : int, true_particles_index : ak.Array):
     mask = None
     partner_energy = None
-    true_particles = events.trueParticlesBT.GetUniqueParticleNumbers(events.trueParticlesBT.number)
 
-    for i in range(ak.count(true_particles[event])):
-        index = TrueParticleIndices(events, event, true_particles[event][i])[0]
+    for i in range(ak.count(true_particles_index)):
+        index = true_particles_index[i]
 
         if events.trueParticlesBT.number[event][a] == events.trueParticlesBT.number[event][index]: continue
 
@@ -57,39 +56,58 @@ def GetAllSharedEnergy(events : Master.Data, event : int, a : int):
         else:
             mask = mask | m
             partner_energy = ak.concatenate([partner_energy, ak.unflatten(ak.where(m, events.trueParticlesBT.energy[event][index], 0), 1, -1)], -1)
-    print(f"number of shared hits: {ak.count(mask[mask])}")
+    n_shared = ak.count(mask[mask])
+    print(f"number of shared hits: {n_shared}")
 
     true_energy = events.trueParticlesBT.energy[event][a]
     weights = true_energy / (true_energy + ak.sum(partner_energy, -1))
 
     hit_energy = events.trueParticlesBT.hit_energy[event][a]
-    mask = mask & (hit_energy > 0)    
+    mask = mask & (hit_energy > 0)
     
     excess_energy = ak.sum(hit_energy[mask] * (1 - weights[mask]))
-    return excess_energy
+    return excess_energy, n_shared
 
 @Master.timer
 def GetEnergy(events : Master.Data, showers : ak.Array, all_energy : bool = False):
     data = {
+        "event": [],
+        "run" : [],
+        "subrun" : [],
+
         "true_energy_0" : [],
         "true_energy_1" : [],
         
         "true_energy_hits_0" : [],
         "true_energy_hits_1" : [],
-        
+
         "shared_energy_0" : [],
         "shared_energy_1" : [],
+        
+        "n_shared_hits_0" : [],
+        "n_shared_hits_1" : [],
     }
+    true_particles = events.trueParticlesBT.GetUniqueParticleNumbers(events.trueParticlesBT.number)
     for i in range(ak.num(showers, 0)):
         if all_energy:
-            e_0 = GetAllSharedEnergy(events, i, showers[i][0])
-            e_1 = GetAllSharedEnergy(events, i, showers[i][0])
+            true_particles_index = [TrueParticleIndices(events, i, true_particles[i][j])[0] for j in range(ak.count(true_particles[i]))]
+
+            e_0, n_0 = GetAllSharedEnergy(events, i, showers[i][0], true_particles_index)
+            e_1, n_1 = GetAllSharedEnergy(events, i, showers[i][1], true_particles_index)
+            data["n_shared_hits_0"].append(n_0)
+            data["n_shared_hits_1"].append(n_1)
+
         else:
+            mask = GetSharedHitsMask(events.trueParticlesBT, i, showers[i][0], showers[i][1])
+            data["n_shared_hits_0"].append(ak.count(mask[mask]))
+            data["n_shared_hits_1"].append(ak.count(mask[mask]))
             e_0, e_1 = GetSharedEnergy(events.trueParticlesBT, i, showers[i][0], showers[i][1])
-        # if e1 <= 0 or e2 <= 0: continue
         true_energy = [events.trueParticlesBT.energy[i][showers[i][j]] for j in range(2)]
         true_energy_hits = [events.trueParticlesBT.energyByHits[i][showers[i][j]] for j in range(2)]
 
+        data["event"].append(events.eventNum[i])
+        data["run"].append(events.run[i])
+        data["subrun"].append(events.subRun[i])
         data["true_energy_0"].append(true_energy[0])
         data["true_energy_1"].append(true_energy[1])
         data["true_energy_hits_0"].append(true_energy_hits[0])
@@ -109,7 +127,10 @@ def main(args):
     print(start_shower_indices)
 
     df = pd.DataFrame(GetEnergy(events, start_shower_indices, args.all_energy))
-    df.to_csv(args.csv, mode = "a", header = not os.path.exists(args.csv))
+    if args.csv != None:
+        df.to_csv(args.csv, mode = "a", header = not os.path.exists(args.csv))
+    else:
+        df.head()
     return
 
 if __name__ == "__main__":
