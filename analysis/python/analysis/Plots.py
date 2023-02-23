@@ -13,14 +13,14 @@ from scipy.optimize import curve_fit
 from scipy.special import gamma
 
 
-def Save(name : str = "plot", directory : str = ""):
+def Save(name : str = "plot", directory : str = "", dpi = 80):
     """ Saves the last created plot to file. Run after one the functions below.
 
     Args:
         name (str, optional): Name of plot. Defaults to "plot".
         directory (str, optional): directory to save plot in.
     """
-    plt.savefig(directory + name + ".png")
+    plt.savefig(directory + name + ".png", dpi = dpi)
     plt.close()
 
 
@@ -64,7 +64,7 @@ def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label : str 
     return height, edges
 
 
-def PlotHist2D(data_x, data_y, bins : int = 100, x_range : list = [], y_range : list = [], xlabel : str = "", ylabel : str = "", title : str = "", label : str = "", x_scale : str = "linear", y_scale : str = "linear", newFigure : bool = True, annotation : str = None):
+def PlotHist2D(data_x, data_y, bins : int = 100, x_range : list = [], y_range : list = [], z_range : list = [None, None], xlabel : str = "", ylabel : str = "", title : str = "", label : str = "", x_scale : str = "linear", y_scale : str = "linear", newFigure : bool = True, annotation : str = None):
     """ Plot 2D histograms.
 
     Returns:
@@ -88,7 +88,7 @@ def PlotHist2D(data_x, data_y, bins : int = 100, x_range : list = [], y_range : 
         data_y = data_y[data_y <= y_range[1]]
 
     # plot data with a logarithmic color scale
-    height, xedges, yedges, _ = plt.hist2d(data_x, data_y, bins, norm = matplotlib.colors.LogNorm(), label = label)
+    height, xedges, yedges, _ = plt.hist2d(data_x, data_y, bins, norm = matplotlib.colors.LogNorm(), label = label, vmin = z_range[0], vmax = z_range[1])
     plt.colorbar()
 
     plt.xlabel(xlabel)
@@ -126,6 +126,31 @@ def PlotHistComparison(datas, xRange : list = [], bins : int = 100, xlabel : str
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
+def PlotHist2DComparison(x : list, y : list, bins : int = 50, xlabels : list = [None] * 2, ylabels : list = [None] * 2, colourmap = "plasma", figsize = [6.4, 4.8]):
+    edges = [bins, bins]
+    h_range = [[np.min(x), np.max(x)], [np.min(y), np.max(y)]]
+
+    heights = []
+    for i, j in zip(x, y):
+        h, edges[0], edges[1] = np.histogram2d(np.array(i), np.array(j), bins = edges, range = h_range)
+        h[h == 0] = np.nan
+        heights.append(h.T)
+
+    fig, ax = plt.subplots(nrows = 1, ncols = 2, figsize = figsize)
+    extent = [edges[0][0], edges[0][-1], edges[1][0], edges[1][-1]]
+
+    cmin = np.nanmin(heights)
+    cmax = np.nanmax(heights)
+
+    for i in range(len(heights)):
+        im = ax[i].imshow(heights[i], origin = "lower", interpolation = "nearest", extent = extent, vmin = cmin, vmax = cmax, cmap = colourmap)
+        ax[i].set_xlabel(xlabels[i])
+        ax[i].set_ylabel(ylabels[i])
+
+    fig.tight_layout()
+    fig.colorbar(im, ax = ax.ravel().tolist())
+
+
 def UniqueData(data):
     """ Formats data to be plotted as a bar plot based on unique values and how often they occur.
     """
@@ -155,6 +180,7 @@ def PlotBar(data, width : float = 0.4, xlabel : str = "", title : str = "", labe
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
     plt.tight_layout()
     return unique, counts
+
 
 def PlotBarComparision(data_1, data_2, width : float = 0.4, xlabel : str = "", title : str = "", label_1 : str = "", label_2 : str = "", newFigure : bool = True, annotation : str = None):
     """ Plot two bar plots of the same data type side-by-side.
