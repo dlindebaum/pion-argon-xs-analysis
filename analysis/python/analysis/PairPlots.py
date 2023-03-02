@@ -24,6 +24,7 @@ class PlotConfig():
         self.FIG_FACECOLOR          = 'white'
         self.AXIS_FACECOLOR         = 'white'
         self.BINS                   = 'best'                # Number of bins
+        self.BEST_BINS_MULTIPLIER   = 1                     # Allows tweaking the number of bins produced by the "best" algorithm
         self.GRID_COLOR             = 'gray'                # Color of plot grid
         self.GRID_ALPHA             = 0.25                  # Transparency of the plot grid
         self.LEGEND_COLOR           = 'white'
@@ -192,6 +193,12 @@ class PlotConfig():
             })
             if index <= max(self.HIST_COLOURS.keys()):
                 final_kwargs.update({"color":self.HIST_COLOURS[index]})
+        elif type == "line":
+            final_kwargs.pop("linewidth")
+            final_kwargs.update({
+                "linewidth" : self.LINEWIDTH,
+                "colors"    : "red"
+            })
 
         final_kwargs.update(kwargs)
 
@@ -271,10 +278,12 @@ class PlotConfig():
         return
 
     def get_bins(self, data, array=False):
-        if self.BINS == "best":
-            num_bins, _ = self._get_best_bins(data)
-        elif len(np.unique(data)) != 1:
-            num_bins = self.BINS
+        if len(np.unique(data)) != 1:
+            if self.BINS == "best":
+                num_bins, _ = self._get_best_bins(data)
+                num_bins = int(num_bins * self.BEST_BINS_MULTIPLIER)
+            else:
+                num_bins = self.BINS
         elif array:
             return np.linspace(min(data), max(data) + 0.1, 2)
         else:
@@ -300,10 +309,11 @@ class PlotConfig():
     def expand_bins(bins, data):
         if min(data) < bins[0]:
             low_bin_width = bins[1] - bins[0]
-            bins = np.concatenate((np.arange(bins[0], min(data) - low_bin_width, low_bin_width)[::-1], bins))
+            bins = np.concatenate((np.arange(bins[0] - low_bin_width, min(data) - low_bin_width, low_bin_width)[::-1], bins))
         if max(data) >= bins[-1]:
             high_bin_width = bins[-1] - bins[-2]
-            bins = np.concatenate((bins, np.arange(bins[-1], max(data) + high_bin_width, high_bin_width)))
+            # TODO nicer way to do this?
+            bins = np.concatenate((bins, np.arange(bins[-1]+ high_bin_width, max(data) + high_bin_width*(1+1e-6), high_bin_width)))
         return bins
 
 

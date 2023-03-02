@@ -16,9 +16,11 @@ import time
 # This is a memory management tool, currently not really necessary
 def del_prop(obj, property_name):
     """
-    Deletes a properties from the supplied `RecoPaticleData` type object.
+    Deletes a properties from the supplied `RecoPaticleData` type
+    object.
 
-    Requires the `obj` to have a property ``_RecoPaticleData__{property_name}``.
+    Requires the `obj` to have a property
+    ``_RecoPaticleData__{property_name}``.
 
     Parameters
     ----------
@@ -31,24 +33,112 @@ def del_prop(obj, property_name):
     return
 
 
-#     plt.figure(figsize=(8,6))
-#     plt.hist(ak.count(events.trueParticlesBT.pdg, axis=-1), bins=100)
-#     plt.xlabel("Number of PFOs in event")
-#     plt.ylabel("Count")
-#     plt.title("(beam, pi+, CNNScore) NPFPs >=2")
-#     plt.savefig("/users/wx21978/projects/pion-phys/plots/photon_pairs/PFO_dist_nPFPs>2.png")
-#     plt.close()
+def apply_function(
+        name,
+        history_list: list,
+        func,
+        events : Master.Data,
+        *args,
+        timed=True,
+        **kwargs):
+    if timed:
+        ts = time.time()
+    result = func(events, *args, **kwargs)
+    if timed:
+        print(f"{name} done in {time.time() - ts}s")
+    evt_remaining = ak.count(events.eventNum)
+    history_list.append([name,
+                         ak.count(events.trueParticlesBT.pdg),
+                         ak.count(events.trueParticlesBT.pdg)/evt_remaining,
+                         evt_remaining,
+                         100*(evt_remaining/history_list[1][3]) ])
+    return result
 
-def load_and_cut_data(path, batch_size = -1, batch_start = -1, pion_count='one', two_photon=True, cnn_cut=True, valid_momenta=True, beam_slice_cut=True):
+
+def apply_filter(events : Master.Data, filter, truth_filter = False):
+    filter_true = []
+    if truth_filter:
+        filter_true = [filter]
+    return events.Filter([filter], filter_true)
+
+
+def get_0_or_1_pi0(events : Master.Data):
+    # Copying the BeamMCFitler here to allow multiple valid numbers
+    empty = ak.num(events.trueParticles.number) > 0
+    events.Filter([empty], [empty])
+
+    #* only look at events with 0 or 1 primary pi0s
+    pi0 = events.trueParticles.PrimaryPi0Mask
+    single_primary_pi0 = np.logical_or(
+        ak.num(pi0[pi0]) == 0, ak.num(pi0[pi0]) == 1)
+    events.Filter([single_primary_pi0], [single_primary_pi0])
+
+    #* remove true particles which aren't primaries
+    primary_pi0 = events.trueParticles.PrimaryPi0Mask
+    # this is fine so long as we only care about pi0->gamma gamma
+    primary_daughter = events.trueParticles.truePhotonMask
+    primaries = np.logical_or(primary_pi0, primary_daughter)
+    return events.Filter([], [primaries])
+
+
+def filter_beam_slice(events : Master.Data):
+    slice_mask = [[]] * ak.num(events.recoParticles.beam_number, axis=0)
+    for i in range(ak.num(slice_mask, axis=0)):
+        slices = events.recoParticles.sliceID[i]
+        beam_slice = slices[
+            events.recoParticles.number[i] \
+            == events.recoParticles.beam_number[i]]
+        slice_mask[i] = list(slices == beam_slice)
+    slice_mask = ak.Array(slice_mask)
+    return events.Filter([slice_mask], [])
+
+
+def filter_impact_and_distance(
+        events : Master.Data,
+        distance_bounds_cm=None,
+        max_impact_cm=None):
+    if (distance_bounds_cm is None) and (max_impact_cm is None):
+        return None
+    mask = [[]] * ak.num(events.recoParticles.beam_number, axis=0)
+    for i in range(ak.num(mask, axis=0)):
+        starts = events.recoParticles.startPos[i]
+        beam_vertex = events.recoParticles.beamVertex[i]
+        distances = get_separation(starts, beam_vertex)
+        if distance_bounds_cm is not None:
+            distance_mask = np.logical_and(distances > distance_bounds_cm[0],
+                                           distances < distance_bounds_cm[1])
+        if max_impact_cm is not None:
+            directions = events.recoParticles.direction[i]
+            impact_mask = get_impact_parameter(directions,
+                                               starts,
+                                               beam_vertex) < max_impact_cm
+        mask[i] = np.logical_and(distance_mask, impact_mask)
+    mask = ak.Array(mask)
+    return events.Filter([mask], [])
+
+
+def load_and_cut_data(
+        path, batch_size = -1,
+        batch_start = -1,
+        pion_count='one',
+        two_photon=True,
+        cnn_cut=0.36,
+        valid_momenta=True,
+        beam_slice_cut=True,
+        n_hits_cut=0,
+        distance_bounds_cm=None,
+        max_impact_cm=None,
+        print_summary=True):
     """
     Loads the ntuple file from `path` and performs the initial cuts,
     returning the result as a `Data` instance.
 
-    A single batch of data can be loaded an cut on by changing `batch_size`
-    and `batch_start`.
+    A single batch of data can be loaded an cut on by changing
+    `batch_size` and `batch_start`.
 
-    The cuts used can be partially controlled by the `two_photon`, `cnn_cut`,
-    `valid_momenta`, `beam_slice_cut`, and `no_pi0` arguments.
+    The cuts used can be partially controlled by the `two_photon`,
+    `cnn_cut`, `valid_momenta`, `beam_slice_cut`, and `no_pi0`
+    arguments.
 
     Parameters
     ----------
@@ -83,135 +173,87 @@ def load_and_cut_data(path, batch_size = -1, batch_start = -1, pion_count='one',
     events : Data
         A Data instance containing the cut events.
     """
-
-    events = Master.Data(path, includeBackTrackedMC=True, nEvents=batch_size, start=batch_start)
-
+    events = Master.Data(path,
+                         includeBackTrackedMC=True,
+                         nEvents=batch_size,
+                         start=batch_start)
     # Apply cuts:
-    n = [["Event selection", "Number of PFOs", "Average PFOs per event", "Number of events", "Percentage of events remaining"]]
-    n.append(["no selection", ak.count(events.trueParticlesBT.pdg),ak.count(events.trueParticlesBT.pdg)/ak.count(events.eventNum), ak.count(events.eventNum), 100])
-
+    n = [["Event selection",
+          "Number of PFOs",
+          "Average PFOs per event",
+          "Number of events",
+          "Percentage of events remaining"]]
+    n.append(["no selection",
+              ak.count(events.trueParticlesBT.pdg),
+              ak.count(events.trueParticlesBT.pdg)/ak.count(events.eventNum),
+              ak.count(events.eventNum), 100])
     if pion_count == 'one':
-        # Single pi0
-        ts = time.time()
-        Master.BeamMCFilter(events, returnCopy=False)
-        print(f"single pi0 done in {time.time()  - ts}s")
-        evt_remaining = ak.count(events.eventNum)
-        n.append([ "beam -> pi0 + X", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
+        apply_function(
+            "single pi0", n,
+            Master.BeamMCFilter, events, returnCopy=False)
     elif pion_count == 'zero':
-        # No pi0s
-        ts = time.time()
-        Master.BeamMCFilter(events, n_pi0=0, returnCopy=False)
-        print(f"no pi0s done in {time.time()  - ts}s")
-        evt_remaining = ak.count(events.eventNum)
-        n.append([ "no pi0s from beam", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
+        apply_function(
+            "no pi0s", n,
+            Master.BeamMCFilter, events, n_pi0=0, returnCopy=False)
     elif pion_count == 'both':
-        # 0 or 1 pi0s
-        ts = time.time()
-        
-        # Copying the BeamMCFitler here to allow multiple valid numbers
-        empty = ak.num(events.trueParticles.number) > 0
-        events.Filter([empty], [empty])
-
-        #* only look at events with 0 or 1 primary pi0s
-        pi0 = events.trueParticles.PrimaryPi0Mask
-        single_primary_pi0 = np.logical_or(ak.num(pi0[pi0]) == 0, ak.num(pi0[pi0]) == 1)
-        events.Filter([single_primary_pi0], [single_primary_pi0])
-
-        #* remove true particles which aren't primaries
-        primary_pi0 = events.trueParticles.PrimaryPi0Mask
-        primary_daughter = events.trueParticles.truePhotonMask # this is fine so long as we only care about pi0->gamma gamma
-        primaries = np.logical_or(primary_pi0, primary_daughter)
-        events.Filter([], [primaries])
-
-        print(f"0 or 1 pi0s done in {time.time()  - ts}s")
-        evt_remaining = ak.count(events.eventNum)
-        n.append([ "0/1 pi0s from beam", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
-
+        apply_function(
+            "0 or 1 pi0s", n,
+            get_0_or_1_pi0, events)
     if two_photon:
-        # Require diphoton decay from the pi0
-        ts = time.time()
-        f = Master.Pi0TwoBodyDecayMask(events)
-        events.Filter([f], [f])
-        print(f"pi+ beam done in {time.time()  - ts}s")
-        evt_remaining = ak.count(events.eventNum)
-        n.append(["diphoton decay", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
-
-    # if no_pi0:
-    #     # Require no pi0s presenet
-    #     ts = time.time()
-    #     f = Master.Pi0TwoBodyDecayMask(events)
-    #     events.Filter([f], [f])
-    #     print(f"pi+ beam done in {time.time()  - ts}s")
-    #     evt_remaining = ak.count(events.eventNum)
-    #     n.append(["diphoton decay", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
-
+        apply_function(
+            "diphoton decays", n,
+            apply_filter,
+            events, Master.Pi0TwoBodyDecayMask(events), truth_filter=True)
     # Require a beam particle to exist. ETA ~15s:
-    ts = time.time()
-    events.ApplyBeamFilter() # apply beam filter if possible
-    print(f"beam done in {time.time()  - ts}s")
-    evt_remaining = ak.count(events.eventNum)
-    n.append([ "beam", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
-
+    apply_function(
+        "beam", n,
+        lambda e: e.ApplyBeamFilter(), events)
     # Require pi+ beam. ETA ~10s
     # Check with reco pi+? (Currently cheating the pi+ selection)
-    ts = time.time()
-    true_beam = events.trueParticlesBT.pdg[events.recoParticles.beam_number == events.recoParticles.number]
-    f = ak.all(true_beam == 211, -1)
-    events.Filter([f], [f])
-    del(true_beam)
-    print(f"pi+ beam done in {time.time()  - ts}s")
-    evt_remaining = ak.count(events.eventNum)
-    n.append(["pi+ beam", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
-
-    # # Only look at PFOs with > 50 hits. ETA ~30s:
-    # ts = time.time()
-    # events.Filter([events.recoParticles.nHits > 50], [])
-    # del_prop(events.recoParticles, "nHits")
-    # print(f"Hits > 50 done in {time.time()  - ts}s")
-    # evt_remaining = ak.count(events.eventNum)
-    # n.append(["nHits >= 51", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
-
+    beam_pdg_codes = events.trueParticlesBT.pdg[
+        events.recoParticles.beam_number == events.recoParticles.number]
+    pi_beam_filter = ak.all(beam_pdg_codes == 211, -1)
+    apply_function(
+        "pi+ beam", n,
+        apply_filter, events, pi_beam_filter, truth_filter=True)
+    del beam_pdg_codes
+    del pi_beam_filter
+    # Only look at PFOs with > n_hits hits. ETA ~30s:
+    if not np.isclose(n_hits_cut, 0):
+        apply_function(
+            "nHits", n,
+            apply_filter, events, events.recoParticles.nHits > n_hits_cut)
     # Cheat this?
     if beam_slice_cut:
-        slice_mask = [[]] * ak.num(events.recoParticles.beam_number, axis=0)
-        ts = time.time()
-        for i in range(ak.num(slice_mask, axis=0)):
-            slices = events.recoParticles.sliceID[i]
-            beam_slice = slices[events.recoParticles.number[i] == events.recoParticles.beam_number[i]]
-            slice_mask[i] = list(slices == beam_slice)
-        slice_mask = ak.Array(slice_mask)
-        
-        events.Filter([slice_mask], [])
-        print(f"Beam slice done in {time.time()  - ts}s")
-        evt_remaining = ak.count(events.eventNum)
-        n.append(["Beam slice", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
-
-    if cnn_cut:
-        # Take CNNScore > 0.36. ETA ~15s:
-        cnn_cut = 0.36
-        ts = time.time()
-        events.Filter([events.recoParticles.cnnScore > cnn_cut], [])
-        print(f"CNNScore > 0.36 done in {time.time()  - ts}s")
-        evt_remaining = ak.count(events.eventNum)
-        n.append([f"CNNScore > {cnn_cut}", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
-
+        apply_function(
+            "Beam slice", n,
+            filter_beam_slice, events)
+    if not np.isclose(cnn_cut, 0):
+        apply_function(
+            f"CNNScore > {cnn_cut}", n,
+            apply_filter, events, events.recoParticles.cnnScore > cnn_cut)
     if valid_momenta:
-        ts = time.time()
         reco_momenta=events.recoParticles.momentum
-        events.Filter([np.logical_and(np.logical_and(reco_momenta.x != -999., reco_momenta.y != -999.), reco_momenta.z != -999.)], [])
-        print(f"Valid momenta done in {time.time()  - ts}s")
-        evt_remaining = ak.count(events.eventNum)
-        n.append(["Valid momenta", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
-
+        mom_filter = np.logical_and(
+            np.logical_and(reco_momenta.x != -999., reco_momenta.y != -999.),
+            reco_momenta.z != -999.)
+        apply_function(
+            "Valid momenta", n,
+            apply_filter, events, mom_filter)
+        del reco_momenta
+        del mom_filter
+    if (distance_bounds_cm is not None) or (max_impact_cm is not None):
+        apply_function(
+            "distance/impact", n,
+            filter_impact_and_distance, events,
+            distance_bounds_cm, max_impact_cm
+        )
     # Require >= 2 PFOs. ETA ~90s:
-    ts = time.time()
-    f = Master.NPFPMask(events, -1)
-    events.Filter([f], [f])
-    print(f"PFOs >= 2 done in {time.time()  - ts}s")
-    evt_remaining = ak.count(events.eventNum)
-    n.append(["nPFP >= 2", ak.count(events.trueParticlesBT.pdg), ak.count(events.trueParticlesBT.pdg)/evt_remaining, evt_remaining, 100*(evt_remaining/n[1][3]) ])
-    
-    # Used to have plots of the distribution of PFOs per event after each cut. Example code:
+    apply_function(
+        "PFOs >= 2", n,
+        apply_filter, events, Master.NPFPMask(events, -1), truth_filter=True)
+    # Previously had plots of the distribution of PFOs per event after
+    # each cut. Example code:
     # plt.figure(figsize=(8,6))
     # plt.hist(ak.count(events.trueParticlesBT.pdg, axis=-1), bins=100)
     # plt.xlabel("Number of PFOs in event")
@@ -219,21 +261,16 @@ def load_and_cut_data(path, batch_size = -1, batch_start = -1, pion_count='one',
     # plt.title("(beam, pi+, CNNScore) NPFPs >=2")
     # plt.savefig("/users/wx21978/projects/pion-phys/plots/photon_pairs/PFO_dist_nPFPs>2.png")
     # plt.close()
-
-
-    print(pd.DataFrame(n[1:], columns = n[0]).to_string())
-    # print("\n".join([str(l) for l in n]))
-    
-    plt.close()
-
+    if print_summary:
+        print(pd.DataFrame(n[1:], columns = n[0]).to_string())
     return events
 
 
-######################################################################################################
-######################################################################################################
-##########                                PLOTTING FUCNTIONS                                ##########
-######################################################################################################
-######################################################################################################
+#######################################################################
+#######################################################################
+##########                PLOTTING FUCNTIONS                 ##########
+#######################################################################
+#######################################################################
 
 
 def simple_sig_bkg_hist(
@@ -293,20 +330,16 @@ def simple_sig_bkg_hist(
         Any additional keyword arguments to be passed to the ``plt.hist``
         calls. The same arguments will be passed to all plots.
     """
-
     if path[-1] != '/':
         path += '/'
-
     if not isinstance(y_scaling, list):
         y_scaling = [y_scaling]
-
     if not isinstance(range, list):
         range = [range]
     if not ( (isinstance(bins, list) or isinstance(bins, np.ndarray)) and len(bins) == len(range) ):
         # Strictly, this could be a problem on edge-case that we want to use one fewer bins than the
         # number of ranges  we investigate, but this is sufficiently likely that we can ignore that
         bins = [bins for _ in range]
-
     for y_scale in y_scaling:
         for i, r in enumerate(range):
             if r is None:
@@ -329,8 +362,6 @@ def simple_sig_bkg_hist(
                     bin_size = f"{hist_range/bins[i]:.2g}" + units
                 else:
                     bin_size = f"{hist_range/len(bins[i]):.2g}" + units
-            
-
             plt.figure(figsize=(12,9))
             plt.hist(ak.ravel(property[sig_mask]),                 bins=100, label="signal", **kwargs)
             plt.hist(ak.ravel(property[np.logical_not(sig_mask)]), bins=100, label="background", **kwargs)
@@ -339,11 +370,10 @@ def simple_sig_bkg_hist(
             plt.xlabel(prop_name.title() + "/" + units)
             plt.ylabel("Count/" + bin_size)
             plt.savefig(path + prop_name.replace(" ", "_") + unique_save_id + "_hist_" + path_end + ".png")
-
             plt.close()
-    
     return
     
+
 def plot_pair_hists(
         prop_name, units, property, sig_count,
         path="/users/wx21978/projects/pion-phys/plots/photon_pairs/", unique_save_id = "",
@@ -528,8 +558,8 @@ def plot_pair_hists(
             plt.ylabel("Density/" + bin_size)
             plt.savefig(path + "paired_" + prop_name.replace(" ", "_") + path_end + "_norm_log.png")
             plt.close()
-    
     return
+
 
 def plot_rank_hist(
         prop_name, ranking,
@@ -590,8 +620,8 @@ def plot_rank_hist(
         plt.ylabel("Count")
         plt.savefig(path + "ranking_" + prop_name.replace(" ", "_") + unique_save_id + ".png")
         plt.close()
-    
     return
+
 
 def make_truth_comparison_plots(
         events, photon_indicies,
@@ -665,7 +695,6 @@ def make_truth_comparison_plots(
         fig_e_i_log, energy_i_axis_log    = plt.subplots(figsize=(16,12), layout="tight")
         fig_e_ii_log, energy_ii_axis_log  = plt.subplots(figsize=(16,12), layout="tight")
         fig_dirs_log, directions_axis_log = plt.subplots(figsize=(16,12), layout="tight")
-
 
     for i, prop in enumerate(list(photon_indicies.keys())):
         if isinstance(prop, str):
@@ -750,7 +779,6 @@ def make_truth_comparison_plots(
         fig_e_i_log.savefig(path + "leading_photon_energy_log.png")
         fig_e_ii_log.savefig(path + "subleading_photon_energy_log.png")
         fig_dirs_log.savefig(path + "directions_log.png")
-    
     plt.close()
     return
 
@@ -812,6 +840,7 @@ def get_mother_pdgs(events):
     mother_pdgs = ak.Array(mother_pdgs)
     return mother_pdgs
 
+
 def get_MC_truth_beam_mask(event_mothers, event_ids, beam_id=1):
     """
     Loops through all PFOs in an event and generates a mask which selects all PFOs
@@ -847,8 +876,8 @@ def get_MC_truth_beam_mask(event_mothers, event_ids, beam_id=1):
         mask = [e in new_ids for e in event_mothers]
         # Flag the newly added PFOs as "to be added" and loop, unless no new PFOs are found
         new_ids = event_ids[mask]
-
     return [e in beam_ids for e in event_ids]
+
 
 def np_to_ak_indicies(indicies):
     """
@@ -878,6 +907,7 @@ def np_to_ak_indicies(indicies):
 ##########                                  EVENT PAIRING                                   ##########
 ######################################################################################################
 ######################################################################################################
+
 
 def truth_pfos_in_two_photon_decay(events, sort=True):
     """
@@ -922,8 +952,8 @@ def truth_pfos_in_two_photon_decay(events, sort=True):
 
         sorted_energies = np.flip(np.argsort(truth_energy[(truth_pdgs == 22) & beam_mask])) if sort else [0, 1]
         photon_ids[i,:] = beam_photons_ids[sorted_energies]
-    
     return photon_ids
+
 
 def get_best_pairs(
         events,
@@ -1094,7 +1124,6 @@ list, optional
     zero_count = 0
     one_count = 0
 
-
     # Loop over each event to determine the best pair
     for i in range(num_events):
         bt_ids = events.trueParticlesBT.number[i]
@@ -1119,7 +1148,6 @@ list, optional
                 print(true_momenta[true_ids == photon_i ])
                 print(true_momenta[true_ids == photon_ii])
 
-
         if valid_mom_cut:
             # Maybe want to look at what happens when we use purity/completeness with no good data cut?
             reco_momenta = events.recoParticles.momentum[i]
@@ -1142,21 +1170,17 @@ list, optional
             # Get the data to use
             reco_prop = reco_props[m][i]
             true_prop = true_props[m][i]
-
             # Get the truth property of each photon
             true_prop_i  = true_prop[true_ids == photon_i ]
             true_prop_ii = true_prop[true_ids == photon_ii]
-
             # Get a mask indicating the daughters of each photon in the reco data
             photon_i_mask  = [ bt_ids[good_data] == photon_i  ][0]
             photon_ii_mask = [ bt_ids[good_data] == photon_ii ][0]
             # Need the [0] because bt_ids[good_data] == photon_i is an array, so returns an array (one element)
 
-
             # Order the PFOs by the selected method
             reco_prop_ordering_i  = testing_methods[m](reco_prop[ indicies[good_data][photon_i_mask ] ], true_prop_i )
             reco_prop_ordering_ii = testing_methods[m](reco_prop[ indicies[good_data][photon_ii_mask] ], true_prop_ii)
-
             # Returns the index of the PFO selected as the best selection for each photon
             photon_i_index  = indicies[good_data][photon_i_mask ][ reco_prop_ordering_i[-1]]
             photon_ii_index = indicies[good_data][photon_ii_mask][reco_prop_ordering_ii[-1]]
@@ -1165,28 +1189,24 @@ list, optional
             if verbosity >= 6:
                 print(f"List of reco values {m} with good data:")
                 print(*reco_props[m][good_data])
-
             if verbosity >= 4:
                 print(f"Values of {m}:")
                 print("Leading photon")
                 print(reco_props[indicies[good_data][photon_i_mask ]])
                 print("Sub-leading photon")
                 print(reco_props[indicies[good_data][photon_ii_mask]])
-
             if verbosity >= 5:
                 print(f"Index ordering of {m} values")
                 print("Leading photon")
                 print(reco_prop_ordering_i)
                 print("Sub-leading photon")
                 print(reco_prop_ordering_ii)
-
             if verbosity >= 3:
                 print(f"Selected {m}:")
                 print("Leading photon")
                 print(reco_prop[photon_i_index])
                 print("Sub-leading photon")
                 print(reco_prop[photon_ii_index])
-
 
             # If we are returning IDs, we need to find the corresponding reco ID
             if return_type == "id":
@@ -1202,18 +1222,17 @@ list, optional
             else:
                 truth_indicies_photon_beam[m][i,:] = [photon_i_index, photon_ii_index]
     
-
     if report:
         print(f"{zero_count} events discarded due to no true photons having matched PFOs.")
         print(f"{one_count} events discarded due to only one true photon having matched PFOs.")
 
     if return_type == "mask":
         truth_indicies_photon_beam = ak.Array(truth_indicies_photon_beam)
-
     if len(methods_to_use) == 1:
         return truth_indicies_photon_beam[method[0]], valid_event_mask
     else:
         return truth_indicies_photon_beam, valid_event_mask
+
 
 def pair_apply_sig_mask(truth_mask, pair_coords):
     """
@@ -1237,6 +1256,7 @@ def pair_apply_sig_mask(truth_mask, pair_coords):
 
     # Add the results
     return true_counts[pair_coords["0"]] + true_counts[pair_coords["1"]]
+
 
 def gen_pair_sig_counts(events, pair_coords):
     """
@@ -1262,7 +1282,6 @@ def gen_pair_sig_counts(events, pair_coords):
     """
     photon_from_pions = np.logical_and(events.trueParticlesBT.pdg == 22, events.trueParticlesBT.motherPdg == 111)
 
-
     different_daughter = events.trueParticlesBT.number[pair_coords["0"]] != events.trueParticlesBT.number[pair_coords["1"]]
     same_mother = events.trueParticlesBT.mother[pair_coords["0"]] == events.trueParticlesBT.mother[pair_coords["1"]]
 
@@ -1276,11 +1295,10 @@ def gen_pair_sig_counts(events, pair_coords):
     del same_mother_and_different_daughter
     del both_photons
 
-
     at_least_one_photon = np.logical_or(photon_from_pions[pair_coords["0"]], photon_from_pions[pair_coords["1"]])
-
     # Add the results
     return np.multiply(at_least_one_photon, 1) + np.multiply(photons_form_pi0, 1)
+
 
 def get_sig_count(events, pair_coordinates, single_best=False, **kwargs):
     """
@@ -1310,10 +1328,10 @@ def get_sig_count(events, pair_coordinates, single_best=False, **kwargs):
         events.Filter([valid_events], [valid_events])
         truth_pair_indicies = truth_pair_indicies[valid_events]
         del valid_events
-
         return pair_apply_sig_mask(truth_pair_indicies, pair_coordinates)
     else:
         return gen_pair_sig_counts(events, pair_coordinates)
+
 
 def pair_photon_counts(events, pair_coords, mother_pdgs):
     """
@@ -1339,16 +1357,13 @@ def pair_photon_counts(events, pair_coords, mother_pdgs):
         Number of photons produced by pi0s in each pair.
     """
     true_photons = events.trueParticlesBT.pdg == 22
-
     # Get the locations wehere the pdg is 22 and mother pdg is 111
     first_sigs = np.logical_and(true_photons[pair_coords["0"]], mother_pdgs[pair_coords["0"]] == 111)
     # Multiplying by 1 sets the dtype to be int (1 where True, 0 where False)
     first_sigs = np.multiply(first_sigs, 1)
-
     #Same for second particle
     second_sigs = np.logical_and(true_photons[pair_coords["1"]], mother_pdgs[pair_coords["1"]] == 111)
     second_sigs = np.multiply(second_sigs, 1)
-
     # Add the results
     return first_sigs + second_sigs
 
@@ -1358,6 +1373,7 @@ def pair_photon_counts(events, pair_coords, mother_pdgs):
 ##########                                   CALCULATIONS                                   ##########
 ######################################################################################################
 ######################################################################################################
+
 
 def get_impact_parameter(direction, start_pos, beam_vertex):
     """
@@ -1380,6 +1396,26 @@ def get_impact_parameter(direction, start_pos, beam_vertex):
     rel_pos = vector.sub(beam_vertex, start_pos)
     cross = vector.cross(rel_pos, direction)
     return vector.magnitude(cross)
+
+
+def get_separation(pos1, pos2):
+    """
+    Finds the separation between positions `pos1` and `pos2`.
+
+    Parameters
+    ----------
+    spos1 : ak.zip({'x':ak.Array, 'y':ak.Array, 'z':ak.Array})
+        Postion 1.
+    spos1 : ak.zip({'x':ak.Array, 'y':ak.Array, 'z':ak.Array})
+        Postion 2.
+
+    Returns
+    -------
+    separation : ak.Array
+        Separation between positions 1 and 2.
+    """
+    return vector.magnitude(vector.sub(pos1, pos2))
+
 
 def closest_approach(dir1, dir2, start1, start2):
     """
@@ -1404,11 +1440,10 @@ def closest_approach(dir1, dir2, start1, start2):
     # x_1 - x_2 + lambda_1 v_1 - lambda_2 v_2 = d/sin(theta) v_1 x v_2
     cross = vector.normalize( vector.cross(dir1, dir2) )
     rel_start = vector.sub(start1, start2)
-
     # Separation between the lines
     d = vector.dot(rel_start, cross)
-
     return d
+
 
 def get_shared_vertex(mom1, mom2, start1, start2):
     """
@@ -1439,18 +1474,14 @@ def get_shared_vertex(mom1, mom2, start1, start2):
     """
     # We estimate the shared vertex by taking the midpoint of the line of closest approch
     # This is a projected point, NOT the difference between the reconstructed starts
-
     joining_dir = vector.normalize( vector.cross(mom1, mom2) )
     separation = vector.dot(vector.sub(start1, start2), joining_dir)
-
     dir1_selector = vector.cross(joining_dir, mom2)
-
     # We don't use the normalised momentum, because we later multiply by the momentum, so it cancels
     start1_offset = vector.dot( vector.sub(start2, start1), dir1_selector ) / vector.dot(mom1, dir1_selector)
-
     pos1 = vector.add(start1, vector.prod(start1_offset, mom1))
-
     return vector.add(pos1, vector.prod(separation/2, joining_dir))
+
 
 def get_midpoints(x1, x2):
     """
@@ -1498,11 +1529,11 @@ def paired_mass(events, pair_coords):
     # Get the momenta via the pair indicies
     first_mom = events.recoParticles.momentum[pair_coords["0"]]
     second_mom = events.recoParticles.momentum[pair_coords["1"]]
-
     # Calculate
     e = vector.magnitude(first_mom) + vector.magnitude(second_mom)
     p = vector.magnitude(vector.add(first_mom, second_mom))
     return np.sqrt(e**2 - p**2)
+
 
 def paired_momentum(events, pair_coords):
     """
@@ -1523,9 +1554,9 @@ def paired_momentum(events, pair_coords):
     # Get the momenta via the pair indicies
     first_mom = events.recoParticles.momentum[pair_coords["0"]]
     second_mom = events.recoParticles.momentum[pair_coords["1"]]
-
     # Calculate
     return vector.add(first_mom, second_mom)
+
 
 def paired_energy(events, pair_coords):
     """
@@ -1546,9 +1577,9 @@ def paired_energy(events, pair_coords):
     # Get the energies via the pair indicies
     first_mom = events.recoParticles.momentum[pair_coords["0"]]
     second_mom = events.recoParticles.momentum[pair_coords["1"]]
-
     # Calculate
     return vector.magnitude(first_mom) + vector.magnitude(second_mom)
+
 
 def paired_closest_approach(events, pair_coords):
     """
@@ -1570,8 +1601,8 @@ def paired_closest_approach(events, pair_coords):
     first_pos = events.recoParticles.startPos[pair_coords["0"]]
     second_dir = events.recoParticles.direction[pair_coords["1"]]
     second_pos = events.recoParticles.startPos[pair_coords["1"]]
-
     return closest_approach(first_dir,second_dir,first_pos,second_pos)
+
 
 def paired_beam_impact(events, pair_coords):
     """
@@ -1595,15 +1626,13 @@ def paired_beam_impact(events, pair_coords):
     first_pos = events.recoParticles.startPos[pair_coords["0"]]
     second_mom = events.recoParticles.momentum[pair_coords["1"]]
     second_pos = events.recoParticles.startPos[pair_coords["1"]]
-
     # Direction of the summed momenta of the PFOs
     paired_direction = vector.normalize(vector.add(first_mom, second_mom))
-
     # Midpoint of the line of closest approach between the PFOs
     shared_vertex = get_shared_vertex(first_mom, second_mom, first_pos, second_pos)
-
     # Impact parameter between the PFOs and corresponding beam vertex
     return get_impact_parameter(paired_direction, shared_vertex, events.recoParticles.beamVertex)
+
 
 def paired_separation(events, pair_coords):
     """
@@ -1625,8 +1654,8 @@ def paired_separation(events, pair_coords):
     # Get the positions via the pair indicies
     first_pos = events.recoParticles.startPos[pair_coords["0"]]
     second_pos = events.recoParticles.startPos[pair_coords["1"]]
+    return get_separation(first_pos, second_pos)
 
-    return vector.magnitude(vector.sub(first_pos, second_pos))
 
 def paired_beam_slice(events, pair_coords):
     """
@@ -1649,8 +1678,8 @@ def paired_beam_slice(events, pair_coords):
     # Get the positions via the pair indicies
     first_slice = events.recoParticles.sliceID[pair_coords["0"]]
     second_slice = events.recoParticles.sliceID[pair_coords["1"]]
-
     return (first_slice == second_slice) * (first_slice + 1) - 1
+
 
 # N.B. this is phi in Shyam's scheme
 def paired_opening_angle(events, pair_coords):
@@ -1672,7 +1701,6 @@ def paired_opening_angle(events, pair_coords):
     # Get the momenta via the pair indicies
     first_dir = events.recoParticles.direction[pair_coords["0"]]
     second_dir = events.recoParticles.direction[pair_coords["1"]]
-
     # Calculate
     return np.arccos(vector.dot(first_dir, second_dir))
 
@@ -1682,6 +1710,7 @@ def paired_opening_angle(events, pair_coords):
 ##########                                     RUNNING                                      ##########
 ######################################################################################################
 ######################################################################################################
+
 
 if __name__ == "__main__":
 
@@ -1724,7 +1753,15 @@ if __name__ == "__main__":
     for batch in batch_names:
         print("Beginning batch: " + batch)
 
-        evts = load_and_cut_data(batch_folder + batch, batch_size = -1, batch_start = -1)
+        evts = load_and_cut_data(
+            batch_folder + batch,
+            batch_size = -1, batch_start = -1,
+            pion_count="both",
+            cnn_cut=0.5,
+            n_hits_cut=80,
+            beam_slice_cut=False,
+            distance_bounds_cm=(3,90),
+            max_impact_cm=20)
 
         # truth_pair_indicies, valid_events = get_best_pairs(evts, method="mom", return_type="mask", report=True)
 
