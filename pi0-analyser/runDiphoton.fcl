@@ -11,7 +11,8 @@ process_name: diphotonMC
 pi0_test_selection:
 {
    module_type:             "pi0TestSelection"
-   CalorimetryTag:          "pandoracalo"
+   BeamCalorimetryTag:      "pandoracalo"
+   ShowerCalorimetryTag:    "pandora2Showercalo"
    TrackerTag:              "pandoraTrack"
    ShowerTag:               "pandoraShower"
    HitTag:                  "hitpdune"

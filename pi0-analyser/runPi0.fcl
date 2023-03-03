@@ -11,7 +11,8 @@ process_name: Pi0MC
 pi0_test_selection:
 {
    module_type:             "pi0TestSelection"
-   CalorimetryTag:          "pandoracalinoxyzt"
+   BeamCalorimetryTag:      "pandoracalo"
+   ShowerCalorimetryTag:    "pandora2Showercalo"
    TrackerTag:              "pandoraTrack"
    ShowerTag:               "pandoraShower"
    HitTag:                  "hitpdune"
@@ -22,7 +23,7 @@ pi0_test_selection:
 
    BeamlineUtils: @local::standard_protodunebeamlineutils
    Pi0Only: true
-   RetrieveSpacePoints: false
+   RetrieveHitInfo: false
    # Retrieve G4 determines what truth information should be accessed has 4 options:
    # 0 : None
    # 1 : PIO, only get truth information from pi0 decays and their daughters

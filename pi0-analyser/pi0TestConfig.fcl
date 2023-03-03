@@ -9,7 +9,8 @@ BEGIN_PROLOG
 pi0_test_selection:
 {
    module_type:             "pi0TestSelection"
-   CalorimetryTag:          "pandoracalinoxyzt"
+   BeamCalorimetryTag:      "pandoracalo"
+   ShowerCalorimetryTag:    "pandora2Showercalo"
    TrackerTag:              "pandoraTrack"
    ShowerTag:               "pandoraShower"
    HitTag:                  "hitpdune"
