@@ -135,10 +135,10 @@ def RenderEventDisplay(n):
     display.xz.grid()
 
     #* plot some information about the event:
-    text =  "$E_{\pi^{+}}$: "  + str(events.trueParticlesBT.energy[n][events.recoParticles.beam_number[n] == events.recoParticles.number[n]][0])[0:4] + "GeV \n"
-    text += "$E_{\pi^{0}}$: "  + str(events.trueParticles.energy[n][events.trueParticles.pdg[n] == 111][0])[0:4] + "GeV \n"
-    text += "$E_{\gamma_{0}}$: " + str(events.trueParticlesBT.energy[start_showers_merged][n][0])[0:4] + "GeV \n"
-    text += "$E_{\gamma_{1}}$: " + str(events.trueParticlesBT.energy[start_showers_merged][n][1])[0:4] + "GeV "
+    text =  "$E_{\pi^{+}}$: "  + str(events.trueParticlesBT.energy[n][events.recoParticles.beam_number[n] == events.recoParticles.number[n]][0])[0:4] + "MeV \n"
+    text += "$E_{\pi^{0}}$: "  + str(events.trueParticles.energy[n][events.trueParticles.pdg[n] == 111][0])[0:4] + "MeV \n"
+    text += "$E_{\gamma_{0}}$: " + str(events.trueParticlesBT.energy[start_showers_merged][n][0])[0:4] + "MeV \n"
+    text += "$E_{\gamma_{1}}$: " + str(events.trueParticlesBT.energy[start_showers_merged][n][1])[0:4] + "MeV "
     
     props = dict(boxstyle='round', facecolor='grey', alpha=1)
     display.xz.text(0.01, 0.85, text, transform=display.xz.transAxes, fontsize=14, bbox=props)
@@ -164,7 +164,7 @@ def RenderEventDisplay(n):
 def main():
     global events, start_showers, to_merge, showBackground, showSignal, signal, background, q
     ##################################################################################################
-    events = Master.Data("work/ROOTFiles/Prod4a_6GeV_BeamSim_00_evd.root", True)
+    events = Master.Data("work/ROOTFiles/Prod4a_6MeV_BeamSim_00_evd.root", True)
 
     #* create hit space point arrays
     events.recoParticles.spacePoints = ak.zip({"x" : events.io.Get("reco_daughter_allShower_spacePointX"), 

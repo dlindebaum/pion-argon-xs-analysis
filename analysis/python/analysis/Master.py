@@ -12,7 +12,9 @@ from abc import ABC, abstractmethod
 
 import awkward as ak
 import numpy as np
+import pandas as pd
 import uproot
+from rich import print
 
 # custom modules
 from python.analysis import vector
@@ -753,6 +755,7 @@ class RecoParticleData(ParticleData):
     Property Methods:
         beam_number (ak.Array): beam PFO number
         sliceID (ak.Array): slice the PFO corresponds to
+        beamSliceID (ak.Array): slice the beam PFO corresponds to
         beamCosmicScore (ak.Array): whether the reconstruction chain used was for a neutrino vertex (beam) or cosmics
         pandoraTag (ak.Array): label given to particles by pandora; track, shower or -999
         number (ak.Array): PFO number
@@ -787,6 +790,11 @@ class RecoParticleData(ParticleData):
     def sliceID(self) -> ak.Array:
         self.LoadData("sliceID", "reco_daughter_allShower_sliceID")
         return getattr(self, f"_{type(self).__name__}__sliceID")
+
+    @property
+    def beamSliceID(self) -> ak.Array:
+        self.LoadData("beamSliceID", "reco_beam_sliceID")
+        return getattr(self, f"_{type(self).__name__}__beamSliceID")
 
     @property
     def beamCosmicScore(self) -> ak.Array:
@@ -896,7 +904,7 @@ class RecoParticleData(ParticleData):
         inv_mass = (2 * leading * secondary * (1 - np.cos(angle)))**0.5
 
         #* pi0 momentum
-        pi0_momentum = vector.magnitude(ak.sum(self.momentum, axis=-1))/1000
+        pi0_momentum = vector.magnitude(ak.sum(self.momentum, axis=-1))
 
         null_dir = np.logical_or(direction_pair[:, :, 1:].x == -999, direction_pair[:, :, :-1].x == -999) # mask shower pairs with invalid direction vectors
         null = np.logical_or(leading < 0, secondary < 0) # mask of shower pairs with invalid energy
@@ -904,9 +912,6 @@ class RecoParticleData(ParticleData):
         #* filter null data
         pi0_momentum = np.where(null_dir, -999, pi0_momentum)
         pi0_momentum = np.where(null, -999, pi0_momentum)
-
-        leading = leading/1000
-        secondary = secondary/1000
 
         leading = np.where(null, -999, leading)
         leading = np.where(null_dir, -999, leading)
@@ -916,7 +921,6 @@ class RecoParticleData(ParticleData):
         angle = np.where(null, -999, angle)
         angle = np.where(null_dir, -999, angle)
 
-        inv_mass = inv_mass/1000
         inv_mass = np.where(null, -999, inv_mass)
         inv_mass = np.where(null_dir, -999, inv_mass)
 
@@ -991,15 +995,19 @@ class TrueParticleDataBT(ParticleData):
         number (ak.Array): backtracked particle number
         mother (ak.Array): backtracked particle number of mother
         pdg (ak.Array): pdg code of backtracked particle
+        motherPdg (ak.Array): pdg code of mother of backtracked particle
         startPos (ak.Record):
         endPos (ak.Record):
         momentum (ak.Record):
         energy (ak.Array):
+        energyByHits (ak.Array): energy of the true particle, calculated from the true hits
         direction (ak.Record):
-        matchedHits (ak.Array): true hits matched to reco hits
         hitsInRecoCluster (ak.Array): total hits in a reco cluster
-        mcParticleHits (ak.Array): true particle hits
-        sharedHits (ak.Array): true hits shared by other particles (i think?)
+        nHits (ak.Array): true particle hits
+        sharedHits (ak.Array): hits shared by both reco and backtracked true particle
+        trueBeamVertex (ak.Record): end poisition of backtracked true beam particle
+        purity (ak.Array): fraction of shared hits in reconstructed object
+        completeness (ak.Array): fraction of shared hits in the backtrackted true particle
         particleNumber: placeholder for ROOT files which don't have the particle number stored as NTuples
         SingleMatch (ak.Array): mask of events with only 1 unique backtracked particle
 
@@ -1024,6 +1032,11 @@ class TrueParticleDataBT(ParticleData):
     def pdg(self) -> ak.Array:
         self.LoadData("pdg", "reco_daughter_PFP_true_byHits_pdg")
         return getattr(self, f"_{type(self).__name__}__pdg")
+
+    @property
+    def motherPdg(self) -> ak.Array:
+        self.LoadData("motherPdg", "reco_daughter_PFP_true_byHits_Mother_pdg")
+        return getattr(self, f"_{type(self).__name__}__motherPdg")
 
     @property
     def startPos(self) -> ak.Record:
@@ -1067,9 +1080,9 @@ class TrueParticleDataBT(ParticleData):
         return getattr(self, f"_{type(self).__name__}__energy")
 
     @property
-    def matchedHits(self) -> ak.Array:
-        self.LoadData("matchedHits", "reco_daughter_PFP_true_byHits_matchedHits")
-        return getattr(self, f"_{type(self).__name__}__matchedHits")
+    def energyByHits(self) -> ak.Array:
+        self.LoadData("energyByHits", "reco_daughter_PFP_true_byHits_EnergyByHits")
+        return getattr(self, f"_{type(self).__name__}__energyByHits")
 
     @property
     def hitsInRecoCluster(self) -> ak.Array:
@@ -1077,9 +1090,9 @@ class TrueParticleDataBT(ParticleData):
         return getattr(self, f"_{type(self).__name__}__hitsInRecoCluster")
 
     @property
-    def mcParticleHits(self) -> ak.Array:
-        self.LoadData("mcParticleHits", "reco_daughter_PFP_true_byHits_mcParticleHits")
-        return getattr(self, f"_{type(self).__name__}__mcParticleHits")
+    def nHits(self) -> ak.Array:
+        self.LoadData("nHits", "reco_daughter_PFP_true_byHits_nHits")
+        return getattr(self, f"_{type(self).__name__}__nHits")
 
     @property
     def sharedHits(self) -> ak.Array:
@@ -1087,7 +1100,7 @@ class TrueParticleDataBT(ParticleData):
         return getattr(self, f"_{type(self).__name__}__sharedHits")
 
     @property
-    def trueBeamVertex(self) -> ak.Array:
+    def trueBeamVertex(self) -> ak.Record:
         nTuples = [
             "reco_beam_PFP_true_byHits_endX"
             "reco_beam_PFP_true_byHits_endY"
@@ -1095,6 +1108,18 @@ class TrueParticleDataBT(ParticleData):
         ]
         self.LoadData("trueBeamVertex", nTuples)
         return getattr(self, f"_{type(self).__name__}__trueBeamVertex")
+
+    @property
+    def purity(self) -> ak.Array:
+        if not hasattr(self, f"_{type(self).__name__}__purity"):
+            self.__purity = self.sharedHits / self.hitsInRecoCluster
+        return self.__purity
+
+    @property
+    def completeness(self) -> ak.Array:
+        if not hasattr(self, f"_{type(self).__name__}__completeness"):
+            self.__completeness = self.sharedHits / self.nHits
+        return self.__completeness
 
     @property
     def particleNumber(self) -> ak.Array:
@@ -1203,6 +1228,205 @@ class TrueParticleDataBT(ParticleData):
         inv_mass = np.where(null_dir, -999, inv_mass)
 
         return inv_mass, angle, leading, secondary, pi0_momentum
+
+
+class ShowerPairs:
+    """ Particle data class for backtracked truth information.
+
+    Attributes:
+        events (Data): events to look at
+        pairs (ak.Array): boolean mask which selects a pair of PFOs for each event
+        leading (ak.Array): boolean mask which selects the pair leading in backtracked true energy
+        subleading (ak.Array): boolean mask which selects the sub leading pair in backtracked true energy
+    Static Methods:
+        OpeningAngle
+        Mass
+        Pi0Mom
+        FractionalError
+    Property Methods:
+        reco_lead_energy (ak.Array) : reco leading pair energy
+        reco_sub_energy (ak.Array) : reco subleading pair energy
+        reco_angle (ak.Array) : reco opening angle
+        reco_mass (ak.Array) : reco invariant mass
+        reco_pi0_mom (ak.Array) : reco sum momentum magnitude
+        true_lead_energy (ak.Array) : true leading pair energy
+        true_sub_energy (ak.Array) : true subleading pair energy
+        true_angle (ak.Array) : true opening angle
+        true_mass (ak.Array) : true invariant mass
+        true_pi0_mom (ak.Array) : true sum momentum magnitude
+        error_lead_energy (ak.Array) : error leading pair energy
+        error_sub_energy (ak.Array) : error subleading pair energy
+        error_angle (ak.Array) : error opening angle
+        error_mass (ak.Array) : errore invariant mass
+        error_pi0_mom (ak.Array) : error sum momentum magnitude
+    Methods:
+        SortByBacktrackedEnergy : create leading and sub leading masks
+        CalculateAll (pd.DataFrame) : calculates all quantities
+        SaveToCSV : saves quantities to a csv
+
+    """
+    def __init__(self, events : Data, shower_pair_mask : ak.Array):
+        self.events = events
+        self.pairs = shower_pair_mask # we need to know which PFO to pair up
+        self.SortByBacktrackedEnergy() # get leading, and subleading shower masks
+        return
+
+    
+    def SortByBacktrackedEnergy(self):
+        """ Creates masks which select an indivual shower in a pair, by it's backtracked energy.
+            #? Should we allow a choice as to which quantity the pairs are sorted by?
+        """
+        indices = ak.local_index(self.pairs) # get indices of PFO like array
+        pair_ind = indices[self.pairs] # get the indices of the pairs
+        sorted_pair_ind = ak.argsort(self.events.trueParticlesBT.energy[self.pairs], ascending = False) # sort psirs by BT energy
+        sorted_pair_ind = pair_ind[sorted_pair_ind] # apply sorted local indices to the actual indices
+
+        # create masks for each
+        self.leading = indices == sorted_pair_ind[:, 0]
+        self.subleading = indices == sorted_pair_ind[:, 1]
+        
+    @staticmethod
+    def OpeningAngle(directions : ak.Record) -> ak.Array:
+        """ Angle between shower pair directions.
+
+        Args:
+            directions (ak.Record): shower pair directions, inner arrays should have two directions.
+
+        Returns:
+            ak.Array: angles (rad).
+        """
+        mag = vector.magnitude(directions)
+        return np.arccos(vector.dot(directions[:, 0], directions[:, 1]) / (mag[:, 0] * mag[:, 1]))
+
+    @staticmethod
+    def Mass(energies : ak.Array, angle : ak.Array) -> ak.Array:
+        """ Invariant mass of shower pairs.
+
+        Args:
+            energies (ak.Array): shower pair energies, inner arrays should have two energies.
+            angle (ak.Array): opening angle see ShowerPairs.OpeningAngle.
+
+        Returns:
+            ak.Array: mass (MeV)
+        """
+        return (2 * energies[:, 0] * energies[:, 1] * (1 - np.cos(angle)))**0.5
+
+    @staticmethod
+    def Pi0Mom(momenta : ak.Array) -> ak.Array:
+        """ Summed momentum magnitude of shower pairs.
+
+        Args:
+            momenta (ak.Record): shower pair momenta, inner arrays should have two momenta.
+
+        Returns:
+            ak.Array: sum momentum (MeV)
+        """
+        return vector.magnitude(ak.sum(momenta, axis = -1))
+
+    @staticmethod
+    def FractionalError(reco : ak.Array, true : ak.Array) -> ak.Array:
+        """ percentage difference between reco and truth.
+
+        Args:
+            reco (ak.Array): reconstructed value
+            true (ak.Array): true value
+
+        Returns:
+            ak.Array: fractional error (%)
+        """
+        return (reco / true) - 1
+
+    ##############################################################################################
+    @property
+    def reco_lead_energy(self):
+        return self.events.recoParticles.energy[self.leading]
+
+    @property
+    def reco_sub_energy(self):
+        return self.events.recoParticles.energy[self.subleading]
+
+    @property
+    def reco_angle(self):
+        return ShowerPairs.OpeningAngle(self.events.recoParticles.direction[self.pairs])
+
+    @property
+    def reco_mass(self):
+        return ShowerPairs.Mass(self.events.recoParticles.energy[self.pairs], self.reco_angle)
+
+    @property
+    def reco_pi0_mom(self):
+        return ShowerPairs.Pi0Mom(self.events.recoParticles.momentum[self.pairs])
+
+    ##############################################################################################
+    @property
+    def true_lead_energy(self):
+        return self.events.trueParticlesBT.energy[self.leading]
+
+    @property
+    def true_sub_energy(self):
+        return self.events.trueParticlesBT.energy[self.subleading]
+
+    @property
+    def true_angle(self):
+        return ShowerPairs.OpeningAngle(self.events.trueParticlesBT.direction[self.pairs])
+
+    @property
+    def true_mass(self):
+        return ShowerPairs.Mass(self.events.trueParticlesBT.energy[self.pairs], self.true_angle)
+
+    @property
+    def true_pi0_mom(self):
+        return ShowerPairs.Pi0Mom(self.events.trueParticlesBT.momentum[self.pairs])
+
+    ##############################################################################################
+    @property
+    def error_lead_energy(self):
+        return ShowerPairs.FractionalError(self.reco_lead_energy, self.true_lead_energy)
+
+    @property
+    def error_sub_energy(self):
+        return ShowerPairs.FractionalError(self.reco_sub_energy, self.true_sub_energy)
+
+    @property
+    def error_angle(self):
+        return ShowerPairs.FractionalError(self.reco_angle, self.true_angle)
+    @property
+    def error_mass(self):
+        return ShowerPairs.FractionalError(self.reco_mass, self.true_mass)
+
+    @property
+    def error_pi0_mom(self):
+        return ShowerPairs.FractionalError(self.reco_pi0_mom, self.true_pi0_mom)
+
+        
+    def CalculateAll(self) -> pd.DataFrame:
+        """ Calculates all possible quantities and stores the results in a dataframe.
+
+        Returns:
+            pd.DataFrame: dataframe.
+        """
+        #* search terms are based on the prefix (sace sensitive) of the property methods, when adding new quantities they should conform to this standard
+        search_terms = ["reco", "true", "error"]
+        
+        df = {}
+        for search in search_terms:
+            for k in vars(ShowerPairs):
+                if search in k:
+                    print(k)
+                    df.update({k: ak.ravel(getattr(self, k))})
+        df = pd.DataFrame(df)
+        print(df)
+        return df
+
+    
+    def SaveToCSV(self, name : str = "shower-pair-quantities"):
+        """ Save all quantities to a csv file.
+            Will overwrite existing files!
+
+        Args:
+            name (str, optional): file name (exluding extentions). Defaults to "shower-pair-quantities".
+        """
+        self.CalculateAll().to_csv(name + ".csv")
 
 
 def NPFPMask(events : Data, nObjects : int = None) -> ak.Array:
