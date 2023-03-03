@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import argparse
 import os
 import subprocess
@@ -25,6 +26,7 @@ class CalculateMergeQuantities(Processor):
         self.args.file = file
         self.args.directory = directory
         self.args.nBatches = nBatches
+        self.args.debug = False
 
     def Create_CLI(self, description: str = "Process description", eplilog: str = None):
         return super().Create_CLI(description, eplilog)
