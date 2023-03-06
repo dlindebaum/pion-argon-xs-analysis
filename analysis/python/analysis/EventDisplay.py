@@ -6,9 +6,9 @@ Author: Shyam Bhuller
 Description: Event display object.
 """
 import awkward as ak
+import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
 import numpy as np
-from mpl_toolkits.mplot3d import Axes3D
 
 from python.analysis import vector
 
@@ -62,8 +62,8 @@ class EventDisplay:
 
         if plot3D:
             plt.figure(2).clf() # clear existing 3D figure 
-            self.fig3D = plt.figure(num=2)
-            self.ax3D = Axes3D(self.fig3D)
+            self.fig3D = plt.figure(num = 2)
+            self.ax3D = self.fig3D.add_subplot(projection = "3d")
             self.ax3D.set_xlabel("x (cm)")
             self.ax3D.set_ylabel("z (cm)") # swtich y and z axes, so that the y axis is vertical
             self.ax3D.set_zlabel("y (cm)")
@@ -88,7 +88,7 @@ class EventDisplay:
             self.ax3D.set_ylim3d(z)
             self.ax3D.set_zlim3d(y)
 
-    def PFO(self, points : ak.Array, marker : str, colour : str, pointSize : int = 2, startPoint : ak.Record = None, direction : ak.Record = None, pdg : int = None):
+    def PFO(self, points : ak.Array, marker : str, colour : str, alpha : float = 1, pointSize : int = 2, startPoint : ak.Record = None, direction : ak.Record = None, pdg : int = None):
         """ Plot a PFO in the event display.
 
         Args:
@@ -110,16 +110,16 @@ class EventDisplay:
         points = points[fudicial_cut]
 
         if hasattr(self, "fig2D"):
-            self.xy.scatter(points.x, points.y, pointSize, marker=marker, color=colour)
-            self.xz.scatter(points.x, points.z, pointSize, marker=marker, color=colour)
+            self.xy.scatter(points.x, points.y, pointSize, marker = marker, color = colour, alpha = alpha)
+            self.xz.scatter(points.x, points.z, pointSize, marker = marker, color = colour, alpha = alpha)
             if startPoint is not None:
-                self.xy.scatter(startPoint.x, startPoint.y, pointSize * 30, marker="x", color=colour)
-                self.xz.scatter(startPoint.x, startPoint.z, pointSize * 30, marker="x", color=colour)
+                self.xy.scatter(startPoint.x, startPoint.y, pointSize * 30, marker = "x", color = colour, alpha = alpha)
+                self.xz.scatter(startPoint.x, startPoint.z, pointSize * 30, marker = "x", color = colour, alpha = alpha)
         
         if hasattr(self, "fig3D"):
-            self.ax3D.scatter(points.x, points.z, points.y, s=pointSize, marker=marker, color=colour)
+            self.ax3D.scatter(points.x, points.z, points.y, s = pointSize, marker = marker, color = colour, alpha = alpha)
             if startPoint is not None:
-                self.ax3D.scatter(startPoint.x, startPoint.z, startPoint.y, s=pointSize * 30, marker="x", color=colour)
+                self.ax3D.scatter(startPoint.x, startPoint.z, startPoint.y, s = pointSize * 30, marker = "x", color = colour, alpha = alpha)
         
         if direction is not None and startPoint is not None:
             self.Line(startPoint, vector.add(startPoint, vector.prod(10, direction)), colour, lineStyle="-")
@@ -165,7 +165,7 @@ class EventDisplay:
         
         return
 
-    def Text(self, point : ak.Record, text : str, fontsize : int = 16):
+    def Text(self, point : ak.Record, text : str, fontsize : int = 16, colour = "black"):
         """ Draw text.
 
         Args:
@@ -174,11 +174,11 @@ class EventDisplay:
             fontsize (int, optional): font size. Defaults to 16.
         """
         if hasattr(self, "fig2D"):
-            self.xy.text(point.x, point.y, str(text), fontsize = fontsize, clip_on = True)
-            self.xz.text(point.x, point.z, str(text), fontsize = fontsize, clip_on = True)
+            self.xy.text(point.x, point.y, str(text), fontsize = fontsize, clip_on = True, color = colour, path_effects = [pe.withStroke(linewidth = 1, foreground = "black")])
+            self.xz.text(point.x, point.z, str(text), fontsize = fontsize, clip_on = True, color = colour, path_effects = [pe.withStroke(linewidth = 1, foreground = "black")])
 
         if hasattr(self, "fig3D"):
-            self.ax3D.text(point.x, point.z, point.y, str(text), fontsize = fontsize, clip_on = True)
+            self.ax3D.text(point.x, point.z, point.y, str(text), fontsize = fontsize, clip_on = True, color = colour, path_effects = [pe.withStroke(linewidth = 1, foreground = "black")])
             self.ax3D.set_clip_on(True) # prevents text objects from being rendered outside of the axes bounds
 
         return
