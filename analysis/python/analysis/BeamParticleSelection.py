@@ -8,8 +8,11 @@ TODO Cleanup beam quality cut code
 ? Should the cuts be configurable?
 ? should this be kept in a class?
 """
+from functools import wraps
+
 import awkward as ak
 import numpy as np
+import pandas as pd
 
 import python.analysis.vector as vector
 from python.analysis.Master import Data
@@ -36,6 +39,7 @@ def CountEventsWrapper(f):
     Returns:
         any: output of f.
     """
+    @wraps(f)
     def wrapper(*args, **kwargs):
         m = f(*args, **kwargs)
         c = CountMask(m)
@@ -81,7 +85,6 @@ def CaloSizeCut(events : Data) -> ak.Array:
     Returns:
         ak.Array: boolean mask.
     """
-    # calo_wire = events.io.Get("reco_beam_calo_wire")
     calo_wire = events.recoParticles.beam_caloWire
     calo_wire = calo_wire[calo_wire != -999] # Analyser fills the empty entry with a -999
     return ak.num(calo_wire, 1) > 0 
@@ -149,20 +152,16 @@ def BeamQualityCut(events : Data) -> ak.Array:
     dxy_max = 3
     costh_min = 0.95
     costh_max = 2
+    
+    has_angle_cut = True;
 
     # do only MC for now.
-    beam_start_pos = vector.vector(
-        events.io.Get("reco_beam_startX"),
-        events.io.Get("reco_beam_startY"),
-        events.io.Get("reco_beam_startZ")
-    )
-
     beam_dx = (events.recoParticles.beam_startPos.x - beam_startX_mc) / beam_startX_rms_mc
     beam_dy = (events.recoParticles.beam_startPos.y - beam_startY_mc) / beam_startY_rms_mc
     beam_dz = (events.recoParticles.beam_startPos.z - beam_startZ_mc) / beam_startZ_rms_mc
     beam_dxy = (beam_dx**2 + beam_dy**2)**0.5
 
-    beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos, beam_start_pos))
+    beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos, events.recoParticles.beam_startPos))
 
     beam_dir_mc = vector.vector(
         np.cos(beam_angleX_mc * np.pi / 180),
@@ -173,7 +172,6 @@ def BeamQualityCut(events : Data) -> ak.Array:
 
     beam_costh = vector.dot(beam_dir, beam_dir_mc)
 
-    has_angle_cut = True;
 
     beam_quality_mask = events.eventNum > 0 # mask which is all trues
 
@@ -219,12 +217,11 @@ def MichelScoreCut(events : Data) -> ak.Array:
     Returns:
         ak.Array: boolean mask.
     """
-    # score = events.io.Get("reco_beam_vertex_michel_score") / events.io.Get("reco_beam_vertex_nHits")
     score = events.recoParticles.beam_michelScore / events.recoParticles.beam_nHits
     return score < 0.55
 
 @CountEventsWrapper
-def medianDEdXCut(events : Data) -> ak.Array:
+def MedianDEdXCut(events : Data) -> ak.Array:
     """ cut on median dEdX to exlude proton background.
 
     Args:
@@ -253,8 +250,8 @@ def medianDEdXCut(events : Data) -> ak.Array:
 
     return median < 2.4
 
-@CountEventsWrapper
-def CombineSelections(events : Data, selection : list) -> ak.Array:
+
+def CombineSelections(events : Data, selection : list, verbose : bool = False, return_table : bool = False) -> ak.Array:
     """ Combines multiple beam particle selections.
 
     Args:
@@ -264,16 +261,38 @@ def CombineSelections(events : Data, selection : list) -> ak.Array:
     Returns:
         ak.Array: boolean mask of combined selection.
     """
+    if verbose or return_table:
+        table = {
+            "no selection" : [ak.num(events.eventNum, 0), 100]*2
+        }
+
     mask = None
     for s in selection:
+        new_mask = s(events)
         if not hasattr(mask, "__iter__"):
-            mask = s(events)
+            mask = new_mask
         else:
-            mask = mask & s(events)
-    return mask
+            mask = mask & new_mask
 
-@CountEventsWrapper
-def ApplyDefaultSelection(events : Data) -> ak.Array:
+        if verbose:
+            successive_counts = ak.num(mask[mask], 0)
+            single_counts = ak.num(new_mask[new_mask], 0)
+            table[s.__name__] = [single_counts, 100 * single_counts/ table["no selection"][0], successive_counts, 100 * successive_counts / table["no selection"][0]]
+
+    if return_table or verbose:
+        table = pd.DataFrame(table, index = ["number of events which pass the cut", "single efficiency", "number of events afer successive cuts", "successive efficiency"]).T
+        relative_efficiency = np.append([np.nan], 100 * table["number of events afer successive cuts"].values[1:] / table["number of events afer successive cuts"].values[:-1])
+        table["relative efficiency"] = relative_efficiency
+    if verbose:
+        print(table)
+
+    if return_table:
+        return mask, table
+    else:
+        return mask
+
+
+def ApplyDefaultSelection(events : Data, verbose : bool = True, return_table : bool = True) -> ak.Array:
     """ Create boolean mask for default MC beam particle selection
         (includes pi+ beam selection for now as well).
 
@@ -290,6 +309,6 @@ def ApplyDefaultSelection(events : Data) -> ak.Array:
         BeamQualityCut,
         APA3Cut,
         MichelScoreCut,
-        medianDEdXCut
+        MedianDEdXCut
     ]
-    return CombineSelections(events, selection)
+    return CombineSelections(events, selection, verbose, return_table)
