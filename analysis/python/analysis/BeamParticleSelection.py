@@ -252,3 +252,44 @@ def medianDEdXCut(events : Data) -> ak.Array:
     median = ak.flatten(ak.fill_none(ak.pad_none(ak.where(count % 2, median_odd, median_even), 1), -999)) # pick which median is the correct one
 
     return median < 2.4
+
+@CountEventsWrapper
+def CombineSelections(events : Data, selection : list) -> ak.Array:
+    """ Combines multiple beam particle selections.
+
+    Args:
+        events (Data): events to study.
+        selection (list): list of beam particle selection functions (must return a boolean mask).
+
+    Returns:
+        ak.Array: boolean mask of combined selection.
+    """
+    mask = None
+    for s in selection:
+        if not hasattr(mask, "__iter__"):
+            mask = s(events)
+        else:
+            mask = mask & s(events)
+    return mask
+
+@CountEventsWrapper
+def ApplyDefaultSelection(events : Data) -> ak.Array:
+    """ Create boolean mask for default MC beam particle selection
+        (includes pi+ beam selection for now as well).
+
+    Args:
+        events (Data): events to study
+
+    Returns:
+        ak.Array: boolean mask
+    """
+    selection = [
+        PiBeamSelection, #* pi+ beam selection
+        PandoraTagCut,
+        CaloSizeCut,
+        BeamQualityCut,
+        APA3Cut,
+        MichelScoreCut,
+        medianDEdXCut
+    ]
+    return CombineSelections(events, selection)
