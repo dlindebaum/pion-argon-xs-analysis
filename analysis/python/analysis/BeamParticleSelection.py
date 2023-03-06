@@ -17,39 +17,87 @@ import python.analysis.vector as vector
 from python.analysis.Master import Data
 
 
-def CountEvents(f):
+def CountMask(m : ak.Array) -> tuple:
+    """ Counts the total number of entries in a boolean mask,
+        and the number which are True.
+
+    Args:
+        m (ak.Array): boolean mask.
+
+    Returns:
+        tuple: (number of entries, number of entries which are true).
+    """
+    return ak.count(m), ak.count(m[m])
+
+
+def CountEventsWrapper(f):
+    """ Wrapper for selection functions which checks the number of entries that pass a cut.
+
+    Args:
+        f (function): selection function.
+    Returns:
+        any: output of f.
+    """
     def wrapper(*args, **kwargs):
         m = f(*args, **kwargs)
-        print(m)
-        print(f"number of events before|after {f.__name__}: {ak.count(m)}|{ak.count(m[m])}")
+        c = CountMask(m)
+        print(f"number of entries before|after {f.__name__}: {c[0]}|{c[1]}")
         return m
     return wrapper
 
-
 #! This is a pi+ beam selection, should this be here?
-@CountEvents
-def PiBeamSelection(events : Data):
-    # beam particle PDG cut
+@CountEventsWrapper
+def PiBeamSelection(events : Data) -> ak.Array:
+    """ Pi+ beam particle selection. For MC only.
+
+    Args:
+        events (Data): events to study.
+
+    Returns:
+        ak.Array: boolean mask.
+    """
     pdg = events.io.Get("reco_beam_PFP_true_byHits_pdg")
-    return (pdg == 211) | (pdg == -13)
+    return (pdg == 211) | (pdg == -13) # return both 211 and -13 as you can't distinguish between pi+ and mu+ in data
 
-
-@CountEvents
+@CountEventsWrapper
 def PandoraTagCut(events : Data) -> ak.Array:
-    # pandora tag cut
+    """ Cut on Pandora slice tag, selects track like beam particles.
+
+    Args:
+        events (Data): events to study.
+
+    Returns:
+        ak.Array: boolean mask.
+    """
     tag = events.recoParticles.pandoraTag[events.recoParticles.beam_number == events.recoParticles.number]
     tag = ak.flatten(ak.fill_none(ak.pad_none(tag, 1), -999))
     return tag == 13
 
-@CountEvents
+@CountEventsWrapper
 def CaloSizeCut(events : Data) -> ak.Array:
-    # calo size cut
+    """ Cut which checks the beam particle has a calorimetry object (required for median dEdX cut).
+
+    Args:
+        events (Data): events to study.
+
+    Returns:
+        ak.Array: boolean mask.
+    """
     calo_wire = events.io.Get("reco_beam_calo_wire")
     calo_wire = calo_wire[calo_wire != -999] # Analyser fills the empty entry with a -999
     return ak.num(calo_wire, 1) > 0 
 
-@CountEvents
+@CountEventsWrapper
 def BeamQualityCut(events : Data) -> ak.Array:
+    """ Cut on beam particle start position and trajectory, 
+        Selects beam particles with values consistent to the beam plug.
+
+    Args:
+        events (Data): events to study.
+
+    Returns:
+        ak.Array: boolean mask.
+    """
     # beam quality cut
     beam_startX_data = -28.3483;
     beam_startY_data = 424.553;
@@ -90,7 +138,7 @@ def BeamQualityCut(events : Data) -> ak.Array:
 
     # range of acceptable deltas
 
-    #! these are set like this so that the comparisions are not done for dx and dy
+    #! these are set like this so that the comparisons are not done for dx and dy, instead a comparison with sqrt(x**2 + y**2) is done (dxy)
     dx_min = 3
     dx_max = -3
     dy_min = 3
@@ -115,7 +163,7 @@ def BeamQualityCut(events : Data) -> ak.Array:
     beam_dz = (beam_start_pos.z - beam_startZ_mc) / beam_startZ_rms_mc
     beam_dxy = (beam_dx**2 + beam_dy**2)**0.5
 
-    beam_dir = vector.normalize(vector.sub(beam_start_pos, events.recoParticles.beamVertex))
+    beam_dir = vector.normalize(vector.sub(events.recoParticles.beamVertex, beam_start_pos))
 
     beam_dir_mc = vector.vector(
         np.cos(beam_angleX_mc * np.pi / 180),
@@ -130,44 +178,61 @@ def BeamQualityCut(events : Data) -> ak.Array:
 
     beam_quality_mask = events.eventNum > 0 # mask which is all trues
 
-    def beam_quality_cut(x, xmin, xmax):
-        # print(f"{x=}")
-        # print(f"{xmin=}")
-        # print(f"{xmax=}")
+    def cut(x, xmin, xmax):
         return ((x > xmin) & (x < xmax))
 
     if dx_min < dx_max:
-        beam_quality_mask = beam_quality_mask & beam_quality_cut(beam_dx, dx_min, dx_max) #* should be the same as the logic below
-        # if (beam_dx < dx_min) return false;
-        # if (beam_dx > dx_max) return false;
+        beam_quality_mask = beam_quality_mask & cut(beam_dx, dx_min, dx_max) #* should be the same as the logic below
 
     if dy_min < dy_max:
-        beam_quality_mask = beam_quality_mask & beam_quality_cut(beam_dy, dy_min, dy_max) #* should be the same as the logic below
+        beam_quality_mask = beam_quality_mask & cut(beam_dy, dy_min, dy_max) #* should be the same as the logic below
 
     if dz_min < dz_max:
-        beam_quality_mask = beam_quality_mask & beam_quality_cut(beam_dz, dz_min, dz_max) #* should be the same as the logic below
+        beam_quality_mask = beam_quality_mask & cut(beam_dz, dz_min, dz_max) #* should be the same as the logic below
 
     if dxy_min < dxy_max:
-        beam_quality_mask = beam_quality_mask & beam_quality_cut(beam_dxy, dxy_min, dxy_max) #* should be the same as the logic below
+        beam_quality_mask = beam_quality_mask & cut(beam_dxy, dxy_min, dxy_max) #* should be the same as the logic below
 
     if has_angle_cut and (costh_min < costh_max):
-        beam_quality_mask = beam_quality_mask & beam_quality_cut(beam_costh, costh_min, costh_max) #* should be the same as the logic below
+        beam_quality_mask = beam_quality_mask & cut(beam_costh, costh_min, costh_max) #* should be the same as the logic below
     return beam_quality_mask
 
-@CountEvents
+@CountEventsWrapper
 def APA3Cut(events : Data) -> ak.Array:
+    """ Cuts on beam end z position to select beam particles which end in APA3.
+
+    Args:
+        events (Data): events to study.
+
+    Returns:
+        ak.Array: boolean mask.
+    """
     # APA3 cut
     return events.recoParticles.beamVertex.z < 220 # cm
 
-@CountEvents
+@CountEventsWrapper
 def MichelScoreCut(events : Data) -> ak.Array:
-    # michel score cut
+    """ Cut on michel score to remove muon like beam particles.
+
+    Args:
+        events (Data): events to study.
+
+    Returns:
+        ak.Array: boolean mask.
+    """
     score = events.io.Get("reco_beam_vertex_michel_score") / events.io.Get("reco_beam_vertex_nHits")
     return score < 0.55
 
-@CountEvents
+@CountEventsWrapper
 def medianDEdXCut(events : Data) -> ak.Array:
-    # proton background cut
+    """ cut on median dEdX to exlude proton background.
+
+    Args:
+        events (Data): events to study.
+
+    Returns:
+        ak.Array: boolean mask.
+    """
     beam_dEdX = events.io.Get("reco_beam_calibrated_dEdX_SCE")
 
     # awkward has no median function and numpy median won't work on jagged arrays, so we do it ourselves
@@ -184,6 +249,6 @@ def medianDEdXCut(events : Data) -> ak.Array:
     select_even = ak.local_index(beam_dEdX_sorted) == med_even
     median_even = (beam_dEdX_sorted[select] + beam_dEdX_sorted[select_even]) / 2 # median is average of middle value and middle - 1 value
 
-    median = ak.flatten(ak.where(count % 2, median_odd, median_even)) # pick which median is the correct one
+    median = ak.flatten(ak.fill_none(ak.pad_none(ak.where(count % 2, median_odd, median_even), 1), -999)) # pick which median is the correct one
 
     return median < 2.4
