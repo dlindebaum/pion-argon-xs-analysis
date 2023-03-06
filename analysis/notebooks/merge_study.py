@@ -338,7 +338,7 @@ def SelectSample(events : Master.Data, nDaughters : int) -> tuple:
 
 @Master.timer
 def main():
-    events = Master.Data(file, True)
+    events = Master.Data(file)
     events.ApplyBeamFilter() # apply beam filter if possible
 
     if study == "performance":

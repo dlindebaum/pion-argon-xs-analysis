@@ -123,7 +123,7 @@ class ShowerMergeQuantities:
         v3 = ak.Array([vector.normalize(vector.cross(start_shower_dir[:, i], self.to_merge_dir)) for i in range(2)])
         self.d = np.abs(ak.Array([vector.dot(vector.sub(start_shower_pos[:, i], self.to_merge_pos), v3[i]) for i in range(2)]))
 
-        pi0_vertex = events.recoParticles.beamVertex # assume the pi0 lifetime is short so these are approximately the same (should be even at 6GeV beam energy)
+        pi0_vertex = events.recoParticles.beam_endPos # assume the pi0 lifetime is short so these are approximately the same (should be even at 6GeV beam energy)
         self.p = ak.Array([vector.magnitude(vector.cross(vector.sub(pi0_vertex, self.to_merge_pos), self.to_merge_dir)) for i in range(2)])
 
         self.delta_phi = ak.Array([vector.angle(start_shower_dir[:, i], self.to_merge_dir) for i in range(2)])
@@ -482,7 +482,7 @@ def ROOTWorkFlow():
          - geometric quantities for signal/background discrimination
          - pair quantities and shower merging
     """
-    events = Master.Data(file, includeBackTrackedMC = True, nEvents = args.nEvents[0], start = args.nEvents[1])
+    events = Master.Data(file, nEvents = args.nEvents[0], start = args.nEvents[1])
     EventSelection(events)
     PFOSelection(events)
     start_showers, to_merge = SplitSample(events, args.matchBy)

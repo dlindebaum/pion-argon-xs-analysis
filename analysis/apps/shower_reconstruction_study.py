@@ -213,7 +213,7 @@ def PlotFromCSV():
 def AnalyseMultipleFiles():
     nPFP = []
     for f in file:
-        events = Master.Data(f, includeBackTrackedMC=True)
+        events = Master.Data(f)
         events.ApplyBeamFilter()
 
         if ak.count(nPFP) == 0:
@@ -248,7 +248,7 @@ def AnalyseMultipleFiles():
 
 
 def AnalyseSingle():
-    events = Master.Data(file, includeBackTrackedMC=True)
+    events = Master.Data(file)
     events.ApplyBeamFilter() # apply beam filter if possible
 
     # apply additional selection for beam MC events

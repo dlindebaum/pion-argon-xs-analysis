@@ -108,7 +108,6 @@ class Data:
     
     Attributes:
         io (IO): IO class which is used for interfacing with the NTuple file (using uproot).
-        includeBacktrackedMC (bool): Should backtracked MC be loaded. Defaults to False. #! to be removed!
         filename (str): NTuple file name. Defaults to None. #? does this need to be an attribute of the class if already defined in IO?
         nEvents (int): number of events to study. Defaults to -1 (all events). #? does this need to be an attribute of the class if already defined in IO?
         start (int): start point in which to read events from the root file. Defaults to 0. #? does this need to be an attribute of the class if already defined in IO?
@@ -134,19 +133,18 @@ class Data:
         MergeShower (Data): merge PFOs using reco information for pure pi0 sample.
         MergeShowerBT (Data): Merge showers using bactacked matching for pure pi0 sample.
     """
-    def __init__(self, filename : str = None, includeBackTrackedMC : bool = True, nEvents : int = -1, start : int = 0):
+    def __init__(self, filename : str = None, nEvents : int = -1, start : int = 0):
         self.filename = filename
         if self.filename != None:
             self.nEvents = nEvents
             self.start = start
             self.io = IO(self.filename, self.nEvents, self.start)
-            self.run = self.io.Get("Run")            
+            self.run = self.io.Get("Run")
             self.subRun = self.io.Get("SubRun")
             self.eventNum = self.io.Get("EventID")
             self.trueParticles = TrueParticleData(self)
             self.recoParticles = RecoParticleData(self)
-            if includeBackTrackedMC is True:
-                self.trueParticlesBT = TrueParticleDataBT(self)
+            self.trueParticlesBT = TrueParticleDataBT(self)
 
     @property
     def SortedTrueEnergyMask(self) -> ak.Array:
@@ -367,7 +365,7 @@ class Data:
             print("data doesn't contain beam number, can't apply filter.")
             return
         hasBeam = self.recoParticles.beam_number != -999 # check if event has a beam particle
-        hasBeam = np.logical_and(self.recoParticles.beamVertex.x != -999, hasBeam)
+        hasBeam = np.logical_and(self.recoParticles.beam_endPos.x != -999, hasBeam)
         self.Filter([hasBeam], [hasBeam]) # filter data
     
     @timer
@@ -822,8 +820,14 @@ class RecoParticleData(ParticleData):
     Property Methods:
         beam_number (ak.Array): beam PFO number
         sliceID (ak.Array): slice the PFO corresponds to
-        beamSliceID (ak.Array): slice the beam PFO corresponds to
-        beamCosmicScore (ak.Array): whether the reconstruction chain used was for a neutrino vertex (beam) or cosmics
+        beam_sliceID (ak.Array): slice the beam PFO corresponds to
+        beam_cosmicScore (ak.Array): whether the reconstruction chain used was for a neutrino vertex (beam) or cosmics
+        beam_endPos (ak.Record): end point of the beam particle
+        beam_startPos (ak.Record): start point of the beam particle
+        beam_caloWire (ak.Array): wire numbers of beam calorimetry
+        beam_michelScore (ak.Array): beam particle michel score
+        beam_nHits (ak.Array): beam particle number of hits
+        beam_dEdx (ak.Array): beam particle dEdx
         pandoraTag (ak.Array): label given to particles by pandora; track, shower or -999
         number (ak.Array): PFO number
         mother (ak.Array): number of mother PFO
@@ -835,7 +839,6 @@ class RecoParticleData(ParticleData):
         showerLength (ak.Array): length of shower (if applicable)
         showerConeAngle (ak.Array): width of shower (if applicable)
         cnnScore (ak.Array): shower-track like score.
-        beamVertex (ak.Record): end point of the beam particle
         spacePoints (ak.Record): hit space points
         channel (ak.Array): hit channel
         peakTime (ak.Array): hit peak time
@@ -859,24 +862,64 @@ class RecoParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__beam_number")
 
     @property
-    def sliceID(self) -> ak.Array:
-        self.LoadData("sliceID", "reco_daughter_allShower_sliceID")
-        return getattr(self, f"_{type(self).__name__}__sliceID")
+    def beam_sliceID(self) -> ak.Array:
+        self.LoadData("beam_sliceID", "reco_beam_sliceID")
+        return getattr(self, f"_{type(self).__name__}__beam_sliceID")
 
     @property
-    def beamSliceID(self) -> ak.Array:
-        self.LoadData("beamSliceID", "reco_beam_sliceID")
-        return getattr(self, f"_{type(self).__name__}__beamSliceID")
+    def beam_cosmicScore(self) -> ak.Array:
+        self.LoadData("beam_cosmicScore", "reco_daughter_allShower_beamCosmicScore")
+        return getattr(self, f"_{type(self).__name__}__beam_cosmicScore")
 
     @property
-    def beamCosmicScore(self) -> ak.Array:
-        self.LoadData("beamCosmicScore", "reco_daughter_allShower_beamCosmicScore")
-        return getattr(self, f"_{type(self).__name__}__beamCosmicScore")
+    def beam_endPos(self) -> ak.Record:
+        nTuples = [
+            "reco_beam_endX",
+            "reco_beam_endY",
+            "reco_beam_endZ",
+        ]
+        self.LoadData("beam_endPos", nTuples)
+        return getattr(self, f"_{type(self).__name__}__beam_endPos")
+
+    @property
+    def beam_startPos(self) -> ak.Record:
+        nTuples = [
+            "reco_beam_startX",
+            "reco_beam_startY",
+            "reco_beam_startZ",
+        ]
+        self.LoadData("beam_startPos", nTuples)
+        return getattr(self, f"_{type(self).__name__}__beam_startPos")
+
+    @property
+    def beam_caloWire(self) -> ak.Array:
+        self.LoadData("beam_caloWire", "reco_beam_calo_wire")
+        return getattr(self, f"_{type(self).__name__}__beam_caloWire")
+
+    @property
+    def beam_michelScore(self) -> ak.Array:
+        self.LoadData("beam_michelScore", "reco_beam_vertex_michel_score")
+        return getattr(self, f"_{type(self).__name__}__beam_michelScore")
+
+    @property
+    def beam_nHits(self) -> ak.Array:
+        self.LoadData("beam_nHits", "reco_beam_vertex_nHits")
+        return getattr(self, f"_{type(self).__name__}__beam_nHits")
+
+    @property
+    def beam_dEdX(self) -> ak.Array:
+        self.LoadData("beam_dEdX", "reco_beam_calibrated_dEdX_SCE")
+        return getattr(self, f"_{type(self).__name__}__beam_dEdX")
 
     @property
     def pandoraTag(self) -> ak.Array:
         self.LoadData("pandoraTag", "pandoraTag")
         return getattr(self, f"_{type(self).__name__}__pandoraTag")
+
+    @property
+    def sliceID(self) -> ak.Array:
+        self.LoadData("sliceID", "reco_daughter_allShower_sliceID")
+        return getattr(self, f"_{type(self).__name__}__sliceID")
 
     @property
     def number(self) -> ak.Array:
@@ -941,16 +984,6 @@ class RecoParticleData(ParticleData):
     def cnnScore(self) -> ak.Array:
         self.LoadData("cnnScore", "CNNScore_collection")
         return getattr(self, f"_{type(self).__name__}__cnnScore")
-
-    @property
-    def beamVertex(self) -> ak.Record:
-        nTuples = [
-            "reco_beam_endX",
-            "reco_beam_endY",
-            "reco_beam_endZ",
-        ]
-        self.LoadData("beamVertex", nTuples)
-        return getattr(self, f"_{type(self).__name__}__beamVertex")
 
     @property
     def spacePoints(self) -> ak.Record:

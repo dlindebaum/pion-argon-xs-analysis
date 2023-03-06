@@ -3,10 +3,8 @@ Created on: 03/03/2023 14:30
 
 Author: Shyam Bhuller
 
-Description: Contains cuts for Beam Particle Selection
+Description: Contains cuts for Beam Particle Selection.
 TODO Cleanup beam quality cut code
-TODO Add property methods for the new Ntuples in Master.Data
-TODO Add documentation
 ? Should the cuts be configurable?
 ? should this be kept in a class?
 """
@@ -83,7 +81,8 @@ def CaloSizeCut(events : Data) -> ak.Array:
     Returns:
         ak.Array: boolean mask.
     """
-    calo_wire = events.io.Get("reco_beam_calo_wire")
+    # calo_wire = events.io.Get("reco_beam_calo_wire")
+    calo_wire = events.recoParticles.beam_caloWire
     calo_wire = calo_wire[calo_wire != -999] # Analyser fills the empty entry with a -999
     return ak.num(calo_wire, 1) > 0 
 
@@ -158,12 +157,12 @@ def BeamQualityCut(events : Data) -> ak.Array:
         events.io.Get("reco_beam_startZ")
     )
 
-    beam_dx = (beam_start_pos.x - beam_startX_mc) / beam_startX_rms_mc
-    beam_dy = (beam_start_pos.y - beam_startY_mc) / beam_startY_rms_mc
-    beam_dz = (beam_start_pos.z - beam_startZ_mc) / beam_startZ_rms_mc
+    beam_dx = (events.recoParticles.beam_startPos.x - beam_startX_mc) / beam_startX_rms_mc
+    beam_dy = (events.recoParticles.beam_startPos.y - beam_startY_mc) / beam_startY_rms_mc
+    beam_dz = (events.recoParticles.beam_startPos.z - beam_startZ_mc) / beam_startZ_rms_mc
     beam_dxy = (beam_dx**2 + beam_dy**2)**0.5
 
-    beam_dir = vector.normalize(vector.sub(events.recoParticles.beamVertex, beam_start_pos))
+    beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos, beam_start_pos))
 
     beam_dir_mc = vector.vector(
         np.cos(beam_angleX_mc * np.pi / 180),
@@ -208,7 +207,7 @@ def APA3Cut(events : Data) -> ak.Array:
         ak.Array: boolean mask.
     """
     # APA3 cut
-    return events.recoParticles.beamVertex.z < 220 # cm
+    return events.recoParticles.beam_endPos.z < 220 # cm
 
 @CountEventsWrapper
 def MichelScoreCut(events : Data) -> ak.Array:
@@ -220,7 +219,8 @@ def MichelScoreCut(events : Data) -> ak.Array:
     Returns:
         ak.Array: boolean mask.
     """
-    score = events.io.Get("reco_beam_vertex_michel_score") / events.io.Get("reco_beam_vertex_nHits")
+    # score = events.io.Get("reco_beam_vertex_michel_score") / events.io.Get("reco_beam_vertex_nHits")
+    score = events.recoParticles.beam_michelScore / events.recoParticles.beam_nHits
     return score < 0.55
 
 @CountEventsWrapper
@@ -233,7 +233,7 @@ def medianDEdXCut(events : Data) -> ak.Array:
     Returns:
         ak.Array: boolean mask.
     """
-    beam_dEdX = events.io.Get("reco_beam_calibrated_dEdX_SCE")
+    beam_dEdX = events.recoParticles.beam_dEdX
 
     # awkward has no median function and numpy median won't work on jagged arrays, so we do it ourselves
     beam_dEdX_sorted = ak.sort(beam_dEdX, -1) # first sort in ascending order
