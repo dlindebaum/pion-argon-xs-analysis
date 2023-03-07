@@ -16,7 +16,7 @@ import pandas as pd
 
 from notebooks import merge_study
 # custom modules
-from python.analysis import Master, Plots
+from python.analysis import Master, Plots, LegacyBeamParticleSelection
 
 
 def Plot2DRatio(ind : int, truths : np.array, errors : np.array, labels : str, xlabels : str, ylabels : str, nrows : int, ncols : int, bins : int = 25):
@@ -225,7 +225,11 @@ def AnalyseMultipleFiles():
         print(f"beamMC : {events.trueParticles.pi0_MC}")
         if events.trueParticles.pi0_MC == False:
             print("apply beam MC filter")
-            events = Master.BeamMCFilter(events)
+            mask = LegacyBeamParticleSelection.BeamMCFilter(events)
+            events.Filter([mask], [mask])
+            truth_mask = LegacyBeamParticleSelection.FinalStatePi0Cut(events)
+            events.Filter([], [truth_mask])
+
 
         samples = []
         for i in range(len(s_l)):
@@ -255,7 +259,10 @@ def AnalyseSingle():
     print(f"beamMC : {events.trueParticles.pi0_MC}")
     if events.trueParticles.pi0_MC == False:
         print("apply beam MC filter")
-        events = Master.BeamMCFilter(events)
+        mask = LegacyBeamParticleSelection.BeamMCFilter(events)
+        events.Filter([mask], [mask])
+        truth_mask = LegacyBeamParticleSelection.FinalStatePi0Cut(events)
+        events.Filter([], [truth_mask])
 
     if save is True: os.makedirs(outDir, exist_ok=True)
     n = ak.count(events.recoParticles.nHits, -1)

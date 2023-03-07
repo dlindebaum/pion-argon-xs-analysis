@@ -21,7 +21,7 @@ from rich import print
 from tabulate import tabulate
 
 from apps import CutOptimization
-from python.analysis import Master, Plots, vector
+from python.analysis import Master, Plots, vector, LegacyBeamParticleSelection
 
 
 def Percentage(a, b):
@@ -264,51 +264,47 @@ def EventSelection(events : Master.Data, matchBy : str = "spatial", invertFinal 
 
     #################### SELECTION USING TRUTH INFORMATION #################### 
     #* select events with 1 pi0 from the pi+
-    Master.BeamMCFilter(events, returnCopy=False)
+    mask = LegacyBeamParticleSelection.BeamMCFilter(events)
+    events.Filter([mask], [mask])
+    truth_mask = LegacyBeamParticleSelection.FinalStatePi0Cut(events)
+    events.Filter([], [truth_mask])
     n.append(["beam -> pi0 + X", "truth", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100])
 
     #* pi+ beam selection!
-    true_beam = events.trueParticlesBT.pdg[events.recoParticles.beam_number == events.recoParticles.number]
-    f = ak.all(true_beam == 211, -1)
-    events.Filter([f], [f])
+    mask = LegacyBeamParticleSelection.PiBeamSelection(events)
+    events.Filter([mask], [mask])
     n.append(["pi+ beam", "backtracked", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100-Percentage(n[2][2], ak.count(events.eventNum))])
 
     #* select only two body decay
-    f = Master.Pi0TwoBodyDecayMask(events)
-    events.Filter([f], [f])
+    mask = LegacyBeamParticleSelection.DiPhotonCut(events)
+    events.Filter([mask], [mask])
     n.append(["diphoton decay", "truth", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100-Percentage(n[2][2], ak.count(events.eventNum))])
 
     #################### SELECTION USING RECO INFORMATION #################### 
     #* select events with beam particle
-    events.ApplyBeamFilter()
+    # events.ApplyBeamFilter()
+    mask = LegacyBeamParticleSelection.RecoBeamParticleCut(events)
+    events.Filter([mask], [mask])
     n.append(["beam particle", "reco", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100-Percentage(n[2][2], ak.count(events.eventNum))])
 
     #* select events with >1 PFP
-    f = Master.NPFPMask(events, -1)
-    events.Filter([f], [f]) # filter events with mask
+    mask = LegacyBeamParticleSelection.HasPFO(events)
+    events.Filter([mask], [mask])
     n.append(["nPFP > 1", "reco", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100-Percentage(n[2][2], ak.count(events.eventNum))])
 
     #################### SELECTION USING BACKTRACKED INFORMATION #################### 
     #* select events with more than one backtracked true particle
-    unique = events.trueParticlesBT.GetUniqueParticleNumbers(events.trueParticlesBT.number)
-    f = ak.num(unique) > 1
-    events.Filter([f], [f])
+    mask = LegacyBeamParticleSelection.HasBacktracked(events)
+    events.Filter([mask], [mask])
     n.append(["at least 1 true particle", "backtracked", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100-Percentage(n[2][2], ak.count(events.eventNum))])
 
     #* select events with both true pi0 photons
-    pi0 = ak.flatten(events.trueParticles.number[events.trueParticles.PrimaryPi0Mask])
-    f = events.trueParticlesBT.mother == pi0
-    not_null = np.logical_not(np.logical_or(events.recoParticles.startPos.x == -999, events.recoParticles.momentum.x == -999))
-    f = np.logical_and(f, not_null)
-    daughters = events.trueParticlesBT.number[f]
-    unique_daughters = events.trueParticlesBT.GetUniqueParticleNumbers(daughters)
-    unique_daughters = ak.count(unique_daughters, -1)
-    f = unique_daughters == 2
+    mask = LegacyBeamParticleSelection.BothPhotonsBacktracked(events)
     label = "both true photons are backtracked"
     if invertFinal is True:
-        f = np.logical_not(f)
+        mask = np.logical_not(mask)
         label = "both true photons are not backtracked"
-    events.Filter([f], [f])
+    events.Filter([mask], [mask])
     n.append([label, "backtracked", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100-Percentage(n[2][2], ak.count(events.eventNum))])
 
     print(tabulate(n, tablefmt="latex"))

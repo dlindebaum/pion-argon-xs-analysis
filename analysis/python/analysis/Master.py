@@ -359,7 +359,7 @@ class Data:
     @timer
     def ApplyBeamFilter(self):
         """ Applies a beam filter to the sample, which selects objects
-            in events which are the beam particle, or daughters of the beam.
+            in events which are the beam particle.
         """
         if self.recoParticles.beam_number is None:
             print("data doesn't contain beam number, can't apply filter.")
@@ -1723,35 +1723,6 @@ def Pi0MCMask(events : Data, nObjects : int = None) -> ak.Array:
     t_mask = Pi0TwoBodyDecayMask(events)
     valid = np.logical_and(r_mask, t_mask)
     return valid
-
-@timer
-def BeamMCFilter(events : Data, n_pi0 : int = 1, returnCopy=True) -> Data:
-    """ Filters BeamMC data to get events with only 1 pi0 which originates from the beam particle interaction.
-
-    Args:
-        events (Data): events to filter
-
-    Returns:
-        Data: selected events
-    """
-    #* remove events with no truth info
-    empty = ak.num(events.trueParticles.number) > 0
-    if returnCopy is True:
-        events = events.Filter([empty], [empty], returnCopy=True)
-    else:
-        events.Filter([empty], [empty])
-
-    #* only look at events with 1 primary pi0
-    pi0 = events.trueParticles.PrimaryPi0Mask
-    single_primary_pi0 = ak.num(pi0[pi0]) == n_pi0 # only look at events with 1 pi0
-    events.Filter([single_primary_pi0], [single_primary_pi0])
-
-    #* remove true particles which aren't primaries
-    primary_pi0 = events.trueParticles.PrimaryPi0Mask
-    primary_daughter = events.trueParticles.truePhotonMask # this is fine so long as we only care about pi0->gamma gamma
-    primaries = np.logical_or(primary_pi0, primary_daughter)
-    events.Filter([], [primaries])
-    if returnCopy is True: return events
 
 
 def FractionalError(reco : ak.Array, true : ak.Array, null : ak.Array) -> tuple:
