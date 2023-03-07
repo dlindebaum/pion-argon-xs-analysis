@@ -14,6 +14,9 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
 from scipy.stats import iqr
 import copy as copy_lib
+import sys
+sys.path.insert(1, '/users/wx21978/projects/pion-phys/pi0-analysis/analysis/')
+from python.analysis import vector, EventHandling
 
 
 class PlotConfig():
@@ -707,3 +710,513 @@ class PairHistsBatchPlotter(HistogramBatchPlotter):
                 self._plot_types[plot_type].end_plot(save_path = self.image_save_base + save_path_end + "_" + plot_type + ".png")
         
         return
+    
+
+def simple_sig_bkg_hist(
+        prop_name, units, property, sig_mask,
+        path="/users/wx21978/projects/pion-phys/plots/photon_pairs/", unique_save_id = "",
+        y_scaling = 'log', bin_size = None, bins = 100, range = None, **kwargs
+    ):
+    """
+    Produces a set of plots of the supplied `property` with configurable
+    scalings, bins and ranges.
+
+    Data to be plotted comes from `property`, and a `sig_mask` to indicate
+    background vs. signal. Signal and background are plotted on the same axis
+    for comparison.
+
+    `prop_name` and `units` are required to correctly label and title the plot.
+
+    `y_scaling`, `bin_size`, `bins`, and `range` can all be supplied as lists of
+    values (that could be passed to a pyplot function). If a list is passed,
+    the options supplied will be iterated through, and a plot will be produced
+    for each value given. `bin_size`, `bins`, and `range` must all either have
+    same length, or not be a list.
+
+    Parameters
+    ----------
+    prop_name : str
+        Name of the property plotted for title and saved file.
+    units : str
+        Unit the property is measured.
+    property : ak.Array or np.ndarray
+        Array containing the values to be plotted.
+    sig_mask : ak.Array or np.ndarray
+        Mask which indicates which of the values in `property`
+        correspond to signal data.
+    path : str, optional
+        Directory in which to save the final plot(s). Default is
+        '/users/wx21978/projects/pion-phys/plots/photon_pairs/'.
+    unique_save_id : str, optional
+        Extra string to add into the save name to avoid
+        overwriting. Default is ''.
+    y_scaling : str or list, optional
+        Type of scalings to use on the y-axis. Should be
+        'linear' or 'log'. Default is 'log'
+    bin_size : str, list, or None, optional
+        The size of the bins. If None, this will be automatically
+        calculated, but can be manually specified, i.e. if using
+        custom/variable bin widths. Default is None.
+    bins : int, np.ndarray, or list, optional
+        Number of bins if ``int``, or bin edges if ``ndarray``.
+        Default is 100.
+    range : float, None, tuple, or list, optional
+        Range over which to produce the plot. Default is None.
+    
+    Other Parameters
+    ----------------
+    **kwargs
+        Any additional keyword arguments to be passed to the ``plt.hist``
+        calls. The same arguments will be passed to all plots.
+    """
+    if path[-1] != '/':
+        path += '/'
+    if not isinstance(y_scaling, list):
+        y_scaling = [y_scaling]
+    if not isinstance(range, list):
+        range = [range]
+    if not ( (isinstance(bins, list) or isinstance(bins, np.ndarray)) and len(bins) == len(range) ):
+        # Strictly, this could be a problem on edge-case that we want to use one fewer bins than the
+        # number of ranges  we investigate, but this is sufficiently likely that we can ignore that
+        bins = [bins for _ in range]
+    for y_scale in y_scaling:
+        for i, r in enumerate(range):
+            if r is None:
+                path_end = "full"
+                hist_range = np.max(property)
+            elif isinstance(r, tuple):
+                path_end = f"{r[0]}-{r[1]}"
+                hist_range = r[1] - r[0]
+                kwargs.update({"range":r})
+            else:
+                path_end = f"<{r}"
+                hist_range = r
+                kwargs.update({"range":(0,r)})
+            
+            if not y_scale == "linear":
+                path_end += "_" + y_scale
+
+            if bin_size is None:
+                if isinstance(bins[i], int):
+                    bin_size = f"{hist_range/bins[i]:.2g}" + units
+                else:
+                    bin_size = f"{hist_range/len(bins[i]):.2g}" + units
+            plt.figure(figsize=(12,9))
+            plt.hist(ak.ravel(property[sig_mask]),                 bins=100, label="signal", **kwargs)
+            plt.hist(ak.ravel(property[np.logical_not(sig_mask)]), bins=100, label="background", **kwargs)
+            plt.legend()
+            plt.yscale(y_scale)
+            plt.xlabel(prop_name.title() + "/" + units)
+            plt.ylabel("Count/" + bin_size)
+            plt.savefig(path + prop_name.replace(" ", "_") + unique_save_id + "_hist_" + path_end + ".png")
+            plt.close()
+    return
+    
+
+def plot_pair_hists(
+        prop_name, units, property, sig_count,
+        path="/users/wx21978/projects/pion-phys/plots/photon_pairs/", unique_save_id = "",
+        inc_stacked=False, inc_norm=True, inc_log=True,
+        bin_size = None, bins = 100,
+        range=None, weights=None, **kwargs
+    ):
+    """
+    Produces a set of plots of the supplied `property` of a pair of PFOs with
+    configurable types of plot, scalings, bins, ranges, weights.
+
+    Data to be plotted comes from `property`, and a `sig_count` indicates
+    how many signal type PFOs went into the given pair. 0, 1, and 2 signals
+    are plotted on the same axis for comparison.
+
+    `prop_name` and `units` are required to correctly label and title the plots.
+
+    Whether to produce stacked, normalised, and log scale plots is controlled
+    by `inc_stacked`, `inc_norm`, and `inc_log` respectively.
+
+    `bin_size`, `bins`, `range`, and `weights` can all be supplied as lists of
+    values (that could be passed to a pyplot function). If a list is passed,
+    the options supplied will be iterated through, and a plot will be produced
+    for each value given. `bin_size`, `bins`, and `range` must all either have
+    same length, or not be a list.
+
+    Parameters
+    ----------
+    prop_name : str
+        Name of the property plotted for title and saved file.
+    units : str
+        Unit the property is measured.
+    property : ak.Array or np.ndarray
+        Array containing the pair values to be plotted.
+    sig_count : ak.Array or np.ndarray
+        And array with the same shape as `property` to indicate how
+        many signal PFOs exist in the pair.
+    path : str, optional
+        Directory in which to save the final plots. Default is
+        '/users/wx21978/projects/pion-phys/plots/photon_pairs/'.
+    unique_save_id : str, optional
+        Extra string to add into the save name to avoid
+        overwriting. Default is ''.
+    inc_stacked : bool, optional
+        Whether to include a stacked histogram plot. Default is False.
+    inc_norm : bool, optional
+        Whether to include a normalised histogram. Default is True.
+    inc_log : bool, optional
+        Whether to include logarithmic scale histograms. Will
+        also produce a logarithmic normalised plot if `inc_norm`
+        is True. Default is True.
+    bin_size : str, list, or None, optional
+        The size of the bins. If None, this will be automatically
+        calculated, but can be manually specified, i.e. if using
+        custom/variable bin widths. Default is None.
+    bins : int, np.ndarray, or list, optional
+        Number of bins if ``int``, or bin edges if ``ndarray``.
+        Default is 100.
+    range : float, None, tuple, or list, optional
+        Range over which to produce the plot. Default is None.
+    weights : ak.Array, np.ndarray, list, or None, optional
+        Weights to used for each value of the `property`. Default
+        is None.
+    
+    Other Parameters
+    ----------------
+    **kwargs
+        Any additional keyword arguments to be passed to the ``plt.hist``
+        calls. The same arguments will be passed to all plots.
+    """
+    
+    if path[-1] != '/':
+        path += '/'
+
+    if not isinstance(range, list):
+        range = [range]
+    if not ( (isinstance(bins, list) or isinstance(bins, np.ndarray)) and len(bins) == len(range) ):
+        # Strictly, this could be a problem on edge-case that we want to use one fewer bins than the
+        # number of ranges  we investigate, but this is sufficiently likely that we can ignore that
+        bins = [bins] * len(range)
+
+    # There is definitely a better way to do this...
+    if not isinstance(weights, list):
+        if inc_stacked: # Need to keep track of the raw weights if producing a stacked plot
+            raw_weights = [weights] * len(range)
+        if weights is None:
+            weights = [{2:None, 1:None, 0:None}] * len(range)
+        else:
+            weights = [{2:ak.ravel(weights[sig_count == 2]), 1:ak.ravel(weights[sig_count == 1]), 0:ak.ravel(weights[sig_count == 0])}] * len(range)
+    else:
+        if inc_stacked: # Need to keep track of the raw weights if producing a stacked plot
+            raw_weights = weights
+        for i in np.arange(len(weights)):
+            if weights[i] is None:
+                weights[i] = {2:None, 1:None, 0:None}
+            else:
+                weights[i] = {2:ak.ravel(weights[i][sig_count == 2]), 1:ak.ravel(weights[i][sig_count == 1]), 0:ak.ravel(weights[i][sig_count == 0])}
+
+    sig_0 = ak.ravel(property[sig_count == 0])
+    sig_1 = ak.ravel(property[sig_count == 1])
+    sig_2 = ak.ravel(property[sig_count == 2])
+
+    for i, r in enumerate(range):
+        if r is None:
+            path_end = unique_save_id + "_hist_full"
+            hist_range = np.max(property)
+        elif isinstance(r, tuple):
+            path_end = unique_save_id + f"_hist_{r[0]}-{r[1]}"
+            hist_range = r[1] - r[0]
+            kwargs.update({"range":r})
+        else:
+            path_end = unique_save_id + f"_hist<{r}"
+            hist_range = r
+            kwargs.update({"range":(0,r)})
+        
+        if bin_size is None:
+            if isinstance(bins[i], int):
+                bin_size = f"{hist_range/bins[i]:.2g}" + units
+            else:
+                bin_size = f"{hist_range/len(bins[i]):.2g}" + units
+
+        if inc_stacked:
+            # Whoever wrote this disgusting way to deal with stacked weights ought to be shot...
+            if raw_weights[i] is not None:
+                all_weights = ak.ravel(raw_weights[i])
+                no_bkg_weights = ak.ravel(raw_weights[i][sig_count != 0])
+            else: 
+                all_weights = None
+                no_bkg_weights = None
+            
+            plt.figure(figsize=(12,9))
+            plt.hist(ak.ravel(property),                 label="0 signal", bins = bins[i], weights=all_weights,    color="C2", **kwargs)
+            plt.hist(ak.ravel(property[sig_count != 0]), label="1 signal", bins = bins[i], weights=no_bkg_weights, color="C1", **kwargs)
+            plt.hist(sig_2,                              label="2 signal", bins = bins[i], weights=weights[i][2],  color="C0", **kwargs)
+            plt.legend()
+            plt.xlabel(prop_name.title() + "/" + units)
+            plt.ylabel("Count/" + bin_size)
+            plt.savefig(path + "paired_" + prop_name.replace(" ", "_") + path_end + "_stacked.png")
+            plt.close()
+
+        plt.figure(figsize=(12,9))
+        plt.hist(sig_2, histtype='step', label="2 signal", bins = bins[i], weights=weights[i][2], **kwargs)
+        plt.hist(sig_1, histtype='step', label="1 signal", bins = bins[i], weights=weights[i][1], **kwargs)
+        plt.hist(sig_0, histtype='step', label="0 signal", bins = bins[i], weights=weights[i][0], **kwargs)
+        plt.legend()
+        plt.xlabel(prop_name.title() + "/" + units)
+        plt.ylabel("Count/" + bin_size)
+        plt.savefig(path + "paired_" + prop_name.replace(" ", "_") + path_end + ".png")
+        plt.close()
+
+        if inc_log:
+            plt.figure(figsize=(12,9))
+            plt.hist(sig_2, histtype='step', label="2 signal", bins = bins[i], weights=weights[i][2], **kwargs)
+            plt.hist(sig_1, histtype='step', label="1 signal", bins = bins[i], weights=weights[i][1], **kwargs)
+            plt.hist(sig_0, histtype='step', label="0 signal", bins = bins[i], weights=weights[i][0], **kwargs)
+            plt.legend()
+            plt.yscale('log')
+            plt.xlabel(prop_name.title() + "/" + units)
+            plt.ylabel("Count/" + bin_size)
+            plt.savefig(path + "paired_" + prop_name.replace(" ", "_") + path_end + "_log.png")
+            plt.close()
+
+        if inc_norm:
+            plt.figure(figsize=(12,9))
+            plt.hist(sig_2, histtype='step', density=True, label="2 signal", bins = bins[i], weights=weights[i][2], **kwargs)
+            plt.hist(sig_1, histtype='step', density=True, label="1 signal", bins = bins[i], weights=weights[i][1], **kwargs)
+            plt.hist(sig_0, histtype='step', density=True, label="0 signal", bins = bins[i], weights=weights[i][0], **kwargs)
+            plt.legend()
+            plt.xlabel(prop_name.title() + "/" + units)
+            plt.ylabel("Density/" + bin_size)
+            plt.savefig(path + "paired_" + prop_name.replace(" ", "_") + path_end + "_norm.png")
+            plt.close()
+
+        if inc_log and inc_norm:
+            plt.figure(figsize=(12,9))
+            plt.hist(sig_2, histtype='step', density=True, label="2 signal", bins = bins[i], weights=weights[i][2], **kwargs)
+            plt.hist(sig_1, histtype='step', density=True, label="1 signal", bins = bins[i], weights=weights[i][1], **kwargs)
+            plt.hist(sig_0, histtype='step', density=True, label="0 signal", bins = bins[i], weights=weights[i][0], **kwargs)
+            plt.legend()
+            plt.yscale('log')
+            plt.xlabel(prop_name.title() + "/" + units)
+            plt.ylabel("Density/" + bin_size)
+            plt.savefig(path + "paired_" + prop_name.replace(" ", "_") + path_end + "_norm_log.png")
+            plt.close()
+    return
+
+
+def plot_rank_hist(
+        prop_name, ranking,
+        path="/users/wx21978/projects/pion-phys/plots/photon_pairs/", unique_save_id = "",
+        y_scaling = 'log', bins = None, **kwargs
+    ):
+    """
+    Produces a plot displaying a set of ranks (positions) as a histogram.
+
+    Ranked data must already be calculated and gets passed as `ranking`.
+
+    `prop_name` is required to correctly title and save the plot.
+
+    `y_scaling` can be supplied as list of scalings ('log' and 'linear'). If a
+    list is passed, the options supplied will be iterated through, and a plot
+    will be produced for each value given.
+
+    Parameters
+    ----------
+    prop_name : str
+        Name of the property plotted for title and saved file.
+    ranking : ak.Array or np.ndarray
+        Array containing the ranks to be plotted.
+    path : str, optional
+        Directory in which to save the final plot(s). Default is
+        '/users/wx21978/projects/pion-phys/plots/photon_pairs/'.
+    unique_save_id : str, optional
+        Extra string to add into the save name to avoid
+        overwriting. Default is ''.
+    y_scaling : str or list, optional
+        Type of scalings to use on the y-axis. Should be
+        'linear' or 'log'. Default is 'log'
+    bins : int, np.ndarray, or None, optional
+        Number of bins if ``int``, or bin edges if ``ndarray``.
+        Gives one bin per ranking if None. Default is None.
+    
+    Other Parameters
+    ----------------
+    **kwargs
+        Any additional keyword arguments to be passed to the ``plt.hist``
+        calls. The same arguments will be passed to all plots.
+    """
+
+    if path[-1] != '/':
+        path += '/'
+
+    if not isinstance(y_scaling, list):
+        y_scaling = [y_scaling]
+    if bins is None:
+        bins = int(np.max(ranking) -1)
+
+    for y_scale in y_scaling:
+        plt.figure(figsize=(12,9))
+        plt.hist(ranking, label="signal", bins=bins,  **kwargs)
+        plt.legend()
+        plt.yscale(y_scale)
+        plt.xlabel(prop_name.title() + " ranking")
+        plt.ylabel("Count")
+        plt.savefig(path + "ranking_" + prop_name.replace(" ", "_") + unique_save_id + ".png")
+        plt.close()
+    return
+
+
+def make_truth_comparison_plots(
+        events, photon_indicies,
+        valid_events=None,
+        prop_label=None, inc_log=True,
+        path="/users/wx21978/projects/pion-phys/plots/photon_pairs/truth_method_comparisions/",
+        **kwargs
+    ):
+    """
+    Produces a set of plots displaying the errors of a set of PFOs with respect to the truth
+    PFO they are representing. Errors in energy for the leading (highest energy) and sub-
+    leading (lowest energy) photon are displayed in separate plots, and the cosine of the
+    angular differences between the PFOs and truth particles is displayed for both photons
+    on the same plot.
+
+    `photons_indicies` can be a dictionary to allow comparision of multiple methods of generating
+    truth photons to be compared on the same plot.
+
+    Parameters
+    ----------
+    events : Data
+        Events from which data is gathered.
+    photon_indicies : dict or np.ndarray
+        Indicies of the selected best particles. May be passed as a dictionary containing
+        numpy arrays labelled by the method used to generate the indicies for comparision.
+    valid_events : list, np.ndarray, ak.Array(), or None
+        1D set of boolean values to optionally excluded known invalid events. Default is
+        None.
+    prop_label : str or None, optional
+        Optional name of property to appear in legend if `photons_indicies` is not a
+        dictionary.
+    inc_log : bool, optional
+        Whether to include logarithmically scaled plots. Default is True.
+    path : str, optional
+        Directory in which to save the final plots. Default is
+        '/users/wx21978/projects/pion-phys/plots/photon_pairs/truth_method_comparisions/'.
+    
+    Other Parameters
+    ----------------
+    **kwargs
+        Any additional keyword arguments to be passed to the ``plt.hist`` calls. The same
+        arguments will be passed to all plots.
+    """
+    if path[-1] != '/':
+        path += '/'
+    
+    # If we don't specify valid events, assume all events are OK, so convert valid events into a
+    #   slice which selects all events
+    if valid_events is None:
+        valid_events = slice(None)
+
+    # Ideally, we can use the trueParticle (not trueparticleBT} data, since trueParticle is likely
+    #   already loaded, and trueParticleBT likely hasn't been
+    true_energies = events.trueParticlesBT.energy[valid_events]
+    # true_energies_mom = vector.magnitude(events.trueParticlesBT.momentum)[valid_events]
+    true_dirs = events.trueParticlesBT.direction[valid_events]
+
+    reco_energies = events.recoParticles.energy[valid_events]
+    reco_dirs = events.recoParticles.direction[valid_events]
+
+    # Warning - not sure this has been tested without photon_indicies as a dictionary...
+    if not isinstance(photon_indicies, dict):
+        photon_indicies = {prop_label:photon_indicies}
+        
+    
+    fig_e_i, energy_i_axis    = plt.subplots(figsize=(16,12), layout="tight")
+    fig_e_ii, energy_ii_axis  = plt.subplots(figsize=(16,12), layout="tight")
+    fig_dirs, directions_axis = plt.subplots(figsize=(16,12), layout="tight")
+    
+    if inc_log:
+        fig_e_i_log, energy_i_axis_log    = plt.subplots(figsize=(16,12), layout="tight")
+        fig_e_ii_log, energy_ii_axis_log  = plt.subplots(figsize=(16,12), layout="tight")
+        fig_dirs_log, directions_axis_log = plt.subplots(figsize=(16,12), layout="tight")
+
+    for i, prop in enumerate(list(photon_indicies.keys())):
+        if isinstance(prop, str):
+            y1_label = "y1 " + prop
+            y2_label = "y2 " + prop
+        else:
+            y1_label = None
+            y2_label = None
+
+        photon_i_indicies  = EventHandling.np_to_ak_indicies(photon_indicies[prop][:,0][valid_events])
+        photon_ii_indicies = EventHandling.np_to_ak_indicies(photon_indicies[prop][:,1][valid_events])
+        
+        # This might contain some useful stuff for moving to trueParticle informatio, rather than trueParticleBT
+        # err_true_photon_i = np.zeros(np.sum(valid_events))
+        # photon_i_ids = events.trueParticlesBT.number[valid_events][photon_i_indicies]
+        # reco_energy_full = reco_energies[photon_i_indicies]
+        # index = np.arange(photon_indicies[prop][:,0].shape[0])[valid_events]
+        # for j in range(np.sum(valid_events)):
+        #     true_ids = events.trueParticles.number[index[j]].to_numpy()
+        #     true_energy = events.trueParticles.energy[index[j]].to_numpy()
+            
+        #     true_energy_i = true_energy[true_ids == photon_i_ids[j]]
+        #     # true_energy_ii = true_energy[true_ids == pfo_truth_ids[photon_ii_indicies]]
+        #     err_true_photon_i[j] = (reco_energy_full[j] / true_energy_i )[0] -1
+
+
+        err_energy_photon_i  = (reco_energies[photon_i_indicies ] / true_energies[photon_i_indicies ]) -1
+        err_energy_photon_ii = (reco_energies[photon_ii_indicies] / true_energies[photon_ii_indicies]) -1
+    
+        err_direction_photon_i  = vector.dot(reco_dirs[photon_i_indicies ], true_dirs[photon_i_indicies ])
+        err_direction_photon_ii = vector.dot(reco_dirs[photon_ii_indicies], true_dirs[photon_ii_indicies])
+
+        # Linear
+        energy_i_axis.hist( err_energy_photon_i,  label=y1_label, histtype="step", bins=100**kwargs)
+        energy_ii_axis.hist(err_energy_photon_ii, label=y2_label, histtype="step", bins=100**kwargs)
+
+        directions_axis.hist(err_direction_photon_i,  label=y1_label, histtype="step", bins=80, color=f"C{i}"**kwargs)
+        directions_axis.hist(err_direction_photon_ii, label=y2_label, histtype="step", bins=80, color=f"C{i}", ls="--"**kwargs)
+
+        if inc_log:
+            # Log
+            energy_i_axis_log.hist( err_energy_photon_i,  label=y1_label, histtype="step", bins=100**kwargs)
+            energy_ii_axis_log.hist(err_energy_photon_ii, label=y2_label, histtype="step", bins=100**kwargs)
+
+            directions_axis_log.hist(err_direction_photon_i,  label=y1_label, histtype="step", bins=50, color=f"C{i}"**kwargs)
+            directions_axis_log.hist(err_direction_photon_ii, label=y2_label, histtype="step", bins=50, color=f"C{i}", ls="--"**kwargs)
+
+    # Linear
+    energy_i_axis.set_xlabel("Fractional energy error")
+    energy_i_axis.set_ylabel("Count")
+    energy_i_axis.legend()
+
+    energy_ii_axis.set_xlabel("Fractional energy error")
+    energy_ii_axis.set_ylabel("Count")
+    energy_ii_axis.legend()
+
+    directions_axis.set_xlabel("Best photon vs. truth dot product")
+    directions_axis.set_ylabel("Count")
+    directions_axis.legend(loc="upper left")
+
+    if inc_log:
+        # Log
+        energy_i_axis_log.set_xlabel("Fractional energy error")
+        energy_i_axis_log.set_ylabel("Count")
+        energy_i_axis_log.set_yscale("log")
+        energy_i_axis_log.legend()
+
+        energy_ii_axis_log.set_xlabel("Fractional energy error")
+        energy_ii_axis_log.set_ylabel("Count")
+        energy_i_axis_log.set_yscale("log")
+        energy_ii_axis_log.legend()
+
+        directions_axis_log.set_xlabel("Best photon vs. truth dot product")
+        directions_axis_log.set_ylabel("Count")
+        energy_i_axis_log.set_yscale("log")
+        directions_axis_log.legend(loc="upper left")
+
+    fig_e_i.savefig(path + "leading_photon_energy.png")
+    fig_e_ii.savefig(path + "subleading_photon_energy.png")
+    fig_dirs.savefig(path + "directions.png")
+    if inc_log:
+        fig_e_i_log.savefig(path + "leading_photon_energy_log.png")
+        fig_e_ii_log.savefig(path + "subleading_photon_energy_log.png")
+        fig_dirs_log.savefig(path + "directions_log.png")
+    plt.close()
+    return
