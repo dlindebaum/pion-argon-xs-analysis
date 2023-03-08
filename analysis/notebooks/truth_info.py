@@ -12,7 +12,7 @@ import awkward as ak
 import matplotlib.pyplot as plt
 
 # custom imports
-from python.analysis import Master, Plots
+from python.analysis import Master, Plots, LegacyBeamParticleSelection
 
 
 @Master.timer
@@ -26,7 +26,11 @@ def main():
             _, _, valid = events.MCMatching(applyFilters=False) # matching
             events.Filter([valid], [valid], False)
         if sampleType == "beam":
-            events = Master.BeamMCFilter(events)
+            mask = LegacyBeamParticleSelection.BeamMCFilter(events)
+            events.Filter([mask], [mask])
+            truth_mask = LegacyBeamParticleSelection.FinalStatePi0Cut(events)
+            events.Filter([], [truth_mask])
+            events.Filter([], [Master.Pi0TwoBodyDecayMask(events)])
 
     t = events.trueParticles.CalculatePairQuantities() # calculate truth info
 

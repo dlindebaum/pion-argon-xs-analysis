@@ -16,7 +16,7 @@ import pandas as pd
 
 from notebooks import merge_study
 # custom modules
-from python.analysis import Master, Plots
+from python.analysis import Master, Plots, LegacyBeamParticleSelection
 
 
 def Plot2DRatio(ind : int, truths : np.array, errors : np.array, labels : str, xlabels : str, ylabels : str, nrows : int, ncols : int, bins : int = 25):
@@ -174,7 +174,7 @@ def SelectSample(events : Master.Data, nDaughters : int, merge : bool = False, b
 
     if merge is True and backtracked is True:
         if cheatMerging is True:
-            filtered, null = filtered.MergePFPCheat()
+            filtered, null = filtered.MergePFOCheat()
             filtered.Filter([null], [null])
         else:
             filtered = filtered.MergeShowerBT(best_match[selection])
@@ -213,19 +213,23 @@ def PlotFromCSV():
 def AnalyseMultipleFiles():
     nPFP = []
     for f in file:
-        events = Master.Data(f, includeBackTrackedMC=True)
+        events = Master.Data(f)
         events.ApplyBeamFilter()
 
         if ak.count(nPFP) == 0:
-            nPFP = ak.count(events.recoParticles.nHits, -1)
+            nPFP = ak.count(events.recoParticles.nHits_collection, -1)
         else:
-            nPFP = ak.concatenate([nPFP, ak.count(events.recoParticles.nHits, -1)])
+            nPFP = ak.concatenate([nPFP, ak.count(events.recoParticles.nHits_collection, -1)])
 
         # apply additional selection for beam MC events
         print(f"beamMC : {events.trueParticles.pi0_MC}")
         if events.trueParticles.pi0_MC == False:
             print("apply beam MC filter")
-            events = Master.BeamMCFilter(events)
+            mask = LegacyBeamParticleSelection.BeamMCFilter(events)
+            events.Filter([mask], [mask])
+            truth_mask = LegacyBeamParticleSelection.FinalStatePi0Cut(events)
+            events.Filter([], [truth_mask])
+
 
         samples = []
         for i in range(len(s_l)):
@@ -248,17 +252,20 @@ def AnalyseMultipleFiles():
 
 
 def AnalyseSingle():
-    events = Master.Data(file, includeBackTrackedMC=True)
+    events = Master.Data(file)
     events.ApplyBeamFilter() # apply beam filter if possible
 
     # apply additional selection for beam MC events
     print(f"beamMC : {events.trueParticles.pi0_MC}")
     if events.trueParticles.pi0_MC == False:
         print("apply beam MC filter")
-        events = Master.BeamMCFilter(events)
+        mask = LegacyBeamParticleSelection.BeamMCFilter(events)
+        events.Filter([mask], [mask])
+        truth_mask = LegacyBeamParticleSelection.FinalStatePi0Cut(events)
+        events.Filter([], [truth_mask])
 
     if save is True: os.makedirs(outDir, exist_ok=True)
-    n = ak.count(events.recoParticles.nHits, -1)
+    n = ak.count(events.recoParticles.nHits_collection, -1)
     Plots.PlotBar(n[n>0], xlabel="Number of particle flow objects per event")
     if save is True: Plots.Save(outDir + "n_objects")
 
