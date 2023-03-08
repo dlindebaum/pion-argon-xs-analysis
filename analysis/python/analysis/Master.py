@@ -710,7 +710,7 @@ class TrueParticleData(ParticleData):
 
     @property
     def mother_pdg(self) -> ak.Array:
-        self.LoadData("mother_pdg", "g4_mother_pdg")
+        self.LoadData("mother_pdg", "g4_mother_Pdg")
         return getattr(self, f"_{type(self).__name__}__mother_pdg")
 
     @property
