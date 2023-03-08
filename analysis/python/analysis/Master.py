@@ -428,7 +428,7 @@ class Data:
                 data["dir"] = vector.normalize(ak.sum(p, -1))
                 data["p"] = vector.prod(data["e"], data["dir"])
 
-            data["nHits"] = SumHits(self.recoParticles.nHits[pfos])
+            data["nHits"] = SumHits(self.recoParticles.nHits_collection[pfos])
 
             # recompute the purity/completeness of the PFO
             data["true_hits"] = self.trueParticlesBT.nHits[pfos][:, 0] # true hits for all PFOs are the same
@@ -672,6 +672,7 @@ class TrueParticleData(ParticleData):
         pdg (ak.Array): pdg code
         number (ak.Array): particle number
         mother (ak.Array): number of mother particle
+        mother_pdg (ak.Array): mother pdg code
         mass (ak.Array):
         energy (ak.Array):
         momentum (ak.Record):
@@ -702,6 +703,11 @@ class TrueParticleData(ParticleData):
     def mother(self) -> ak.Array:
         self.LoadData("mother", "g4_mother")
         return getattr(self, f"_{type(self).__name__}__mother")
+
+    @property
+    def mother_pdg(self) -> ak.Array:
+        self.LoadData("mother_pdg", "g4_mother_pdg")
+        return getattr(self, f"_{type(self).__name__}__mother_pdg")
 
     @property
     def mass(self) -> ak.Array:
@@ -831,14 +837,17 @@ class RecoParticleData(ParticleData):
         pandoraTag (ak.Array): label given to particles by pandora; track, shower or -999
         number (ak.Array): PFO number
         mother (ak.Array): number of mother PFO
-        nHits (ak.Array): number of collection plane hits
+        nHits (ak.Array): number of hits
+        nHits_collection (ak.Array): number of collection plane hits
         energy (ak.Array):
         momentum (ak.Record):
         direction (ak.Record):
         startPos (ak.Record):
         showerLength (ak.Array): length of shower (if applicable)
         showerConeAngle (ak.Array): width of shower (if applicable)
-        cnnScore (ak.Array): shower-track like score.
+        emScore (ak.Array): shower like score
+        trackScore (ak.Array): track like score
+        cnnScore (ak.Array): emScore/(emScore + trackScore)
         spacePoints (ak.Record): hit space points
         channel (ak.Array): hit channel
         peakTime (ak.Array): hit peak time
@@ -930,11 +939,16 @@ class RecoParticleData(ParticleData):
     def mother(self) -> ak.Array:
         self.LoadData("mother", "reco_PFP_Mother")
         return getattr(self, f"_{type(self).__name__}__mother")
-    
+
     @property
     def nHits(self) -> ak.Array:
-        self.LoadData("nHits", "reco_daughter_PFP_nHits_collection")
+        self.LoadData("nHits", "reco_daughter_PFP_nHits")
         return getattr(self, f"_{type(self).__name__}__nHits")
+
+    @property
+    def nHits_collection(self) -> ak.Array:
+        self.LoadData("nHits_collection", "reco_daughter_PFP_nHits_collection")
+        return getattr(self, f"_{type(self).__name__}__nHits_collection")
 
     @property
     def startPos(self) -> ak.Record:
@@ -979,6 +993,16 @@ class RecoParticleData(ParticleData):
     def showerConeAngle(self) -> ak.Array:
         self.LoadData("coneAngle", "reco_daughter_allShower_coneAngle")
         return getattr(self, f"_{type(self).__name__}__coneAngle")
+
+    @property
+    def trackScore(self) -> ak.Array:
+        self.LoadData("trackScore", "reco_daughter_PFP_trackScore_collection")
+        return getattr(self, f"_{type(self).__name__}__trackScore")
+
+    @property
+    def emScore(self) -> ak.Array:
+        self.LoadData("emScore", "reco_daughter_PFP_emScore_collection")
+        return getattr(self, f"_{type(self).__name__}__emScore")
 
     @property
     def cnnScore(self) -> ak.Array:

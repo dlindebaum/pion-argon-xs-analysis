@@ -217,9 +217,9 @@ def AnalyseMultipleFiles():
         events.ApplyBeamFilter()
 
         if ak.count(nPFP) == 0:
-            nPFP = ak.count(events.recoParticles.nHits, -1)
+            nPFP = ak.count(events.recoParticles.nHits_collection, -1)
         else:
-            nPFP = ak.concatenate([nPFP, ak.count(events.recoParticles.nHits, -1)])
+            nPFP = ak.concatenate([nPFP, ak.count(events.recoParticles.nHits_collection, -1)])
 
         # apply additional selection for beam MC events
         print(f"beamMC : {events.trueParticles.pi0_MC}")
@@ -265,7 +265,7 @@ def AnalyseSingle():
         events.Filter([], [truth_mask])
 
     if save is True: os.makedirs(outDir, exist_ok=True)
-    n = ak.count(events.recoParticles.nHits, -1)
+    n = ak.count(events.recoParticles.nHits_collection, -1)
     Plots.PlotBar(n[n>0], xlabel="Number of particle flow objects per event")
     if save is True: Plots.Save(outDir + "n_objects")
 
