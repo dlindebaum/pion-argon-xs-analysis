@@ -1,0 +1,28 @@
+#include "filters.fcl"
+#include "triggeralgo_service.fcl"
+#include "ProtoDUNEBeamCuts.fcl"
+#include "ProtoDUNECalibration.fcl"
+#include "ProtoDUNEBeamlineUtils.fcl"
+
+BEGIN_PROLOG
+
+pi0_test_selection:
+{
+   module_type:             "pi0TestSelection"
+   CalorimetryTag:          "pandoracalinoxyzt"
+   TrackerTag:              "pandoraTrack"
+   ShowerTag:               "pandoraShower"
+   HitTag:                  "hitpdune"
+   PFParticleTag:           "pandora"
+   GeneratorTag:            "generator"
+
+   SelectEvents: []
+
+   BeamlineUtils: @local::standard_protodunebeamlineutils
+   Pi0Only: true
+   CalibrationParsSCE: @local::CalorimetryParameters_SPProd4_MC_SCE
+   Debug: false
+
+}
+
+END_PROLOG
