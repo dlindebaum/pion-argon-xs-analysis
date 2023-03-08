@@ -6,7 +6,6 @@ Author: Shyam Bhuller
 Description: Module containing core components of analysis code. 
 """
 import itertools
-import os
 import time
 import warnings
 from abc import ABC, abstractmethod

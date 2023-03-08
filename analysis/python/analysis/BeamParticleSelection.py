@@ -70,42 +70,42 @@ def BeamQualityCut(events : Data) -> ak.Array:
         ak.Array: boolean mask.
     """
     # beam quality cut
-    beam_startX_data = -28.3483;
-    beam_startY_data = 424.553;
-    beam_startZ_data = 3.19841;
+    beam_startX_data = -28.3483
+    beam_startY_data = 424.553
+    beam_startZ_data = 3.19841
 
-    beam_startX_rms_data = 4.63594;
-    beam_startY_rms_data = 5.21649;
-    beam_startZ_rms_data = 1.2887;
+    beam_startX_rms_data = 4.63594
+    beam_startY_rms_data = 5.21649
+    beam_startZ_rms_data = 1.2887
 
-    beam_startX_mc = -30.7834;
-    beam_startY_mc = 422.422;
-    beam_startZ_mc = 0.113008;
+    beam_startX_mc = -30.7834
+    beam_startY_mc = 422.422
+    beam_startZ_mc = 0.113008
 
-    beam_startX_rms_mc = 4.97391;
-    beam_startY_rms_mc = 4.47824;
-    beam_startZ_rms_mc = 0.214533;
+    beam_startX_rms_mc = 4.97391
+    beam_startY_rms_mc = 4.47824
+    beam_startZ_rms_mc = 0.214533
 
-    beam_angleX_data = 100.464;
-    beam_angleY_data = 103.442;
-    beam_angleZ_data = 17.6633;
+    beam_angleX_data = 100.464
+    beam_angleY_data = 103.442
+    beam_angleZ_data = 17.6633
 
-    beam_angleX_mc = 101.579;
-    beam_angleY_mc = 101.212;
-    beam_angleZ_mc = 16.5822;
+    beam_angleX_mc = 101.579
+    beam_angleY_mc = 101.212
+    beam_angleZ_mc = 16.5822
 
     # beam XY parameters
-    meanX_data = -31.3139;
-    meanY_data = 422.116;
+    meanX_data = -31.3139
+    meanY_data = 422.116
 
-    rmsX_data = 3.79366;
-    rmsY_data = 3.48005;
+    rmsX_data = 3.79366
+    rmsY_data = 3.48005
 
-    meanX_mc = -29.1637;
-    meanY_mc = 421.76;
+    meanX_mc = -29.1637
+    meanY_mc = 421.76
 
-    rmsX_mc = 4.50311;
-    rmsY_mc = 3.83908;
+    rmsX_mc = 4.50311
+    rmsY_mc = 3.83908
 
     # range of acceptable deltas
 
