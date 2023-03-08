@@ -79,11 +79,11 @@ def BeamParticleIPCut(events : Data) -> ak.Array:
     return ip < 20
 
 
-def InitialPi0PhotonSelection(events : Data, return_table : bool = False):
+def InitialPi0PhotonSelection(events : Data, verbose : bool = False, return_table : bool = False):
     selections = [
         EMScoreCut,
         NHitsCut,
         BeamParticleDistanceCut,
         BeamParticleIPCut
     ]
-    return CombineSelections(events, selections, 1, return_table = return_table)
+    return CombineSelections(events, selections, 1, verbose, return_table)
