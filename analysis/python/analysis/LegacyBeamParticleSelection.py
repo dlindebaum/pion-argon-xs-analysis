@@ -5,17 +5,19 @@ Author: Shyam Bhuller
 
 Description: 
 """
-from python.analysis import Master, BeamParticleSelection
-
 import awkward as ak
 import numpy as np
 
-@BeamParticleSelection.CountEventsWrapper
+from python.analysis import Master
+from python.analysis.SelectionTools import *
+
+
+@CountsWrapper
 def HasTruthInfo(events : Master.Data) -> ak.Array:
     #* remove events with no truth info
     return ak.num(events.trueParticles.number) > 0
 
-@BeamParticleSelection.CountEventsWrapper
+@CountsWrapper
 def Pi0InFinalState(events : Master.Data, n_pi0 : int = 1) -> ak.Array:
     #* only look at events with 1 primary pi0
     pi0 = events.trueParticles.PrimaryPi0Mask
@@ -28,7 +30,7 @@ def FinalStatePi0Cut(events : Master.Data) -> ak.Array:
     #! this cuts on truth information, not events
     return events.trueParticles.PrimaryPi0Mask | events.trueParticles.truePhotonMask 
 
-@BeamParticleSelection.CountEventsWrapper
+@CountsWrapper
 def BeamMCFilter(events : Master.Data, n_pi0 : int = 1) -> ak.Array:
     """ Filters BeamMC data to get events with only 1 pi0 which originates from the beam particle interaction.
 
@@ -45,29 +47,29 @@ def BeamMCFilter(events : Master.Data, n_pi0 : int = 1) -> ak.Array:
 
     return (empty & pi0) & truth_event_cut
 
-@BeamParticleSelection.CountEventsWrapper
+@CountsWrapper
 def PiBeamSelection(events : Master.Data) -> ak.Array:
     true_beam = events.trueParticlesBT.pdg[events.recoParticles.beam_number == events.recoParticles.number]
     return ak.all(true_beam == 211, -1)
 
-@BeamParticleSelection.CountEventsWrapper
+@CountsWrapper
 def DiPhotonCut(events : Master.Data):
     return Master.Pi0TwoBodyDecayMask(events)
 
-@BeamParticleSelection.CountEventsWrapper
+@CountsWrapper
 def RecoBeamParticleCut(events : Master.Data) -> ak.Array:
     return (events.recoParticles.beam_number != -999) & (events.recoParticles.beam_endPos.x != -999)
 
-@BeamParticleSelection.CountEventsWrapper
+@CountsWrapper
 def HasPFO(events : Master.Data) -> ak.Array:
     return Master.NPFPMask(events, -1)
 
-@BeamParticleSelection.CountEventsWrapper
+@CountsWrapper
 def HasBacktracked(events : Master.Data):
     unique = events.trueParticlesBT.GetUniqueParticleNumbers(events.trueParticlesBT.number)
     return ak.num(unique) > 1
 
-@BeamParticleSelection.CountEventsWrapper
+@CountsWrapper
 def BothPhotonsBacktracked(events : Master.Data) -> ak.Array:
     pi0 = events.trueParticles.number[events.trueParticles.PrimaryPi0Mask]
     pi0 = ak.fill_none(ak.pad_none(pi0, ak.max(ak.num(pi0)), -1), -999, -1)
@@ -92,7 +94,7 @@ def BothPhotonsBacktracked(events : Master.Data) -> ak.Array:
     return mask
 
 
-def ApplyLegacyBeamParticleSelection(events : Master.Data, verbose : bool = True):
+def CreateLegacyBeamParticleSelection(events : Master.Data, verbose : bool = True):
     selections = [
         BeamMCFilter,
         PiBeamSelection,
@@ -102,6 +104,4 @@ def ApplyLegacyBeamParticleSelection(events : Master.Data, verbose : bool = True
         HasBacktracked,
         BothPhotonsBacktracked,
     ]
-    return BeamParticleSelection.CombineSelections(events, selection = selections, verbose = verbose, return_table = True)
-
-
+    return CombineSelections(events, selections, 0, verbose, True)

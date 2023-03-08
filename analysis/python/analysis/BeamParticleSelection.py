@@ -8,47 +8,16 @@ TODO Cleanup beam quality cut code
 ? Should the cuts be configurable?
 ? should this be kept in a class?
 """
-from functools import wraps
-
 import awkward as ak
 import numpy as np
-import pandas as pd
 
-import python.analysis.vector as vector
+from python.analysis import vector
 from python.analysis.Master import Data
+from python.analysis.SelectionTools import *
 
-
-def CountMask(m : ak.Array) -> tuple:
-    """ Counts the total number of entries in a boolean mask,
-        and the number which are True.
-
-    Args:
-        m (ak.Array): boolean mask.
-
-    Returns:
-        tuple: (number of entries, number of entries which are true).
-    """
-    return ak.count(m), ak.count(m[m])
-
-
-def CountEventsWrapper(f):
-    """ Wrapper for selection functions which checks the number of entries that pass a cut.
-
-    Args:
-        f (function): selection function.
-    Returns:
-        any: output of f.
-    """
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        m = f(*args, **kwargs)
-        c = CountMask(m)
-        print(f"number of entries before|after {f.__name__}: {c[0]}|{c[1]}")
-        return m
-    return wrapper
 
 #! This is a pi+ beam selection, should this be here?
-@CountEventsWrapper
+@CountsWrapper
 def PiBeamSelection(events : Data) -> ak.Array:
     """ Pi+ beam particle selection. For MC only.
 
@@ -61,7 +30,7 @@ def PiBeamSelection(events : Data) -> ak.Array:
     pdg = events.io.Get("reco_beam_PFP_true_byHits_pdg")
     return (pdg == 211) | (pdg == -13) # return both 211 and -13 as you can't distinguish between pi+ and mu+ in data
 
-@CountEventsWrapper
+@CountsWrapper
 def PandoraTagCut(events : Data) -> ak.Array:
     """ Cut on Pandora slice tag, selects track like beam particles.
 
@@ -75,7 +44,7 @@ def PandoraTagCut(events : Data) -> ak.Array:
     tag = ak.flatten(ak.fill_none(ak.pad_none(tag, 1), -999))
     return tag == 13
 
-@CountEventsWrapper
+@CountsWrapper
 def CaloSizeCut(events : Data) -> ak.Array:
     """ Cut which checks the beam particle has a calorimetry object (required for median dEdX cut).
 
@@ -89,7 +58,7 @@ def CaloSizeCut(events : Data) -> ak.Array:
     calo_wire = calo_wire[calo_wire != -999] # Analyser fills the empty entry with a -999
     return ak.num(calo_wire, 1) > 0 
 
-@CountEventsWrapper
+@CountsWrapper
 def BeamQualityCut(events : Data) -> ak.Array:
     """ Cut on beam particle start position and trajectory, 
         Selects beam particles with values consistent to the beam plug.
@@ -194,7 +163,7 @@ def BeamQualityCut(events : Data) -> ak.Array:
         beam_quality_mask = beam_quality_mask & cut(beam_costh, costh_min, costh_max) #* should be the same as the logic below
     return beam_quality_mask
 
-@CountEventsWrapper
+@CountsWrapper
 def APA3Cut(events : Data) -> ak.Array:
     """ Cuts on beam end z position to select beam particles which end in APA3.
 
@@ -207,7 +176,7 @@ def APA3Cut(events : Data) -> ak.Array:
     # APA3 cut
     return events.recoParticles.beam_endPos.z < 220 # cm
 
-@CountEventsWrapper
+@CountsWrapper
 def MichelScoreCut(events : Data) -> ak.Array:
     """ Cut on michel score to remove muon like beam particles.
 
@@ -220,7 +189,7 @@ def MichelScoreCut(events : Data) -> ak.Array:
     score = events.recoParticles.beam_michelScore / events.recoParticles.beam_nHits
     return score < 0.55
 
-@CountEventsWrapper
+@CountsWrapper
 def MedianDEdXCut(events : Data) -> ak.Array:
     """ cut on median dEdX to exlude proton background.
 
@@ -250,49 +219,7 @@ def MedianDEdXCut(events : Data) -> ak.Array:
 
     return median < 2.4
 
-
-def CombineSelections(events : Data, selection : list, verbose : bool = False, return_table : bool = False) -> ak.Array:
-    """ Combines multiple beam particle selections.
-
-    Args:
-        events (Data): events to study.
-        selection (list): list of beam particle selection functions (must return a boolean mask).
-
-    Returns:
-        ak.Array: boolean mask of combined selection.
-    """
-    if verbose or return_table:
-        table = {
-            "no selection" : [ak.num(events.eventNum, 0), 100]*2
-        }
-
-    mask = None
-    for s in selection:
-        new_mask = s(events)
-        if not hasattr(mask, "__iter__"):
-            mask = new_mask
-        else:
-            mask = mask & new_mask
-
-        if return_table or verbose:
-            successive_counts = ak.num(mask[mask], 0)
-            single_counts = ak.num(new_mask[new_mask], 0)
-            table[s.__name__] = [single_counts, 100 * single_counts/ table["no selection"][0], successive_counts, 100 * successive_counts / table["no selection"][0]]
-
-    if return_table or verbose:
-        table = pd.DataFrame(table, index = ["number of events which pass the cut", "single efficiency", "number of events afer successive cuts", "successive efficiency"]).T
-        relative_efficiency = np.append([np.nan], 100 * table["number of events afer successive cuts"].values[1:] / table["number of events afer successive cuts"].values[:-1])
-        table["relative efficiency"] = relative_efficiency
-    if verbose:
-        print(table)
-
-    if return_table:
-        return mask, table
-    else:
-        return mask
-
-
-def ApplyDefaultSelection(events : Data, verbose : bool = True, return_table : bool = True) -> ak.Array:
+def CreateDefaultSelection(events : Data, verbose : bool = True, return_table : bool = True) -> ak.Array:
     """ Create boolean mask for default MC beam particle selection
         (includes pi+ beam selection for now as well).
 
@@ -311,4 +238,4 @@ def ApplyDefaultSelection(events : Data, verbose : bool = True, return_table : b
         MichelScoreCut,
         MedianDEdXCut
     ]
-    return CombineSelections(events, selection, verbose, return_table)
+    return CombineSelections(events, selection, 0, verbose, return_table)
