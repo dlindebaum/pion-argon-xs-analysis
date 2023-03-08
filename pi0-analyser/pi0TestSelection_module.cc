@@ -96,7 +96,7 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   void AnalyseBeamPFP(const recob::PFParticle &beam, const art::Event &evt);
   void AnalyseMCTruth(const recob::PFParticle &daughter, const art::Event &evt, const detinfo::DetectorPropertiesData &detProp, const detinfo::DetectorClocksData &clockData, const std::vector<art::Ptr<recob::Hit> > &hitVec);
   void AnalyseMCTruthBeam(const art::Event &evt);
-  void FillG4NTuple(const simb::MCParticle* &particle, const int &number);
+  void FillG4NTuple(const sim::ParticleList &particle_list, const simb::MCParticle* &particle, const int &number);
   void CollectG4Particle(const int &Pdg, const int start, const int stop);
   void AnalyseFromBeam(const art::Event &evt, const detinfo::DetectorClocksData &clockData, const detinfo::DetectorPropertiesData &detProp, anab::MVAReader<recob::Hit,4> &hitResults, std::vector<recob::PFParticle> pfpVec);
 
@@ -107,7 +107,7 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
 
   private:
   
-  enum G4Mode{PI0=1, DIPHOTON=2, ALL=3, NONE=0}; // determines what MC particles are retrieved from the truth table
+  enum G4Mode{PI0=1, DIPHOTON=2, ALL=3, PI0_PIP=4, NONE=0}; // determines what MC particles are retrieved from the truth table
   
   // fcl parameters, order matters!
   protoana::ProtoDUNECalibration calibration_SCE;
@@ -267,6 +267,7 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   //---------------------------MC Truth---------------------------//
   std::vector<int> G4ParticleNum;
   std::vector<int> G4ParticleMother;
+  std::vector<int> G4ParticleMotherPdg;
   std::vector<int> G4ParticlePdg;
 
   std::vector<double> G4ParticleEnergy;
@@ -622,6 +623,7 @@ void protoana::pi0TestSelection::reset()
   //---------------------------MC Truth---------------------------//
   G4ParticleNum.clear();
   G4ParticleMother.clear();
+  G4ParticleMotherPdg.clear();
   G4ParticlePdg.clear();
   
   G4ParticleEnergy.clear();
@@ -641,7 +643,7 @@ void protoana::pi0TestSelection::reset()
 }
 
 
-void protoana::pi0TestSelection::FillG4NTuple(const simb::MCParticle* &particle, const int &number)
+void protoana::pi0TestSelection::FillG4NTuple(const sim::ParticleList &particle_list, const simb::MCParticle* &particle, const int &number)
 {
   if(fDebug)
   {
@@ -671,6 +673,16 @@ void protoana::pi0TestSelection::FillG4NTuple(const simb::MCParticle* &particle,
 
   G4ParticleNum.push_back(number);
   G4ParticleMother.push_back(particle->Mother());
+  
+  if(particle->Mother() != 0) // particle has mother
+  {
+    const simb::MCParticle* mother = particle_list.find(particle->Mother())->second;
+    G4ParticleMotherPdg.push_back(mother->PdgCode());
+  }
+  else // particle has no mother
+  {
+    G4ParticleMotherPdg.push_back(-1);
+  }
 }
 
 
@@ -695,19 +707,19 @@ void protoana::pi0TestSelection::CollectG4Particle(const int &pdg=0, const int s
       // run if a specific particle is needed
       if(pdg == pPart->PdgCode())
       {
-        FillG4NTuple(pPart, part->first);
+        FillG4NTuple(plist, pPart, part->first);
 
         if(fDebug) std::cout << "number of Daughters: " << pPart->NumberDaughters() << std::endl;
         for (int i = pPart->FirstDaughter(); i < pPart->FirstDaughter() + pPart->NumberDaughters(); i++)
         {
           const simb::MCParticle* daughter = plist.find(i)->second;
-          FillG4NTuple(daughter, i);
+          FillG4NTuple(plist, daughter, i);
         }
       }
       // run if all particles are needed
       if(pdg == 0)
       {
-        FillG4NTuple(pPart, part->first);
+        FillG4NTuple(plist, pPart, part->first);
       }
     }
     if(fDebug) std::cout << "number of G4 particles: " << plist.size() << std::endl;
@@ -1443,6 +1455,7 @@ void protoana::pi0TestSelection::beginJob()
   fOutTree->Branch("g4_num", &G4ParticleNum);
   fOutTree->Branch("g4_mother", &G4ParticleMother);
   fOutTree->Branch("g4_Pdg", &G4ParticlePdg);
+  fOutTree->Branch("g4_mother_Pdg", &G4ParticleMotherPdg);
 
   fOutTree->Branch("g4_startE", &G4ParticleEnergy);
   fOutTree->Branch("g4_mass", &G4ParticleMass);
@@ -1633,7 +1646,12 @@ void protoana::pi0TestSelection::analyze(art::Event const & evt)
       std::cout << "Retreiving all pi0 MCParticles + daughters" << std::endl;
       CollectG4Particle(111);
       break;
-    
+    case PI0_PIP:
+      std::cout << "Retreiving all pi0 MCParticles + daughters" << std::endl;
+      CollectG4Particle(111);
+      std::cout << "Retreiving all pi+ MCParticles + daughters" << std::endl;
+      CollectG4Particle(211);
+      break;
     case DIPHOTON:
       std::cout << "Retreiving photons 0 and 1 + daughters" << std::endl;
       CollectG4Particle(22, 0, 2);
