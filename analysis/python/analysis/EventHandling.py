@@ -17,6 +17,8 @@ sys.path.insert(1, '/users/wx21978/projects/pion-phys/pi0-analysis/analysis/')
 
 def get_mother_pdgs(events):
     """
+    DEPRECATED: use events.trueParticles(BT).motherPdg
+
     Loops through each event (warning: slow) and creates a reco-type
     array of PDG codes of mother particle. E.g. a photon from a pi0
     will be assigned a PDG code 111.
@@ -131,10 +133,13 @@ def count_diphoton_decays(events):
         Array containing the number of occurances of pi0 -> yy for each
         event.
     """
+    try:
+        pi0_daughters = events.trueParticles.motherPdg == 111
+    except:
+        pi0_daughters = get_mother_pdgs(events) == 111
     pi0_photon_mothers = events.trueParticles.mother[np.logical_and(
         events.trueParticles.pdg == 22,
-        # events.trueParticles.motherPdg == 111)]
-        get_mother_pdgs(events) == 111)]
+        pi0_daughters)]
     counts = ak.Array(map(
         lambda pi0s: np.sum(np.unique(pi0s, return_counts=True)[1] == 2),
         pi0_photon_mothers))
