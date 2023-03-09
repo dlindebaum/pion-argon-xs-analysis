@@ -6,7 +6,6 @@ Author: Shyam Bhuller
 Description: Module containing core components of analysis code. 
 """
 import itertools
-import os
 import time
 import warnings
 from abc import ABC, abstractmethod
@@ -711,7 +710,7 @@ class TrueParticleData(ParticleData):
 
     @property
     def mother_pdg(self) -> ak.Array:
-        self.LoadData("mother_pdg", "g4_mother_pdg")
+        self.LoadData("mother_pdg", "g4_mother_Pdg")
         return getattr(self, f"_{type(self).__name__}__mother_pdg")
 
     @property
