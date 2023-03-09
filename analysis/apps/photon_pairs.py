@@ -9,29 +9,6 @@ import os
 import sys
 sys.path.insert(1, '/users/wx21978/projects/pion-phys/pi0-analysis/analysis/')
 
-# Functions
-
-# This is a memory management tool, currently not really necessary
-
-
-def del_prop(obj, property_name):
-    """
-    Deletes a properties from the supplied `RecoPaticleData` type
-    object.
-
-    Requires the `obj` to have a property
-    ``_RecoPaticleData__{property_name}``.
-
-    Parameters
-    ----------
-    obj : RecoPaticleData
-        Object from which to remove the property.
-    property_name : str
-        Property to be deleted (should match the name of the property).
-    """
-    del(obj.__dict__["_RecoPaticleData__" + property_name])
-    return
-
 
 #######################################################################
 #######################################################################
