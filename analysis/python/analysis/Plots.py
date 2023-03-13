@@ -13,7 +13,7 @@ from scipy.optimize import curve_fit
 from scipy.special import gamma
 
 
-def Save(name : str = "plot", directory : str = "", dpi = 80):
+def Save(name : str = "plot", directory : str = "", dpi = 100):
     """ Saves the last created plot to file. Run after one the functions below.
 
     Args:
@@ -38,14 +38,14 @@ def Plot(x, y, xlabel : str = "", ylabel : str = "", title : str = "", label : s
     plt.tight_layout()
 
 
-def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label : str = "", alpha : int = 1, histtype : str = "bar", sf : int = 2, density : bool = False, x_scale : str = "linear", y_scale : str = "linear", newFigure : bool = True, annotation : str = None):
+def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None, alpha : int = 1, histtype : str = "bar", sf : int = 2, density : bool = False, x_scale : str = "linear", y_scale : str = "linear", newFigure : bool = True, annotation : str = None, stacked : bool = False, color = None):
     """ Plot 1D histograms.
 
     Returns:
         np.arrays : bin heights and edges
     """
     if newFigure is True: plt.figure()
-    height, edges, _ = plt.hist(data, bins, label=label, alpha=alpha, density=density, histtype=histtype)
+    height, edges, _ = plt.hist(data, bins, label = label, alpha = alpha, density = density, histtype = histtype, stacked = stacked, color = color)
     binWidth = round((edges[-1] - edges[0]) / len(edges), sf)
     # TODO: make ylabel a parameter
     if density == False:
@@ -57,7 +57,7 @@ def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label : str 
     plt.xscale(x_scale)
     plt.yscale(y_scale)
     plt.title(title)
-    if label != "": plt.legend()
+    if label is not None: plt.legend()
     if annotation is not None:
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
     plt.tight_layout()
@@ -165,13 +165,14 @@ def UniqueData(data):
     return unique_labels, counts
 
 
-def PlotBar(data, width : float = 0.4, xlabel : str = "", title : str = "", label : str = "", alpha : float = 1, newFigure : bool = True, annotation : str = None):
+def PlotBar(data, width : float = 0.8, xlabel : str = "", title : str = "", label : str = "", alpha : float = 1, newFigure : bool = True, annotation : str = None, bar_labels : bool = False):
     """ Plot a bar graph or unique items in data.
     """
     if newFigure is True: plt.figure()
 
     unique, counts = UniqueData(data)
-    plt.bar(unique, counts, width, label=label, alpha=alpha)
+    bar = plt.bar(unique, counts, width, label=label, alpha=alpha)
+    if bar_labels: plt.bar_label(bar, counts)
     plt.ylabel("Counts")
     plt.xlabel(xlabel)
     plt.title(title)
@@ -182,7 +183,7 @@ def PlotBar(data, width : float = 0.4, xlabel : str = "", title : str = "", labe
     return unique, counts
 
 
-def PlotBarComparision(data_1, data_2, width : float = 0.4, xlabel : str = "", title : str = "", label_1 : str = "", label_2 : str = "", newFigure : bool = True, annotation : str = None):
+def PlotBarComparision(data_1, data_2, width : float = 0.8, xlabel : str = "", title : str = "", label_1 : str = "", label_2 : str = "", newFigure : bool = True, annotation : str = None):
     """ Plot two bar plots of the same data type side-by-side.
     """
     if newFigure is True: plt.figure()
@@ -228,6 +229,49 @@ def PlotBarComparision(data_1, data_2, width : float = 0.4, xlabel : str = "", t
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
     plt.tight_layout()
     return [unique_1, counts_1], [unique_2, counts_2]
+
+
+def PlotStackedBar(bars, labels, xlabel : str = None, colours : list = None, alpha : float = 1, label_title : str = None, width : float = 0.8, annotation : str = None):
+    """ Plot stacked bar chart.
+
+    Args:
+        bars : bar plot data for each sample, is a list of a list of two numpy arrays, first is the labels, second is the counts.
+        labels : sample labels
+    """
+    bar = []
+    for i in range(len(bars)):
+        bar.extend(bars[i][0])
+    bar = np.unique(bar)
+
+    # pad empty bars and sort
+    for i in range(len(bars)):
+        for j in range(len(bar)):
+            if(bar[j] not in bars[i][0]):
+                bars[i][0] = np.append(bars[i][0], bar[j])
+                bars[i][1] = np.append(bars[i][1], 0)
+        bars[i] = [j[bars[i][0].argsort()] for j in bars[i]]
+        bars[i][0] = [str(i) for i in bars[i][0]] # convert bar values to string for better plotting
+
+    # stack counts
+    for i in range(len(bars)):
+        if i == 0: continue
+        bars[i][1] += bars[i-1][1]
+    plt.figure()
+
+    if colours == None:
+        for b in reversed(bars):
+            bar = plt.bar(b[0], b[1], alpha = alpha, width = width)
+    else:
+        for b, c in zip(reversed(bars), reversed(colours)):
+            bar = plt.bar(b[0], b[1], color = c, alpha = alpha, width = width)
+
+    plt.legend(labels = labels[::-1], title = label_title)
+    plt.xlabel(xlabel)
+    plt.ylabel("Counts")
+    plt.tight_layout()
+
+    if annotation is not None:
+        plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
 def BW(x, A : float, M : float, T : float):

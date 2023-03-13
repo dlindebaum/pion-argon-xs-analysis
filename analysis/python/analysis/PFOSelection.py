@@ -67,15 +67,15 @@ def BeamParticleDistanceCut(events : Data) -> ak.Array:
 
 @CountsWrapper
 def BeamParticleIPCut(events : Data) -> ak.Array:
-    ip = vector.magnitude(
-            vector.cross(
+    ip = vector.magnitude(vector.cross(
                 vector.sub(
                         events.recoParticles.beam_endPos,
                         events.recoParticles.startPos
                 ),
                 events.recoParticles.direction
             )
-        )    
+        )
+
     return ip < 20
 
 
