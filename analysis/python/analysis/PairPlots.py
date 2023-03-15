@@ -6,6 +6,7 @@ Author: Dennis Lindebaum
 Description: Module containing plotting data for initial pair analyses
 """
 
+from python.analysis import vector, EventHandling
 import warnings
 import math
 import numpy as np
@@ -16,133 +17,94 @@ from scipy.stats import iqr
 import copy as copy_lib
 import sys
 sys.path.insert(1, '/users/wx21978/projects/pion-phys/pi0-analysis/analysis/')
-from python.analysis import vector, EventHandling
 
 
 class PlotConfig():
 
     def __init__(self):
-        self.PLT_STYLE              = "fivethirtyeight"
-        self.FIG_SIZE               = (14,10)
-        self.FIG_FACECOLOR          = 'white'
-        self.AXIS_FACECOLOR         = 'white'
-        self.BINS                   = 'best'                # Number of bins
-        self.BEST_BINS_MULTIPLIER   = 1                     # Allows tweaking the number of bins produced by the "best" algorithm
-        self.GRID_COLOR             = 'gray'                # Color of plot grid
-        self.GRID_ALPHA             = 0.25                  # Transparency of the plot grid
-        self.LEGEND_COLOR           = 'white'
-        self.MINOR_GRID_X           = False
-        self.MINOR_GRID_Y           = False
-        self.SPINE_COLOR            = 'black'
-        self.TICK_SIZE              = 18
-        self.TICK_SIZE_MINOR        = 14
-        self.TICK_LENGTH            = 14
-        self.TICK_WIDTH             = 4
-        self.MINOR_TICK_SPACING_X   = "auto"
-        self.MINOR_TICK_SPACING_Y   = "auto"
-        self.LEGEND_SIZE            = 18
-        self.LEGEND_SIZE_DOUBLE     = 11
-        self.TITLE_SIZE             = 28
-        self.TITLE_SIZE_DOUBLE      = 22
-        self.AX_ALPHA               = 0.5
-        self.TEXT_SIZE              = 18
-        self.DPI                    = 300
+        self.PLT_STYLE = "fivethirtyeight"
+        self.FIG_SIZE = (14, 10)
+        self.FIG_FACECOLOR = 'white'
+        self.AXIS_FACECOLOR = 'white'
+        self.BINS = 'best'                # Number of bins
+        # Allows tweaking the number of bins produced by the "best" algorithm
+        self.BEST_BINS_MULTIPLIER = 1
+        self.GRID_COLOR = 'gray'                # Color of plot grid
+        self.GRID_ALPHA = 0.25                  # Transparency of the plot grid
+        self.LEGEND_COLOR = 'white'
+        self.MINOR_GRID_X = False
+        self.MINOR_GRID_Y = False
+        self.SPINE_COLOR = 'black'
+        self.TICK_SIZE = 18
+        self.TICK_SIZE_MINOR = 14
+        self.TICK_LENGTH = 14
+        self.TICK_WIDTH = 4
+        self.MINOR_TICK_SPACING_X = "auto"
+        self.MINOR_TICK_SPACING_Y = "auto"
+        self.LEGEND_SIZE = 18
+        self.LEGEND_SIZE_DOUBLE = 11
+        self.TITLE_SIZE = 28
+        self.TITLE_SIZE_DOUBLE = 22
+        self.AX_ALPHA = 0.5
+        self.TEXT_SIZE = 18
+        self.DPI = 300
 
-        self.SAVE_FOLDER            = None                  # Folder to save the plot
-        self.SHOW_PLOT              = False                 # Show the plot?
-        self.N_HITS_WHICH           = "count"               # Count to get number of individual hits per APA. "sum" to get total of hits per APA (Summed Hit Size)
-        self.LABEL_SIZE             = 24
-        self.LOGSCALE               = False
-        self.LINEWIDTH              = 2
+        self.SAVE_FOLDER = None                  # Folder to save the plot
+        self.SHOW_PLOT = False                 # Show the plot?
+        # Count to get number of individual hits per APA. "sum" to get total of hits per APA (Summed Hit Size)
+        self.N_HITS_WHICH = "count"
+        self.LABEL_SIZE = 24
+        self.LOGSCALE = False
+        self.LINEWIDTH = 2
 
-        self.HIST_COLOR1            = "tab:blue"
-        self.HIST_COLOR2            = "tab:orange"
-        self.HIST_COLOR3            = "tab:green"
-        self.HIST_COLOR4            = "tab:purple"
-        self.HIST_DENSITY           = False                 # Normalise the count of the histograms
-        self.HIST_TYPE              = "step"
+        self.HIST_COLOR1 = "tab:blue"
+        self.HIST_COLOR2 = "tab:orange"
+        self.HIST_COLOR3 = "tab:green"
+        self.HIST_COLOR4 = "tab:purple"
+        self.HIST_DENSITY = False                 # Normalise the count of the histograms
+        self.HIST_TYPE = "step"
 
         self.HIST_COLOURS = {
-            0:self.HIST_COLOR1,
-            1:self.HIST_COLOR2,
-            2:self.HIST_COLOR3,
-            3:self.HIST_COLOR4
+            0: self.HIST_COLOR1,
+            1: self.HIST_COLOR2,
+            2: self.HIST_COLOR3,
+            3: self.HIST_COLOR4
         }
-    
+
     def __str__(self):
-        return "\n".join(["{} = {}".format(str(var),vars(self)[var]) for var in vars(self)])
-
-    # def __eq__(self, other):
-        
-    #     if not isinstance(other, AnalysisPlotConfig):
-    #         # don't attempt to compare against unrelated types
-    #         print("Warning! Comparing different instances/types is not implemented")
-    #         return NotImplemented
-        
-    #     return (
-    #         super().__eq__(self)    == super().__eq__(other)    and
-    #         self.PLT_STYLE          == other.PLT_STYLE          and  
-    #         self.HIST_COLOR1        == other.HIST_COLOR1        and 
-    #         self.FIG_SIZE           == other.FIG_SIZE           and  
-    #         self.FIG_FACECOLOR      == other.FIG_FACECOLOR      and 
-    #         self.BINS               == other.BINS               and
-    #         self.GRID_COLOR         == other.GRID_COLOR         and  
-    #         self.GRID_ALPHA         == other.GRID_ALPHA         and
-    #         self.SHOW_PLT           == other.SHOW_PLT           and  
-    #         self.N_HITS_WHICH       == other.N_HITS_WHICH       and 
-    #         self.LABEL_SIZE         == other.LABEL_SIZE         and   
-    #         self.HIST_DENSITY       == other.HIST_DENSITY       and  
-    #         self.LOGSCALE           == other.LOGSCALE           
-    #     )
-
-    # def __ne__(self, other):
-        
-    #     if not isinstance(other, AnalysisPlotConfig):
-    #         # don't attempt to compare against unrelated types
-    #         print("Warning! Comparing different instances/types is not implemented")
-    #         return NotImplemented
-        
-    #     return (
-    #         super().__ne__(self)    == super().__ne__(other)    or
-    #         self.PLT_STYLE          != other.PLT_STYLE          or 
-    #         self.HIST_COLOR1        != other.HIST_COLOR1        or
-    #         self.FIG_SIZE           != other.FIG_SIZE           or 
-    #         self.FIG_FACECOLOR      != other.FIG_FACECOLOR      or
-    #         self.BINS               != other.BINS               or
-    #         self.GRID_COLOR         != other.GRID_COLOR         or 
-    #         self.GRID_ALPHA         != other.GRID_ALPHA         or
-    #         self.SHOW_PLT           != other.SHOW_PLT           or 
-    #         self.N_HITS_WHICH       != other.N_HITS_WHICH       or
-    #         self.LABEL_SIZE         != other.LABEL_SIZE         or  
-    #         self.HIST_DENSITY       != other.HIST_DENSITY       or 
-    #         self.LOGSCALE           != other.LOGSCALE
-    #     )
-
-    # def __hash__(self):
-    #     return hash(
-    #         (
-    #             super().__init__(), 
-    #             self.PLT_STYLE, 
-    #             self.HIST_COLOR1,  
-    #             self.FIG_SIZE, 
-    #             self.FIG_FACECOLOR,
-    #             self.BINS,   
-    #             self.GRID_COLOR,
-    #             self.GRID_ALPHA,  
-    #             self.SHOW_PLT,  
-    #             self.N_HITS_WHICH, 
-    #             self.LABEL_SIZE,
-    #             self.HIST_DENSITY, 
-    #             self.LOGSCALE
-    #         )
-    #     )
+        return "\n".join(["{} = {}".format(str(var), vars(self)[var]) for var in vars(self)])
 
     def copy(self):
         return copy_lib.deepcopy(self)
 
     def setup_figure(self, sub_rows=1, sub_cols=1, title=None, **kwargs):
-        # TODO add a scaling function to adjust all test sizes etc, base on either single scalling, or input dimensions
+        """
+        Create a figure and axes instance with the supplied parameters
+        and title.
 
+        Parameters
+        ----------
+        sub_rows : int, optional
+            Number of rows to have in the figure. Default is 1.
+        sub_cols : int, optional
+            Number of columns to have in the figure. Default is 1.
+        title : str or None, optional
+            Overall title to display over the figure. Default is None.
+        **kwargs
+            All additional keyword arguments are passed to the
+            pyplot.subplots call.
+
+        Returns
+        -------
+        fig : pyplot.Figure
+            Created figure.
+        axs : array of Axes
+            An array containing an array of the axes in the figure of
+            shape `(sub_rows, sub_cols)`. This will be an array
+            containing one axis if `sub_rows = sub_cols = 1`.
+        """
+        # TODO add a scaling function to adjust all test sizes etc,
+        # base on either single scalling, or input dimensions
         plt.style.use(self.PLT_STYLE)
 
         fig_kwargs = {
@@ -161,19 +123,24 @@ class PlotConfig():
 
         for ax in axs.flatten():
             ax.patch.set_alpha(self.AX_ALPHA)
-            
-            ax.tick_params(axis='both', which='major', labelsize=self.TICK_SIZE)
-            ax.tick_params(axis='both', direction="out", length=self.TICK_LENGTH, width=self.TICK_WIDTH, grid_color=self.GRID_COLOR, grid_alpha=self.GRID_ALPHA)
+
+            ax.tick_params(axis='both', which='major',
+                           labelsize=self.TICK_SIZE)
+            ax.tick_params(axis='both', direction="out", length=self.TICK_LENGTH,
+                           width=self.TICK_WIDTH, grid_color=self.GRID_COLOR, grid_alpha=self.GRID_ALPHA)
 
             if self.MINOR_TICK_SPACING_X == "auto":
                 ax.xaxis.set_minor_locator(AutoMinorLocator())
             else:
-                ax.xaxis.set_minor_locator(MultipleLocator(self.MINOR_TICK_SPACING_X))
+                ax.xaxis.set_minor_locator(
+                    MultipleLocator(self.MINOR_TICK_SPACING_X))
             if self.MINOR_TICK_SPACING_Y == "auto":
                 ax.yaxis.set_minor_locator(AutoMinorLocator())
             else:
-                ax.yaxis.set_minor_locator(MultipleLocator(self.MINOR_TICK_SPACING_X))
-            ax.tick_params(axis="both", which='minor', labelsize=self.TICK_SIZE-2, length=self.TICK_LENGTH-2)
+                ax.yaxis.set_minor_locator(
+                    MultipleLocator(self.MINOR_TICK_SPACING_X))
+            ax.tick_params(axis="both", which='minor',
+                           labelsize=self.TICK_SIZE-2, length=self.TICK_LENGTH-2)
 
             ax.xaxis.grid(self.MINOR_GRID_X, which='minor')
             ax.yaxis.grid(self.MINOR_GRID_Y, which='minor')
@@ -182,25 +149,53 @@ class PlotConfig():
                 ax.set_yscale("log")
 
         return fig, axs
-      
+
     def gen_kwargs(self, type="plot", index=0, **kwargs):
+        """
+        Generates keyword arguments to format a plot with the style
+        of this `PlotConfig` instance.
+
+        The results of this function are intended to be unpacked and
+        passed to a `plt.plot` (or similar) call.
+
+        Parameters
+        ----------
+        type : {"plot", "line", "hist"}, optional
+            Type of plot being formatted. "plot" is most generally
+            applicable. Default is plot.
+        index : int, optional
+            Index of the line on the axis. Controls the colour. Default
+            is 0.
+        **kwargs
+            All additional keyword arguments are returned by this
+            function, and can overwrite generated parameters.
+
+        Returns
+        -------
+        fig : pyplot.Figure
+            Created figure.
+        axs : array of Axes
+            An array containing an array of the axes in the figure of
+            shape `(sub_rows, sub_cols)`. This will be an array
+            containing one axis if `sub_rows = sub_cols = 1`.
+        """
         final_kwargs = {
-            "linewidth"    : self.LINEWIDTH
+            "linewidth": self.LINEWIDTH
         }
-        
+
         if type == "hist":
             final_kwargs.update({
-                "bins"          : self.BINS,
+                "bins": self.BINS,
                 "density": self.HIST_DENSITY,
                 "histtype": self.HIST_TYPE
             })
             if index <= max(self.HIST_COLOURS.keys()):
-                final_kwargs.update({"color":self.HIST_COLOURS[index]})
+                final_kwargs.update({"color": self.HIST_COLOURS[index]})
         elif type == "line":
             final_kwargs.pop("linewidth")
             final_kwargs.update({
-                "linewidth" : self.LINEWIDTH,
-                "colors"    : "red"
+                "linewidth": self.LINEWIDTH,
+                "colors": "red"
             })
 
         final_kwargs.update(kwargs)
@@ -208,6 +203,42 @@ class PlotConfig():
         return final_kwargs
 
     def format_axis(self, *ax, xlabel=None, ylabel=None, xlim=None, ylim=None, legend=True, xlog=None, ylog=None):
+        """
+        Formats the supplied axis with the style of this `PlotConfig`
+        instance.
+
+        Parameters:
+        *ax : pyplot.Axes or array of Axes
+            Axes to be formatted. If not supplied, the current axis
+            will be obtained via `plt.gca()`.
+        xlabel : str or None, optional
+            Label to be displayed on the x axis. If None, no label is
+            printed. Default is None.
+        ylabel : str or None, optional
+            Label to be displayed on the y axis. If None, no label is
+            printed. Default is None.
+        xlim : tuple or None, optional
+            Range to be displayed along the x axis in form (lower
+            limit, upper limit). If None, the default pyplot limits are
+            used. Default is None.
+        ylim : tuple or None, optional
+            Range to be displayed along the y axis in form (lower
+            limit, upper limit). If None, the default pyplot limits are
+            used. Default is None.
+        legend : bool, optional
+            Whether or not to display a legend if plot labels have been
+            passed. Default is True.
+        xlog : bool or None, optional
+            Option to override the default x axis log scale of this
+            `PlotConfig` instance via True or False. If None, the
+            default settings of the `PlotConfig` instance is used.
+            Default is None.
+        ylog : bool or None, optional
+            Option to override the default y axis log scale of this
+            `PlotConfig` instance via True or False. If None, the
+            default settings of the `PlotConfig` instance is used.
+            Default is None.
+        """
         if len(ax) == 0 or (len(ax) == 1 and ax[0] is None):
             # Overrides for log scales needs to be before xlim call
             if xlog is not None:
@@ -229,7 +260,8 @@ class PlotConfig():
             for spine in plt.gca().spines.values():
                 spine.set_edgecolor(self.SPINE_COLOR)
             if legend:
-                plt.legend(prop={'size': self.LEGEND_SIZE}, facecolor=self.LEGEND_COLOR)
+                plt.legend(prop={'size': self.LEGEND_SIZE},
+                           facecolor=self.LEGEND_COLOR)
 
         else:
             for a in ax:
@@ -253,34 +285,71 @@ class PlotConfig():
                 for spine in a.spines.values():
                     spine.set_edgecolor(self.SPINE_COLOR)
                 if legend:
-                    a.legend(prop={'size': self.LEGEND_SIZE}, facecolor=self.LEGEND_COLOR)
+                    a.legend(prop={'size': self.LEGEND_SIZE},
+                             facecolor=self.LEGEND_COLOR)
 
         return
 
-    def end_plot(self, save_path=None):   
-        # Need to get this to work with multiple figures open
-        
-        plt.tight_layout()   
+    def end_plot(self, save_name=None):
+        """
+        Ends a plot by saving it if `save_name` is specified and
+        displaying the plot if the `PlotConfig` instance has
+        `SHOW_PLOT=True`.
+        The figure will only be closed if the current figure was saved
+        or shown to avoid accidental plot removal.
 
-        if save_path is not None:
-            if "/" in save_path:
-                plt.savefig(save_path, bbox_inches='tight', facecolor=self.FIG_FACECOLOR, dpi=self.DPI)
+        Parameters
+        ----------
+        save_name : str or None, optional
+            Name to save the plot by. If the name contains a "/", the
+            save_name will be assumed to be a full path and saved
+            accordingly (N.B. designed for bash style file names),
+            otherwise, the plot will be saved under the
+            `PlotConfig.SAVE_FOLDER + save_name`. If None, the file
+            will not be saved. Default is None.
+        """
+        # Need to get this to work with multiple figures open
+        plt.tight_layout()
+
+        if save_name is not None:
+            if "/" in save_name:
+                plt.savefig(save_name, bbox_inches='tight',
+                            facecolor=self.FIG_FACECOLOR, dpi=self.DPI)
             elif self.SAVE_FOLDER is not None:
                 if self.SAVE_FOLDER[-1] != "/":
                     self.SAVE_FOLDER += "/"
-                plt.savefig(self.SAVE_FOLDER + save_path, bbox_inches='tight', facecolor=self.FIG_FACECOLOR, dpi=self.DPI)
+                plt.savefig(self.SAVE_FOLDER + save_name, bbox_inches='tight',
+                            facecolor=self.FIG_FACECOLOR, dpi=self.DPI)
             else:
-                warnings.warn("Plot has been given a file name to save, but not path to folder in the PlotConfig")
+                warnings.warn(
+                    "Plot has been given a file name to save, but not path to folder in the PlotConfig")
 
         if self.SHOW_PLOT:
             plt.show()
-        
-        if self.SHOW_PLOT or (save_path is not None):
+
+        if self.SHOW_PLOT or (save_name is not None):
             plt.close()
-        
         return
 
     def get_bins(self, data, array=False):
+        """
+        Returns the bins to use for a given set of data as defined by
+        `BINS` of the `PlotConfig` instance.
+
+        Parameters
+        ----------
+        data : array-like
+            Data to be binned
+        array : bool, optional
+            Whether to return an array of bin edges or a number of
+            bins. Default is False.
+
+        Returns
+        bins : int or np.ndarray
+            Returns the number of bins to divide the full range of data
+            by if `array` is `False`, else returns an array of bin
+            edges.
+        """
         if len(np.unique(data)) != 1:
             if self.BINS == "best":
                 num_bins, _ = self._get_best_bins(data)
@@ -291,7 +360,7 @@ class PlotConfig():
             return np.linspace(min(data), max(data) + 0.1, 2)
         else:
             return None
-        
+
         if array:
             return np.linspace(min(data), max(data), num_bins+1)
         return num_bins
@@ -310,13 +379,35 @@ class PlotConfig():
 
     @staticmethod
     def expand_bins(bins, data):
+        """
+        Given an array of bin edges, expands the bins by extending the
+        lower (upper) bin edges by the factors of width of the lower
+        (upper) bin until the new set of `data` is contined within the
+        new bins.
+
+        Parameters
+        ----------
+        bins : np.ndarray
+            Previous set of bin edges.
+        data : array-like
+            New data to encapsulate in the binning
+
+        Returns
+        -------
+        new_bins : np.ndarray
+            New bin edges which encapsulate the full range of `data` by
+            adding additional bins below/above the existing edges in
+            `bins` 
+        """
         if min(data) < bins[0]:
             low_bin_width = bins[1] - bins[0]
-            bins = np.concatenate((np.arange(bins[0] - low_bin_width, min(data) - low_bin_width, low_bin_width)[::-1], bins))
+            bins = np.concatenate((np.arange(
+                bins[0] - low_bin_width, min(data) - low_bin_width, low_bin_width)[::-1], bins))
         if max(data) >= bins[-1]:
             high_bin_width = bins[-1] - bins[-2]
             # TODO nicer way to do this?
-            bins = np.concatenate((bins, np.arange(bins[-1]+ high_bin_width, max(data) + high_bin_width*(1+1e-6), high_bin_width)))
+            bins = np.concatenate((bins, np.arange(
+                bins[-1] + high_bin_width, max(data) + high_bin_width*(1+1e-6), high_bin_width)))
         return bins
 
 
@@ -330,7 +421,7 @@ class HistogramBatchPlotter():
         self.bins = {}
         self.binned_data = {}
         return
-    
+
     def _extend_bins(self, new_data, hist_name=None):
         """
         We let the initial plot construct whatever the standard bins are.
@@ -354,22 +445,24 @@ class HistogramBatchPlotter():
 
         if curr_min > new_min:
             new_bins_count = math.ceil((curr_min-new_min)/bin_widths_low)
-            low_bins = np.linspace(curr_min - new_bins_count*bin_widths_low, curr_min - bin_widths_low, new_bins_count)
-            
+            low_bins = np.linspace(
+                curr_min - new_bins_count*bin_widths_low, curr_min - bin_widths_low, new_bins_count)
+
             empty_bin_data = np.zeros(new_bins_count, dtype=data.dtype)
 
             bins = np.concatenate((low_bins, bins))
             data = np.concatenate((empty_bin_data, data))
-        
+
         if curr_max < new_max:
             new_bins_count = math.ceil((new_max - curr_max)/bin_widths_high)
-            high_bins = np.linspace(curr_max + bin_widths_high, curr_max + new_bins_count*bin_widths_high, new_bins_count)
+            high_bins = np.linspace(
+                curr_max + bin_widths_high, curr_max + new_bins_count*bin_widths_high, new_bins_count)
 
             empty_bin_data = np.zeros(new_bins_count, dtype=data.dtype)
 
             bins = np.concatenate((bins, high_bins))
-            data = np.concatenate((data,empty_bin_data))
-        
+            data = np.concatenate((data, empty_bin_data))
+
         self.bins[hist_name] = bins
         self.binned_data[hist_name] = data
         return
@@ -386,37 +479,58 @@ class HistogramBatchPlotter():
         hist_name
         """
         new_plot = hist_name not in self.binned_data.keys()
-        
+
         if range is not None:
             data = data[np.logical_and(data >= range[0], data < range[1])]
 
         if new_plot:
             if bins is None:
                 bins = self.plt_cfg.get_bins(data)
-            counts, hist_bins = np.histogram(data, bins=bins, range=range, weights=weights)
-            
-            self.bins.update({hist_name:hist_bins})
-            self.binned_data.update({hist_name:counts})
+            counts, hist_bins = np.histogram(
+                data, bins=bins, range=range, weights=weights)
+
+            self.bins.update({hist_name: hist_bins})
+            self.binned_data.update({hist_name: counts})
 
         else:
             if range is None:
                 self._extend_bins(data, hist_name)
-            counts, hist_bins = np.histogram(data, bins=self.bins[hist_name], range=range, weights=weights)
+            counts, hist_bins = np.histogram(
+                data, bins=self.bins[hist_name], range=range, weights=weights)
 
             if (hist_bins != self.bins[hist_name]).all():
-                raise AssertionError("Bins from histogram do not match sorted bins.")
+                raise AssertionError(
+                    "Bins from histogram do not match sorted bins.")
             new_binned_data = self.binned_data[hist_name] + counts
-            self.binned_data.update({hist_name:new_binned_data})
+            self.binned_data.update({hist_name: new_binned_data})
 
         return self.binned_data[hist_name], self.bins[hist_name]
 
     def plot_hist(self, *ax, hist_name=None, plot_config=None, **plot_kwargs):
+        """
+        Make a histogram plot of stored data.
+
+        Parameters
+        ----------
+        *ax : pyplot.Axis
+            Axis to plot the hist on. If not specified, a new figure is
+            created.
+        hist_name : str or None, optional
+            Identifier of the data to be plotted. Default is None.
+        plot_config : PlotConfig or None, optional
+            Plot configuration to use to produce the plot. If None, the
+            `plt_cfg` in this `HistogramBatchPlotter` is used. Default
+            is None.
+        **plot_kwargs
+            All additional keyword arguments are passed to the `hist()`
+            call.
+        """
         if plot_config is None:
             plot_config = self.plt_cfg
         plot_config_kwargs = {
-            "type"      : "hist",
-            "bins"      : self.bins[hist_name],
-            "weights"   : self.binned_data[hist_name]
+            "type": "hist",
+            "bins": self.bins[hist_name],
+            "weights": self.binned_data[hist_name]
         }
         plot_config_kwargs.update(plot_kwargs)
 
@@ -434,14 +548,19 @@ class HistogramBatchPlotter():
                     **plot_config_kwargs
                 )
             )
-    
+
     def make_hist_figure(self, hist_name=None, save_name=None, xlabel=None, ylabel=None, title=None):
         """
-        Produces a figure using the histogram(s) data from hist_name.
+        Produces a new figure using the histogram(s) data from
+        `hist_name`.
 
         Parameters
         ----------
-        hist_name : list or str, optional
+        hist_name : list, str, or None, optional
+            Identifier of the data to be plotted. If a list is passed,
+            all supplied data will be plotted on the same axis.
+            Default is None.
+        save_name : str or None, optional
         xlabel
         ylabel
         title
@@ -450,11 +569,12 @@ class HistogramBatchPlotter():
             hist_name = [hist_name]
         use_labels = len(hist_name) != 1
 
-        fig, axes = self.plt_cfg.setup_figure(title = title)
+        fig, axes = self.plt_cfg.setup_figure(title=title)
 
         for h_name in hist_name:
-            self.plot_hist(axes[0], hist_name=h_name, normed=self.plt_cfg.HIST_DENSITY, labelled=use_labels)
-        
+            self.plot_hist(axes[0], hist_name=h_name,
+                           normed=self.plt_cfg.HIST_DENSITY, labelled=use_labels)
+
         self.plt_cfg.format_axis(axes[0], xlabel=xlabel, ylabel=ylabel)
         self.plt_cfg.end_plot(save_path=save_name)
         return fig, axes
@@ -462,12 +582,12 @@ class HistogramBatchPlotter():
 
 class PairHistsBatchPlotter(HistogramBatchPlotter):
     def __init__(
-        self, 
+        self,
         prop_name, units,
         plot_config=None, unique_save_id="",
         inc_stacked=False, inc_norm=True, inc_log=True,
         # bin_size = None,
-        bins = 100, range=None,
+        bins=100, range=None,
         **kwargs
     ):
         """
@@ -517,7 +637,7 @@ class PairHistsBatchPlotter(HistogramBatchPlotter):
         weights : ak.Array, np.ndarray, or None, optional
             Weights to used for each value of the `property`. Default
             is None.
-        
+
         Other Parameters
         ----------------
         **kwargs
@@ -526,9 +646,9 @@ class PairHistsBatchPlotter(HistogramBatchPlotter):
         """
         # `bin_size` CURRENTLY NOT USED: We don't enforce the bins for each signal type to have the same widths
         # bin_size : str, list, or None, optional
-            # The size of the bins. If None, this will be automatically
-            # calculated, but can be manually specified, i.e. if using
-            # custom/variable bin widths. Default is None.
+        # The size of the bins. If None, this will be automatically
+        # calculated, but can be manually specified, i.e. if using
+        # custom/variable bin widths. Default is None.
 
         super().__init__(plot_config=plot_config)
 
@@ -550,14 +670,14 @@ class PairHistsBatchPlotter(HistogramBatchPlotter):
             self._plot_types.update({"log": self._plot_types["basic"].copy()})
             self._plot_types["log"].LOGSCALE = True
         if self.includes_normed_log_scale:
-            self._plot_types.update({"norm_log": self._plot_types["norm"].copy()})
+            self._plot_types.update(
+                {"norm_log": self._plot_types["norm"].copy()})
             self._plot_types["norm_log"].LOGSCALE = True
 
         # Stacked plots are held separated, since they need a different plotting method
         if self.includes_stacked:
             self._stacked_config = self._plot_types["basic"].copy()
             self._stacked_config = "bar"
-
 
         # This sets up the bins and ranges we are using:
         if not isinstance(range, list):
@@ -566,23 +686,25 @@ class PairHistsBatchPlotter(HistogramBatchPlotter):
         for i, r in enumerate(range):
             if not (isinstance(r, tuple) or r is None):
                 range[i] = (0, r)
-        
+
         if not isinstance(bins, list):
             bins = [bins]
 
         # Check the lists supplied are compatible: Either they must both be the same,
         #   or one of them must have a length of one.
         if len(range) != len(bins) and len(range) != 1 and len(bins) != 1:
-            raise ValueError(f"Bins length {len(bins)} and ranges length {len(range)} incompatible")
-        
+            raise ValueError(
+                f"Bins length {len(bins)} and ranges length {len(range)} incompatible")
+
         # Get the larger number of supplied values
         num_repeats = max(len(range), len(bins))
         # Tile the smaller one until it has the length of the larger one
         range = range * (num_repeats // len(range))
         bins = bins * (num_repeats // len(bins))
-        
+
         # Put the values in the list of parameters to run over
-        self._range_bins_list = [ {"range": range[i], "bins": bins[i]} for i in np.arange(num_repeats)]
+        self._range_bins_list = [
+            {"range": range[i], "bins": bins[i]} for i in np.arange(num_repeats)]
 
         # CURRENTLY NOT USED: see comment at start of __init__
         # if not isinstance(bin_size, list):
@@ -590,15 +712,14 @@ class PairHistsBatchPlotter(HistogramBatchPlotter):
         # if len(bin_size) != 1 and len(bin_size) != len(bins):
         #     raise ValueError(f"Bins length {len(bins)} and bin sizes length {len(bin_size)} incompatible")
 
-
         # Additional plotting parameters
         self._plot_kwargs = kwargs
 
-
         # Naming
-        self.image_save_base = "paired_" + prop_name.replace(" ", "_") + unique_save_id + "_hist"
+        self.image_save_base = "paired_" + \
+            prop_name.replace(" ", "_") + unique_save_id + "_hist"
         # self.units = units
-        self.plot_x_label = prop_name.title() + "/" + units # self.units
+        self.plot_x_label = prop_name.title() + "/" + units  # self.units
 
         # Internal namse for the plots
         if self.includes_stacked:
@@ -623,18 +744,19 @@ class PairHistsBatchPlotter(HistogramBatchPlotter):
         weights : ak.Array, optional
         Weightings of `data` points.
         """
-        if self.includes_stacked: # Need to keep track of the raw weights if producing a stacked plot
+        if self.includes_stacked:  # Need to keep track of the raw weights if producing a stacked plot
             raw_weights = weights
         if weights is None:
-            weights = {2:None, 1:None, 0:None}
+            weights = {2: None, 1: None, 0: None}
         else:
-            weights = {2:ak.ravel(weights[sig_count == 2]), 1:ak.ravel(weights[sig_count == 1]), 0:ak.ravel(weights[sig_count == 0])}
-        
+            weights = {2: ak.ravel(weights[sig_count == 2]), 1: ak.ravel(
+                weights[sig_count == 1]), 0: ak.ravel(weights[sig_count == 0])}
+
         # For some reason, we need to convert the akward array to numpy, or numpy will complain
         #   "to_rectilinear argument must be iterable" when we try to use a tuple for the range...
         # Define this ahead of time since it can be used by both stacked and normal histograms
         two_signal = ak.ravel(data[sig_count == 2]).to_numpy()
-    
+
         for index, params in enumerate(self._range_bins_list):
             if self.includes_stacked:
                 if raw_weights is not None:
@@ -643,16 +765,22 @@ class PairHistsBatchPlotter(HistogramBatchPlotter):
                 else:
                     all_weights = None
                     no_bkg_weights = None
-                
-                super().add_batch(two_signal                               , hist_name=self._stacked_names[0] + f"_ind_{index}", weights=weights[2]     , **params)
-                super().add_batch(ak.ravel(data[sig_count != 0]).to_numpy(), hist_name=self._stacked_names[1] + f"_ind_{index}", weights=no_bkg_weights , **params)
-                super().add_batch(ak.ravel(data).to_numpy()                , hist_name=self._stacked_names[2] + f"_ind_{index}", weights=all_weights    , **params)
-            
+
+                super().add_batch(two_signal,
+                                  hist_name=self._stacked_names[0] + f"_ind_{index}", weights=weights[2], **params)
+                super().add_batch(ak.ravel(data[sig_count != 0]).to_numpy(
+                ), hist_name=self._stacked_names[1] + f"_ind_{index}", weights=no_bkg_weights, **params)
+                super().add_batch(ak.ravel(data).to_numpy(),
+                                  hist_name=self._stacked_names[2] + f"_ind_{index}", weights=all_weights, **params)
+
             # Only need to do this once, since the changes between logs etc. are cosmetic
-            super().add_batch(ak.ravel(data[sig_count == 0]).to_numpy(), hist_name=self._standard_names[0] + f"_ind_{index}", weights=weights[0], **params)
-            super().add_batch(ak.ravel(data[sig_count == 1]).to_numpy(), hist_name=self._standard_names[1] + f"_ind_{index}", weights=weights[1], **params)
-            super().add_batch(two_signal                               , hist_name=self._standard_names[2] + f"_ind_{index}", weights=weights[2], **params)
-        
+            super().add_batch(ak.ravel(data[sig_count == 0]).to_numpy(
+            ), hist_name=self._standard_names[0] + f"_ind_{index}", weights=weights[0], **params)
+            super().add_batch(ak.ravel(data[sig_count == 1]).to_numpy(
+            ), hist_name=self._standard_names[1] + f"_ind_{index}", weights=weights[1], **params)
+            super().add_batch(two_signal,
+                              hist_name=self._standard_names[2] + f"_ind_{index}", weights=weights[2], **params)
+
         return
 
     def make_figures(self):
@@ -668,7 +796,7 @@ class PairHistsBatchPlotter(HistogramBatchPlotter):
                 save_path_end = f"_{curr_range[0]}-{curr_range[1]}"
             else:
                 save_path_end = f"<{curr_range}"
-            
+
             # CURRENTLY NOT USED: we don't enforce each signal count to have the same bin widths.
             # To use this, need to get the bin sizes from self.bins[hist_name][1] - self.bins[hist_name][0]
             # if bin_size is None:
@@ -689,8 +817,10 @@ class PairHistsBatchPlotter(HistogramBatchPlotter):
                         range=curr_range,
                         **self._plot_kwargs
                     )
-                self._stacked_config.format_axis(stack_axes[0], xlabel=self.plot_x_label, ylabel="Count")
-                self._stacked_config.end_plot(save_path = self.image_save_base + save_path_end + "_stacked.png")
+                self._stacked_config.format_axis(
+                    stack_axes[0], xlabel=self.plot_x_label, ylabel="Count")
+                self._stacked_config.end_plot(
+                    save_path=self.image_save_base + save_path_end + "_stacked.png")
 
             for plot_type in self._plot_types.keys():
                 ylabel = "Density" if "norm" in plot_type else "Count"
@@ -706,17 +836,19 @@ class PairHistsBatchPlotter(HistogramBatchPlotter):
                         range=curr_range,
                         **self._plot_kwargs
                     )
-                self._plot_types[plot_type].format_axis(axes[0], xlabel=self.plot_x_label, ylabel=ylabel)
-                self._plot_types[plot_type].end_plot(save_path = self.image_save_base + save_path_end + "_" + plot_type + ".png")
-        
+                self._plot_types[plot_type].format_axis(
+                    axes[0], xlabel=self.plot_x_label, ylabel=ylabel)
+                self._plot_types[plot_type].end_plot(
+                    save_path=self.image_save_base + save_path_end + "_" + plot_type + ".png")
+
         return
-    
+
 
 def simple_sig_bkg_hist(
-        prop_name, units, property, sig_mask,
-        path="/users/wx21978/projects/pion-phys/plots/photon_pairs/", unique_save_id = "",
-        y_scaling = 'log', bin_size = None, bins = 100, range = None, **kwargs
-    ):
+    prop_name, units, property, sig_mask,
+    path="/users/wx21978/projects/pion-phys/plots/photon_pairs/", unique_save_id="",
+    y_scaling='log', bin_size=None, bins=100, range=None, **kwargs
+):
     """
     Produces a set of plots of the supplied `property` with configurable
     scalings, bins and ranges.
@@ -762,7 +894,7 @@ def simple_sig_bkg_hist(
         Default is 100.
     range : float, None, tuple, or list, optional
         Range over which to produce the plot. Default is None.
-    
+
     Other Parameters
     ----------------
     **kwargs
@@ -775,7 +907,7 @@ def simple_sig_bkg_hist(
         y_scaling = [y_scaling]
     if not isinstance(range, list):
         range = [range]
-    if not ( (isinstance(bins, list) or isinstance(bins, np.ndarray)) and len(bins) == len(range) ):
+    if not ((isinstance(bins, list) or isinstance(bins, np.ndarray)) and len(bins) == len(range)):
         # Strictly, this could be a problem on edge-case that we want to use one fewer bins than the
         # number of ranges  we investigate, but this is sufficiently likely that we can ignore that
         bins = [bins for _ in range]
@@ -787,12 +919,12 @@ def simple_sig_bkg_hist(
             elif isinstance(r, tuple):
                 path_end = f"{r[0]}-{r[1]}"
                 hist_range = r[1] - r[0]
-                kwargs.update({"range":r})
+                kwargs.update({"range": r})
             else:
                 path_end = f"<{r}"
                 hist_range = r
-                kwargs.update({"range":(0,r)})
-            
+                kwargs.update({"range": (0, r)})
+
             if not y_scale == "linear":
                 path_end += "_" + y_scale
 
@@ -801,25 +933,28 @@ def simple_sig_bkg_hist(
                     bin_size = f"{hist_range/bins[i]:.2g}" + units
                 else:
                     bin_size = f"{hist_range/len(bins[i]):.2g}" + units
-            plt.figure(figsize=(12,9))
-            plt.hist(ak.ravel(property[sig_mask]),                 bins=100, label="signal", **kwargs)
-            plt.hist(ak.ravel(property[np.logical_not(sig_mask)]), bins=100, label="background", **kwargs)
+            plt.figure(figsize=(12, 9))
+            plt.hist(ak.ravel(property[sig_mask]),
+                     bins=100, label="signal", **kwargs)
+            plt.hist(ak.ravel(property[np.logical_not(
+                sig_mask)]), bins=100, label="background", **kwargs)
             plt.legend()
             plt.yscale(y_scale)
             plt.xlabel(prop_name.title() + "/" + units)
             plt.ylabel("Count/" + bin_size)
-            plt.savefig(path + prop_name.replace(" ", "_") + unique_save_id + "_hist_" + path_end + ".png")
+            plt.savefig(path + prop_name.replace(" ", "_") +
+                        unique_save_id + "_hist_" + path_end + ".png")
             plt.close()
     return
-    
+
 
 def plot_pair_hists(
-        prop_name, units, property, sig_count,
-        path="/users/wx21978/projects/pion-phys/plots/photon_pairs/", unique_save_id = "",
-        inc_stacked=False, inc_norm=True, inc_log=True,
-        bin_size = None, bins = 100,
-        range=None, weights=None, **kwargs
-    ):
+    prop_name, units, property, sig_count,
+    path="/users/wx21978/projects/pion-phys/plots/photon_pairs/", unique_save_id="",
+    inc_stacked=False, inc_norm=True, inc_log=True,
+    bin_size=None, bins=100,
+    range=None, weights=None, **kwargs
+):
     """
     Produces a set of plots of the supplied `property` of a pair of PFOs with
     configurable types of plot, scalings, bins, ranges, weights.
@@ -876,40 +1011,42 @@ def plot_pair_hists(
     weights : ak.Array, np.ndarray, list, or None, optional
         Weights to used for each value of the `property`. Default
         is None.
-    
+
     Other Parameters
     ----------------
     **kwargs
         Any additional keyword arguments to be passed to the ``plt.hist``
         calls. The same arguments will be passed to all plots.
     """
-    
+
     if path[-1] != '/':
         path += '/'
 
     if not isinstance(range, list):
         range = [range]
-    if not ( (isinstance(bins, list) or isinstance(bins, np.ndarray)) and len(bins) == len(range) ):
+    if not ((isinstance(bins, list) or isinstance(bins, np.ndarray)) and len(bins) == len(range)):
         # Strictly, this could be a problem on edge-case that we want to use one fewer bins than the
         # number of ranges  we investigate, but this is sufficiently likely that we can ignore that
         bins = [bins] * len(range)
 
     # There is definitely a better way to do this...
     if not isinstance(weights, list):
-        if inc_stacked: # Need to keep track of the raw weights if producing a stacked plot
+        if inc_stacked:  # Need to keep track of the raw weights if producing a stacked plot
             raw_weights = [weights] * len(range)
         if weights is None:
-            weights = [{2:None, 1:None, 0:None}] * len(range)
+            weights = [{2: None, 1: None, 0: None}] * len(range)
         else:
-            weights = [{2:ak.ravel(weights[sig_count == 2]), 1:ak.ravel(weights[sig_count == 1]), 0:ak.ravel(weights[sig_count == 0])}] * len(range)
+            weights = [{2: ak.ravel(weights[sig_count == 2]), 1:ak.ravel(
+                weights[sig_count == 1]), 0:ak.ravel(weights[sig_count == 0])}] * len(range)
     else:
-        if inc_stacked: # Need to keep track of the raw weights if producing a stacked plot
+        if inc_stacked:  # Need to keep track of the raw weights if producing a stacked plot
             raw_weights = weights
         for i in np.arange(len(weights)):
             if weights[i] is None:
-                weights[i] = {2:None, 1:None, 0:None}
+                weights[i] = {2: None, 1: None, 0: None}
             else:
-                weights[i] = {2:ak.ravel(weights[i][sig_count == 2]), 1:ak.ravel(weights[i][sig_count == 1]), 0:ak.ravel(weights[i][sig_count == 0])}
+                weights[i] = {2: ak.ravel(weights[i][sig_count == 2]), 1: ak.ravel(
+                    weights[i][sig_count == 1]), 0: ak.ravel(weights[i][sig_count == 0])}
 
     sig_0 = ak.ravel(property[sig_count == 0])
     sig_1 = ak.ravel(property[sig_count == 1])
@@ -922,12 +1059,12 @@ def plot_pair_hists(
         elif isinstance(r, tuple):
             path_end = unique_save_id + f"_hist_{r[0]}-{r[1]}"
             hist_range = r[1] - r[0]
-            kwargs.update({"range":r})
+            kwargs.update({"range": r})
         else:
             path_end = unique_save_id + f"_hist<{r}"
             hist_range = r
-            kwargs.update({"range":(0,r)})
-        
+            kwargs.update({"range": (0, r)})
+
         if bin_size is None:
             if isinstance(bins[i], int):
                 bin_size = f"{hist_range/bins[i]:.2g}" + units
@@ -939,72 +1076,92 @@ def plot_pair_hists(
             if raw_weights[i] is not None:
                 all_weights = ak.ravel(raw_weights[i])
                 no_bkg_weights = ak.ravel(raw_weights[i][sig_count != 0])
-            else: 
+            else:
                 all_weights = None
                 no_bkg_weights = None
-            
-            plt.figure(figsize=(12,9))
-            plt.hist(ak.ravel(property),                 label="0 signal", bins = bins[i], weights=all_weights,    color="C2", **kwargs)
-            plt.hist(ak.ravel(property[sig_count != 0]), label="1 signal", bins = bins[i], weights=no_bkg_weights, color="C1", **kwargs)
-            plt.hist(sig_2,                              label="2 signal", bins = bins[i], weights=weights[i][2],  color="C0", **kwargs)
+
+            plt.figure(figsize=(12, 9))
+            plt.hist(ak.ravel(property),                 label="0 signal",
+                     bins=bins[i], weights=all_weights,    color="C2", **kwargs)
+            plt.hist(ak.ravel(property[sig_count != 0]), label="1 signal",
+                     bins=bins[i], weights=no_bkg_weights, color="C1", **kwargs)
+            plt.hist(sig_2,                              label="2 signal",
+                     bins=bins[i], weights=weights[i][2],  color="C0", **kwargs)
             plt.legend()
             plt.xlabel(prop_name.title() + "/" + units)
             plt.ylabel("Count/" + bin_size)
-            plt.savefig(path + "paired_" + prop_name.replace(" ", "_") + path_end + "_stacked.png")
+            plt.savefig(path + "paired_" + prop_name.replace(" ",
+                        "_") + path_end + "_stacked.png")
             plt.close()
 
-        plt.figure(figsize=(12,9))
-        plt.hist(sig_2, histtype='step', label="2 signal", bins = bins[i], weights=weights[i][2], **kwargs)
-        plt.hist(sig_1, histtype='step', label="1 signal", bins = bins[i], weights=weights[i][1], **kwargs)
-        plt.hist(sig_0, histtype='step', label="0 signal", bins = bins[i], weights=weights[i][0], **kwargs)
+        plt.figure(figsize=(12, 9))
+        plt.hist(sig_2, histtype='step', label="2 signal",
+                 bins=bins[i], weights=weights[i][2], **kwargs)
+        plt.hist(sig_1, histtype='step', label="1 signal",
+                 bins=bins[i], weights=weights[i][1], **kwargs)
+        plt.hist(sig_0, histtype='step', label="0 signal",
+                 bins=bins[i], weights=weights[i][0], **kwargs)
         plt.legend()
         plt.xlabel(prop_name.title() + "/" + units)
         plt.ylabel("Count/" + bin_size)
-        plt.savefig(path + "paired_" + prop_name.replace(" ", "_") + path_end + ".png")
+        plt.savefig(path + "paired_" +
+                    prop_name.replace(" ", "_") + path_end + ".png")
         plt.close()
 
         if inc_log:
-            plt.figure(figsize=(12,9))
-            plt.hist(sig_2, histtype='step', label="2 signal", bins = bins[i], weights=weights[i][2], **kwargs)
-            plt.hist(sig_1, histtype='step', label="1 signal", bins = bins[i], weights=weights[i][1], **kwargs)
-            plt.hist(sig_0, histtype='step', label="0 signal", bins = bins[i], weights=weights[i][0], **kwargs)
+            plt.figure(figsize=(12, 9))
+            plt.hist(sig_2, histtype='step', label="2 signal",
+                     bins=bins[i], weights=weights[i][2], **kwargs)
+            plt.hist(sig_1, histtype='step', label="1 signal",
+                     bins=bins[i], weights=weights[i][1], **kwargs)
+            plt.hist(sig_0, histtype='step', label="0 signal",
+                     bins=bins[i], weights=weights[i][0], **kwargs)
             plt.legend()
             plt.yscale('log')
             plt.xlabel(prop_name.title() + "/" + units)
             plt.ylabel("Count/" + bin_size)
-            plt.savefig(path + "paired_" + prop_name.replace(" ", "_") + path_end + "_log.png")
+            plt.savefig(path + "paired_" + prop_name.replace(" ",
+                        "_") + path_end + "_log.png")
             plt.close()
 
         if inc_norm:
-            plt.figure(figsize=(12,9))
-            plt.hist(sig_2, histtype='step', density=True, label="2 signal", bins = bins[i], weights=weights[i][2], **kwargs)
-            plt.hist(sig_1, histtype='step', density=True, label="1 signal", bins = bins[i], weights=weights[i][1], **kwargs)
-            plt.hist(sig_0, histtype='step', density=True, label="0 signal", bins = bins[i], weights=weights[i][0], **kwargs)
+            plt.figure(figsize=(12, 9))
+            plt.hist(sig_2, histtype='step', density=True, label="2 signal",
+                     bins=bins[i], weights=weights[i][2], **kwargs)
+            plt.hist(sig_1, histtype='step', density=True, label="1 signal",
+                     bins=bins[i], weights=weights[i][1], **kwargs)
+            plt.hist(sig_0, histtype='step', density=True, label="0 signal",
+                     bins=bins[i], weights=weights[i][0], **kwargs)
             plt.legend()
             plt.xlabel(prop_name.title() + "/" + units)
             plt.ylabel("Density/" + bin_size)
-            plt.savefig(path + "paired_" + prop_name.replace(" ", "_") + path_end + "_norm.png")
+            plt.savefig(path + "paired_" + prop_name.replace(" ",
+                        "_") + path_end + "_norm.png")
             plt.close()
 
         if inc_log and inc_norm:
-            plt.figure(figsize=(12,9))
-            plt.hist(sig_2, histtype='step', density=True, label="2 signal", bins = bins[i], weights=weights[i][2], **kwargs)
-            plt.hist(sig_1, histtype='step', density=True, label="1 signal", bins = bins[i], weights=weights[i][1], **kwargs)
-            plt.hist(sig_0, histtype='step', density=True, label="0 signal", bins = bins[i], weights=weights[i][0], **kwargs)
+            plt.figure(figsize=(12, 9))
+            plt.hist(sig_2, histtype='step', density=True, label="2 signal",
+                     bins=bins[i], weights=weights[i][2], **kwargs)
+            plt.hist(sig_1, histtype='step', density=True, label="1 signal",
+                     bins=bins[i], weights=weights[i][1], **kwargs)
+            plt.hist(sig_0, histtype='step', density=True, label="0 signal",
+                     bins=bins[i], weights=weights[i][0], **kwargs)
             plt.legend()
             plt.yscale('log')
             plt.xlabel(prop_name.title() + "/" + units)
             plt.ylabel("Density/" + bin_size)
-            plt.savefig(path + "paired_" + prop_name.replace(" ", "_") + path_end + "_norm_log.png")
+            plt.savefig(path + "paired_" + prop_name.replace(" ",
+                        "_") + path_end + "_norm_log.png")
             plt.close()
     return
 
 
 def plot_rank_hist(
-        prop_name, ranking,
-        path="/users/wx21978/projects/pion-phys/plots/photon_pairs/", unique_save_id = "",
-        y_scaling = 'log', bins = None, **kwargs
-    ):
+    prop_name, ranking,
+    path="/users/wx21978/projects/pion-phys/plots/photon_pairs/", unique_save_id="",
+    y_scaling='log', bins=None, **kwargs
+):
     """
     Produces a plot displaying a set of ranks (positions) as a histogram.
 
@@ -1034,7 +1191,7 @@ def plot_rank_hist(
     bins : int, np.ndarray, or None, optional
         Number of bins if ``int``, or bin edges if ``ndarray``.
         Gives one bin per ranking if None. Default is None.
-    
+
     Other Parameters
     ----------------
     **kwargs
@@ -1048,27 +1205,28 @@ def plot_rank_hist(
     if not isinstance(y_scaling, list):
         y_scaling = [y_scaling]
     if bins is None:
-        bins = int(np.max(ranking) -1)
+        bins = int(np.max(ranking) - 1)
 
     for y_scale in y_scaling:
-        plt.figure(figsize=(12,9))
+        plt.figure(figsize=(12, 9))
         plt.hist(ranking, label="signal", bins=bins,  **kwargs)
         plt.legend()
         plt.yscale(y_scale)
         plt.xlabel(prop_name.title() + " ranking")
         plt.ylabel("Count")
-        plt.savefig(path + "ranking_" + prop_name.replace(" ", "_") + unique_save_id + ".png")
+        plt.savefig(path + "ranking_" + prop_name.replace(" ",
+                    "_") + unique_save_id + ".png")
         plt.close()
     return
 
 
 def make_truth_comparison_plots(
-        events, photon_indicies,
-        valid_events=None,
-        prop_label=None, inc_log=True,
-        path="/users/wx21978/projects/pion-phys/plots/photon_pairs/truth_method_comparisions/",
-        **kwargs
-    ):
+    events, photon_indicies,
+    valid_events=None,
+    prop_label=None, inc_log=True,
+    path="/users/wx21978/projects/pion-phys/plots/photon_pairs/truth_method_comparisions/",
+    **kwargs
+):
     """
     Produces a set of plots displaying the errors of a set of PFOs with respect to the truth
     PFO they are representing. Errors in energy for the leading (highest energy) and sub-
@@ -1097,7 +1255,7 @@ def make_truth_comparison_plots(
     path : str, optional
         Directory in which to save the final plots. Default is
         '/users/wx21978/projects/pion-phys/plots/photon_pairs/truth_method_comparisions/'.
-    
+
     Other Parameters
     ----------------
     **kwargs
@@ -1106,7 +1264,7 @@ def make_truth_comparison_plots(
     """
     if path[-1] != '/':
         path += '/'
-    
+
     # If we don't specify valid events, assume all events are OK, so convert valid events into a
     #   slice which selects all events
     if valid_events is None:
@@ -1123,17 +1281,19 @@ def make_truth_comparison_plots(
 
     # Warning - not sure this has been tested without photon_indicies as a dictionary...
     if not isinstance(photon_indicies, dict):
-        photon_indicies = {prop_label:photon_indicies}
-        
-    
-    fig_e_i, energy_i_axis    = plt.subplots(figsize=(16,12), layout="tight")
-    fig_e_ii, energy_ii_axis  = plt.subplots(figsize=(16,12), layout="tight")
-    fig_dirs, directions_axis = plt.subplots(figsize=(16,12), layout="tight")
-    
+        photon_indicies = {prop_label: photon_indicies}
+
+    fig_e_i, energy_i_axis = plt.subplots(figsize=(16, 12), layout="tight")
+    fig_e_ii, energy_ii_axis = plt.subplots(figsize=(16, 12), layout="tight")
+    fig_dirs, directions_axis = plt.subplots(figsize=(16, 12), layout="tight")
+
     if inc_log:
-        fig_e_i_log, energy_i_axis_log    = plt.subplots(figsize=(16,12), layout="tight")
-        fig_e_ii_log, energy_ii_axis_log  = plt.subplots(figsize=(16,12), layout="tight")
-        fig_dirs_log, directions_axis_log = plt.subplots(figsize=(16,12), layout="tight")
+        fig_e_i_log, energy_i_axis_log = plt.subplots(
+            figsize=(16, 12), layout="tight")
+        fig_e_ii_log, energy_ii_axis_log = plt.subplots(
+            figsize=(16, 12), layout="tight")
+        fig_dirs_log, directions_axis_log = plt.subplots(
+            figsize=(16, 12), layout="tight")
 
     for i, prop in enumerate(list(photon_indicies.keys())):
         if isinstance(prop, str):
@@ -1143,9 +1303,11 @@ def make_truth_comparison_plots(
             y1_label = None
             y2_label = None
 
-        photon_i_indicies  = EventHandling.np_to_ak_indicies(photon_indicies[prop][:,0][valid_events])
-        photon_ii_indicies = EventHandling.np_to_ak_indicies(photon_indicies[prop][:,1][valid_events])
-        
+        photon_i_indicies = EventHandling.np_to_ak_indicies(
+            photon_indicies[prop][:, 0][valid_events])
+        photon_ii_indicies = EventHandling.np_to_ak_indicies(
+            photon_indicies[prop][:, 1][valid_events])
+
         # This might contain some useful stuff for moving to trueParticle informatio, rather than trueParticleBT
         # err_true_photon_i = np.zeros(np.sum(valid_events))
         # photon_i_ids = events.trueParticlesBT.number[valid_events][photon_i_indicies]
@@ -1154,32 +1316,43 @@ def make_truth_comparison_plots(
         # for j in range(np.sum(valid_events)):
         #     true_ids = events.trueParticles.number[index[j]].to_numpy()
         #     true_energy = events.trueParticles.energy[index[j]].to_numpy()
-            
+
         #     true_energy_i = true_energy[true_ids == photon_i_ids[j]]
         #     # true_energy_ii = true_energy[true_ids == pfo_truth_ids[photon_ii_indicies]]
         #     err_true_photon_i[j] = (reco_energy_full[j] / true_energy_i )[0] -1
 
+        err_energy_photon_i = (
+            reco_energies[photon_i_indicies] / true_energies[photon_i_indicies]) - 1
+        err_energy_photon_ii = (
+            reco_energies[photon_ii_indicies] / true_energies[photon_ii_indicies]) - 1
 
-        err_energy_photon_i  = (reco_energies[photon_i_indicies ] / true_energies[photon_i_indicies ]) -1
-        err_energy_photon_ii = (reco_energies[photon_ii_indicies] / true_energies[photon_ii_indicies]) -1
-    
-        err_direction_photon_i  = vector.dot(reco_dirs[photon_i_indicies ], true_dirs[photon_i_indicies ])
-        err_direction_photon_ii = vector.dot(reco_dirs[photon_ii_indicies], true_dirs[photon_ii_indicies])
+        err_direction_photon_i = vector.dot(
+            reco_dirs[photon_i_indicies], true_dirs[photon_i_indicies])
+        err_direction_photon_ii = vector.dot(
+            reco_dirs[photon_ii_indicies], true_dirs[photon_ii_indicies])
 
         # Linear
-        energy_i_axis.hist( err_energy_photon_i,  label=y1_label, histtype="step", bins=100**kwargs)
-        energy_ii_axis.hist(err_energy_photon_ii, label=y2_label, histtype="step", bins=100**kwargs)
+        energy_i_axis.hist(err_energy_photon_i,  label=y1_label,
+                           histtype="step", bins=100**kwargs)
+        energy_ii_axis.hist(err_energy_photon_ii, label=y2_label,
+                            histtype="step", bins=100**kwargs)
 
-        directions_axis.hist(err_direction_photon_i,  label=y1_label, histtype="step", bins=80, color=f"C{i}"**kwargs)
-        directions_axis.hist(err_direction_photon_ii, label=y2_label, histtype="step", bins=80, color=f"C{i}", ls="--"**kwargs)
+        directions_axis.hist(err_direction_photon_i,  label=y1_label,
+                             histtype="step", bins=80, color=f"C{i}"**kwargs)
+        directions_axis.hist(err_direction_photon_ii, label=y2_label,
+                             histtype="step", bins=80, color=f"C{i}", ls="--"**kwargs)
 
         if inc_log:
             # Log
-            energy_i_axis_log.hist( err_energy_photon_i,  label=y1_label, histtype="step", bins=100**kwargs)
-            energy_ii_axis_log.hist(err_energy_photon_ii, label=y2_label, histtype="step", bins=100**kwargs)
+            energy_i_axis_log.hist(
+                err_energy_photon_i,  label=y1_label, histtype="step", bins=100**kwargs)
+            energy_ii_axis_log.hist(
+                err_energy_photon_ii, label=y2_label, histtype="step", bins=100**kwargs)
 
-            directions_axis_log.hist(err_direction_photon_i,  label=y1_label, histtype="step", bins=50, color=f"C{i}"**kwargs)
-            directions_axis_log.hist(err_direction_photon_ii, label=y2_label, histtype="step", bins=50, color=f"C{i}", ls="--"**kwargs)
+            directions_axis_log.hist(
+                err_direction_photon_i,  label=y1_label, histtype="step", bins=50, color=f"C{i}"**kwargs)
+            directions_axis_log.hist(err_direction_photon_ii, label=y2_label,
+                                     histtype="step", bins=50, color=f"C{i}", ls="--"**kwargs)
 
     # Linear
     energy_i_axis.set_xlabel("Fractional energy error")
