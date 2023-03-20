@@ -1,36 +1,21 @@
 #!/usr/bin/env python
 
 # Imports
-from python.analysis import Master, pfoProperties
+from python.analysis.PFOSelection import get_mother_pdgs
+from python.analysis import (Master, PFOSelection,
+                             BeamParticleSelection, EventHandling)
 import time
+import warnings
 import awkward as ak
 import numpy as np
 import pandas as pd
-import sys
-sys.path.insert(1, '/users/wx21978/projects/pion-phys/pi0-analysis/analysis/')
-
-# Functions
-
-# This is a memory management tool, currently not really necessary
 
 
-def del_prop(obj, property_name):
-    """
-    Deletes a properties from the supplied `RecoPaticleData` type
-    object.
-
-    Requires the `obj` to have a property
-    ``_RecoPaticleData__{property_name}``.
-
-    Parameters
-    ----------
-    obj : RecoPaticleData
-        Object from which to remove the property.
-    property_name : str
-        Property to be deleted (should match the name of the property).
-    """
-    del(obj.__dict__["_RecoPaticleData__" + property_name])
-    return
+#######################################################################
+#######################################################################
+##########                  EVENT SELECTION                  ##########
+#######################################################################
+#######################################################################
 
 
 def apply_function(
@@ -40,8 +25,9 @@ def apply_function(
         events: Master.Data,
         *args,
         timed=True,
+        ts=None,
         **kwargs):
-    if timed:
+    if timed and (ts is None):
         ts = time.time()
     result = func(events, *args, **kwargs)
     if timed:
@@ -62,26 +48,8 @@ def apply_filter(events: Master.Data, filter, truth_filter=False):
     return events.Filter([filter], filter_true)
 
 
-def get_0_or_1_pi0(events: Master.Data):
-    # Copying the BeamMCFitler here to allow multiple valid numbers
-    empty = ak.num(events.trueParticles.number) > 0
-    events.Filter([empty], [empty])
-
-    # * only look at events with 0 or 1 primary pi0s
-    pi0 = events.trueParticles.PrimaryPi0Mask
-    single_primary_pi0 = np.logical_or(
-        ak.num(pi0[pi0]) == 0, ak.num(pi0[pi0]) == 1)
-    events.Filter([single_primary_pi0], [single_primary_pi0])
-
-    # * remove true particles which aren't primaries
-    primary_pi0 = events.trueParticles.PrimaryPi0Mask
-    # this is fine so long as we only care about pi0->gamma gamma
-    primary_daughter = events.trueParticles.truePhotonMask
-    primaries = np.logical_or(primary_pi0, primary_daughter)
-    return events.Filter([], [primaries])
-
-
 def filter_beam_slice(events: Master.Data):
+    # TODO vectorise
     slice_mask = [[]] * ak.num(events.recoParticles.beam_number, axis=0)
     for i in range(ak.num(slice_mask, axis=0)):
         slices = events.recoParticles.sliceID[i]
@@ -93,43 +61,20 @@ def filter_beam_slice(events: Master.Data):
     return events.Filter([slice_mask], [])
 
 
-def filter_impact_and_distance(
-        events: Master.Data,
-        distance_bounds_cm=None,
-        max_impact_cm=None):
-    if (distance_bounds_cm is None) and (max_impact_cm is None):
-        return None
-    mask = [[]] * ak.num(events.recoParticles.beam_number, axis=0)
-    for i in range(ak.num(mask, axis=0)):
-        starts = events.recoParticles.startPos[i]
-        beam_vertex = events.recoParticles.beamVertex[i]
-        distances = pfoProperties.get_separation(starts, beam_vertex)
-        if distance_bounds_cm is not None:
-            distance_mask = np.logical_and(distances > distance_bounds_cm[0],
-                                           distances < distance_bounds_cm[1])
-        if max_impact_cm is not None:
-            directions = events.recoParticles.direction[i]
-            impact_mask = pfoProperties.get_impact_parameter(
-                directions,
-                starts,
-                beam_vertex) < max_impact_cm
-        mask[i] = np.logical_and(distance_mask, impact_mask)
-    mask = ak.Array(mask)
-    return events.Filter([mask], [])
-
-
 def load_and_cut_data(
-        path, batch_size=-1,
-        batch_start=-1,
-        pion_count='one',
-        two_photon=True,
-        cnn_cut=0.36,
+        path,
+        batch_size=-1, batch_start=-1,
+        beam_selection=True,
         valid_momenta=True,
-        beam_slice_cut=True,
-        n_hits_cut=0,
-        distance_bounds_cm=None,
-        max_impact_cm=None,
-        print_summary=True):
+        n_hits_cut=80,
+        cnn_cut=0.5,
+        distance_bounds_cm=(3., 90.),
+        max_impact_cm=20.,
+        beam_slice_cut=False,
+        truth_pi0_count=None,
+        truth_pi_charged_count=None,
+        print_summary=True,
+        catch_warnings=True) -> Master.Data:
     """
     Loads the ntuple file from `path` and performs the initial cuts,
     returning the result as a `Data` instance.
@@ -150,15 +95,6 @@ def load_and_cut_data(
     batch_start : int, optional
         Sets which event to start reading from. Default is -1
         (first event).
-    pion_count : str {zero, one, both, all}, optional
-        Sets the number of pi0s created by the beam that must be
-        present in the final events. `'zero'` selects only events
-        with no pi0s, `'one'` selects only 1 pi0, `'both'` selects
-        events with 0 or 1 pi0s, and `'all'` removes the cut.
-        Default is `'one'`.
-    two_photon : bool, optional
-        If true, only accepts events with 1 pi0 which decays to two
-        photons. Default is True.
     cnn_cut : bool, optional
         Whether to perform a cut on PFOs requiring the CNN score to
         be > 0.36. Default is True.
@@ -176,7 +112,6 @@ def load_and_cut_data(
     """
     # TODO add wther truth or MC to names (+ generally better names etc.)
     events = Master.Data(path,
-                         includeBackTrackedMC=True,
                          nEvents=batch_size,
                          start=batch_start)
     # Apply cuts:
@@ -189,71 +124,64 @@ def load_and_cut_data(
               ak.count(events.trueParticlesBT.pdg),
               ak.count(events.trueParticlesBT.pdg)/ak.count(events.eventNum),
               ak.count(events.eventNum), 100])
-    if pion_count == 'one':
+    with warnings.catch_warnings():
+        if catch_warnings:
+            warnings.simplefilter("ignore", category=UserWarning)
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+        # Beam selection
+        if beam_selection:
+            ts = time.time()
+            beam_selection_mask = BeamParticleSelection.CreateDefaultSelection(
+                events, verbose=True, return_table=False)
+            apply_function(
+                "Beam selection (reco)", n,
+                apply_filter, events, beam_selection_mask, truth_filter=True,
+                ts=ts)
+        # Only accept PFOs with a well reconstructed momentum/direction
+        if valid_momenta:
+            ts = time.time()
+            valid_filter = PFOSelection.GoodShowerSelection(events)
+            apply_function(
+                "Valid momenta (reco)", n,
+                apply_filter, events, valid_filter,
+                ts=ts)
+            del valid_filter
+        # Only particles from the beam slice. Cheat this?
+        if beam_slice_cut:
+            apply_function(
+                "Beam slice (reco)", n,
+                filter_beam_slice, events)
+        # Candidate photon PFO selection
+        if ((not np.isclose(n_hits_cut, 0)) or (not np.isclose(cnn_cut, 0)) or
+                (distance_bounds_cm is not None) or (max_impact_cm is not None)):
+            ts = time.time()
+            beam_selection_mask = PFOSelection.InitialPi0PhotonSelection(
+                events,
+                cnn_cut=cnn_cut,
+                n_hits_cut=n_hits_cut,
+                distance_bounds_cm=distance_bounds_cm,
+                max_impact_cm=max_impact_cm,
+                verbose=True,
+                return_table=False)
+            apply_function(
+                "Beam selection (reco)", n,
+                apply_filter, events, beam_selection_mask, truth_filter=True,
+                ts=ts)
+        # Require >= 2 PFOs. ETA ~90s:
+        ts = time.time()
+        at_least_2_pfos = Master.NPFPMask(events, -1)
         apply_function(
-            "single pi0", n,
-            Master.BeamMCFilter, events, returnCopy=False)
-    elif pion_count == 'zero':
-        apply_function(
-            "no pi0s", n,
-            Master.BeamMCFilter, events, n_pi0=0, returnCopy=False)
-    elif pion_count == 'both':
-        apply_function(
-            "0 or 1 pi0s", n,
-            get_0_or_1_pi0, events)
-    if two_photon:
-        apply_function(
-            "diphoton decays", n,
-            apply_filter,
-            events, Master.Pi0TwoBodyDecayMask(events), truth_filter=True)
-    # Require a beam particle to exist. ETA ~15s:
-    apply_function(
-        "beam", n,
-        lambda e: e.ApplyBeamFilter(), events)
-    # Require pi+ beam. ETA ~10s
-    # Check with reco pi+? (Currently cheating the pi+ selection)
-    beam_pdg_codes = events.trueParticlesBT.pdg[
-        events.recoParticles.beam_number == events.recoParticles.number]
-    pi_beam_filter = ak.all(beam_pdg_codes == 211, -1)
-    apply_function(
-        "pi+ beam", n,
-        apply_filter, events, pi_beam_filter, truth_filter=True)
-    del beam_pdg_codes
-    del pi_beam_filter
-    # Only look at PFOs with > n_hits hits. ETA ~30s:
-    if not np.isclose(n_hits_cut, 0):
-        apply_function(
-            "nHits", n,
-            apply_filter, events, events.recoParticles.nHits > n_hits_cut)
-    # Cheat this?
-    if beam_slice_cut:
-        apply_function(
-            "Beam slice", n,
-            filter_beam_slice, events)
-    if not np.isclose(cnn_cut, 0):
-        apply_function(
-            f"CNNScore > {cnn_cut}", n,
-            apply_filter, events, events.recoParticles.cnnScore > cnn_cut)
-    if valid_momenta:
-        reco_momenta = events.recoParticles.momentum
-        mom_filter = np.logical_and(
-            np.logical_and(reco_momenta.x != -999., reco_momenta.y != -999.),
-            reco_momenta.z != -999.)
-        apply_function(
-            "Valid momenta", n,
-            apply_filter, events, mom_filter)
-        del reco_momenta
-        del mom_filter
-    if (distance_bounds_cm is not None) or (max_impact_cm is not None):
-        apply_function(
-            "distance/impact", n,
-            filter_impact_and_distance, events,
-            distance_bounds_cm, max_impact_cm
-        )
-    # Require >= 2 PFOs. ETA ~90s:
-    apply_function(
-        "PFOs >= 2", n,
-        apply_filter, events, Master.NPFPMask(events, -1), truth_filter=True)
+            "PFOs >= 2 (reco)", n,
+            apply_filter, events, at_least_2_pfos,
+            truth_filter=True, ts=ts)
+        if (truth_pi0_count is not None) or (truth_pi_charged_count is not None):
+            ts = time.time()
+            truth_filter = generate_truth_tags(
+                truth_pi0_count, truth_pi_charged_count)
+            apply_function(
+                f"{truth_pi0_count}pi0, {truth_pi_charged_count}pi+ (truth)", n,
+                apply_filter, events, truth_filter,
+                truth_filter=True, ts=ts)
     # Previously had plots of the distribution of PFOs per event after
     # each cut. Example code:
     # plt.figure(figsize=(8,6))
@@ -265,4 +193,278 @@ def load_and_cut_data(
     # plt.close()
     if print_summary:
         print(pd.DataFrame(n[1:], columns=n[0]).to_string())
+    return events
+
+
+#######################################################################
+#######################################################################
+##########             EVENT TYPE TRUTH TAGGING              ##########
+#######################################################################
+#######################################################################
+
+
+def count_diphoton_decays(events, beam_daughters=True):
+    """
+    Returns the number of truth pi0 particles which decay to yy in each
+    event in `events`.
+
+    pi0 -> yy
+
+    Parameters
+    ----------
+    events : Data
+        Events in which to count pi0 occurances.
+    beam_daughters : boolean, optional
+        Whether to only accept a pi0 if it is a daughter of the beam
+        particle. Default is True.
+
+    Returns
+    -------
+    counts : ak.Array
+        Array containing the number of occurances of pi0 -> yy for each
+        event.
+    """
+    def get_two_count_pi0s(pi0s):
+        pions, counts = np.unique(pi0s, return_counts=True)
+        return pions[counts == 2]
+
+    if beam_daughters:
+        beam_daughter_filter = events.trueParticles.mother == 1
+    else:
+        beam_daughter_filter = True
+    beam_cadidate_pi0s = events.trueParticles.number[np.logical_and(
+        beam_daughter_filter,
+        events.trueParticles.pdg == 111)]
+    try:
+        pi0_daughters = events.trueParticles.mother_pdg == 111
+    except:
+        pi0_daughters = get_mother_pdgs(events) == 111
+    pi0_photon_mothers = events.trueParticles.mother[np.logical_and(
+        events.trueParticles.pdg == 22,
+        pi0_daughters)]
+    counts = ak.Array(map(
+        lambda pi0s: len(
+            np.intersect1d(
+                pi0s['beam'],
+                get_two_count_pi0s(pi0s['photon']))),
+        ak.zip(
+            {"beam": beam_cadidate_pi0s, "photon": pi0_photon_mothers},
+            depth_limit=1)))
+    return counts
+
+
+def count_non_beam_charged_pi(events, beam_daughters=True):
+    """
+    Returns the number of truth pi+ particles event in `events`.
+
+    Parameters
+    ----------
+    events : Data
+        Events in which to count pi+ occurances.
+    beam_daughters : boolean, optional
+        Whether to only accept a pi+ if it is a daughter of the beam
+        particle. Default is True.
+
+    Returns
+    -------
+    counts : ak.Array
+        Array containing the number of pi+ particles for each event.
+    """
+    if beam_daughters:
+        daughter_truth = events.trueParticles.mother == 1
+    else:
+        daughter_truth = ak.ones_like(events.trueParticles.mother, dtype=bool)
+    non_beam_pi_mask = np.logical_and(
+        daughter_truth,
+        np.logical_and(events.trueParticles.pdg == 211,
+                       events.trueParticles.number != 1))
+    return ak.sum(non_beam_pi_mask, axis=-1)
+
+
+def _generate_selection(cut):
+    if isinstance(cut, tuple):
+        if len(cut) == 1:
+            return lambda count: count >= cut[0]
+        elif len(cut) == 2:
+            return lambda count: np.logical_and(
+                count >= min(cut), count <= max(cut))
+        else:
+            raise ValueError(f"Cut tuple {cut} must contain 1 or 2 values.")
+    elif cut is None:
+        return lambda count: True
+    else:
+        return lambda count: count == cut
+
+
+def generate_truth_tags(events, n_pi0, n_pi_charged, beam_daighters=True):
+    """
+    Generates a True/False tag for each event in `events` indicating
+    whether they pass the truth level requirements of `n_pi0` and
+    `n_pi_charged`.
+
+    `n_pi0` and `n_pi_charged` may be integers, tuples, or None. If
+    integer, only the specified number of occurances is selected. If a
+    tuple of length 1, any events with occurances greater than or equal
+    to the value in the tupled are selected. If a tuple of two values, 
+    he number of occurances must be equal to or between the values in
+    the tuple. If None, no cut will be applied.
+
+    Parameters
+    ----------
+    events : Data
+        Events to be tagged.
+    n_pi0 : None, int, or tuple
+        Required number of pi0s that decay into two photons in an event
+        for the event to pass the tag.
+    n_pi_charged : None, int, or tuple
+        Required number of non-beam pi+ particles in an event for the
+        event to pass the tag.
+    beam_daughters : boolean, optional
+        Whether to only accept a PFO if it is a daughter of the beam
+        particle. Default is True.
+
+    Returns
+    -------
+    tag : ak.Array
+        Array matching the number of events in `events` containing a
+        boolean of whether each event is selected by the tag.
+    """
+    pi0_cut: function = _generate_selection(n_pi0)
+    pi_charged_cut: function = _generate_selection(n_pi_charged)
+    pi0_count = count_diphoton_decays(events)
+    pi_charged_count = count_non_beam_charged_pi(events)
+    return np.logical_and(pi0_cut(pi0_count),
+                          pi_charged_cut(pi_charged_count))
+
+
+#######################################################################
+#######################################################################
+##########                    DEPRECATED                     ##########
+#######################################################################
+#######################################################################
+
+
+def candidate_photon_pfo_selection(
+        events: Master.Data,
+        cut_record=[[], [1, 1, 1, 1, 1]],
+        n_hits_cut=80,
+        cnn_cut=0.5,
+        distance_bounds_cm=(3, 90),
+        max_impact_cm=20.):
+    """
+    DEPRECATED
+    Use PFOSelection.InitialPi0PhotonSelection to generate a filter and
+    then apply the generated filter.
+
+    Finds a set of PFOs passing cuts on number of hits, cnn score,
+    distance from beam vertex and impact parameter with beam vertex.
+
+    Parameters
+    ----------
+    events : Master.Data
+        Events containing the PFOs to cut on.
+    cut record : list, optional
+        Record of the number of events cut. Default list avoids errors
+        if not used.
+    n_hits_cut : int, optional
+        Minimum number of hits required by a PFO to pass the cut.
+        Deafult is 80.
+    cnn_cut : float, optional
+        Minimum CNN score required by a PFO to pass the cut. Default is
+        0.5.
+    distance_bounds_cm : tuple, optional
+        (lower bound, upper bound) for allowed distances between the
+        PFO start point the beam vertex. Default is (3., 90.).
+    max_impact_cm : float, optional
+        Maximum allowed impact parameter with teh beam particle for a
+        PFO to pass the cut. Default is 20.
+    """
+    warnings.warn("deprecated", DeprecationWarning)
+    if max_impact_cm is not None:
+        ts = time.time()
+        impacts = PFOSelection.find_beam_impact_parameters(events)
+        impact_mask = impacts < max_impact_cm
+        apply_function(
+            "Beam impact (reco)", cut_record,
+            apply_filter, events, impact_mask,
+            ts=ts)
+    if distance_bounds_cm is not None:
+        ts = time.time()
+        distances = PFOSelection.find_beam_separations(events)
+        distance_mask = np.logical_and(distances > distance_bounds_cm[0],
+                                       distances < distance_bounds_cm[1])
+        apply_function(
+            "Distance from beam (reco)", cut_record,
+            apply_filter, events, distance_mask,
+            ts=ts)
+    if not np.isclose(n_hits_cut, 0):
+        ts = time.time()
+        apply_function(
+            f"nHits > {n_hits_cut} (reco)", cut_record,
+            apply_filter, events, events.recoParticles.nHits > n_hits_cut,
+            ts=ts)
+    if not np.isclose(cnn_cut, 0):
+        ts = time.time()
+        apply_function(
+            f"EMScore > {cnn_cut} (reco)", cut_record,
+            apply_filter, events, events.recoParticles.emScore > cnn_cut,
+            ts=ts)
+    return events
+
+
+def get_0_or_1_pi0(events: Master.Data):
+    warnings.warn("deprecated", DeprecationWarning)
+    # Copying the BeamMCFitler here to allow multiple valid numbers
+    empty = ak.num(events.trueParticles.number) > 0
+    events.Filter([empty], [empty])
+
+    # * only look at events with 0 or 1 primary pi0s
+    pi0 = events.trueParticles.PrimaryPi0Mask
+    single_primary_pi0 = np.logical_or(
+        ak.num(pi0[pi0]) == 0, ak.num(pi0[pi0]) == 1)
+    events.Filter([single_primary_pi0], [single_primary_pi0])
+
+    # * remove true particles which aren't primaries
+    primary_pi0 = events.trueParticles.PrimaryPi0Mask
+    # this is fine so long as we only care about pi0->gamma gamma
+    primary_daughter = events.trueParticles.truePhotonMask
+    primaries = np.logical_or(primary_pi0, primary_daughter)
+    return events.Filter([], [primaries])
+
+
+def old_event_selection_truth(events, pion_count, two_photon, cut_record):
+    warnings.warn("deprecated", DeprecationWarning)
+    if pion_count == 'one':
+        apply_function(
+            "single pi0", cut_record,
+            Master.BeamMCFilter, events, returnCopy=False)
+    elif pion_count == 'zero':
+        apply_function(
+            "no pi0s", cut_record,
+            Master.BeamMCFilter, events, n_pi0=0, returnCopy=False)
+    elif pion_count == 'both':
+        apply_function(
+            "0 or 1 pi0s", cut_record,
+            get_0_or_1_pi0, events)
+    if two_photon:
+        apply_function(
+            "diphoton decays", cut_record,
+            apply_filter,
+            events, Master.Pi0TwoBodyDecayMask(events), truth_filter=True)
+    # Require a beam particle to exist. ETA ~15s:
+    apply_function(
+        "beam", cut_record,
+        lambda e: e.ApplyBeamFilter(), events)
+    # Require pi+ beam. ETA ~10s
+    # Check with reco pi+? (Currently cheating the pi+ selection)
+    ts = time.time()
+    beam_pdg_codes = events.trueParticlesBT.pdg[
+        events.recoParticles.beam_number == events.recoParticles.number]
+    pi_beam_filter = ak.all(beam_pdg_codes == 211, -1)
+    apply_function(
+        "pi+ beam", cut_record,
+        apply_filter, events, pi_beam_filter,
+        truth_filter=True, ts=ts)
+    del beam_pdg_codes
+    del pi_beam_filter
     return events

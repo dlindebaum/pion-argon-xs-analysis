@@ -582,7 +582,7 @@ def ROOTWorkFlow():
         else:
             raise Exception("Don't understand the merge type")
 
-        pairs = Master.ShowerPairs(events, start_showers_all)
+        pairs = Master.ShowerPairs(events, shower_pair_mask=start_showers_all)
         pairs.SaveToCSV(args.outDir + args.csv)
         # p = Master.CalculateQuantities(s, True)
         # PairQuantitiesToCSV(p)
