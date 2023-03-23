@@ -1,9 +1,7 @@
 #!/usr/bin/env python
 
 # Imports
-from python.analysis.PFOSelection import get_mother_pdgs
-from python.analysis import (Master, PFOSelection,
-                             BeamParticleSelection, EventHandling)
+from python.analysis import Master, PFOSelection, BeamParticleSelection
 import time
 import warnings
 import awkward as ak
@@ -238,7 +236,7 @@ def count_diphoton_decays(events, beam_daughters=True):
     try:
         pi0_daughters = events.trueParticles.mother_pdg == 111
     except:
-        pi0_daughters = get_mother_pdgs(events) == 111
+        pi0_daughters = PFOSelection.get_mother_pdgs(events) == 111
     pi0_photon_mothers = events.trueParticles.mother[np.logical_and(
         events.trueParticles.pdg == 22,
         pi0_daughters)]
