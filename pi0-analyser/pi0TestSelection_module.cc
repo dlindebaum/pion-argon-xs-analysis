@@ -697,6 +697,11 @@ void protoana::pi0TestSelection::CollectG4Particle(const int &pdg=0, const int s
       {
         continue;
       }
+      // skip the particle if it has already been added
+      if(std::find(G4ParticleNum.begin(), G4ParticleNum.end(), part->first) != G4ParticleNum.end())
+      {
+        continue;
+      }
       // finish once we process the last particle
       if(stop > -1 && part->first > stop)
       {
@@ -704,6 +709,7 @@ void protoana::pi0TestSelection::CollectG4Particle(const int &pdg=0, const int s
         break;
       }
       const simb::MCParticle* pPart = part->second;
+
       // run if a specific particle is needed
       if(pdg == pPart->PdgCode())
       {
@@ -712,6 +718,11 @@ void protoana::pi0TestSelection::CollectG4Particle(const int &pdg=0, const int s
         if(fDebug) std::cout << "number of Daughters: " << pPart->NumberDaughters() << std::endl;
         for (int i = pPart->FirstDaughter(); i < pPart->FirstDaughter() + pPart->NumberDaughters(); i++)
         {
+          // skip the particle if it has already been added
+          if(std::find(G4ParticleNum.begin(), G4ParticleNum.end(), plist.find(i)->first) != G4ParticleNum.end())
+          {
+            continue;
+          }
           const simb::MCParticle* daughter = plist.find(i)->second;
           FillG4NTuple(plist, daughter, i);
         }
