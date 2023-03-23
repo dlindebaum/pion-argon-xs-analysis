@@ -1,71 +1,16 @@
 #!/usr/bin/env python
 
 # Imports
-from python.analysis import vector
-import time
-import awkward as ak
+from python.analysis import vector, PFOSelection
 import numpy as np
-import sys
-sys.path.insert(1, '/users/wx21978/projects/pion-phys/pi0-analysis/analysis/')
+import awkward as ak
+
 
 #######################################################################
 #######################################################################
-##########                EVENT MANIPULATION                 ##########
+##########                  PAIR SELECTION                   ##########
 #######################################################################
 #######################################################################
-
-
-def get_mother_pdgs(events):
-    """
-    Loops through each event (warning: slow) and creates a reco-type
-    array of PDG codes of mother particle. E.g. a photon from a pi0
-    will be assigned a PDG code 111.
-
-    Mother particle is defined as the mother of the truth particle
-    which the PFO was backtracked to.
-
-    Beam particle is hard-coded to have a PDG code of 211.
-
-    Anything which cannot have a mother PDG code assigned is given 0.
-
-    Future warning: Mother PDG codes are planned to be added into the
-    ntuple data making this function redundant.
-
-    Parameters
-    ----------
-    events : Data
-        Set of events to produce the mother PDG codes for.
-
-    Returns
-    -------
-    mother_pdgs : ak.Array
-        PDG code of the mother of the truth particle that backtrackd to
-        the PFO.
-    """
-    # This loops through every event and assigned the pdg code of the
-    # mother. Assigns 211 (pi+) to daughters of the beam, and 0 to
-    # everything which is not found
-    mother_ids = events.trueParticles.mother
-    truth_ids = events.trueParticles.number
-    truth_pdgs = events.trueParticles.pdg
-    mother_pdgs = mother_ids.to_list()
-    ts = time.time()
-    for i in range(ak.num(mother_ids, axis=0)):
-        true_pdg_lookup = {
-            truth_ids[i][d]:
-            truth_pdgs[i][d] for d in range(ak.count(truth_ids[i]))}
-        true_pdg_lookup.update({0: 0, 1: 211})
-        # I have no idea why the hell I did this
-        # # Presumably the beam particle gets a strange pdg code??
-        for j in range(ak.count(mother_ids[i])):
-            try:
-                mother_pdgs[i][j] = true_pdg_lookup[mother_ids[i][j]]
-            except:
-                mother_pdgs[i][j] = 0
-
-    print(f"Mother PDG codes found in {time.time()  - ts}s")
-    mother_pdgs = ak.Array(mother_pdgs)
-    return mother_pdgs
 
 
 def get_MC_truth_beam_mask(event_mothers, event_ids, beam_id=1):
@@ -111,189 +56,6 @@ def get_MC_truth_beam_mask(event_mothers, event_ids, beam_id=1):
         # no new PFOs are found
         new_ids = event_ids[mask]
     return [e in beam_ids for e in event_ids]
-
-
-def count_diphoton_decays(events):
-    """
-    Returns the number of truth pi0 particles which decay to yy in each
-    event in `events`.
-
-    pi0 -> yy
-
-    Parameters
-    ----------
-    events : Data
-        Events in which to count pi0 occurances.
-
-    Returns
-    -------
-    counts : ak.Array
-        Array containing the number of occurances of pi0 -> yy for each
-        event.
-    """
-    pi0_photon_mothers = events.trueParticles.mother[np.logical_and(
-        events.trueParticles.pdg == 22,
-        # events.trueParticles.motherPdg == 111)]
-        get_mother_pdgs(events) == 111)]
-    counts = ak.Array(map(
-        lambda pi0s: np.sum(np.unique(pi0s, return_counts=True)[1] == 2),
-        pi0_photon_mothers))
-    return counts
-
-
-def count_non_beam_charged_pi(events):
-    """
-    Returns the number of truth pi+ particles event in `events`.
-
-    Parameters
-    ----------
-    events : Data
-        Events in which to count pi+ occurances.
-
-    Returns
-    -------
-    counts : ak.Array
-        Array containing the number of pi+ particles for each event.
-    """
-    non_beam_pi_mask = np.logical_and(
-        events.trueParticles.pdg == 211,
-        events.trueParticles.number != 1)
-    return ak.sum(non_beam_pi_mask, axis=-1)
-
-
-def _generate_selection(cut):
-    if isinstance(cut, tuple):
-        if len(cut) == 1:
-            return lambda count: count >= cut[0]
-        elif len(cut) == 2:
-            return lambda count: np.logical_and(
-                count >= min(cut), count <= max(cut))
-        else:
-            raise ValueError(f"Cut tuple {cut} must contain 1 or 2 values.")
-    elif cut is None:
-        return lambda count: True
-    else:
-        return lambda count: count == cut
-
-
-def generate_truth_tags(events, n_pi0, n_pi_charged):
-    """
-    Generates a True/False tag for each event in `events` indicating
-    whether they pass the truth level requirements of `n_pi0` and
-    `n_pi_charged`.
-
-    `n_pi0` and `n_pi_charged` may be integers, tuples, or None. If
-    integer, only the specified number of occurances is selected. If a
-    tuple of length 1, any events with occurances greater than or equal
-    to the value in the tupled are selected. If a tuple of two values, 
-    he number of occurances must be equal to or between the values in
-    the tuple. If None, no cut will be applied.
-
-    Parameters
-    ----------
-    events : Data
-        Events to be tagged.
-    n_pi0 : None, int, or tuple
-        Required number of pi0s that decay into two photons in an event
-        for the event to pass the tag.
-    n_pi_charged : None, int, or tuple
-        Required number of non-beam pi+ particles in an event for the
-        event to pass the tag.
-
-    Returns
-    -------
-    tag : ak.Array
-        Array matching the number of events in `events` containing a
-        boolean of whether each event is selected by the tag.
-    """
-    pi0_cut: function = _generate_selection(n_pi0)
-    pi_charged_cut: function = _generate_selection(n_pi_charged)
-    pi0_count = count_diphoton_decays(events)
-    pi_charged_count = count_non_beam_charged_pi(events)
-    return np.logical_and(pi0_cut(pi0_count),
-                          pi_charged_cut(pi_charged_count))
-
-
-def np_to_ak_indicies(indicies):
-    """
-    Takes a numpy array of indicies for slicing and converts them to a
-    format compatible with awkward arrays which selected PFOs in an
-    event base on the index, rather than events themselves based on the
-    index.
-
-    Parameters
-    ----------
-    indicies: np.ndarray
-        Array of indicies for conversion.
-
-    Returns
-    -------
-    ak_indicies : ak.Array
-        Array of indicies which selected PFOs when slicing an awkward
-        array.
-    """
-    # 1. Expands the dimensions to ensure you hit one index per event
-    # 2. Convert to list - this is necessary to ensure the final
-    #    awkward array has variable size. Without variable size arrays,
-    #    it tries to gather the event of the index, not the PFO at the
-    #    index in the event.
-    # 3. Convert to awkward array
-    return ak.Array(np.expand_dims(indicies, 1).tolist())
-
-
-#######################################################################
-#######################################################################
-##########                   EVENT PAIRING                   ##########
-#######################################################################
-#######################################################################
-
-
-def truth_pfos_in_two_photon_decay(events, sort=True):
-    """
-    Returns the truth IDs of the two photons in each event which come
-    from pi0 -> yy decay. Requires a mask on `events` to select only
-    events which contain exactly pion which decays into two photons.
-
-    The IDs are return as a (num_events, 2) numpy nparray.
-
-    The optional `sort` argument will cause the photons to be sorted by
-    energy, such that index 0 of each event contains the leading
-    (higher energy) photon.
-
-    Parameters
-    ----------
-    events : Data
-        Set of events in which to look for photons.
-    sort : bool, optional
-        Defines whether the photon IDs are sorted by energy or not.
-        Default is True.
-
-    Returns
-    -------
-    photon_ids : np.ndarray
-        Array containing the truth IDs of the two photons created by
-        pion decay in each event.
-    """
-    num_events = ak.num(events.trueParticlesBT.mother, axis=0)
-
-    # This is only valid for the 1 pi0 in event, 2 photon decay cut
-    photon_ids = np.zeros((num_events, 2))
-
-    for i in range(num_events):
-        truth_mothers = events.trueParticles.mother[i]
-        truth_ids = events.trueParticles.number[i]
-        truth_pdgs = events.trueParticles.pdg[i]
-        truth_energy = events.trueParticles.energy[i].to_numpy()
-
-        beam_mask = get_MC_truth_beam_mask(
-            truth_mothers, truth_ids, beam_id=1)
-
-        beam_photons_ids = truth_ids[(truth_pdgs == 22) & beam_mask]
-
-        sorted_energies = np.flip(np.argsort(
-            truth_energy[(truth_pdgs == 22) & beam_mask])) if sort else [0, 1]
-        photon_ids[i, :] = beam_photons_ids[sorted_energies]
-    return photon_ids
 
 
 def get_best_pairs(
@@ -757,3 +519,97 @@ def pair_photon_counts(events, pair_coords, mother_pdgs):
     second_sigs = np.multiply(second_sigs, 1)
     # Add the results
     return first_sigs + second_sigs
+
+
+#######################################################################
+#######################################################################
+##########                  PAIR PROPERTIES                  ##########
+#######################################################################
+#######################################################################
+
+
+def paired_beam_impact(shower_pairs, type="reco"):
+    """
+    Finds the impact parameter between the beam and the combined
+    momentum traced back from the midpoint of the closest approach of
+    each pair in `pair_coords` for each event in `events`.
+
+    Parameters
+    ----------
+    shower_pairs : ShowerPairs
+        Set of pairs to .
+    type : {reco, true, cheated}
+        Inidicies to construct the pairs.
+
+    Returns
+    -------
+    impact_parameter : ak.Array
+        Impact parameter between the beam vertex and each pairs.
+    """
+    if type == "reco":
+        data = shower_pairs.events.recoParticles
+        beam_vertex = data.beam_endPos
+        dir = shower_pairs.reco_direction
+    else:
+        data = shower_pairs.events.trueParticlesBT
+        beam_vertex = data.trueBeamVertex
+        if type == "cheated":
+            dir = shower_pairs.cheated_direction
+        else:
+            dir = shower_pairs.true_direction
+    shared_vertex = shower_pairs.SharedVertex(
+        data.momentum[shower_pairs.leading],
+        data.momentum[shower_pairs.subleading],
+        data.startPos[shower_pairs.leading],
+        data.startPos[shower_pairs.subleading])
+    # Impact parameter between the PFOs and corresponding beam vertex
+    return PFOSelection.get_impact_parameter(
+        dir, shared_vertex, beam_vertex)
+
+
+def truth_pfos_in_two_photon_decay(events, sort=True):
+    """
+    Returns the truth IDs of the two photons in each event which come
+    from pi0 -> yy decay. Requires a mask on `events` to select only
+    events which contain exactly pion which decays into two photons.
+
+    The IDs are return as a (num_events, 2) numpy nparray.
+
+    The optional `sort` argument will cause the photons to be sorted by
+    energy, such that index 0 of each event contains the leading
+    (higher energy) photon.
+
+    Parameters
+    ----------
+    events : Data
+        Set of events in which to look for photons.
+    sort : bool, optional
+        Defines whether the photon IDs are sorted by energy or not.
+        Default is True.
+
+    Returns
+    -------
+    photon_ids : np.ndarray
+        Array containing the truth IDs of the two photons created by
+        pion decay in each event.
+    """
+    num_events = ak.num(events.trueParticlesBT.mother, axis=0)
+
+    # This is only valid for the 1 pi0 in event, 2 photon decay cut
+    photon_ids = np.zeros((num_events, 2))
+
+    for i in range(num_events):
+        truth_mothers = events.trueParticles.mother[i]
+        truth_ids = events.trueParticles.number[i]
+        truth_pdgs = events.trueParticles.pdg[i]
+        truth_energy = events.trueParticles.energy[i].to_numpy()
+
+        beam_mask = get_MC_truth_beam_mask(
+            truth_mothers, truth_ids, beam_id=1)
+
+        beam_photons_ids = truth_ids[(truth_pdgs == 22) & beam_mask]
+
+        sorted_energies = np.flip(np.argsort(
+            truth_energy[(truth_pdgs == 22) & beam_mask])) if sort else [0, 1]
+        photon_ids[i, :] = beam_photons_ids[sorted_energies]
+    return photon_ids
