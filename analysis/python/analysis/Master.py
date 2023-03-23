@@ -1254,9 +1254,19 @@ class TrueParticleDataBT(ParticleData):
         return getattr(self, f"_{type(self).__name__}__energy")
 
     @property
+    def energyByHits_uncorrected(self) -> ak.Array:
+        self.LoadData("energyByHits_uncorrected", "reco_daughter_PFP_true_byHits_EnergyByHits")
+        return getattr(self, f"_{type(self).__name__}__energyByHits_uncorrected")
+
+    @property
+    def energyByHits_correction(self) -> ak.Array:
+        self.LoadData("energyByHits_correction", "reco_daughter_PFP_true_byHits_EnergyByHits_correction")
+        return getattr(self, f"_{type(self).__name__}__energyByHits_correction")
+
+    @property
     def energyByHits(self) -> ak.Array:
-        self.LoadData("energyByHits", "reco_daughter_PFP_true_byHits_EnergyByHits")
-        return getattr(self, f"_{type(self).__name__}__energyByHits")
+        self.__energyByHits = self.energyByHits_uncorrected - self.energyByHits_correction
+        return self.__energyByHits
 
     @property
     def momentumByHits(self) -> ak.Record:
@@ -1665,7 +1675,7 @@ class ShowerPairs:
         Returns:
             pd.DataFrame: dataframe.
         """
-        #* search terms are based on the prefix (sace sensitive) of the property methods, when adding new quantities they should conform to this standard
+        #* search terms are based on the prefix (caae sensitive) of the property methods, when adding new quantities they should conform to this standard
         search_terms = ["reco", "true", "cheated", "error"]
         
         df = {}

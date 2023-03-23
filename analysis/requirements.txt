@@ -2,6 +2,7 @@ uproot
 awkward
 numpy
 pandas
+tables
 matplotlib
 rich
 tabulate
