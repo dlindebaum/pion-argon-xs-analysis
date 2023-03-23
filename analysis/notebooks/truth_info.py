@@ -27,6 +27,7 @@ def main():
             events.Filter([valid], [valid], False)
         if sampleType == "beam":
             events = Master.BeamMCFilter(events)
+            events.Filter([], [Master.Pi0TwoBodyDecayMask(events)])
 
     t = events.trueParticles.CalculatePairQuantities() # calculate truth info
 
