@@ -1626,7 +1626,7 @@ class ShowerPairs:
 
     """
 
-    def __init__(self, events: Data, pair_coords=None,
+    def __init__(self, events: Data, pair_coords = None,
                  shower_pair_mask: ak.Array = None):
         self.events = events
         if shower_pair_mask is not None:
@@ -1737,7 +1737,14 @@ class ShowerPairs:
         Returns:
             ak.Array: fractional error (%)
         """
-        return (reco / true) - 1
+        def f(r, t):
+            return (r / t) -1
+        if hasattr(reco, "x") and hasattr(true, "x"):
+            # vector like quantity
+            return vector.vector(f(reco.x, true.x), f(reco.y, true.y), f(reco.z, true.z))
+        else:
+            # scalar quantity
+            return f(reco, true)
 
     @staticmethod
     def Midpoints(x1, x2):
@@ -1861,6 +1868,12 @@ class ShowerPairs:
             self.events.recoParticles.momentum[self.leading])
 
     @property
+    def reco_pi0_mom_mag(self):
+        return vector.magnitude(ShowerPairs.Pi0Mom(
+            self.events.recoParticles.momentum[self.leading],
+            self.events.recoParticles.momentum[self.leading]))
+
+    @property
     def reco_direction(self):
         return vector.normalize(self.reco_pi0_mom)
 
@@ -1920,6 +1933,12 @@ class ShowerPairs:
             self.events.trueParticlesBT.momentum[self.subleading])
 
     @property
+    def true_pi0_mom_mag(self):
+        return vector.magnitude(ShowerPairs.Pi0Mom(
+            self.events.trueParticlesBT.momentum[self.leading],
+            self.events.trueParticlesBT.momentum[self.subleading]))
+
+    @property
     def true_direction(self):
         return vector.normalize(self.true_pi0_mom)
 
@@ -1970,6 +1989,12 @@ class ShowerPairs:
             self.events.trueParticlesBT.momentumByHits[self.subleading])
 
     @property
+    def cheated_pi0_mom_mag(self):
+        return vector.magnitude(ShowerPairs.Pi0Mom(
+            self.events.trueParticlesBT.momentumByHits[self.leading],
+            self.events.trueParticlesBT.momentumByHits[self.subleading]))
+
+    @property
     def cheated_direction(self):
         return vector.normalize(self.cheated_pi0_mom)
 
@@ -2007,6 +2032,10 @@ class ShowerPairs:
         return ShowerPairs.FractionalError(self.reco_pi0_mom, self.true_pi0_mom)
 
     @property
+    def error_pi0_mom_mag(self):
+        return ShowerPairs.FractionalError(self.reco_pi0_mom_mag, self.true_pi0_mom_mag)
+
+    @property
     def error_closest_approach(self):
         return ShowerPairs.FractionalError(self.reco_closest_approach,
                                            self.true_closest_approach)
@@ -2030,7 +2059,12 @@ class ShowerPairs:
             for k in vars(ShowerPairs):
                 if search in k:
                     print(k)
-                    df.update({k: ak.ravel(getattr(self, k))})
+                    q = getattr(self, k)
+                    if hasattr(q, "x"):
+                        # add individual vector components separately to the dataframe
+                        df.update({k + "_x" : ak.ravel(q.x), k + "_y" : ak.ravel(q.y), k + "_z" : ak.ravel(q.z)})
+                    else:
+                        df.update({k: ak.ravel(q)})
         df = pd.DataFrame(df)
 
         metadata = {
