@@ -23,7 +23,7 @@ def RecoShowerPairsDataFrame(events : Master.Data, start_showers : ak.Array, to_
     quantities.to_merge_dir = copy.recoParticles.direction
     quantities.to_merge_pos = copy.recoParticles.startPos
     pair_mask = shower_merging.ShowerMerging(copy, start_showers, quantities, -1)
-    pairs = Master.ShowerPairs(copy, np.logical_or(*pair_mask))
+    pairs = Master.ShowerPairs(copy, shower_pair_mask = np.logical_or(*pair_mask))
     return pairs.CalculateAll()
 
 
@@ -45,7 +45,7 @@ def main(args):
         start_showers, to_merge = shower_merging.SplitSampleReco(events)
 
 
-    unmerged_pairs = Master.ShowerPairs(events, np.logical_or(*start_showers))
+    unmerged_pairs = Master.ShowerPairs(events, shower_pair_mask = np.logical_or(*start_showers))
     u_df = unmerged_pairs.CalculateAll()
 
     r_df = RecoShowerPairsDataFrame(events, start_showers, to_merge)
@@ -54,7 +54,7 @@ def main(args):
     if args.beam_selection_type == "cheated":
         events.MergePFOCheat(0)
         pairs = events.trueParticlesBT.mother == ak.flatten(events.trueParticles.number[events.trueParticles.PrimaryPi0Mask])
-        cheated_pairs = Master.ShowerPairs(events, pairs)
+        cheated_pairs = Master.ShowerPairs(events, shower_pair_mask = pairs)
         c_df = cheated_pairs.CalculateAll()
         cheat_merge[0] = Filter(c_df, "reco")
         cheat_merge[1] = Filter(c_df, "error")

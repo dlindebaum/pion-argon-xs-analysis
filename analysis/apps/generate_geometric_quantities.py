@@ -55,7 +55,10 @@ if __name__ == "__main__":
         args.out += ".csv"
     else:
         args.out.split(".")[0] += ".csv"
-    
+
+    if args.outDir == "":
+        args.outDir = args.file.split("/")[-1].split(".")[0] + "/"
+
     if args.outDir != "" and args.outDir[-1] != "/":
         args.outDir += "/"
 

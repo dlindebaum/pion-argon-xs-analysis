@@ -208,9 +208,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Plot Shower pair quantities produced from ParticleData classes (in csv format)")
     parser.add_argument(dest = "files", nargs = "+", help = "csv file/s to open.")
     # parser.add_argument("-t", "--type", dest = "type", nargs = "+", type = str, choices = ["all", "reco", "true", "error"], help = "which type of data to plot")
-    parser.add_argument("-t", "--type", dest = "type", nargs = "+", type = str, help = "which type of data to plot, is a hdf5 key")
     parser.add_argument("-q", "--quantity", dest = "quantity", nargs = "+", type = str, choices = ["all", "mass", "angle", "lead_energy", "sub_energy", "pi0_mom"], help = "which quantitiy to plot")
     parser.add_argument("-p", "--plots", dest = "plots", nargs = "+", type = str, choices = ["all", "diff", "hist", "qq"], help = "what plots we want to make")
+    parser.add_argument("-t", "--type", dest = "type", nargs = "+", type = str, help = "which type of data to plot, is a hdf5 key")
 
     parser.add_argument("-c", "--control", dest = "control", type = str, default = None)
 

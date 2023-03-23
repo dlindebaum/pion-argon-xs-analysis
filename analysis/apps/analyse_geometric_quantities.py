@@ -74,8 +74,9 @@ def ShowerMergingCriteria(q : shower_merging.ShowerMergeQuantities, outDir : str
 
         o = [c[i] + m[i] for i in range(len(c))] # combine output
         o = pd.DataFrame(o, columns = q.selectionVariables + metric_labels)
-        if o["s"] > 0 and o["b"] > 0: # don't store cuts which exclude all PFOs 
-            o.to_csv(output_path, mode = "a", header = not os.path.exists(output_path))
+        # don't store cuts which exclude all signal PFOs
+        o = o[o["s"] > 0]
+        o.to_csv(output_path, mode = "a", header = not os.path.exists(output_path))
 
         counter += 1
         end = '\n' if counter == 0 else '\r'

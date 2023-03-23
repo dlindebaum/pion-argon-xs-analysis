@@ -103,6 +103,8 @@ def main(args):
     shower_merging.SetPlotStyle()
     events = Master.Data(args.file, nEvents = args.nEvents[0], start = args.nEvents[1])
 
+    if args.save: os.makedirs(args.out, exist_ok = True)
+
     #* apply either cheated or reco selection
     match args.pfo_selection_type:
         case "cheated":
