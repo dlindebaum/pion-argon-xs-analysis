@@ -634,19 +634,12 @@ def Selection(events : Master.Data, event_type : str, pfo_type : str) -> list[pd
         case _:
             raise Exception(f"event selection type {event_type} not understood.")
     events.Filter([mask], [mask])
-    
-    match pfo_type:
-        case "cheated":
-            mask, pfo_table = PFOSelection.GoodShowerSelection(events, True)
-        case "reco":
-            mask, pfo_table = PFOSelection.GoodShowerSelection(events, True)
-            # mask, pfo_table = PFOSelection.InitialPi0PhotonSelection(events, False, True)
-        case _:
-            raise Exception(f"event selection type {event_type} not understood.")
+
+    mask, pfo_table = PFOSelection.GoodShowerSelection(events, True)
     events.Filter([mask])
 
     if pfo_type == "reco":
-        mask, photon_candidate_table = PFOSelection.InitialPi0PhotonSelection(events, False, return_table = True)
+        mask, photon_candidate_table = PFOSelection.InitialPi0PhotonSelection(events, verbose = False, return_table = True)
         event_mask = ak.num(mask[mask]) == 2 # select events with 2 photon candidates only #TODO handle > 2 candidates
         events.Filter([event_mask], [event_mask])
 

@@ -5,20 +5,22 @@ Author: Shyam Bhuller
 
 Description: A script conatining boiler plate code for creating plots with matplotlib.
 """
-import matplotlib
-import matplotlib.pyplot as plt
-from matplotlib.ticker import (MultipleLocator, AutoMinorLocator)
-import warnings
 import copy as copy_lib
 import math
-import numpy as np
+import warnings
+
 import awkward as ak
+import matplotlib
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.ticker import AutoMinorLocator, MultipleLocator
 from scipy.integrate import quad
 from scipy.optimize import curve_fit
 from scipy.special import gamma
 from scipy.stats import iqr
-from python.analysis.SelectionTools import np_to_ak_indicies
+
 from python.analysis import vector
+from python.analysis.SelectionTools import np_to_ak_indicies
 
 
 class PlotConfig():
@@ -846,14 +848,14 @@ class PairHistsBatchPlotter(HistogramBatchPlotter):
         return
 
 
-def Save(name: str = "plot", directory: str = "", dpi=80):
+def Save(name: str = "plot", directory: str = "", dpi = 160):
     """ Saves the last created plot to file. Run after one the functions below.
 
     Args:
         name (str, optional): Name of plot. Defaults to "plot".
         directory (str, optional): directory to save plot in.
     """
-    plt.savefig(directory + name + ".png", dpi=dpi)
+    plt.savefig(directory + name + ".png", dpi = dpi)
     plt.close()
 
 
@@ -873,16 +875,13 @@ def Plot(x, y, xlabel: str = "", ylabel: str = "", title: str = "", label: str =
     plt.tight_layout()
 
 
-def PlotHist(data, bins=100, xlabel: str = "", title: str = "", label: str = "", alpha: int = 1, histtype: str = "bar", sf: int = 2, density: bool = False, x_scale: str = "linear", y_scale: str = "linear", newFigure: bool = True, annotation: str = None):
+def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None, alpha : int = 1, histtype : str = "bar", sf : int = 2, density : bool = False, x_scale : str = "linear", y_scale : str = "linear", newFigure : bool = True, annotation : str = None, stacked : bool = False, color = None):
     """ Plot 1D histograms.
-
     Returns:
         np.arrays : bin heights and edges
     """
-    if newFigure is True:
-        plt.figure()
-    height, edges, _ = plt.hist(
-        data, bins, label=label, alpha=alpha, density=density, histtype=histtype)
+    if newFigure is True: plt.figure()
+    height, edges, _ = plt.hist(data, bins, label = label, alpha = alpha, density = density, histtype = histtype, stacked = stacked, color = color)
     binWidth = round((edges[-1] - edges[0]) / len(edges), sf)
     # TODO: make ylabel a parameter
     if density == False:
@@ -894,8 +893,7 @@ def PlotHist(data, bins=100, xlabel: str = "", title: str = "", label: str = "",
     plt.xscale(x_scale)
     plt.yscale(y_scale)
     plt.title(title)
-    if label != "":
-        plt.legend()
+    if label is not None: plt.legend()
     if annotation is not None:
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
     plt.tight_layout()
@@ -1010,7 +1008,7 @@ def UniqueData(data):
     return unique_labels, counts
 
 
-def PlotBar(data, width: float = 0.4, xlabel: str = "", title: str = "", label: str = "", alpha: float = 1, newFigure: bool = True, annotation: str = None):
+def PlotBar(data, width: float = 0.4, xlabel: str = "", title: str = "", label: str = "", alpha: float = 1, newFigure: bool = True, annotation: str = None, bar_labels : bool = True):
     """ Plot a bar graph or unique items in data.
     """
     if newFigure is True:

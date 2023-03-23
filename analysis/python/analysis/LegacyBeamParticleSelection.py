@@ -104,4 +104,4 @@ def CreateLegacyBeamParticleSelection(events : Master.Data, verbose : bool = Tru
         HasBacktracked,
         BothPhotonsBacktracked,
     ]
-    return CombineSelections(events, selections, 0, verbose, True)
+    return CombineSelections(events, selections, 0, verbose = verbose, return_table = True)

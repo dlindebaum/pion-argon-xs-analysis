@@ -87,7 +87,7 @@ def BeamParticleIPCut(events, impact=20.) -> ak.Array:
 
 def InitialPi0PhotonSelection(
         events,
-        cnn_cut: float = 0.5,
+        em_cut: float = 0.5,
         n_hits_cut: int = 80,
         distance_bounds_cm: tuple = (3., 90.),
         max_impact_cm: float = 20.,
@@ -100,7 +100,7 @@ def InitialPi0PhotonSelection(
         BeamParticleIPCut
     ]
     arguments = [
-        {"score": cnn_cut},
+        {"score": em_cut},
         {"hits": n_hits_cut},
         {"lims": distance_bounds_cm},
         {"impact": max_impact_cm}

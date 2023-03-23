@@ -155,7 +155,7 @@ def load_and_cut_data(
             ts = time.time()
             beam_selection_mask = PFOSelection.InitialPi0PhotonSelection(
                 events,
-                cnn_cut=cnn_cut,
+                em_cut=cnn_cut,
                 n_hits_cut=n_hits_cut,
                 distance_bounds_cm=distance_bounds_cm,
                 max_impact_cm=max_impact_cm,

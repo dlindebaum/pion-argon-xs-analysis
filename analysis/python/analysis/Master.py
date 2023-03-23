@@ -17,7 +17,7 @@ import uproot
 from rich import print
 
 # custom modules
-from python.analysis import vector, PFOSelection
+from python.analysis import vector
 
 
 def timer(func):

@@ -11,6 +11,8 @@ import awkward as ak
 import numpy as np
 import pandas as pd
 
+from python.analysis.Master import Data
+
 
 def CountMask(m: ak.Array) -> tuple:
     """ Counts the total number of entries in a boolean mask,
@@ -42,7 +44,7 @@ def CountsWrapper(f):
     return wrapper
 
 
-def CombineSelections(events, selection: list, levels: int, args: list = None, verbose: bool = False, return_table: bool = False) -> ak.Array:
+def CombineSelections(events : Data, selection: list, levels: int, args: list = None, verbose: bool = False, return_table: bool = False) -> ak.Array:
     """ Combines multiple beam particle selections.
 
     Args:

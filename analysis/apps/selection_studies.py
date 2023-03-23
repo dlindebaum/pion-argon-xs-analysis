@@ -11,6 +11,7 @@ import os
 
 import awkward as ak
 import numpy as np
+from rich import print
 
 from python.analysis import Master, Plots, shower_merging
 

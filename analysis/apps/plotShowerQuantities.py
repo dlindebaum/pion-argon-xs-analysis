@@ -21,12 +21,12 @@ from python.analysis import Plots
 class info:
     """ Basically a dicitonary... I don't know why I wrote this
     """
-    def __init__(self, mass = None, angle = None, lead_energy = None, sub_energy = None, pi0_mom = None) -> None:
+    def __init__(self, mass = None, angle = None, lead_energy = None, sub_energy = None, pi0_mom_mag = None) -> None:
         self.mass = mass
         self.angle = angle
         self.lead_energy = lead_energy
         self.sub_energy = sub_energy
-        self.pi0_mom = pi0_mom
+        self.pi0_mom_mag = pi0_mom_mag
         pass
     def __getitem__(self, key : str):
         return getattr(self, key)
@@ -205,11 +205,15 @@ def main(args):
 
 
 if __name__ == "__main__":
+    
+    quantities = ["mass", "angle", "lead_energy", "sub_energy", "pi0_mom_mag"]
+    plots = ["diff", "hist", "qq"]
+
     parser = argparse.ArgumentParser(description = "Plot Shower pair quantities produced from ParticleData classes (in csv format)")
     parser.add_argument(dest = "files", nargs = "+", help = "csv file/s to open.")
     # parser.add_argument("-t", "--type", dest = "type", nargs = "+", type = str, choices = ["all", "reco", "true", "error"], help = "which type of data to plot")
-    parser.add_argument("-q", "--quantity", dest = "quantity", nargs = "+", type = str, choices = ["all", "mass", "angle", "lead_energy", "sub_energy", "pi0_mom"], help = "which quantitiy to plot")
-    parser.add_argument("-p", "--plots", dest = "plots", nargs = "+", type = str, choices = ["all", "diff", "hist", "qq"], help = "what plots we want to make")
+    parser.add_argument("-q", "--quantity", dest = "quantity", nargs = "+", type = str, choices = quantities + ["all"], help = "which quantitiy to plot")
+    parser.add_argument("-p", "--plots", dest = "plots", nargs = "+", type = str, choices = plots + ["all"], help = "what plots we want to make")
     parser.add_argument("-t", "--type", dest = "type", nargs = "+", type = str, help = "which type of data to plot, is a hdf5 key")
 
     parser.add_argument("-c", "--control", dest = "control", type = str, default = None)
@@ -227,20 +231,23 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     #* check and format arguements
-    CheckArguement(args.type, "specify the type of data to plot with '-t/--type'")
+    # CheckArguement(args.type, "specify the type of data to plot with '-t/--type'")
     CheckArguement(args.quantity, "specify the quantitiy to plot with '-q/--quantity'")
     CheckArguement(args.plots, "specify the type of plot to make '-p/--plots'")
 
     with pd.HDFStore(args.files[0]) as file: keys = file.keys()
 
-    for t in args.type:
-        if t not in keys:
-            raise KeyError(f"key '{t}' not found in {args.files}, list of possible keys are {keys}")
+    if args.type is None:
+        raise KeyError(f"list of possible keys are {keys}")
+    else:
+        for t in args.type:
+            if t not in keys:
+                raise KeyError(f"key '{t}' not found in {args.files}, list of possible keys are {keys}")
 
     if "all" in args.quantity:
-        args.quantity = ["mass", "angle", "lead_energy", "sub_energy", "pi0_mom"]
+        args.quantity = quantities
     if "all" in args.plots:
-        args.plots = ["diff", "hist", "qq"]
+        args.plots = plots
 
     if any(x in args.plots for x in ["qq", "diff"]):
         if len(args.files) == 1:
