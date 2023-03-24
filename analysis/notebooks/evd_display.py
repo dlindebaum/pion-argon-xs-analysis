@@ -51,7 +51,7 @@ def main():
         print(f"plotting : {n}")
         
         # data for table
-        nPFP = ak.count(events.recoParticles.nHits[n])
+        nPFP = ak.count(events.recoParticles.nHits_collection[n])
         nTrueParticle = ak.count(events.trueParticles.number[n])
         nTrack = ak.count(events.recoParticles.pandoraID[n][events.recoParticles.pandoraID[n] == 13])
         nShower = ak.count(events.recoParticles.pandoraID[n][events.recoParticles.pandoraID[n] == 11])

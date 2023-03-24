@@ -53,10 +53,10 @@ def PlotBackgroundPFO(display : EventDisplay, eventNum : int, background : ak.Ar
     if i == -1:
         for p in range(ak.num(background_points, 0)):
             display.PFO(background_points[p], marker = "x", colour = background_colours[p % len(background_colours)], startPoint = background_startPoints[p], pdg = background_pdg[p])
-            if plotIP: PlotImpactParameter(display, background_startPoints[p], events.recoParticles.beamVertex[i], background_direction[p])
+            if plotIP: PlotImpactParameter(display, background_startPoints[p], events.recoParticles.beam_endPos[i], background_direction[p])
     else:
         display.PFO(background_points[i], marker = "x", colour = background_colours[i % len(background_colours)], startPoint = background_startPoints[i], pdg = background_pdg[i])
-        if plotIP: PlotImpactParameter(display, background_startPoints[i], events.recoParticles.beamVertex[i], background_direction[i])
+        if plotIP: PlotImpactParameter(display, background_startPoints[i], events.recoParticles.beam_endPos[i], background_direction[i])
     return
 
 
@@ -77,11 +77,11 @@ def PlotSignalPFO(display : EventDisplay, eventNum : int, signal : ak.Array, poi
         print(f"Number of signal PFOs for start shower {start_shower}: {ak.num(signal_points, 0)}")
         for p in range(ak.num(signal_points, 0)):
             display.PFO(signal_points[p], marker = "x", colour = colours[p % len(colours)], startPoint = signal_startPoints[p], direction = signal_direction[p], pdg = signal_pdg[p])
-            if plotIP: PlotImpactParameter(display, signal_startPoints[p], events.recoParticles.beamVertex[i], signal_direction[p])
+            if plotIP: PlotImpactParameter(display, signal_startPoints[p], events.recoParticles.beam_endPos[i], signal_direction[p])
     else:
         display.PFO(signal_points[i], marker = "x", colour = colours[i % len(colours)], startPoint = signal_startPoints[i], direction = signal_direction[i], pdg = signal_pdg[p])
         if plotIP:
-            PlotImpactParameter(display, signal_startPoints[i], events.recoParticles.beamVertex[i], signal_direction[i])
+            PlotImpactParameter(display, signal_startPoints[i], events.recoParticles.beam_endPos[i], signal_direction[i])
 
 
 def RenderEventDisplay(n):
@@ -115,10 +115,10 @@ def RenderEventDisplay(n):
     beam_mask = events.recoParticles.number == events.recoParticles.beam_number
     points = events.recoParticles.spacePoints[beam_mask][n]
     pdg = events.trueParticlesBT.pdg[beam_mask][n]
-    display.PFO(points, marker="o", colour="black", startPoint = events.recoParticles.beamVertex[n], pdg=None)
+    display.PFO(points, marker="o", colour="black", startPoint = events.recoParticles.beam_endPos[n], pdg=None)
 
     #* Plot beam vertex
-    display.Point(events.recoParticles.beamVertex[n], marker="x", colour="red", pointSize=100)
+    display.Point(events.recoParticles.beam_endPos[n], marker="x", colour="red", pointSize=100)
 
     custom_lines = [matplotlib.lines.Line2D([0], [0], color="black", lw=2),
                     matplotlib.lines.Line2D([0], [0], color="green", lw=2),
@@ -144,9 +144,9 @@ def RenderEventDisplay(n):
     display.xz.text(0.01, 0.85, text, transform=display.xz.transAxes, fontsize=14, bbox=props)
 
     roi = SimpleNamespace(**{
-        "x": [events.recoParticles.beamVertex[n].x-100, events.recoParticles.beamVertex[n].x+100],
-        "y": [events.recoParticles.beamVertex[n].y-100, events.recoParticles.beamVertex[n].y+100],
-        "z": [events.recoParticles.beamVertex[n].z-100, events.recoParticles.beamVertex[n].z+100]
+        "x": [events.recoParticles.beam_endPos[n].x-100, events.recoParticles.beam_endPos[n].x+100],
+        "y": [events.recoParticles.beam_endPos[n].y-100, events.recoParticles.beam_endPos[n].y+100],
+        "z": [events.recoParticles.beam_endPos[n].z-100, events.recoParticles.beam_endPos[n].z+100]
     })
     display.DetectorBounds(roi.x, roi.y, roi.z)
 
@@ -164,7 +164,7 @@ def RenderEventDisplay(n):
 def main():
     global events, start_showers, to_merge, showBackground, showSignal, signal, background, q
     ##################################################################################################
-    events = Master.Data("work/ROOTFiles/Prod4a_6MeV_BeamSim_00_evd.root", True)
+    events = Master.Data("work/ROOTFiles/Prod4a_6MeV_BeamSim_00_evd.root")
 
     #* create hit space point arrays
     events.recoParticles.spacePoints = ak.zip({"x" : events.io.Get("reco_daughter_allShower_spacePointX"), 
