@@ -103,19 +103,6 @@ def angle(a : ak.Record, b : ak.Record) -> ak.Array:
     return np.arccos(dot(a, b) / (magnitude(a) * magnitude(b)))
 
 
-def dist(a : ak.Record, b : ak.Record):
-    """ Compute cartesian distance between two vectors.
-
-    Args:
-        a (ak.Record): a vector
-        b (ak.Record): another vector
-
-    Returns:
-        ak.Array: distance between a and b
-    """
-    return magnitude(ak.zip({"x": a.x - b.x, "y": a.y - b.y, "z": a.z - b.z}))
-
-
 def add(a : ak.Record, b : ak.Record):
     """ Compute vector addition of two vectors.
 
@@ -140,3 +127,16 @@ def sub(a : ak.Record, b : ak.Record):
         ak.Array: displacement between a and b
     """
     return ak.zip({"x": a.x - b.x, "y": a.y - b.y, "z": a.z - b.z})
+
+
+def dist(a : ak.Record, b : ak.Record):
+    """ Compute cartesian distance between two vectors.
+
+    Args:
+        a (ak.Record): a vector
+        b (ak.Record): another vector
+
+    Returns:
+        ak.Array: distance between a and b
+    """
+    return magnitude(sub(a, b))

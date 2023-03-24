@@ -9,19 +9,23 @@ BEGIN_PROLOG
 pi0_test_selection:
 {
    module_type:             "pi0TestSelection"
-   CalorimetryTag:          "pandoracalinoxyzt"
+   CalorimetryTag:          "pandoracalo"
    TrackerTag:              "pandoraTrack"
    ShowerTag:               "pandoraShower"
    HitTag:                  "hitpdune"
    PFParticleTag:           "pandora"
    GeneratorTag:            "generator"
+   CalorimetryTagSCE:       "pandoracalinoxyzt"
 
    SelectEvents: []
 
-   BeamlineUtils: @local::standard_protodunebeamlineutils
-   Pi0Only: true
+   BeamlineUtils:        @local::standard_protodunebeamlineutils
+   Pi0Only:    true
+   AnalyseFromBeam:   true
    CalibrationParsSCE: @local::CalorimetryParameters_SPProd4_MC_SCE
-   Debug: false
+
+   #CalibrationParsSCE: @local::CalorimetryParameters_SPProd2_MC_SCE
+   #CalibrationParsSCE: @local::CalorimetryParameters_SPProd2_MC_35ms
 
 }
 

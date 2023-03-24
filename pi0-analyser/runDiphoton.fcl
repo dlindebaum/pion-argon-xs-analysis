@@ -17,10 +17,11 @@ pi0_test_selection:
    HitTag:                  "hitpdune"
    PFParticleTag:           "pandora"
    GeneratorTag:            "generator"
+   CalorimetryTagSCE:       "pandoracalinoxyzt"
 
    SelectEvents: []
 
-   BeamlineUtils: @local::standard_protodunebeamlineutils
+   BeamlineUtils:        @local::standard_protodunebeamlineutils
    Pi0Only: true
    RetrieveSpacePoints: false
    # Retrieve G4 determines what truth information should be accessed has 4 options:
@@ -31,7 +32,9 @@ pi0_test_selection:
    RetrieveG4: 2
    AnalyseFromBeam: true
    CalibrationParsSCE: @local::CalorimetryParameters_SPProd4_MC_SCE
-   Debug : false
+
+   #CalibrationParsSCE: @local::CalorimetryParameters_SPProd2_MC_SCE
+   #CalibrationParsSCE: @local::CalorimetryParameters_SPProd2_MC_35ms
 
 }
 

@@ -1,9 +1,5 @@
 #include "services_dune.fcl"
-#include "filters.fcl"
-#include "triggeralgo_service.fcl"
-#include "ProtoDUNEBeamCuts.fcl"
-#include "ProtoDUNECalibration.fcl"
-#include "ProtoDUNEBeamlineUtils.fcl"
+#include "pi0TestConfig.fcl"
 #include "ProtoDUNETruthBeamFilter.fcl"
 
 process_name: pi0BeamMC
@@ -11,16 +7,18 @@ process_name: pi0BeamMC
 pi0_test_selection:
 {
    module_type:             "pi0TestSelection"
-   CalorimetryTag:          "pandora2Showercalo"
+   CalorimetryTag:          "pandoracalo"
    TrackerTag:              "pandoraTrack"
    ShowerTag:               "pandoraShower"
    HitTag:                  "hitpdune"
    PFParticleTag:           "pandora"
    GeneratorTag:            "generator"
+   CalorimetryTagSCE:       "pandoracalinoxyzt"
+
    SelectEvents: []
 
-   BeamlineUtils: @local::standard_protodunebeamlineutils
-   Pi0Only: false
+   BeamlineUtils:        @local::standard_protodunebeamlineutils
+   Pi0Only: true
    RetrieveSpacePoints: false
    # Retrieve G4 determines what truth information should be accessed has 4 options:
    # 0 : None
@@ -28,8 +26,12 @@ pi0_test_selection:
    # 2 : DIPHOTON, get the first two MC particles (and their daughters maybe?), only use when analysing diphoton MC.
    # 3 : ALL, NOT RECOMMENDED as it retrieves all MC particles from the truth table, and resulting file sizes will be significantly larger.
    RetrieveG4: 1
+   AnalyseFromBeam: true
    CalibrationParsSCE: @local::CalorimetryParameters_SPProd4_MC_SCE
-   Debug: false
+
+   #CalibrationParsSCE: @local::CalorimetryParameters_SPProd2_MC_SCE
+   #CalibrationParsSCE: @local::CalorimetryParameters_SPProd2_MC_35ms
+
 }
 
 services:
