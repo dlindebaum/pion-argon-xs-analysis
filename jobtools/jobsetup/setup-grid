@@ -86,14 +86,14 @@ tnotnull MRB_DIR || unset me db dollar_underscore dollar_zed is_sourced base msg
 tnotnull MRB_DIR || return 1
 
 setenv MRB_PROJECT "larsoft"
-setenv MRB_PROJECT_VERSION "v09_47_00_01"
+setenv MRB_PROJECT_VERSION "v09_63_00"
 setenv MRB_QUALS "e20:prof"
 setenv MRB_TOP "${INPUT_TAR_DIR_LOCAL}"
 setenv MRB_TOP_BUILD "${INPUT_TAR_DIR_LOCAL}"
 setenv MRB_SOURCE "${INPUT_TAR_DIR_LOCAL}/srcs"
-setenv MRB_INSTALL "${INPUT_TAR_DIR_LOCAL}/localProducts_larsoft_${MRB_PROJECT_VERSION}_${MRB_QUALS}"
+setenv MRB_INSTALL "${INPUT_TAR_DIR_LOCAL}/localProducts_larsoft_${MRB_PROJECT_VERSION}_${MRB_QUALS/:/_}"
 setenv PRODUCTS "${MRB_INSTALL}:${PRODUCTS}"
-setenv CETPKG_INSTALL "${INPUT_TAR_DIR_LOCAL}/localProducts_larsoft_${MRB_PROJECT_VERSION}_${MRB_QUALS}"
+setenv CETPKG_INSTALL "${INPUT_TAR_DIR_LOCAL}/localProducts_larsoft_${MRB_PROJECT_VERSION}_${MRB_QUALS/:/_}"
 
 #--- begin middle boilerplate
 
