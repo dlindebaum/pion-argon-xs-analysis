@@ -22,7 +22,7 @@ def RecoShowerPairsDataFrame(events : Master.Data, start_showers : ak.Array, to_
     quantities.bestCut = args.cut_type
     quantities.to_merge_dir = copy.recoParticles.direction
     quantities.to_merge_pos = copy.recoParticles.startPos
-    pair_mask = shower_merging.ShowerMerging(copy, start_showers, quantities, -1)
+    pair_mask = shower_merging.ShowerMerging(copy, start_showers, to_merge, quantities, -1)
     pairs = Master.ShowerPairs(copy, shower_pair_mask = np.logical_or(*pair_mask))
     return pairs.CalculateAll()
 
