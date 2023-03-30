@@ -84,15 +84,18 @@ def BeamParticleIPCut(events, impact=20.) -> ak.Array:
     ip = find_beam_impact_parameters(events)
     return ip < impact
 
+def VetoBeamParticle(events):
+    return events.recoParticles.beam_number != events.recoParticles.number
 
 def InitialPi0PhotonSelection(
         events,
-        em_cut: float = 0.5,
-        n_hits_cut: int = 80,
-        distance_bounds_cm: tuple = (3., 90.),
-        max_impact_cm: float = 20.,
-        verbose: bool = False,
-        return_table: bool = False):
+        em_cut : float = 0.5,
+        n_hits_cut : int = 80,
+        distance_bounds_cm : tuple = (3., 90.),
+        max_impact_cm : float = 20.,
+        veto_beam_particle : bool = True,
+        verbose : bool = False,
+        return_table : bool = False):
     selections = [
         EMScoreCut,
         NHitsCut,
@@ -105,6 +108,9 @@ def InitialPi0PhotonSelection(
         {"lims": distance_bounds_cm},
         {"impact": max_impact_cm}
     ]
+    if veto_beam_particle:
+        selections.append(VetoBeamParticle)
+        arguments.append({})
     return CombineSelections(events, selections, 1, arguments, verbose, return_table)
 
 
