@@ -22,6 +22,7 @@ def SetPlotStyle():
     plt.style.use('ggplot')
     plt.rcParams.update({'patch.linewidth': 1})
     plt.rcParams.update({'font.size': 10})
+    plt.rcParams.update({"axes.titlecolor" : "#555555"})
 
 
 class ShowerMergeQuantities:
@@ -230,20 +231,6 @@ def BestCut(cuts : pd.DataFrame, q_names : list, type="balanced") -> list:
     print(best_cuts.to_markdown())
     return best_cuts[q_names].values.tolist()[0]
 
-#! not used anywhere
-def GetMin(quantity : ak.Array) -> ak.Array:
-    """ Get smallest geometric quantitity wrt to a start shower
-
-    Args:
-        quantity (ak.Array): geometric quantity
-
-    Returns:
-        ak.Array: smallest quantity per event
-    """
-    min_q = [ak.unflatten(quantity[i], 1, -1) for i in range(2)]
-    min_q = ak.concatenate(min_q, -1)
-    return ak.min(min_q, -1)
-
 @Master.timer
 def SplitSample(events : Master.Data, method="spatial") -> tuple:
     """ Select starting showers to merge for the pi0 decay.
@@ -334,7 +321,7 @@ def SignalBackground(events : Master.Data, start_showers : list, to_merge : ak.A
 
 
 @Master.timer
-def ShowerMerging(events : Master.Data, start_showers : ak.Array, quantities : ShowerMergeQuantities, n_merge : int = -1, merge_method : int = 0, make_copy : bool = False) -> Master.Data:
+def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array, quantities : ShowerMergeQuantities, n_merge : int = -1, merge_method : int = 0, make_copy : bool = False) -> Master.Data:
     """ Shower merging algorithm based on reco data.
 
     Args:
@@ -373,12 +360,12 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, quantities : S
             ak.Array: array of closest start shower indices per PFO
         """
         masked_q = ak.where(mask, q, 9999999) # if value is 9999999 then it never can be chosen as the minimum value (hopefully)
-        q_to_merge = ak.argmin(masked_q, -1, keepdims=True)
+        q_to_merge = ak.argmin(masked_q, -1, keepdims = True)
         # returns:
         # 0 if cloest shower is start shower 0
         # 1 if cloest shower is start shower 1
         # -1 if PFO shouldn't be merged
-        return ak.where(ak.min(masked_q, -1, keepdims=True) == 9999999, -1, q_to_merge)
+        return ak.where(ak.min(masked_q, -1, keepdims = True) == 9999999, -1, q_to_merge)
 
     def ReplaceShowerPairValue(mask : ak.Array, quantity : ak.Array, values : ak.Array) -> ak.Array:
         """ Replaces the shower pair values in a quantitiy for another set.
@@ -425,6 +412,10 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, quantities : S
     scores = ak.where(scores == 1, 0, scores) # [1, 0, 0]
     scores = ak.where(scores == 2, 1, scores) # [1, 1, 0]
     scores = ak.where(scores == 3, 1, scores) # [1, 1, 1]
+
+    #* at this point we can check the performance of the shower merging
+    ShowerMergingEventPerformance(events, start_showers, to_merge, scores)
+    ShowerMergingPFOPerformance(events, start_showers, to_merge, scores, quantities)
 
     #* get momenta of PFOs to merge
     momentum = events.recoParticles.momentum
@@ -515,30 +506,30 @@ def EventSelection(events : Master.Data, matchBy : str = "spatial", invertFinal 
     #* pi+ beam selection!
     mask = LegacyBeamParticleSelection.PiBeamSelection(events)
     events.Filter([mask], [mask])
-    n.append(["pi+ beam", "backtracked", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100-Percentage(n[2][2], ak.count(events.eventNum))])
+    n.append(["pi+ beam", "backtracked", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100 - Percentage(n[2][2], ak.count(events.eventNum))])
 
     #* select only two body decay
     mask = LegacyBeamParticleSelection.DiPhotonCut(events)
     events.Filter([mask], [mask])
-    n.append(["diphoton decay", "truth", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100-Percentage(n[2][2], ak.count(events.eventNum))])
+    n.append(["diphoton decay", "truth", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100 - Percentage(n[2][2], ak.count(events.eventNum))])
 
     #################### SELECTION USING RECO INFORMATION #################### 
     #* select events with beam particle
     # events.ApplyBeamFilter()
     mask = LegacyBeamParticleSelection.RecoBeamParticleCut(events)
     events.Filter([mask], [mask])
-    n.append(["beam particle", "reco", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100-Percentage(n[2][2], ak.count(events.eventNum))])
+    n.append(["beam particle", "reco", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100 - Percentage(n[2][2], ak.count(events.eventNum))])
 
     #* select events with >1 PFP
     mask = LegacyBeamParticleSelection.HasPFO(events)
     events.Filter([mask], [mask])
-    n.append(["nPFP > 1", "reco", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100-Percentage(n[2][2], ak.count(events.eventNum))])
+    n.append(["nPFP > 1", "reco", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100 - Percentage(n[2][2], ak.count(events.eventNum))])
 
     #################### SELECTION USING BACKTRACKED INFORMATION #################### 
     #* select events with more than one backtracked true particle
     mask = LegacyBeamParticleSelection.HasBacktracked(events)
     events.Filter([mask], [mask])
-    n.append(["at least 1 true particle", "backtracked", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100-Percentage(n[2][2], ak.count(events.eventNum))])
+    n.append(["at least 1 true particle", "backtracked", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100 - Percentage(n[2][2], ak.count(events.eventNum))])
 
     #* select events with both true pi0 photons
     mask = LegacyBeamParticleSelection.BothPhotonsBacktracked(events)
@@ -547,7 +538,7 @@ def EventSelection(events : Master.Data, matchBy : str = "spatial", invertFinal 
         mask = np.logical_not(mask)
         label = "both true photons are not backtracked"
     events.Filter([mask], [mask])
-    n.append([label, "backtracked", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100-Percentage(n[2][2], ak.count(events.eventNum))])
+    n.append([label, "backtracked", ak.count(events.eventNum), Percentage(n[-1][2], ak.count(events.eventNum)), 100 - Percentage(n[2][2], ak.count(events.eventNum))])
 
     print(tabulate(n, tablefmt="latex"))
 
@@ -568,7 +559,7 @@ def ValidPFOSelection(events : Master.Data):
     def ApplySelection(mask : ak.Array, mask_name : str, data_type : str):
         events.Filter([mask])
         count = ak.count(events.recoParticles.number)
-        n.append([mask_name, data_type, count, Percentage(n[-1][2], count), 100-Percentage(n[1][2], count)])    
+        n.append([mask_name, data_type, count, Percentage(n[-1][2], count), 100 - Percentage(n[1][2], count)])    
 
     # selections 
     mask = events.recoParticles.startPos.x != -999
@@ -625,7 +616,18 @@ def StartShowerByDistance(events : Master.Data) -> ak.Array:
     return start_showers
 
 
-def Selection(events : Master.Data, event_type : str, pfo_type : str) -> list[pd.DataFrame]:
+def Selection(events : Master.Data, event_type : str, pfo_type : str, select_photon_candidates : bool = True) -> list[pd.DataFrame]:
+    """ Applies an event selecion and PFO selection.
+
+    Args:
+        events (Master.Data): events to look at
+        event_type (str): event selection type
+        pfo_type (str): pfo selection type
+        select_photon_candidates (bool): whether to select events with 2 photon candidates or not
+
+    Returns:
+        list[pd.DataFrame]: table of performance metrics for each selection
+    """
     match event_type:
         case "cheated":
             mask, event_table = LegacyBeamParticleSelection.CreateLegacyBeamParticleSelection(events, False)
@@ -640,8 +642,9 @@ def Selection(events : Master.Data, event_type : str, pfo_type : str) -> list[pd
 
     if pfo_type == "reco":
         mask, photon_candidate_table = PFOSelection.InitialPi0PhotonSelection(events, verbose = False, return_table = True)
-        event_mask = ak.num(mask[mask]) == 2 # select events with 2 photon candidates only #TODO handle > 2 candidates
-        events.Filter([event_mask], [event_mask])
+        if select_photon_candidates:
+            event_mask = ak.num(mask[mask]) == 2 # select events with 2 photon candidates only #TODO handle > 2 candidates
+            events.Filter([event_mask], [event_mask])
 
     if pfo_type == "reco":
         return event_table, pfo_table, photon_candidate_table
@@ -649,7 +652,15 @@ def Selection(events : Master.Data, event_type : str, pfo_type : str) -> list[pd
         return event_table, pfo_table
 
 
-def SplitSampleReco(events : Master.Data):
+def SplitSampleReco(events : Master.Data)-> tuple:
+    """ Creates two boolean mask, one which is just the starting showers, the second are all other PFOs in the event.
+
+    Args:
+        events (Master.Data): events to look at
+
+    Returns:
+        tuple: starting showers mask and all other PFOs mask
+    """
     mask = PFOSelection.InitialPi0PhotonSelection(events, False, False)
 
     #* need to compute start shower masks and to_merge masks to follow the same convention as SplitSample
@@ -658,3 +669,164 @@ def SplitSampleReco(events : Master.Data):
     to_merge = np.logical_not(np.logical_or(*start_showers))
 
     return start_showers, to_merge
+
+
+def CountMask(mask : ak.Array, axis : int = None):
+    """ Count the number of true entries in a boolean mask.
+
+    Args:
+        mask (ak.Array): boolean mask
+        axis (int, optional): axis of arrays to count. Defaults to None.
+
+    Returns:
+        int or ak.Array: count depending on the axis
+    """
+    return ak.count(mask[mask], axis = axis)
+
+
+def ShowerMergingPFOPerformance(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array, scores : ak.Array, quantities : ShowerMergeQuantities):
+    """ Calculates performance metrics for how well the shower merging performs on a per PFO basis.
+
+    Args:
+        events (Master.Data): evnets to study
+        start_showers (ak.Array): starting shower masks
+        to_merge (ak.Array): to merge mask
+        scores (ak.Array): score attributed to each PFO to merge, see it's definition as ShowerMerging
+        quantities (ShowerMergeQuantities): ShowerMergeQuantities for each PFO
+    """
+    # false negative - showers we should have merged but didn't
+    # false positive - showers we merged but shouldn't have
+    # true positive - showers we should have merged and did
+    # true negative - showers we should have merged but didn't
+    # mismatch - of the showers merged, which were assigned to the wrong start shower
+
+    #! not using SignalBackground method here to be explicit when defining signal and background masks
+    all_showers = np.logical_or(*start_showers)
+    s_num = events.trueParticlesBT.number[all_showers]
+    tm_num = events.trueParticlesBT.number[to_merge]
+
+    signal = np.logical_or(*[events.trueParticlesBT.number == s_num[:, i] for i in range(2)]) # showers we should have merged
+    signal = signal & ~all_showers # starting showers are excluded from the signal
+    background = ~signal # showers we shouldn't have merged
+
+    merged = scores != -3 # PFOs actually merged
+    not_merged = ~merged
+
+    print(ak.count(merged))
+    print(ak.count(signal))
+    n = ak.count(signal)
+
+    tp = merged & signal # true positive, signal pfos merged
+    nTp = CountMask(tp)
+    tn = ~(merged | signal) # true negative, background not merged
+    nTn = CountMask(tn)
+
+    xor = merged != signal
+
+    fp = xor & (signal == False) # false positive, background PFOs merged
+    nFp = CountMask(fp)
+    fn = xor & (signal == True) # false negative, signal PFOs not merged
+    nFn = CountMask(fn)
+
+    nSignal = CountMask(signal)
+    nBackground = CountMask(background)
+    nMerged = CountMask(merged)
+    nUnmerged = CountMask(not_merged)
+
+    # signal_num = events.trueParticlesBT.number[to_merge][signal_all]
+    target_num = events.trueParticlesBT.number[tp]
+    actual_num = ak.where(scores == 0, s_num[:, 0], scores)
+    actual_num = ak.where(actual_num == 1, s_num[:, 1], actual_num)
+    actual_num = actual_num[tp]
+
+    actual_num = actual_num[ak.num(actual_num) > 0]
+    target_num = target_num[ak.num(target_num) > 0]
+
+    mismatch = ak.ravel(actual_num == target_num)
+    mismatch_rate = ak.count(mismatch[mismatch == False]) / ak.count(mismatch)
+    matched_rate = 1 - mismatch_rate
+    print(f"mismatch (%): {100 * mismatch_rate}")
+
+    print(f"number of signal PFOs before cutting: {nSignal}")
+    print(f"number of background PFOs before cutting: {nBackground}")
+    table = [
+        ["PFO performance metric"                     , "number of PFOs"        , "total efficiency (%)"     , "signal/background efficiency (%)", "merged/unmerged efficiency (%)" ],
+        ["signal PFOs merged and correctly matched"   , int(nTp * matched_rate) , 100 * nTp * matched_rate/n , 100 * matched_rate * nTp/nSignal  , 100 * matched_rate * nTp/nMerged ],
+        ["signal PFOs merged and incorrectly matched" , int(nTp * mismatch_rate), 100 * nTp * mismatch_rate/n, 100 * mismatch_rate * nTp/nSignal , 100 * mismatch_rate * nTp/nMerged],
+        ["background PFOs merged (false positive)"    , nFp                     , 100 * nFp/n                , 100 * nFp/nBackground             , 100 * nFp/nMerged                ],
+        ["signal PFOs not merged (false negative)"    , nFn                     , 100 * nFn/n                , 100 * nFn/nSignal                 , 100 * nFn/nUnmerged              ],
+        ["background PFOs not merged (true negatives)", nTn                     , 100 * nTn/n                , 100 * nTn/nBackground             , 100 * nTn/nUnmerged              ],
+        ["signal PFOs correctly matched"              , "-"                     , "-"                        , 100 * matched_rate                , 100 * matched_rate               ]
+        ]
+
+    print(f"{ak.count(scores)=}")
+    print(f"{ak.count(to_merge)=}")
+
+    print(tabulate(table, floatfmt = ".2f", tablefmt = "fancy_grid"))
+
+    #? is this needed?
+    mask = quantities.mask
+    cut_signal = signal[np.logical_or(*mask)]
+    print(f"{ak.count(ak.ravel(cut_signal[cut_signal]))=}")
+
+
+def ShowerMergingEventPerformance(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array, scores : ak.Array):
+    """ Calculates performance metrics for how well the shower merging performs on a per PFO basis.
+
+    Args:
+        events (Master.Data): evnets to study
+        start_showers (ak.Array): starting shower masks
+        to_merge (ak.Array): to merge mask
+        scores (ak.Array): score attributed to each PFO to merge, see it's definition as ShowerMerging
+    """
+    all_showers = np.logical_or(*start_showers)
+    s_num = events.trueParticlesBT.number[all_showers]
+    tm_num = events.trueParticlesBT.number[to_merge]
+
+    signal = np.logical_or(*[events.trueParticlesBT.number == s_num[:, i] for i in range(2)]) # showers we should have merged
+    signal = signal & ~all_showers # starting showers are excluded from the signal
+
+    background = ~signal # showers we shouldn't have merged
+
+    merged = scores != -3 # PFOs actually merged
+    not_merged = ~merged
+
+    nMerged = CountMask(merged, -1)
+    nSignal = CountMask(signal, -1)
+    nBackground = CountMask(background, -1)
+
+    print(ak.num(signal))
+    print(ak.num(merged))
+
+    tp = merged & signal # true positive
+    nTp = CountMask(tp, -1)
+
+    xor = merged != signal
+
+    fp = xor & (signal == False) # false positive
+    nFp = CountMask(fp, -1)
+    t = (nFp > 0) & (nTp > 0)
+
+    signal_only = (nFp == 0) & (nTp > 0)
+    background_only = (nFp > 0) & (nTp == 0)
+
+    n = ak.count(events.eventNum)
+    n_t = ak.count(nSignal[nSignal > 0])
+    n_m = ak.count(nMerged[nMerged > 0])
+    print(f"number of events after selection: {n}")
+    print(f"number of events with PFOs to merge: {n_t}")
+    print(f"number of events where we merge: {n_m}")
+    print(f"number of events where we merge signal: {ak.count(nTp[nTp > 0])}")
+    print(f"number of events where we merge background: {ak.count(nFp[nFp > 0])}")
+    print(f"number of events where we merge signal and background {CountMask(t)}")
+    print(f"number of events where we merge only signal {CountMask(signal_only)}")
+    print(f"number of events where we merge only background {CountMask(background_only)}")
+
+    table = [
+        ["performance metric", "number of events", "total efficiency", "merging efficiency"],
+        ["signal merged"               , ak.count(nTp[nTp > 0]), 100 * ak.count(nTp[nTp > 0]) / n_t, 100 * ak.count(nTp[nTp > 0]) / n_m],
+        ["only signal merged"          , CountMask(signal_only), 100 * CountMask(signal_only) / n_t, 100 * CountMask(signal_only) / n_m],
+        ["signal and background merged", CountMask(t)          , 100 * CountMask(t) / n_t          , 100 * CountMask(t) / n_m]
+        ]
+
+    print(tabulate(table, floatfmt=".2f", tablefmt="fancy_grid"))
