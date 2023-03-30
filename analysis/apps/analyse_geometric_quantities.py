@@ -5,6 +5,7 @@ Created on: 14/03/2023 15:17
 Author: Shyam Bhuller
 
 Description: Looks at a geometric_quantities dataframe, produce plots of geometric quantities and/or do the shower selection cut optimisation.
+TODO multiprocessing for finding cuts
 """
 import argparse
 import itertools
@@ -90,7 +91,7 @@ def main(args):
     if args.cut:
         ShowerMergingCriteria(q, args.out)
     if args.plot:
-        q.PlotQuantities(q.signal, q.background, annotate = args.dataset, save = args.save, outDir = args.out)
+        q.PlotQuantities(q.signal, q.background, annotate = args.dataset, save = True, outDir = args.out)
 
     return
 
@@ -103,7 +104,6 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--plot", dest = "plot", action = "store_true", help = "make plots")
     parser.add_argument("-c", "--cut", dest = "cut", action = "store_true", help = "generate optimised cuts (warning! this can take a long time)")
 
-    parser.add_argument("-s", "--save", dest = "save", action = "store_true", help = "save plots")
     parser.add_argument("-o", "--out", dest = "out", type = str, default = None, help = "directory to save files")
 
     args = parser.parse_args()
@@ -114,6 +114,7 @@ if __name__ == "__main__":
 
     if args.out is None:
         args.out = args.file.split("/")[-1].split(".")[0] + "/"
+    if args.out[-1] != "/": args.out += "/"
 
     print(vars(args))
     main(args)

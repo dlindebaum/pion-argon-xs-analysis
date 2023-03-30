@@ -6,6 +6,7 @@ Author: Shyam Bhuller
 Description: 
 """
 import warnings
+from dataclasses import dataclass
 
 import awkward as ak
 import matplotlib.pyplot as plt
@@ -16,6 +17,7 @@ from tabulate import tabulate
 
 from python.analysis import Master, Plots, vector
 from python.analysis import LegacyBeamParticleSelection, BeamParticleSelection, PFOSelection
+from python.analysis.EventSelection import generate_truth_tags
 
 
 def SetPlotStyle():
@@ -23,6 +25,15 @@ def SetPlotStyle():
     plt.rcParams.update({'patch.linewidth': 1})
     plt.rcParams.update({'font.size': 10})
     plt.rcParams.update({"axes.titlecolor" : "#555555"})
+
+
+@dataclass(slots = True)
+class Tag:
+    name : str = ""
+    name_simple : str = ""
+    colour : str = ""
+    mask : ak.Array = ""
+    number : int = -1
 
 
 class ShowerMergeQuantities:
@@ -830,3 +841,13 @@ def ShowerMergingEventPerformance(events : Master.Data, start_showers : ak.Array
         ]
 
     print(tabulate(table, floatfmt=".2f", tablefmt="fancy_grid"))
+
+def GenerateTruthTags(events : Master.Data = None):
+    tags = {
+        "$\geq 1\pi^{0} + X$"        : Tag("$\geq 1\pi^{0} + X$",        "inclusive signal", "#348ABD", generate_truth_tags(events, (1,), 0) if events is not None else None, 0),
+        "$1\pi^{0} + 0\pi^{+}$"      : Tag("$1\pi^{0} + 0\pi^{+}$",      "exclusive signal", "#8EBA42", generate_truth_tags(events, 1, 0)    if events is not None else None, 1),
+        "$0\pi^{0} + 0\pi^{+}$"      : Tag("$0\pi^{0} + 0\pi^{+}$",      "background",       "#777777", generate_truth_tags(events, 0, (0,)) if events is not None else None, 2),
+        "$1\pi^{0} + \geq 1\pi^{+}$" : Tag("$1\pi^{0} + \geq 1\pi^{+}$", "sideband",         "#E24A33", generate_truth_tags(events, 1, (1,)) if events is not None else None, 3),
+        "$0\pi^{0} + \geq 1\pi^{+}$" : Tag("$0\pi^{0} + \geq 1\pi^{+}$", "sideband",         "#988ED5", generate_truth_tags(events, 0, (1,)) if events is not None else None, 4),
+    }
+    return tags
