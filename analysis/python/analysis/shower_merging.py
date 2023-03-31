@@ -284,18 +284,11 @@ def SplitSample(events : Master.Data, method="spatial") -> tuple:
 
     if(ak.any(ak.num(uniqueID) == 1)):
         raise Exception("data contains events with reco particles matched to only one photon, did you forget to apply singleMatch filter?")
-    print(ak.any(ak.count(uniqueID, -1) != 2))
 
     # get PFP's which match to the same true particle
     mcp = [mcID == uniqueID[:, i] for i in range(2)]
-    [print(ak.count(mcp[i], -1)) for i in range(2)]
-    print(ak.any(ak.count(separation, -1) != ak.count(mcp[0], -1)))
-    print(ak.any(ak.count(separation, -1) != ak.count(mcp[1], -1)))
     
-    mother = [events.trueParticlesBT.GetUniqueParticleNumbers(events.trueParticlesBT.mother[mcp[i]]) for i in range(2)]
-    print(ak.all(mother[0] == pi0))
-    print(ak.all(mother[1] == pi0))
-    print(ak.all(events.trueParticles.pdg[events.trueParticles.PrimaryPi0Mask] == 111))
+    # mother = [events.trueParticlesBT.GetUniqueParticleNumbers(events.trueParticlesBT.mother[mcp[i]]) for i in range(2)]
 
     min_sorted_spearation = [ak.min(separation[mcp[i]], -1) for i in range(2)] # get minimum separation sorted by ID
 
@@ -357,6 +350,7 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.
         """
         return ak.concatenate([ak.unflatten(data[i], 1, -1) for i in range(2)], -1) # concantenate to group quantities per event together
 
+
     def ClosestQuantity(q : ak.Array, mask : ak.Array) -> ak.Array:
         """ Get the shower which has the smallest geometric quantity wrt to the starting shower
             i.e. if q is the angle of the PFO wrt to starting showers it will return the index
@@ -377,6 +371,7 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.
         # 1 if cloest shower is start shower 1
         # -1 if PFO shouldn't be merged
         return ak.where(ak.min(masked_q, -1, keepdims = True) == 9999999, -1, q_to_merge)
+
 
     def ReplaceShowerPairValue(mask : ak.Array, quantity : ak.Array, values : ak.Array) -> ak.Array:
         """ Replaces the shower pair values in a quantitiy for another set.
@@ -425,8 +420,8 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.
     scores = ak.where(scores == 3, 1, scores) # [1, 1, 1]
 
     #* at this point we can check the performance of the shower merging
-    ShowerMergingEventPerformance(events, start_showers, to_merge, scores)
-    ShowerMergingPFOPerformance(events, start_showers, to_merge, scores, quantities)
+    event_performance_table = ShowerMergingEventPerformance(events, start_showers, to_merge, scores)
+    pfo_performance_table = ShowerMergingPFOPerformance(events, start_showers, to_merge, scores, quantities)
 
     #* get momenta of PFOs to merge
     momentum = events.recoParticles.momentum
@@ -483,11 +478,11 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.
         AssignQuantities(merged)
         merged.Filter([~mask_all])
         new_start_showers = [merged.recoParticles.number == start_showers_ID[:, i] for i in range(2)]
-        return merged, new_start_showers
+        return merged, new_start_showers, event_performance_table, pfo_performance_table
     else:
         AssignQuantities(events)
         events.Filter([~mask_all])
-        return [events.recoParticles.number == start_showers_ID[:, i] for i in range(2)]
+        return [events.recoParticles.number == start_showers_ID[:, i] for i in range(2)], event_performance_table, pfo_performance_table
 
 
 def Percentage(a, b):
@@ -714,7 +709,6 @@ def ShowerMergingPFOPerformance(events : Master.Data, start_showers : ak.Array, 
     #! not using SignalBackground method here to be explicit when defining signal and background masks
     all_showers = np.logical_or(*start_showers)
     s_num = events.trueParticlesBT.number[all_showers]
-    tm_num = events.trueParticlesBT.number[to_merge]
 
     signal = np.logical_or(*[events.trueParticlesBT.number == s_num[:, i] for i in range(2)]) # showers we should have merged
     signal = signal & ~all_showers # starting showers are excluded from the signal
@@ -723,8 +717,6 @@ def ShowerMergingPFOPerformance(events : Master.Data, start_showers : ak.Array, 
     merged = scores != -3 # PFOs actually merged
     not_merged = ~merged
 
-    print(ak.count(merged))
-    print(ak.count(signal))
     n = ak.count(signal)
 
     tp = merged & signal # true positive, signal pfos merged
@@ -770,16 +762,8 @@ def ShowerMergingPFOPerformance(events : Master.Data, start_showers : ak.Array, 
         ["signal PFOs correctly matched"              , "-"                     , "-"                        , 100 * matched_rate                , 100 * matched_rate               ]
         ]
 
-    print(f"{ak.count(scores)=}")
-    print(f"{ak.count(to_merge)=}")
-
     print(tabulate(table, floatfmt = ".2f", tablefmt = "fancy_grid"))
-
-    #? is this needed?
-    mask = quantities.mask
-    cut_signal = signal[np.logical_or(*mask)]
-    print(f"{ak.count(ak.ravel(cut_signal[cut_signal]))=}")
-
+    return pd.DataFrame(table)
 
 def ShowerMergingEventPerformance(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array, scores : ak.Array):
     """ Calculates performance metrics for how well the shower merging performs on a per PFO basis.
@@ -800,14 +784,9 @@ def ShowerMergingEventPerformance(events : Master.Data, start_showers : ak.Array
     background = ~signal # showers we shouldn't have merged
 
     merged = scores != -3 # PFOs actually merged
-    not_merged = ~merged
 
     nMerged = CountMask(merged, -1)
     nSignal = CountMask(signal, -1)
-    nBackground = CountMask(background, -1)
-
-    print(ak.num(signal))
-    print(ak.num(merged))
 
     tp = merged & signal # true positive
     nTp = CountMask(tp, -1)
@@ -841,6 +820,7 @@ def ShowerMergingEventPerformance(events : Master.Data, start_showers : ak.Array
         ]
 
     print(tabulate(table, floatfmt=".2f", tablefmt="fancy_grid"))
+    return pd.DataFrame(table)
 
 def GenerateTruthTags(events : Master.Data = None):
     tags = {

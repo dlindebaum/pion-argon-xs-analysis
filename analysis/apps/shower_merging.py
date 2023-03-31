@@ -16,15 +16,15 @@ from rich import print
 from python.analysis import Master, shower_merging
 
 
-def RecoShowerPairsDataFrame(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array) -> pd.DataFrame:
+def RecoShowerPairsDataFrame(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array) -> tuple:
     copy = events.Filter(returnCopy = True) # make a local copy of the events object so that we can do both the cheated merging and regular merging
     quantities = shower_merging.ShowerMergeQuantities(copy, to_merge, args.cuts)
     quantities.bestCut = args.cut_type
     quantities.to_merge_dir = copy.recoParticles.direction
     quantities.to_merge_pos = copy.recoParticles.startPos
-    pair_mask = shower_merging.ShowerMerging(copy, start_showers, to_merge, quantities, -1)
+    pair_mask, event_performance_table, pfo_performance_table = shower_merging.ShowerMerging(copy, start_showers, to_merge, quantities, -1)
     pairs = Master.ShowerPairs(copy, shower_pair_mask = np.logical_or(*pair_mask))
-    return pairs.CalculateAll()
+    return pairs.CalculateAll(), event_performance_table, pfo_performance_table
 
 
 def Filter(df : pd.DataFrame, value : str) -> pd.DataFrame:
@@ -61,7 +61,9 @@ def main(args):
 
     metadata = pd.concat([u_df[["run", "subrun", "event"]], tags_number], axis = 1)
 
-    r_df = RecoShowerPairsDataFrame(events, start_showers, to_merge)
+    r_df, event_performance_table, pfo_performance_table = RecoShowerPairsDataFrame(events, start_showers, to_merge)
+    event_performance_table.to_latex(args.outDir + "event_performance_table.tex")
+    pfo_performance_table.to_latex(args.outDir + "pfo_performance_table.tex")
 
     cheat_merge = [pd.DataFrame([])]*2
     if args.selection_type == "cheated":
@@ -103,7 +105,7 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--cuts", dest = "cuts", type = str, help = "list of cuts to choose from", required = True)
     parser.add_argument("-t", "--type", dest = "cut_type", type = str, choices = ["purity", "efficiency"], help = "type of cut to pick.", required = True)
 
-    parser.add_argument("-d", "--directory", dest = "outDir", type = str, default = "", help = "directory to save files")
+    parser.add_argument("-d", "--directory", dest = "outDir", type = str, default = None, help = "directory to save files")
     parser.add_argument("-o", "--output-file", dest = "out", type = str, help = "output file name.")
 
     args = parser.parse_args()
@@ -117,6 +119,9 @@ if __name__ == "__main__":
     else:
         args.out.split(".")[0] += "_shower_pairs.hdf5"
     
+    if args.outDir is None:
+        args.outDir = args.file.split("/")[-1].split(".")[0]
+
     if args.outDir != "" and args.outDir[-1] != "/":
         args.outDir += "/"
 
