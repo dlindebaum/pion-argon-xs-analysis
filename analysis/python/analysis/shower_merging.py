@@ -822,12 +822,39 @@ def ShowerMergingEventPerformance(events : Master.Data, start_showers : ak.Array
     print(tabulate(table, floatfmt=".2f", tablefmt="fancy_grid"))
     return pd.DataFrame(table)
 
-def GenerateTruthTags(events : Master.Data = None):
-    tags = {
-        "$\geq 1\pi^{0} + X$"        : Tag("$\geq 1\pi^{0} + X$",        "inclusive signal", "#348ABD", generate_truth_tags(events, (1,), 0) if events is not None else None, 0),
-        "$1\pi^{0} + 0\pi^{+}$"      : Tag("$1\pi^{0} + 0\pi^{+}$",      "exclusive signal", "#8EBA42", generate_truth_tags(events, 1, 0)    if events is not None else None, 1),
-        "$0\pi^{0} + 0\pi^{+}$"      : Tag("$0\pi^{0} + 0\pi^{+}$",      "background",       "#777777", generate_truth_tags(events, 0, (0,)) if events is not None else None, 2),
-        "$1\pi^{0} + \geq 1\pi^{+}$" : Tag("$1\pi^{0} + \geq 1\pi^{+}$", "sideband",         "#E24A33", generate_truth_tags(events, 1, (1,)) if events is not None else None, 3),
-        "$0\pi^{0} + \geq 1\pi^{+}$" : Tag("$0\pi^{0} + \geq 1\pi^{+}$", "sideband",         "#988ED5", generate_truth_tags(events, 0, (1,)) if events is not None else None, 4),
-    }
+
+
+class Tags(dict):
+    def __init__(self, *arg, **kw):
+        for member in list(Tag.__annotations__.keys()):
+            setattr(self, member, TagIterator(self, member))
+
+        self.name = TagIterator(self, "name")
+        super(Tags, self).__init__(*arg, **kw)
+
+
+class TagIterator:
+    def __init__(self, parent : Tags, value : str):
+        self.__parent = parent
+        self.__value = value
+
+    def __getitem__(self, i):
+        for _, v in self.__parent.items():
+            if getattr(v, self.__value) == i:
+                return v
+
+    @property
+    def values(self):
+        return [getattr(v, self.__value) for _, v in self.__parent.items()]
+
+    def __str__(self) -> str:
+        return str(self.values)
+
+def GenerateTruthTags(events : Master.Data = None) -> Tags:
+    tags = Tags()
+    tags["$\geq 1\pi^{0} + X$"       ] = Tag("$\geq 1\pi^{0} + X$",        "inclusive signal", "#348ABD", generate_truth_tags(events, (1,), 0) if events is not None else None, 0)
+    tags["$1\pi^{0} + 0\pi^{+}$"     ] = Tag("$1\pi^{0} + 0\pi^{+}$",      "exclusive signal", "#8EBA42", generate_truth_tags(events, 1, 0)    if events is not None else None, 1)
+    tags["$0\pi^{0} + 0\pi^{+}$"     ] = Tag("$0\pi^{0} + 0\pi^{+}$",      "background",       "#777777", generate_truth_tags(events, 0, (0,)) if events is not None else None, 2)
+    tags["$1\pi^{0} + \geq 1\pi^{+}$"] = Tag("$1\pi^{0} + \geq 1\pi^{+}$", "sideband",         "#E24A33", generate_truth_tags(events, 1, (1,)) if events is not None else None, 3)
+    tags["$0\pi^{0} + \geq 1\pi^{+}$"] = Tag("$0\pi^{0} + \geq 1\pi^{+}$", "sideband",         "#988ED5", generate_truth_tags(events, 0, (1,)) if events is not None else None, 4)
     return tags
