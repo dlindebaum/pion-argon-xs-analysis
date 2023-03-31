@@ -5,127 +5,256 @@ Created on: 14/03/2023 15:14
 Author: Shyam Bhuller
 
 Description: Applies beam particle selection, PFO selection, produces tables and basic plots.
+#TODO Handle multiple root file inputs
+#? have the capability of storing quantities to hdf5 files (and capability to read them in)?
 """
 import argparse
 import os
 
 import awkward as ak
+import matplotlib.pyplot as plt
 import numpy as np
 from rich import print
 
-from python.analysis import Master, Plots, shower_merging
+from python.analysis import Master, Plots, shower_merging, EventSelection
 
 
-def MakePlots(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array, save : bool, out : str):
-    """ Make plots of some basic quantities.
+def BasicQuantities(events : Master.Data, start_showers_all : ak.Array, to_merge : ak.Array, signal_all : ak.Array, background : ak.Array) -> dict:
+    """ Gets quantities to plot, generally are categorised by signal/background events.
 
     Args:
         events (Master.Data): events to study
-        start_showers (ak.Array): initial photon candidates
-        to_merge (ak.Array): remaining PFOs
-        save (bool): save plots?
-        out (str): ouput file path
+        start_showers_all (ak.Array): start shower mask
+        to_merge (ak.Array): PFOs to merge mask
+        signal_all (ak.Array): signal PFO mask
+        background (ak.Array): background PFO mask
+
+    Returns:
+        dict: quantities
     """
-    signal, background, signal_all = shower_merging.SignalBackground(events, start_showers, to_merge)
+    data = {
+        "n_signal"      : ak.count(signal_all[signal_all], -1),
+        "n_background"  : ak.count(background[background], -1),
+        "energy_signal" : ak.ravel(events.recoParticles.energy[to_merge][signal_all]),
+        "energy_background" : ak.ravel(events.recoParticles.energy[to_merge][background]),
+        "nHits_collection_signal" : ak.ravel(events.recoParticles.nHits_collection[to_merge][signal_all]),
+        "nHits_collection_background" : ak.ravel(events.recoParticles.nHits_collection[to_merge][background]),
+        "nHits_signal" : ak.ravel(events.recoParticles.nHits[to_merge][signal_all]),
+        "nHits_background" : ak.ravel(events.recoParticles.nHits[to_merge][background]),
+        "cnn_signal" : ak.ravel(events.recoParticles.cnnScore[to_merge][background]),
+        "cnn_background" : ak.ravel(events.recoParticles.cnnScore[to_merge][signal_all]),
+        "start_shower_purity" : ak.ravel(events.trueParticlesBT.purity[start_showers_all]),
+        "start_shower_completeness" : ak.ravel(events.trueParticlesBT.completeness[start_showers_all]),
+        "purity_signal" : ak.ravel(events.trueParticlesBT.purity[to_merge][signal_all]),
+        "purity_background" : ak.ravel(events.trueParticlesBT.purity[to_merge][background]),
+        "completeness_signal" : ak.ravel(events.trueParticlesBT.completeness[to_merge][signal_all]),
+        "completeness_background" : ak.ravel(events.trueParticlesBT.completeness[to_merge][background]),
+    }
+    for d in data:
+        print(f"{d} : {repr(data[d])}")
+    return data
 
-    #* plot number of signal and background per event
-    nSignal = ak.count(signal_all[signal_all], -1)
-    nBackground = ak.count(background[background], -1)
 
-    print(f"Total number of Signal PFOs :{ak.sum(nSignal)}")
-    print(f"Total number of background PFOs :{ak.sum(nBackground)}")
+def BasicTaggedQuantities(events : Master.Data, tags : dict, start_showers_all : ak.Array, signal_all : ak.Array, background : ak.Array) -> dict:
+    """ Gets quantities to plot split by the tags specified.
 
-    if save:
-        path = out + "basic_quantities/"
-        os.makedirs(path, exist_ok = True)
-        labels = ["background", "signal"]
-        
-        Plots.PlotHist(ak.ravel(nSignal), xlabel = "Start shower multiplicity", annotation = args.annotation)
-        Plots.Save("multiplicity", path)
+    Args:
+        events (Master.Data): events to study
+        tags (dict): event tags
+        start_showers_all (ak.Array): start shower mask
+        signal_all (ak.Array): signal PFO mask
+        background (ak.Array): background PFO mask 
 
-        Plots.PlotHistComparison([nBackground, nSignal], xlabel = "Number of PFOs", bins = 20, labels = labels, annotation = args.annotation)
-        Plots.Save("nPFO", path)
+    Returns:
+        dict: tagged quantities
+    """
+    data = {
+        "n_signal" : ak.count(signal_all[signal_all], -1),
+        "n_background" : ak.count(background[background], -1),
+        "n_PFO" : [],
+        "n_signal_tagged" : [],
+        "n_background_tagged" : [],
+        "purity" : [],
+        "completeness" : [],
+        "pdg" : [],
+        "mother_pdg" : [],
+    }
+    for k, t in tags.items():
+        data["n_PFO"].append(ak.num(events.recoParticles.number)[t.mask])
+        data["n_signal_tagged"].append(ak.ravel(data["n_signal"][t.mask]))
+        data["n_background_tagged"].append(ak.ravel(data["n_background"][t.mask]))
+        data["completeness"].append(ak.ravel(events.trueParticlesBT.completeness[start_showers_all])[t.mask])
+        data["purity"].append(ak.ravel(events.trueParticlesBT.purity[start_showers_all])[t.mask])
+        data["pdg"].append(list(np.unique((events.trueParticlesBT.pdg[start_showers_all])[tags[k].mask], return_counts = True)))
+        data["mother_pdg"].append(list(np.unique((events.trueParticlesBT.motherPdg[start_showers_all])[tags[k].mask], return_counts = True)))
 
-        #TODO fix these plots for cheated selection
-        # Plots.PlotHist2D(ak.ravel(vector.magnitude(events.trueParticles.momentum[events.trueParticles.PrimaryPi0Mask])), nSignal, 50, xlabel = "True $\pi^{0}}$ momentum (GeV)", ylabel = "Number of signal PFO", annotation = args.annotation)
-        # Plots.Save("pi0_p_vs_nPFO_signal", path)
+    for d in data:
+        print(f"{d} : {repr(data[d])}")
+    return data
 
-        # Plots.PlotHist2D(ak.ravel(vector.magnitude(events.trueParticles.momentum[events.trueParticles.PrimaryPi0Mask])), nBackground, 50, xlabel = "True $\pi^{0}}$ momentum (GeV)", ylabel = "Number of background PFO", annotation = args.annotation)
-        # Plots.Save("pi0_p_vs_nPFO_background", path)
 
-        nbins =  max(nSignal) - min(nSignal)
-        Plots.PlotHist(nSignal, xlabel="Number of signal PFOs", bins=np.arange(nbins)-0.5, annotation = args.annotation)
-        Plots.Save("nPFO_signal", path)
+def MakePlots(data : dict, out : str):
+    """ Makes plots of basic quantities
 
-        Plots.PlotHist(nBackground, xlabel = "Number of background PFOs", bins = 20, annotation = args.annotation)
-        Plots.Save("nPFO_background", path)
+    Args:
+        data (dict): quantities to plot
+        out (str): output file directory
+    """
+    labels = ["background", "signal"]
+    
+    Plots.PlotHist(ak.ravel(data["n_signal"]), xlabel = "Start shower multiplicity", annotation = args.annotation)
+    Plots.Save("multiplicity", out)
 
-        Plots.PlotHistComparison([ak.ravel(events.recoParticles.energy[to_merge][background]), ak.ravel(events.recoParticles.energy[to_merge][np.logical_or(*signal)])], xlabel = "Energy (MeV)", bins = 20, y_scale = "log", labels = labels, annotation = args.annotation)
-        Plots.Save("energy", path)
+    Plots.PlotHistComparison([data["n_background"], data["n_signal"]], xlabel = "Number of PFOs", bins = 20, labels = labels, annotation = args.annotation)
+    Plots.Save("nPFO", out)
 
-        Plots.PlotHistComparison([ak.ravel(events.recoParticles.nHits_collection[to_merge][background]), ak.ravel(events.recoParticles.nHits_collection[to_merge][np.logical_or(*signal)])], xlabel = "Number of collection plane hits", bins = 20, y_scale = "log", labels = labels, annotation = args.annotation)
-        Plots.Save("hits_collection", path)
+    nbins =  max(data["n_signal"]) - min(data["n_signal"])
+    Plots.PlotHist(data["n_signal"], xlabel="Number of signal PFOs", bins=np.arange(nbins)-0.5, annotation = args.annotation)
+    Plots.Save("nPFO_signal", out)
 
-        Plots.PlotHistComparison([ak.ravel(events.recoParticles.nHits_collection[to_merge][background]), ak.ravel(events.recoParticles.nHits[to_merge][np.logical_or(*signal)])], xlabel = "Number of hits", bins = 20, y_scale = "log", labels = labels, annotation = args.annotation)
-        Plots.Save("hits", path)
+    Plots.PlotHist(data["n_background"], xlabel = "Number of background PFOs", bins = 20, annotation = args.annotation)
+    Plots.Save("nPFO_background", out)
 
-        Plots.PlotHistComparison([ak.ravel(events.recoParticles.cnnScore[to_merge][background]), ak.ravel(events.recoParticles.cnnScore[to_merge][np.logical_or(*signal)])], xlabel = "CNN score", bins = 20, labels = labels, annotation = args.annotation)
-        Plots.Save("cnn", path)
+    Plots.PlotHistComparison([data["energy_background"], data["energy_signal"]], xlabel = "Energy (MeV)", bins = 20, y_scale = "log", labels = labels, annotation = args.annotation)
+    Plots.Save("energy", out)
 
-        purity = events.trueParticlesBT.purity
-        completeness = events.trueParticlesBT.completeness
+    Plots.PlotHistComparison([data["nHits_collection_background"], data["nHits_collection_signal"]], xlabel = "Number of collection plane hits", bins = 20, y_scale = "log", labels = labels, annotation = args.annotation)
+    Plots.Save("hits_collection", out)
 
-        start_showers_all = np.logical_or(*start_showers)
-        
-        Plots.PlotHist(ak.ravel(purity[start_showers_all]), xlabel = "start shower purity", annotation = args.annotation)
-        Plots.Save("ss-purity", path)
-        
-        Plots.PlotHist(ak.ravel(completeness[start_showers_all]), xlabel = "start shower completeness", annotation = args.annotation)
-        Plots.Save("ss-completeness", path)
+    Plots.PlotHistComparison([data["nHits_background"], data["nHits_signal"]], xlabel = "Number of hits", bins = 20, y_scale = "log", labels = labels, annotation = args.annotation)
+    Plots.Save("hits", out)
 
-        Plots.PlotHistComparison([ak.ravel(purity[to_merge][background]), ak.ravel(purity[to_merge][np.logical_or(*signal)])], labels = labels, xlabel = "purity", annotation = args.annotation)
-        Plots.Save("purity", path)
-        
-        Plots.PlotHistComparison([ak.ravel(completeness[to_merge][background]), ak.ravel(completeness[to_merge][np.logical_or(*signal)])], labels = labels, xlabel = "completeness", annotation = args.annotation)
-        Plots.Save("completeness", path)
+    Plots.PlotHistComparison([data["cnn_background"], data["cnn_signal"]], xlabel = "CNN score", bins = 20, labels = labels, annotation = args.annotation)
+    Plots.Save("cnn", out)
 
-        Plots.PlotHist2D(ak.ravel(purity), ak.ravel(completeness), xlabel = "purity", ylabel = "completeness")
-        Plots.Save("purity_vs_completeness", path)
+    Plots.PlotHist(data["start_shower_purity"], xlabel = "start shower purity", annotation = args.annotation)
+    Plots.Save("ss-purity", out)
+    
+    Plots.PlotHist(data["start_shower_completeness"], xlabel = "start shower completeness", annotation = args.annotation)
+    Plots.Save("ss-completeness", out)
 
-        Plots.PlotHist2D(ak.ravel(purity[to_merge][np.logical_or(*signal)]), ak.ravel(completeness[to_merge][np.logical_or(*signal)]), bins = 25, xlabel = "purity", ylabel = "completeness", title = "signal")
-        Plots.Save("purity_vs_completeness_s", path)
+    Plots.PlotHist2D(data["purity_signal"], data["completeness_signal"], bins = 25, xlabel = "purity", ylabel = "completeness", title = "signal")
+    Plots.Save("purity_vs_completeness_s", out)
 
-        Plots.PlotHist2D(ak.ravel(purity[to_merge][background]), ak.ravel(completeness[to_merge][background]), bins = 25, xlabel = "purity", ylabel = "completeness", title = "background")
-        Plots.Save("purity_vs_completeness_b", path)
+    Plots.PlotHist2D(data["purity_background"], data["completeness_background"], bins = 25, xlabel = "purity", ylabel = "completeness", title = "background")
+    Plots.Save("purity_vs_completeness_b", out)
+    return
+
+
+def MakePlotsTagged(data : dict, tags : dict, out : str):
+    """ Makes plots of basic quantities.
+
+    Args:
+        data (dict): quantities to plot
+        tags (dict): event tags
+        out (str): output file directory
+    """
+
+    n_signal_bins = max(data["n_signal"]) - min(data["n_signal"]) + 2
+
+    labels = []
+    colours = []
+    for k, t in tags.items():
+        labels.append(k)
+        colours.append(t.colour)
+
+    Plots.PlotHist(data["n_PFO"], bins = 20, xlabel = "number of PFOs", stacked = True, label = labels, color = colours, annotation = args.annotation)
+    Plots.Save("tagged_nPFO", out)
+
+    Plots.PlotHist(data["n_signal_tagged"], bins = np.arange(n_signal_bins) - 0.5, xlabel = "mutiplicity", stacked = True, label = labels, color = colours, annotation = args.annotation)
+    plt.xticks(np.arange(n_signal_bins))
+    Plots.Save("tagged_multiplicity", out)
+
+    Plots.PlotHist(data["n_signal_tagged"], bins = 20, xlabel = "number of signal PFOs", stacked = True, label = labels, color = colours, annotation = args.annotation)
+    Plots.Save("tagged_nPFO_signal", out)
+
+    Plots.PlotHist(data["n_background_tagged"], bins = 20, xlabel = "Number of background PFOs", stacked = True, label = labels, color = colours, annotation = args.annotation)
+    Plots.Save("tagged_nPFO_background", out)
+
+    Plots.PlotHist(data["completeness"], bins = 20, xlabel = "start shower completeness", stacked = True, label = labels, color = colours, annotation = args.annotation)
+    Plots.Save("tagged_start_shower_completeness", out)
+
+    Plots.PlotHist(data["purity"], bins = 20, xlabel = "start shower purity", stacked = True, label = labels, color = colours, annotation = args.annotation)
+    Plots.Save("tagged_start_shower_purity", out)
+
+    Plots.PlotStackedBar(data["pdg"], xlabel = "pdg of intial photon candidates", label_title = "initial $\pi^{0}$ photon candidates.", labels = labels, colours = colours, annotation = args.annotation)
+    Plots.Save("tagged_pdg", out)
+
+    Plots.PlotStackedBar(data["mother_pdg"], xlabel = "mother pdg of initial photon candidates", label_title = "initial $\pi^{0}$ photon candidates.", labels = labels, colours = colours, annotation = args.annotation)
+    Plots.Save("tagged_mother_pdg", out)
+
+
+def MakeInitialTaggingPlots(tags : dict, n_photons : ak.Array, out : str):
+    """ Makes truth tag plots, splitting the dataset by the number of pi0 shower candidates.
+
+    Args:
+        tags (dict): event tags
+        n_photons (ak.Array): pi0 shower candidates mask
+        out (str): output file directory
+    """
+    for s in np.unique(n_photons):
+        plt.figure()
+        for name, t in tags.items():
+            c = shower_merging.CountMask(t.mask[n_photons == s])
+            Plots.PlotBar([name]*c, xlabel = "truth tag", color = t.colour, label = t.name_simple, title = f"number of shower candidates: {s}", newFigure = False)
+        Plots.Save(f"truth_tags_nPFO_{s}", out)
     return
 
 
 def main(args):
+    #* initial setup
     shower_merging.SetPlotStyle()
-    events = Master.Data(args.file, nEvents = args.nEvents[0], start = args.nEvents[1])
+    os.makedirs(args.out + "basic_quantities/tagged/", exist_ok = True)
 
-    if args.save: os.makedirs(args.out, exist_ok = True)
+    events = Master.Data(args.file, nEvents = args.nEvents[0], start = args.nEvents[1]) # load data
 
     #* apply either cheated or reco selection
-    match args.pfo_selection_type:
+    match args.selection_type:
         case "cheated":
-            events_table, pfo_table = shower_merging.Selection(events, args.beam_selection_type, args.pfo_selection_type)
-            start_showers, to_merge = shower_merging.SplitSample(events)
+            events_table, pfo_table = shower_merging.Selection(events, args.selection_type, args.selection_type) # apply selection
+            start_showers, to_merge = shower_merging.SplitSample(events) # split sample into pi0 showers and PFOs to merge
         case "reco":
-            events_table, pfo_table, photon_candidate_table = shower_merging.Selection(events, args.beam_selection_type, args.pfo_selection_type)
+            events_table, pfo_table, photon_candidate_table = shower_merging.Selection(events, args.selection_type, args.selection_type, False)
+
+            n_photon_candidates = ak.num(events.recoParticles.number[shower_merging.PFOSelection.InitialPi0PhotonSelection(events)]) # get pi0 shower candidates
+
+            tags = shower_merging.GenerateTruthTags(events)
+
+            MakeInitialTaggingPlots(tags, n_photon_candidates, args.out + "basic_quantities/tagged/") # plots of the event topology
+
+            #* select events which have exactly 2 photon candidates, will deal with > 2 later
+            photon_candidates = n_photon_candidates == 2
+            events.Filter([photon_candidates], [photon_candidates])
+
+            for k in tags:
+                tags[k].mask = tags[k].mask[photon_candidates] # apply photon candidate masks to the tags
+
             start_showers, to_merge = shower_merging.SplitSampleReco(events)
 
-            if args.save:
-                photon_candidate_table.to_latex(args.out + "photon_candidate_selection.tex")
+            photon_candidate_table.to_latex(args.out + "photon_candidate_selection.tex")
+
         case _:
-            raise Exception(f"event selection type {args.pfo_selection_type} not understood.")
+            raise Exception(f"event selection type {args.selection_type} not understood.")
 
-    if args.save:
-        events_table.to_latex(args.out + "event_selection.tex")
-        pfo_table.to_latex(args.out + "pfo_selection.tex")
+    events_table.to_latex(args.out + "event_selection.tex")
+    pfo_table.to_latex(args.out + "pfo_selection.tex")
 
+    #* Plots for the candidate events only i.e. where nphoton candidates == 2
+    start_showers_all = np.logical_or(*start_showers)
+    _, background, signal_all = shower_merging.SignalBackground(events, start_showers, to_merge)
 
-    MakePlots(events, start_showers, to_merge, args.save, args.out)
+    data = BasicQuantities(events, start_showers_all, to_merge, signal_all, background)
+
+    print(f"Total number of Signal PFOs :{ak.sum(data['n_signal'])}")
+    print(f"Total number of background PFOs :{ak.sum(data['n_background'])}")
+
+    MakePlots(data, args.out + "basic_quantities/")
+
+    if args.selection_type == "reco":
+        data = BasicTaggedQuantities(events, tags, start_showers_all, signal_all, background)
+        MakePlotsTagged(data, tags, args.out + "basic_quantities/tagged/")
+
+    print(f"plots and tables saved to: {args.out}")
     return
 
 
@@ -134,10 +263,8 @@ if __name__ == "__main__":
     parser.add_argument(dest = "file", type = str, help = "NTuple file to study.")
     parser.add_argument("-e", "--events", dest = "nEvents", type = int, nargs = 2, default = [-1, 0], help = "number of events to analyse and number to skip (-1 is all)")
 
-    parser.add_argument("-b", "--beam-particle-selection", dest = "beam_selection_type", type = str, choices = ["cheated", "reco"], help = "type of beam particle selection to use.", required = True)
-    parser.add_argument("-p", "--pfo-selection", dest = "pfo_selection_type", type = str, choices = ["cheated", "reco"], help = "type of pfo selection to use when selecting photon shower candidates.", required = True)
+    parser.add_argument("-s", "--selection", dest = "selection_type", type = str, choices = ["cheated", "reco"], help = "type of selection to use.", required = True)
 
-    parser.add_argument("-s", "--save", dest = "save", action = "store_true", help = "whether to save the plots")
     parser.add_argument("-o", "--out", dest = "out", type = str, default = None, help = "directory to save plots")
     parser.add_argument("-a", "--annotation", dest = "annotation", type = str, default = None, help = "annotation to add to plots")
 
@@ -145,6 +272,7 @@ if __name__ == "__main__":
 
     if args.out is None:
         args.out = args.file.split("/")[-1].split(".")[0] + "/"
+    if args.out[-1] != "/": args.out += "/"
 
     print(vars(args))
     main(args)

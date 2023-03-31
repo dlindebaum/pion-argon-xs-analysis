@@ -203,7 +203,7 @@ def MichelScoreCut(events: Data) -> ak.Array:
     Returns:
         ak.Array: boolean mask.
     """
-    score = events.recoParticles.beam_michelScore / events.recoParticles.beam_nHits
+    score = ak.where(events.recoParticles.beam_nHits != 0, events.recoParticles.beam_michelScore / events.recoParticles.beam_nHits, -999)
     return score < 0.55
 
 

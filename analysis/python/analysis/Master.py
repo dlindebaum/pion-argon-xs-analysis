@@ -2070,7 +2070,7 @@ class ShowerPairs:
         metadata = {
             "event": self.events.eventNum,
             "run": self.events.run,
-            "surun": self.events.subRun
+            "subrun": self.events.subRun
         }
         df = pd.concat([pd.DataFrame(metadata), df], 1)
 

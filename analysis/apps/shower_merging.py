@@ -16,15 +16,15 @@ from rich import print
 from python.analysis import Master, shower_merging
 
 
-def RecoShowerPairsDataFrame(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array) -> pd.DataFrame:
+def RecoShowerPairsDataFrame(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array) -> tuple:
     copy = events.Filter(returnCopy = True) # make a local copy of the events object so that we can do both the cheated merging and regular merging
     quantities = shower_merging.ShowerMergeQuantities(copy, to_merge, args.cuts)
     quantities.bestCut = args.cut_type
     quantities.to_merge_dir = copy.recoParticles.direction
     quantities.to_merge_pos = copy.recoParticles.startPos
-    pair_mask = shower_merging.ShowerMerging(copy, start_showers, quantities, -1)
+    pair_mask, event_performance_table, pfo_performance_table = shower_merging.ShowerMerging(copy, start_showers, to_merge, quantities, -1)
     pairs = Master.ShowerPairs(copy, shower_pair_mask = np.logical_or(*pair_mask))
-    return pairs.CalculateAll()
+    return pairs.CalculateAll(), event_performance_table, pfo_performance_table
 
 
 def Filter(df : pd.DataFrame, value : str) -> pd.DataFrame:
@@ -36,22 +36,37 @@ def Filter(df : pd.DataFrame, value : str) -> pd.DataFrame:
 def main(args):
     events = Master.Data(args.file, nEvents = args.nEvents[0], start = args.nEvents[1])
 
-    shower_merging.Selection(events, args.beam_selection_type, args.pfo_selection_type)
+    shower_merging.Selection(events, args.selection_type, args.selection_type)
 
-    if args.beam_selection_type == "cheated":
+    #* tag the shower pairs based on event topology
+    tags = shower_merging.GenerateTruthTags(events)
+
+    tags_number = [-1] * len(tags["$\geq 1\pi^{0} + X$"].mask)
+    tags_map = {"not tagged" : [-1]}
+    for i, k in enumerate(tags):
+        tags_map[k] = [i]
+        tags_number = ak.where(tags[k].mask == True, i, tags_number)
+
+    tags_number = pd.DataFrame({"tag": ak.to_list(tags_number)})
+    tags_map = pd.DataFrame(tags_map)
+
+    if args.selection_type == "cheated":
         start_showers, to_merge = shower_merging.SplitSample(events)
 
-    if args.beam_selection_type == "reco":
+    if args.selection_type == "reco":
         start_showers, to_merge = shower_merging.SplitSampleReco(events)
-
 
     unmerged_pairs = Master.ShowerPairs(events, shower_pair_mask = np.logical_or(*start_showers))
     u_df = unmerged_pairs.CalculateAll()
 
-    r_df = RecoShowerPairsDataFrame(events, start_showers, to_merge)
+    metadata = pd.concat([u_df[["run", "subrun", "event"]], tags_number], axis = 1)
+
+    r_df, event_performance_table, pfo_performance_table = RecoShowerPairsDataFrame(events, start_showers, to_merge)
+    event_performance_table.to_latex(args.outDir + "event_performance_table.tex")
+    pfo_performance_table.to_latex(args.outDir + "pfo_performance_table.tex")
 
     cheat_merge = [pd.DataFrame([])]*2
-    if args.beam_selection_type == "cheated":
+    if args.selection_type == "cheated":
         events.MergePFOCheat(0)
         pairs = events.trueParticlesBT.mother == ak.flatten(events.trueParticles.number[events.trueParticles.PrimaryPi0Mask])
         cheated_pairs = Master.ShowerPairs(events, shower_pair_mask = pairs)
@@ -60,6 +75,8 @@ def main(args):
         cheat_merge[1] = Filter(c_df, "error")
 
     data = { # output data in hierarchical order
+        "tag_map" : tags_map,
+        "metadata" : metadata,
         "true" : Filter(u_df, "true"),
         "cheat": Filter(u_df, "cheated"),
         "unmerged/reco" : Filter(u_df, "reco"),
@@ -83,13 +100,12 @@ if __name__ == "__main__":
     parser.add_argument(dest = "file", type = str, help = "NTuple file to study.")
     parser.add_argument("-e", "--events", dest = "nEvents", type = int, nargs = 2, default = [-1, 0], help = "number of events to analyse and number to skip (-1 is all)")
 
-    parser.add_argument("-b", "--beam-particle-selection", dest = "beam_selection_type", type = str, choices = ["cheated", "reco"], help = "type of beam particle selection to use.", required = True)
-    parser.add_argument("-p", "--pfo-selection", dest = "pfo_selection_type", type = str, choices = ["cheated", "reco"], help = "type of pfo selection to use when selecting photon shower candidates.", required = True)
+    parser.add_argument("-s", "--selection", dest = "selection_type", type = str, choices = ["cheated", "reco"], help = "type of selection to use.", required = True)
 
     parser.add_argument("-c", "--cuts", dest = "cuts", type = str, help = "list of cuts to choose from", required = True)
     parser.add_argument("-t", "--type", dest = "cut_type", type = str, choices = ["purity", "efficiency"], help = "type of cut to pick.", required = True)
 
-    parser.add_argument("-d", "--directory", dest = "outDir", type = str, default = "", help = "directory to save files")
+    parser.add_argument("-d", "--directory", dest = "outDir", type = str, default = None, help = "directory to save files")
     parser.add_argument("-o", "--output-file", dest = "out", type = str, help = "output file name.")
 
     args = parser.parse_args()
@@ -103,6 +119,9 @@ if __name__ == "__main__":
     else:
         args.out.split(".")[0] += "_shower_pairs.hdf5"
     
+    if args.outDir is None:
+        args.outDir = args.file.split("/")[-1].split(".")[0]
+
     if args.outDir != "" and args.outDir[-1] != "/":
         args.outDir += "/"
 

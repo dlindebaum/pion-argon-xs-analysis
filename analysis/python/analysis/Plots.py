@@ -1008,14 +1008,14 @@ def UniqueData(data):
     return unique_labels, counts
 
 
-def PlotBar(data, width: float = 0.4, xlabel: str = "", title: str = "", label: str = "", alpha: float = 1, newFigure: bool = True, annotation: str = None, bar_labels : bool = True):
+def PlotBar(data, width: float = 0.4, xlabel: str = "", title: str = "", label: str = "", alpha: float = 1, newFigure: bool = True, annotation: str = None, bar_labels : bool = True, color = None):
     """ Plot a bar graph or unique items in data.
     """
     if newFigure is True:
         plt.figure()
 
     unique, counts = UniqueData(data)
-    bar = plt.bar(unique, counts, width, label=label, alpha=alpha)
+    bar = plt.bar(unique, counts, width, label=label, alpha=alpha, color = color)
     if bar_labels: plt.bar_label(bar, counts)
     plt.ylabel("Counts")
     plt.xlabel(xlabel)
