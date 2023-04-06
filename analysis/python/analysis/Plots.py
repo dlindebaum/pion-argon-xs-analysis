@@ -1090,28 +1090,29 @@ def PlotStackedBar(bars, labels, xlabel : str = None, colours : list = None, alp
     bar = np.unique(bar)
 
     # pad empty bars and sort
-    for i in range(len(bars)):
+    fixed_bars = list(bars) # copy function input to avoid mutating arguement
+    for i in range(len(fixed_bars)):
         for j in range(len(bar)):
-            if(bar[j] not in bars[i][0]):
-                bars[i][0] = np.append(bars[i][0], bar[j])
-                bars[i][1] = np.append(bars[i][1], 0)
-        bars[i] = [j[bars[i][0].argsort()] for j in bars[i]]
-        bars[i][0] = [str(i) for i in bars[i][0]] # convert bar values to string for better plotting
+            if(bar[j] not in fixed_bars[i][0]):
+                fixed_bars[i][0] = np.append(fixed_bars[i][0], bar[j])
+                fixed_bars[i][1] = np.append(fixed_bars[i][1], 0)
+        fixed_bars[i] = [j[fixed_bars[i][0].argsort()] for j in fixed_bars[i]]
+        fixed_bars[i][0] = [str(i) for i in fixed_bars[i][0]] # convert bar values to string for better plotting
 
     # stack counts
-    for i in range(len(bars)):
+    for i in range(len(fixed_bars)):
         if i == 0: continue
-        bars[i][1] += bars[i-1][1]
-    plt.figure()
+        fixed_bars[i][1] += fixed_bars[i-1][1]
 
+    plt.figure()
     if colours == None:
-        for b in reversed(bars):
+        for b in reversed(fixed_bars):
             bar = plt.bar(b[0], b[1], alpha = alpha, width = width)
     else:
-        for b, c in zip(reversed(bars), reversed(colours)):
+        for b, c in zip(reversed(fixed_bars), reversed(colours)):
             bar = plt.bar(b[0], b[1], color = c, alpha = alpha, width = width)
 
-    plt.legend(labels = labels[::-1], title = label_title)
+    plt.legend(labels = labels, title = label_title)
     plt.xlabel(xlabel)
     plt.ylabel("Counts")
     plt.tight_layout()
