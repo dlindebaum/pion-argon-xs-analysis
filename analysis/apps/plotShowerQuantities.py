@@ -201,8 +201,8 @@ def main(args):
         args.quantity = ""
 
     if args.tags is not None:
-        tag_map = pd.read_hdf(args.files[0], "tag_map")
-        tag_number = pd.read_hdf(args.files[0], "metadata")["tag"]
+        tag_map = pd.read_hdf(args.file, "tag_map")
+        tag_number = pd.read_hdf(args.file, "metadata")["tag"]
         
         tags = shower_merging.GenerateTruthTags()
         for t in tags.name_simple.values:

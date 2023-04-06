@@ -130,6 +130,26 @@ class ShowerMergeQuantities:
         return mask
 
 
+    def GenerateDataFrame(self, signal : ak.Array, background : ak.Array):
+        """ Generates a pandas dataframe with the geometric quantities.
+
+        Args:
+            signal (ak.Array): signal PFO mask
+            background (ak.Array): background PFO mask
+        """
+        #* create dataframe and add all calculated quantities
+        for i in range(len(self.selectionVariables)):
+            print(self.selectionVariables[i])
+            if i == 0:
+                df = ak.to_pandas(getattr(self, self.selectionVariables[i]), anonymous=self.selectionVariables[i])
+            else:
+                df = pd.concat([df, ak.to_pandas(getattr(self, self.selectionVariables[i]), anonymous=self.selectionVariables[i])], axis = 1)
+        
+        #* add signal and background boolean masks
+        df = pd.concat([df, ak.to_pandas(signal, anonymous="signal")], axis = 1)
+        df = pd.concat([df, ak.to_pandas([background, background], anonymous="background")], axis = 1)
+        return df
+
     def SaveQuantitiesToCSV(self, signal : ak.Array, background : ak.Array, filename : str = "merge-quantities.csv"):
         """ Saves merge quantities as a pandas dataframe to file.
 
@@ -138,18 +158,7 @@ class ShowerMergeQuantities:
             background (ak.Array): background PFO mask
             filename (str, optional): _description_. Defaults to "merge-quantities.csv".
         """
-        #* create dataframe and add all calculated quantities
-        for i in range(len(self.selectionVariables)):
-            print(self.selectionVariables[i])
-            if i == 0:
-                df = ak.to_pandas(getattr(self, self.selectionVariables[i]), anonymous=self.selectionVariables[i])
-            else:
-                df = pd.concat([df, ak.to_pandas(getattr(self, self.selectionVariables[i]), anonymous=self.selectionVariables[i])], 1)
-        
-        #* add signal and background boolean masks
-        df = pd.concat([df, ak.to_pandas(signal, anonymous="signal")], 1)
-        df = pd.concat([df, ak.to_pandas([background, background], anonymous="background")], 1)
-        df.to_csv(filename)
+        self.GenerateDataFrame(signal, background).to_csv(filename)
 
 
     def LoadQuantitiesFromCSV(self, filename : str):
@@ -746,7 +755,10 @@ def ShowerMergingPFOPerformance(events : Master.Data, start_showers : ak.Array, 
     target_num = target_num[ak.num(target_num) > 0]
 
     mismatch = ak.ravel(actual_num == target_num)
-    mismatch_rate = ak.count(mismatch[mismatch == False]) / ak.count(mismatch)
+    if ak.count(mismatch) == 0:
+        mismatch_rate = 0
+    else:
+        mismatch_rate = ak.count(mismatch[mismatch == False]) / ak.count(mismatch)
     matched_rate = 1 - mismatch_rate
     print(f"mismatch (%): {100 * mismatch_rate}")
 

@@ -5,7 +5,6 @@ Created on: 14/03/2023 15:14
 Author: Shyam Bhuller
 
 Description: Applies beam particle selection, PFO selection, produces tables and basic plots.
-#TODO Handle multiple root file inputs
 #? have the capability of storing quantities to hdf5 files (and capability to read them in)?
 """
 import argparse
@@ -15,9 +14,9 @@ import sys
 import awkward as ak
 import matplotlib.pyplot as plt
 import numpy as np
-from rich import print
+from rich import print as rprint
 
-from python.analysis import Master, Plots, shower_merging, EventSelection, Processing
+from python.analysis import Master, Plots, shower_merging, Processing
 
 
 def BasicQuantities(events : Master.Data, start_showers_all : ak.Array, to_merge : ak.Array, signal_all : ak.Array, background : ak.Array) -> dict:
@@ -266,6 +265,7 @@ def main(args):
     output = Processing.mutliprocess(run, args.file, args.batches, args.events, vars(args))
 
     tags = shower_merging.GenerateTruthTags()
+    selected_tags = shower_merging.GenerateTruthTags()
     n_photon_candidates = []
 
     data = {}
@@ -274,13 +274,20 @@ def main(args):
     for o in output:
         all_tags = o["tags"]
         for k, t in all_tags.items():
-            if k in tags:
-                tags[k].mask = ak.concatenate([tags[k].mask, t.mask])
-            else:
+            if tags[k].mask is None:
                 tags[k].mask = t.mask
+            else:
+                tags[k].mask = ak.concatenate([tags[k].mask, t.mask])
+
+        pi0_candidate_tags = o["photon_candidate_tags"]
+        for k, t in pi0_candidate_tags.items():
+            if selected_tags[k].mask is None:
+                selected_tags[k].mask = t.mask
+            else:
+                selected_tags[k].mask = ak.concatenate([selected_tags[k].mask, t.mask])
 
         if "n_photon_candidates" in o.keys():
-            n_photon_candidates = ak.concatenate([o["n_photon_candidates"], n_photon_candidates])
+            n_photon_candidates = ak.concatenate([n_photon_candidates, o["n_photon_candidates"]])
 
         for k, v in o["data"].items():
             if k in data:
@@ -293,7 +300,6 @@ def main(args):
                 tagged_data[k] = ak.concatenate([tagged_data[k], v], axis = -1)
             else:
                 tagged_data[k] = ak.Array(v)
-
 
     def format_bar_plots(d):
         pdg_list = np.unique(ak.ravel(d[:, 0]))
@@ -314,9 +320,9 @@ def main(args):
     MakePlots(data, args.out + "basic_quantities/")
 
     if args.selection_type == "reco":
-        MakePlotsTagged(tagged_data, tags, args.out + "basic_quantities/tagged/")
+        MakePlotsTagged(tagged_data, selected_tags, args.out + "basic_quantities/tagged/")
 
-    print(f"plots and tables saved to: {args.out}")
+    rprint(f"plots and tables saved to: {args.out}")
     return
 
 
@@ -346,5 +352,5 @@ if __name__ == "__main__":
     if args.use_threads:
         args.batches = os.cpu_count()
 
-    print(vars(args))
+    rprint(vars(args))
     main(args)
