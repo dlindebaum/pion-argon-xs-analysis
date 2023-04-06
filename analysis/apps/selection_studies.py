@@ -14,6 +14,7 @@ import sys
 import awkward as ak
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from rich import print as rprint
 
 from python.analysis import Master, Plots, shower_merging, Processing
@@ -201,6 +202,46 @@ def MakeInitialTaggingPlots(tags : dict, n_photons : ak.Array, out : str):
     return
 
 
+def MergeTables(tables : list) -> pd.DataFrame:
+    """ Merges selection performance tables.
+
+    Args:
+        tables (list): list of selection performance tables
+
+    Returns:
+        pd.DataFrame: merged table
+    """
+    table = {}
+    table["number of events which pass the cut"] = sum(t["number of events which pass the cut"] for t in tables)
+    table["single_efficiency"] = 100 * table["number of events which pass the cut"] / table["number of events which pass the cut"][0]
+    table["number of events after successive cuts"] = sum(t["number of events after successive cuts"] for t in tables)
+    relative_efficiency = np.append([np.nan], 100 * table["number of events after successive cuts"].values[1:]
+                                    / table["number of events after successive cuts"].values[:-1])
+    table["single_efficiency"] = 100 * table["number of events after successive cuts"] / table["number of events after successive cuts"][0]
+    table["relative efficiency"] = relative_efficiency
+    return pd.DataFrame(table)
+
+
+def FormatBarPlots(d : ak.Array) -> ak.Array:
+    """ Merges data stored in "bar plot format".
+
+    Args:
+        d (ak.Array): "bar plot" like data (first array is the labels, second is the counts)
+
+    Returns:
+        ak.Array: merged data
+    """
+    pdg_list = np.unique(ak.ravel(d[:, 0]))
+    counts = []
+    for pdg in pdg_list:
+        to_sum = d[:, 0] == pdg
+        s = ak.sum(d[:, 1][to_sum], axis = -1)
+        counts.append(s)
+    counts = ak.concatenate(ak.unflatten(counts, 1, -1), -1)
+    labels = [pdg_list] * len(counts)
+    return ak.concatenate([ak.unflatten(labels, 1), ak.unflatten(counts, 1)], 1)
+
+
 def run(i, file, n_events, start, args):
     with open(f"out_{i}.log", "w") as sys.stdout, open(f"out_{i}.log", "w") as sys.stderr:
         events = Master.Data(file, nEvents = n_events, start = start) # load data
@@ -227,9 +268,6 @@ def run(i, file, n_events, start, args):
                     photon_candidate_tags[k].mask = mask[photon_candidates] # apply photon candidate masks to the tags
 
                 start_showers, to_merge = shower_merging.SplitSampleReco(events)
-
-                # photon_candidate_table.to_latex(args.out + "photon_candidate_selection.tex")
-
             case _:
                 raise Exception(f"event selection type {args['selection_type']} not understood.")
 
@@ -262,8 +300,9 @@ def main(args):
     shower_merging.SetPlotStyle()
     os.makedirs(args.out + "basic_quantities/tagged/", exist_ok = True)
 
-    output = Processing.mutliprocess(run, args.file, args.batches, args.events, vars(args))
+    output = Processing.mutliprocess(run, args.file, args.batches, args.events, vars(args)) # run the main analysing method
 
+    #* merge output from processes
     tags = shower_merging.GenerateTruthTags()
     selected_tags = shower_merging.GenerateTruthTags()
     n_photon_candidates = []
@@ -301,22 +340,19 @@ def main(args):
             else:
                 tagged_data[k] = ak.Array(v)
 
-    def format_bar_plots(d):
-        pdg_list = np.unique(ak.ravel(d[:, 0]))
-        counts = []
-        for pdg in pdg_list:
-            to_sum = d[:, 0] == pdg
-            s = ak.sum(d[:, 1][to_sum], axis = -1)
-            counts.append(s)
-        counts = ak.concatenate(ak.unflatten(counts, 1, -1), -1)
-        labels = [pdg_list] * len(counts)
-        return ak.concatenate([ak.unflatten(labels, 1), ak.unflatten(counts, 1)], 1)
 
-    tagged_data["pdg"] = ak.to_numpy(format_bar_plots(tagged_data["pdg"]))
-    tagged_data["mother_pdg"] = ak.to_numpy(format_bar_plots(tagged_data["mother_pdg"]))
+    tagged_data["pdg"] = ak.to_numpy(FormatBarPlots(tagged_data["pdg"]))
+    tagged_data["mother_pdg"] = ak.to_numpy(FormatBarPlots(tagged_data["mother_pdg"]))
 
+    #* merge and save tables
+    MergeTables([o["events_table"] for o in output]).to_latex(args.out + "event_selection.tex")
+    MergeTables([o["pfo_table"] for o in output]).to_latex(args.out + "pfo_selection.tex")
+
+    if "photon_candidate_table" in output[0]:
+        MergeTables([o["photon_candidate_table"] for o in output]).to_latex(args.out + "photon_candidate_selection.tex")
+
+    #* make plots
     MakeInitialTaggingPlots(tags, n_photon_candidates, args.out + "basic_quantities/tagged/") # plots of the event topology
-
     MakePlots(data, args.out + "basic_quantities/")
 
     if args.selection_type == "reco":
