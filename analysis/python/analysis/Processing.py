@@ -105,7 +105,7 @@ def GenerateFunctionArguments(files : list, nBatches : int, nEvents : int, args 
 
 
 @Master.timer
-def mutliprocess(func, files : list, nBatches : list, nEvents : list, args : dict):
+def mutliprocess(func, files : list, nBatches : list, nEvents : list, args : dict, nodes : int = None):
     """ Run a function with parallel processing, requires that it analyses ntuples.
 
     Args:
@@ -114,11 +114,12 @@ def mutliprocess(func, files : list, nBatches : list, nEvents : list, args : dic
         nBatches (list): number of batches
         nEvents (list): number of events
         args (dict): args for function
+        nodes (int) : number of processors to use, if None all are used.
 
     Returns:
         Any: function output
     """
-    pool = ProcessPool() # use all my threads, damn it!
+    pool = ProcessPool(nodes = nodes) # use all my threads, damn it!
 
     inputs = GenerateFunctionArguments(files, nBatches, nEvents, args = args)
     batch_numbers = list(range(len(inputs[0])))

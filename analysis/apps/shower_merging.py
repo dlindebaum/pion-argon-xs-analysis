@@ -14,7 +14,7 @@ import sys
 import awkward as ak
 import numpy as np
 import pandas as pd
-from rich import print
+from rich import print as rprint
 
 from python.analysis import Master, shower_merging, Processing
 
@@ -37,7 +37,10 @@ def Filter(df : pd.DataFrame, value : str) -> pd.DataFrame:
 
 
 def run(i, file, n_events, start, args):
-    with open(f"out_{i}.log", "w") as sys.stdout, open(f"out_{i}.log", "w") as sys.stderr:
+    batch_num = i # function arguments are pass by reference, so keep track of the batch number internally
+    # original_out = sys.stdout
+    # rprint(f"starting batch {i}")
+    with open(f"out_{batch_num}.log", "w") as sys.stdout, open(f"out_{batch_num}.log", "w") as sys.stderr:
         events = Master.Data(file, nEvents = n_events, start = start)
 
         shower_merging.Selection(events, args["selection_type"], args["selection_type"])
@@ -66,8 +69,6 @@ def run(i, file, n_events, start, args):
         metadata = pd.concat([u_df[["run", "subrun", "event"]], tags_number], axis = 1)
 
         r_df, event_performance_table, pfo_performance_table = RecoShowerPairsDataFrame(events, start_showers, to_merge, args["cuts"], args["cut_type"])
-        # event_performance_table.to_latex(args.outDir + "event_performance_table.tex")
-        # pfo_performance_table.to_latex(args.outDir + "pfo_performance_table.tex")
 
         cheat_merge = [pd.DataFrame([])]*2
         if args["selection_type"] == "cheated":
@@ -90,13 +91,32 @@ def run(i, file, n_events, start, args):
             "merged_cheat/reco" : cheat_merge[0],
             "merged_cheat/error" : cheat_merge[1],
         }
-
+        # rprint(f"finished batch {batch_num}", file = original_out)
         return data, event_performance_table, pfo_performance_table
 
 
+def MergeTables(tables : list) -> dict:
+    """ Combine tables produced from run().
+
+    Args:
+        tables (list): list of tables
+
+    Returns:
+        dict: combined tables
+    """
+    table = {}
+    for t in tables:
+        for k, v in t.items():
+            if k in table:
+                table[k][0] = table[k][0] + v
+            else:
+                table[k] = [v]
+    return pd.DataFrame(table, index = ["counts"]).T
+
+
 def main(args):
-    output = Processing.mutliprocess(run, args.file, args.batches, args.events, vars(args))
-    print(len(output))
+    output = Processing.mutliprocess(run, args.file, args.batches, args.events, vars(args), args.threads)
+    rprint(len(output))
 
     data = {}
     event_perf_tables = []
@@ -114,8 +134,17 @@ def main(args):
             else:
                 data[k] = v
 
-    print(data)
+    event_table = MergeTables(event_perf_tables)
+    event_table["percentage"] = 100 * event_table["counts"] / event_table["counts"][0]
+    pfo_table = MergeTables(pfo_perf_tables)
+    pfo_table["percentage"] = 100 * pfo_table["counts"] / pfo_table["counts"][0]
+
+    rprint(event_table)
+    rprint(pfo_table)
+
     os.makedirs(args.out, exist_ok = True)
+    event_table.to_latex(args.out + "event_performance_table.tex")
+    pfo_table.to_latex(args.out + "pfo_performance_table.tex")
     file = pd.HDFStore(args.out + "shower_pairs.hdf5")
     for k, v in data.items():
         v.to_hdf(file, k + "/")
@@ -131,7 +160,7 @@ if __name__ == "__main__":
     parser.add_argument("-b", "--batches", dest = "batches", type = int, default = None, help = "number of batches to split n tuple files into when parallel processing processing data.")
     parser.add_argument("-e", "--events", dest = "events", type = int, default = None, help = "number of events to process when parallel processing data.")
 
-    parser.add_argument("-t", "--used-threads", dest = "use_threads", action = "store_true", help = "sets the number of batches to the number of threads on the machine.")
+    parser.add_argument("-t", "--threads", dest = "threads", type = int, default = 1, help = "number of threads to use when processsing")
 
     parser.add_argument("-s", "--selection", dest = "selection_type", type = str, choices = ["cheated", "reco"], help = "type of selection to use.", required = True)
 
@@ -149,8 +178,5 @@ if __name__ == "__main__":
             args.out = "shower_merging/" #? how to make a better name for multiple input files?
     if args.out[-1] != "/": args.out += "/"
 
-    if args.use_threads:
-        args.batches = os.cpu_count()
-
-    print(vars(args))
+    rprint(vars(args))
     main(args)

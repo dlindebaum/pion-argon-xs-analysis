@@ -38,7 +38,7 @@ def run(i, file, n_events, start, args):
 
 def main(args):
     os.makedirs(args.out, exist_ok = True)
-    output = Processing.mutliprocess(run, args.file, args.batches, args.events, vars(args))
+    output = Processing.mutliprocess(run, args.file, args.batches, args.events, vars(args), args.threads)
     file_path = args.out + "geometric_quantities.csv"
     mode = "w"
     for o in output:
@@ -55,7 +55,7 @@ if __name__ == "__main__":
     parser.add_argument("-b", "--batches", dest = "batches", type = int, default = None, help = "number of batches to split n tuple files into when parallel processing processing data.")
     parser.add_argument("-e", "--events", dest = "events", type = int, default = None, help = "number of events to process when parallel processing data.")
 
-    parser.add_argument("-t", "--used-threads", dest = "use_threads", action = "store_true", help = "sets the number of batches to the number of threads on the machine.")
+    parser.add_argument("-t", "--threads", dest = "threads", type = int, default = 1, help = "number of threads to use when processsing")
 
     parser.add_argument("-s", "--selection", dest = "selection_type", type = str, choices = ["cheated", "reco"], help = "type of selection to use.", required = True)
 

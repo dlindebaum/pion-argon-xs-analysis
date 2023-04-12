@@ -755,27 +755,23 @@ def ShowerMergingPFOPerformance(events : Master.Data, start_showers : ak.Array, 
     target_num = target_num[ak.num(target_num) > 0]
 
     mismatch = ak.ravel(actual_num == target_num)
-    if ak.count(mismatch) == 0:
-        mismatch_rate = 0
-    else:
-        mismatch_rate = ak.count(mismatch[mismatch == False]) / ak.count(mismatch)
-    matched_rate = 1 - mismatch_rate
-    print(f"mismatch (%): {100 * mismatch_rate}")
+    matched = ak.count(mismatch) - ak.count(mismatch[mismatch == False])
 
-    print(f"number of signal PFOs before cutting: {nSignal}")
-    print(f"number of background PFOs before cutting: {nBackground}")
-    table = [
-        ["PFO performance metric"                     , "number of PFOs"        , "total efficiency (%)"     , "signal/background efficiency (%)", "merged/unmerged efficiency (%)" ],
-        ["signal PFOs merged and correctly matched"   , int(nTp * matched_rate) , 100 * nTp * matched_rate/n , 100 * matched_rate * nTp/nSignal  , 100 * matched_rate * nTp/nMerged ],
-        ["signal PFOs merged and incorrectly matched" , int(nTp * mismatch_rate), 100 * nTp * mismatch_rate/n, 100 * mismatch_rate * nTp/nSignal , 100 * mismatch_rate * nTp/nMerged],
-        ["background PFOs merged (false positive)"    , nFp                     , 100 * nFp/n                , 100 * nFp/nBackground             , 100 * nFp/nMerged                ],
-        ["signal PFOs not merged (false negative)"    , nFn                     , 100 * nFn/n                , 100 * nFn/nSignal                 , 100 * nFn/nUnmerged              ],
-        ["background PFOs not merged (true negatives)", nTn                     , 100 * nTn/n                , 100 * nTn/nBackground             , 100 * nTn/nUnmerged              ],
-        ["signal PFOs correctly matched"              , "-"                     , "-"                        , 100 * matched_rate                , 100 * matched_rate               ]
-        ]
+    data = {
+        "PFOs" : n,
+        "signal PFOs" : nSignal,
+        "background PFOs" : nBackground,
+        "merged PFOs" : nMerged,
+        "signal PFOs merged" : nTp,
+        "background PFOs merged" : nFp,
+        "unmerged PFOs" : nUnmerged,
+        "signal PFOs not merged" : nFn,
+        "background PFOs not merged" : nTn,
+        "signal PFOs matched" : matched
+    }
+    print(data)
+    return data
 
-    print(tabulate(table, floatfmt = ".2f", tablefmt = "fancy_grid"))
-    return pd.DataFrame(table)
 
 def ShowerMergingEventPerformance(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array, scores : ak.Array):
     """ Calculates performance metrics for how well the shower merging performs on a per PFO basis.
@@ -812,28 +808,18 @@ def ShowerMergingEventPerformance(events : Master.Data, start_showers : ak.Array
     signal_only = (nFp == 0) & (nTp > 0)
     background_only = (nFp > 0) & (nTp == 0)
 
-    n = ak.count(events.eventNum)
-    n_t = ak.count(nSignal[nSignal > 0])
-    n_m = ak.count(nMerged[nMerged > 0])
-    print(f"number of events after selection: {n}")
-    print(f"number of events with PFOs to merge: {n_t}")
-    print(f"number of events where we merge: {n_m}")
-    print(f"number of events where we merge signal: {ak.count(nTp[nTp > 0])}")
-    print(f"number of events where we merge background: {ak.count(nFp[nFp > 0])}")
-    print(f"number of events where we merge signal and background {CountMask(t)}")
-    print(f"number of events where we merge only signal {CountMask(signal_only)}")
-    print(f"number of events where we merge only background {CountMask(background_only)}")
-
-    table = [
-        ["performance metric", "number of events", "total efficiency", "merging efficiency"],
-        ["signal merged"               , ak.count(nTp[nTp > 0]), 100 * ak.count(nTp[nTp > 0]) / n_t, 100 * ak.count(nTp[nTp > 0]) / n_m],
-        ["only signal merged"          , CountMask(signal_only), 100 * CountMask(signal_only) / n_t, 100 * CountMask(signal_only) / n_m],
-        ["signal and background merged", CountMask(t)          , 100 * CountMask(t) / n_t          , 100 * CountMask(t) / n_m]
-        ]
-
-    print(tabulate(table, floatfmt=".2f", tablefmt="fancy_grid"))
-    return pd.DataFrame(table)
-
+    data = {
+        "events after selection" : ak.count(events.eventNum),
+        "events with PFOs to merge" : ak.count(nSignal[nSignal > 0]),
+        "events where PFOs are merged" : ak.count(nMerged[nMerged > 0]),
+        "events where we merge signal" : ak.count(nTp[nTp > 0]),
+        "events where we merge background" : ak.count(nFp[nFp > 0]),
+        "events where we merge signal and background" : CountMask(t),
+        "events where we merge only signal" : CountMask(signal_only),
+        "events where we merge only background" : CountMask(background_only)
+        }
+    print(data)
+    return data
 
 
 class Tags(dict):
