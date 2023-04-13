@@ -38,8 +38,6 @@ def Filter(df : pd.DataFrame, value : str) -> pd.DataFrame:
 
 def run(i, file, n_events, start, args):
     batch_num = i # function arguments are pass by reference, so keep track of the batch number internally
-    # original_out = sys.stdout
-    # rprint(f"starting batch {i}")
     with open(f"out_{batch_num}.log", "w") as sys.stdout, open(f"out_{batch_num}.log", "w") as sys.stderr:
         events = Master.Data(file, nEvents = n_events, start = start)
 
@@ -91,7 +89,6 @@ def run(i, file, n_events, start, args):
             "merged_cheat/reco" : cheat_merge[0],
             "merged_cheat/error" : cheat_merge[1],
         }
-        # rprint(f"finished batch {batch_num}", file = original_out)
         return data, event_performance_table, pfo_performance_table
 
 

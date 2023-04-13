@@ -144,22 +144,19 @@ def PlotDiff(data : dict, xlabel : str, outDir : str, name : str, args, legend_l
 
 
 def main(args):
-    #* plot styling
-    plt.style.use('ggplot')
-    plt.rcParams.update({'patch.linewidth': 1})
-    plt.rcParams.update({'font.size': 10})
+    shower_merging.SetPlotStyle()
 
     #* plot ranges
     plot_ranges = {
-        "reco": info(),
-        "true": info(),
+        "reco": info([0, 500], None, [0, 1000], [0, 1000], [0, 1000]),
+        "true": info([0, 500], None, [0, 1000], [0, 1000], [0, 1000]),
         "error": info(
-            [-1, 10], 
-            [-1, 10], 
-            [-1, 10], 
-            [-1, 10], 
-            [-1, 10]),
-        "cheat" : info()
+            [-1, 1], 
+            [-1, 1], 
+            [-1, 1], 
+            [-1, 1], 
+            [-1, 1]),
+        "cheat" : info([0, 500], None, [0, 1000], [0, 1000], [0, 1000])
     }
 
     #* plot labels

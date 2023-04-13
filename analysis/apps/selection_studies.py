@@ -162,8 +162,9 @@ def MakePlotsTagged(data : dict, tags : dict, out : str):
     Plots.PlotHist(data["n_PFO"].to_list(), bins = 20, xlabel = "number of PFOs", stacked = True, label = labels, color = colours, annotation = args.annotation)
     Plots.Save("tagged_nPFO", out)
 
-    Plots.PlotHist(data["n_signal_tagged"].to_list(), bins = np.arange(n_signal_bins) - 0.5, xlabel = "mutiplicity", stacked = True, label = labels, color = colours, annotation = args.annotation)
-    plt.xticks(np.arange(n_signal_bins))
+    truncated_tagged_signal = ak.where(data["n_signal_tagged"] > 11, 11, data["n_signal_tagged"])
+    Plots.PlotHist(truncated_tagged_signal.to_list(), bins = np.arange(13) - 0.5, xlabel = "mutiplicity", stacked = True, label = labels, color = colours, annotation = args.annotation)
+    plt.xticks(np.arange(12))
     Plots.Save("tagged_multiplicity", out)
 
     Plots.PlotHist(data["n_signal_tagged"].to_list(), bins = 20, xlabel = "number of signal PFOs", stacked = True, label = labels, color = colours, annotation = args.annotation)
@@ -197,7 +198,7 @@ def MakeInitialTaggingPlots(tags : dict, n_photons : ak.Array, out : str):
         plt.figure()
         for name, t in tags.items():
             c = shower_merging.CountMask(t.mask[n_photons == s])
-            Plots.PlotBar([name]*c, xlabel = "truth tag", color = t.colour, label = t.name_simple, title = f"number of shower candidates: {s}", newFigure = False)
+            Plots.PlotBar([name]*c, xlabel = "truth tag", color = t.colour, label = t.name_simple, title = f"number of shower candidates: {s} | total number of events : {ak.sum(n_photons == s)}", newFigure = False)
         Plots.Save(f"truth_tags_nPFO_{s}", out)
     return
 
@@ -215,8 +216,7 @@ def MergeTables(tables : list) -> pd.DataFrame:
     table["number of events which pass the cut"] = sum(t["number of events which pass the cut"] for t in tables)
     table["single_efficiency"] = 100 * table["number of events which pass the cut"] / table["number of events which pass the cut"][0]
     table["number of events after successive cuts"] = sum(t["number of events after successive cuts"] for t in tables)
-    relative_efficiency = np.append([np.nan], 100 * table["number of events after successive cuts"].values[1:]
-                                    / table["number of events after successive cuts"].values[:-1])
+    relative_efficiency = np.append([np.nan], 100 * table["number of events after successive cuts"].values[1:] / table["number of events after successive cuts"].values[:-1])
     table["single_efficiency"] = 100 * table["number of events after successive cuts"] / table["number of events after successive cuts"][0]
     table["relative efficiency"] = relative_efficiency
     return pd.DataFrame(table)

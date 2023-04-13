@@ -848,14 +848,14 @@ class PairHistsBatchPlotter(HistogramBatchPlotter):
         return
 
 
-def Save(name: str = "plot", directory: str = "", dpi = 160):
+def Save(name: str = "plot", directory: str = "", dpi = 300):
     """ Saves the last created plot to file. Run after one the functions below.
 
     Args:
         name (str, optional): Name of plot. Defaults to "plot".
         directory (str, optional): directory to save plot in.
     """
-    plt.savefig(directory + name + ".png", dpi = dpi)
+    plt.savefig(directory + name + ".png", dpi = dpi, bbox_inches='tight')
     plt.close()
 
 

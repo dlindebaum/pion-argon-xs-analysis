@@ -25,6 +25,7 @@ def SetPlotStyle():
     plt.rcParams.update({'patch.linewidth': 1})
     plt.rcParams.update({'font.size': 10})
     plt.rcParams.update({"axes.titlecolor" : "#555555"})
+    plt.rcParams.update({"axes.titlesize" : 12})
 
 
 @dataclass(slots = True)
