@@ -859,7 +859,7 @@ def Save(name: str = "plot", directory: str = "", dpi = 300):
     plt.close()
 
 
-def Plot(x, y, xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", marker: str = "", linestyle: str = "-", newFigure: bool = True, annotation: str = None):
+def Plot(x, y, xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", marker: str = "", linestyle: str = "-", newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None):
     """ Make scatter plot.
     """
     if newFigure is True:
@@ -867,6 +867,8 @@ def Plot(x, y, xlabel: str = "", ylabel: str = "", title: str = "", label: str =
     plt.plot(x, y, marker=marker, linestyle=linestyle, label=label)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
+    plt.xscale(x_scale)
+    plt.yscale(y_scale)
     plt.title(title)
     if label != "":
         plt.legend()
@@ -1112,7 +1114,7 @@ def PlotStackedBar(bars, labels, xlabel : str = None, colours : list = None, alp
         for b, c in zip(reversed(fixed_bars), reversed(colours)):
             bar = plt.bar(b[0], b[1], color = c, alpha = alpha, width = width)
 
-    plt.legend(labels = labels, title = label_title)
+    plt.legend(labels = list(reversed(labels)), title = label_title)
     plt.xlabel(xlabel)
     plt.ylabel("Counts")
     plt.tight_layout()

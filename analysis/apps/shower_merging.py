@@ -30,6 +30,20 @@ def RecoShowerPairsDataFrame(events : Master.Data, start_showers : ak.Array, to_
     return pairs.CalculateAll(), event_performance_table, pfo_performance_table
 
 
+def CheatedShowerPairsDataFrame(events : Master.Data, start_showers : ak.Array):
+    copy = events.Filter(returnCopy = True)
+    showers = copy.trueParticlesBT.number[np.logical_or(*start_showers)] # use this to create the pair mask for the shower pairs
+    copy.MergePFOCheat(0)
+
+    showers_mask = []
+    for i in range(2):
+        showers_mask.append(copy.trueParticlesBT.number == showers[:, i])
+    showers_mask = np.logical_or(*showers_mask)
+    # pairs = events.trueParticlesBT.mother == ak.flatten(events.trueParticles.number[events.trueParticles.PrimaryPi0Mask])
+    cheated_pairs = Master.ShowerPairs(copy, shower_pair_mask = showers_mask)
+    return cheated_pairs.CalculateAll()
+
+
 def Filter(df : pd.DataFrame, value : str) -> pd.DataFrame:
     out = df.filter(regex = value + "*")
     out.columns = [out.columns[i].replace(value + "_", "") for i in range(len(out.columns))]
@@ -68,14 +82,7 @@ def run(i, file, n_events, start, args):
 
         r_df, event_performance_table, pfo_performance_table = RecoShowerPairsDataFrame(events, start_showers, to_merge, args["cuts"], args["cut_type"])
 
-        cheat_merge = [pd.DataFrame([])]*2
-        if args["selection_type"] == "cheated":
-            events.MergePFOCheat(0)
-            pairs = events.trueParticlesBT.mother == ak.flatten(events.trueParticles.number[events.trueParticles.PrimaryPi0Mask])
-            cheated_pairs = Master.ShowerPairs(events, shower_pair_mask = pairs)
-            c_df = cheated_pairs.CalculateAll()
-            cheat_merge[0] = Filter(c_df, "reco")
-            cheat_merge[1] = Filter(c_df, "error")
+        c_df = CheatedShowerPairsDataFrame(events, start_showers)
 
         data = { # output data in hierarchical order
             "tag_map" : tags_map,
@@ -86,8 +93,8 @@ def run(i, file, n_events, start, args):
             "unmerged/error" : Filter(u_df, "error"),
             "merged/reco" : Filter(r_df, "reco"),
             "merged/error" : Filter(r_df, "error"),
-            "merged_cheat/reco" : cheat_merge[0],
-            "merged_cheat/error" : cheat_merge[1],
+            "merged_cheat/reco" : Filter(c_df, "reco"),
+            "merged_cheat/error" : Filter(c_df, "error"),
         }
         return data, event_performance_table, pfo_performance_table
 
@@ -162,7 +169,7 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--selection", dest = "selection_type", type = str, choices = ["cheated", "reco"], help = "type of selection to use.", required = True)
 
     parser.add_argument("-c", "--cuts", dest = "cuts", type = str, help = "list of cuts to choose from", required = True)
-    parser.add_argument("-T", "--type", dest = "cut_type", type = str, choices = ["purity", "efficiency"], help = "type of cut to pick.", required = True)
+    parser.add_argument("-T", "--type", dest = "cut_type", type = str, choices = ["balanced", "purity", "efficiency", "s_x_purity"], help = "type of cut to pick.", required = True)
 
     parser.add_argument("-o", "--out", dest = "out", type = str, default = None, help = "directory to save files")
 

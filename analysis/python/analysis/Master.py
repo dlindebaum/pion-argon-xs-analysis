@@ -1646,10 +1646,19 @@ class ShowerPairs:
         """
         indices = ak.local_index(self.pairs)  # get indices of PFO like array
         pair_ind = indices[self.pairs]  # get the indices of the pairs
+
         sorted_pair_ind = ak.argsort(
-            self.events.trueParticlesBT.energy[self.pairs], ascending=False)  # sort psirs by BT energy
+            self.events.trueParticlesBT.energy[self.pairs], ascending=False)  # sort pairs by BT energy
         # apply sorted local indices to the actual indices
         sorted_pair_ind = pair_ind[sorted_pair_ind]
+
+        # check if we only have 1 unqiue index in the pair
+        true_photon_count = ak.num(sorted_pair_ind)
+        if ak.any(true_photon_count == 1):
+            warnings.warn("\nShower pair mask has some pairs with 1 photon.\nThis happens when both shower PFOs in a pair backtrack to the same true photon.")
+
+            sorted_pair_ind = ak.fill_none(ak.pad_none(sorted_pair_ind, 2, -1), -1, -1)
+            sorted_pair_ind = ak.where(sorted_pair_ind == -1, sorted_pair_ind[:, 0], sorted_pair_ind)
 
         # create masks for each
         self.leading = indices == sorted_pair_ind[:, 0]

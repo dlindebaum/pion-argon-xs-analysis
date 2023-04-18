@@ -224,7 +224,7 @@ def BestCut(cuts : pd.DataFrame, q_names : list, type="balanced") -> list:
     Returns:
         list : selected cut + metrics
     """
-    types = ["balanced", "purity", "efficiency"]
+    types = ["balanced", "purity", "efficiency", "s_x_purity"]
     if type not in types:
         raise Exception(f"cut type must be either {types}")
 
@@ -233,7 +233,8 @@ def BestCut(cuts : pd.DataFrame, q_names : list, type="balanced") -> list:
 
     if type == "balanced":
         # pick a cut which has reasonable signal efficiency, then pick the highest purity cut
-        c = c[c["$\\epsilon_{s}$"] > 0.5]
+        # c = c[c["$\\epsilon_{s}$"] > 0.5]
+        c = c[(c["s"] > 1000) & (c["s/b"] > 2)]
         max_index = c["purity"].idxmax()
 
     if type == "purity":
@@ -242,14 +243,20 @@ def BestCut(cuts : pd.DataFrame, q_names : list, type="balanced") -> list:
         c = c[c["$\\epsilon_{s}$"] > 0.1]
         max_index = c["purity"].idxmax()
 
+    if type == "s_x_purity":
+        # pick the cut with highest signal times purity
+        sp = c["s"] * c["purity"]
+        max_index = sp.idxmax()
+
     if type == "efficiency":
         # pick a cut with > 10% purity and then pick the highest efficiency cut
         c = c[c["purity"] > 0.1]
         max_index = c["$\\epsilon$"].idxmax()
+
     best_cuts = c[c.index == max_index]
     
     print("Best cut: ")
-    print(best_cuts.to_markdown())
+    print(best_cuts)
     return best_cuts[q_names].values.tolist()[0]
 
 @Master.timer
@@ -849,11 +856,13 @@ class TagIterator:
     def __str__(self) -> str:
         return str(self.values)
 
+
 def GenerateTruthTags(events : Master.Data = None) -> Tags:
     tags = Tags()
-    tags["$\geq 1\pi^{0} + X$"       ] = Tag("$\geq 1\pi^{0} + X$",        "inclusive signal", "#348ABD", generate_truth_tags(events, (1,), 0) if events is not None else None, 0)
-    tags["$1\pi^{0} + 0\pi^{+}$"     ] = Tag("$1\pi^{0} + 0\pi^{+}$",      "exclusive signal", "#8EBA42", generate_truth_tags(events, 1, 0)    if events is not None else None, 1)
-    tags["$0\pi^{0} + 0\pi^{+}$"     ] = Tag("$0\pi^{0} + 0\pi^{+}$",      "background",       "#777777", generate_truth_tags(events, 0, (0,)) if events is not None else None, 2)
-    tags["$1\pi^{0} + \geq 1\pi^{+}$"] = Tag("$1\pi^{0} + \geq 1\pi^{+}$", "sideband",         "#E24A33", generate_truth_tags(events, 1, (1,)) if events is not None else None, 3)
-    tags["$0\pi^{0} + \geq 1\pi^{+}$"] = Tag("$0\pi^{0} + \geq 1\pi^{+}$", "sideband",         "#988ED5", generate_truth_tags(events, 0, (1,)) if events is not None else None, 4)
+    # tags["$\geq 1\pi^{0} + X$"       ] = shower_merging.Tag("$\geq 1\pi^{0} + X$",        "inclusive signal", "#348ABD", shower_merging.generate_truth_tags(events, (1,), 0) if events is not None else None, 0)
+    tags["$1\pi^{0} + 0\pi^{+}$"     ]          = Tag("$1\pi^{0} + 0\pi^{+}$"              , "exclusive signal", "#8EBA42", generate_truth_tags(events, 1, 0)    if events is not None else None, 1)
+    tags["$0\pi^{0} + 0\pi^{+}$"     ]          = Tag("$0\pi^{0} + 0\pi^{+}$"              , "background",       "#777777", generate_truth_tags(events, 0, 0) if events is not None else None, 2)
+    tags["$1\pi^{0} + \geq 1\pi^{+}$"]          = Tag("$1\pi^{0} + \geq 1\pi^{+}$"         , "sideband",         "#E24A33", generate_truth_tags(events, 1, (1,)) if events is not None else None, 3)
+    tags["$0\pi^{0} + \geq 1\pi^{+}$"]          = Tag("$0\pi^{0} + \geq 1\pi^{+}$"         , "sideband",         "#988ED5", generate_truth_tags(events, 0, (1,)) if events is not None else None, 4)
+    tags["$\greater 1\pi^{0} + \geq 0\pi^{+}$"] = Tag("$\greater 1\pi^{0} + \geq 0\pi^{+}$", "sideband",         "#348ABD", generate_truth_tags(events, (2,), (0,)) if events is not None else None, 5)
     return tags
