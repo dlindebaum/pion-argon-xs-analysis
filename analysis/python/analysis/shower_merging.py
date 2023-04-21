@@ -342,7 +342,7 @@ def SignalBackground(events : Master.Data, start_showers : list, to_merge : ak.A
 
 
 @Master.timer
-def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array, quantities : ShowerMergeQuantities, n_merge : int = -1, merge_method : int = 0, make_copy : bool = False) -> Master.Data:
+def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array, quantities : ShowerMergeQuantities, n_merge : int = -1, merge_method : int = 0, make_copy : bool = False, cheat : bool = False) -> Master.Data:
     """ Shower merging algorithm based on reco data.
 
     Args:
@@ -352,6 +352,7 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.
         n_merge (int, optional): maximum number of PFOs to merge per event. Defaults to -1 (no maximum)
         merge_method (int, optional): how to compute the new values of momentum/energy
         merge_copy (bool, optional): return a copy of the events class or modify the existing object
+        cheat (bool, optional): cheat the merging by passing the signal PFO mask rather than one based on cuts.
 
     Returns:
         Master.Data: events with PFOs merged to start showers (so PFOs merged are removed from the events and start shower values are updated accordingly)
@@ -406,14 +407,40 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.
         new = ak.where(mask[1], values[:, 1], new)
         return new
 
+
     def AssignQuantities(events : Master.Data):
-        events.recoParticles._RecoParticleData__momentum = ReplaceShowerPairValue(start_showers, events.recoParticles.momentum, momentum)
-        events.recoParticles._RecoParticleData__energy = ReplaceShowerPairValue(start_showers, events.recoParticles.energy, energy)
-        events.recoParticles._RecoParticleData__direction = ReplaceShowerPairValue(start_showers, events.recoParticles.direction, direction)
+        events.recoParticles._RecoParticleData__momentum =  ReplaceShowerPairValue(start_showers, events.recoParticles.momentum , corrected_data["momentum"])
+        events.recoParticles._RecoParticleData__energy =    ReplaceShowerPairValue(start_showers, events.recoParticles.energy   , corrected_data["energy"])
+        events.recoParticles._RecoParticleData__direction = ReplaceShowerPairValue(start_showers, events.recoParticles.direction, corrected_data["direction"])
+        events.recoParticles._RecoParticleData__nHits = ReplaceShowerPairValue(start_showers, events.recoParticles.nHits, corrected_data["nHits"])
+        events.recoParticles._RecoParticleData__nHits_collection = ReplaceShowerPairValue(start_showers, events.recoParticles.nHits_collection, corrected_data["nHits"])
+
+        events.trueParticlesBT._TrueParticleDataBT__sharedHits = ReplaceShowerPairValue(start_showers, events.trueParticlesBT.sharedHits, corrected_data["shared_hits"])
+        events.trueParticlesBT._TrueParticleDataBT__hitsInRecoCluster = ReplaceShowerPairValue(start_showers, events.trueParticlesBT.hitsInRecoCluster, corrected_data["reco_cluster_hits"])
+        events.trueParticlesBT._TrueParticleDataBT__purity = ReplaceShowerPairValue(start_showers, events.trueParticlesBT.purity, corrected_data["purity"])
+        events.trueParticlesBT._TrueParticleDataBT__completeness = ReplaceShowerPairValue(start_showers, events.trueParticlesBT.completeness, corrected_data["completeness"])
+
+        events.trueParticlesBT._TrueParticleDataBT__sharedHits_collection = ReplaceShowerPairValue(start_showers, events.trueParticlesBT.sharedHits_collection, corrected_data["shared_hits_collection"])
+        events.trueParticlesBT._TrueParticleDataBT__hitsInRecoCluster_collection = ReplaceShowerPairValue(start_showers, events.trueParticlesBT.hitsInRecoCluster_collection, corrected_data["reco_cluster_hits_collection"])
+        events.trueParticlesBT._TrueParticleDataBT__purity_collection = ReplaceShowerPairValue(start_showers, events.trueParticlesBT.purity_collection, corrected_data["purity_collection"])
+        events.trueParticlesBT._TrueParticleDataBT__completeness_collection = ReplaceShowerPairValue(start_showers, events.trueParticlesBT.completeness_collection, corrected_data["completeness_collection"])
+
 
     #* retrieve quantities and find which start shower is closest to each PFO for each variable
     quantities.Evaluate(events, start_showers)
-    mask = SortByStartingShower(quantities.mask) # PFOs we want to merge after cut based study is done
+
+    if cheat:
+        all_showers = np.logical_or(*start_showers)
+        s_num = events.trueParticlesBT.number[all_showers]
+
+        signal = [events.trueParticlesBT.number == s_num[:, i] for i in range(2)] # showers we should have merged
+        signal = [signal[i] & ~all_showers for i in range(2)] # starting showers are excluded from the signal
+        # mask, _, _ = SignalBackground(events, start_showers, to_merge)
+        mask = SortByStartingShower(signal)
+    else:
+        mask = SortByStartingShower(quantities.mask) # PFOs we want to merge after cut based study is done
+    
+
     start_showers_ID = ak.concatenate([events.recoParticles.number[start_showers[i]] for i in range(2)], -1) # id of start showers to recreate mask after merging
 
     mask = [(np.logical_or(*start_showers) != mask[:, :, i]) & mask[:, :, i] for i in range(2)]
@@ -426,68 +453,128 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.
     phi = ClosestQuantity(SortByStartingShower(quantities.delta_phi), mask) # can use this to determine which starting shower the PFO direction is most aligned to
 
     #* figure out which is the common start shower between all variables
-    # if min phi, alpha and x are all the same then merge to that shower
-    # if two are the same, merge to the most common shower
-    # if none agree (shouldn't be possible)
-    #! should replace this with calculating the mode of the scores
-    print(ak.concatenate([phi, x, alpha], -1))
-    scores = ak.sum(ak.concatenate([phi, x, alpha], -1), -1)
-    scores = ak.where(scores == 1, 0, scores) # [1, 0, 0]
-    scores = ak.where(scores == 2, 1, scores) # [1, 1, 0]
-    scores = ak.where(scores == 3, 1, scores) # [1, 1, 1]
+    if cheat:
+        # for the cheated merging the mask is already sorted by the PFOs that should be merged to said shower
+        score_0 = ak.where(mask[:, :, 0], 1, -1) # if we need to merge to shower 0 it has score 1
+        score_1 = ak.where(mask[:, :, 1], 2, -1) # if we need to merge to shower 1 it has score 2
+        
+        # sum the scores
+        # note that there are 4 possible outcomes:
+        # -2, where the PFO should not be merged (i.e. background)
+        # 0, merge PFO to shower 0
+        # 1, merge PFO to shower 1
+        # 3, merge PFO to both showers, this only happens when the initial shower selection fails and picks two PFOs which backtrack to the saem photon i.e. this can happen when using the reco selection.
+        # Note when doing the reco shower merging, it is guarenteed only 1 PFO is merged to 1 shower, even if whe have a case like score == 3.
+        scores = score_0 + score_1
+        scores = ak.where(scores == -2, -3, scores) # conform to the reco score definition of not merged
+
+    else:
+        # if min phi, alpha and x are all the same then merge to that shower
+        # if two are the same, merge to the most common shower
+        # if none agree (shouldn't be possible)
+        #! should replace this with calculating the mode of the scores
+        print(ak.concatenate([phi, x, alpha], -1))
+        scores = ak.sum(ak.concatenate([phi, x, alpha], -1), -1)
+        scores = ak.where(scores == 1, 0, scores) # [1, 0, 0]
+        scores = ak.where(scores == 2, 1, scores) # [1, 1, 0]
+        scores = ak.where(scores == 3, 1, scores) # [1, 1, 1]
 
     #* at this point we can check the performance of the shower merging
+    event_performance_table = []
+    pfo_performance_table = []
     event_performance_table = ShowerMergingEventPerformance(events, start_showers, to_merge, scores)
-    pfo_performance_table = ShowerMergingPFOPerformance(events, start_showers, to_merge, scores, quantities)
+    pfo_performance_table = ShowerMergingPFOPerformance(events, start_showers, scores)
+
+    def MaxPFOToMerge(quantity, null = 0):
+        padded_quantity = ak.pad_none(quantity, ak.max(ak.count(quantity, -1)), -1) # pad jagged array for easier slicing 
+        padded_quantity = ak.fill_none(padded_quantity, null, 1) # None -> zero momentum
+        return padded_quantity[:, :n_merge] # get max PFO number to merge
 
     #* get momenta of PFOs to merge
-    momentum = events.recoParticles.momentum
-    if merge_method == 1:
-        energy = events.recoParticles.energy
+    data_to_merge = {
+        "momentum" : events.recoParticles.momentum,
+        "nHits" : events.recoParticles.nHits,
+        "nHits_collection" : events.recoParticles.nHits_collection,
+        "shared_hits" : events.trueParticlesBT.sharedHits,
+        "shared_hits_collection" : events.trueParticlesBT.sharedHits_collection,
+        "reco_cluster_hits" : events.trueParticlesBT.hitsInRecoCluster,
+        "reco_cluster_hits_collection" : events.trueParticlesBT.hitsInRecoCluster_collection,
+    }
     if n_merge > 0:
-        momentum = ak.pad_none(momentum, ak.max(ak.count(momentum, -1)), -1) # pad jagged array for easier slicing
-        momentum = ak.fill_none(momentum, {"x": 0, "y": 0, "z": 0}, 1) # None -> zero momentum
-        momentum = momentum[:, :n_merge] # get max PFO number to merge
-
-        if merge_method == 1:
-            energy = ak.pad_none(energy, ak.max(ak.count(energy, -1)), -1) 
-            energy = ak.fill_none(energy, 0, 1)
-            energy = energy[:, :n_merge]
+        for d in data_to_merge:
+            if d == "momentum":
+                null = {"x": 0, "y": 0, "z": 0}
+            else:
+                null = 0
+            data_to_merge[d] = MaxPFOToMerge(data_to_merge[d], null)
 
         scores = ak.pad_none(scores, ak.max(ak.count(scores, -1)), -1)
         scores = ak.fill_none(scores, -1) # padded scores are -1 i.e. not considered for merging
         scores = scores[:, :n_merge]
- 
-    #* merge all PFOs based on which starting shower they should be merged with i.e. this value is the total amount we correct the shower momenta by
-    sorted_momentum_to_merge = []
+
     if merge_method == 1:
-        sorted_energy_to_merge = []
+        data_to_merge["energy"] = events.recoParticles.energy
+        if n_merge > 0:
+            data_to_merge["energy"] = MaxPFOToMerge(data_to_merge["energy"])
+
+    #* merge all PFOs based on which starting shower they should be merged with i.e. this value is the total amount we correct the shower momenta by
+    sorted_data_to_merge = {k : [] for k in data_to_merge}
+
     for i in range(2): #? is this always 2? What happens when we want to study events with > 1 pi0?
         val = scores == i
-        sorted_momenta = ak.where(val, momentum, vector.prod(0, momentum))
-        sorted_momentum_to_merge.append(ak.sum(sorted_momenta, -1))
-        if merge_method == 1:
-            sorted_energy = ak.where(val, energy, 0)
-            sorted_energy_to_merge.append(ak.sum(sorted_energy, -1))
+        if cheat: val = val | (scores == 3) # see above when determining the score for cheated merging.
+
+        for k in sorted_data_to_merge:
+            if k == "momentum":
+                null = vector.prod(0, data_to_merge["momentum"])
+            else:
+                null = 0
+            sorted_data = ak.where(val, data_to_merge[k], null)
+            sorted_data_to_merge[k].append(ak.sum(sorted_data, -1))
 
     #* add correction to each starting shower and calculate shower properties
+    corrected_data = {}
+    
+    original_hit_data = {
+        "nHits" : events.recoParticles.nHits,
+        "nHits_collection" : events.recoParticles.nHits_collection,
+        "shared_hits" : events.trueParticlesBT.sharedHits,
+        "shared_hits_collection" : events.trueParticlesBT.sharedHits_collection,
+        "reco_cluster_hits" : events.trueParticlesBT.hitsInRecoCluster,
+        "reco_cluster_hits_collection" : events.trueParticlesBT.hitsInRecoCluster_collection,
+    }
+    for k in original_hit_data:
+        original_hit_data[k] = [original_hit_data[k][start_showers[i]] for i in range(2)]
+
     #* merge via momentum sum
     if merge_method == 0:
-        momentum = [vector.add(events.recoParticles.momentum[start_showers[i]], sorted_momentum_to_merge[i]) for i in range(2)]
-        energy = ak.concatenate([vector.magnitude(momentum[i]) for i in range(2)], -1)
-        direction = ak.concatenate([vector.normalize(momentum[i]) for i in range(2)], -1)
-        momentum = ak.concatenate(momentum, -1)
+        momentum = [vector.add(events.recoParticles.momentum[start_showers[i]], sorted_data_to_merge["momentum"][i]) for i in range(2)]
+        corrected_data["energy"] = ak.concatenate([vector.magnitude(momentum[i]) for i in range(2)], -1)
+        corrected_data["direction"] = ak.concatenate([vector.normalize(momentum[i]) for i in range(2)], -1)
+        corrected_data["momentum"] = ak.concatenate(momentum, -1)
 
     #* merge using energy i.e. summing hits, direction calculation is unchanged
     if merge_method == 1:
-        momentum = [vector.add(events.recoParticles.momentum[start_showers[i]], sorted_momentum_to_merge[i]) for i in range(2)]
-        energy = [events.recoParticles.energy[start_showers[i]] + sorted_energy_to_merge[i] for i in range(2)]
+        momentum = [vector.add(events.recoParticles.momentum[start_showers[i]], sorted_data_to_merge["momentum"][i]) for i in range(2)]
+        energy = [events.recoParticles.energy[start_showers[i]] + sorted_data_to_merge["energy"][i] for i in range(2)]
         direction = [vector.normalize(momentum[i]) for i in range(2)]
         momentum = [vector.prod(energy[i], direction[i]) for i in range(2)]
 
-        energy = ak.concatenate(energy, -1)
-        direction = ak.concatenate(direction, -1)
-        momentum = ak.concatenate(momentum, -1)
+        corrected_data["energy"] = ak.concatenate(energy, -1)
+        corrected_data["direction"] = ak.concatenate(direction, -1)
+        corrected_data["momentum"] = ak.concatenate(momentum, -1)
+
+    for k, v in sorted_data_to_merge.items():
+        if k in ["momentum", "energy"]: continue
+        corrected_data[k] = ak.concatenate([original_hit_data[k][i] + v[i] for i in range(2)], -1)
+
+    true_hits = ak.concatenate([events.trueParticlesBT.nHits[start_showers[i]] for i in range(2)], -1)
+    true_hits_collection = ak.concatenate([events.trueParticlesBT.nHits_collection[start_showers[i]] for i in range(2)], -1)
+
+    corrected_data["purity"] = corrected_data["shared_hits"] / corrected_data["reco_cluster_hits"]
+    corrected_data["completeness"] = corrected_data["shared_hits"] / true_hits
+    corrected_data["purity_collection"] = corrected_data["shared_hits_collection"] / corrected_data["reco_cluster_hits_collection"]
+    corrected_data["completeness_collection"] = corrected_data["shared_hits_collection"] / true_hits_collection
 
     # now we need to remove the merged PFOs from the data
     if make_copy:
@@ -707,7 +794,7 @@ def CountMask(mask : ak.Array, axis : int = None):
     return ak.count(mask[mask], axis = axis)
 
 
-def ShowerMergingPFOPerformance(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array, scores : ak.Array, quantities : ShowerMergeQuantities):
+def ShowerMergingPFOPerformance(events : Master.Data, start_showers : ak.Array, scores : ak.Array):
     """ Calculates performance metrics for how well the shower merging performs on a per PFO basis.
 
     Args:
@@ -734,51 +821,58 @@ def ShowerMergingPFOPerformance(events : Master.Data, start_showers : ak.Array, 
     merged = scores != -3 # PFOs actually merged
     not_merged = ~merged
 
-    n = ak.count(signal)
-
     tp = merged & signal # true positive, signal pfos merged
-    nTp = CountMask(tp)
     tn = ~(merged | signal) # true negative, background not merged
-    nTn = CountMask(tn)
 
     xor = merged != signal
 
     fp = xor & (signal == False) # false positive, background PFOs merged
-    nFp = CountMask(fp)
     fn = xor & (signal == True) # false negative, signal PFOs not merged
-    nFn = CountMask(fn)
-
-    nSignal = CountMask(signal)
-    nBackground = CountMask(background)
-    nMerged = CountMask(merged)
-    nUnmerged = CountMask(not_merged)
 
     # signal_num = events.trueParticlesBT.number[to_merge][signal_all]
     target_num = events.trueParticlesBT.number[tp]
-    actual_num = ak.where(scores == 0, s_num[:, 0], scores)
-    actual_num = ak.where(actual_num == 1, s_num[:, 1], actual_num)
+    actual_num = ak.where((scores == 0) | (scores == 3), s_num[:, 0], scores) # see shower merging score determination for cheated merging for why score == 3 is allowed.
+    actual_num = ak.where((actual_num == 1) | (actual_num == 3), s_num[:, 1], actual_num)
     actual_num = actual_num[tp]
 
     actual_num = actual_num[ak.num(actual_num) > 0]
     target_num = target_num[ak.num(target_num) > 0]
 
-    mismatch = ak.ravel(actual_num == target_num)
-    matched = ak.count(mismatch) - ak.count(mismatch[mismatch == False])
+    match = actual_num == target_num
+
+    tags = GenerateTruthTags(events)
 
     data = {
-        "PFOs" : n,
-        "signal PFOs" : nSignal,
-        "background PFOs" : nBackground,
-        "merged PFOs" : nMerged,
-        "signal PFOs merged" : nTp,
-        "background PFOs merged" : nFp,
-        "unmerged PFOs" : nUnmerged,
-        "signal PFOs not merged" : nFn,
-        "background PFOs not merged" : nTn,
-        "signal PFOs matched" : matched
+        "PFOs" : signal,
+        "signal PFOs" : signal,
+        "background PFOs" : background,
+        "merged PFOs" : merged,
+        "signal PFOs merged" : tp,
+        "background PFOs merged" : fp,
+        "unmerged PFOs" : not_merged,
+        "signal PFOs not merged" : fn,
+        "background PFOs not merged" : tn,
+        "signal PFOs matched" : match
     }
-    print(data)
-    return data
+    for d in data:
+        print(d)
+        if d == "signal PFOs matched":
+            data[d] = [data[d]] + [data[d][tags[t].mask[ak.any(tp, -1)]] for t in tags]
+        else:
+            data[d] = [data[d]] + [data[d][tags[t].mask] for t in tags]
+
+    counts = {}
+    for d in data:
+        if d == "PFOs":
+            counts[d] = [ak.count(t) for t in data[d]]
+        if d == "signal PFOs matched":
+            counts[d] = [ak.sum(t) for t in data[d]]
+        else:
+            counts[d] = [CountMask(t) for t in data[d]]
+
+    counts = pd.DataFrame(counts, index = ["all"] + list(tags.keys())).T
+    print(counts)
+    return counts
 
 
 def ShowerMergingEventPerformance(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array, scores : ak.Array):
@@ -816,18 +910,44 @@ def ShowerMergingEventPerformance(events : Master.Data, start_showers : ak.Array
     signal_only = (nFp == 0) & (nTp > 0)
     background_only = (nFp > 0) & (nTp == 0)
 
+    tags = GenerateTruthTags(events)
+
     data = {
-        "events after selection" : ak.count(events.eventNum),
-        "events with PFOs to merge" : ak.count(nSignal[nSignal > 0]),
-        "events where PFOs are merged" : ak.count(nMerged[nMerged > 0]),
-        "events where we merge signal" : ak.count(nTp[nTp > 0]),
-        "events where we merge background" : ak.count(nFp[nFp > 0]),
-        "events where we merge signal and background" : CountMask(t),
-        "events where we merge only signal" : CountMask(signal_only),
-        "events where we merge only background" : CountMask(background_only)
+        "events after selection" : events.eventNum,
+        "events with PFOs to merge" : nSignal,
+        "events where PFOs are merged" : nMerged,
+        "events where we merge signal" : nTp,
+        "events where we merge background" : nFp,
+        "events where we merge signal and background" : t,
+        "events where we merge only signal" : signal_only,
+        "events where we merge only background" : background_only
         }
-    print(data)
-    return data
+
+    for d in data:
+        data[d] = [data[d]] + [data[d][tags[t].mask] for t in tags]
+
+    counts = {k : [] for k in data}
+
+    def EventCountNonZero(c, i):
+        x = data[c][i]
+        counts[c].append(ak.count(x[x > 0]))
+
+    def EventCountMask(c, i):
+        counts[c].append(CountMask(data[c][i]))
+
+    for i in range(len(tags) + 1):
+        counts["events after selection"].append(ak.count(data["events after selection"][i]))
+        EventCountNonZero("events with PFOs to merge", i)
+        EventCountNonZero("events where PFOs are merged", i)
+        EventCountNonZero("events where we merge signal", i)
+        EventCountNonZero("events where we merge background", i)
+        EventCountMask("events where we merge signal and background", i)
+        EventCountMask("events where we merge only signal", i)
+        EventCountMask("events where we merge only background", i)
+
+    counts = pd.DataFrame(counts, index = ["all"] + list(tags.keys())).T
+    print(counts)
+    return counts
 
 
 class Tags(dict):
@@ -860,9 +980,9 @@ class TagIterator:
 def GenerateTruthTags(events : Master.Data = None) -> Tags:
     tags = Tags()
     # tags["$\geq 1\pi^{0} + X$"       ] = shower_merging.Tag("$\geq 1\pi^{0} + X$",        "inclusive signal", "#348ABD", shower_merging.generate_truth_tags(events, (1,), 0) if events is not None else None, 0)
-    tags["$1\pi^{0} + 0\pi^{+}$"     ]          = Tag("$1\pi^{0} + 0\pi^{+}$"              , "exclusive signal", "#8EBA42", generate_truth_tags(events, 1, 0)    if events is not None else None, 1)
-    tags["$0\pi^{0} + 0\pi^{+}$"     ]          = Tag("$0\pi^{0} + 0\pi^{+}$"              , "background",       "#777777", generate_truth_tags(events, 0, 0) if events is not None else None, 2)
-    tags["$1\pi^{0} + \geq 1\pi^{+}$"]          = Tag("$1\pi^{0} + \geq 1\pi^{+}$"         , "sideband",         "#E24A33", generate_truth_tags(events, 1, (1,)) if events is not None else None, 3)
-    tags["$0\pi^{0} + \geq 1\pi^{+}$"]          = Tag("$0\pi^{0} + \geq 1\pi^{+}$"         , "sideband",         "#988ED5", generate_truth_tags(events, 0, (1,)) if events is not None else None, 4)
-    tags["$\greater 1\pi^{0} + \geq 0\pi^{+}$"] = Tag("$\greater 1\pi^{0} + \geq 0\pi^{+}$", "sideband",         "#348ABD", generate_truth_tags(events, (2,), (0,)) if events is not None else None, 5)
+    tags["$1\pi^{0} + 0\pi^{+}$"     ]          = Tag("$1\pi^{0} + 0\pi^{+}$"              , "exclusive signal", "#8EBA42", generate_truth_tags(events, 1, 0)    if events is not None else None, 0)
+    tags["$0\pi^{0} + 0\pi^{+}$"     ]          = Tag("$0\pi^{0} + 0\pi^{+}$"              , "background",       "#777777", generate_truth_tags(events, 0, 0) if events is not None else None, 1)
+    tags["$1\pi^{0} + \geq 1\pi^{+}$"]          = Tag("$1\pi^{0} + \geq 1\pi^{+}$"         , "sideband",         "#E24A33", generate_truth_tags(events, 1, (1,)) if events is not None else None, 2)
+    tags["$0\pi^{0} + \geq 1\pi^{+}$"]          = Tag("$0\pi^{0} + \geq 1\pi^{+}$"         , "sideband",         "#988ED5", generate_truth_tags(events, 0, (1,)) if events is not None else None, 3)
+    tags["$\greater 1\pi^{0} + \geq 0\pi^{+}$"] = Tag("$\greater 1\pi^{0} + \geq 0\pi^{+}$", "sideband",         "#348ABD", generate_truth_tags(events, (2,), (0,)) if events is not None else None, 4)
     return tags

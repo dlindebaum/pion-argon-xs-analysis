@@ -5,7 +5,6 @@ Created on: 14/03/2023 15:18
 Author: Shyam Bhuller
 
 Description: Applies event selection and PFO selection, based on the cuts dataframe will select showers to merge, and write out the shower pair properties to file for plotting.
-#TODO fix performance tables metric for parallel processing.
 """
 import argparse
 import os
@@ -19,18 +18,18 @@ from rich import print as rprint
 from python.analysis import Master, shower_merging, Processing
 
 
-def RecoShowerPairsDataFrame(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array, cuts : str, cut_type : str) -> tuple:
+def RecoShowerPairsDataFrame(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array, cuts : str, cut_type : str, cheat : bool) -> tuple:
     copy = events.Filter(returnCopy = True) # make a local copy of the events object so that we can do both the cheated merging and regular merging
     quantities = shower_merging.ShowerMergeQuantities(copy, to_merge, cuts)
     quantities.bestCut = cut_type
     quantities.to_merge_dir = copy.recoParticles.direction
     quantities.to_merge_pos = copy.recoParticles.startPos
-    pair_mask, event_performance_table, pfo_performance_table = shower_merging.ShowerMerging(copy, start_showers, to_merge, quantities, -1)
+    pair_mask, event_performance_table, pfo_performance_table = shower_merging.ShowerMerging(copy, start_showers, to_merge, quantities, -1, merge_method = 0, cheat = cheat) #? merge_method configurable?
     pairs = Master.ShowerPairs(copy, shower_pair_mask = np.logical_or(*pair_mask))
     return pairs.CalculateAll(), event_performance_table, pfo_performance_table
 
 
-def CheatedShowerPairsDataFrame(events : Master.Data, start_showers : ak.Array):
+def CheatedShowerPairsDataFrameOld(events : Master.Data, start_showers : ak.Array):
     copy = events.Filter(returnCopy = True)
     showers = copy.trueParticlesBT.number[np.logical_or(*start_showers)] # use this to create the pair mask for the shower pairs
     copy.MergePFOCheat(0)
@@ -80,9 +79,10 @@ def run(i, file, n_events, start, args):
 
         metadata = pd.concat([u_df[["run", "subrun", "event"]], tags_number], axis = 1)
 
-        r_df, event_performance_table, pfo_performance_table = RecoShowerPairsDataFrame(events, start_showers, to_merge, args["cuts"], args["cut_type"])
+        r_df, event_performance_table, pfo_performance_table = RecoShowerPairsDataFrame(events, start_showers, to_merge, args["cuts"], args["cut_type"], cheat = False)
 
-        c_df = CheatedShowerPairsDataFrame(events, start_showers)
+        c_df, event_cheat_performance_table, pfo_cheat_performance_table = RecoShowerPairsDataFrame(events, start_showers, to_merge, args["cuts"], args["cut_type"], cheat = True)
+        # c_df = CheatedShowerPairsDataFrame(events, start_showers)
 
         data = { # output data in hierarchical order
             "tag_map" : tags_map,
@@ -96,7 +96,7 @@ def run(i, file, n_events, start, args):
             "merged_cheat/reco" : Filter(c_df, "reco"),
             "merged_cheat/error" : Filter(c_df, "error"),
         }
-        return data, event_performance_table, pfo_performance_table
+        return data, event_performance_table, pfo_performance_table, event_cheat_performance_table, pfo_cheat_performance_table
 
 
 def MergeTables(tables : list) -> dict:
@@ -123,32 +123,43 @@ def main(args):
     rprint(len(output))
 
     data = {}
-    event_perf_tables = []
-    pfo_perf_tables = []
+    event_table = None
+    pfo_table = None
+    cheat_event_table = None
+    cheat_pfo_table = None
 
     for o in output:
-        event_perf_tables.append(o[1])
-        pfo_perf_tables.append(o[2])
-        
-        for k, v in o[0].items():
+        if event_table is None:
+            event_table = o[1]
+            pfo_table = o[2]
+            cheat_event_table = o[3]
+            cheat_pfo_table = o[4]
+        else:
+            event_table += o[1]
+            pfo_table += o[2]
+            cheat_event_table += o[3]
+            cheat_pfo_table += o[4]
 
+        for k, v in o[0].items():
             if k in data:
                 if k == "tag_map": continue # map is a copy for each batch so doesn't need to get appended
                 data[k] = pd.concat([data[k], v], axis = 0)
             else:
                 data[k] = v
 
-    event_table = MergeTables(event_perf_tables)
-    event_table["percentage"] = 100 * event_table["counts"] / event_table["counts"][0]
-    pfo_table = MergeTables(pfo_perf_tables)
-    pfo_table["percentage"] = 100 * pfo_table["counts"] / pfo_table["counts"][0]
-
     rprint(event_table)
     rprint(pfo_table)
+
+    rprint(cheat_event_table)
+    rprint(cheat_pfo_table)
 
     os.makedirs(args.out, exist_ok = True)
     event_table.to_latex(args.out + "event_performance_table.tex")
     pfo_table.to_latex(args.out + "pfo_performance_table.tex")
+
+    cheat_event_table.to_latex(args.out + "event_cheat_performance_table.tex")
+    cheat_pfo_table.to_latex(args.out + "pfo_cheat_performance_table.tex")
+
     file = pd.HDFStore(args.out + "shower_pairs.hdf5")
     for k, v in data.items():
         v.to_hdf(file, k + "/")

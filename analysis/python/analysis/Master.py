@@ -1852,6 +1852,54 @@ class ShowerPairs:
         return self.events.recoParticles.energy[self.subleading]
 
     @property
+    def reco_lead_nHits(self):
+        return self.events.recoParticles.nHits[self.leading]
+
+    @property
+    def reco_sub_nHits(self):
+        return self.events.recoParticles.nHits[self.subleading]
+
+    @property
+    def reco_lead_nHits_collection(self):
+        return self.events.recoParticles.nHits[self.leading]
+
+    @property
+    def reco_sub_nHits_collection(self):
+        return self.events.recoParticles.nHits[self.subleading]
+
+    @property
+    def reco_lead_purity(self):
+        return self.events.trueParticlesBT.purity[self.leading]
+
+    @property
+    def reco_sub_purity(self):
+        return self.events.trueParticlesBT.purity[self.subleading]
+
+    @property
+    def reco_lead_completeness(self):
+        return self.events.trueParticlesBT.completeness[self.leading]
+
+    @property
+    def reco_sub_completeness(self):
+        return self.events.trueParticlesBT.completeness[self.subleading]
+
+    @property
+    def reco_lead_purity_collection(self):
+        return self.events.trueParticlesBT.purity_collection[self.leading]
+
+    @property
+    def reco_sub_purity_collection(self):
+        return self.events.trueParticlesBT.purity_collection[self.subleading]
+
+    @property
+    def reco_lead_completeness_collection(self):
+        return self.events.trueParticlesBT.completeness_collection[self.leading]
+
+    @property
+    def reco_sub_completeness_collection(self):
+        return self.events.trueParticlesBT.completeness_collection[self.subleading]
+
+    @property
     def reco_angle(self):
         return ShowerPairs.OpeningAngle(
             self.events.recoParticles.direction[self.leading],
@@ -1976,7 +2024,7 @@ class ShowerPairs:
 
     @property
     def cheated_angle(self):
-        return self.true_angle
+        return self.reco_angle
 
     @property
     def cheated_mass(self):
