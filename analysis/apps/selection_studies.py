@@ -252,8 +252,12 @@ def run(i, file, n_events, start, args):
                 events_table, pfo_table = shower_merging.Selection(events, args["selection_type"], args["selection_type"]) # apply selection
                 start_showers, to_merge = shower_merging.SplitSample(events) # split sample into pi0 showers and PFOs to merge
             case "reco":
-                events_table, pfo_table, photon_candidate_table = shower_merging.Selection(events, args["selection_type"], args["selection_type"], False)
+                events_table, pfo_table, photon_candidate_table, pip_candidate_table = shower_merging.Selection(events, args["selection_type"], args["selection_type"], veto_daughter_pip = False, select_photon_candidates = False)
 
+                n_pip_candidates = ak.num(events.recoParticles.number[shower_merging.PFOSelection.DaughterPiPlusSelection(events)]) # get pi+ candidates
+                events_mask = n_pip_candidates == 0
+                daughter_pip_event_counts = {"before" : ak.count(events_mask), "after" : ak.sum(events_mask)}
+                events.Filter([events_mask], [events_mask])
                 n_photon_candidates = ak.num(events.recoParticles.number[shower_merging.PFOSelection.InitialPi0PhotonSelection(events)]) # get pi0 shower candidates
 
                 tags = shower_merging.GenerateTruthTags(events)
@@ -287,6 +291,8 @@ def run(i, file, n_events, start, args):
         if args["selection_type"] == "reco":
             tagged_data = BasicTaggedQuantities(events, photon_candidate_tags, start_showers_all, signal_all, background)
 
+            output["daughter_pip_event_counts"] = daughter_pip_event_counts
+            output["pip_candidate_table"] = pip_candidate_table
             output["photon_candidate_table"] = photon_candidate_table
             output["n_photon_candidates"] = n_photon_candidates
             output["tags"] = tags #TODO also do for cheated selection
@@ -306,6 +312,7 @@ def main(args):
     tags = shower_merging.GenerateTruthTags()
     selected_tags = shower_merging.GenerateTruthTags()
     n_photon_candidates = []
+    daughter_pip_event_counts = {}
 
     data = {}
     tagged_data = {}
@@ -324,6 +331,13 @@ def main(args):
                 selected_tags[k].mask = t.mask
             else:
                 selected_tags[k].mask = ak.concatenate([selected_tags[k].mask, t.mask])
+
+        if "daughter_pip_event_counts" in o.keys():
+            for k in o["daughter_pip_event_counts"]:
+                if k in daughter_pip_event_counts:
+                    daughter_pip_event_counts[k] += o["daughter_pip_event_counts"][k]
+                else:
+                    daughter_pip_event_counts[k] = o["daughter_pip_event_counts"][k]
 
         if "n_photon_candidates" in o.keys():
             n_photon_candidates = ak.concatenate([n_photon_candidates, o["n_photon_candidates"]])
@@ -350,6 +364,11 @@ def main(args):
 
     if "photon_candidate_table" in output[0]:
         MergeTables([o["photon_candidate_table"] for o in output]).to_latex(args.out + "photon_candidate_selection.tex")
+    if "pip_candidate_table" in output[0]:
+        MergeTables([o["pip_candidate_table"] for o in output]).to_latex(args.out + "pip_candidate_selection.tex")
+
+
+    pd.DataFrame(daughter_pip_event_counts, index = [0]).to_latex(args.out + "daughter_pip_event_counts.tex")
 
     #* make plots
     MakeInitialTaggingPlots(tags, n_photon_candidates, args.out + "basic_quantities/tagged/") # plots of the event topology

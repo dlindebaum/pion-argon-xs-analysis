@@ -70,8 +70,5 @@ if __name__ == "__main__":
             args.out = "geometric_quantities/" #? how to make a better name for multiple input files?
     if args.out[-1] != "/": args.out += "/"
 
-    if args.use_threads:
-        args.batches = os.cpu_count()
-
     print(vars(args))
     main(args)

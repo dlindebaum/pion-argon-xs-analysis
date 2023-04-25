@@ -937,6 +937,7 @@ class RecoParticleData(ParticleData):
         peakTime (ak.Array): hit peak time
         integral (ak.Array): hit integral
         hit_energy (ak.Array): hit energy
+        track_dEdX (ak.Array): dEdX (if PFO is interpreted as track like)
 
 
     Methods:
@@ -1125,6 +1126,11 @@ class RecoParticleData(ParticleData):
     def hit_energy(self) -> type:
         self.LoadData("hit_energy", "reco_daughter_allShower_hit_energy")
         return getattr(self, f"_{type(self).__name__}__hit_energy")
+
+    @property
+    def track_dEdX(self) -> type:
+        self.LoadData("track_dEdX", "reco_daughter_allTrack_calibrated_dEdX_SCE")
+        return getattr(self, f"_{type(self).__name__}__track_dEdX")
 
     def CalculatePairQuantities(self, useBT: bool = False) -> tuple:
         """ Calculate reconstructed shower pair quantities.

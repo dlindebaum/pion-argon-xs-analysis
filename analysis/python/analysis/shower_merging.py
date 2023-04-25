@@ -726,13 +726,14 @@ def StartShowerByDistance(events : Master.Data) -> ak.Array:
     return start_showers
 
 
-def Selection(events : Master.Data, event_type : str, pfo_type : str, select_photon_candidates : bool = True) -> list[pd.DataFrame]:
+def Selection(events : Master.Data, event_type : str, pfo_type : str, veto_daughter_pip : bool = True, select_photon_candidates : bool = True) -> list[pd.DataFrame]:
     """ Applies an event selecion and PFO selection.
 
     Args:
         events (Master.Data): events to look at
         event_type (str): event selection type
         pfo_type (str): pfo selection type
+        veto_daughter_pip (bool) : Exlude events which have a daughter pi+ in the final state.
         select_photon_candidates (bool): whether to select events with 2 photon candidates or not
 
     Returns:
@@ -751,13 +752,19 @@ def Selection(events : Master.Data, event_type : str, pfo_type : str, select_pho
     events.Filter([mask])
 
     if pfo_type == "reco":
+        
+        mask, daughter_pi_candidate_table = PFOSelection.DaughterPiPlusSelection(events, verbose = False, return_table = True)
+        if veto_daughter_pip:
+            event_mask = ak.num(mask[mask]) == 0 # exclude all events which have a pi+ in he final state
+            events.Filter([event_mask], [event_mask])
+
         mask, photon_candidate_table = PFOSelection.InitialPi0PhotonSelection(events, verbose = False, return_table = True)
         if select_photon_candidates:
             event_mask = ak.num(mask[mask]) == 2 # select events with 2 photon candidates only #TODO handle > 2 candidates
             events.Filter([event_mask], [event_mask])
 
     if pfo_type == "reco":
-        return event_table, pfo_table, photon_candidate_table
+        return event_table, pfo_table, photon_candidate_table, daughter_pi_candidate_table
     if pfo_type == "cheated":
         return event_table, pfo_table
 
