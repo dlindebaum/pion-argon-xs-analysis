@@ -937,6 +937,7 @@ class RecoParticleData(ParticleData):
         peakTime (ak.Array): hit peak time
         integral (ak.Array): hit integral
         hit_energy (ak.Array): hit energy
+        track_dEdX (ak.Array): dEdX (if PFO is interpreted as track like)
 
 
     Methods:
@@ -1125,6 +1126,11 @@ class RecoParticleData(ParticleData):
     def hit_energy(self) -> type:
         self.LoadData("hit_energy", "reco_daughter_allShower_hit_energy")
         return getattr(self, f"_{type(self).__name__}__hit_energy")
+
+    @property
+    def track_dEdX(self) -> type:
+        self.LoadData("track_dEdX", "reco_daughter_allTrack_calibrated_dEdX_SCE")
+        return getattr(self, f"_{type(self).__name__}__track_dEdX")
 
     def CalculatePairQuantities(self, useBT: bool = False) -> tuple:
         """ Calculate reconstructed shower pair quantities.
@@ -1646,10 +1652,19 @@ class ShowerPairs:
         """
         indices = ak.local_index(self.pairs)  # get indices of PFO like array
         pair_ind = indices[self.pairs]  # get the indices of the pairs
+
         sorted_pair_ind = ak.argsort(
-            self.events.trueParticlesBT.energy[self.pairs], ascending=False)  # sort psirs by BT energy
+            self.events.trueParticlesBT.energy[self.pairs], ascending=False)  # sort pairs by BT energy
         # apply sorted local indices to the actual indices
         sorted_pair_ind = pair_ind[sorted_pair_ind]
+
+        # check if we only have 1 unqiue index in the pair
+        true_photon_count = ak.num(sorted_pair_ind)
+        if ak.any(true_photon_count == 1):
+            warnings.warn("\nShower pair mask has some pairs with 1 photon.\nThis happens when both shower PFOs in a pair backtrack to the same true photon.")
+
+            sorted_pair_ind = ak.fill_none(ak.pad_none(sorted_pair_ind, 2, -1), -1, -1)
+            sorted_pair_ind = ak.where(sorted_pair_ind == -1, sorted_pair_ind[:, 0], sorted_pair_ind)
 
         # create masks for each
         self.leading = indices == sorted_pair_ind[:, 0]
@@ -1843,6 +1858,54 @@ class ShowerPairs:
         return self.events.recoParticles.energy[self.subleading]
 
     @property
+    def reco_lead_nHits(self):
+        return self.events.recoParticles.nHits[self.leading]
+
+    @property
+    def reco_sub_nHits(self):
+        return self.events.recoParticles.nHits[self.subleading]
+
+    @property
+    def reco_lead_nHits_collection(self):
+        return self.events.recoParticles.nHits[self.leading]
+
+    @property
+    def reco_sub_nHits_collection(self):
+        return self.events.recoParticles.nHits[self.subleading]
+
+    @property
+    def reco_lead_purity(self):
+        return self.events.trueParticlesBT.purity[self.leading]
+
+    @property
+    def reco_sub_purity(self):
+        return self.events.trueParticlesBT.purity[self.subleading]
+
+    @property
+    def reco_lead_completeness(self):
+        return self.events.trueParticlesBT.completeness[self.leading]
+
+    @property
+    def reco_sub_completeness(self):
+        return self.events.trueParticlesBT.completeness[self.subleading]
+
+    @property
+    def reco_lead_purity_collection(self):
+        return self.events.trueParticlesBT.purity_collection[self.leading]
+
+    @property
+    def reco_sub_purity_collection(self):
+        return self.events.trueParticlesBT.purity_collection[self.subleading]
+
+    @property
+    def reco_lead_completeness_collection(self):
+        return self.events.trueParticlesBT.completeness_collection[self.leading]
+
+    @property
+    def reco_sub_completeness_collection(self):
+        return self.events.trueParticlesBT.completeness_collection[self.subleading]
+
+    @property
     def reco_angle(self):
         return ShowerPairs.OpeningAngle(
             self.events.recoParticles.direction[self.leading],
@@ -1967,7 +2030,7 @@ class ShowerPairs:
 
     @property
     def cheated_angle(self):
-        return self.true_angle
+        return self.reco_angle
 
     @property
     def cheated_mass(self):

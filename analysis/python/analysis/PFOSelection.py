@@ -20,6 +20,24 @@ from python.analysis.SelectionTools import *
 #######################################################################
 
 
+def Median(x : ak.Array):
+    s = ak.sort(x, -1)
+    count = ak.num(s, -1)
+
+    med_odd = count // 2  # median is middle entry
+    select = ak.local_index(s) == med_odd
+    median_odd = s[select]
+
+    # calculate the median assuming the arrray length is even
+    med_even = (med_odd - 1) * (count > 1)  # need the middle - 1 value
+    select_even = ak.local_index(s) == med_even
+    # median is average of middle value and middle - 1 value
+    median_even = (s[select] + s[select_even]) / 2
+
+    median = ak.flatten(ak.fill_none(ak.pad_none(ak.where(count % 2, median_odd, median_even), 1, -1), -999), -1)  # pick which median is the correct one
+    return median
+
+
 @CountsWrapper
 def ValidRecoEnergyCut(events) -> ak.Array:
     return events.recoParticles.energy != -999
@@ -63,12 +81,12 @@ def GoodShowerSelection(events, return_table=False):
 
 
 @CountsWrapper
-def EMScoreCut(events, score=0.5) -> ak.Array:
+def EMScoreCut(events, score = 0.5) -> ak.Array:
     return events.recoParticles.emScore > score
 
 
 @CountsWrapper
-def NHitsCut(events, hits=80) -> ak.Array:
+def NHitsCut(events, hits = 80) -> ak.Array:
     return events.recoParticles.nHits > hits
 
 
@@ -80,12 +98,38 @@ def BeamParticleDistanceCut(events, lims=(3., 90.)) -> ak.Array:
 
 
 @CountsWrapper
-def BeamParticleIPCut(events, impact=20.) -> ak.Array:
+def BeamParticleIPCut(events, impact = 20.) -> ak.Array:
     ip = find_beam_impact_parameters(events)
     return ip < impact
 
+
+@CountsWrapper
+def TrackScoreCut(events, score = 0.5):
+    return events.recoParticles.trackScore > score
+
+
+@CountsWrapper
+def BeamDaughterCut(events):
+    beam_number = ak.where(events.recoParticles.beam_number == -999, -1, events.recoParticles.beam_number) # null beam number (no beam particle) and null mother (pf has no mother) are the same value, so change one of them to something else
+    return events.recoParticles.mother == beam_number
+
+
+@CountsWrapper
 def VetoBeamParticle(events):
     return events.recoParticles.beam_number != events.recoParticles.number
+
+
+@CountsWrapper
+def PiPlusSelection(events, min_dEdX = 0.5, max_dEdX = 2.8):
+    median_dEdX = Median(events.recoParticles.track_dEdX)
+    return (median_dEdX < max_dEdX) & (median_dEdX > min_dEdX)
+
+
+@CountsWrapper
+def ProtonSelection(events, dEdX):
+    median_dEdX = Median(events.recoParticles.track_dEdX)
+    return median_dEdX > dEdX
+
 
 def InitialPi0PhotonSelection(
         events,
@@ -113,6 +157,50 @@ def InitialPi0PhotonSelection(
         arguments.append({})
     return CombineSelections(events, selections, 1, arguments, verbose, return_table)
 
+
+def DaughterPiPlusSelection(
+        events,
+        track_cut : float = 0.5,
+        n_hits_cut : int = 20,
+        min_dEdX : float = 0.5,
+        max_dEdX : float = 2.8,
+        verbose : bool = False,
+        return_table : bool = False):
+    selections = [
+        BeamDaughterCut,
+        TrackScoreCut,
+        NHitsCut,
+        PiPlusSelection
+    ]
+    arguments = [
+        {},
+        {"score" : track_cut},
+        {"hits" : n_hits_cut},
+        {"min_dEdX" : min_dEdX, "max_dEdX" : max_dEdX}
+    ]
+    return CombineSelections(events, selections, 1, arguments, verbose, return_table)
+
+
+def DaughterProtonSelection(
+        events,
+        track_cut : float = 0.5,
+        n_hits_cut : int = 20,
+        dEdX : float = 2.8,
+        verbose : bool = False,
+        return_table : bool = False):
+    selections = [
+        BeamDaughterCut,
+        TrackScoreCut,
+        NHitsCut,
+        ProtonSelection
+    ]
+    arguments = [
+        {},
+        {"score" : track_cut},
+        {"hits" : n_hits_cut},
+        {"dEdX" : dEdX}
+    ]
+    return CombineSelections(events, selections, 1, arguments, verbose, return_table)
 
 #######################################################################
 #######################################################################

@@ -5,18 +5,19 @@ Created on: 14/03/2023 15:14
 Author: Shyam Bhuller
 
 Description: Applies beam particle selection, PFO selection, produces tables and basic plots.
-#TODO Handle multiple root file inputs
 #? have the capability of storing quantities to hdf5 files (and capability to read them in)?
 """
 import argparse
 import os
+import sys
 
 import awkward as ak
 import matplotlib.pyplot as plt
 import numpy as np
-from rich import print
+import pandas as pd
+from rich import print as rprint
 
-from python.analysis import Master, Plots, shower_merging, EventSelection
+from python.analysis import Master, Plots, shower_merging, Processing
 
 
 def BasicQuantities(events : Master.Data, start_showers_all : ak.Array, to_merge : ak.Array, signal_all : ak.Array, background : ak.Array) -> dict:
@@ -158,29 +159,30 @@ def MakePlotsTagged(data : dict, tags : dict, out : str):
         labels.append(k)
         colours.append(t.colour)
 
-    Plots.PlotHist(data["n_PFO"], bins = 20, xlabel = "number of PFOs", stacked = True, label = labels, color = colours, annotation = args.annotation)
+    Plots.PlotHist(data["n_PFO"].to_list(), bins = 20, xlabel = "number of PFOs", stacked = True, label = labels, color = colours, annotation = args.annotation)
     Plots.Save("tagged_nPFO", out)
 
-    Plots.PlotHist(data["n_signal_tagged"], bins = np.arange(n_signal_bins) - 0.5, xlabel = "mutiplicity", stacked = True, label = labels, color = colours, annotation = args.annotation)
-    plt.xticks(np.arange(n_signal_bins))
+    truncated_tagged_signal = ak.where(data["n_signal_tagged"] > 11, 11, data["n_signal_tagged"])
+    Plots.PlotHist(truncated_tagged_signal.to_list(), bins = np.arange(13) - 0.5, xlabel = "mutiplicity", stacked = True, label = labels, color = colours, annotation = args.annotation)
+    plt.xticks(np.arange(12))
     Plots.Save("tagged_multiplicity", out)
 
-    Plots.PlotHist(data["n_signal_tagged"], bins = 20, xlabel = "number of signal PFOs", stacked = True, label = labels, color = colours, annotation = args.annotation)
+    Plots.PlotHist(data["n_signal_tagged"].to_list(), bins = 20, xlabel = "number of signal PFOs", stacked = True, label = labels, color = colours, annotation = args.annotation)
     Plots.Save("tagged_nPFO_signal", out)
 
-    Plots.PlotHist(data["n_background_tagged"], bins = 20, xlabel = "Number of background PFOs", stacked = True, label = labels, color = colours, annotation = args.annotation)
+    Plots.PlotHist(data["n_background_tagged"].to_list(), bins = 20, xlabel = "Number of background PFOs", stacked = True, label = labels, color = colours, annotation = args.annotation)
     Plots.Save("tagged_nPFO_background", out)
 
-    Plots.PlotHist(data["completeness"], bins = 20, xlabel = "start shower completeness", stacked = True, label = labels, color = colours, annotation = args.annotation)
+    Plots.PlotHist(data["completeness"].to_list(), bins = 20, xlabel = "start shower completeness", stacked = True, label = labels, color = colours, annotation = args.annotation)
     Plots.Save("tagged_start_shower_completeness", out)
 
-    Plots.PlotHist(data["purity"], bins = 20, xlabel = "start shower purity", stacked = True, label = labels, color = colours, annotation = args.annotation)
+    Plots.PlotHist(data["purity"].to_list(), bins = 20, xlabel = "start shower purity", stacked = True, label = labels, color = colours, annotation = args.annotation)
     Plots.Save("tagged_start_shower_purity", out)
 
-    Plots.PlotStackedBar(data["pdg"], xlabel = "pdg of intial photon candidates", label_title = "initial $\pi^{0}$ photon candidates.", labels = labels, colours = colours, annotation = args.annotation)
+    Plots.PlotStackedBar(data["pdg"], xlabel = "pdg of intial photon candidates", label_title = "event topolgy", labels = labels, colours = colours, annotation = args.annotation)
     Plots.Save("tagged_pdg", out)
 
-    Plots.PlotStackedBar(data["mother_pdg"], xlabel = "mother pdg of initial photon candidates", label_title = "initial $\pi^{0}$ photon candidates.", labels = labels, colours = colours, annotation = args.annotation)
+    Plots.PlotStackedBar(data["mother_pdg"], xlabel = "mother pdg of initial photon candidates", label_title = "event topolgy", labels = labels, colours = colours, annotation = args.annotation)
     Plots.Save("tagged_mother_pdg", out)
 
 
@@ -196,73 +198,198 @@ def MakeInitialTaggingPlots(tags : dict, n_photons : ak.Array, out : str):
         plt.figure()
         for name, t in tags.items():
             c = shower_merging.CountMask(t.mask[n_photons == s])
-            Plots.PlotBar([name]*c, xlabel = "truth tag", color = t.colour, label = t.name_simple, title = f"number of shower candidates: {s}", newFigure = False)
+            Plots.PlotBar([name]*c, xlabel = "truth tag", color = t.colour, label = t.name_simple, title = f"number of shower candidates: {s} | total number of events : {ak.sum(n_photons == s)}", newFigure = False)
         Plots.Save(f"truth_tags_nPFO_{s}", out)
     return
 
 
+def MergeTables(tables : list) -> pd.DataFrame:
+    """ Merges selection performance tables.
+
+    Args:
+        tables (list): list of selection performance tables
+
+    Returns:
+        pd.DataFrame: merged table
+    """
+    table = {}
+    table["number of events which pass the cut"] = sum(t["number of events which pass the cut"] for t in tables)
+    table["single_efficiency"] = 100 * table["number of events which pass the cut"] / table["number of events which pass the cut"][0]
+    table["number of events after successive cuts"] = sum(t["number of events after successive cuts"] for t in tables)
+    relative_efficiency = np.append([np.nan], 100 * table["number of events after successive cuts"].values[1:] / table["number of events after successive cuts"].values[:-1])
+    table["single_efficiency"] = 100 * table["number of events after successive cuts"] / table["number of events after successive cuts"][0]
+    table["relative efficiency"] = relative_efficiency
+    return pd.DataFrame(table)
+
+
+def FormatBarPlots(d : ak.Array) -> ak.Array:
+    """ Merges data stored in "bar plot format".
+
+    Args:
+        d (ak.Array): "bar plot" like data (first array is the labels, second is the counts)
+
+    Returns:
+        ak.Array: merged data
+    """
+    pdg_list = np.unique(ak.ravel(d[:, 0]))
+    counts = []
+    for pdg in pdg_list:
+        to_sum = d[:, 0] == pdg
+        s = ak.sum(d[:, 1][to_sum], axis = -1)
+        counts.append(s)
+    counts = ak.concatenate(ak.unflatten(counts, 1, -1), -1)
+    labels = [pdg_list] * len(counts)
+    return ak.concatenate([ak.unflatten(labels, 1), ak.unflatten(counts, 1)], 1)
+
+
+def run(i, file, n_events, start, args):
+    with open(f"out_{i}.log", "w") as sys.stdout, open(f"out_{i}.log", "w") as sys.stderr:
+        events = Master.Data(file, nEvents = n_events, start = start) # load data
+
+        #* apply either cheated or reco selection
+        match args["selection_type"]:
+            case "cheated":
+                events_table, pfo_table = shower_merging.Selection(events, args["selection_type"], args["selection_type"]) # apply selection
+                start_showers, to_merge = shower_merging.SplitSample(events) # split sample into pi0 showers and PFOs to merge
+            case "reco":
+                events_table, pfo_table, photon_candidate_table, pip_candidate_table = shower_merging.Selection(events, args["selection_type"], args["selection_type"], veto_daughter_pip = False, select_photon_candidates = False)
+
+                n_pip_candidates = ak.num(events.recoParticles.number[shower_merging.PFOSelection.DaughterPiPlusSelection(events)]) # get pi+ candidates
+                events_mask = n_pip_candidates == 0
+                daughter_pip_event_counts = {"before" : ak.count(events_mask), "after" : ak.sum(events_mask)}
+                events.Filter([events_mask], [events_mask])
+                n_photon_candidates = ak.num(events.recoParticles.number[shower_merging.PFOSelection.InitialPi0PhotonSelection(events)]) # get pi0 shower candidates
+
+                tags = shower_merging.GenerateTruthTags(events)
+
+                #* select events which have exactly 2 photon candidates, will deal with > 2 later
+                photon_candidates = n_photon_candidates == 2
+                events.Filter([photon_candidates], [photon_candidates])
+
+                photon_candidate_tags = shower_merging.GenerateTruthTags()
+                for k in tags:
+                    mask = ak.Array(tags[k].mask)
+                    photon_candidate_tags[k].mask = mask[photon_candidates] # apply photon candidate masks to the tags
+
+                start_showers, to_merge = shower_merging.SplitSampleReco(events)
+            case _:
+                raise Exception(f"event selection type {args['selection_type']} not understood.")
+
+
+        #* Plots for the candidate events only i.e. where nphoton candidates == 2
+        start_showers_all = np.logical_or(*start_showers)
+        _, background, signal_all = shower_merging.SignalBackground(events, start_showers, to_merge)
+
+        #* produce data for plotting
+        data = BasicQuantities(events, start_showers_all, to_merge, signal_all, background)
+
+        output = {
+            "events_table" : events_table,
+            "pfo_table" : pfo_table,
+            "data" : data
+        }
+        if args["selection_type"] == "reco":
+            tagged_data = BasicTaggedQuantities(events, photon_candidate_tags, start_showers_all, signal_all, background)
+
+            output["daughter_pip_event_counts"] = daughter_pip_event_counts
+            output["pip_candidate_table"] = pip_candidate_table
+            output["photon_candidate_table"] = photon_candidate_table
+            output["n_photon_candidates"] = n_photon_candidates
+            output["tags"] = tags #TODO also do for cheated selection
+            output["photon_candidate_tags"] = photon_candidate_tags #TODO also do for cheated selection
+            output["tagged_data"] = tagged_data
+    return output
+
+@Master.timer
 def main(args):
     #* initial setup
     shower_merging.SetPlotStyle()
     os.makedirs(args.out + "basic_quantities/tagged/", exist_ok = True)
 
-    events = Master.Data(args.file, nEvents = args.nEvents[0], start = args.nEvents[1]) # load data
+    output = Processing.mutliprocess(run, args.file, args.batches, args.events, vars(args), args.threads) # run the main analysing method
 
-    #* apply either cheated or reco selection
-    match args.selection_type:
-        case "cheated":
-            events_table, pfo_table = shower_merging.Selection(events, args.selection_type, args.selection_type) # apply selection
-            start_showers, to_merge = shower_merging.SplitSample(events) # split sample into pi0 showers and PFOs to merge
-        case "reco":
-            events_table, pfo_table, photon_candidate_table = shower_merging.Selection(events, args.selection_type, args.selection_type, False)
+    #* merge output from processes
+    tags = shower_merging.GenerateTruthTags()
+    selected_tags = shower_merging.GenerateTruthTags()
+    n_photon_candidates = []
+    daughter_pip_event_counts = {}
 
-            n_photon_candidates = ak.num(events.recoParticles.number[shower_merging.PFOSelection.InitialPi0PhotonSelection(events)]) # get pi0 shower candidates
+    data = {}
+    tagged_data = {}
 
-            tags = shower_merging.GenerateTruthTags(events)
+    for o in output:
+        all_tags = o["tags"]
+        for k, t in all_tags.items():
+            if tags[k].mask is None:
+                tags[k].mask = t.mask
+            else:
+                tags[k].mask = ak.concatenate([tags[k].mask, t.mask])
 
-            MakeInitialTaggingPlots(tags, n_photon_candidates, args.out + "basic_quantities/tagged/") # plots of the event topology
+        pi0_candidate_tags = o["photon_candidate_tags"]
+        for k, t in pi0_candidate_tags.items():
+            if selected_tags[k].mask is None:
+                selected_tags[k].mask = t.mask
+            else:
+                selected_tags[k].mask = ak.concatenate([selected_tags[k].mask, t.mask])
 
-            #* select events which have exactly 2 photon candidates, will deal with > 2 later
-            photon_candidates = n_photon_candidates == 2
-            events.Filter([photon_candidates], [photon_candidates])
+        if "daughter_pip_event_counts" in o.keys():
+            for k in o["daughter_pip_event_counts"]:
+                if k in daughter_pip_event_counts:
+                    daughter_pip_event_counts[k] += o["daughter_pip_event_counts"][k]
+                else:
+                    daughter_pip_event_counts[k] = o["daughter_pip_event_counts"][k]
 
-            for k in tags:
-                tags[k].mask = tags[k].mask[photon_candidates] # apply photon candidate masks to the tags
+        if "n_photon_candidates" in o.keys():
+            n_photon_candidates = ak.concatenate([n_photon_candidates, o["n_photon_candidates"]])
 
-            start_showers, to_merge = shower_merging.SplitSampleReco(events)
+        for k, v in o["data"].items():
+            if k in data:
+                data[k] = ak.concatenate([data[k], v])
+            else:
+                data[k] = ak.Array(v)
 
-            photon_candidate_table.to_latex(args.out + "photon_candidate_selection.tex")
+        for k, v in o["tagged_data"].items():
+            if k in tagged_data:
+                tagged_data[k] = ak.concatenate([tagged_data[k], v], axis = -1)
+            else:
+                tagged_data[k] = ak.Array(v)
 
-        case _:
-            raise Exception(f"event selection type {args.selection_type} not understood.")
 
-    events_table.to_latex(args.out + "event_selection.tex")
-    pfo_table.to_latex(args.out + "pfo_selection.tex")
+    tagged_data["pdg"] = ak.to_numpy(FormatBarPlots(tagged_data["pdg"]))
+    tagged_data["mother_pdg"] = ak.to_numpy(FormatBarPlots(tagged_data["mother_pdg"]))
 
-    #* Plots for the candidate events only i.e. where nphoton candidates == 2
-    start_showers_all = np.logical_or(*start_showers)
-    _, background, signal_all = shower_merging.SignalBackground(events, start_showers, to_merge)
+    #* merge and save tables
+    MergeTables([o["events_table"] for o in output]).to_latex(args.out + "event_selection.tex")
+    MergeTables([o["pfo_table"] for o in output]).to_latex(args.out + "pfo_selection.tex")
 
-    data = BasicQuantities(events, start_showers_all, to_merge, signal_all, background)
+    if "photon_candidate_table" in output[0]:
+        MergeTables([o["photon_candidate_table"] for o in output]).to_latex(args.out + "photon_candidate_selection.tex")
+    if "pip_candidate_table" in output[0]:
+        MergeTables([o["pip_candidate_table"] for o in output]).to_latex(args.out + "pip_candidate_selection.tex")
 
-    print(f"Total number of Signal PFOs :{ak.sum(data['n_signal'])}")
-    print(f"Total number of background PFOs :{ak.sum(data['n_background'])}")
 
+    pd.DataFrame(daughter_pip_event_counts, index = [0]).to_latex(args.out + "daughter_pip_event_counts.tex")
+
+    #* make plots
+    MakeInitialTaggingPlots(tags, n_photon_candidates, args.out + "basic_quantities/tagged/") # plots of the event topology
     MakePlots(data, args.out + "basic_quantities/")
 
     if args.selection_type == "reco":
-        data = BasicTaggedQuantities(events, tags, start_showers_all, signal_all, background)
-        MakePlotsTagged(data, tags, args.out + "basic_quantities/tagged/")
+        MakePlotsTagged(tagged_data, selected_tags, args.out + "basic_quantities/tagged/")
 
-    print(f"plots and tables saved to: {args.out}")
+    rprint(f"plots and tables saved to: {args.out}")
     return
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Applies beam particle selection, PFO selection, produces tables and basic plots.", formatter_class = argparse.RawDescriptionHelpFormatter)
-    parser.add_argument(dest = "file", type = str, help = "NTuple file to study.")
-    parser.add_argument("-e", "--events", dest = "nEvents", type = int, nargs = 2, default = [-1, 0], help = "number of events to analyse and number to skip (-1 is all)")
+    parser.add_argument(dest = "file", nargs = "+", help = "NTuple file to study.")
+    
+    parser.add_argument("-b", "--batches", dest = "batches", type = int, default = None, help = "number of batches to split n tuple files into when parallel processing processing data.")
+    parser.add_argument("-e", "--events", dest = "events", type = int, default = None, help = "number of events to process when parallel processing data.")
 
+    parser.add_argument("-t", "--threads", dest = "threads", type = int, default = 1, help = "number of threads to use when processsing")
+    
     parser.add_argument("-s", "--selection", dest = "selection_type", type = str, choices = ["cheated", "reco"], help = "type of selection to use.", required = True)
 
     parser.add_argument("-o", "--out", dest = "out", type = str, default = None, help = "directory to save plots")
@@ -271,8 +398,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.out is None:
-        args.out = args.file.split("/")[-1].split(".")[0] + "/"
+        if len(args.file) == 1:
+            args.out = args.file[0].split("/")[-1].split(".")[0] + "/"
+        else:
+            args.out = "selection_studies/" #? how to make a better name for multiple input files?
     if args.out[-1] != "/": args.out += "/"
 
-    print(vars(args))
+    rprint(vars(args))
     main(args)
