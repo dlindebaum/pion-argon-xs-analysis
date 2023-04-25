@@ -2,7 +2,6 @@
 // Class:       pi0TestSelection
 // Plugin Type: analyzer (art v2_07_03)
 // File:        pi0TestSelection_module.cc
-//TODO follow new calibration as done in PDSPAnalyser (after understanding current reconsturction)
 ////////////////////////////////////////////////////////////////////////
 
 #include "art/Framework/Core/EDAnalyzer.h"
@@ -93,6 +92,9 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   void reset();
 
   void AnalyseDaughterPFP(const recob::PFParticle &daughterPFP, const art::Event &evt, const detinfo::DetectorPropertiesData &detProp, anab::MVAReader<recob::Hit,4> &hitResults);
+  void GetShowerProperties(const recob::PFParticle &daughterPFP, const art::Event &evt, const detinfo::DetectorPropertiesData &detProp);
+  void GetTrackProperties(const recob::PFParticle &daughterPFP, const art::Event &evt, const detinfo::DetectorPropertiesData &detProp);
+
   void AnalyseBeamPFP(const recob::PFParticle &beam, const art::Event &evt);
   void AnalyseMCTruth(const recob::PFParticle &daughter, const art::Event &evt, const detinfo::DetectorPropertiesData &detProp, const detinfo::DetectorClocksData &clockData, const std::vector<art::Ptr<recob::Hit> > &hitVec);
   void AnalyseMCTruthBeam(const art::Event &evt);
@@ -101,7 +103,8 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   void AnalyseFromBeam(const art::Event &evt, const detinfo::DetectorClocksData &clockData, const detinfo::DetectorPropertiesData &detProp, anab::MVAReader<recob::Hit,4> &hitResults, std::vector<recob::PFParticle> pfpVec);
 
   void NullRecoBeamInfo();
-  void NullRecoDaughterPFPInfo();
+  void NullRecoDaughterShowerInfo();
+  void NullRecoDaughterTrackInfo();
 
   void CorrectBacktrackedHitEnergy();
 
@@ -154,7 +157,34 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   std::vector<int> pandoraTags; // track/shower like tag from pandora
   std::vector<double> emScore;
   std::vector<double> trackScore;
-  std::vector<double> CNNScore; // CNN score per shower
+  std::vector<double> michelScore;
+  std::vector<double> CNNScore; // CNN score per PFO
+
+  // track calorimetry information
+  std::vector<std::vector<double>> reco_daughter_allTrack_resRange_SCE;
+  std::vector<std::vector<double>> reco_daughter_allTrack_dEdX_SCE;
+  std::vector<std::vector<double>> reco_daughter_allTrack_dQdX_SCE;
+  std::vector<std::vector<double>> reco_daughter_allTrack_calibrated_dQdX_SCE;
+  std::vector<std::vector<double>> reco_daughter_allTrack_calibrated_dEdX_SCE;
+  std::vector<std::vector<double>> reco_daughter_allTrack_EField_SCE; // also a calibrated quantity
+  std::vector<std::vector<double>> reco_daughter_allTrack_calo_X;
+  std::vector<std::vector<double>> reco_daughter_allTrack_calo_Y;
+  std::vector<std::vector<double>> reco_daughter_allTrack_calo_Z;
+
+  std::vector<double> reco_daughter_allTrack_Theta;
+  std::vector<double> reco_daughter_allTrack_Phi;
+
+  std::vector<double> reco_daughter_allTrack_startDirX;
+  std::vector<double> reco_daughter_allTrack_startDirY;
+  std::vector<double> reco_daughter_allTrack_startDirZ;
+
+  std::vector<double> reco_daughter_allTrack_len;
+  std::vector<double> reco_daughter_allTrack_startX;
+  std::vector<double> reco_daughter_allTrack_startY;
+  std::vector<double> reco_daughter_allTrack_startZ;
+  std::vector<double> reco_daughter_allTrack_endX;
+  std::vector<double> reco_daughter_allTrack_endY;
+  std::vector<double> reco_daughter_allTrack_endZ;
 
   // shower start position
   std::vector<double> startPosX;
@@ -201,6 +231,9 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
 
   double reco_beam_vertex_michel_score;
   int reco_beam_vertex_nHits;
+
+  double reco_beam_vertex_nHits_charge_weighted;
+  double reco_beam_vertex_score_charge_weighted;
 
   std::vector<double> reco_beam_calo_wire;
   std::vector<double> reco_beam_calibrated_dEdX_SCE;
@@ -498,8 +531,10 @@ std::vector<double> protoana::pi0TestSelection::CNNScoreCalculator(anab::MVARead
   double score = 0;
   double mean_em = 0;
   double mean_track = 0;
+  double mean_michel = 0;
   double cnn_track = 0;
   double cnn_em = 0;
+  double cnn_michel = 0;
 
   // Calculate the score per hit than take the average
   for(unsigned int h = 0; h < n; h++)
@@ -507,17 +542,21 @@ std::vector<double> protoana::pi0TestSelection::CNNScoreCalculator(anab::MVARead
     std::array<float,4> cnn_out = hitResults.getOutput( hits[h] );
     cnn_track = cnn_out[ hitResults.getIndex("track") ];
     cnn_em = cnn_out[ hitResults.getIndex("em") ];
+    cnn_michel = cnn_out[ hitResults.getIndex("michel") ];
 
     mean_em += cnn_em;
     mean_track += cnn_track;
+    mean_michel += cnn_michel;
   }
   mean_em = (n > 0) ? ( mean_em / n ) : -999; // posts -999 if there were no hits
   mean_track = (n > 0) ? ( mean_track / n ) : -999;
+  mean_michel = (n > 0) ? ( mean_michel / n ) : -999;
   score = (n > 0) ? (mean_em / (mean_em + mean_track) ) : -999;
 
   output.push_back(score);
   output.push_back(mean_em);
   output.push_back(mean_track);
+  output.push_back(mean_michel);
 
   return output;
 }
@@ -550,7 +589,33 @@ void protoana::pi0TestSelection::reset()
   pandoraTags.clear();
   emScore.clear();
   trackScore.clear();
+  michelScore.clear();
   CNNScore.clear();
+
+  reco_daughter_allTrack_resRange_SCE.clear();
+  reco_daughter_allTrack_dEdX_SCE.clear();
+  reco_daughter_allTrack_dQdX_SCE.clear();
+  reco_daughter_allTrack_calibrated_dQdX_SCE.clear();
+  reco_daughter_allTrack_calibrated_dEdX_SCE.clear();
+  reco_daughter_allTrack_EField_SCE.clear();
+  reco_daughter_allTrack_calo_X.clear();
+  reco_daughter_allTrack_calo_Y.clear();
+  reco_daughter_allTrack_calo_Z.clear();
+
+  reco_daughter_allTrack_Theta.clear();
+  reco_daughter_allTrack_Phi.clear();
+
+  reco_daughter_allTrack_startDirX.clear();
+  reco_daughter_allTrack_startDirY.clear();
+  reco_daughter_allTrack_startDirZ.clear();
+
+  reco_daughter_allTrack_len.clear();
+  reco_daughter_allTrack_startX.clear();
+  reco_daughter_allTrack_startY.clear();
+  reco_daughter_allTrack_startZ.clear();
+  reco_daughter_allTrack_endX.clear();
+  reco_daughter_allTrack_endY.clear();
+  reco_daughter_allTrack_endZ.clear();
 
   startPosX.clear();
   startPosY.clear();
@@ -737,45 +802,8 @@ void protoana::pi0TestSelection::CollectG4Particle(const int &pdg=0, const int s
 }
 
 
-void protoana::pi0TestSelection::AnalyseDaughterPFP(const recob::PFParticle &daughterPFP, const art::Event &evt, const detinfo::DetectorPropertiesData &detProp, anab::MVAReader<recob::Hit,4> &hitResults)
+void protoana::pi0TestSelection::GetShowerProperties(const recob::PFParticle &daughterPFP, const art::Event &evt, const detinfo::DetectorPropertiesData &detProp)
 {
-  std::chrono::time_point start = std::chrono::high_resolution_clock::now();
-  // get what pandora thinks the pdg code is
-  pdgCodes.push_back(daughterPFP.PdgCode());
-
-  // determine if they are track like or shower like using pandora
-  // then fill a vector containing this data: 11 = shower 13 = track
-  pandoraTags.push_back(PandoraIdentification(daughterPFP, evt));
-
-  // number of hits on all planes
-  unsigned int num = pfpUtil.GetNumberPFParticleHits(daughterPFP, evt, fPFParticleTag);
-  nHits.push_back(num);
-  if(fDebug) std::cout << "number of hits: " << num << std::endl;
-
-  // number of collection plane hits
-  const std::vector<art::Ptr<recob::Hit>> collection_hits = pfpUtil.GetPFParticleHitsFromPlane_Ptrs( daughterPFP, evt, fPFParticleTag, 2 ); // get collection plane hit objects for the daughter
-  unsigned int num_collection = collection_hits.size();
-  nHits_collection.push_back(num_collection);
-  if(fDebug) std::cout << "number of collection plane hits: " << num_collection << std::endl;
-
-  // slice ID
-  int slice = pfpUtil.GetPFParticleSliceIndex(daughterPFP, evt, fPFParticleTag);
-  sliceID.push_back(slice);
-  if(fDebug) std::cout << "sliceID: " << slice << std::endl;
-
-  // beam tag score
-  int bcScore = pfpUtil.GetBeamCosmicScore(daughterPFP, evt, fPFParticleTag);
-  beamCosmicScore.push_back(bcScore);
-  if(fDebug) std::cout << "beam/cosmic score: " << bcScore << std::endl;
-
-  // calculate cnn score, use collection plane hits only here as this has the better performance
-  std::vector<double> cnnOutput = CNNScoreCalculator(hitResults, collection_hits, num_collection);
-  CNNScore.push_back(cnnOutput[0]);
-  // also output the average and em track score to calculate it in python
-  emScore.push_back(cnnOutput[1]);
-  trackScore.push_back(cnnOutput[2]);
-
-
   const recob::Shower* shower = 0x0; // intilise the forced shower object
   if(fDebug) std::cout << "Getting shower" << std::endl;
   // try assigning the forced shower object
@@ -860,7 +888,6 @@ void protoana::pi0TestSelection::AnalyseDaughterPFP(const recob::PFParticle &dau
         //* Don't populate hit information if we weren't told to (even null entries)
       }
 
-      //std::cout << "Getting calibrated shower energy" << std::endl;
       auto calo = showerUtil.GetRecoShowerCalorimetry(
           *shower, evt, "pandora2Shower", fShowerCalorimetryTag);
       bool found_calo = false;
@@ -884,14 +911,159 @@ void protoana::pi0TestSelection::AnalyseDaughterPFP(const recob::PFParticle &dau
     else
     {
       if(fDebug) std::cout << "couldn't get shower object! Moving on" << std::endl;
-      NullRecoDaughterPFPInfo();
+      NullRecoDaughterShowerInfo();
     }
   }
   catch( const cet::exception &e )
   {
     if(fDebug) std::cout << "couldn't get shower object! Moving on" << std::endl;
-    NullRecoDaughterPFPInfo();
+    NullRecoDaughterShowerInfo();
   }
+}
+
+void protoana::pi0TestSelection::GetTrackProperties(const recob::PFParticle &daughterPFP, const art::Event &evt, const detinfo::DetectorPropertiesData &detProp)
+{
+  const recob::Track* track = 0x0; // intilise the forced track object
+  if(fDebug) std::cout << "Getting track" << std::endl;
+  // try assigning the forced track object
+  try
+  {
+    track =	pfpUtil.GetPFParticleTrack(daughterPFP, evt, fPFParticleTag, "pandora2Track");
+    if(track)
+    {
+      reco_daughter_allTrack_Theta.push_back(track->Theta());
+      reco_daughter_allTrack_Phi.push_back(track->Phi());
+      reco_daughter_allTrack_startDirX.push_back(track->StartDirection().X());
+      reco_daughter_allTrack_startDirY.push_back(track->StartDirection().Y());
+      reco_daughter_allTrack_startDirZ.push_back(track->StartDirection().Z());
+      reco_daughter_allTrack_len.push_back(track->Length());
+      reco_daughter_allTrack_startX.push_back(track->Trajectory().Start().X());
+      reco_daughter_allTrack_startY.push_back(track->Trajectory().Start().Y());
+      reco_daughter_allTrack_startZ.push_back(track->Trajectory().Start().Z());
+      reco_daughter_allTrack_endX.push_back(track->Trajectory().End().X());
+      reco_daughter_allTrack_endY.push_back(track->Trajectory().End().Y());
+      reco_daughter_allTrack_endZ.push_back(track->Trajectory().End().Z());
+
+      //Calorimetry info, only found if at least one calorimetry object has the collection plane ID.
+      std::vector<anab::Calorimetry> caloSCE = trackUtil.GetRecoTrackCalorimetry(*track, evt, "pandora2Track", "pandora2calo");
+      bool found_calo = false;
+      size_t i = 0;
+      for ( i = 0; i < caloSCE.size(); ++i) {
+        if (caloSCE[i].PlaneID().Plane == 2) {
+          found_calo = true;
+          break; 
+        }
+      }
+
+      reco_daughter_allTrack_resRange_SCE.push_back( std::vector<double>() );
+      reco_daughter_allTrack_dEdX_SCE.push_back( std::vector<double>() );
+      reco_daughter_allTrack_dQdX_SCE.push_back( std::vector<double>() );
+      reco_daughter_allTrack_calibrated_dQdX_SCE.push_back( std::vector<double>() );
+      reco_daughter_allTrack_calibrated_dEdX_SCE.push_back( std::vector<double>() );
+      reco_daughter_allTrack_EField_SCE.push_back( std::vector<double>() );
+      reco_daughter_allTrack_calo_X.push_back( std::vector<double>() );
+      reco_daughter_allTrack_calo_Y.push_back( std::vector<double>() );
+      reco_daughter_allTrack_calo_Z.push_back( std::vector<double>() );
+
+      if(found_calo)
+      {
+        if (fDebug) std::cout << "found calorimetry object" << std::endl;
+        std::vector<float> dEdx_SCE = caloSCE[i].dEdx();
+        std::vector<float> dQdx_SCE = caloSCE[i].dQdx();
+        std::vector<float> range_SCE = caloSCE[i].ResidualRange();
+        std::vector<anab::Point_t> theXYZPoints = caloSCE[i].XYZ();
+        for( size_t j = 0; j < dEdx_SCE.size(); ++j ){
+          reco_daughter_allTrack_resRange_SCE.back().push_back( range_SCE[j] );
+          reco_daughter_allTrack_dEdX_SCE.back().push_back( dEdx_SCE[j] );
+          reco_daughter_allTrack_dQdX_SCE.back().push_back( dQdx_SCE[j] );
+          reco_daughter_allTrack_calo_X.back().push_back(theXYZPoints[j].X());
+          reco_daughter_allTrack_calo_Y.back().push_back(theXYZPoints[j].Y());
+          reco_daughter_allTrack_calo_Z.back().push_back(theXYZPoints[j].Z());
+        }
+
+        // check the following methods for how dEdX and the following are calibrated (done by Ajib).
+        std::vector<float> cali_dEdX_SCE = calibration_SCE.GetCalibratedCalorimetry(*track, evt, "pandora2Track", "pandora2calo", 2);
+        for( auto dedx : cali_dEdX_SCE){
+          reco_daughter_allTrack_calibrated_dEdX_SCE.back().push_back(dedx);
+        }
+        std::vector<double> new_dQdX = calibration_SCE.CalibratedQdX(*track, evt, "pandora2Track", "pandora2calo", 2, -10.);
+        for (auto dqdx : new_dQdX) {
+          reco_daughter_allTrack_calibrated_dQdX_SCE.back().push_back(dqdx);
+        }
+        std::vector<double> efield = calibration_SCE.GetEFieldVector(*track, evt, "pandora2Track", "pandora2calo", 2, -10.);
+        for (auto ef : efield) {
+          reco_daughter_allTrack_EField_SCE.back().push_back(ef);
+        }
+      }
+      else
+      {
+        reco_daughter_allTrack_resRange_SCE.back().push_back(-999);
+        reco_daughter_allTrack_dEdX_SCE.back().push_back(-999);
+        reco_daughter_allTrack_dQdX_SCE.back().push_back(-999);
+        reco_daughter_allTrack_calibrated_dQdX_SCE.back().push_back(-999);
+        reco_daughter_allTrack_calibrated_dEdX_SCE.back().push_back(-999);
+        reco_daughter_allTrack_EField_SCE.back().push_back(-999);
+        reco_daughter_allTrack_calo_X.back().push_back(-999);
+        reco_daughter_allTrack_calo_Y.back().push_back(-999);
+        reco_daughter_allTrack_calo_Z.back().push_back(-999);
+      }
+    }
+    else
+    {
+      if(fDebug) std::cout << "couldn't get track object! Moving on" << std::endl;
+      NullRecoDaughterTrackInfo();
+    }
+  }
+  catch( const cet::exception &e )
+  {
+    if(fDebug) std::cout << "couldn't get track object! Moving on" << std::endl;
+    NullRecoDaughterTrackInfo();
+  }
+}
+
+
+void protoana::pi0TestSelection::AnalyseDaughterPFP(const recob::PFParticle &daughterPFP, const art::Event &evt, const detinfo::DetectorPropertiesData &detProp, anab::MVAReader<recob::Hit,4> &hitResults)
+{
+  std::chrono::time_point start = std::chrono::high_resolution_clock::now();
+  // get what pandora thinks the pdg code is
+  pdgCodes.push_back(daughterPFP.PdgCode());
+
+  // determine if they are track like or shower like using pandora
+  // then fill a vector containing this data: 11 = shower 13 = track
+  pandoraTags.push_back(PandoraIdentification(daughterPFP, evt));
+
+  // number of hits on all planes
+  unsigned int num = pfpUtil.GetNumberPFParticleHits(daughterPFP, evt, fPFParticleTag);
+  nHits.push_back(num);
+  if(fDebug) std::cout << "number of hits: " << num << std::endl;
+
+  // number of collection plane hits
+  const std::vector<art::Ptr<recob::Hit>> collection_hits = pfpUtil.GetPFParticleHitsFromPlane_Ptrs( daughterPFP, evt, fPFParticleTag, 2 ); // get collection plane hit objects for the daughter
+  unsigned int num_collection = collection_hits.size();
+  nHits_collection.push_back(num_collection);
+  if(fDebug) std::cout << "number of collection plane hits: " << num_collection << std::endl;
+
+  // slice ID
+  int slice = pfpUtil.GetPFParticleSliceIndex(daughterPFP, evt, fPFParticleTag);
+  sliceID.push_back(slice);
+  if(fDebug) std::cout << "sliceID: " << slice << std::endl;
+
+  // beam tag score
+  int bcScore = pfpUtil.GetBeamCosmicScore(daughterPFP, evt, fPFParticleTag);
+  beamCosmicScore.push_back(bcScore);
+  if(fDebug) std::cout << "beam/cosmic score: " << bcScore << std::endl;
+
+  // calculate cnn score, use collection plane hits only here as this has the better performance
+  std::vector<double> cnnOutput = CNNScoreCalculator(hitResults, collection_hits, num_collection);
+  CNNScore.push_back(cnnOutput[0]);
+  // also output the average and em track score to calculate it in python
+  emScore.push_back(cnnOutput[1]);
+  trackScore.push_back(cnnOutput[2]);
+  michelScore.push_back(cnnOutput[3]);
+
+  GetShowerProperties(daughterPFP, evt, detProp);
+  GetTrackProperties(daughterPFP, evt, detProp);
+
   if(fDebug)
   {
     std::chrono::time_point stop = std::chrono::high_resolution_clock::now();
@@ -995,6 +1167,13 @@ void protoana::pi0TestSelection::AnalyseBeamPFP(const recob::PFParticle &beam, c
     std::pair<double, int> vertex_michel_score = trackUtil.GetVertexMichelScore(*beamTrack, evt, fTrackerTag, fHitTag);
     reco_beam_vertex_nHits = vertex_michel_score.second;
     reco_beam_vertex_michel_score = vertex_michel_score.first;
+
+    // charge weighted michel score
+    std::pair<double, double> vertex_michel_score_weight_by_charge = trackUtil.GetVertexMichelScore_weight_by_charge(*beamTrack, evt, fTrackerTag, fHitTag);
+    reco_beam_vertex_nHits_charge_weighted = vertex_michel_score_weight_by_charge.second;
+    reco_beam_vertex_score_charge_weighted = vertex_michel_score_weight_by_charge.first;
+    // reco_beam_vertex_michel_score_weight_by_charge = (vertex_michel_score_weight_by_charge.second != 0 ? vertex_michel_score_weight_by_charge.first/vertex_michel_score_weight_by_charge.second : -999.);
+
   }
 }
 
@@ -1260,9 +1439,11 @@ void protoana::pi0TestSelection::NullRecoBeamInfo()
   reco_beam_calo_wire = null_double_array;
   reco_beam_vertex_michel_score = -999;
   reco_beam_vertex_nHits = -999;
+  reco_beam_vertex_nHits_charge_weighted = -999;
+  reco_beam_vertex_score_charge_weighted = -999;
   reco_beam_calibrated_dEdX_SCE = null_double_array;
 }
-void protoana::pi0TestSelection::NullRecoDaughterPFPInfo()
+void protoana::pi0TestSelection::NullRecoDaughterShowerInfo()
 {
   startPosX.push_back(-999);
   startPosY.push_back(-999);
@@ -1287,6 +1468,19 @@ void protoana::pi0TestSelection::NullRecoDaughterPFPInfo()
     hit_channel.push_back(null_int_array);
   }
 }
+void protoana::pi0TestSelection::NullRecoDaughterTrackInfo()
+{
+  reco_daughter_allTrack_resRange_SCE.push_back(null_double_array);
+  reco_daughter_allTrack_dEdX_SCE.push_back(null_double_array);
+  reco_daughter_allTrack_dQdX_SCE.push_back(null_double_array);
+  reco_daughter_allTrack_calibrated_dQdX_SCE.push_back(null_double_array);
+  reco_daughter_allTrack_calibrated_dEdX_SCE.push_back(null_double_array);
+  reco_daughter_allTrack_EField_SCE.push_back(null_double_array);
+  reco_daughter_allTrack_calo_X.push_back(null_double_array);
+  reco_daughter_allTrack_calo_Y.push_back(null_double_array);
+  reco_daughter_allTrack_calo_Z.push_back(null_double_array);
+}
+
 
 void protoana::pi0TestSelection::CorrectBacktrackedHitEnergy()
 {
@@ -1362,7 +1556,34 @@ void protoana::pi0TestSelection::beginJob()
   fOutTree->Branch("pandoraTag", &pandoraTags);
   fOutTree->Branch("reco_daughter_PFP_emScore_collection", &emScore);
   fOutTree->Branch("reco_daughter_PFP_trackScore_collection", &trackScore);
+  fOutTree->Branch("reco_daughter_PFP_michelScore_collection", &michelScore);
   fOutTree->Branch("CNNScore_collection", &CNNScore);
+
+  fOutTree->Branch("reco_daughter_allTrack_resRange_SCE", &reco_daughter_allTrack_resRange_SCE);
+  fOutTree->Branch("reco_daughter_allTrack_dEdX_SCE", &reco_daughter_allTrack_dEdX_SCE);
+  fOutTree->Branch("reco_daughter_allTrack_dQdX_SCE", &reco_daughter_allTrack_dQdX_SCE);
+  fOutTree->Branch("reco_daughter_allTrack_calibrated_dQdX_SCE", &reco_daughter_allTrack_calibrated_dQdX_SCE);
+  fOutTree->Branch("reco_daughter_allTrack_calibrated_dEdX_SCE", &reco_daughter_allTrack_calibrated_dEdX_SCE);
+  fOutTree->Branch("reco_daughter_allTrack_EField_SCE", &reco_daughter_allTrack_EField_SCE);
+  fOutTree->Branch("reco_daughter_allTrack_calo_X", &reco_daughter_allTrack_calo_X);
+  fOutTree->Branch("reco_daughter_allTrack_calo_Y", &reco_daughter_allTrack_calo_Y);
+  fOutTree->Branch("reco_daughter_allTrack_calo_Z", &reco_daughter_allTrack_calo_Z);
+
+  fOutTree->Branch("reco_daughter_allTrack_Theta", &reco_daughter_allTrack_Theta);
+  fOutTree->Branch("reco_daughter_allTrack_Phi", &reco_daughter_allTrack_Phi);
+
+  fOutTree->Branch("reco_daughter_allTrack_startDirX", &reco_daughter_allTrack_startDirX);
+  fOutTree->Branch("reco_daughter_allTrack_startDirY", &reco_daughter_allTrack_startDirY);
+  fOutTree->Branch("reco_daughter_allTrack_startDirZ", &reco_daughter_allTrack_startDirZ);
+
+  fOutTree->Branch("reco_daughter_allTrack_len", &reco_daughter_allTrack_len);
+  fOutTree->Branch("reco_daughter_allTrack_startX", &reco_daughter_allTrack_startX);
+  fOutTree->Branch("reco_daughter_allTrack_startY", &reco_daughter_allTrack_startY);
+  fOutTree->Branch("reco_daughter_allTrack_startZ", &reco_daughter_allTrack_startZ);
+  fOutTree->Branch("reco_daughter_allTrack_endX", &reco_daughter_allTrack_endX);
+  fOutTree->Branch("reco_daughter_allTrack_endY", &reco_daughter_allTrack_endY);
+  fOutTree->Branch("reco_daughter_allTrack_endZ", &reco_daughter_allTrack_endZ);
+
 
   fOutTree->Branch("reco_daughter_allShower_startX", &startPosX);
   fOutTree->Branch("reco_daughter_allShower_startY", &startPosY);
@@ -1406,6 +1627,9 @@ void protoana::pi0TestSelection::beginJob()
   fOutTree->Branch("reco_beam_vertex_nHits", &reco_beam_vertex_nHits);
   fOutTree->Branch("reco_beam_vertex_michel_score", &reco_beam_vertex_michel_score);
   
+  fOutTree->Branch("reco_beam_vertex_nHits_charge_weighted", &reco_beam_vertex_nHits_charge_weighted);
+  fOutTree->Branch("reco_beam_vertex_michel_score_charge_weighted", &reco_beam_vertex_score_charge_weighted);
+
   fOutTree->Branch("reco_beam_calibrated_dEdX_SCE", &reco_beam_calibrated_dEdX_SCE);
 
   //---------------------------Backtracked Beam---------------------------//
