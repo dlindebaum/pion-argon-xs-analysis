@@ -1,12 +1,11 @@
+#include "services_dune.fcl"
 #include "filters.fcl"
 #include "triggeralgo_service.fcl"
 #include "ProtoDUNEBeamCuts.fcl"
 #include "ProtoDUNECalibration.fcl"
 #include "ProtoDUNEBeamlineUtils.fcl"
-#include "services_dune.fcl"
-#include "ProtoDUNETruthBeamFilter.fcl"
 
-process_name: Pi0MC
+process_name: pi0Data
 
 pi0_test_selection:
 {
@@ -22,14 +21,15 @@ pi0_test_selection:
    SelectEvents: []
 
    BeamlineUtils: @local::standard_protodunebeamlineutils
-   Pi0Only: true
+   Pi0Only: false
    RetrieveHitInfo: false
    # Retrieve G4 determines what truth information should be accessed has 4 options:
    # 0 : None
    # 1 : PIO, only get truth information from pi0 decays and their daughters
    # 2 : DIPHOTON, get the first two MC particles (and their daughters maybe?), only use when analysing diphoton MC.
    # 3 : ALL, NOT RECOMMENDED as it retrieves all MC particles from the truth table, and resulting file sizes will be significantly larger.
-   RetrieveG4: 1
+   # 4 : PI0_PIP, pi0 and pi+ plus their daughters
+   RetrieveG4: 4
    CalibrationParsSCE: @local::CalorimetryParameters_SPProd4_MC_SCE
    Debug: false
 }
@@ -51,7 +51,7 @@ services:
       SimChannelModuleLabel: "tpcrawdecoder:simpleSC"
       G4ModuleLabel: "largeant"
       MinimumHitEnergyFraction: 1e-1
-      # HitTimeRMS: 5
+      HitTimeRMS: 5
     }
   }
 
@@ -71,10 +71,9 @@ source:
 
 physics:
 {
-
  analyzers:
  {
-  pduneana:           @local::pi0_test_selection
+  pduneana:          @local::pi0_test_selection
  }
 
  pi0Ana: [pduneana]
@@ -83,3 +82,5 @@ physics:
 }
 
 outputs: {}
+services.ParticleInventoryService.ParticleInventory.EveIdCalculator: "EmEveIdCalculator"
+physics.analyzers.pduneana.BeamlineUtils.UseCERNCalibSelection: true

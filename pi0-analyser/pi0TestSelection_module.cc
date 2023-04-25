@@ -94,6 +94,7 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   void AnalyseDaughterPFP(const recob::PFParticle &daughterPFP, const art::Event &evt, const detinfo::DetectorPropertiesData &detProp, anab::MVAReader<recob::Hit,4> &hitResults);
   void GetShowerProperties(const recob::PFParticle &daughterPFP, const art::Event &evt, const detinfo::DetectorPropertiesData &detProp);
   void GetTrackProperties(const recob::PFParticle &daughterPFP, const art::Event &evt, const detinfo::DetectorPropertiesData &detProp);
+  void GetBeamInstrumentation(const art::Event &evt, const std::vector<art::Ptr<beam::ProtoDUNEBeamEvent>> &beamVec);
 
   void AnalyseBeamPFP(const recob::PFParticle &beam, const art::Event &evt);
   void AnalyseMCTruth(const recob::PFParticle &daughter, const art::Event &evt, const detinfo::DetectorPropertiesData &detProp, const detinfo::DetectorClocksData &clockData, const std::vector<art::Ptr<recob::Hit> > &hitVec);
@@ -122,6 +123,7 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   std::string fPFParticleTag;
   std::string fGeneratorTag;
   protoana::ProtoDUNEBeamlineUtils fBeamlineUtils;
+  int fBeamPIDMomentum;
   art::ServiceHandle<geo::Geometry> geom;
   art::ServiceHandle<cheat::BackTrackerService> bt_serv;
   art::ServiceHandle< cheat::ParticleInventoryService > pi_serv;
@@ -238,6 +240,24 @@ class protoana::pi0TestSelection : public art::EDAnalyzer {
   std::vector<double> reco_beam_calo_wire;
   std::vector<double> reco_beam_calibrated_dEdX_SCE;
 
+  //-------------------------Beam Instrumentation-------------------------//
+  double beam_inst_momentum;
+  bool beam_inst_valid;
+  int beam_inst_trigger;
+
+  double beam_inst_X;
+  double beam_inst_Y;
+  double beam_inst_Z;
+  
+  double beam_inst_dirX;
+  double beam_inst_dirY;
+  double beam_inst_dirZ;
+
+  std::vector< int > beam_inst_PDG_candidates;
+
+  int beam_inst_nTracks;
+  int beam_inst_nMomenta;
+
   //---------------------------Backtracked Beam---------------------------//
   // true beam meta-data
   int trueBeamPdg;
@@ -340,6 +360,7 @@ protoana::pi0TestSelection::pi0TestSelection(fhicl::ParameterSet const & p)
   fPFParticleTag(p.get<std::string>("PFParticleTag")),
   fGeneratorTag(p.get<std::string>("GeneratorTag")),
   fBeamlineUtils(p.get<fhicl::ParameterSet>("BeamlineUtils")),
+  fBeamPIDMomentum(p.get<int>("BeamPIDMomentum")),
   fPi0Only(p.get<bool>("Pi0Only")),
   fRetrieveHitInfo(p.get<bool>("RetrieveHitInfo")),
   fRetrieveG4(static_cast<G4Mode>(p.get<int>("RetrieveG4"))),
@@ -645,6 +666,9 @@ void protoana::pi0TestSelection::reset()
   //---------------------------Reconstructed Beam---------------------------//
   reco_beam_calo_wire.clear();
   reco_beam_calibrated_dEdX_SCE.clear();
+
+  //--------------------------Beam Instrumentation--------------------------//
+  beam_inst_PDG_candidates.clear();
 
   //---------------------------Backtracked Daughter---------------------------//
   matchedNum.clear();
@@ -1019,6 +1043,62 @@ void protoana::pi0TestSelection::GetTrackProperties(const recob::PFParticle &dau
     if(fDebug) std::cout << "couldn't get track object! Moving on" << std::endl;
     NullRecoDaughterTrackInfo();
   }
+}
+
+void protoana::pi0TestSelection::GetBeamInstrumentation(const art::Event &evt, const std::vector<art::Ptr<beam::ProtoDUNEBeamEvent>> &beamVec)
+{
+  //High level info about the beam trigger
+  const beam::ProtoDUNEBeamEvent & beamEvent = *(beamVec.at(0)); 
+  beam_inst_trigger = beamEvent.GetTimingTrigger();
+  if (evt.isRealData() && !fBeamlineUtils.IsGoodBeamlineTrigger(evt)) {
+    std::cout << "Failed beam quality check" << std::endl;
+    beam_inst_valid = false;
+  }
+  else
+  {
+    beam_inst_valid = true;
+  }
+
+  //Number of tracks reconstructed in the final four fiber monitors
+  int nTracks = beamEvent.GetBeamTracks().size();
+
+  if( nTracks > 0 ){
+    beam_inst_X = beamEvent.GetBeamTracks()[0].Trajectory().End().X();
+    beam_inst_Y = beamEvent.GetBeamTracks()[0].Trajectory().End().Y();
+    beam_inst_Z = beamEvent.GetBeamTracks()[0].Trajectory().End().Z();
+
+    beam_inst_dirX = beamEvent.GetBeamTracks()[0].Trajectory().EndDirection().X();
+    beam_inst_dirY = beamEvent.GetBeamTracks()[0].Trajectory().EndDirection().Y();
+    beam_inst_dirZ = beamEvent.GetBeamTracks()[0].Trajectory().EndDirection().Z();
+  }
+  else{
+    beam_inst_X = -999;
+    beam_inst_Y = -999;
+    beam_inst_Z = -999;
+    beam_inst_dirX = -999;
+    beam_inst_dirY = -999;
+    beam_inst_dirZ = -999;
+  }
+
+  //Momentum reconstructed from spectrometer
+  std::vector< double > momenta = beamEvent.GetRecoBeamMomenta();
+  int nMomenta = momenta.size();
+  if( nMomenta > 0 ){
+    beam_inst_momentum = momenta[0];
+  }
+  else{
+    beam_inst_momentum = -999;
+  }
+
+  beam_inst_nTracks = nTracks;
+  beam_inst_nMomenta = nMomenta;
+
+  //beamline PID 
+  if (evt.isRealData()) {
+    std::vector< int > pdg_cands = fBeamlineUtils.GetPID( beamEvent, fBeamPIDMomentum );
+    beam_inst_PDG_candidates.insert( beam_inst_PDG_candidates.end(), pdg_cands.begin(), pdg_cands.end() );
+  }
+  return;
 }
 
 
@@ -1632,6 +1712,23 @@ void protoana::pi0TestSelection::beginJob()
 
   fOutTree->Branch("reco_beam_calibrated_dEdX_SCE", &reco_beam_calibrated_dEdX_SCE);
 
+  //-------------------------Beam Instrumentation--------------------------//
+  fOutTree->Branch("beam_inst_momentum", &beam_inst_momentum );
+  fOutTree->Branch("beam_inst_valid", &beam_inst_valid );
+  fOutTree->Branch("beam_inst_trigger", &beam_inst_trigger );
+
+  fOutTree->Branch("beam_inst_X", &beam_inst_X );
+  fOutTree->Branch("beam_inst_Y", &beam_inst_Y );
+  fOutTree->Branch("beam_inst_Z", &beam_inst_Z );
+
+  fOutTree->Branch("beam_inst_dirX", &beam_inst_dirX );
+  fOutTree->Branch("beam_inst_dirY", &beam_inst_dirY );
+  fOutTree->Branch("beam_inst_dirZ", &beam_inst_dirZ );
+
+  fOutTree->Branch("beam_inst_PDG_candidates", &beam_inst_PDG_candidates );
+  fOutTree->Branch("beam_inst_nTracks", &beam_inst_nTracks );
+  fOutTree->Branch("beam_inst_nMomenta", &beam_inst_nMomenta );
+
   //---------------------------Backtracked Beam---------------------------//
   fOutTree->Branch("reco_beam_PFP_true_byHits_pdg", &trueBeamPdg);
 
@@ -1766,19 +1863,30 @@ void protoana::pi0TestSelection::analyze(art::Event const & evt)
   if(!fPi0Only)
   {
     std::vector<art::Ptr<beam::ProtoDUNEBeamEvent>> beamVec;
-    try
+    if(evt.isRealData())
     {
-      auto beamHandle = evt.getValidHandle<std::vector<beam::ProtoDUNEBeamEvent>>("generator");
-      if( beamHandle.isValid())
-      {
+      auto beamHandle = evt.getValidHandle<std::vector<beam::ProtoDUNEBeamEvent>>("beamevent");
+      if (beamHandle.isValid()) {
         art::fill_ptr_vector(beamVec, beamHandle);
       }
     }
-    catch (const cet::exception &e)
+    else
     {
-      std::cout << "BeamEvent generator object not found, moving on" << std::endl;
-      return;
+      try
+      {
+        auto beamHandle = evt.getValidHandle<std::vector<beam::ProtoDUNEBeamEvent>>("generator");
+        if( beamHandle.isValid())
+        {
+          art::fill_ptr_vector(beamVec, beamHandle);
+        }
+      }
+      catch (const cet::exception &e)
+      {
+        std::cout << "BeamEvent generator object not found, moving on" << std::endl;
+        return;
+      }
     }
+    GetBeamInstrumentation(evt, beamVec);
   }
   //-------------------------------------------------------------------------------------------//
 
@@ -1789,7 +1897,7 @@ void protoana::pi0TestSelection::analyze(art::Event const & evt)
   beam = -999;
   if(beamParticles.size() == 0)
   {
-    std::cout << "no beam particle..." << std::endl;
+    std::cout << "no beam particle PFO found from slices..." << std::endl;
   }
   else
   {

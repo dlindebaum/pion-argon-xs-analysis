@@ -18,6 +18,7 @@ pi0_test_selection:
    HitTag:                  "hitpdune"
    PFParticleTag:           "pandora"
    GeneratorTag:            "generator"
+   BeamPIDMomentum:         1
    SelectEvents: []
 
    BeamlineUtils: @local::standard_protodunebeamlineutils
