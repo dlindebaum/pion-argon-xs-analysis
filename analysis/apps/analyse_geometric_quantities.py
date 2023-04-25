@@ -67,6 +67,7 @@ def ShowerMergingCriteria(q : shower_merging.ShowerMergeQuantities, outDir : str
     output_path = f"{outDir}analysedCuts.csv"
 
     #* loop through all combination of values for each parameter and optmize the final cut
+    mode = "w"
     for initial_cuts in itertools.product(*values.T):
         for i in range(len(cuts)):
             cuts[i].value = initial_cuts[i]
@@ -77,7 +78,8 @@ def ShowerMergingCriteria(q : shower_merging.ShowerMergeQuantities, outDir : str
         o = pd.DataFrame(o, columns = q.selectionVariables + metric_labels)
         # don't store cuts which exclude all signal PFOs
         o = o[o["s"] > 0]
-        o.to_csv(output_path, mode = "a", header = not os.path.exists(output_path))
+        o.to_csv(output_path, mode = mode, header = not os.path.exists(output_path))
+        mode = "a" # swtich to append mode after writing the first entry
 
         counter += 1
         end = '\n' if counter == 0 else '\r'
@@ -99,7 +101,6 @@ if __name__ == "__main__":
     example_usage = "fill me in!"
     parser = argparse.ArgumentParser(description = "Calculate geometric quantities of PFOs to be used for the shower merging analysis.", formatter_class = argparse.RawDescriptionHelpFormatter, epilog = example_usage)
     parser.add_argument(dest = "file", type = str, help = "NTuple file to study.")
-    parser.add_argument("-e", "--events", dest = "nEvents", type = int, nargs = 2, default = [-1, 0], help = "number of events to analyse and number to skip (-1 is all)")
 
     parser.add_argument("-p", "--plot", dest = "plot", action = "store_true", help = "make plots")
     parser.add_argument("-c", "--cut", dest = "cut", action = "store_true", help = "generate optimised cuts (warning! this can take a long time)")
