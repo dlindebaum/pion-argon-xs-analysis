@@ -752,15 +752,16 @@ def Selection(events : Master.Data, event_type : str, pfo_type : str, veto_daugh
     events.Filter([mask])
 
     if pfo_type == "reco":
-        
-        mask, daughter_pi_candidate_table = PFOSelection.DaughterPiPlusSelection(events, verbose = False, return_table = True)
-        if veto_daughter_pip:
-            event_mask = ak.num(mask[mask]) == 0 # exclude all events which have a pi+ in he final state
-            events.Filter([event_mask], [event_mask])
 
         mask, photon_candidate_table = PFOSelection.InitialPi0PhotonSelection(events, verbose = False, return_table = True)
         if select_photon_candidates:
             event_mask = ak.num(mask[mask]) == 2 # select events with 2 photon candidates only #TODO handle > 2 candidates
+            events.Filter([event_mask], [event_mask])
+
+        #* veto_daughter_pip can take a long time and a lot of resources, so do this cut after the pi0 photon selection
+        mask, daughter_pi_candidate_table = PFOSelection.DaughterPiPlusSelection(events, verbose = False, return_table = True)
+        if veto_daughter_pip:
+            event_mask = ak.num(mask[mask]) == 0 # exclude all events which have a pi+ in the final state
             events.Filter([event_mask], [event_mask])
 
     if pfo_type == "reco":
