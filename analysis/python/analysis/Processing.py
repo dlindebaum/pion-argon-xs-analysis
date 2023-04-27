@@ -16,6 +16,22 @@ from rich import print
 import warnings
 
 from python.analysis import Master
+from contextlib import redirect_stdout, redirect_stderr
+
+def log_process(func):
+    """ Function wrapper to redirect printout from a process to a log file.
+
+    Args:
+        func (_type_): function.
+    """
+    def wrap(*args, **kwargs):
+        process_num = args[0]
+        print(f"starting process : {process_num}")
+        with open(f"out_{args[0]}.log", "w") as f:
+            with redirect_stdout(f):
+                with redirect_stderr(f):
+                    return func(*args, **kwargs)
+    return wrap
 
 
 def CalculateBatches(file : str, n_batches : int = None, n_events : int = None) -> list[int]:

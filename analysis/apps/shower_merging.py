@@ -48,55 +48,53 @@ def Filter(df : pd.DataFrame, value : str) -> pd.DataFrame:
     out.columns = [out.columns[i].replace(value + "_", "") for i in range(len(out.columns))]
     return out
 
-
+@Processing.log_process
 def run(i, file, n_events, start, args):
-    batch_num = i # function arguments are pass by reference, so keep track of the batch number internally
-    with open(f"out_{batch_num}.log", "w") as sys.stdout, open(f"out_{batch_num}.log", "w") as sys.stderr:
-        events = Master.Data(file, nEvents = n_events, start = start)
+    events = Master.Data(file, nEvents = n_events, start = start)
 
-        shower_merging.Selection(events, args["selection_type"], args["selection_type"])
+    shower_merging.Selection(events, args["selection_type"], args["selection_type"])
 
-        #* tag the shower pairs based on event topology
-        tags = shower_merging.GenerateTruthTags(events)
+    #* tag the shower pairs based on event topology
+    tags = shower_merging.GenerateTruthTags(events)
 
-        tags_number = [-1] * len(tags.number[0].mask)
-        tags_map = {"not tagged" : [-1]}
-        for i, k in enumerate(tags):
-            tags_map[k] = [tags[k].number]
-            tags_number = ak.where(tags[k].mask == True, tags[k].number, tags_number)
+    tags_number = [-1] * len(tags.number[0].mask)
+    tags_map = {"not tagged" : [-1]}
+    for i, k in enumerate(tags):
+        tags_map[k] = [tags[k].number]
+        tags_number = ak.where(tags[k].mask == True, tags[k].number, tags_number)
 
-        tags_number = pd.DataFrame({"tag": ak.to_list(tags_number)})
-        tags_map = pd.DataFrame(tags_map)
+    tags_number = pd.DataFrame({"tag": ak.to_list(tags_number)})
+    tags_map = pd.DataFrame(tags_map)
 
-        if args["selection_type"] == "cheated":
-            start_showers, to_merge = shower_merging.SplitSample(events)
+    if args["selection_type"] == "cheated":
+        start_showers, to_merge = shower_merging.SplitSample(events)
 
-        if args["selection_type"] == "reco":
-            start_showers, to_merge = shower_merging.SplitSampleReco(events)
+    if args["selection_type"] == "reco":
+        start_showers, to_merge = shower_merging.SplitSampleReco(events)
 
-        unmerged_pairs = Master.ShowerPairs(events, shower_pair_mask = np.logical_or(*start_showers))
-        u_df = unmerged_pairs.CalculateAll()
+    unmerged_pairs = Master.ShowerPairs(events, shower_pair_mask = np.logical_or(*start_showers))
+    u_df = unmerged_pairs.CalculateAll()
 
-        metadata = pd.concat([u_df[["run", "subrun", "event"]], tags_number], axis = 1)
+    metadata = pd.concat([u_df[["run", "subrun", "event"]], tags_number], axis = 1)
 
-        r_df, event_performance_table, pfo_performance_table = RecoShowerPairsDataFrame(events, start_showers, to_merge, args["cuts"], args["cut_type"], cheat = False)
+    r_df, event_performance_table, pfo_performance_table = RecoShowerPairsDataFrame(events, start_showers, to_merge, args["cuts"], args["cut_type"], cheat = False)
 
-        c_df, event_cheat_performance_table, pfo_cheat_performance_table = RecoShowerPairsDataFrame(events, start_showers, to_merge, args["cuts"], args["cut_type"], cheat = True)
-        # c_df = CheatedShowerPairsDataFrame(events, start_showers)
+    c_df, event_cheat_performance_table, pfo_cheat_performance_table = RecoShowerPairsDataFrame(events, start_showers, to_merge, args["cuts"], args["cut_type"], cheat = True)
+    # c_df = CheatedShowerPairsDataFrame(events, start_showers)
 
-        data = { # output data in hierarchical order
-            "tag_map" : tags_map,
-            "metadata" : metadata,
-            "true" : Filter(u_df, "true"),
-            "cheat": Filter(u_df, "cheated"),
-            "unmerged/reco" : Filter(u_df, "reco"),
-            "unmerged/error" : Filter(u_df, "error"),
-            "merged/reco" : Filter(r_df, "reco"),
-            "merged/error" : Filter(r_df, "error"),
-            "merged_cheat/reco" : Filter(c_df, "reco"),
-            "merged_cheat/error" : Filter(c_df, "error"),
-        }
-        return data, event_performance_table, pfo_performance_table, event_cheat_performance_table, pfo_cheat_performance_table
+    data = { # output data in hierarchical order
+        "tag_map" : tags_map,
+        "metadata" : metadata,
+        "true" : Filter(u_df, "true"),
+        "cheat": Filter(u_df, "cheated"),
+        "unmerged/reco" : Filter(u_df, "reco"),
+        "unmerged/error" : Filter(u_df, "error"),
+        "merged/reco" : Filter(r_df, "reco"),
+        "merged/error" : Filter(r_df, "error"),
+        "merged_cheat/reco" : Filter(c_df, "reco"),
+        "merged_cheat/error" : Filter(c_df, "error"),
+    }
+    return data, event_performance_table, pfo_performance_table, event_cheat_performance_table, pfo_cheat_performance_table
 
 
 def MergeTables(tables : list) -> dict:

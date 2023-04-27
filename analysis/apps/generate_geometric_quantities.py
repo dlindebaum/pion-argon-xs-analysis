@@ -16,23 +16,23 @@ from rich import print
 
 from python.analysis import Master, shower_merging, Processing
 
-
+@Processing.log_process
 def run(i, file, n_events, start, args):
-    with open(f"out_{i}.log", "w") as sys.stdout, open(f"out_{i}.log", "w") as sys.stderr:
-        events = Master.Data(file, nEvents = n_events, start = start)
-        shower_merging.Selection(events, args["selection_type"], args["selection_type"])
+    print(f"proccess: {i}")
+    events = Master.Data(file, nEvents = n_events, start = start)
+    shower_merging.Selection(events, args["selection_type"], args["selection_type"])
 
-        if args["selection_type"] == "cheated":
-            start_showers, to_merge = shower_merging.SplitSample(events)
+    if args["selection_type"] == "cheated":
+        start_showers, to_merge = shower_merging.SplitSample(events)
 
-        if args["selection_type"] == "reco":
-            start_showers, to_merge = shower_merging.SplitSampleReco(events)
+    if args["selection_type"] == "reco":
+        start_showers, to_merge = shower_merging.SplitSampleReco(events)
 
-        signal, background, _ = shower_merging.SignalBackground(events, start_showers, to_merge)
+    signal, background, _ = shower_merging.SignalBackground(events, start_showers, to_merge)
 
-        q = shower_merging.ShowerMergeQuantities(events, to_merge)
-        q.Evaluate(events, start_showers)
-        df = q.GenerateDataFrame(signal, background)
+    q = shower_merging.ShowerMergeQuantities(events, to_merge)
+    q.Evaluate(events, start_showers)
+    df = q.GenerateDataFrame(signal, background)
     return df
 
 

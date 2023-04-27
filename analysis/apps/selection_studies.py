@@ -241,63 +241,69 @@ def FormatBarPlots(d : ak.Array) -> ak.Array:
     labels = [pdg_list] * len(counts)
     return ak.concatenate([ak.unflatten(labels, 1), ak.unflatten(counts, 1)], 1)
 
-
+@Processing.log_process
 def run(i, file, n_events, start, args):
-    with open(f"out_{i}.log", "w") as sys.stdout, open(f"out_{i}.log", "w") as sys.stderr:
-        events = Master.Data(file, nEvents = n_events, start = start) # load data
+    events = Master.Data(file, nEvents = n_events, start = start) # load data
 
-        #* apply either cheated or reco selection
-        match args["selection_type"]:
-            case "cheated":
-                events_table, pfo_table = shower_merging.Selection(events, args["selection_type"], args["selection_type"]) # apply selection
-                start_showers, to_merge = shower_merging.SplitSample(events) # split sample into pi0 showers and PFOs to merge
-            case "reco":
-                events_table, pfo_table, photon_candidate_table, pip_candidate_table = shower_merging.Selection(events, args["selection_type"], args["selection_type"], veto_daughter_pip = False, select_photon_candidates = False)
-
-                n_pip_candidates = ak.num(events.recoParticles.number[shower_merging.PFOSelection.DaughterPiPlusSelection(events)]) # get pi+ candidates
-                events_mask = n_pip_candidates == 0
-                daughter_pip_event_counts = {"before" : ak.count(events_mask), "after" : ak.sum(events_mask)}
-                events.Filter([events_mask], [events_mask])
-                n_photon_candidates = ak.num(events.recoParticles.number[shower_merging.PFOSelection.InitialPi0PhotonSelection(events)]) # get pi0 shower candidates
-
-                tags = shower_merging.GenerateTruthTags(events)
-
-                #* select events which have exactly 2 photon candidates, will deal with > 2 later
-                photon_candidates = n_photon_candidates == 2
-                events.Filter([photon_candidates], [photon_candidates])
-
-                photon_candidate_tags = shower_merging.GenerateTruthTags()
-                for k in tags:
-                    mask = ak.Array(tags[k].mask)
-                    photon_candidate_tags[k].mask = mask[photon_candidates] # apply photon candidate masks to the tags
-
-                start_showers, to_merge = shower_merging.SplitSampleReco(events)
-            case _:
-                raise Exception(f"event selection type {args['selection_type']} not understood.")
+    #* apply either cheated or reco selection
+    match args["selection_type"]:
+        case "cheated":
+            events_table, pfo_table = shower_merging.Selection(events, args["selection_type"], args["selection_type"]) # apply selection
+            start_showers, to_merge = shower_merging.SplitSample(events) # split sample into pi0 showers and PFOs to merge
+        case "reco":
+            events_table, pfo_table, photon_candidate_table, pip_candidate_table = shower_merging.Selection(events, args["selection_type"], args["selection_type"], veto_daughter_pip = False, select_photon_candidates = False)
 
 
-        #* Plots for the candidate events only i.e. where nphoton candidates == 2
-        start_showers_all = np.logical_or(*start_showers)
-        _, background, signal_all = shower_merging.SignalBackground(events, start_showers, to_merge)
+            #* select events with 0 daughter pi+ candidates
+            n_pip_candidates = ak.num(events.recoParticles.number[shower_merging.PFOSelection.DaughterPiPlusSelection(events)])
+            events_mask = n_pip_candidates == 0
+            daughter_pip_event_counts = {"before" : ak.count(events_mask), "after" : ak.sum(events_mask)}
+            events.Filter([events_mask], [events_mask])
 
-        #* produce data for plotting
-        data = BasicQuantities(events, start_showers_all, to_merge, signal_all, background)
+            tags = shower_merging.GenerateTruthTags(events)
 
-        output = {
-            "events_table" : events_table,
-            "pfo_table" : pfo_table,
-            "data" : data
-        }
-        if args["selection_type"] == "reco":
-            tagged_data = BasicTaggedQuantities(events, photon_candidate_tags, start_showers_all, signal_all, background)
+            #* select events which have exactly 2 photon candidates, will deal with > 2 later
+            n_photon_candidates = ak.num(events.recoParticles.number[shower_merging.PFOSelection.InitialPi0PhotonSelection(events)]) # get pi0 shower candidates
+            photon_candidates = n_photon_candidates == 2
+            events.Filter([photon_candidates], [photon_candidates])
 
-            output["daughter_pip_event_counts"] = daughter_pip_event_counts
-            output["pip_candidate_table"] = pip_candidate_table
-            output["photon_candidate_table"] = photon_candidate_table
-            output["n_photon_candidates"] = n_photon_candidates
-            output["tags"] = tags #TODO also do for cheated selection
-            output["photon_candidate_tags"] = photon_candidate_tags #TODO also do for cheated selection
-            output["tagged_data"] = tagged_data
+            # n_photon_candidates = ak.num(events.recoParticles.number[shower_merging.PFOSelection.InitialPi0PhotonSelection(events)]) # get pi0 shower candidates
+            # photon_candidates = n_photon_candidates == 2
+            # n_photon_candidates = n_photon_candidates[events_mask]
+            # photon_candidates = photon_candidates[events_mask]
+
+            photon_candidate_tags = shower_merging.GenerateTruthTags()
+            for k in tags:
+                mask = ak.Array(tags[k].mask)
+                photon_candidate_tags[k].mask = mask[photon_candidates] # apply photon candidate masks to the tags
+
+            start_showers, to_merge = shower_merging.SplitSampleReco(events)
+        case _:
+            raise Exception(f"event selection type {args['selection_type']} not understood.")
+
+
+    #* Plots for the candidate events only i.e. where nphoton candidates == 2
+    start_showers_all = np.logical_or(*start_showers)
+    _, background, signal_all = shower_merging.SignalBackground(events, start_showers, to_merge)
+
+    #* produce data for plotting
+    data = BasicQuantities(events, start_showers_all, to_merge, signal_all, background)
+
+    output = {
+        "events_table" : events_table,
+        "pfo_table" : pfo_table,
+        "data" : data
+    }
+    if args["selection_type"] == "reco":
+        tagged_data = BasicTaggedQuantities(events, photon_candidate_tags, start_showers_all, signal_all, background)
+
+        output["daughter_pip_event_counts"] = daughter_pip_event_counts
+        output["pip_candidate_table"] = pip_candidate_table
+        output["photon_candidate_table"] = photon_candidate_table
+        output["n_photon_candidates"] = n_photon_candidates
+        output["tags"] = tags #TODO also do for cheated selection
+        output["photon_candidate_tags"] = photon_candidate_tags #TODO also do for cheated selection
+        output["tagged_data"] = tagged_data
     return output
 
 @Master.timer
