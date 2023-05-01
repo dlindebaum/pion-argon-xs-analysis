@@ -242,7 +242,7 @@ def FormatBarPlots(d : ak.Array) -> ak.Array:
     return ak.concatenate([ak.unflatten(labels, 1), ak.unflatten(counts, 1)], 1)
 
 @Processing.log_process
-def run(i, file, n_events, start, args):
+def run(i, file, n_events, start, selected_events, args):
     events = Master.Data(file, nEvents = n_events, start = start) # load data
 
     #* apply either cheated or reco selection
@@ -304,6 +304,9 @@ def run(i, file, n_events, start, args):
         output["tags"] = tags #TODO also do for cheated selection
         output["photon_candidate_tags"] = photon_candidate_tags #TODO also do for cheated selection
         output["tagged_data"] = tagged_data
+    
+    events.Save_Selected_Event_indices(args["out"] + file.split(".")[0].split("/")[-1] + "_" + str(i) + "_selected_events.hdf5") # so we don't need to redo the full selection in subsequent analyses
+
     return output
 
 @Master.timer

@@ -146,6 +146,7 @@ class Data:
             self.run = self.io.Get("Run")
             self.subRun = self.io.Get("SubRun")
             self.eventNum = self.io.Get("EventID")
+            self.event_index = ak.local_index(self.eventNum) + start # unique index for each event
             self.trueParticles = TrueParticleData(self)
             self.recoParticles = RecoParticleData(self)
             self.trueParticlesBT = TrueParticleDataBT(self)
@@ -374,6 +375,7 @@ class Data:
             filtered.start = self.start
             filtered.io = IO(filtered.filename,
                              filtered.nEvents, filtered.start)
+            filtered.event_index = self.event_index
             filtered.eventNum = self.eventNum
             filtered.subRun = self.subRun
             filtered.run = self.run
@@ -656,6 +658,22 @@ class Data:
 
         merged_events.trueParticlesBT.Filter([best_match], returnCopy=False)
         return merged_events
+
+
+    def Save_Selected_Event_indices(self, output_path : str = "selected_events.hdf5"):
+        pd.DataFrame(self.event_index).to_hdf(output_path, "df")
+        print(f"event indices saved to : {output_path}")
+
+    def Load_Selected_Events(self, indices_file : str):
+        selection = pd.read_hdf(indices_file).values.flatten()
+
+        mask = []
+        for i in self.event_index:
+            mask.append(any(i == selection))
+        mask = ak.Array(mask)
+
+        self.Filter([mask], [mask])
+
 
 
 class ParticleData(ABC):

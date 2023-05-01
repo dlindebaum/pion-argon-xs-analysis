@@ -87,7 +87,7 @@ def CalculateBatches(file : str, n_batches : int = None, n_events : int = None) 
     return batches
 
 
-def GenerateFunctionArguments(files : list, nBatches : int, nEvents : int, args : dict) -> list:
+def GenerateFunctionArguments(files : list, nBatches : int, nEvents : int, args : dict, event_indices : list = None) -> list:
     """ Create a list of function arguments to supply to each job. It will automatically calculate the number of events and stride for each job.
 
     Args:
@@ -106,7 +106,8 @@ def GenerateFunctionArguments(files : list, nBatches : int, nEvents : int, args 
         start.append(list(np.cumsum(b) - b[0]))
         batches.append(b)
 
-    inputs = [[], [], []]
+    inputs = [[], [], [], []]
+
     for i in range(len(files)): # create the function argument lists
         inp = list(itertools.product([files[i]], batches[i])) # first join the file and batch numbers
 
@@ -115,13 +116,17 @@ def GenerateFunctionArguments(files : list, nBatches : int, nEvents : int, args 
             inputs[0].append(j[0])
             inputs[1].append(j[1])
             inputs[2].append(s)
-    inputs += [[args]*len(inputs[0])] # each job will have the same additional args, so just copy this.
+            if event_indices is not None:
+                inputs[3].append(event_indices[i])
+            else:
+                inputs[3].append(None)
 
+    inputs += [[args]*len(inputs[0])] # each job will have the same additional args, so just copy this.
     return inputs
 
 
 @Master.timer
-def mutliprocess(func, files : list, nBatches : list, nEvents : list, args : dict, nodes : int = None):
+def mutliprocess(func, files : list, nBatches : list, nEvents : list, args : dict, nodes : int = None, event_indices : list = None):
     """ Run a function with parallel processing, requires that it analyses ntuples.
 
     Args:
@@ -137,6 +142,6 @@ def mutliprocess(func, files : list, nBatches : list, nEvents : list, args : dic
     """
     pool = ProcessPool(nodes = nodes) # use all my threads, damn it!
 
-    inputs = GenerateFunctionArguments(files, nBatches, nEvents, args = args)
+    inputs = GenerateFunctionArguments(files, nBatches, nEvents, args = args, event_indices = event_indices)
     batch_numbers = list(range(len(inputs[0])))
     return pool.map(func, batch_numbers, *inputs)

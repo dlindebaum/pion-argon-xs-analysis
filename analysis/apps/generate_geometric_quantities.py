@@ -17,10 +17,17 @@ from rich import print
 from python.analysis import Master, shower_merging, Processing
 
 @Processing.log_process
-def run(i, file, n_events, start, args):
+def run(i, file, n_events, start, selected_events, args):
     print(f"proccess: {i}")
     events = Master.Data(file, nEvents = n_events, start = start)
-    shower_merging.Selection(events, args["selection_type"], args["selection_type"])
+
+    if selected_events is None:
+        shower_merging.Selection(events, args["selection_type"], args["selection_type"])
+    else:
+        print("we have an event indices file!")
+        events.Load_Selected_Events(selected_events)
+        mask, _ = shower_merging.PFOSelection.GoodShowerSelection(events, True) # still need to do any PFO selection
+        events.Filter([mask])
 
     if args["selection_type"] == "cheated":
         start_showers, to_merge = shower_merging.SplitSample(events)
@@ -38,7 +45,7 @@ def run(i, file, n_events, start, args):
 
 def main(args):
     os.makedirs(args.out, exist_ok = True)
-    output = Processing.mutliprocess(run, args.file, args.batches, args.events, vars(args), args.threads)
+    output = Processing.mutliprocess(run, args.file, args.batches, args.events, vars(args), args.threads, event_indices = args.selected_events)
     file_path = args.out + "geometric_quantities.csv"
     mode = "w"
     for o in output:
@@ -51,6 +58,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Calculate geometric quantities of PFOs to be used for the shower merging analysis.", formatter_class = argparse.RawDescriptionHelpFormatter)
     parser.add_argument(dest = "file", nargs = "+", help = "NTuple file to study.")
+    parser.add_argument("--selected-events", dest = "selected_events", nargs = "+", help = "event indices from a selection 1 per nTuple file")
 
     parser.add_argument("-b", "--batches", dest = "batches", type = int, default = None, help = "number of batches to split n tuple files into when parallel processing processing data.")
     parser.add_argument("-e", "--events", dest = "events", type = int, default = None, help = "number of events to process when parallel processing data.")
