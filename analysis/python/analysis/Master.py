@@ -1493,6 +1493,11 @@ class TrueParticleDataBT(ParticleData):
         return getattr(self, f"_{type(self).__name__}__hit_energy")
 
     @property
+    def beam_pdg(self) -> ak.Array:
+        self.LoadData("beam_pdg", "reco_beam_PFP_true_byHits_pdg")
+        return getattr(self, f"_{type(self).__name__}__beam_pdg")
+
+    @property
     def particleNumber(self) -> ak.Array:
         """ Gets the true particle number of each true particle backtracked to reco
 

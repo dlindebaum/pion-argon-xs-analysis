@@ -27,9 +27,8 @@ def PiBeamSelection(events: Data) -> ak.Array:
     Returns:
         ak.Array: boolean mask.
     """
-    pdg = events.io.Get("reco_beam_PFP_true_byHits_pdg")
     # return both 211 and -13 as you can't distinguish between pi+ and mu+ in data
-    return (pdg == 211) | (pdg == -13)
+    return (events.trueParticlesBT.beam_pdg == 211) | (events.trueParticlesBT.beam_pdg == -13)
 
 
 @CountsWrapper
