@@ -9,7 +9,7 @@ TODO Documentation.
 import awkward as ak
 import numpy as np
 
-from python.analysis import vector
+from python.analysis import vector, Master
 from python.analysis.SelectionTools import *
 
 
@@ -39,12 +39,12 @@ def Median(x : ak.Array):
 
 
 @CountsWrapper
-def ValidRecoEnergyCut(events) -> ak.Array:
+def ValidRecoEnergyCut(events : Master.Data) -> ak.Array:
     return events.recoParticles.energy != -999
 
 
 @CountsWrapper
-def ValidRecoPositionCut(events) -> ak.Array:
+def ValidRecoPositionCut(events : Master.Data) -> ak.Array:
     return np.logical_and(
         np.logical_and(
             events.recoParticles.startPos.x != -999,
@@ -55,7 +55,7 @@ def ValidRecoPositionCut(events) -> ak.Array:
 
 
 @CountsWrapper
-def ValidRecoMomentumCut(events) -> ak.Array:
+def ValidRecoMomentumCut(events : Master.Data) -> ak.Array:
     return np.logical_and(
         np.logical_and(
             events.recoParticles.momentum.x != -999,
@@ -66,73 +66,73 @@ def ValidRecoMomentumCut(events) -> ak.Array:
 
 
 @CountsWrapper
-def ValidCNNScoreCut(events) -> ak.Array:
+def ValidCNNScoreCut(events : Master.Data) -> ak.Array:
     return events.recoParticles.cnnScore != -999
 
 
-def GoodShowerSelection(events, return_table=False):
+def GoodShowerSelection(events : Master.Data, return_table = False):
     selections = [
         ValidRecoPositionCut,
         ValidRecoMomentumCut,
         ValidRecoEnergyCut,
         ValidCNNScoreCut,
     ]
-    return CombineSelections(events, selections, 1, return_table=return_table)
+    return CombineSelections(events, selections, 1, return_table = return_table)
 
 
 @CountsWrapper
-def EMScoreCut(events, score = 0.5) -> ak.Array:
+def EMScoreCut(events : Master.Data, score = 0.5) -> ak.Array:
     return events.recoParticles.emScore > score
 
 
 @CountsWrapper
-def NHitsCut(events, hits = 80) -> ak.Array:
+def NHitsCut(events : Master.Data, hits = 80) -> ak.Array:
     return events.recoParticles.nHits > hits
 
 
 @CountsWrapper
-def BeamParticleDistanceCut(events, lims=(3., 90.)) -> ak.Array:
+def BeamParticleDistanceCut(events : Master.Data, lims = (3., 90.)) -> ak.Array:
     # distance to beam end position in cm
     dist = find_beam_separations(events)
     return (dist > lims[0]) & (dist < lims[1])
 
 
 @CountsWrapper
-def BeamParticleIPCut(events, impact = 20.) -> ak.Array:
+def BeamParticleIPCut(events : Master.Data, impact = 20.) -> ak.Array:
     ip = find_beam_impact_parameters(events)
     return ip < impact
 
 
 @CountsWrapper
-def TrackScoreCut(events, score = 0.5):
+def TrackScoreCut(events : Master.Data, score = 0.5):
     return events.recoParticles.trackScore > score
 
 
 @CountsWrapper
-def BeamDaughterCut(events):
+def BeamDaughterCut(events : Master.Data):
     beam_number = ak.where(events.recoParticles.beam_number == -999, -1, events.recoParticles.beam_number) # null beam number (no beam particle) and null mother (pf has no mother) are the same value, so change one of them to something else
     return events.recoParticles.mother == beam_number
 
 
 @CountsWrapper
-def VetoBeamParticle(events):
+def VetoBeamParticle(events : Master.Data):
     return events.recoParticles.beam_number != events.recoParticles.number
 
 
 @CountsWrapper
-def PiPlusSelection(events, min_dEdX = 0.5, max_dEdX = 2.8):
+def PiPlusSelection(events : Master.Data, min_dEdX = 0.5, max_dEdX = 2.8):
     median_dEdX = Median(events.recoParticles.track_dEdX)
     return (median_dEdX < max_dEdX) & (median_dEdX > min_dEdX)
 
 
 @CountsWrapper
-def ProtonSelection(events, dEdX):
+def ProtonSelection(events : Master.Data, dEdX):
     median_dEdX = Median(events.recoParticles.track_dEdX)
     return median_dEdX > dEdX
 
 
 def InitialPi0PhotonSelection(
-        events,
+        events : Master.Data,
         em_cut : float = 0.5,
         n_hits_cut : int = 80,
         distance_bounds_cm : tuple = (3., 90.),
@@ -159,7 +159,7 @@ def InitialPi0PhotonSelection(
 
 
 def DaughterPiPlusSelection(
-        events,
+        events : Master.Data,
         track_cut : float = 0.5,
         n_hits_cut : int = 20,
         min_dEdX : float = 0.5,
@@ -167,39 +167,42 @@ def DaughterPiPlusSelection(
         verbose : bool = False,
         return_table : bool = False):
     selections = [
-        BeamDaughterCut,
         TrackScoreCut,
         NHitsCut,
         PiPlusSelection
     ]
     arguments = [
-        {},
         {"score" : track_cut},
         {"hits" : n_hits_cut},
         {"min_dEdX" : min_dEdX, "max_dEdX" : max_dEdX}
     ]
+    if events.nTuple_type == Master.Ntuple_Type.SHOWER_MERGING:
+        print("Apply beam daughter cuts")
+        selections.insert(0, BeamDaughterCut)
+        arguments.insert(0, {}) # the cut changes slightly depending on the ntuple type we use.
     return CombineSelections(events, selections, 1, arguments, verbose, return_table)
 
 
 def DaughterProtonSelection(
-        events,
+        events : Master.Data,
         track_cut : float = 0.5,
         n_hits_cut : int = 20,
         dEdX : float = 2.8,
         verbose : bool = False,
         return_table : bool = False):
     selections = [
-        BeamDaughterCut,
         TrackScoreCut,
         NHitsCut,
         ProtonSelection
     ]
     arguments = [
-        {},
         {"score" : track_cut},
         {"hits" : n_hits_cut},
         {"dEdX" : dEdX}
     ]
+    if events.nTuple_type == Master.Ntuple_Type.SHOWER_MERGING:
+        selections.insert(0, BeamDaughterCut)
+        arguments.insert(0, {}) # the cut changes slightly depending on the ntuple type we use.
     return CombineSelections(events, selections, 1, arguments, verbose, return_table)
 
 #######################################################################

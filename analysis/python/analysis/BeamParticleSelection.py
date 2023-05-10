@@ -13,6 +13,7 @@ import numpy as np
 
 from python.analysis import vector
 from python.analysis.Master import Data
+from python.analysis.PFOSelection import Median
 from python.analysis.SelectionTools import *
 
 
@@ -213,27 +214,7 @@ def MedianDEdXCut(events: Data) -> ak.Array:
     Returns:
         ak.Array: boolean mask.
     """
-    beam_dEdX = events.recoParticles.beam_dEdX
-
-    # awkward has no median function and numpy median won't work on jagged arrays, so we do it ourselves
-    beam_dEdX_sorted = ak.sort(beam_dEdX, -1)  # first sort in ascending order
-    count = ak.num(beam_dEdX, 1)  # get the number of entries per beam dEdX
-
-    # calculate the median assuming the arrray length is odd
-    med_odd = count // 2  # median is middle entry
-    select = ak.local_index(beam_dEdX_sorted) == med_odd
-    median_odd = beam_dEdX_sorted[select]
-
-    # calculate the median assuming the arrray length is even
-    med_even = (med_odd - 1) * (count > 1)  # need the middle - 1 value
-    select_even = ak.local_index(beam_dEdX_sorted) == med_even
-    # median is average of middle value and middle - 1 value
-    median_even = (beam_dEdX_sorted[select] +
-                   beam_dEdX_sorted[select_even]) / 2
-
-    median = ak.flatten(ak.fill_none(ak.pad_none(ak.where(
-        count % 2, median_odd, median_even), 1), -999))  # pick which median is the correct one
-
+    median = Median(events.recoParticles.beam_dEdX)
     return median < 2.4
 
 
