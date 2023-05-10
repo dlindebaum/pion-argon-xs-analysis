@@ -944,14 +944,15 @@ def PlotHist2D(data_x, data_y, bins: int = 100, x_range: list = [], y_range: lis
     return height, [xedges, yedges]
 
 
-def PlotHistComparison(datas, xRange: list = [], bins: int = 100, xlabel: str = "", title: str = "", labels: list = [], alpha: int = 1, histtype: str = "step", x_scale: str = "linear", y_scale: str = "linear", sf: int = 2, density: bool = True, annotation: str = None):
+def PlotHistComparison(datas, xRange: list = [], bins: int = 100, xlabel: str = "", title: str = "", labels: list = [], alpha: int = 1, histtype: str = "step", x_scale: str = "linear", y_scale: str = "linear", sf: int = 2, density: bool = True, annotation: str = None, newFigure: bool = True):
     """ Plots multiple histograms on one plot
 
     Args:
         datas (any): list of data sets to plot
         xRange (list, optional): plot range for all data. Defaults to [].
     """
-    plt.figure()
+    if newFigure is True:
+        plt.figure()
     for i in range(len(labels)):
         data = datas[i]
         if xRange and len(xRange) == 2:
@@ -965,6 +966,7 @@ def PlotHistComparison(datas, xRange: list = [], bins: int = 100, xlabel: str = 
                      labels[i], alpha, histtype, sf, density, newFigure=False)
     plt.xscale(x_scale)
     plt.yscale(y_scale)
+    plt.tight_layout()
     if annotation is not None:
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 

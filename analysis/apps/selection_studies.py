@@ -305,7 +305,7 @@ def run(i, file, n_events, start, selected_events, args):
         output["photon_candidate_tags"] = photon_candidate_tags #TODO also do for cheated selection
         output["tagged_data"] = tagged_data
     
-    events.Save_Selected_Event_indices(args["out"] + file.split(".")[0].split("/")[-1] + "_" + str(i) + "_selected_events.hdf5") # so we don't need to redo the full selection in subsequent analyses
+    events.Save_Selected_Event_indices(args["out"] + file.split("/")[-1].split(".")[0] + "_" + str(i) + "_selected_events.hdf5") # so we don't need to redo the full selection in subsequent analyses
 
     return output
 
@@ -327,29 +327,36 @@ def main(args):
     tagged_data = {}
 
     for o in output:
-        all_tags = o["tags"]
-        for k, t in all_tags.items():
-            if tags[k].mask is None:
-                tags[k].mask = t.mask
-            else:
-                tags[k].mask = ak.concatenate([tags[k].mask, t.mask])
-
-        pi0_candidate_tags = o["photon_candidate_tags"]
-        for k, t in pi0_candidate_tags.items():
-            if selected_tags[k].mask is None:
-                selected_tags[k].mask = t.mask
-            else:
-                selected_tags[k].mask = ak.concatenate([selected_tags[k].mask, t.mask])
-
-        if "daughter_pip_event_counts" in o.keys():
-            for k in o["daughter_pip_event_counts"]:
-                if k in daughter_pip_event_counts:
-                    daughter_pip_event_counts[k] += o["daughter_pip_event_counts"][k]
+        if args.selection_type == "reco":
+            all_tags = o["tags"]
+            for k, t in all_tags.items():
+                if tags[k].mask is None:
+                    tags[k].mask = t.mask
                 else:
-                    daughter_pip_event_counts[k] = o["daughter_pip_event_counts"][k]
+                    tags[k].mask = ak.concatenate([tags[k].mask, t.mask])
 
-        if "n_photon_candidates" in o.keys():
-            n_photon_candidates = ak.concatenate([n_photon_candidates, o["n_photon_candidates"]])
+            pi0_candidate_tags = o["photon_candidate_tags"]
+            for k, t in pi0_candidate_tags.items():
+                if selected_tags[k].mask is None:
+                    selected_tags[k].mask = t.mask
+                else:
+                    selected_tags[k].mask = ak.concatenate([selected_tags[k].mask, t.mask])
+
+            if "daughter_pip_event_counts" in o.keys():
+                for k in o["daughter_pip_event_counts"]:
+                    if k in daughter_pip_event_counts:
+                        daughter_pip_event_counts[k] += o["daughter_pip_event_counts"][k]
+                    else:
+                        daughter_pip_event_counts[k] = o["daughter_pip_event_counts"][k]
+
+            if "n_photon_candidates" in o.keys():
+                n_photon_candidates = ak.concatenate([n_photon_candidates, o["n_photon_candidates"]])
+
+            for k, v in o["tagged_data"].items():
+                if k in tagged_data:
+                    tagged_data[k] = ak.concatenate([tagged_data[k], v], axis = -1)
+                else:
+                    tagged_data[k] = ak.Array(v)
 
         for k, v in o["data"].items():
             if k in data:
@@ -357,15 +364,10 @@ def main(args):
             else:
                 data[k] = ak.Array(v)
 
-        for k, v in o["tagged_data"].items():
-            if k in tagged_data:
-                tagged_data[k] = ak.concatenate([tagged_data[k], v], axis = -1)
-            else:
-                tagged_data[k] = ak.Array(v)
 
-
-    tagged_data["pdg"] = ak.to_numpy(FormatBarPlots(tagged_data["pdg"]))
-    tagged_data["mother_pdg"] = ak.to_numpy(FormatBarPlots(tagged_data["mother_pdg"]))
+    if args.selection_type == "reco":
+        tagged_data["pdg"] = ak.to_numpy(FormatBarPlots(tagged_data["pdg"]))
+        tagged_data["mother_pdg"] = ak.to_numpy(FormatBarPlots(tagged_data["mother_pdg"]))
 
     #* merge and save tables
     MergeTables([o["events_table"] for o in output]).to_latex(args.out + "event_selection.tex")
@@ -380,10 +382,10 @@ def main(args):
     pd.DataFrame(daughter_pip_event_counts, index = [0]).to_latex(args.out + "daughter_pip_event_counts.tex")
 
     #* make plots
-    MakeInitialTaggingPlots(tags, n_photon_candidates, args.out + "basic_quantities/tagged/") # plots of the event topology
     MakePlots(data, args.out + "basic_quantities/")
 
     if args.selection_type == "reco":
+        MakeInitialTaggingPlots(tags, n_photon_candidates, args.out + "basic_quantities/tagged/") # plots of the event topology
         MakePlotsTagged(tagged_data, selected_tags, args.out + "basic_quantities/tagged/")
 
     rprint(f"plots and tables saved to: {args.out}")
