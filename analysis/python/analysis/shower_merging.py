@@ -10,9 +10,9 @@ from dataclasses import dataclass
 
 import awkward as ak
 import matplotlib.pyplot as plt
+from matplotlib.cm import get_cmap
 import numpy as np
 import pandas as pd
-from rich import print
 from tabulate import tabulate
 
 from python.analysis import Master, Plots, vector
@@ -20,12 +20,14 @@ from python.analysis import LegacyBeamParticleSelection, BeamParticleSelection, 
 from python.analysis.EventSelection import generate_truth_tags
 
 
-def SetPlotStyle():
+def SetPlotStyle(extend_colors : bool = False):
     plt.style.use('ggplot')
     plt.rcParams.update({'patch.linewidth': 1})
     plt.rcParams.update({'font.size': 10})
     plt.rcParams.update({"axes.titlecolor" : "#555555"})
     plt.rcParams.update({"axes.titlesize" : 12})
+    if extend_colors:
+        plt.rcParams.update({"axes.prop_cycle" : plt.cycler("color", get_cmap("tab20").colors)})
 
 
 @dataclass(slots = True)

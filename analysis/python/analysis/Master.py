@@ -161,10 +161,11 @@ class Data:
 
     def __init__(self, filename: str = None, nEvents: int = -1, start: int = 0, nTuple_type : Ntuple_Type = None):
         self.filename = filename
-        if Ntuple_Type is None:
+        if nTuple_type is None:
             warnings.warn(f"nTuple type is not specified, assuming it is {Ntuple_Type.SHOWER_MERGING}")
-            nTuple_type = Ntuple_Type.SHOWER_MERGING
-        self.nTuple_type = nTuple_type
+            self.nTuple_type = Ntuple_Type.SHOWER_MERGING
+        else:
+            self.nTuple_type = nTuple_type
         if self.filename != None:
             self.nEvents = nEvents
             self.start = start
@@ -1115,21 +1116,21 @@ class RecoParticleData(ParticleData):
     @property
     def beam_endPos(self) -> ak.Record:
         nTuples = [
-            "reco_beam_endX",
-            "reco_beam_endY",
-            "reco_beam_endZ",
+            ["reco_beam_calo_endX", "reco_beam_endX"],
+            ["reco_beam_calo_endY", "reco_beam_endY"],
+            ["reco_beam_calo_endZ", "reco_beam_endZ"]
         ]
-        self.LoadData("beam_endPos", nTuples)
+        self.LoadData("beam_endPos", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__beam_endPos")
 
     @property
     def beam_startPos(self) -> ak.Record:
         nTuples = [
-            "reco_beam_startX",
-            "reco_beam_startY",
-            "reco_beam_startZ",
+            ["reco_beam_calo_startX", "reco_beam_startX"], # the first name in the list is prioritised.
+            ["reco_beam_calo_startY", "reco_beam_startY"],
+            ["reco_beam_calo_startZ", "reco_beam_startZ"]
         ]
-        self.LoadData("beam_startPos", nTuples)
+        self.LoadData("beam_startPos", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__beam_startPos")
 
     @property
@@ -1153,13 +1154,8 @@ class RecoParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__beam_dEdX")
 
     @property
-    def beam_pandoraTag(self) -> ak.Array:
-        self.LoadData("beam_pandoraTag", "reco_beam_type")
-        return getattr(self, f"_{type(self).__name__}__beam_pandoraTag")
-
-    @property
     def pandoraTag(self) -> ak.Array:
-        self.LoadData("pandoraTag", "pandoraTag") # This information is not stored for daughter PFOs
+        self.LoadData("pandoraTag", "pandoraTag") # This information is not stored for daughter PFOs in PDSPAnalyser
         return getattr(self, f"_{type(self).__name__}__pandoraTag")
 
     @property
@@ -1169,7 +1165,7 @@ class RecoParticleData(ParticleData):
 
     @property
     def number(self) -> ak.Array:
-        self.LoadData("number", "reco_daughter_PFP_ID")
+        self.LoadData("number", ["reco_PFP_ID", "reco_daughter_PFP_ID"])
         return getattr(self, f"_{type(self).__name__}__number")
 
     @property
@@ -1255,7 +1251,7 @@ class RecoParticleData(ParticleData):
             "reco_daughter_allShower_spacePointY",
             "reco_daughter_allShower_spacePointZ"
         ]
-        self.LoadData("spacePoints", nTuples)
+        self.LoadData("spacePoints", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__spacePoints") # not in PDSPAnalyser
 
     @property
@@ -1282,6 +1278,16 @@ class RecoParticleData(ParticleData):
     def track_dEdX(self) -> type:
         self.LoadData("track_dEdX", "reco_daughter_allTrack_calibrated_dEdX_SCE")
         return getattr(self, f"_{type(self).__name__}__track_dEdX")
+
+    @property
+    def beam_pandora_tag(self) -> type:
+        if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
+            tag = self.events.recoParticles.pandoraTag[self.events.recoParticles.beam_number == self.events.recoParticles.number]
+            tag = ak.flatten(ak.fill_none(ak.pad_none(tag, 1), -999))
+            setattr(self, f"_{type(self).__name__}__beam_pandora_tag", tag)
+        if self.events.nTuple_type == Ntuple_Type.PDSP:
+            self.LoadData("beam_pandora_tag", "reco_beam_type")
+        return getattr(self, f"_{type(self).__name__}__beam_pandora_tag")
 
     def CalculatePairQuantities(self, useBT: bool = False) -> tuple:
         """ Calculate reconstructed shower pair quantities.
@@ -1512,7 +1518,7 @@ class TrueParticleDataBT(ParticleData):
 
     @property
     def energyByHits(self) -> ak.Array:
-        if self.energyByHits_uncorrected == ak.highlevel.Array and self.energyByHits_correction == ak.highlevel.Array:
+        if type(self.energyByHits_uncorrected) == ak.highlevel.Array and type(self.energyByHits_correction) == ak.highlevel.Array:
             v = self.energyByHits_uncorrected - self.energyByHits_correction
         else:
             v = None
@@ -1522,7 +1528,7 @@ class TrueParticleDataBT(ParticleData):
     @property
     def momentumByHits(self) -> ak.Record:
         if not hasattr(self, f"_{type(self).__name__}__momentumByHits"):
-            if self.energyByHits == ak.highlevel.Array and self.direction == ak.highlevel.Array:
+            if type(self.energyByHits) == ak.highlevel.Array and type(self.direction) == ak.highlevel.Array:
                 mom = vector.prod(self.energyByHits, self.direction)
                 mom = ak.where(self.direction.x == -999,
                             {"x": -999, "y": -999, "z": -999}, mom)
@@ -1577,7 +1583,7 @@ class TrueParticleDataBT(ParticleData):
     def purity(self) -> ak.Array:
         if not hasattr(self, f"_{type(self).__name__}__purity"):
             if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
-                if self.sharedHits == ak.highlevel.Array and self.hitsInRecoCluster == ak.highlevel.Array:
+                if type(self.sharedHits) == ak.highlevel.Array and type(self.hitsInRecoCluster) == ak.highlevel.Array:
                     v = self.sharedHits / self.hitsInRecoCluster
                 else:
                     v = None
@@ -1590,7 +1596,7 @@ class TrueParticleDataBT(ParticleData):
     def completeness(self) -> ak.Array:
         if not hasattr(self, f"_{type(self).__name__}__completeness"):
             if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
-                if self.sharedHits  == ak.highlevel.Array and self.nHits == ak.highlevel.Array:
+                if type(self.sharedHits)  == ak.highlevel.Array and type(self.nHits) == ak.highlevel.Array:
                     v = self.sharedHits / self.nHits
                 else:
                     v = None
@@ -1602,7 +1608,7 @@ class TrueParticleDataBT(ParticleData):
     @property
     def purity_collection(self) -> ak.Array:
         if not hasattr(self, f"_{type(self).__name__}__purity_collection"):
-            if self.sharedHits_collection  == ak.highlevel.Array and self.hitsInRecoCluster_collection  == ak.highlevel.Array:
+            if type(self.sharedHits_collection)  == ak.highlevel.Array and type(self.hitsInRecoCluster_collection)  == ak.highlevel.Array:
                 v = self.sharedHits_collection / self.hitsInRecoCluster_collection
             else:
                 v = None
@@ -1612,7 +1618,7 @@ class TrueParticleDataBT(ParticleData):
     @property
     def completeness_collection(self) -> ak.Array:
         if not hasattr(self, f"_{type(self).__name__}__completeness_collection"):
-            if self.sharedHits_collection  == ak.highlevel.Array and self.nHits_collection  == ak.highlevel.Array:
+            if type(self.sharedHits_collection) == ak.highlevel.Array and type(self.nHits_collection) == ak.highlevel.Array:
                 v = self.sharedHits_collection / self.nHits_collection
             else:
                 v = None
@@ -1651,8 +1657,8 @@ class TrueParticleDataBT(ParticleData):
 
     @property
     def beam_pdg(self) -> ak.Array:
-        self.LoadData("beam_pdg", "reco_beam_PFP_true_byHits_pdg")
-        return getattr(self, f"_{type(self).__name__}__beam_pdg") # for shower merging only
+        self.LoadData("beam_pdg", ["reco_beam_PFP_true_byHits_pdg", "reco_beam_true_byHits_PDG"])
+        return getattr(self, f"_{type(self).__name__}__beam_pdg")
 
     @property
     def particleNumber(self) -> ak.Array:

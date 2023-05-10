@@ -41,10 +41,7 @@ def PandoraTagCut(events: Data) -> ak.Array:
     Returns:
         ak.Array: boolean mask.
     """
-    tag = events.recoParticles.pandoraTag[events.recoParticles.beam_number ==
-                                          events.recoParticles.number]
-    tag = ak.flatten(ak.fill_none(ak.pad_none(tag, 1), -999))
-    return tag == 13
+    return events.recoParticles.beam_pandora_tag == 13
 
 
 @CountsWrapper
