@@ -60,6 +60,22 @@ class Cuts():
         else:
             Exception(f"{self.operator} is not a valid Operator")
 
+    def mask(self):
+        """ makes mask of cuts.
+        Returns:
+            ak.Array: mask
+        """
+        if self.operator == Operator.LESS:
+            return self.variable < self.value
+        elif self.operator == Operator.GREATER:
+            return self.variable > self.value
+        elif self.operator == Operator.EQUAL:
+            return self.variable == self.value
+        elif self.operator == Operator.NOT_EQUAL:
+            return self.variable != self.value
+        else:
+            Exception(f"{self.operator} is not a valid Operator")
+
     def __repr__(self) -> str:
         """ Pretty printing of cut.
         """

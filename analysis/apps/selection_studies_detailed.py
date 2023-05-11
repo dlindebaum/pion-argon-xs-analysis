@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 import argparse
+import json
 import os
 
 from rich import print as rprint
 from python.analysis import Master, BeamParticleSelection, PFOSelection, Plots, shower_merging, vector, Processing
 
 import awkward as ak
-import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from particle import Particle
-from scipy.optimize import curve_fit
 
 
 def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float = 0.2, face : str = "right", flip : bool = False, color = "black"):
@@ -137,7 +136,7 @@ def GenerateTrueBeamParticleTags(events : Master.Data) -> dict:
     return masks
 
 
-def MakeOutput(value, tags, cuts = []):
+def MakeOutput(value, tags, cuts = []) -> dict:
     return {"value" : value, "tags" : tags, "cuts" : cuts}
 
 
@@ -167,35 +166,18 @@ def AnalyseBeamSelection(events : Master.Data):
     events.Filter([mask], [mask])
 
     #* beam quality cuts
-    def gaussian(x, a, x0, sigma):
-        return a * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
-
-    def fit_gaussian(data, bins, range = None):
-        if range is None:
-            range = [min(data), max(data)]
-        y, bins_edges = np.histogram(np.array(data), bins = bins, range = range)
-        bin_centers = (bins_edges[1:] + bins_edges[:-1]) / 2
-        return curve_fit(gaussian, bin_centers, y, p0 = (0, ak.mean(data), ak.std(data)))
-
-    mu = {}
-    sigma = {}
-    for i in ["x", "y", "z"]:
-        popt, _ = fit_gaussian(events.recoParticles.beam_startPos[i], bins = 100)
-        mu[i] = popt[1]
-        sigma[i] =popt[2]
-
-    print(mu)
-    print(sigma)
+    with open(args["beam_quality_fit"], "r") as f:
+        fit_values = json.load(f)
 
     #* dxy cut
-    dxy = (((events.recoParticles.beam_startPos.x - mu["x"]) / sigma["x"])**2 + ((events.recoParticles.beam_startPos.y - mu["y"]) / sigma["y"])**2)**0.5
+    dxy = (((events.recoParticles.beam_startPos.x - fit_values["mu_x"]) / fit_values["sigma_x"])**2 + ((events.recoParticles.beam_startPos.y - fit_values["mu_y"]) / fit_values["sigma_y"])**2)**0.5
     mask = dxy < 3
     output["dxy"] = MakeOutput(dxy, GenerateTrueBeamParticleTags(events), [3])
     print(f"dxy cut: {BeamParticleSelection.CountMask(mask)}")
     events.Filter([mask], [mask])
 
     #* dz cut
-    delta_z = (events.recoParticles.beam_startPos.z - mu["z"]) / sigma["z"]
+    delta_z = (events.recoParticles.beam_startPos.z - fit_values["mu_z"]) / fit_values["sigma_z"]
     mask = (delta_z > -3) & (delta_z < 3)
     output["dz"] = MakeOutput(delta_z, GenerateTrueBeamParticleTags(events), [-3, 3])
     events.Filter([mask], [mask])
@@ -203,28 +185,11 @@ def AnalyseBeamSelection(events : Master.Data):
 
     #* beam direction
     beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos, events.recoParticles.beam_startPos))
-
-    mu_dir = {}
-    sigma_dir = {}
-    for i in ["x", "y", "z"]:
-        popt, _ = fit_gaussian(beam_dir[i], bins = 50)
-        mu_dir[i] = popt[1]
-        sigma_dir[i] = popt[2]
-
-    print(mu_dir)
-    print(sigma_dir)
-
-    beam_dir_mu = vector.normalize(vector.vector(mu_dir["x"], mu_dir["y"], mu_dir["z"]))
+    beam_dir_mu = vector.normalize(vector.vector(fit_values["mu_dir_x"], fit_values["mu_dir_y"], fit_values["mu_dir_z"]))
     beam_costh = vector.dot(beam_dir, beam_dir_mu)
     mask = beam_costh > 0.95
     output["cos_theta"] = MakeOutput(beam_costh, GenerateTrueBeamParticleTags(events), [0.95])
     events.Filter([mask], [mask])
-
-    output["fit_values"] = {
-        "start_pos" : {"mu": mu, "sigma" : sigma},
-        "direction" : {"mu": mu_dir, "sigma" : sigma_dir}
-    }
-    print(output["fit_values"])
 
     #* APA3 cut
     mask = BeamParticleSelection.APA3Cut(events)
@@ -253,23 +218,23 @@ def AnalysePiPlusSelection(events : Master.Data):
         #* beam particle daughter selection 
         mask = PFOSelection.BeamDaughterCut(events)
         output["track_score_all"] = MakeOutput(events.recoParticles.trackScore, GenerateTrueParticleTags(events)) # keep a record of the track score to show the cosmic muon background
-        events.Filter([mask], [mask])
+        events.Filter([mask])
 
     #* track score selection
     mask = PFOSelection.TrackScoreCut(events)
     output["track_score"] = MakeOutput(events.recoParticles.trackScore, GenerateTrueParticleTags(events), [0.5])
-    events.Filter([mask], [mask])
+    events.Filter([mask])
 
     #* nHits cut
     mask = PFOSelection.NHitsCut(events, 20)
     output["nHits"] = MakeOutput(events.recoParticles.nHits, GenerateTrueParticleTags(events), [20])
     output["completeness"] = MakeOutput(events.trueParticlesBT.completeness, GenerateTrueParticleTags(events))
-    events.Filter([mask], [mask])
+    events.Filter([mask])
 
     #* median dEdX    
     mask = PFOSelection.PiPlusSelection(events)
     output["median_dEdX"] = MakeOutput(PFOSelection.Median(events.recoParticles.track_dEdX), GenerateTrueParticleTags(events), [0.5, 2.8])
-    events.Filter([mask], [mask])
+    events.Filter([mask])
 
     #* true particle population
     tags = GenerateTrueParticleTags(events)
@@ -282,9 +247,6 @@ def AnalysePiPlusSelection(events : Master.Data):
 def run(i, file, n_events, start, selected_events, args):
     events = Master.Data(file, nEvents = n_events, start = start, nTuple_type = args["ntuple_type"]) # load data
 
-    # do the beam particle selection (will expand on this later)
-    # shower_merging.Selection(events, "reco", "reco", veto_daughter_pip = False, select_photon_candidates = False) # only do reco selection for now
-  
     output_beam = AnalyseBeamSelection(events) # events are cut after this
 
     output_pip = AnalysePiPlusSelection(events) # events are cut after this
@@ -298,7 +260,6 @@ def run(i, file, n_events, start, selected_events, args):
 
 
 def MakeBeamSelectionPlots(output : dict, outDir : str):
-    
     bar_data = []
     for tag in output["pi_beam"]:
         bar_data.extend([tag] * output["pi_beam"][tag])
@@ -340,8 +301,8 @@ def MakeBeamSelectionPlots(output : dict, outDir : str):
     Plots.Save("true_particle_ID", outDir)
     return
 
-def MakePiPlusSelectionPlots(output, outDir : str):
 
+def MakePiPlusSelectionPlots(output : dict, outDir : str):
     if "track_score_all" in output:
         PlotTagged(output["track_score_all"]["value"], output["track_score_all"]["tags"], y_scale = "log", x_label = "track score")
         Plots.Save("track_score_all", outDir)
@@ -390,8 +351,6 @@ def MergeOutputs(outputs : list):
                     if o in ["final_tags", "pi_beam"]:
                         for t in merged_output[selection_output][o]:
                             merged_output[selection_output][o][t] = merged_output[selection_output][o][t] + output[selection_output][o][t]
-                    elif o == "fit_values":
-                        continue
                     else:
                         merged_output[selection_output][o]["value"] = ak.concatenate([merged_output[selection_output][o]["value"], output[selection_output][o]["value"]])
                         merged_tags = {}
@@ -421,12 +380,12 @@ if __name__ == "__main__":
     parser.add_argument(dest = "file", nargs = "+", help = "NTuple file to study.")
     parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Master.Ntuple_Type, help = f"type of ntuple I am looking at {Master.Ntuple_Type._member_map_}.", required = True)
 
+    parser.add_argument("--beam_quality_fit", dest = "beam_quality_fit", type = str, help = "fit values for the beam quality cut.", required = True)
+
     parser.add_argument("-b", "--batches", dest = "batches", type = int, default = None, help = "number of batches to split n tuple files into when parallel processing processing data.")
     parser.add_argument("-e", "--events", dest = "events", type = int, default = None, help = "number of events to process when parallel processing data.")
 
     parser.add_argument("-t", "--threads", dest = "threads", type = int, default = 1, help = "number of threads to use when processsing")
-    
-    # parser.add_argument("-s", "--selection", dest = "selection_type", type = str, choices = ["cheated", "reco"], help = "type of selection to use.", required = True)
 
     parser.add_argument("-o", "--out", dest = "out", type = str, default = None, help = "directory to save plots")
     parser.add_argument("-a", "--annotation", dest = "annotation", type = str, default = None, help = "annotation to add to plots")
