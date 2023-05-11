@@ -19,7 +19,7 @@ from scipy.optimize import curve_fit
 from scipy.special import gamma
 from scipy.stats import iqr
 
-from python.analysis import vector
+from python.analysis import vector, Tags
 from python.analysis.SelectionTools import np_to_ak_indicies
 
 
@@ -996,6 +996,66 @@ def PlotHist2DComparison(x: list, y: list, bins: int = 50, xlabels: list = [None
 
     fig.tight_layout()
     fig.colorbar(im, ax=ax.ravel().tolist())
+
+
+def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float = 0.2, face : str = "right", flip : bool = False, color = "black"):
+    """ Illustrates a cut on a plot. Direction of the arrow indidcates which portion of the plot passes the cut.
+
+    Args:
+        value (float): value of the cut
+        arrow_loc (float, optional): where along the line to place the arrow. Defaults to 0.8.
+        arrow_length (float, optional): length of the arrow, must be in units of the cut. Defaults to 0.2.
+        face (str, optional): which way the arrow faces. Defaults to "right".
+        flip (bool, optional): flip the arrow to the y axis. Defaults to False.
+        color (str, optional): colour of the line and arrow. Defaults to "black".
+    """
+
+    if face == "right":
+        face_factor = 1
+    elif face == "left":
+        face_factor = -1
+    else:
+        raise Exception("face must be left or right")
+
+    xy0 = (value - face_factor * (value/1500), arrow_loc)
+    xy1 = (value - (value/1500) + face_factor * arrow_length, arrow_loc)
+    transform = ("data", "axes fraction")
+
+    if flip:
+        xy0 = tuple(reversed(xy0))
+        xy1 = tuple(reversed(xy1))
+        transform = tuple(reversed(transform))
+
+        plt.axhline(value, color = color)
+    else:
+        plt.axvline(value, color = color)
+
+    plt.annotate("", xy = xy1, xytext = xy0, arrowprops=dict(facecolor = color, edgecolor = color, arrowstyle = "->"), xycoords= transform)
+
+
+def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2):
+    """ Makes a stacked histogram and splits the sample based on tags.
+
+    Args:
+        data (np.array): data to plot
+        tags (shower_merging.Tags): tags for the data.
+        bins (int, optional): number of bins. Defaults to 100.
+        range (list, optional): plot range. Defaults to None.
+        y_scale (str, optional): y axis scale. Defaults to "linear".
+        x_label (str, optional): x label. Defaults to "".
+        loc (str, optional): legend location. Defaults to "best".
+        ncols (int, optional): number of columns in legend. Defaults to 2.
+    """
+    split_data = [ak.ravel(data[tags[t].mask]) for t in tags]
+    
+    colours = tags.colour.values
+    if ak.any(ak.is_none(colours)):
+        print("some tags do not have colours, will override them for the default ones")
+        for i in range(len(tags)):
+            colours[i] = "C" + str(i)
+
+    PlotHist(split_data, stacked = True, label = tags.name.values, bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours)
+    plt.legend(loc = loc, ncols = ncols)
 
 
 def UniqueData(data):
