@@ -745,7 +745,7 @@ def Selection(events : Master.Data, event_type : str, pfo_type : str, veto_daugh
         case "cheated":
             mask, event_table = LegacyBeamParticleSelection.CreateLegacyBeamParticleSelection(events, False)
         case "reco":
-            mask, event_table = BeamParticleSelection.CreateDefaultSelection(events, False, True)
+            mask, event_table = BeamParticleSelection.CreateDefaultSelection(events, None, False, True)
         case _:
             raise Exception(f"event selection type {event_type} not understood.")
     events.Filter([mask], [mask])
@@ -994,5 +994,5 @@ def GenerateTruthTags(events : Master.Data = None) -> Tags:
     tags["$0\pi^{0} + 0\pi^{+}$"     ]          = Tag("$0\pi^{0} + 0\pi^{+}$"              , "background",       "#777777", generate_truth_tags(events, 0, 0) if events is not None else None, 1)
     tags["$1\pi^{0} + \geq 1\pi^{+}$"]          = Tag("$1\pi^{0} + \geq 1\pi^{+}$"         , "sideband",         "#E24A33", generate_truth_tags(events, 1, (1,)) if events is not None else None, 2)
     tags["$0\pi^{0} + \geq 1\pi^{+}$"]          = Tag("$0\pi^{0} + \geq 1\pi^{+}$"         , "sideband",         "#988ED5", generate_truth_tags(events, 0, (1,)) if events is not None else None, 3)
-    tags["$\greater 1\pi^{0} + \geq 0\pi^{+}$"] = Tag("$\greater 1\pi^{0} + \geq 0\pi^{+}$", "sideband",         "#348ABD", generate_truth_tags(events, (2,), (0,)) if events is not None else None, 4)
+    tags["$\greater 1\pi^{0} + \geq 0\pi^{+}$"] = Tag("$> 1\pi^{0} + \geq 0\pi^{+}$", "sideband",         "#348ABD", generate_truth_tags(events, (2,), (0,)) if events is not None else None, 4)
     return tags

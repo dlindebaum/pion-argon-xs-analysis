@@ -294,7 +294,7 @@ def _generate_selection(cut):
         return lambda count: count == cut
 
 
-def generate_truth_tags(events, n_pi0, n_pi_charged, beam_daighters=True):
+def generate_truth_tags(events : Master.Data, n_pi0, n_pi_charged, beam_daughters=True):
     """
     Generates a True/False tag for each event in `events` indicating
     whether they pass the truth level requirements of `n_pi0` and
@@ -329,8 +329,14 @@ def generate_truth_tags(events, n_pi0, n_pi_charged, beam_daighters=True):
     """
     pi0_cut: function = _generate_selection(n_pi0)
     pi_charged_cut: function = _generate_selection(n_pi_charged)
-    pi0_count = count_diphoton_decays(events)
-    pi_charged_count = count_non_beam_charged_pi(events)
+    if events.trueParticles.nPi0 is None:
+        pi0_count = count_diphoton_decays(events)
+    else:
+        pi0_count = events.trueParticles.nPi0
+    if events.trueParticles.nPiPlus is None:
+        pi_charged_count = count_non_beam_charged_pi(events)
+    else:
+        pi_charged_count = events.trueParticles.nPiPlus
     return np.logical_and(pi0_cut(pi0_count),
                           pi_charged_cut(pi_charged_count))
 

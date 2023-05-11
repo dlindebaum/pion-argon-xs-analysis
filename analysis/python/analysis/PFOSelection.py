@@ -75,7 +75,6 @@ def GoodShowerSelection(events : Master.Data, return_table = False):
         ValidRecoPositionCut,
         ValidRecoMomentumCut,
         ValidRecoEnergyCut,
-        ValidCNNScoreCut,
     ]
     return CombineSelections(events, selections, 1, return_table = return_table)
 
@@ -260,7 +259,7 @@ def find_beam_impact_parameters(events):
 
 def find_beam_separations(events):
     """
-    Finds the separations of eachstart position of each reconstructed
+    Finds the separations of each start position of each reconstructed
     PFO in `events` and the reconstructed beam vertex.
 
     Parameters
