@@ -1822,42 +1822,23 @@ class ShowerPairs:
                  shower_pair_mask: ak.Array = None):
         self.events = events
         if shower_pair_mask is not None:
-            self.pairs = shower_pair_mask  # we need to know which PFO to pair up
-            self.SortByBacktrackedEnergy()  # get leading, and subleading shower masks
+            self.pairs = self.GetPairsFromMask(shower_pair_mask)
         else:
             if pair_coords is None:
                 pair_coords = ak.argcombinations(
                     self.events.recoParticles.number, 2)
             self.pairs = pair_coords
-            self.SortCoordsByBacktrackedEnergy()
+        self.SortByBacktrackedEnergy()
         return
 
+    @staticmethod
+    def GetPairsFromMask(mask):
+        inverse_mask = ak.Array(map(
+            lambda e: np.squeeze(np.argwhere(e), axis=1),
+            mask))
+        return ak.combinations(inverse_mask, 2)
+
     def SortByBacktrackedEnergy(self):
-        """ Creates masks which select an individual shower in a pair, by it's backtracked energy.
-            #? Should we allow a choice as to which quantity the pairs are sorted by?
-        """
-        indices = ak.local_index(self.pairs)  # get indices of PFO like array
-        pair_ind = indices[self.pairs]  # get the indices of the pairs
-
-        sorted_pair_ind = ak.argsort(
-            self.events.trueParticlesBT.energy[self.pairs], ascending=False)  # sort pairs by BT energy
-        # apply sorted local indices to the actual indices
-        sorted_pair_ind = pair_ind[sorted_pair_ind]
-
-        # check if we only have 1 unqiue index in the pair
-        true_photon_count = ak.num(sorted_pair_ind)
-        if ak.any(true_photon_count == 1):
-            warnings.warn("\nShower pair mask has some pairs with 1 photon.\nThis happens when both shower PFOs in a pair backtrack to the same true photon.")
-
-            sorted_pair_ind = ak.fill_none(ak.pad_none(sorted_pair_ind, 2, -1), -1, -1)
-            sorted_pair_ind = ak.where(sorted_pair_ind == -1, sorted_pair_ind[:, 0], sorted_pair_ind)
-
-        # create masks for each
-        self.leading = indices == sorted_pair_ind[:, 0]
-        self.subleading = indices == sorted_pair_ind[:, 1]
-        self.pairs = ak.zip((self.leading, self.subleading))
-
-    def SortCoordsByBacktrackedEnergy(self):
         """
         Orders the argcombinations by the shower with higher
         backtracked energy.
