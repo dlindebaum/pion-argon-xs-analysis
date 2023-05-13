@@ -157,34 +157,39 @@ def AnalysePhotonCandidateSelection(events : Master.Data) -> dict:
 def AnalysePi0Selection(events : Master.Data) -> dict:
     output = {}
 
-    #* number of photon candidate
     photonCandidates = PFOSelection.InitialPi0PhotonSelection(events) # repeat the photon candidate selection, but only require the mask
+
+    #* number of photon candidate
     n_photons = ak.sum(photonCandidates, -1)
     mask = n_photons == 2
     output["n_photons"] = MakeOutput(n_photons, None, [2])
     events.Filter([mask], [mask]) # technically is an event level cut as we only try to find 1 pi0 in the final state, two is more complicated
+    photonCandidates = photonCandidates[mask]
     
-    
-    #* opening angle
-    shower_pairs = Master.ShowerPairs(events)
-    angle = ak.flatten(shower_pairs.reco_angle)
-    mask = (angle > (10 * np.pi / 180)) & (angle < (80 * np.pi / 180))
-    output["angle"] = MakeOutput(angle, Tags.GeneratePi0Tags(events), [(10 * np.pi / 180), (80 * np.pi / 180)])
-    events.Filter([mask], [mask])
-
     #* invariant mass
-    shower_pairs = Master.ShowerPairs(events)
+    shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photonCandidates)
     mass = ak.flatten(shower_pairs.reco_mass)
     mask = (mass > 50) & (mass < 250)
     output["mass"] = MakeOutput(mass, Tags.GeneratePi0Tags(events), [50, 250])
     output["event_tag"] = MakeOutput(None, Tags.GenerateTrueFinalStateTags(events), None)
     events.Filter([mask], [mask])
 
+    photonCandidates = photonCandidates[mask]
+
+    #* opening angle
+    shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photonCandidates)
+    angle = ak.flatten(shower_pairs.reco_angle)
+    mask = (angle > (10 * np.pi / 180)) & (angle < (80 * np.pi / 180))
+    output["angle"] = MakeOutput(angle, Tags.GeneratePi0Tags(events), [(10 * np.pi / 180), (80 * np.pi / 180)])
+    events.Filter([mask], [mask])
+    photonCandidates = photonCandidates[mask]
     return output
 
 # @Processing.log_process
 def run(i, file, n_events, start, selected_events, args):
     events = Master.Data(file, nEvents = n_events, start = start, nTuple_type = args["ntuple_type"]) # load data
+
+    events.Filter([PFOSelection.GoodShowerSelection(events)])
 
     output_beam = AnalyseBeamSelection(events, args["beam_quality_fit"]) # events are cut after this
 
