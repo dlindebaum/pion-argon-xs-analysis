@@ -16,7 +16,7 @@ def MakeOutput(value, tags, cuts = []) -> dict:
     return {"value" : value, "tags" : tags, "cuts" : cuts}
 
 
-def AnalyseBeamSelection(events : Master.Data):
+def AnalyseBeamSelection(events : Master.Data, beam_quality_fits : str) -> dict:
     output = {}
 
     mask = BeamParticleSelection.CaloSizeCut(events) # not plot needed for this
@@ -26,7 +26,7 @@ def AnalyseBeamSelection(events : Master.Data):
     mask = BeamParticleSelection.PiBeamSelection(events)
     counts = Tags.GenerateTrueBeamParticleTags(events)
     for i in counts:
-        counts[i] = ak.sum(counts[i])
+        counts[i] = ak.sum(counts[i].mask)
     output["pi_beam"] = counts
     events.Filter([mask], [mask])
 
@@ -42,7 +42,7 @@ def AnalyseBeamSelection(events : Master.Data):
     events.Filter([mask], [mask])
 
     #* beam quality cuts
-    with open(args["beam_quality_fit"], "r") as f:
+    with open(beam_quality_fits, "r") as f:
         fit_values = json.load(f)
 
     #* dxy cut
@@ -81,12 +81,12 @@ def AnalyseBeamSelection(events : Master.Data):
     #* true particle population
     tags = Tags.GenerateTrueBeamParticleTags(events)
     for t in tags:
-        tags[t] = ak.sum(tags[t]) # turn mask into counts
+        tags[t] = ak.sum(tags[t].mask) # turn mask into counts
     output["final_tags"] = tags
     return output
 
 
-def AnalysePiPlusSelection(events : Master.Data):
+def AnalysePiPlusSelection(events : Master.Data) -> dict:
     # for now just do the daughter pi+ cuts
     output = {}
 
@@ -115,21 +115,58 @@ def AnalysePiPlusSelection(events : Master.Data):
     #* true particle population
     tags = Tags.GenerateTrueParticleTags(events)
     for t in tags:
-        tags[t] = ak.sum(tags[t]) # turn mask into counts
+        tags[t] = ak.sum(tags[t].mask) # turn mask into counts
     output["final_tags"] = tags
+    return output
+
+
+def AnalysePhotonCandidateSelection(events : Master.Data) -> dict:
+    output = {}
+
+    #* em shower score cut
+    output["em_score"] = MakeOutput(events.recoParticles.emScore, Tags.GenerateTrueParticleTags(events), [0.5])
+    mask = PFOSelection.EMScoreCut(events, 0.5)
+    events.Filter([mask])
+
+    #* nHits cut
+    output["nHits"] = MakeOutput(events.recoParticles.nHits, Tags.GenerateTrueParticleTags(events), [80])
+    output["nHits_completeness"] = MakeOutput(events.trueParticlesBT.completeness, [], [])
+    mask = PFOSelection.NHitsCut(events, 80)
+    events.Filter([mask])
+
+    #* distance to beam cut
+    dist = PFOSelection.find_beam_separations(events)
+    output["beam_separation"] = MakeOutput(dist, Tags.GenerateTrueParticleTags(events), [3, 90])
+    mask = PFOSelection.BeamParticleDistanceCut(events, [3, 90])
+    events.Filter([mask])
+
+    #* impact parameter
+    ip = PFOSelection.find_beam_impact_parameters(events)
+    output["impact_parameter"] = MakeOutput(ip, Tags.GenerateTrueParticleTags(events), [20])
+    output["impact_parameter_completeness"] = MakeOutput(events.trueParticlesBT.completeness, [], [])
+
+    #* true particle population
+    tags = Tags.GenerateTrueParticleTags(events)
+    for t in tags:
+        tags[t] = ak.sum(tags[t].mask) # turn mask into counts
+    output["final_tags"] = tags
+
     return output
 
 # @Processing.log_process
 def run(i, file, n_events, start, selected_events, args):
     events = Master.Data(file, nEvents = n_events, start = start, nTuple_type = args["ntuple_type"]) # load data
 
-    output_beam = AnalyseBeamSelection(events) # events are cut after this
+    output_beam = AnalyseBeamSelection(events, args["beam_quality_fit"]) # events are cut after this
 
-    output_pip = AnalysePiPlusSelection(events) # events are cut after this
+    output_pip = AnalysePiPlusSelection(events.Filter(returnCopy = True)) # pass the PFO selections a copy of the event
+
+    output_photon = AnalysePhotonCandidateSelection(events.Filter(returnCopy = True))
 
     output = {
         "beam" : output_beam,
         "pip" : output_pip,
+        "photon" : output_photon
     }
 
     return output
@@ -207,6 +244,33 @@ def MakePiPlusSelectionPlots(output : dict, outDir : str):
     Plots.Save("true_particle_ID", outDir)
     return
 
+def MakePhotonCandidateSelectionPlots(output : dict, outDir : str):
+    Plots.PlotTagged(output["em_score"]["value"], output["em_score"]["tags"], bins = 50, x_range = [0, 1], ncols = 5, x_label = "em score")
+    Plots.DrawCutPosition(output["em_score"]["cuts"][0])
+    Plots.Save("em_score", outDir)
+
+    Plots.PlotTagged(output["nHits"]["value"], output["nHits"]["tags"], bins = 50, x_label = "number of hits", x_range = [0, 1000])
+    Plots.DrawCutPosition(output["nHits"]["cuts"][0], arrow_length = 100)
+    Plots.Save("nHits", outDir)
+
+    Plots.PlotHist2D(ak.ravel(output["nHits_completeness"]["value"]), ak.ravel(output["nHits"]["value"]), bins = 50, x_range = [0, 1],y_range = [0, 1000], xlabel = "completeness", ylabel = "number of hits")
+    Plots.DrawCutPosition(output["nHits"]["cuts"][0], flip = True, arrow_length = 100, color = "red")
+    Plots.Save("nHits_vs_completeness", outDir)
+
+    Plots.PlotTagged(output["beam_separation"]["value"], output["beam_separation"]["tags"], bins = 50, x_range = [0, 200], x_label = "distance from PFO start to beam end position (cm)")
+    Plots.DrawCutPosition(min(output["beam_separation"]["cuts"]), arrow_length = 30)
+    Plots.DrawCutPosition(max(output["beam_separation"]["cuts"]), face = "left", arrow_length = 30)
+    Plots.Save("beam_separation", outDir)
+
+    Plots.PlotTagged(output["impact_parameter"]["value"], output["impact_parameter"]["tags"], bins = 50, x_label = "impact parameter wrt beam (cm)")
+    Plots.DrawCutPosition(output["impact_parameter"]["cuts"][0], arrow_length = 20, face = "left")
+    Plots.Save("impact_parameter", outDir)
+
+    Plots.PlotHist2D(ak.ravel(output["impact_parameter_completeness"]["value"]), ak.ravel(output["impact_parameter"]["value"]), bins = 50, x_range = [0, 1], xlabel = "completeness", ylabel = "impact parameter wrt beam (cm)")
+    Plots.DrawCutPosition(output["impact_parameter"]["cuts"][0], arrow_loc = 0.2, arrow_length = 20, face = "left", flip = True, color ="red")
+    Plots.Save("impact_parameter_vs_completeness", outDir)
+    return
+
 
 def MergeOutputs(outputs : list):
     rprint("outputs")
@@ -244,10 +308,12 @@ def main(args):
     shower_merging.SetPlotStyle(extend_colors = True)
     os.makedirs(args.out + "selection_plots/daughter_pi/", exist_ok = True)
     os.makedirs(args.out + "selection_plots/beam/", exist_ok = True)
+    os.makedirs(args.out + "selection_plots/photon/", exist_ok = True)
 
     output = MergeOutputs(Processing.mutliprocess(run, args.file, args.batches, args.events, vars(args), args.threads)) # run the main analysing method
     MakePiPlusSelectionPlots(output["pip"], args.out + "selection_plots/daughter_pi/")
     MakeBeamSelectionPlots(output["beam"], args.out + "selection_plots/beam/")
+    MakePhotonCandidateSelectionPlots(output["photon"], args.out + "selection_plots/photon/")
     return
 
 

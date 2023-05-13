@@ -399,6 +399,7 @@ class Data:
             # copy filtered attributes into new instance
             filtered = Data()
             filtered.filename = self.filename
+            filtered.nTuple_type = self.nTuple_type
             filtered.nEvents = self.nEvents
             filtered.start = self.start
             filtered.io = IO(filtered.filename,
