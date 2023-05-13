@@ -397,9 +397,8 @@ class Data:
                 self.trueParticlesBT.events = self
         else:
             # copy filtered attributes into new instance
-            filtered = Data()
+            filtered = Data(nTuple_type = self.nTuple_type)
             filtered.filename = self.filename
-            filtered.nTuple_type = self.nTuple_type
             filtered.nEvents = self.nEvents
             filtered.start = self.start
             filtered.io = IO(filtered.filename,

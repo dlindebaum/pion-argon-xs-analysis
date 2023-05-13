@@ -153,6 +153,35 @@ def AnalysePhotonCandidateSelection(events : Master.Data) -> dict:
 
     return output
 
+
+def AnalysePi0Selection(events : Master.Data) -> dict:
+    output = {}
+
+    #* number of photon candidate
+    photonCandidates = PFOSelection.InitialPi0PhotonSelection(events) # repeat the photon candidate selection, but only require the mask
+    n_photons = ak.sum(photonCandidates, -1)
+    mask = n_photons == 2
+    output["n_photons"] = MakeOutput(n_photons, None, [2])
+    events.Filter([mask], [mask]) # technically is an event level cut as we only try to find 1 pi0 in the final state, two is more complicated
+    
+    
+    #* opening angle
+    shower_pairs = Master.ShowerPairs(events)
+    angle = ak.flatten(shower_pairs.reco_angle)
+    mask = (angle > (10 * np.pi / 180)) & (angle < (80 * np.pi / 180))
+    output["angle"] = MakeOutput(angle, Tags.GeneratePi0Tags(events), [(10 * np.pi / 180), (80 * np.pi / 180)])
+    events.Filter([mask], [mask])
+
+    #* invariant mass
+    shower_pairs = Master.ShowerPairs(events)
+    mass = ak.flatten(shower_pairs.reco_mass)
+    mask = (mass > 50) & (mass < 250)
+    output["mass"] = MakeOutput(mass, Tags.GeneratePi0Tags(events), [50, 250])
+    output["event_tag"] = MakeOutput(None, Tags.GenerateTrueFinalStateTags(events), None)
+    events.Filter([mask], [mask])
+
+    return output
+
 # @Processing.log_process
 def run(i, file, n_events, start, selected_events, args):
     events = Master.Data(file, nEvents = n_events, start = start, nTuple_type = args["ntuple_type"]) # load data
@@ -163,10 +192,13 @@ def run(i, file, n_events, start, selected_events, args):
 
     output_photon = AnalysePhotonCandidateSelection(events.Filter(returnCopy = True))
 
+    output_pi0 = AnalysePi0Selection(events.Filter(returnCopy = True))
+
     output = {
         "beam" : output_beam,
         "pip" : output_pip,
-        "photon" : output_photon
+        "photon" : output_photon,
+        "pi0" : output_pi0
     }
 
     return output
@@ -269,6 +301,34 @@ def MakePhotonCandidateSelectionPlots(output : dict, outDir : str):
     Plots.PlotHist2D(ak.ravel(output["impact_parameter_completeness"]["value"]), ak.ravel(output["impact_parameter"]["value"]), bins = 50, x_range = [0, 1], xlabel = "completeness", ylabel = "impact parameter wrt beam (cm)")
     Plots.DrawCutPosition(output["impact_parameter"]["cuts"][0], arrow_loc = 0.2, arrow_length = 20, face = "left", flip = True, color ="red")
     Plots.Save("impact_parameter_vs_completeness", outDir)
+
+    bar_data = []
+    for tag in output["final_tags"]:
+        bar_data.extend([tag]*output["final_tags"][tag])
+    Plots.PlotBar(bar_data, xlabel = "true particle ID")
+    Plots.Save("true_particle_ID", outDir)
+    return
+
+
+def MakePi0SelectionPlots(output : dict, outDir : str):
+    Plots.PlotBar(output["n_photons"]["value"], xlabel = "number of $\pi^{0}$ photon candidates")
+    Plots.Save("n_photons", outDir)
+
+    Plots.PlotTagged(output["angle"]["value"], output["angle"]["tags"], bins = 50, x_label = "Opening angle (rad)")
+    Plots.DrawCutPosition(min(output["angle"]["cuts"]), face = "right", arrow_length = 0.25)
+    Plots.DrawCutPosition(max(output["angle"]["cuts"]), face = "left", arrow_length = 0.25)
+    Plots.Save("angle", outDir)
+
+    Plots.PlotTagged(output["mass"]["value"], output["mass"]["tags"], bins = 50, x_label = "Invariant mass (MeV)")
+    Plots.DrawCutPosition(min(output["mass"]["cuts"]), face = "right", arrow_length = 50)
+    Plots.DrawCutPosition(max(output["mass"]["cuts"]), face = "left", arrow_length = 50)
+    Plots.Save("mass_pi0_tags", outDir)
+
+    Plots.PlotTagged(output["mass"]["value"], output["event_tag"]["tags"], bins = 50, x_label = "Invariant mass (MeV)")
+    Plots.DrawCutPosition(min(output["mass"]["cuts"]), face = "right", arrow_length = 50)
+    Plots.DrawCutPosition(max(output["mass"]["cuts"]), face = "left", arrow_length = 50)
+    Plots.Save("mass_fs_tags", outDir)
+
     return
 
 
@@ -309,11 +369,13 @@ def main(args):
     os.makedirs(args.out + "selection_plots/daughter_pi/", exist_ok = True)
     os.makedirs(args.out + "selection_plots/beam/", exist_ok = True)
     os.makedirs(args.out + "selection_plots/photon/", exist_ok = True)
+    os.makedirs(args.out + "selection_plots/pi0/", exist_ok = True)
 
     output = MergeOutputs(Processing.mutliprocess(run, args.file, args.batches, args.events, vars(args), args.threads)) # run the main analysing method
     MakePiPlusSelectionPlots(output["pip"], args.out + "selection_plots/daughter_pi/")
     MakeBeamSelectionPlots(output["beam"], args.out + "selection_plots/beam/")
     MakePhotonCandidateSelectionPlots(output["photon"], args.out + "selection_plots/photon/")
+    MakePi0SelectionPlots(output["pi0"], args.out + "selection_plots/pi0/")
     return
 
 
