@@ -9,37 +9,47 @@ from python.analysis import Master, BeamParticleSelection, PFOSelection, Plots, 
 import awkward as ak
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from particle import Particle
 
 
-def MakeOutput(value, tags, cuts = []) -> dict:
-    return {"value" : value, "tags" : tags, "cuts" : cuts}
+def MakeOutput(value, tags, cuts = [], fs_tags = None) -> dict:
+    return {"value" : value, "tags" : tags, "cuts" : cuts, "fs_tags" : fs_tags}
 
 
 def AnalyseBeamSelection(events : Master.Data, beam_quality_fits : str) -> dict:
     output = {}
 
-    mask = BeamParticleSelection.CaloSizeCut(events) # not plot needed for this
+    output["no_selection"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, Tags.GenerateTrueFinalStateTags(events))
+
+    mask = BeamParticleSelection.CaloSizeCut(events)
+    output["calo_size"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None)
     events.Filter([mask], [mask])
+    output["calo_size"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
     #* pi+ beam selection
     mask = BeamParticleSelection.PiBeamSelection(events)
     counts = Tags.GenerateTrueBeamParticleTags(events)
     for i in counts:
         counts[i] = ak.sum(counts[i].mask)
-    output["pi_beam"] = counts
+    output["pi_beam"] = MakeOutput(counts, Tags.GenerateTrueBeamParticleTags(events), None)
     events.Filter([mask], [mask])
+    output["pi_beam"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
+
 
     #* beam pandora tag selection
     mask = BeamParticleSelection.PandoraTagCut(events)
     output["pandora_tag"] = MakeOutput(events.recoParticles.beam_pandora_tag, Tags.GenerateTrueBeamParticleTags(events), [13])
     events.Filter([mask], [mask])
+    output["pandora_tag"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
     #* michel score cut
     score = ak.where(events.recoParticles.beam_nHits != 0, events.recoParticles.beam_michelScore / events.recoParticles.beam_nHits, -999)
     mask = BeamParticleSelection.MichelScoreCut(events)
-    output["michel_score"] = MakeOutput(score, Tags.GenerateTrueBeamParticleTags(events), [0.55])
+    output["michel_score"] = MakeOutput(score, Tags.GenerateTrueBeamParticleTags(events), [0.55], Tags.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
+    output["michel_score"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
+
 
     #* beam quality cuts
     with open(beam_quality_fits, "r") as f:
@@ -48,35 +58,40 @@ def AnalyseBeamSelection(events : Master.Data, beam_quality_fits : str) -> dict:
     #* dxy cut
     dxy = (((events.recoParticles.beam_startPos.x - fit_values["mu_x"]) / fit_values["sigma_x"])**2 + ((events.recoParticles.beam_startPos.y - fit_values["mu_y"]) / fit_values["sigma_y"])**2)**0.5
     mask = dxy < 3
-    output["dxy"] = MakeOutput(dxy, Tags.GenerateTrueBeamParticleTags(events), [3])
+    output["dxy"] = MakeOutput(dxy, Tags.GenerateTrueBeamParticleTags(events), [3], Tags.GenerateTrueFinalStateTags(events))
     print(f"dxy cut: {BeamParticleSelection.CountMask(mask)}")
     events.Filter([mask], [mask])
+    output["dxy"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
     #* dz cut
     delta_z = (events.recoParticles.beam_startPos.z - fit_values["mu_z"]) / fit_values["sigma_z"]
     mask = (delta_z > -3) & (delta_z < 3)
-    output["dz"] = MakeOutput(delta_z, Tags.GenerateTrueBeamParticleTags(events), [-3, 3])
+    output["dz"] = MakeOutput(delta_z, Tags.GenerateTrueBeamParticleTags(events), [-3, 3], Tags.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
     print(f"dz cut: {BeamParticleSelection.CountMask(mask)}")
+    output["dz"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
     #* beam direction
     beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos, events.recoParticles.beam_startPos))
     beam_dir_mu = vector.normalize(vector.vector(fit_values["mu_dir_x"], fit_values["mu_dir_y"], fit_values["mu_dir_z"]))
     beam_costh = vector.dot(beam_dir, beam_dir_mu)
     mask = beam_costh > 0.95
-    output["cos_theta"] = MakeOutput(beam_costh, Tags.GenerateTrueBeamParticleTags(events), [0.95])
+    output["cos_theta"] = MakeOutput(beam_costh, Tags.GenerateTrueBeamParticleTags(events), [0.95], Tags.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
+    output["cos_theta"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
     #* APA3 cut
     mask = BeamParticleSelection.APA3Cut(events)
-    output["beam_endPos_z"] = MakeOutput(events.recoParticles.beam_endPos.z, Tags.GenerateTrueBeamParticleTags(events), [220])
+    output["beam_endPos_z"] = MakeOutput(events.recoParticles.beam_endPos.z, Tags.GenerateTrueBeamParticleTags(events), [220], Tags.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
+    output["beam_endPos_z"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
     #* median dE/dX
     mask = BeamParticleSelection.MedianDEdXCut(events)
     median = PFOSelection.Median(events.recoParticles.beam_dEdX)
-    output["median_dEdX"] = MakeOutput(median, Tags.GenerateTrueBeamParticleTags(events), [2.4])
+    output["median_dEdX"] = MakeOutput(median, Tags.GenerateTrueBeamParticleTags(events), [2.4], Tags.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
+    output["median_dEdX"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
     #* true particle population
     tags = Tags.GenerateTrueBeamParticleTags(events)
@@ -144,6 +159,8 @@ def AnalysePhotonCandidateSelection(events : Master.Data) -> dict:
     ip = PFOSelection.find_beam_impact_parameters(events)
     output["impact_parameter"] = MakeOutput(ip, Tags.GenerateTrueParticleTags(events), [20])
     output["impact_parameter_completeness"] = MakeOutput(events.trueParticlesBT.completeness, [], [])
+    mask = PFOSelection.BeamParticleIPCut(events)
+    events.Filter([mask])
 
     #* true particle population
     tags = Tags.GenerateTrueParticleTags(events)
@@ -211,15 +228,15 @@ def run(i, file, n_events, start, selected_events, args):
 
 def MakeBeamSelectionPlots(output : dict, outDir : str):
     bar_data = []
-    for tag in output["pi_beam"]:
-        bar_data.extend([tag] * output["pi_beam"][tag])
-    Plots.PlotBar(bar_data, xlabel = "true particle ID")
+    for tag in output["pi_beam"]["value"]:
+        bar_data.extend([tag] * output["pi_beam"]["value"][tag])
+    Plots.PlotBar(bar_data, xlabel = "True particle ID")
     Plots.Save("pi_beam", outDir)
 
-    Plots.PlotBar(output["pandora_tag"]["value"])
+    Plots.PlotBar(output["pandora_tag"]["value"], xlabel = "Pandora tag")
     Plots.Save("pandora_tag", outDir)
 
-    Plots.PlotTagged(output["michel_score"]["value"], output["michel_score"]["tags"], x_range = (0, 1), y_scale = "log", bins = 50, x_label = "michel score", ncols = 3)
+    Plots.PlotTagged(output["michel_score"]["value"], output["michel_score"]["tags"], x_range = (0, 1), y_scale = "log", bins = 50, x_label = "Michel score", ncols = 3)
     Plots.DrawCutPosition(output["michel_score"]["cuts"][0], face = "left")
     Plots.Save("michel_score", outDir)
 
@@ -240,15 +257,15 @@ def MakeBeamSelectionPlots(output : dict, outDir : str):
     Plots.DrawCutPosition(output["beam_endPos_z"]["cuts"][0], face = "left", arrow_length = 50)
     Plots.Save("beam_endPos_z", outDir)
 
-    Plots.PlotTagged(output["median_dEdX"]["value"], output["median_dEdX"]["tags"], y_scale = "log", x_range = [0, 10], x_label = "median $dE/dX$ (MeV/cm)")
+    Plots.PlotTagged(output["median_dEdX"]["value"], output["median_dEdX"]["tags"], y_scale = "log", x_range = [0, 10], x_label = "Median $dE/dX$ (MeV/cm)")
     Plots.DrawCutPosition(output["median_dEdX"]["cuts"][0], face = "left", arrow_length = 2)
     Plots.Save("median_dEdX", outDir)
 
     bar_data = []
     for tag in output["final_tags"]:
         bar_data.extend([tag]*output["final_tags"][tag])
-    Plots.PlotBar(bar_data, xlabel = "true particle ID")
-    Plots.Save("true_particle_ID", outDir)
+    Plots.PlotBar(bar_data, xlabel = "True particle ID")
+    Plots.Save("final_tags", outDir)
     return
 
 
@@ -336,6 +353,67 @@ def MakePi0SelectionPlots(output : dict, outDir : str):
 
     return
 
+def CalcualteCountMetrics(counts : pd.DataFrame):
+    efficiency = counts.div(counts.no_selection, 0)
+    purity = counts / counts.loc["total"]
+    return purity, efficiency    
+
+
+def MakeFinalStateTables(output : dir, outDir : str):
+    table = {}
+
+    for o in output:
+        if o == "final_tags" : continue
+        row = {}
+        for t in output[o]["fs_tags"]:
+            count = BeamParticleSelection.CountMask(output[o]["fs_tags"][t].mask)
+            row["total"] = count[0]
+            row[t] = count[1]
+
+        table[o] = row
+    event_counts = pd.DataFrame(table)
+    purity, efficiency = CalcualteCountMetrics(event_counts)
+    rprint(event_counts)
+    rprint(purity)
+    rprint(efficiency)
+
+    event_counts.to_latex(outDir + "final_state_event_counts.tex")
+    purity.to_latex(outDir + "final_state_purity.tex")
+    efficiency.to_latex(outDir + "final_state_efficiency.tex")
+    return
+
+
+def MakeParticleTables(output : dir, outDir : str, exclude = []):
+    table = {}
+
+    for o in output:
+        if o in exclude: continue
+        row = {"total" : 0}
+        if o == "final_tags":
+            for t in output[o]:
+                row["total"] = row["total"] + output[o][t]
+                row[t] = output[o][t]
+        else:
+            for t in output[o]["tags"]:
+                if output[o]["tags"][t] is None: continue
+                count = PFOSelection.CountMask(output[o]["tags"][t].mask)
+                row["total"] = count[0]
+                row[t] = count[1]
+        table[o] = row
+    event_counts = pd.DataFrame(table)
+
+    event_counts.columns = event_counts.columns[:-1].insert(0, "no_selection")
+
+    purity, efficiency = CalcualteCountMetrics(event_counts)
+    rprint(event_counts)
+    rprint(purity)
+    rprint(efficiency)
+
+    event_counts.to_latex(outDir + "particle_counts.tex")
+    purity.to_latex(outDir + "particle_purity.tex")
+    efficiency.to_latex(outDir + "particle_efficiency.tex")
+    return
+
 
 def MergeOutputs(outputs : list):
     rprint("outputs")
@@ -353,15 +431,15 @@ def MergeOutputs(outputs : list):
                     continue
                 else:
                     print(o)
-                    if o in ["final_tags", "pi_beam"]:
+                    if o in ["final_tags"]:
                         for t in merged_output[selection_output][o]:
                             merged_output[selection_output][o][t] = merged_output[selection_output][o][t] + output[selection_output][o][t]
                     else:
-                        merged_output[selection_output][o]["value"] = ak.concatenate([merged_output[selection_output][o]["value"], output[selection_output][o]["value"]])
-                        merged_tags = {}
+                        merged_output[selection_output][o]["value"] = ak.concatenate([merged_output[selection_output][o]["value"], output[selection_output][o]["value"]]) 
                         for t in merged_output[selection_output][o]["tags"]:
-                            merged_tags[t] = ak.concatenate([merged_output[selection_output][o]["tags"][t], output[selection_output][o]["tags"][t]])
-                        merged_output[selection_output][o]["tags"] = merged_tags
+                            merged_output[selection_output][o]["tags"][t].mask = ak.concatenate([merged_output[selection_output][o]["tags"][t].mask, output[selection_output][o]["tags"][t]].mask)
+                        for t in merged_output[selection_output][o]["tags"]:
+                            merged_output[selection_output][o]["fs_tags"][t].mask = ak.concatenate([merged_output[selection_output][o]["fs_tags"][t].mask, output[selection_output][o]["fs_tags"][t]].mask)
                         # we shouldn't need to merge cuts because this should be the same for all events
 
     rprint("merged_output")
@@ -377,6 +455,12 @@ def main(args):
     os.makedirs(args.out + "selection_plots/pi0/", exist_ok = True)
 
     output = MergeOutputs(Processing.mutliprocess(run, args.file, args.batches, args.events, vars(args), args.threads)) # run the main analysing method
+    MakeFinalStateTables(output["beam"], args.out + "selection_plots/beam/")
+    MakeParticleTables(output["beam"], args.out + "selection_plots/beam/", ["no_selection"])
+    MakeParticleTables(output["pip"], args.out + "selection_plots/daughter_pi/", ["completeness"])
+    MakeParticleTables(output["photon"], args.out + "selection_plots/photon/", ["nHits_completeness", "impact_parameter_completeness"])
+    MakeParticleTables(output["pi0"], args.out + "selection_plots/pi0/", ["n_photons", "event_tag"])
+
     MakePiPlusSelectionPlots(output["pip"], args.out + "selection_plots/daughter_pi/")
     MakeBeamSelectionPlots(output["beam"], args.out + "selection_plots/beam/")
     MakePhotonCandidateSelectionPlots(output["photon"], args.out + "selection_plots/photon/")
