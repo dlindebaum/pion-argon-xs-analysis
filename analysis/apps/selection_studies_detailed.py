@@ -27,16 +27,6 @@ def AnalyseBeamSelection(events : Master.Data, beam_quality_fits : str) -> dict:
     events.Filter([mask], [mask])
     output["calo_size"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
-    #* pi+ beam selection
-    mask = BeamParticleSelection.PiBeamSelection(events)
-    counts = Tags.GenerateTrueBeamParticleTags(events)
-    for i in counts:
-        counts[i] = ak.sum(counts[i].mask)
-    output["pi_beam"] = MakeOutput(counts, Tags.GenerateTrueBeamParticleTags(events), None)
-    events.Filter([mask], [mask])
-    output["pi_beam"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
-
-
     #* beam pandora tag selection
     mask = BeamParticleSelection.PandoraTagCut(events)
     output["pandora_tag"] = MakeOutput(events.recoParticles.beam_pandora_tag, Tags.GenerateTrueBeamParticleTags(events), [13])
@@ -49,7 +39,6 @@ def AnalyseBeamSelection(events : Master.Data, beam_quality_fits : str) -> dict:
     output["michel_score"] = MakeOutput(score, Tags.GenerateTrueBeamParticleTags(events), [0.55], Tags.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
     output["michel_score"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
-
 
     #* beam quality cuts
     with open(beam_quality_fits, "r") as f:
@@ -92,6 +81,17 @@ def AnalyseBeamSelection(events : Master.Data, beam_quality_fits : str) -> dict:
     output["median_dEdX"] = MakeOutput(median, Tags.GenerateTrueBeamParticleTags(events), [2.4], Tags.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
     output["median_dEdX"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
+
+
+    #* pi+ beam selection
+    mask = BeamParticleSelection.PiBeamSelection(events)
+    counts = Tags.GenerateTrueBeamParticleTags(events)
+    for i in counts:
+        counts[i] = ak.sum(counts[i].mask)
+    output["pi_beam"] = MakeOutput(counts, Tags.GenerateTrueBeamParticleTags(events), None)
+    events.Filter([mask], [mask])
+    output["pi_beam"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
+
 
     #* true particle population
     tags = Tags.GenerateTrueBeamParticleTags(events)
@@ -240,11 +240,11 @@ def MakeBeamSelectionPlots(output : dict, outDir : str):
     Plots.DrawCutPosition(output["michel_score"]["cuts"][0], face = "left")
     Plots.Save("michel_score", outDir)
 
-    Plots.PlotTagged(output["dxy"]["value"], output["dxy"]["tags"], bins = 50, x_label = "$dxy$ (cm)", y_scale = "log", x_range = [0, 10])
+    Plots.PlotTagged(output["dxy"]["value"], output["dxy"]["tags"], bins = 50, x_label = "$dxy$", y_scale = "log", x_range = [0, 10])
     Plots.DrawCutPosition(output["dxy"]["cuts"][0], arrow_length = 1, face = "left")
     Plots.Save("dxy", outDir)
 
-    Plots.PlotTagged(output["dz"]["value"], output["dz"]["tags"], bins = 50, x_label = "$dz$ (cm)", y_scale = "log", x_range = [0, 10])
+    Plots.PlotTagged(output["dz"]["value"], output["dz"]["tags"], bins = 50, x_label = "$dz$", y_scale = "log", x_range = [-10, 10])
     Plots.DrawCutPosition(min(output["dz"]["cuts"]), arrow_length = 1, face = "right")
     Plots.DrawCutPosition(max(output["dz"]["cuts"]), arrow_length = 1, face = "left")
     Plots.Save("dz", outDir)
@@ -377,9 +377,9 @@ def MakeFinalStateTables(output : dir, outDir : str):
     rprint(purity)
     rprint(efficiency)
 
-    event_counts.to_latex(outDir + "final_state_event_counts.tex")
-    purity.to_latex(outDir + "final_state_purity.tex")
-    efficiency.to_latex(outDir + "final_state_efficiency.tex")
+    event_counts.T.to_latex(outDir + "final_state_event_counts.tex")
+    purity.T.to_latex(outDir + "final_state_purity.tex")
+    efficiency.T.to_latex(outDir + "final_state_efficiency.tex")
     return
 
 
@@ -409,9 +409,9 @@ def MakeParticleTables(output : dir, outDir : str, exclude = []):
     rprint(purity)
     rprint(efficiency)
 
-    event_counts.to_latex(outDir + "particle_counts.tex")
-    purity.to_latex(outDir + "particle_purity.tex")
-    efficiency.to_latex(outDir + "particle_efficiency.tex")
+    event_counts.T.to_latex(outDir + "particle_counts.tex")
+    purity.T.to_latex(outDir + "particle_purity.tex")
+    efficiency.T.to_latex(outDir + "particle_efficiency.tex")
     return
 
 
