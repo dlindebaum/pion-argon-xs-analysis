@@ -94,10 +94,7 @@ def AnalyseBeamSelection(events : Master.Data, beam_quality_fits : str) -> dict:
 
 
     #* true particle population
-    tags = Tags.GenerateTrueBeamParticleTags(events)
-    for t in tags:
-        tags[t] = ak.sum(tags[t].mask) # turn mask into counts
-    output["final_tags"] = tags
+    output["final_tags"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, Tags.GenerateTrueFinalStateTags(events))
     return output
 
 
@@ -128,10 +125,7 @@ def AnalysePiPlusSelection(events : Master.Data) -> dict:
     events.Filter([mask])
 
     #* true particle population
-    tags = Tags.GenerateTrueParticleTags(events)
-    for t in tags:
-        tags[t] = ak.sum(tags[t].mask) # turn mask into counts
-    output["final_tags"] = tags
+    output["final_tags"] = MakeOutput(None, Tags.GenerateTrueParticleTags(events), None)
     return output
 
 
@@ -163,11 +157,7 @@ def AnalysePhotonCandidateSelection(events : Master.Data) -> dict:
     events.Filter([mask])
 
     #* true particle population
-    tags = Tags.GenerateTrueParticleTags(events)
-    for t in tags:
-        tags[t] = ak.sum(tags[t].mask) # turn mask into counts
-    output["final_tags"] = tags
-
+    output["final_tags"] = MakeOutput(None, Tags.GenerateTrueParticleTags(events), None)
     return output
 
 
@@ -190,7 +180,6 @@ def AnalysePi0Selection(events : Master.Data) -> dict:
     output["mass"] = MakeOutput(mass, Tags.GeneratePi0Tags(events), [50, 250])
     output["event_tag"] = MakeOutput(None, Tags.GenerateTrueFinalStateTags(events), None)
     events.Filter([mask], [mask])
-
     photonCandidates = photonCandidates[mask]
 
     #* opening angle
@@ -262,8 +251,8 @@ def MakeBeamSelectionPlots(output : dict, outDir : str):
     Plots.Save("median_dEdX", outDir)
 
     bar_data = []
-    for tag in output["final_tags"]:
-        bar_data.extend([tag]*output["final_tags"][tag])
+    for t in output["final_tags"]["tags"]:
+        bar_data.extend([t] * ak.sum(output["final_tags"]["tags"][t].mask))
     Plots.PlotBar(bar_data, xlabel = "True particle ID")
     Plots.Save("final_tags", outDir)
     return
@@ -291,9 +280,10 @@ def MakePiPlusSelectionPlots(output : dict, outDir : str):
     Plots.DrawCutPosition(max(output["median_dEdX"]["cuts"]), arrow_length = 0.5, face = "left")
     Plots.Save("median_dEdX", outDir)
 
+
     bar_data = []
-    for tag in output["final_tags"]:
-        bar_data.extend([tag]*output["final_tags"][tag])
+    for t in output["final_tags"]["tags"]:
+        bar_data.extend([t] * ak.sum(output["final_tags"]["tags"][t].mask))
     Plots.PlotBar(bar_data, xlabel = "true particle ID")
     Plots.Save("true_particle_ID", outDir)
     return
@@ -324,9 +314,10 @@ def MakePhotonCandidateSelectionPlots(output : dict, outDir : str):
     Plots.DrawCutPosition(output["impact_parameter"]["cuts"][0], arrow_loc = 0.2, arrow_length = 20, face = "left", flip = True, color ="red")
     Plots.Save("impact_parameter_vs_completeness", outDir)
 
+
     bar_data = []
-    for tag in output["final_tags"]:
-        bar_data.extend([tag]*output["final_tags"][tag])
+    for t in output["final_tags"]["tags"]:
+        bar_data.extend([t] * ak.sum(output["final_tags"]["tags"][t].mask))
     Plots.PlotBar(bar_data, xlabel = "true particle ID")
     Plots.Save("true_particle_ID", outDir)
     return
@@ -383,23 +374,40 @@ def MakeFinalStateTables(output : dir, outDir : str):
     return
 
 
+def PiPlusBranchingFractions(output : dir, outDir : str):
+    table = {}
+
+    for o in ["no_selection", "final_tags"]:
+        row = {}
+        pi_mask = output[o]["tags"]["$\\pi^{+}$"].mask
+        for t in output[o]["fs_tags"]:
+            count = BeamParticleSelection.CountMask(output[o]["fs_tags"][t].mask & pi_mask)
+            row["total"] = ak.sum(pi_mask)
+            row[t] = count[1]
+        table[o] = row
+    event_counts = pd.DataFrame(table)
+    purity, efficiency = CalcualteCountMetrics(event_counts)
+    rprint(event_counts)
+    rprint(purity)
+    rprint(efficiency)
+
+    event_counts.T.to_latex(outDir + "pi_final_state_counts.tex")
+    purity.T.to_latex(outDir + "pi_final_state_purity.tex")
+    efficiency.T.to_latex(outDir + "pi_final_state_efficiency.tex")
+
+
 def MakeParticleTables(output : dir, outDir : str, exclude = []):
     table = {}
 
     for o in output:
         if o in exclude: continue
         row = {"total" : 0}
-        if o == "final_tags":
-            for t in output[o]:
-                row["total"] = row["total"] + output[o][t]
-                row[t] = output[o][t]
-        else:
-            for t in output[o]["tags"]:
-                if output[o]["tags"][t] is None: continue
-                count = PFOSelection.CountMask(output[o]["tags"][t].mask)
-                row["total"] = count[0]
-                row[t] = count[1]
-        table[o] = row
+        for t in output[o]["tags"]:
+            if output[o]["tags"][t] is None: continue
+            count = PFOSelection.CountMask(output[o]["tags"][t].mask)
+            row["total"] = count[0]
+            row[t] = count[1]
+            table[o] = row
     event_counts = pd.DataFrame(table)
 
     event_counts.columns = event_counts.columns[:-1].insert(0, "no_selection")
@@ -431,16 +439,12 @@ def MergeOutputs(outputs : list):
                     continue
                 else:
                     print(o)
-                    if o in ["final_tags"]:
-                        for t in merged_output[selection_output][o]:
-                            merged_output[selection_output][o][t] = merged_output[selection_output][o][t] + output[selection_output][o][t]
-                    else:
-                        merged_output[selection_output][o]["value"] = ak.concatenate([merged_output[selection_output][o]["value"], output[selection_output][o]["value"]]) 
-                        for t in merged_output[selection_output][o]["tags"]:
-                            merged_output[selection_output][o]["tags"][t].mask = ak.concatenate([merged_output[selection_output][o]["tags"][t].mask, output[selection_output][o]["tags"][t]].mask)
-                        for t in merged_output[selection_output][o]["tags"]:
-                            merged_output[selection_output][o]["fs_tags"][t].mask = ak.concatenate([merged_output[selection_output][o]["fs_tags"][t].mask, output[selection_output][o]["fs_tags"][t]].mask)
-                        # we shouldn't need to merge cuts because this should be the same for all events
+                    merged_output[selection_output][o]["value"] = ak.concatenate([merged_output[selection_output][o]["value"], output[selection_output][o]["value"]]) 
+                    for t in merged_output[selection_output][o]["tags"]:
+                        merged_output[selection_output][o]["tags"][t].mask = ak.concatenate([merged_output[selection_output][o]["tags"][t].mask, output[selection_output][o]["tags"][t]].mask)
+                    for t in merged_output[selection_output][o]["tags"]:
+                        merged_output[selection_output][o]["fs_tags"][t].mask = ak.concatenate([merged_output[selection_output][o]["fs_tags"][t].mask, output[selection_output][o]["fs_tags"][t]].mask)
+                    # we shouldn't need to merge cuts because this should be the same for all events
 
     rprint("merged_output")
     rprint(merged_output)
@@ -460,6 +464,7 @@ def main(args):
     MakeParticleTables(output["pip"], args.out + "selection_plots/daughter_pi/", ["completeness"])
     MakeParticleTables(output["photon"], args.out + "selection_plots/photon/", ["nHits_completeness", "impact_parameter_completeness"])
     MakeParticleTables(output["pi0"], args.out + "selection_plots/pi0/", ["n_photons", "event_tag"])
+    PiPlusBranchingFractions(output["beam"], args.out + "selection_plots/beam/")
 
     MakePiPlusSelectionPlots(output["pip"], args.out + "selection_plots/daughter_pi/")
     MakeBeamSelectionPlots(output["beam"], args.out + "selection_plots/beam/")
