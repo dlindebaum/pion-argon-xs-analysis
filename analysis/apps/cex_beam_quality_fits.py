@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+"""
+Created on: 19/05/2023 13:36
+
+Author: Shyam Bhuller
+
+Description: Computes fits for the beam quality selection and stores them in a json file to be used with the full selection.
+"""
 import argparse
 import json
 import os
@@ -12,24 +19,42 @@ from python.analysis import Master, BeamParticleSelection, vector, Plots
 from python.analysis.shower_merging import SetPlotStyle
 from scipy.optimize import curve_fit
 
-def gaussian(x : np.array, a : float, x0 : float, sigma : float) -> np.array:
+
+def Gaussian(x : np.array, a : float, x0 : float, sigma : float) -> np.array:
     return a * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
 
 
-def fit_gaussian(data : ak.Array, bins : int, range : list = None):
-    if range is None:
-        range = [min(data), max(data)]
-    y, bins_edges = np.histogram(np.array(data), bins = bins, range = sorted([np.percentile(data, 10), np.percentile(data, 90)]))
+def Fit_Gaussian(data : ak.Array, bins : int) -> tuple:
+    """ Fits a gaussian function to a histogram of data, using the least squares method.
+
+    Args:
+        data (ak.Array): data to fit
+        bins (int): number of bins
+        range (list, optional): range of values to fit to. Defaults to None.
+
+    Returns:
+        tuple : fit parameters and covariance matrix
+    """
+    y, bins_edges = np.histogram(np.array(data), bins = bins, range = sorted([np.percentile(data, 10), np.percentile(data, 90)])) # fit only to  data within the 10th and 90th percentile of data to exclude large tails in the distriubtion.
     bin_centers = (bins_edges[1:] + bins_edges[:-1]) / 2
-    return curve_fit(gaussian, bin_centers, y, p0 = (0, np.median(data), np.std(data)))
+    return curve_fit(Gaussian, bin_centers, y, p0 = (0, np.median(data), np.std(data)))
 
 
-def fit_vector(v : ak.Record, bins : int):
+def Fit_Vector(v : ak.Record, bins : int) -> tuple:
+    """ Gaussian fit to each component in the vector.
+
+    Args:
+        v (ak.Record): vector
+        bins (int): number of bins
+
+    Returns:
+        tuple: fit paramaters for each component.
+    """
     a = {}
     mu = {}
     sigma = {}
     for i in ["x", "y", "z"]:
-        popt, _ = fit_gaussian(v[i], bins = bins)
+        popt, _ = Fit_Gaussian(v[i], bins = bins)
         a[i] = popt[0]
         mu[i] = popt[1]
         sigma[i] =popt[2]
@@ -39,27 +64,38 @@ def fit_vector(v : ak.Record, bins : int):
     return a, mu, sigma
 
 
-def plot(value, x_label, range, mu, sigma, name):
+def plot(value : ak.Array, x_label : str, range : list, mu : float, sigma : float, name : str):
+    """ Plot data pluse the gaussian fit made on the data.
+
+    Args:
+        value (ak.Array): date to plot
+        x_label (str): x label
+        range (list): range to plot
+        mu (float): mean of fit
+        sigma (float): rms of fit
+        name (str): plot name
+    """
     heights, edges = Plots.PlotHist(value, xlabel = x_label, bins = 50, range = [mu - range, mu + range])
     x = (edges[1:] + edges[:-1]) / 2
-    y = gaussian(x, max(heights), mu, sigma)
+    y = Gaussian(x, max(heights), mu, sigma)
 
     x_interp = np.linspace(min(x), max(x), 200)
-    y_interp = gaussian(x_interp, max(heights), mu, sigma)
+    y_interp = Gaussian(x_interp, max(heights), mu, sigma)
 
     mse = np.sqrt(np.mean((heights - y)**2))
     plt.errorbar(x, y, mse, fmt = "x",color = "black") # use mse for errors for now, if the fit is poor, then perhaps 1 sigma deviations in the fit or residual
     plt.errorbar(x_interp, y_interp, color = "black")
     plt.ylim(0)
     Plots.Save(name)
-    # y_min = gaussian(x, max(heights), fit_values["mu_x"][0] - fit_values["mu_x"][1]**0.5, fit_values["sigma_x"][0] - fit_values["sigma_x"][1]**0.5)
-    # y_max = gaussian(x, max(heights), fit_values["mu_x"][0] + fit_values["mu_x"][1]**0.5, fit_values["sigma_x"][0] + fit_values["sigma_x"][1]**0.5)
-    # err = np.sqrt(heights)
-    # Plots.Plot(x, y, newFigure = False, marker = "x", xlabel = "x (cm)")
-    # plt.errorbar(x, y, np.array(list(zip(3 * abs(y - y_min), 3 * abs(y-y_max)))).T, fmt = "x")
 
 
 def MakePlots(events : Master.Data, fit_values : dict):
+    """ make plots to see how well the gaussian fit performs.
+
+    Args:
+        events (Master.Data): data to look at
+        fit_values (dict): fit values
+    """
     SetPlotStyle()
     plot(events.recoParticles.beam_startPos.x, "x (cm)", 25, fit_values["mu_x"], fit_values["sigma_x"], "x")
     plot(events.recoParticles.beam_startPos.y, "y (cm)", 25, fit_values["mu_y"], fit_values["sigma_y"], "y")
@@ -72,10 +108,10 @@ def MakePlots(events : Master.Data, fit_values : dict):
     return
 
 def main(args):
-    
     events = Master.Data(args.file, nTuple_type = args.ntuple_type)
 
     #* apply the following cuts before fitting (following the order in BeamParticleSelection)
+    #? allow the option to to the fit without any cuts?
     mask = BeamParticleSelection.CaloSizeCut(events)
     events.Filter([mask], [mask])
 
@@ -89,11 +125,11 @@ def main(args):
     events.Filter([mask], [mask])
 
     #* fit gaussians to the start positions
-    a, mu, sigma = fit_vector(events.recoParticles.beam_startPos, 100)
+    a, mu, sigma = Fit_Vector(events.recoParticles.beam_startPos, 100)
 
     #* fit gaussians to beam directions
     beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos, events.recoParticles.beam_startPos))
-    a_dir, mu_dir, sigma_dir = fit_vector(beam_dir, 50)
+    a_dir, mu_dir, sigma_dir = Fit_Vector(beam_dir, 50)
 
     #* convert to dictionary undestood by the BeamQualityCut function
     fit_values = {

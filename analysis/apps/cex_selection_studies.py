@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+"""
+Created on: 19/05/2023 13:47
+
+Author: Shyam Bhuller
+
+Description: Selection studies for the charge exchange analysis.
+"""
 import argparse
 import json
 import os
@@ -7,31 +14,52 @@ from rich import print as rprint
 from python.analysis import Master, BeamParticleSelection, PFOSelection, Plots, shower_merging, vector, Processing, Tags
 
 import awkward as ak
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from particle import Particle
 
 
-def MakeOutput(value, tags, cuts = [], fs_tags = None) -> dict:
+def MakeOutput(value : ak.Array, tags : Tags.Tags, cuts : list = [], fs_tags : Tags.Tags = None) -> dict:
+    """ Output dictionary for multiprocessing class, if we want to be fancy this can be a dataclass instead.
+        Generally the data stored in this dictionary should be before any cuts are applied, for plotting purposes.
+
+    Args:
+        value (ak.Array): value which is being studied
+        tags (Tags.Tags): tags which categorise the value
+        cuts (list, optional): cut values used on this data. Defaults to [].
+        fs_tags (Tags.Tags, optional): final state tags to the data. Defaults to None.
+
+    Returns:
+        dict: dictionary of data.
+    """
     return {"value" : value, "tags" : tags, "cuts" : cuts, "fs_tags" : fs_tags}
 
 
 def AnalyseBeamSelection(events : Master.Data, beam_quality_fits : str) -> dict:
+    """ Manually applies the beam selection while storing the value being cut on, cut values and truth tags in order to do plotting
+        and produce performance tables.
+
+    Args:
+        events (Master.Data): events to look at
+        beam_quality_fits (str): fit values for the beam quality selection
+
+    Returns:
+        dict: output data.
+    """
     output = {}
 
     output["no_selection"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, Tags.GenerateTrueFinalStateTags(events))
 
+    #* calo size cut
     mask = BeamParticleSelection.CaloSizeCut(events)
     output["calo_size"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None)
     events.Filter([mask], [mask])
     output["calo_size"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
     #* beam pandora tag selection
-    mask = BeamParticleSelection.PandoraTagCut(events)
-    output["pandora_tag"] = MakeOutput(events.recoParticles.beam_pandora_tag, Tags.GenerateTrueBeamParticleTags(events), [13])
-    events.Filter([mask], [mask])
-    output["pandora_tag"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
+    mask = BeamParticleSelection.PandoraTagCut(events) # create the mask for the cut
+    output["pandora_tag"] = MakeOutput(events.recoParticles.beam_pandora_tag, Tags.GenerateTrueBeamParticleTags(events), [13]) # store the data to cut, cut value and truth tags
+    events.Filter([mask], [mask]) # apply the cut
+    output["pandora_tag"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events) # store the final state truth tags after the cut is applied
 
     #* michel score cut
     score = ak.where(events.recoParticles.beam_nHits != 0, events.recoParticles.beam_michelScore / events.recoParticles.beam_nHits, -999)
@@ -99,9 +127,17 @@ def AnalyseBeamSelection(events : Master.Data, beam_quality_fits : str) -> dict:
 
 
 def AnalysePiPlusSelection(events : Master.Data) -> dict:
-    # for now just do the daughter pi+ cuts
+    """ Analyse the daughter pi+ selection.
+
+    Args:
+        events (Master.Data): events to look at
+
+    Returns:
+        dict: output data
+    """
     output = {}
 
+    # this selection only needs to be done for shower merging ntuple because the PDSPAnalyser ntuples only store daughter PFOs, not the beam as well.
     if events.nTuple_type == Master.Ntuple_Type.SHOWER_MERGING:
         #* beam particle daughter selection 
         mask = PFOSelection.BeamDaughterCut(events)
@@ -130,6 +166,14 @@ def AnalysePiPlusSelection(events : Master.Data) -> dict:
 
 
 def AnalysePhotonCandidateSelection(events : Master.Data) -> dict:
+    """ Analyse the photon candidate selection.
+
+    Args:
+        events (Master.Data): events to look at
+
+    Returns:
+        dict: output data
+    """
     output = {}
 
     #* em shower score cut
@@ -162,6 +206,15 @@ def AnalysePhotonCandidateSelection(events : Master.Data) -> dict:
 
 
 def AnalysePi0Selection(events : Master.Data, energy_correction_factor : float = 1) -> dict:
+    """ Analyse the pi0 selection.
+
+    Args:
+        events (Master.Data): events to look at
+        energy_correction_factor (float, optional): linear correction factor to shower energies. Defaults to 1.
+
+    Returns:
+        dict: output data
+    """
     output = {}
 
     photonCandidates = PFOSelection.InitialPi0PhotonSelection(events) # repeat the photon candidate selection, but only require the mask
@@ -217,6 +270,12 @@ def run(i, file, n_events, start, selected_events, args):
 
 
 def MakeBeamSelectionPlots(output : dict, outDir : str):
+    """ Beam particle selection plots.
+
+    Args:
+        output (dict): data to plot
+        outDir (str): output directory
+    """
     bar_data = []
     for tag in output["pi_beam"]["value"]:
         bar_data.extend([tag] * output["pi_beam"]["value"][tag])
@@ -260,6 +319,12 @@ def MakeBeamSelectionPlots(output : dict, outDir : str):
 
 
 def MakePiPlusSelectionPlots(output : dict, outDir : str):
+    """ Pi plus selection plots.
+
+    Args:
+        output (dict): data to plot
+        outDir (str): output directory
+    """
     if "track_score_all" in output:
         Plots.PlotTagged(output["track_score_all"]["value"], output["track_score_all"]["tags"], y_scale = "log", x_label = "track score")
         Plots.Save("track_score_all", outDir)
@@ -290,6 +355,12 @@ def MakePiPlusSelectionPlots(output : dict, outDir : str):
     return
 
 def MakePhotonCandidateSelectionPlots(output : dict, outDir : str):
+    """ Photon candidate plots.
+
+    Args:
+        output (dict): data to plot
+        outDir (str): output directory
+    """
     Plots.PlotTagged(output["em_score"]["value"], output["em_score"]["tags"], bins = 50, x_range = [0, 1], ncols = 5, x_label = "em score")
     Plots.DrawCutPosition(output["em_score"]["cuts"][0])
     Plots.Save("em_score", outDir)
@@ -325,6 +396,12 @@ def MakePhotonCandidateSelectionPlots(output : dict, outDir : str):
 
 
 def MakePi0SelectionPlots(output : dict, outDir : str):
+    """ Pi0 selection plots.
+
+    Args:
+        output (dict): data to plot
+        outDir (str): output directory
+    """
     Plots.PlotBar(output["n_photons"]["value"], xlabel = "number of $\pi^{0}$ photon candidates")
     Plots.Save("n_photons", outDir)
 
@@ -345,13 +422,27 @@ def MakePi0SelectionPlots(output : dict, outDir : str):
 
     return
 
-def CalcualteCountMetrics(counts : pd.DataFrame):
+def CalcualteCountMetrics(counts : pd.DataFrame) -> tuple:
+    """ Calculates purity and efficiency from event counts.
+
+    Args:
+        counts (pd.DataFrame): event counts dataframe
+
+    Returns:
+        tuple: purity and efficiency data frames
+    """
     efficiency = counts.div(counts.no_selection, 0)
     purity = counts / counts.loc["total"]
     return purity, efficiency    
 
 
 def MakeFinalStateTables(output : dir, outDir : str):
+    """ Make performance tables based on the final state truth tags.
+
+    Args:
+        output (dir): output data
+        outDir (str): save location
+    """
     table = {}
 
     for o in output:
@@ -376,6 +467,13 @@ def MakeFinalStateTables(output : dir, outDir : str):
 
 
 def PiPlusBranchingFractions(output : dir, outDir : str):
+    """ Make performance tables which roughly represents the branching fractions of
+        pi+ + Ar interactions.
+
+    Args:
+        output (dir): output data
+        outDir (str): save location
+    """
     table = {}
 
     for o in ["no_selection", "final_tags"]:
@@ -398,6 +496,12 @@ def PiPlusBranchingFractions(output : dir, outDir : str):
 
 
 def MakeParticleTables(output : dir, outDir : str, exclude = []):
+    """ Make performance tables based on the true particle tags.
+
+    Args:
+        output (dir): output data
+        outDir (str): save location
+    """
     table = {}
 
     for o in output:
@@ -424,7 +528,15 @@ def MakeParticleTables(output : dir, outDir : str, exclude = []):
     return
 
 
-def MergeOutputs(outputs : list):
+def MergeOutputs(outputs : list) -> dict:
+    """ Merge multiprocessing output into a single dictionary.
+
+    Args:
+        outputs (list): outputs from multiprocessing job.
+
+    Returns:
+        dict: merged output
+    """
     rprint("outputs")
     rprint(outputs)
 
@@ -454,12 +566,16 @@ def MergeOutputs(outputs : list):
 
 def main(args):
     shower_merging.SetPlotStyle(extend_colors = True)
+
+    output = MergeOutputs(Processing.mutliprocess(run, args.file, args.batches, args.events, vars(args), args.threads)) # run the main analysing method
+
+    # output directories
     os.makedirs(args.out + "selection_plots/daughter_pi/", exist_ok = True)
     os.makedirs(args.out + "selection_plots/beam/", exist_ok = True)
     os.makedirs(args.out + "selection_plots/photon/", exist_ok = True)
     os.makedirs(args.out + "selection_plots/pi0/", exist_ok = True)
 
-    output = MergeOutputs(Processing.mutliprocess(run, args.file, args.batches, args.events, vars(args), args.threads)) # run the main analysing method
+    # tables
     MakeFinalStateTables(output["beam"], args.out + "selection_plots/beam/")
     MakeParticleTables(output["beam"], args.out + "selection_plots/beam/", ["no_selection"])
     MakeParticleTables(output["pip"], args.out + "selection_plots/daughter_pi/", ["completeness"])
@@ -467,6 +583,7 @@ def main(args):
     MakeParticleTables(output["pi0"], args.out + "selection_plots/pi0/", ["n_photons", "event_tag"])
     PiPlusBranchingFractions(output["beam"], args.out + "selection_plots/beam/")
 
+    # plots
     MakePiPlusSelectionPlots(output["pip"], args.out + "selection_plots/daughter_pi/")
     MakeBeamSelectionPlots(output["beam"], args.out + "selection_plots/beam/")
     MakePhotonCandidateSelectionPlots(output["photon"], args.out + "selection_plots/photon/")
