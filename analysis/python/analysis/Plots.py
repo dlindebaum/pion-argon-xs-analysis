@@ -859,12 +859,12 @@ def Save(name: str = "plot", directory: str = "", dpi = 300):
     plt.close()
 
 
-def Plot(x, y, xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", marker: str = "", linestyle: str = "-", newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None):
+def Plot(x, y, xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", marker: str = "", linestyle: str = "-", newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None):
     """ Make scatter plot.
     """
     if newFigure is True:
         plt.figure()
-    plt.plot(x, y, marker=marker, linestyle=linestyle, label=label)
+    plt.plot(x, y, marker=marker, linestyle=linestyle, label=label, color=color)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.xscale(x_scale)
@@ -971,9 +971,17 @@ def PlotHistComparison(datas, xRange: list = [], bins: int = 100, xlabel: str = 
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
-def PlotHist2DComparison(x: list, y: list, bins: int = 50, xlabels: list = [None] * 2, ylabels: list = [None] * 2, colourmap="plasma", figsize=[6.4, 4.8]):
+def PlotHist2DComparison(x: list, y: list, bins: int = 50, xlabels: list = [None] * 2, ylabels: list = [None] * 2, colourmap="plasma", figsize=[6.4, 4.8], x_range = None, y_range = None):
     edges = [bins, bins]
-    h_range = [[np.min(x), np.max(x)], [np.min(y), np.max(y)]]
+    if x_range is None:
+        x_r = [np.min(x), np.max(x)]
+    else:
+        x_r = x_range
+    if y_range is None:
+        y_r = [np.min(y), np.max(y)]
+    else:
+        y_r = y_range
+    h_range = [x_r, y_r]
 
     heights = []
     for i, j in zip(x, y):

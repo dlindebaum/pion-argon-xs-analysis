@@ -1504,7 +1504,8 @@ class TrueParticleDataBT(ParticleData):
     @property
     def energy(self) -> ak.Array:
         self.LoadData("energy", "reco_daughter_PFP_true_byHits_startE")
-        return getattr(self, f"_{type(self).__name__}__energy")
+        factor = 1000 if self.events.nTuple_type == Ntuple_Type.PDSP else 1
+        return factor * getattr(self, f"_{type(self).__name__}__energy")
 
     @property
     def energyByHits_uncorrected(self) -> ak.Array:

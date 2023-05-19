@@ -161,7 +161,7 @@ def AnalysePhotonCandidateSelection(events : Master.Data) -> dict:
     return output
 
 
-def AnalysePi0Selection(events : Master.Data) -> dict:
+def AnalysePi0Selection(events : Master.Data, energy_correction_factor : float = 1) -> dict:
     output = {}
 
     photonCandidates = PFOSelection.InitialPi0PhotonSelection(events) # repeat the photon candidate selection, but only require the mask
@@ -173,15 +173,6 @@ def AnalysePi0Selection(events : Master.Data) -> dict:
     events.Filter([mask], [mask]) # technically is an event level cut as we only try to find 1 pi0 in the final state, two is more complicated
     photonCandidates = photonCandidates[mask]
     
-    #* invariant mass
-    shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photonCandidates)
-    mass = ak.flatten(shower_pairs.reco_mass)
-    mask = (mass > 50) & (mass < 250)
-    output["mass"] = MakeOutput(mass, Tags.GeneratePi0Tags(events), [50, 250])
-    output["event_tag"] = MakeOutput(None, Tags.GenerateTrueFinalStateTags(events), None)
-    events.Filter([mask], [mask])
-    photonCandidates = photonCandidates[mask]
-
     #* opening angle
     shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photonCandidates)
     angle = ak.flatten(shower_pairs.reco_angle)
@@ -189,6 +180,16 @@ def AnalysePi0Selection(events : Master.Data) -> dict:
     output["angle"] = MakeOutput(angle, Tags.GeneratePi0Tags(events), [(10 * np.pi / 180), (80 * np.pi / 180)])
     events.Filter([mask], [mask])
     photonCandidates = photonCandidates[mask]
+
+    #* invariant mass
+    shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photonCandidates)
+    mass = ak.flatten(shower_pairs.reco_mass) / energy_correction_factor # see shower_correction.ipynb
+    mask = (mass > 50) & (mass < 250)
+    output["mass"] = MakeOutput(mass, Tags.GeneratePi0Tags(events), [50, 250])
+    output["event_tag"] = MakeOutput(None, Tags.GenerateTrueFinalStateTags(events), None)
+    events.Filter([mask], [mask])
+    photonCandidates = photonCandidates[mask]
+
     return output
 
 # @Processing.log_process
@@ -203,7 +204,7 @@ def run(i, file, n_events, start, selected_events, args):
 
     output_photon = AnalysePhotonCandidateSelection(events.Filter(returnCopy = True))
 
-    output_pi0 = AnalysePi0Selection(events.Filter(returnCopy = True))
+    output_pi0 = AnalysePi0Selection(events.Filter(returnCopy = True), args["shower_correction_factor"])
 
     output = {
         "beam" : output_beam,
@@ -479,6 +480,7 @@ if __name__ == "__main__":
     parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Master.Ntuple_Type, help = f"type of ntuple I am looking at {Master.Ntuple_Type._member_map_}.", required = True)
 
     parser.add_argument("--beam_quality_fit", dest = "beam_quality_fit", type = str, help = "fit values for the beam quality cut.", required = True)
+    parser.add_argument("--shower_correction_factor", dest = "shower_correction_factor", type = str, help = "linear shower energy correction factor.", default = 1)
 
     parser.add_argument("-b", "--batches", dest = "batches", type = int, default = None, help = "number of batches to split n tuple files into when parallel processing processing data.")
     parser.add_argument("-e", "--events", dest = "events", type = int, default = None, help = "number of events to process when parallel processing data.")

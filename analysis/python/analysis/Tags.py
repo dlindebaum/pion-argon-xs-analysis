@@ -168,8 +168,8 @@ def GeneratePi0Tags(events : Data) -> Tags:
     pi0_tags = Tags()
     pi0_tags["2 $\gamma$'s, same $\pi^{0}$"]      = Tag("2 $\gamma$'s, same $\pi^{0}$" , "pi0s"               , mask = two_photons & same_mother  , number = 0) # both PFOs are photons from the same pi0
     pi0_tags["2 $\gamma$'s, different $\pi^{0}$"] = Tag("2 $\gamma$s, different $\pi^{0}$", "different mother", mask = two_photons & ~same_mother , number = 1) # both PFOs are pi0 photons, but not from the same pi0
-    pi0_tags["1 $\gamma$"]                        = Tag("one $\gamma$"                   , "one photon"         , mask = ak.sum(pi0_photon, -1) == 1, number = 2) # one PFO is a pi0 photon
-    pi0_tags["no $\gamma$"]                       = Tag("0 $\gamma$"                   , "no photons"         , mask = ak.sum(pi0_photon, -1) == 0, number = 3) # no PFO is a pi0 photon
+    pi0_tags["1 $\gamma$"]                        = Tag("1 $\gamma$"                   , "one photon"         , mask = ak.sum(pi0_photon, -1) == 1, number = 2) # one PFO is a pi0 photon
+    pi0_tags["0 $\gamma$"]                       = Tag("0 $\gamma$"                   , "no photons"         , mask = ak.sum(pi0_photon, -1) == 0, number = 3) # no PFO is a pi0 photon
     return pi0_tags
 
 
