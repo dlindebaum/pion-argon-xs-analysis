@@ -54,3 +54,29 @@ Shower merging analysis workflow is as follows:
  - output:
      - <span style="color: red">various plots of shower quantities (png)</span>
 ---
+
+## Run CEX analysis
+
+For now, just plots for the selection can be made:
+
+**cex_beam_quality_fits.py**
+ - input:
+    - <span style="color: maroon">Ntuple file (root)</span>
+ - output:
+    - <span style="color: green">beam quality fit parameters (json)</span>
+
+
+**cex_photon_selection.py**
+ - input:
+    - <span style="color: maroon">Ntuple file (root)</span>
+ - output:
+    - <span style="color: pink">reco and true shower energies (hdf5)</span>
+
+**cex_selection_studies.py**
+ - input:
+    - <span style="color: maroon">Ntuple file (root)</span>
+    - <span style="color: green">beam quality fit parameters (json)</span>
+    - <span style="color: blue">linear shower energy correction value (optional)</span>
+ - output:
+    - <span style="color: red">performance metrics table of each selection (tex)</span>
+    - <span style="color: red">plots of each selection (png)</span>
