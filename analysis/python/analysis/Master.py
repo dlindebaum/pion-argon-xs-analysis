@@ -1154,6 +1154,26 @@ class RecoParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__beam_dEdX")
 
     @property
+    def beam_inst_nTracks(self) -> ak.Array:
+        self.LoadData("beam_inst_nTracks", "beam_inst_nTracks")
+        return getattr(self, f"_{type(self).__name__}__beam_inst_nTracks")
+
+    @property
+    def beam_inst_nMomenta(self) -> ak.Array:
+        self.LoadData("beam_inst_nMomenta", "beam_inst_nMomenta")
+        return getattr(self, f"_{type(self).__name__}__beam_inst_nMomenta")
+
+    @property
+    def beam_inst_trigger(self) -> ak.Array:
+        self.LoadData("beam_inst_trigger", "beam_inst_trigger")
+        return getattr(self, f"_{type(self).__name__}__beam_inst_trigger")
+
+    @property
+    def beam_inst_PDG_candidates(self) -> ak.Array:
+        self.LoadData("beam_inst_PDG_candidates", "beam_inst_PDG_candidates")
+        return getattr(self, f"_{type(self).__name__}__beam_inst_PDG_candidates")
+
+    @property
     def pandoraTag(self) -> ak.Array:
         self.LoadData("pandoraTag", "pandoraTag") # This information is not stored for daughter PFOs in PDSPAnalyser
         return getattr(self, f"_{type(self).__name__}__pandoraTag")

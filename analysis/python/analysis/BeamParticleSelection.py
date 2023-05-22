@@ -17,17 +17,26 @@ from python.analysis.PFOSelection import Median
 from python.analysis.SelectionTools import *
 
 @CountsWrapper
-def PiBeamSelection(events: Data) -> ak.Array:
+def PiBeamSelection(events: Data, use_beam_inst : bool = False) -> ak.Array:
     """ Pi+ beam particle selection. For MC only.
 
     Args:
         events (Data): events to study.
+        use_beam_inst (bool): use beam instrumentation for PID (data)
 
     Returns:
         ak.Array: boolean mask.
     """
-    # return both 211 and -13 as you can't distinguish between pi+ and mu+ in data
-    return (events.trueParticlesBT.beam_pdg == 211) | (events.trueParticlesBT.beam_pdg == -13)
+    if use_beam_inst:
+        mask = (events.recoParticles.beam_inst_nTracks == 1) & (events.recoParticles.beam_inst_nMomenta == 1)
+        mask = mask & (events.recoParticles.beam_inst_trigger != 8)
+
+        # 13 is used for the mu+ pdg in the beam instrumentation.
+        mask = ak.any(events.recoParticles.beam_inst_PDG_candidates == 13, axis = 1) | ak.any(events.recoParticles.beam_inst_PDG_candidates == 211, axis = 1)
+    else:
+        # return both 211 and -13 as you can't distinguish between pi+ and mu+ in data
+        mask = (events.trueParticlesBT.beam_pdg == 211) | (events.trueParticlesBT.beam_pdg == -13)
+    return mask
 
 
 @CountsWrapper
