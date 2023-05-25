@@ -729,9 +729,10 @@ class ParticleData(ABC):
 
 
     def FilterVariable(self, var : str):
+        var_name = f"_{type(self).__name__}__{var}"
         for f in self.filters:
             try:
-                setattr(self, var, getattr(self, var)[f])
+                setattr(self, var_name, getattr(self, var_name)[f])
             except:
                 Warning(f"couldn't apply a filter to {var}")
 
@@ -759,7 +760,7 @@ class ParticleData(ABC):
             else:
                 setattr(self, var_name, self.events.io.Get(nTuple_name))
             # apply any filters to data when loading
-            self.FilterVariable(var_name)
+            self.FilterVariable(name)
 
 
     def Filter(self, filters: list, returnCopy: bool = True):
@@ -815,18 +816,22 @@ class TrueParticleData(ParticleData):
         super().__init__(events)
 
     def PDSPData(self, name : str, beam : str, daughter : str, grand_daughter : str):
-        value = ak.concatenate([ak.unflatten(self.events.io.Get(beam), 1, -1), self.events.io.Get(daughter), self.events.io.Get(grand_daughter)], -1)
-        setattr(self, f"_{type(self).__name__}__{name}", value)
-        self.FilterVariable(name)
+        var_name = f"_{type(self).__name__}__{name}"
+        if hasattr(self.events, "io") and not hasattr(self, var_name):
+            value = ak.concatenate([ak.unflatten(self.events.io.Get(beam), 1, -1), self.events.io.Get(daughter), self.events.io.Get(grand_daughter)], -1)
+            setattr(self, var_name, value)
+            self.FilterVariable(name)
 
     def PDSPDataVector(self, name : str, beam : str, daughter : str, grand_daughter : str):
-        bv = [self.events.io.Get(n) for n in beam]
-        dv = [self.events.io.Get(n) for n in daughter]
-        gv = [self.events.io.Get(n) for n in grand_daughter]
-        value = [ak.concatenate([ak.unflatten(bv[i], 1, -1), dv[i], gv[i]], -1) for i in range(len(beam))]
-        value = vector.vector(x = value[0], y = value[1], z = value[2])
-        setattr(self, f"_{type(self).__name__}__{name}", value)
-        self.FilterVariable(name)
+        var_name = f"_{type(self).__name__}__{name}"
+        if hasattr(self.events, "io") and not hasattr(self, var_name):
+            bv = [self.events.io.Get(n) for n in beam]
+            dv = [self.events.io.Get(n) for n in daughter]
+            gv = [self.events.io.Get(n) for n in grand_daughter]
+            value = [ak.concatenate([ak.unflatten(bv[i], 1, -1), dv[i], gv[i]], -1) for i in range(len(beam))]
+            value = vector.vector(x = value[0], y = value[1], z = value[2])
+            setattr(self, var_name, value)
+            self.FilterVariable(name)
 
     @property
     def pdg(self) -> ak.Array:
@@ -846,19 +851,24 @@ class TrueParticleData(ParticleData):
 
     @property
     def mother(self) -> ak.Array:
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        var_name = f"_{type(self).__name__}__mother"
+        if self.events.nTuple_type == Ntuple_Type.PDSP and not hasattr(self, var_name):
             beam = ak.Array([0] * ak.count(self.events.io.Get("true_beam_ID"))) #! need to check null values for these
             daughter = ak.Array([[1]*i for i in ak.num(self.events.io.Get("true_beam_daughter_ID"))]) #! need to check null values for these
             grand_daughter = self.events.io.Get("true_beam_Pi0_decay_parID")
             mother = ak.concatenate([ak.unflatten(beam, 1, -1), daughter, grand_daughter], -1)
-            setattr(self, f"_{type(self).__name__}__mother", mother)
+            setattr(self, var_name, mother)
             self.FilterVariable("mother")
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             self.LoadData("mother", "g4_mother")
-        return getattr(self, f"_{type(self).__name__}__mother")
+        return getattr(self, var_name)
 
     @property
     def mother_pdg(self) -> ak.Array:
+        if self.events.nTuple_type == Ntuple_Type.PDSP:
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute "
+                + "'mother_pdg' for 'PDSP' ntuple type.")
         self.LoadData("mother_pdg", "g4_mother_Pdg") # PDSPAnalyzer does not contain this information
         return getattr(self, f"_{type(self).__name__}__mother_pdg")
 
@@ -899,13 +909,15 @@ class TrueParticleData(ParticleData):
 
     @property
     def momentum(self) -> ak.Record:
+        var_name = f"_{type(self).__name__}__momentum"
+        apply_scaling = not hasattr(self, var_name)
         if self.events.nTuple_type == Ntuple_Type.PDSP:
             self.PDSPDataVector("momentum", ["true_beam_startPx", "true_beam_startPy", "true_beam_startPz"], ["true_beam_daughter_startPx", "true_beam_daughter_startPy", "true_beam_daughter_startPz"], ["true_beam_Pi0_decay_startPx", "true_beam_Pi0_decay_startPy", "true_beam_Pi0_decay_startPz"])
+            if apply_scaling: # PDSP analyser stores true energy information in GeV
+                setattr(self, var_name, vector.prod(1000, getattr(self, var_name)))
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             self.LoadData("momentum", ["g4_pX", "g4_pY", "g4_pZ"], is_vector = True)
-        if self.events.nTuple_type == Ntuple_Type.PDSP: # PDSP analyser stores true energy information in GeV
-            setattr(self, f"_{type(self).__name__}__momentum", vector.prod(1000, getattr(self, f"_{type(self).__name__}__momentum")))
-        return getattr(self, f"_{type(self).__name__}__momentum")
+        return getattr(self, var_name)
 
     @property
     def direction(self) -> ak.Record:
@@ -931,31 +943,55 @@ class TrueParticleData(ParticleData):
 
     @property
     def nPi0(self) -> type:
+        if self.events.nTuple_type == Ntuple_Type.PDSP:
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute "
+                + "'nPi0' for 'PDSP' ntuple type.")
         self.LoadData("nPi0", "true_daughter_nPi0")
         return getattr(self, f"_{type(self).__name__}__nPi0")
 
     @property
     def nPiPlus(self) -> type:
+        if self.events.nTuple_type == Ntuple_Type.PDSP:
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute "
+                + "'nPiPlus' for 'PDSP' ntuple type.")
         self.LoadData("nPiPlus", "true_daughter_nPiPlus")
         return getattr(self, f"_{type(self).__name__}__nPiPlus")
 
     @property
     def nPiMinus(self) -> type:
+        if self.events.nTuple_type == Ntuple_Type.PDSP:
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute "
+                + "'nPiMinus' for 'PDSP' ntuple type.")
         self.LoadData("nPiMinus", "true_daughter_nPiMinus")
         return getattr(self, f"_{type(self).__name__}__nPiMinus")
 
     @property
     def nProton(self) -> type:
+        if self.events.nTuple_type == Ntuple_Type.PDSP:
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute "
+                + "'nProton' for 'PDSP' ntuple type.")
         self.LoadData("nProton", "true_daughter_nProton")
         return getattr(self, f"_{type(self).__name__}__nProton")
 
     @property
     def nNeutron(self) -> type:
+        if self.events.nTuple_type == Ntuple_Type.PDSP:
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute "
+                + "'nNeutron' for 'PDSP' ntuple type.")
         self.LoadData("nNeutron", "true_daughter_nNeutron")
         return getattr(self, f"_{type(self).__name__}__nNeutron")
 
     @property
     def nNucleus(self) -> type:
+        if self.events.nTuple_type == Ntuple_Type.PDSP:
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute "
+                + "'nNucleus' for 'PDSP' ntuple type.")
         self.LoadData("nNucleus", "true_daughter_nNucleus")
         return getattr(self, f"_{type(self).__name__}__nNucleus")
 
