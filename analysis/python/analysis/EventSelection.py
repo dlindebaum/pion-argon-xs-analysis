@@ -384,6 +384,7 @@ def count_charged_pi_candidates(
         dEdX_cuts=None,
         min_dEdX=None,
         max_dEdX=None,
+        energy_cut=None,
         reco_pi_mask=None):
     """
     Returns the number of pi+ particles identified from reconstructed
@@ -432,6 +433,10 @@ def count_charged_pi_candidates(
             selection_kwargs.update({"max_dEdX":max_dEdX})
         reco_pi_mask = PFOSelection.DaughterPiPlusSelection(
             events, **selection_kwargs)
+        if energy_cut is not None:
+            reco_pi_mask = np.logical_and(
+                reco_pi_mask,
+                events.recoParticles.energy > energy_cut)
     return ak.sum(reco_pi_mask, axis=-1)
 
 
