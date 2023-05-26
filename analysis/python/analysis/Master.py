@@ -943,55 +943,55 @@ class TrueParticleData(ParticleData):
 
     @property
     def nPi0(self) -> type:
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
-                + "'nPi0' for 'PDSP' ntuple type.")
+                + f"'nPi0' for {Ntuple_Type.SHOWER_MERGING} ntuple type.")
         self.LoadData("nPi0", "true_daughter_nPi0")
         return getattr(self, f"_{type(self).__name__}__nPi0")
 
     @property
     def nPiPlus(self) -> type:
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
-                + "'nPiPlus' for 'PDSP' ntuple type.")
+                + f"'nPiPlus' for {Ntuple_Type.SHOWER_MERGING} ntuple type.")
         self.LoadData("nPiPlus", "true_daughter_nPiPlus")
         return getattr(self, f"_{type(self).__name__}__nPiPlus")
 
     @property
     def nPiMinus(self) -> type:
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
-                + "'nPiMinus' for 'PDSP' ntuple type.")
+                + f"'nPiMinus' for {Ntuple_Type.SHOWER_MERGING} ntuple type.")
         self.LoadData("nPiMinus", "true_daughter_nPiMinus")
         return getattr(self, f"_{type(self).__name__}__nPiMinus")
 
     @property
     def nProton(self) -> type:
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
-                + "'nProton' for 'PDSP' ntuple type.")
+                + f"'nProton' for {Ntuple_Type.SHOWER_MERGING} ntuple type.")
         self.LoadData("nProton", "true_daughter_nProton")
         return getattr(self, f"_{type(self).__name__}__nProton")
 
     @property
     def nNeutron(self) -> type:
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
-                + "'nNeutron' for 'PDSP' ntuple type.")
+                + f"'nNeutron' for {Ntuple_Type.SHOWER_MERGING} ntuple type.")
         self.LoadData("nNeutron", "true_daughter_nNeutron")
         return getattr(self, f"_{type(self).__name__}__nNeutron")
 
     @property
     def nNucleus(self) -> type:
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
-                + "'nNucleus' for 'PDSP' ntuple type.")
+                + f"'nNucleus' for {Ntuple_Type.SHOWER_MERGING} ntuple type.")
         self.LoadData("nNucleus", "true_daughter_nNucleus")
         return getattr(self, f"_{type(self).__name__}__nNucleus")
 
