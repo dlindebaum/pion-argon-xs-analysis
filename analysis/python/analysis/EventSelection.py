@@ -61,6 +61,7 @@ def filter_beam_slice(events: Master.Data):
 
 def load_and_cut_data(
         path,
+        ntuple_type = "PDSPAnalyser",
         batch_size=-1, batch_start=-1,
         beam_selection=True,
         valid_momenta=True,
@@ -88,6 +89,8 @@ def load_and_cut_data(
     ----------
     path : str
         Path to the .root file to be loaded.
+    ntuple_type : str {"PDSPAnalyser", "shower_merging"}
+        What type of ntuple loaded. Default is PDSPAnalyser.
     batch_size : int, optional
         Sets how many events to read. Default is -1 (all).
     batch_start : int, optional
@@ -110,6 +113,7 @@ def load_and_cut_data(
     """
     # TODO add wther truth or MC to names (+ generally better names etc.)
     events = Master.Data(path,
+                         nTuple_type=ntuple_type,
                          nEvents=batch_size,
                          start=batch_start)
     # Apply cuts:
@@ -251,6 +255,37 @@ def count_diphoton_decays(events, beam_daughters=True):
     return counts
 
 
+def count_all_pi0s(events, beam_daughters=True):
+    """
+    Returns the number of truth pi0 particles which decay to yy in each
+    event in `events`.
+
+    pi0 -> yy
+
+    Parameters
+    ----------
+    events : Data
+        Events in which to count pi0 occurances.
+    beam_daughters : boolean, optional
+        Whether to only accept a pi0 if it is a daughter of the beam
+        particle. Default is True.
+
+    Returns
+    -------
+    counts : ak.Array
+        Array containing the number of occurances of pi0 -> yy for each
+        event.
+    """
+    if beam_daughters:
+        beam_daughter_filter = events.trueParticles.mother == 1
+    else:
+        beam_daughter_filter = True
+    beam_cadidate_pi0s = events.trueParticles.number[np.logical_and(
+        beam_daughter_filter,
+        events.trueParticles.pdg == 111)]
+    return ak.sum(beam_cadidate_pi0s, axis=-1)
+
+
 def count_non_beam_charged_pi(events, beam_daughters=True):
     """
     Returns the number of truth pi+ particles event in `events`.
@@ -279,6 +314,132 @@ def count_non_beam_charged_pi(events, beam_daughters=True):
     return ak.sum(non_beam_pi_mask, axis=-1)
 
 
+def count_pi0_candidates(
+        events,
+        mass_cut=(50, 250),
+        opening_angle_deg=(10, 80),
+        exactly_two_photons=False,
+        shower_pairs=None,
+        photon_mask=None,
+        pair_coords=None):
+    """
+    Returns the number of truth pi0 particles which decay to yy in each
+    event in `events`.
+
+    pi0 -> yy
+
+    NOTE exactly_two_photons False is not properly implemented yet.
+    Need to smartly work out the maximal set of passing pairs.
+
+    Parameters
+    ----------
+    events : Data
+        Events in which to count pi0 occurances.
+    beam_daughters : boolean, optional
+        Whether to only accept a pi0 if it is a daughter of the beam
+        particle. Default is True.
+
+    Returns
+    -------
+    counts : ak.Array
+        Array containing the number of occurances of pi0 -> yy for each
+        event.
+    """
+    if shower_pairs is None:
+        if pair_coords is not None:
+            shower_pairs = Master.ShowerPairs(events,
+                                              pair_coords=pair_coords)
+        elif photon_mask is not None:
+            shower_pairs = Master.ShowerPairs(events,
+                                              shower_pair_mask=photon_mask)
+        else:
+            shower_pairs = Master.ShowerPairs(
+                events,
+                shower_pair_mask=PFOSelection.InitialPi0PhotonSelection(
+                    events))
+    
+    pass_angle = np.logical_and(
+        shower_pairs.reco_angle > opening_angle_deg[0]*np.pi/180,
+        shower_pairs.reco_angle < opening_angle_deg[1]*np.pi/180)
+    pass_mass = np.logical_and(
+        shower_pairs.reco_mass > mass_cut[0],
+        shower_pairs.reco_mass < mass_cut[1])
+
+    full_pass = np.logical_and(pass_angle, pass_mass)
+
+    if exactly_two_photons:
+        number = np.logical_and(
+            ak.sum(full_pass, axis=1),
+            ak.num(shower_pairs.pairs['0']) == 1)
+        counts = ak.values_astype(number, int)
+    else:
+        counts = ak.sum(full_pass, axis=1)
+    return counts
+
+
+def count_charged_pi_candidates(
+        events,
+        track_cut=None,
+        n_hits_cut=None,
+        dEdX_cuts=None,
+        min_dEdX=None,
+        max_dEdX=None,
+        energy_cut=None,
+        reco_pi_mask=None):
+    """
+    Returns the number of pi+ particles identified from reconstructed
+    PFOs for each event in `events`.
+
+    Parameters
+    ----------
+    events : Data
+        Events in which to count pi+ occurances.
+    track_cut : float, optional
+        Track score required for pi+ candidates. If not set, the
+        default value in the `PFOSelection` module is used.
+    n_hits_cut : int, optional
+        Minimum number of hits required in pi+ candidates. If not set,
+        the default value in the `PFOSelection` module is used.
+    dEdX_cuts : tuple (lower, upper), optional
+        Lower and upper bounds for energy deposition rate required by
+        pi+ candidates. If not set, the default values in the
+        `PFOSelection` module is used.
+    min_dEdX : float, optional
+        Minimum energy deposition rate required by pi+ candidates. If
+        not set, the default value in the `PFOSelection` module is 
+        used. Overwritten by `dEdX_cuts` if specified.
+    max_dEdX : float, optional
+        Maximum energy deposition rate required by pi+ candidates. If
+        not set, the default value in the `PFOSelection` module is 
+        used. Overwritten by `dEdX_cuts` if specified.
+
+    Returns
+    -------
+    counts : ak.Array
+        Array containing the number of pi+ particles for each event.
+    """
+    if reco_pi_mask is None:
+        selection_kwargs = {}
+        if track_cut is not None:
+            selection_kwargs.update({"track_cut":track_cut})
+        if n_hits_cut is not None:
+            selection_kwargs.update({"n_hits_cut":n_hits_cut})
+        if dEdX_cuts is not None:
+            min_dEdX = dEdX_cuts[0]
+            max_dEdX = dEdX_cuts[1]
+        if min_dEdX is not None:
+            selection_kwargs.update({"min_dEdX":min_dEdX})
+        if max_dEdX is not None:
+            selection_kwargs.update({"max_dEdX":max_dEdX})
+        reco_pi_mask = PFOSelection.DaughterPiPlusSelection(
+            events, **selection_kwargs)
+        if energy_cut is not None:
+            reco_pi_mask = np.logical_and(
+                reco_pi_mask,
+                events.recoParticles.energy > energy_cut)
+    return ak.sum(reco_pi_mask, axis=-1)
+
+
 def _generate_selection(cut):
     if isinstance(cut, tuple):
         if len(cut) == 1:
@@ -294,7 +455,14 @@ def _generate_selection(cut):
         return lambda count: count == cut
 
 
-def generate_truth_tags(events, n_pi0, n_pi_charged, beam_daighters=True):
+def generate_truth_tags(
+        events : Master.Data,
+        n_pi0,
+        n_pi_charged,
+        beam_daughters=True,
+        only_diphoton=True,
+        pi0_count=None,
+        pi_charged_count=None):
     """
     Generates a True/False tag for each event in `events` indicating
     whether they pass the truth level requirements of `n_pi0` and
@@ -320,6 +488,21 @@ def generate_truth_tags(events, n_pi0, n_pi_charged, beam_daighters=True):
     beam_daughters : boolean, optional
         Whether to only accept a PFO if it is a daughter of the beam
         particle. Default is True.
+    only_diphoton : boolean, optional
+        Whether to only count a pi0 is it decay into two photons.
+        Default is True.
+    pi0_count : ak.Array, None, optional
+        Pre-created array of counts of pi0s in `events`. Computation
+        time can be reduce if running multiple tags by creating this
+        first using `EventSelection.count_diphoton_decays`, and passing
+        the result here. If None, the counts will be calculated within
+        this function. Default is None.
+    pi_charged_count : ak.Array, None, optional
+        Pre-created array of counts of pi+s in `events`. Computation
+        time can be reduce if running multiple tags by creating this
+        first using `EventSelection.count_non_beam_charged_pi`, and
+        passing the result here. If None, the counts will be calculated
+        within this function. Default is None.
 
     Returns
     -------
@@ -329,8 +512,94 @@ def generate_truth_tags(events, n_pi0, n_pi_charged, beam_daighters=True):
     """
     pi0_cut: function = _generate_selection(n_pi0)
     pi_charged_cut: function = _generate_selection(n_pi_charged)
-    pi0_count = count_diphoton_decays(events)
-    pi_charged_count = count_non_beam_charged_pi(events)
+    if pi0_count is None:
+        if only_diphoton:
+            pi0_count = count_diphoton_decays(
+                events,
+                beam_daughters=beam_daughters)
+        else:
+            if not beam_daughters:
+                count_all_pi0s(events, beam_daughters=beam_daughters)
+            else:
+                try:
+                    pi0_count = events.trueParticles.nPi0
+                except(AttributeError):
+                    count_all_pi0s(events, beam_daughters=beam_daughters)
+    if pi_charged_count is None:
+        if not beam_daughters:
+            pi_charged_count = count_non_beam_charged_pi(
+                events,
+                beam_daughters=beam_daughters)
+        else:
+            try:
+                pi_charged_count = events.trueParticles.nPiPlus
+            except(AttributeError):
+                pi_charged_count = count_non_beam_charged_pi(
+                    events,
+                    beam_daughters=beam_daughters)
+    return np.logical_and(pi0_cut(pi0_count),
+                          pi_charged_cut(pi_charged_count))
+
+
+def generate_reco_tags(
+    events : Master.Data,
+    n_pi0,
+    n_pi_charged,
+    exactly_two_photons=False,
+    pi0_count=None,
+    pi_charged_count=None):
+    """
+    Generates a True/False tag for each event in `events` indicating
+    whether they pass the truth level requirements of `n_pi0` and
+    `n_pi_charged`.
+
+    `n_pi0` and `n_pi_charged` may be integers, tuples, or None. If
+    integer, only the specified number of occurances is selected. If a
+    tuple of length 1, any events with occurances greater than or equal
+    to the value in the tupled are selected. If a tuple of two values, 
+    he number of occurances must be equal to or between the values in
+    the tuple. If None, no cut will be applied.
+
+    Parameters
+    ----------
+    events : Data
+        Events to be tagged.
+    n_pi0 : None, int, or tuple
+        Required number of pi0s that decay into two photons in an event
+        for the event to pass the tag.
+    n_pi_charged : None, int, or tuple
+        Required number of non-beam pi+ particles in an event for the
+        event to pass the tag.
+    exactly_two_photons : boolean, optional
+        Whether or not to only count pi0 candiadtes if there are
+        exactly 2 shower candidates in a event. This limits the count
+        to 1 per event. Default is False.
+    pi0_count : ak.Array, None, optional
+        Pre-created array of counts of pi0s in `events`. Computation
+        time can be reduce if running multiple tags by creating this
+        first using `EventSelection.count_diphoton_decays`, and passing
+        the result here. If None, the counts will be calculated within
+        this function. Default is None.
+    pi_charged_count : ak.Array, None, optional
+        Pre-created array of counts of pi+s in `events`. Computation
+        time can be reduce if running multiple tags by creating this
+        first using `EventSelection.count_non_beam_charged_pi`, and
+        passing the result here. If None, the counts will be calculated
+        within this function. Default is None.
+
+    Returns
+    -------
+    tag : ak.Array
+        Array matching the number of events in `events` containing a
+        boolean of whether each event is selected by the tag.
+    """
+    pi0_cut: function = _generate_selection(n_pi0)
+    pi_charged_cut: function = _generate_selection(n_pi_charged)
+    if pi0_count is None:
+        pi0_count = count_pi0_candidates(
+            events, exactly_two_photons=exactly_two_photons)
+    if pi_charged_count is None:
+        pi_charged_count = count_charged_pi_candidates(events)
     return np.logical_and(pi0_cut(pi0_count),
                           pi_charged_cut(pi_charged_count))
 

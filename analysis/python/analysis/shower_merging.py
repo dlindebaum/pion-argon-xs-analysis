@@ -10,9 +10,9 @@ from dataclasses import dataclass
 
 import awkward as ak
 import matplotlib.pyplot as plt
+from matplotlib.cm import get_cmap
 import numpy as np
 import pandas as pd
-from rich import print
 from tabulate import tabulate
 
 from python.analysis import Master, Plots, vector
@@ -20,12 +20,14 @@ from python.analysis import LegacyBeamParticleSelection, BeamParticleSelection, 
 from python.analysis.EventSelection import generate_truth_tags
 
 
-def SetPlotStyle():
+def SetPlotStyle(extend_colors : bool = False):
     plt.style.use('ggplot')
     plt.rcParams.update({'patch.linewidth': 1})
     plt.rcParams.update({'font.size': 10})
     plt.rcParams.update({"axes.titlecolor" : "#555555"})
     plt.rcParams.update({"axes.titlesize" : 12})
+    if extend_colors:
+        plt.rcParams.update({"axes.prop_cycle" : plt.cycler("color", get_cmap("tab20").colors)})
 
 
 @dataclass(slots = True)
@@ -743,7 +745,7 @@ def Selection(events : Master.Data, event_type : str, pfo_type : str, veto_daugh
         case "cheated":
             mask, event_table = LegacyBeamParticleSelection.CreateLegacyBeamParticleSelection(events, False)
         case "reco":
-            mask, event_table = BeamParticleSelection.CreateDefaultSelection(events, False, True)
+            mask, event_table = BeamParticleSelection.CreateDefaultSelection(events, None, False, True)
         case _:
             raise Exception(f"event selection type {event_type} not understood.")
     events.Filter([mask], [mask])
@@ -752,15 +754,16 @@ def Selection(events : Master.Data, event_type : str, pfo_type : str, veto_daugh
     events.Filter([mask])
 
     if pfo_type == "reco":
-        
-        mask, daughter_pi_candidate_table = PFOSelection.DaughterPiPlusSelection(events, verbose = False, return_table = True)
-        if veto_daughter_pip:
-            event_mask = ak.num(mask[mask]) == 0 # exclude all events which have a pi+ in he final state
-            events.Filter([event_mask], [event_mask])
 
         mask, photon_candidate_table = PFOSelection.InitialPi0PhotonSelection(events, verbose = False, return_table = True)
         if select_photon_candidates:
             event_mask = ak.num(mask[mask]) == 2 # select events with 2 photon candidates only #TODO handle > 2 candidates
+            events.Filter([event_mask], [event_mask])
+
+        #* veto_daughter_pip can take a long time and a lot of resources, so do this cut after the pi0 photon selection
+        mask, daughter_pi_candidate_table = PFOSelection.DaughterPiPlusSelection(events, verbose = False, return_table = True)
+        if veto_daughter_pip:
+            event_mask = ak.num(mask[mask]) == 0 # exclude all events which have a pi+ in the final state
             events.Filter([event_mask], [event_mask])
 
     if pfo_type == "reco":
@@ -991,5 +994,5 @@ def GenerateTruthTags(events : Master.Data = None) -> Tags:
     tags["$0\pi^{0} + 0\pi^{+}$"     ]          = Tag("$0\pi^{0} + 0\pi^{+}$"              , "background",       "#777777", generate_truth_tags(events, 0, 0) if events is not None else None, 1)
     tags["$1\pi^{0} + \geq 1\pi^{+}$"]          = Tag("$1\pi^{0} + \geq 1\pi^{+}$"         , "sideband",         "#E24A33", generate_truth_tags(events, 1, (1,)) if events is not None else None, 2)
     tags["$0\pi^{0} + \geq 1\pi^{+}$"]          = Tag("$0\pi^{0} + \geq 1\pi^{+}$"         , "sideband",         "#988ED5", generate_truth_tags(events, 0, (1,)) if events is not None else None, 3)
-    tags["$\greater 1\pi^{0} + \geq 0\pi^{+}$"] = Tag("$\greater 1\pi^{0} + \geq 0\pi^{+}$", "sideband",         "#348ABD", generate_truth_tags(events, (2,), (0,)) if events is not None else None, 4)
+    tags["$\greater 1\pi^{0} + \geq 0\pi^{+}$"] = Tag("$> 1\pi^{0} + \geq 0\pi^{+}$", "sideband",         "#348ABD", generate_truth_tags(events, (2,), (0,)) if events is not None else None, 4)
     return tags

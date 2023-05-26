@@ -33,10 +33,10 @@ def main():
     t_q = events.trueParticles.CalculatePhotonPairProperties()
 
     # get nTuples not automatically retrieved (set as class variables so filtering is possible)
-    events.recoParticles.pandoraID = events.io.Get("pandoraTag")
-    events.recoParticles.spacePoints = ak.zip({"x" : events.io.Get("reco_daughter_allShower_spacePointX"), 
-                                            "y" : events.io.Get("reco_daughter_allShower_spacePointY"),
-                                            "z" : events.io.Get("reco_daughter_allShower_spacePointZ")})
+    events.recoParticles.pandoraID = events.io.LoadData("pandoraTag")
+    events.recoParticles.spacePoints = ak.zip({"x" : events.io.LoadData("reco_daughter_allShower_spacePointX"), 
+                                            "y" : events.io.LoadData("reco_daughter_allShower_spacePointY"),
+                                            "z" : events.io.LoadData("reco_daughter_allShower_spacePointZ")})
 
     # apply filters before making event displays if needed
     events.ApplyBeamFilter()

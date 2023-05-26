@@ -241,63 +241,72 @@ def FormatBarPlots(d : ak.Array) -> ak.Array:
     labels = [pdg_list] * len(counts)
     return ak.concatenate([ak.unflatten(labels, 1), ak.unflatten(counts, 1)], 1)
 
+@Processing.log_process
+def run(i, file, n_events, start, selected_events, args):
+    events = Master.Data(file, nEvents = n_events, start = start) # load data
 
-def run(i, file, n_events, start, args):
-    with open(f"out_{i}.log", "w") as sys.stdout, open(f"out_{i}.log", "w") as sys.stderr:
-        events = Master.Data(file, nEvents = n_events, start = start) # load data
-
-        #* apply either cheated or reco selection
-        match args["selection_type"]:
-            case "cheated":
-                events_table, pfo_table = shower_merging.Selection(events, args["selection_type"], args["selection_type"]) # apply selection
-                start_showers, to_merge = shower_merging.SplitSample(events) # split sample into pi0 showers and PFOs to merge
-            case "reco":
-                events_table, pfo_table, photon_candidate_table, pip_candidate_table = shower_merging.Selection(events, args["selection_type"], args["selection_type"], veto_daughter_pip = False, select_photon_candidates = False)
-
-                n_pip_candidates = ak.num(events.recoParticles.number[shower_merging.PFOSelection.DaughterPiPlusSelection(events)]) # get pi+ candidates
-                events_mask = n_pip_candidates == 0
-                daughter_pip_event_counts = {"before" : ak.count(events_mask), "after" : ak.sum(events_mask)}
-                events.Filter([events_mask], [events_mask])
-                n_photon_candidates = ak.num(events.recoParticles.number[shower_merging.PFOSelection.InitialPi0PhotonSelection(events)]) # get pi0 shower candidates
-
-                tags = shower_merging.GenerateTruthTags(events)
-
-                #* select events which have exactly 2 photon candidates, will deal with > 2 later
-                photon_candidates = n_photon_candidates == 2
-                events.Filter([photon_candidates], [photon_candidates])
-
-                photon_candidate_tags = shower_merging.GenerateTruthTags()
-                for k in tags:
-                    mask = ak.Array(tags[k].mask)
-                    photon_candidate_tags[k].mask = mask[photon_candidates] # apply photon candidate masks to the tags
-
-                start_showers, to_merge = shower_merging.SplitSampleReco(events)
-            case _:
-                raise Exception(f"event selection type {args['selection_type']} not understood.")
+    #* apply either cheated or reco selection
+    match args["selection_type"]:
+        case "cheated":
+            events_table, pfo_table = shower_merging.Selection(events, args["selection_type"], args["selection_type"]) # apply selection
+            start_showers, to_merge = shower_merging.SplitSample(events) # split sample into pi0 showers and PFOs to merge
+        case "reco":
+            events_table, pfo_table, photon_candidate_table, pip_candidate_table = shower_merging.Selection(events, args["selection_type"], args["selection_type"], veto_daughter_pip = False, select_photon_candidates = False)
 
 
-        #* Plots for the candidate events only i.e. where nphoton candidates == 2
-        start_showers_all = np.logical_or(*start_showers)
-        _, background, signal_all = shower_merging.SignalBackground(events, start_showers, to_merge)
+            #* select events with 0 daughter pi+ candidates
+            n_pip_candidates = ak.num(events.recoParticles.number[shower_merging.PFOSelection.DaughterPiPlusSelection(events)])
+            events_mask = n_pip_candidates == 0
+            daughter_pip_event_counts = {"before" : ak.count(events_mask), "after" : ak.sum(events_mask)}
+            events.Filter([events_mask], [events_mask])
 
-        #* produce data for plotting
-        data = BasicQuantities(events, start_showers_all, to_merge, signal_all, background)
+            tags = shower_merging.GenerateTruthTags(events)
 
-        output = {
-            "events_table" : events_table,
-            "pfo_table" : pfo_table,
-            "data" : data
-        }
-        if args["selection_type"] == "reco":
-            tagged_data = BasicTaggedQuantities(events, photon_candidate_tags, start_showers_all, signal_all, background)
+            #* select events which have exactly 2 photon candidates, will deal with > 2 later
+            n_photon_candidates = ak.num(events.recoParticles.number[shower_merging.PFOSelection.InitialPi0PhotonSelection(events)]) # get pi0 shower candidates
+            photon_candidates = n_photon_candidates == 2
+            events.Filter([photon_candidates], [photon_candidates])
 
-            output["daughter_pip_event_counts"] = daughter_pip_event_counts
-            output["pip_candidate_table"] = pip_candidate_table
-            output["photon_candidate_table"] = photon_candidate_table
-            output["n_photon_candidates"] = n_photon_candidates
-            output["tags"] = tags #TODO also do for cheated selection
-            output["photon_candidate_tags"] = photon_candidate_tags #TODO also do for cheated selection
-            output["tagged_data"] = tagged_data
+            # n_photon_candidates = ak.num(events.recoParticles.number[shower_merging.PFOSelection.InitialPi0PhotonSelection(events)]) # get pi0 shower candidates
+            # photon_candidates = n_photon_candidates == 2
+            # n_photon_candidates = n_photon_candidates[events_mask]
+            # photon_candidates = photon_candidates[events_mask]
+
+            photon_candidate_tags = shower_merging.GenerateTruthTags()
+            for k in tags:
+                mask = ak.Array(tags[k].mask)
+                photon_candidate_tags[k].mask = mask[photon_candidates] # apply photon candidate masks to the tags
+
+            start_showers, to_merge = shower_merging.SplitSampleReco(events)
+        case _:
+            raise Exception(f"event selection type {args['selection_type']} not understood.")
+
+
+    #* Plots for the candidate events only i.e. where nphoton candidates == 2
+    start_showers_all = np.logical_or(*start_showers)
+    _, background, signal_all = shower_merging.SignalBackground(events, start_showers, to_merge)
+
+    #* produce data for plotting
+    data = BasicQuantities(events, start_showers_all, to_merge, signal_all, background)
+
+    output = {
+        "events_table" : events_table,
+        "pfo_table" : pfo_table,
+        "data" : data
+    }
+    if args["selection_type"] == "reco":
+        tagged_data = BasicTaggedQuantities(events, photon_candidate_tags, start_showers_all, signal_all, background)
+
+        output["daughter_pip_event_counts"] = daughter_pip_event_counts
+        output["pip_candidate_table"] = pip_candidate_table
+        output["photon_candidate_table"] = photon_candidate_table
+        output["n_photon_candidates"] = n_photon_candidates
+        output["tags"] = tags #TODO also do for cheated selection
+        output["photon_candidate_tags"] = photon_candidate_tags #TODO also do for cheated selection
+        output["tagged_data"] = tagged_data
+    
+    events.Save_Selected_Event_indices(args["out"] + file.split("/")[-1].split(".")[0] + "_" + str(i) + "_selected_events.hdf5") # so we don't need to redo the full selection in subsequent analyses
+
     return output
 
 @Master.timer
@@ -318,29 +327,36 @@ def main(args):
     tagged_data = {}
 
     for o in output:
-        all_tags = o["tags"]
-        for k, t in all_tags.items():
-            if tags[k].mask is None:
-                tags[k].mask = t.mask
-            else:
-                tags[k].mask = ak.concatenate([tags[k].mask, t.mask])
-
-        pi0_candidate_tags = o["photon_candidate_tags"]
-        for k, t in pi0_candidate_tags.items():
-            if selected_tags[k].mask is None:
-                selected_tags[k].mask = t.mask
-            else:
-                selected_tags[k].mask = ak.concatenate([selected_tags[k].mask, t.mask])
-
-        if "daughter_pip_event_counts" in o.keys():
-            for k in o["daughter_pip_event_counts"]:
-                if k in daughter_pip_event_counts:
-                    daughter_pip_event_counts[k] += o["daughter_pip_event_counts"][k]
+        if args.selection_type == "reco":
+            all_tags = o["tags"]
+            for k, t in all_tags.items():
+                if tags[k].mask is None:
+                    tags[k].mask = t.mask
                 else:
-                    daughter_pip_event_counts[k] = o["daughter_pip_event_counts"][k]
+                    tags[k].mask = ak.concatenate([tags[k].mask, t.mask])
 
-        if "n_photon_candidates" in o.keys():
-            n_photon_candidates = ak.concatenate([n_photon_candidates, o["n_photon_candidates"]])
+            pi0_candidate_tags = o["photon_candidate_tags"]
+            for k, t in pi0_candidate_tags.items():
+                if selected_tags[k].mask is None:
+                    selected_tags[k].mask = t.mask
+                else:
+                    selected_tags[k].mask = ak.concatenate([selected_tags[k].mask, t.mask])
+
+            if "daughter_pip_event_counts" in o.keys():
+                for k in o["daughter_pip_event_counts"]:
+                    if k in daughter_pip_event_counts:
+                        daughter_pip_event_counts[k] += o["daughter_pip_event_counts"][k]
+                    else:
+                        daughter_pip_event_counts[k] = o["daughter_pip_event_counts"][k]
+
+            if "n_photon_candidates" in o.keys():
+                n_photon_candidates = ak.concatenate([n_photon_candidates, o["n_photon_candidates"]])
+
+            for k, v in o["tagged_data"].items():
+                if k in tagged_data:
+                    tagged_data[k] = ak.concatenate([tagged_data[k], v], axis = -1)
+                else:
+                    tagged_data[k] = ak.Array(v)
 
         for k, v in o["data"].items():
             if k in data:
@@ -348,15 +364,10 @@ def main(args):
             else:
                 data[k] = ak.Array(v)
 
-        for k, v in o["tagged_data"].items():
-            if k in tagged_data:
-                tagged_data[k] = ak.concatenate([tagged_data[k], v], axis = -1)
-            else:
-                tagged_data[k] = ak.Array(v)
 
-
-    tagged_data["pdg"] = ak.to_numpy(FormatBarPlots(tagged_data["pdg"]))
-    tagged_data["mother_pdg"] = ak.to_numpy(FormatBarPlots(tagged_data["mother_pdg"]))
+    if args.selection_type == "reco":
+        tagged_data["pdg"] = ak.to_numpy(FormatBarPlots(tagged_data["pdg"]))
+        tagged_data["mother_pdg"] = ak.to_numpy(FormatBarPlots(tagged_data["mother_pdg"]))
 
     #* merge and save tables
     MergeTables([o["events_table"] for o in output]).to_latex(args.out + "event_selection.tex")
@@ -371,10 +382,10 @@ def main(args):
     pd.DataFrame(daughter_pip_event_counts, index = [0]).to_latex(args.out + "daughter_pip_event_counts.tex")
 
     #* make plots
-    MakeInitialTaggingPlots(tags, n_photon_candidates, args.out + "basic_quantities/tagged/") # plots of the event topology
     MakePlots(data, args.out + "basic_quantities/")
 
     if args.selection_type == "reco":
+        MakeInitialTaggingPlots(tags, n_photon_candidates, args.out + "basic_quantities/tagged/") # plots of the event topology
         MakePlotsTagged(tagged_data, selected_tags, args.out + "basic_quantities/tagged/")
 
     rprint(f"plots and tables saved to: {args.out}")
