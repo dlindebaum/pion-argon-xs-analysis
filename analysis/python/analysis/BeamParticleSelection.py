@@ -17,17 +17,33 @@ from python.analysis.PFOSelection import Median
 from python.analysis.SelectionTools import *
 
 @CountsWrapper
-def PiBeamSelection(events: Data) -> ak.Array:
+def PiBeamSelection(events: Data, use_beam_inst : bool = False) -> ak.Array:
     """ Pi+ beam particle selection. For MC only.
 
     Args:
         events (Data): events to study.
+        use_beam_inst (bool): use beam instrumentation for PID (data)
 
     Returns:
         ak.Array: boolean mask.
     """
-    # return both 211 and -13 as you can't distinguish between pi+ and mu+ in data
-    return (events.trueParticlesBT.beam_pdg == 211) | (events.trueParticlesBT.beam_pdg == -13)
+    def compare_beam_pdg(pdg : int):
+        return ak.fill_none(ak.pad_none(events.recoParticles.beam_inst_PDG_candidates, 1, -1), -1, -1) == pdg
+
+
+    if use_beam_inst:
+        mask = events.recoParticles.beam_inst_valid
+        mask = mask & (events.recoParticles.beam_inst_trigger != 8)
+        mask = mask & (events.recoParticles.beam_inst_nTracks == 1) & (events.recoParticles.beam_inst_nMomenta == 1)
+        # 13 is used for the mu+ pdg in the beam instrumentation.
+        mask = mask & ak.any(compare_beam_pdg(211) | compare_beam_pdg(13), axis = -1)
+        mask = mask & events.recoParticles.reco_reconstructable_beam_event
+    else:
+        # return both 211 and -13 as you can't distinguish between pi+ and mu+ in data
+        beam_pdg = ak.flatten(events.trueParticles.pdg[events.trueParticles.number == 1])
+        # mask = (events.trueParticlesBT.beam_pdg == 211) | (events.trueParticlesBT.beam_pdg == -13)
+        mask = (beam_pdg == 211) | (beam_pdg == 13) | (beam_pdg == -13)
+    return mask
 
 
 @CountsWrapper
@@ -213,12 +229,16 @@ def MedianDEdXCut(events: Data) -> ak.Array:
     return median < 2.4
 
 
-def CreateDefaultSelection(events: Data, beam_quality_fits : dict = None, verbose: bool = True, return_table: bool = True) -> ak.Array:
+def CreateDefaultSelection(events: Data, use_beam_inst : bool = False, beam_quality_fits : dict = None, verbose: bool = True, return_table: bool = True) -> ak.Array:
     """ Create boolean mask for default MC beam particle selection
         (includes pi+ beam selection for now as well).
 
     Args:
         events (Data): events to study
+        use_beam_inst (bool) : use beam instrumentation for particle_id
+        beam_quality_fits (dict) : fit parameters for beam quality cuts
+        verbose (bool) : verbose printout
+        return_tables (bool) : return tables with efficiencies
 
     Returns:
         ak.Array: boolean mask
@@ -233,7 +253,7 @@ def CreateDefaultSelection(events: Data, beam_quality_fits : dict = None, verbos
         MedianDEdXCut
     ]
     arguments = [
-        {},
+        {"use_beam_inst" : use_beam_inst},
         {},
         {},
         {},

@@ -397,7 +397,7 @@ class Data:
                 self.trueParticlesBT.events = self
         else:
             # copy filtered attributes into new instance
-            filtered = Data()
+            filtered = Data(nTuple_type = self.nTuple_type)
             filtered.filename = self.filename
             filtered.nEvents = self.nEvents
             filtered.start = self.start
@@ -858,7 +858,7 @@ class TrueParticleData(ParticleData):
             grand_daughter = self.events.io.Get("true_beam_Pi0_decay_parID")
             mother = ak.concatenate([ak.unflatten(beam, 1, -1), daughter, grand_daughter], -1)
             setattr(self, var_name, mother)
-            self.FilterVariable("mother")
+            self.FilterVariable(f"_{type(self).__name__}__mother")
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             self.LoadData("mother", "g4_mother")
         return getattr(self, var_name)
@@ -894,7 +894,7 @@ class TrueParticleData(ParticleData):
                 else:
                     mass = m
             setattr(self, f"_{type(self).__name__}__mass", mass)
-            self.FilterVariable("mass")
+            self.FilterVariable(f"_{type(self).__name__}__mass")
         return getattr(self, f"_{type(self).__name__}__mass")
 
     @property
@@ -904,7 +904,7 @@ class TrueParticleData(ParticleData):
         if self.events.nTuple_type == Ntuple_Type.PDSP:
             e = (vector.magnitude(self.momentum) ** 2 - self.mass ** 2) ** 0.5
             setattr(self, f"_{type(self).__name__}__energy", e)
-            self.FilterVariable("energy")
+            self.FilterVariable(f"_{type(self).__name__}__energy")
         return getattr(self, f"_{type(self).__name__}__energy")
 
     @property
@@ -943,55 +943,55 @@ class TrueParticleData(ParticleData):
 
     @property
     def nPi0(self) -> type:
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
-                + "'nPi0' for 'PDSP' ntuple type.")
+                + f"'nPi0' for {Ntuple_Type.SHOWER_MERGING} ntuple type.")
         self.LoadData("nPi0", "true_daughter_nPi0")
         return getattr(self, f"_{type(self).__name__}__nPi0")
 
     @property
     def nPiPlus(self) -> type:
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
-                + "'nPiPlus' for 'PDSP' ntuple type.")
+                + f"'nPiPlus' for {Ntuple_Type.SHOWER_MERGING} ntuple type.")
         self.LoadData("nPiPlus", "true_daughter_nPiPlus")
         return getattr(self, f"_{type(self).__name__}__nPiPlus")
 
     @property
     def nPiMinus(self) -> type:
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
-                + "'nPiMinus' for 'PDSP' ntuple type.")
+                + f"'nPiMinus' for {Ntuple_Type.SHOWER_MERGING} ntuple type.")
         self.LoadData("nPiMinus", "true_daughter_nPiMinus")
         return getattr(self, f"_{type(self).__name__}__nPiMinus")
 
     @property
     def nProton(self) -> type:
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
-                + "'nProton' for 'PDSP' ntuple type.")
+                + f"'nProton' for {Ntuple_Type.SHOWER_MERGING} ntuple type.")
         self.LoadData("nProton", "true_daughter_nProton")
         return getattr(self, f"_{type(self).__name__}__nProton")
 
     @property
     def nNeutron(self) -> type:
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
-                + "'nNeutron' for 'PDSP' ntuple type.")
+                + f"'nNeutron' for {Ntuple_Type.SHOWER_MERGING} ntuple type.")
         self.LoadData("nNeutron", "true_daughter_nNeutron")
         return getattr(self, f"_{type(self).__name__}__nNeutron")
 
     @property
     def nNucleus(self) -> type:
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
-                + "'nNucleus' for 'PDSP' ntuple type.")
+                + f"'nNucleus' for {Ntuple_Type.SHOWER_MERGING} ntuple type.")
         self.LoadData("nNucleus", "true_daughter_nNucleus")
         return getattr(self, f"_{type(self).__name__}__nNucleus")
 
@@ -1188,6 +1188,36 @@ class RecoParticleData(ParticleData):
     def beam_dEdX(self) -> ak.Array:
         self.LoadData("beam_dEdX", "reco_beam_calibrated_dEdX_SCE")
         return getattr(self, f"_{type(self).__name__}__beam_dEdX")
+
+    @property
+    def reco_reconstructable_beam_event(self) -> ak.Array:
+        self.LoadData("reco_reconstructable_beam_event", "reco_reconstructable_beam_event")
+        return getattr(self, f"_{type(self).__name__}__reco_reconstructable_beam_event")
+
+    @property
+    def beam_inst_valid(self) -> ak.Array:
+        self.LoadData("beam_inst_valid", "beam_inst_valid")
+        return getattr(self, f"_{type(self).__name__}__beam_inst_valid")
+
+    @property
+    def beam_inst_nTracks(self) -> ak.Array:
+        self.LoadData("beam_inst_nTracks", "beam_inst_nTracks")
+        return getattr(self, f"_{type(self).__name__}__beam_inst_nTracks")
+
+    @property
+    def beam_inst_nMomenta(self) -> ak.Array:
+        self.LoadData("beam_inst_nMomenta", "beam_inst_nMomenta")
+        return getattr(self, f"_{type(self).__name__}__beam_inst_nMomenta")
+
+    @property
+    def beam_inst_trigger(self) -> ak.Array:
+        self.LoadData("beam_inst_trigger", "beam_inst_trigger")
+        return getattr(self, f"_{type(self).__name__}__beam_inst_trigger")
+
+    @property
+    def beam_inst_PDG_candidates(self) -> ak.Array:
+        self.LoadData("beam_inst_PDG_candidates", "beam_inst_PDG_candidates")
+        return getattr(self, f"_{type(self).__name__}__beam_inst_PDG_candidates")
 
     @property
     def pandoraTag(self) -> ak.Array:
@@ -1540,7 +1570,8 @@ class TrueParticleDataBT(ParticleData):
     @property
     def energy(self) -> ak.Array:
         self.LoadData("energy", "reco_daughter_PFP_true_byHits_startE")
-        return getattr(self, f"_{type(self).__name__}__energy")
+        factor = 1000 if self.events.nTuple_type == Ntuple_Type.PDSP else 1
+        return factor * getattr(self, f"_{type(self).__name__}__energy")
 
     @property
     def energyByHits_uncorrected(self) -> ak.Array:
@@ -1864,7 +1895,11 @@ class ShowerPairs:
                 pair_coords = ak.argcombinations(
                     self.events.recoParticles.number, 2)
             self.pairs = pair_coords
-        self.SortByBacktrackedEnergy()
+        if ak.count(self.events.trueParticlesBT.energy) > 0:
+            self.SortByEnergy()
+        else:
+            print("no truth information found, sorting showers by reco energy instead")
+            self.SortByEnergy(backtracked = False)
         return
 
     @staticmethod
@@ -1874,14 +1909,20 @@ class ShowerPairs:
             mask))
         return ak.combinations(inverse_mask, 2)
 
-    def SortByBacktrackedEnergy(self):
-        """
-        Orders the argcombinations by the shower with higher
-        backtracked energy.
-        """
+    def SortByEnergy(self, backtracked : bool = True):
+        """ Orders the argcombinations by the shower with higher energy.
+
+        Args:
+            backtracked (bool, optional): sort by backtreacked energy, otherwise reco energy. Defaults to True.
+        """        
+        if backtracked:
+            pd = self.events.trueParticlesBT
+        else:
+            pd = self.events.recoParticles
+
         mask_0_leading = (
-            self.events.trueParticlesBT.energy[self.pairs['0']]
-            >= self.events.trueParticlesBT.energy[self.pairs['1']])
+            pd.energy[self.pairs['0']]
+            >= pd.energy[self.pairs['1']])
         mask_1_leading = np.logical_not(mask_0_leading)
         self.leading = (self.pairs['0'] * mask_0_leading
                         + self.pairs['1'] * mask_1_leading)

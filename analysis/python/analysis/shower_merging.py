@@ -6,7 +6,6 @@ Author: Shyam Bhuller
 Description: 
 """
 import warnings
-from dataclasses import dataclass
 
 import awkward as ak
 import matplotlib.pyplot as plt
@@ -15,9 +14,8 @@ import numpy as np
 import pandas as pd
 from tabulate import tabulate
 
-from python.analysis import Master, Plots, vector
+from python.analysis import Master, Plots, vector, Tags
 from python.analysis import LegacyBeamParticleSelection, BeamParticleSelection, PFOSelection
-from python.analysis.EventSelection import generate_truth_tags
 
 
 def SetPlotStyle(extend_colors : bool = False):
@@ -28,15 +26,6 @@ def SetPlotStyle(extend_colors : bool = False):
     plt.rcParams.update({"axes.titlesize" : 12})
     if extend_colors:
         plt.rcParams.update({"axes.prop_cycle" : plt.cycler("color", get_cmap("tab20").colors)})
-
-
-@dataclass(slots = True)
-class Tag:
-    name : str = ""
-    name_simple : str = ""
-    colour : str = ""
-    mask : ak.Array = ""
-    number : int = -1
 
 
 class ShowerMergeQuantities:
@@ -850,7 +839,7 @@ def ShowerMergingPFOPerformance(events : Master.Data, start_showers : ak.Array, 
 
     match = actual_num == target_num
 
-    tags = GenerateTruthTags(events)
+    tags = Tags.GenerateTrueFinalStateTags(events)
 
     data = {
         "PFOs" : signal,
@@ -920,7 +909,7 @@ def ShowerMergingEventPerformance(events : Master.Data, start_showers : ak.Array
     signal_only = (nFp == 0) & (nTp > 0)
     background_only = (nFp > 0) & (nTp == 0)
 
-    tags = GenerateTruthTags(events)
+    tags = Tags.GenerateTrueFinalStateTags(events)
 
     data = {
         "events after selection" : events.eventNum,
@@ -958,41 +947,3 @@ def ShowerMergingEventPerformance(events : Master.Data, start_showers : ak.Array
     counts = pd.DataFrame(counts, index = ["all"] + list(tags.keys())).T
     print(counts)
     return counts
-
-
-class Tags(dict):
-    def __init__(self, *arg, **kw):
-        for member in list(Tag.__annotations__.keys()):
-            setattr(self, member, TagIterator(self, member))
-
-        self.name = TagIterator(self, "name")
-        super(Tags, self).__init__(*arg, **kw)
-
-
-class TagIterator:
-    def __init__(self, parent : Tags, value : str):
-        self.__parent = parent
-        self.__value = value
-
-    def __getitem__(self, i):
-        for _, v in self.__parent.items():
-            if getattr(v, self.__value) == i:
-                return v
-
-    @property
-    def values(self):
-        return [getattr(v, self.__value) for _, v in self.__parent.items()]
-
-    def __str__(self) -> str:
-        return str(self.values)
-
-
-def GenerateTruthTags(events : Master.Data = None) -> Tags:
-    tags = Tags()
-    # tags["$\geq 1\pi^{0} + X$"       ] = shower_merging.Tag("$\geq 1\pi^{0} + X$",        "inclusive signal", "#348ABD", shower_merging.generate_truth_tags(events, (1,), 0) if events is not None else None, 0)
-    tags["$1\pi^{0} + 0\pi^{+}$"     ]          = Tag("$1\pi^{0} + 0\pi^{+}$"              , "exclusive signal", "#8EBA42", generate_truth_tags(events, 1, 0)    if events is not None else None, 0)
-    tags["$0\pi^{0} + 0\pi^{+}$"     ]          = Tag("$0\pi^{0} + 0\pi^{+}$"              , "background",       "#777777", generate_truth_tags(events, 0, 0) if events is not None else None, 1)
-    tags["$1\pi^{0} + \geq 1\pi^{+}$"]          = Tag("$1\pi^{0} + \geq 1\pi^{+}$"         , "sideband",         "#E24A33", generate_truth_tags(events, 1, (1,)) if events is not None else None, 2)
-    tags["$0\pi^{0} + \geq 1\pi^{+}$"]          = Tag("$0\pi^{0} + \geq 1\pi^{+}$"         , "sideband",         "#988ED5", generate_truth_tags(events, 0, (1,)) if events is not None else None, 3)
-    tags["$\greater 1\pi^{0} + \geq 0\pi^{+}$"] = Tag("$> 1\pi^{0} + \geq 0\pi^{+}$", "sideband",         "#348ABD", generate_truth_tags(events, (2,), (0,)) if events is not None else None, 4)
-    return tags

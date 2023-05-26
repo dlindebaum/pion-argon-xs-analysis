@@ -19,7 +19,7 @@ from scipy.optimize import curve_fit
 from scipy.special import gamma
 from scipy.stats import iqr
 
-from python.analysis import vector
+from python.analysis import vector, Tags
 from python.analysis.SelectionTools import np_to_ak_indicies
 
 
@@ -859,12 +859,12 @@ def Save(name: str = "plot", directory: str = "", dpi = 300):
     plt.close()
 
 
-def Plot(x, y, xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", marker: str = "", linestyle: str = "-", newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None):
+def Plot(x, y, xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", marker: str = "", linestyle: str = "-", newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None):
     """ Make scatter plot.
     """
     if newFigure is True:
         plt.figure()
-    plt.plot(x, y, marker=marker, linestyle=linestyle, label=label)
+    plt.plot(x, y, marker=marker, linestyle=linestyle, label=label, color=color)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.xscale(x_scale)
@@ -971,9 +971,17 @@ def PlotHistComparison(datas, xRange: list = [], bins: int = 100, xlabel: str = 
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
-def PlotHist2DComparison(x: list, y: list, bins: int = 50, xlabels: list = [None] * 2, ylabels: list = [None] * 2, colourmap="plasma", figsize=[6.4, 4.8]):
+def PlotHist2DComparison(x: list, y: list, bins: int = 50, xlabels: list = [None] * 2, ylabels: list = [None] * 2, colourmap="plasma", figsize=[6.4, 4.8], x_range = None, y_range = None):
     edges = [bins, bins]
-    h_range = [[np.min(x), np.max(x)], [np.min(y), np.max(y)]]
+    if x_range is None:
+        x_r = [np.min(x), np.max(x)]
+    else:
+        x_r = x_range
+    if y_range is None:
+        y_r = [np.min(y), np.max(y)]
+    else:
+        y_r = y_range
+    h_range = [x_r, y_r]
 
     heights = []
     for i, j in zip(x, y):
@@ -996,6 +1004,125 @@ def PlotHist2DComparison(x: list, y: list, bins: int = 50, xlabels: list = [None
 
     fig.tight_layout()
     fig.colorbar(im, ax=ax.ravel().tolist())
+
+
+def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : list = None, stacked : bool = False, data_label : str = "Data", mc_labels = "MC", xlabel : str = None, title : str = None, yscale : str = "linear", legend_loc : str = "best", ncols : int = 2, norm : bool = False, sf : int = 2, colour : str = None):
+    """ Make Data MC histograms as seen in most typical particle physics analyses (but looks better).
+
+    Args:
+        data (ak.Array): data sample
+        mc (ak.Array): MC sample
+    """
+    plt.subplots(2, 1, figsize = (6.4, 4.8 * 1.2), gridspec_kw={"height_ratios" : [5, 1]} , sharex = True) # set to that the ratio plot is 1/5th the default plot height
+
+    scale = ak.count(data) / ak.count(mc) if norm is True else 1 # scale MC to data if requested (number of MC entries == number of data entries).
+
+    plt.subplot(211) # MC histogram
+    if x_range is None: x_range = [ak.min([mc, data]), ak.max([mc, data])]
+    h_mc = []
+    for m in mc:
+        h, edges = np.histogram(np.array(m), bins, range = x_range)
+        h_mc.append(h * scale)
+    
+    plt.hist([edges[:-1]]*len(h_mc), edges, weights = h_mc, range = x_range, stacked = stacked, label = mc_labels, color = colour)
+    plt.yscale(yscale)
+    plt.title(title)
+
+    binWidth = round((edges[-1] - edges[0]) / len(edges), sf)
+    if norm == False:
+        yl = "Number of entries (bin width=" + str(binWidth) + ")"
+    else:
+        yl = "Normalised number of entries (bin width=" + str(binWidth) + ")"
+    plt.ylabel(yl)
+
+    h_data, edges = np.histogram(np.array(data), bins = edges, range = x_range) # bin the data in terms of MC
+    centres = (edges[:-1] + edges[1:]) / 2
+    plt.scatter(centres, h_data, c = "black", label = data_label) # plot data as scatter points
+
+    plt.legend(loc = legend_loc, ncols = ncols)
+    plt.tick_params("x", labelbottom = False) # hide x axes tick labels
+
+    if stacked is True:
+        h_mc = np.sum(h_mc, axis = 0)
+
+    plt.subplot(212) # ratio plot
+    ratio = h_data / h_mc # data / MC
+    ratio[ratio == np.inf] = -1 # if the ratio is undefined, set it to -1
+    plt.scatter(centres, ratio, c = "black")
+    plt.ylabel("Data/MC")
+
+    ticks = [0, 0.5, 1, 1.5, 2] # hardcode the yaxis to have 5 ticks
+    # ticks = np.linspace(np.nanmin(ratio) * 1.1, np.nanmax(ratio)*1.1, 4) # hardcode the yaxis to have 4 ticks
+    plt.yticks(ticks, np.char.mod("%.2f", ticks))
+    plt.ylim(0, 2)
+
+    plt.xlabel(xlabel)
+    plt.tight_layout()
+    plt.subplot(211) # do this to set the current figure to the main plot
+
+
+def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float = 0.2, face : str = "right", flip : bool = False, color = "black"):
+    """ Illustrates a cut on a plot. Direction of the arrow indidcates which portion of the plot passes the cut.
+
+    Args:
+        value (float): value of the cut
+        arrow_loc (float, optional): where along the line to place the arrow. Defaults to 0.8.
+        arrow_length (float, optional): length of the arrow, must be in units of the cut. Defaults to 0.2.
+        face (str, optional): which way the arrow faces. Defaults to "right".
+        flip (bool, optional): flip the arrow to the y axis. Defaults to False.
+        color (str, optional): colour of the line and arrow. Defaults to "black".
+    """
+
+    if face == "right":
+        face_factor = 1
+    elif face == "left":
+        face_factor = -1
+    else:
+        raise Exception("face must be left or right")
+
+    xy0 = (value - face_factor * (value/1500), arrow_loc)
+    xy1 = (value - (value/1500) + face_factor * arrow_length, arrow_loc)
+    transform = ("data", "axes fraction")
+
+    if flip:
+        xy0 = tuple(reversed(xy0))
+        xy1 = tuple(reversed(xy1))
+        transform = tuple(reversed(transform))
+
+        plt.axhline(value, color = color)
+    else:
+        plt.axvline(value, color = color)
+
+    plt.annotate("", xy = xy1, xytext = xy0, arrowprops=dict(facecolor = color, edgecolor = color, arrowstyle = "->"), xycoords= transform)
+
+
+def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False):
+    """ Makes a stacked histogram and splits the sample based on tags.
+
+    Args:
+        data (np.array): data to plot
+        tags (shower_merging.Tags): tags for the data.
+        bins (int, optional): number of bins. Defaults to 100.
+        range (list, optional): plot range. Defaults to None.
+        y_scale (str, optional): y axis scale. Defaults to "linear".
+        x_label (str, optional): x label. Defaults to "".
+        loc (str, optional): legend location. Defaults to "best".
+        ncols (int, optional): number of columns in legend. Defaults to 2.
+        data2 (np.array): second sample to plot. if specified it will make a data MC plot (data is MC, data2 is Data).
+    """
+    split_data = [ak.ravel(data[tags[t].mask]) for t in tags]
+    
+    colours = tags.colour.values
+    if ak.any(ak.is_none(colours)):
+        print("some tags do not have colours, will override them for the default ones")
+        for i in range(len(tags)):
+            colours[i] = "C" + str(i)
+
+    if data2 is None:
+        PlotHist(split_data, stacked = True, label = tags.name.values, bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = norm)
+        plt.legend(loc = loc, ncols = ncols)
+    else:
+        PlotHistDataMC(ak.ravel(data2), split_data, bins, x_range, True, "Data", tags.name.values, x_label, None, y_scale, loc, ncols, norm, colour = colours)
 
 
 def UniqueData(data):
