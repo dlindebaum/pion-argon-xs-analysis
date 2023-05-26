@@ -231,7 +231,7 @@ def AnalysePi0Selection(events : Master.Data, data : bool = False, energy_correc
     shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photonCandidates)
     angle = ak.flatten(shower_pairs.reco_angle)
     mask = (angle > (10 * np.pi / 180)) & (angle < (80 * np.pi / 180))
-    tags = None if data else Tags.GeneratePi0Tags(events)
+    tags = None if data else Tags.GeneratePi0Tags(events, photonCandidates)
     output["angle"] = MakeOutput(angle, tags, [(10 * np.pi / 180), (80 * np.pi / 180)])
     events.Filter([mask], [mask])
     photonCandidates = photonCandidates[mask]
@@ -240,7 +240,7 @@ def AnalysePi0Selection(events : Master.Data, data : bool = False, energy_correc
     shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photonCandidates)
     mass = ak.flatten(shower_pairs.reco_mass) / energy_correction_factor # see shower_correction.ipynb
     mask = (mass > 50) & (mass < 250)
-    tags = None if data else Tags.GeneratePi0Tags(events)
+    tags = None if data else Tags.GeneratePi0Tags(events, photonCandidates)
     output["mass"] = MakeOutput(mass, tags, [50, 250])
     output["event_tag"] = MakeOutput(None, Tags.GenerateTrueFinalStateTags(events), None)
     events.Filter([mask], [mask])

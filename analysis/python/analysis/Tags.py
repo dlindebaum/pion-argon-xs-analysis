@@ -145,7 +145,7 @@ def GenerateTrueBeamParticleTags(events : Data) -> Tags:
     return tags
 
 
-def GeneratePi0Tags(events : Data) -> Tags:
+def GeneratePi0Tags(events : Data, photon_PFOs : ak.Array) -> Tags:
     """ Truth tags for pi0s.
         Categories are:
             two photons from the same pi0
@@ -154,22 +154,23 @@ def GeneratePi0Tags(events : Data) -> Tags:
             no photons from a pi0
 
     Args:
-        events (Data): events to look at
+        events (Data): events to look at.
+        photon_PFOs (ak.Array): mask which select PFOs that are photon showers
 
     Returns:
         Tags: tags
     """
-    #! This needs to be modified so that it doesn't rely on events only containing photon candidates.
     pi0_photon = events.trueParticlesBT.motherPdg == 111
 
-    two_photons = ak.all(pi0_photon, 1)
-    same_mother = (events.trueParticlesBT.mother[:, 0] == events.trueParticlesBT.mother[:, 1])
+    correctly_matched_photons = ak.sum(pi0_photon & photon_PFOs, -1)
+    photon_mothers = events.trueParticlesBT.mother[pi0_photon & photon_PFOs]
+    same_mother = photon_mothers[correctly_matched_photons == 2][:, 0] == photon_mothers[correctly_matched_photons == 2][:, 1]
 
     pi0_tags = Tags()
-    pi0_tags["2 $\gamma$'s, same $\pi^{0}$"]      = Tag("2 $\gamma$'s, same $\pi^{0}$" , "pi0s"               , mask = two_photons & same_mother  , number = 0) # both PFOs are photons from the same pi0
-    pi0_tags["2 $\gamma$'s, different $\pi^{0}$"] = Tag("2 $\gamma$s, different $\pi^{0}$", "different mother", mask = two_photons & ~same_mother , number = 1) # both PFOs are pi0 photons, but not from the same pi0
-    pi0_tags["1 $\gamma$"]                        = Tag("1 $\gamma$"                   , "one photon"         , mask = ak.sum(pi0_photon, -1) == 1, number = 2) # one PFO is a pi0 photon
-    pi0_tags["0 $\gamma$"]                       = Tag("0 $\gamma$"                   , "no photons"         , mask = ak.sum(pi0_photon, -1) == 0, number = 3) # no PFO is a pi0 photon
+    pi0_tags["2 $\gamma$'s, same $\pi^{0}$"]      = Tag("2 $\gamma$'s, same $\pi^{0}$" , "pi0s"               , mask = same_mother  , number = 0) # both PFOs are photons from the same pi0
+    pi0_tags["2 $\gamma$'s, different $\pi^{0}$"] = Tag("2 $\gamma$s, different $\pi^{0}$", "different mother", mask = ~same_mother , number = 1) # both PFOs are pi0 photons, but not from the same pi0
+    pi0_tags["1 $\gamma$"]                        = Tag("1 $\gamma$"                   , "one photon"         , mask = correctly_matched_photons == 1, number = 2) # one PFO is a pi0 photon
+    pi0_tags["0 $\gamma$"]                       = Tag("0 $\gamma$"                   , "no photons"          , mask = correctly_matched_photons == 0, number = 3) # no PFO is a pi0 photon
     return pi0_tags
 
 
