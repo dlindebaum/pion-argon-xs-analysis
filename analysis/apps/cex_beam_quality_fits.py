@@ -89,7 +89,7 @@ def plot(value : ak.Array, x_label : str, range : list, mu : float, sigma : floa
     Plots.Save(name)
 
 
-def MakePlots(events : Master.Data, fit_values : dict):
+def MakePlots(events : Master.Data, fit_values : dict, out : str):
     """ make plots to see how well the gaussian fit performs.
 
     Args:
@@ -97,14 +97,14 @@ def MakePlots(events : Master.Data, fit_values : dict):
         fit_values (dict): fit values
     """
     SetPlotStyle()
-    plot(events.recoParticles.beam_startPos.x, "x (cm)", 25, fit_values["mu_x"], fit_values["sigma_x"], "x")
-    plot(events.recoParticles.beam_startPos.y, "y (cm)", 25, fit_values["mu_y"], fit_values["sigma_y"], "y")
-    plot(events.recoParticles.beam_startPos.z, "z (cm)", 1.5, fit_values["mu_z"], fit_values["sigma_z"], "z")
+    plot(events.recoParticles.beam_startPos.x, "x (cm)", 25, fit_values["mu_x"], fit_values["sigma_x"], args.out + "x")
+    plot(events.recoParticles.beam_startPos.y, "y (cm)", 25, fit_values["mu_y"], fit_values["sigma_y"], args.out + "y")
+    plot(events.recoParticles.beam_startPos.z, "z (cm)", 10, fit_values["mu_z"], fit_values["sigma_z"],args.out + "z")
 
     beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos, events.recoParticles.beam_startPos))
-    plot(beam_dir.x, "x direction", 1, fit_values["mu_dir_x"], fit_values["sigma_dir_x"], "dir_x")
-    plot(beam_dir.y, "y direction", 1, fit_values["mu_dir_y"], fit_values["sigma_dir_y"], "dir_y")
-    plot(beam_dir.z, "z direction", 1, fit_values["mu_dir_z"], fit_values["sigma_dir_z"], "dir_z")
+    plot(beam_dir.x, "x direction", 1, fit_values["mu_dir_x"], fit_values["sigma_dir_x"], args.out + "dir_x")
+    plot(beam_dir.y, "y direction", 1, fit_values["mu_dir_y"], fit_values["sigma_dir_y"], args.out + "dir_y")
+    plot(beam_dir.z, "z direction", 1, fit_values["mu_dir_z"], fit_values["sigma_dir_z"], args.out + "dir_z")
     return
 
 def main(args):
@@ -115,14 +115,14 @@ def main(args):
     mask = BeamParticleSelection.CaloSizeCut(events)
     events.Filter([mask], [mask])
 
-    mask = BeamParticleSelection.PiBeamSelection(events)
+    mask = BeamParticleSelection.PiBeamSelection(events, args.sample_type == "data")
     events.Filter([mask], [mask])
 
     mask = BeamParticleSelection.PandoraTagCut(events)
     events.Filter([mask], [mask])
 
-    mask = BeamParticleSelection.MichelScoreCut(events)
-    events.Filter([mask], [mask])
+    # mask = BeamParticleSelection.MichelScoreCut(events)
+    # events.Filter([mask], [mask])
 
     #* fit gaussians to the start positions
     a, mu, sigma = Fit_Vector(events.recoParticles.beam_startPos, 100)
@@ -160,7 +160,7 @@ def main(args):
     with open(name, "w") as f:
         json.dump(fit_values, f)
 
-    MakePlots(events, fit_values)
+    MakePlots(events, fit_values, args.out)
 
     print(f"fit values written to {name}")
     return
@@ -169,12 +169,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Applies beam particle selection, PFO selection, produces tables and basic plots.", formatter_class = argparse.RawDescriptionHelpFormatter)
     parser.add_argument(dest = "file", help = "NTuple file to study.")
     parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Master.Ntuple_Type, help = f"type of ntuple I am looking at {Master.Ntuple_Type._member_map_}.", required = True)
+    parser.add_argument("-S", "--sample-type", dest = "sample_type", type = str, choices = ["mc", "data"], help = f"type of sample I am looking at.", required = True)
 
-    parser.add_argument("-o", "--out", dest = "out", type = str, default = "./", help = "directory to save plots")
+    parser.add_argument("-o", "--out", dest = "out", type = str, default = None, help = "directory to save plots")
 
     args = parser.parse_args()
 
-    if args.out[-1] != "/": args.out += "/"
+    if args.out is None:
+        args.out = args.file.split("/")[-1].split(".")[0] + "/"
 
     print(vars(args))
     main(args)

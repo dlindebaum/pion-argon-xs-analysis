@@ -815,9 +815,10 @@ class TrueParticleData(ParticleData):
         super().__init__(events)
 
     def PDSPData(self, name : str, beam : str, daughter : str, grand_daughter : str):
-        value = ak.concatenate([ak.unflatten(self.events.io.Get(beam), 1, -1), self.events.io.Get(daughter), self.events.io.Get(grand_daughter)], -1)
-        setattr(self, f"_{type(self).__name__}__{name}", value)
-        self.FilterVariable(name)
+        if not hasattr(self, f"_{type(self).__name__}__{name}"):
+            value = ak.concatenate([ak.unflatten(self.events.io.Get(beam), 1, -1), self.events.io.Get(daughter), self.events.io.Get(grand_daughter)], -1)
+            setattr(self, f"_{type(self).__name__}__{name}", value)
+            self.FilterVariable(f"_{type(self).__name__}__{name}")
 
     def PDSPDataVector(self, name : str, beam : str, daughter : str, grand_daughter : str):
         bv = [self.events.io.Get(n) for n in beam]
@@ -826,7 +827,7 @@ class TrueParticleData(ParticleData):
         value = [ak.concatenate([ak.unflatten(bv[i], 1, -1), dv[i], gv[i]], -1) for i in range(len(beam))]
         value = vector.vector(x = value[0], y = value[1], z = value[2])
         setattr(self, f"_{type(self).__name__}__{name}", value)
-        self.FilterVariable(name)
+        self.FilterVariable(f"_{type(self).__name__}__{name}")
 
     @property
     def pdg(self) -> ak.Array:
@@ -852,7 +853,7 @@ class TrueParticleData(ParticleData):
             grand_daughter = self.events.io.Get("true_beam_Pi0_decay_parID")
             mother = ak.concatenate([ak.unflatten(beam, 1, -1), daughter, grand_daughter], -1)
             setattr(self, f"_{type(self).__name__}__mother", mother)
-            self.FilterVariable("mother")
+            self.FilterVariable(f"_{type(self).__name__}__mother")
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             self.LoadData("mother", "g4_mother")
         return getattr(self, f"_{type(self).__name__}__mother")
@@ -884,7 +885,7 @@ class TrueParticleData(ParticleData):
                 else:
                     mass = m
             setattr(self, f"_{type(self).__name__}__mass", mass)
-            self.FilterVariable("mass")
+            self.FilterVariable(f"_{type(self).__name__}__mass")
         return getattr(self, f"_{type(self).__name__}__mass")
 
     @property
@@ -894,7 +895,7 @@ class TrueParticleData(ParticleData):
         if self.events.nTuple_type == Ntuple_Type.PDSP:
             e = (vector.magnitude(self.momentum) ** 2 - self.mass ** 2) ** 0.5
             setattr(self, f"_{type(self).__name__}__energy", e)
-            self.FilterVariable("energy")
+            self.FilterVariable(f"_{type(self).__name__}__energy")
         return getattr(self, f"_{type(self).__name__}__energy")
 
     @property
@@ -1152,6 +1153,16 @@ class RecoParticleData(ParticleData):
     def beam_dEdX(self) -> ak.Array:
         self.LoadData("beam_dEdX", "reco_beam_calibrated_dEdX_SCE")
         return getattr(self, f"_{type(self).__name__}__beam_dEdX")
+
+    @property
+    def reco_reconstructable_beam_event(self) -> ak.Array:
+        self.LoadData("reco_reconstructable_beam_event", "reco_reconstructable_beam_event")
+        return getattr(self, f"_{type(self).__name__}__reco_reconstructable_beam_event")
+
+    @property
+    def beam_inst_valid(self) -> ak.Array:
+        self.LoadData("beam_inst_valid", "beam_inst_valid")
+        return getattr(self, f"_{type(self).__name__}__beam_inst_valid")
 
     @property
     def beam_inst_nTracks(self) -> ak.Array:
@@ -1849,7 +1860,11 @@ class ShowerPairs:
                 pair_coords = ak.argcombinations(
                     self.events.recoParticles.number, 2)
             self.pairs = pair_coords
-        self.SortByBacktrackedEnergy()
+        if ak.count(self.events.trueParticlesBT.energy) > 0:
+            self.SortByEnergy()
+        else:
+            print("no truth information found, sorting showers by reco energy instead")
+            self.SortByEnergy(backtracked = False)
         return
 
     @staticmethod
@@ -1859,14 +1874,20 @@ class ShowerPairs:
             mask))
         return ak.combinations(inverse_mask, 2)
 
-    def SortByBacktrackedEnergy(self):
-        """
-        Orders the argcombinations by the shower with higher
-        backtracked energy.
-        """
+    def SortByEnergy(self, backtracked : bool = True):
+        """ Orders the argcombinations by the shower with higher energy.
+
+        Args:
+            backtracked (bool, optional): sort by backtreacked energy, otherwise reco energy. Defaults to True.
+        """        
+        if backtracked:
+            pd = self.events.trueParticlesBT
+        else:
+            pd = self.events.recoParticles
+
         mask_0_leading = (
-            self.events.trueParticlesBT.energy[self.pairs['0']]
-            >= self.events.trueParticlesBT.energy[self.pairs['1']])
+            pd.energy[self.pairs['0']]
+            >= pd.energy[self.pairs['1']])
         mask_1_leading = np.logical_not(mask_0_leading)
         self.leading = (self.pairs['0'] * mask_0_leading
                         + self.pairs['1'] * mask_1_leading)

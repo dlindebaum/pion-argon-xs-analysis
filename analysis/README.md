@@ -1,5 +1,16 @@
 # pi0-analysis
-Python code for the Pi0 analysis, requires python 3.10.0 or greater.
+Python code for the Pi0 analysis, requires python 3.10.0 or greater. Installing the requirements to run the code is as follows:
+
+Run this once.
+``` bash
+pip install -r requirements.txt
+```
+
+and each time you load the python environment:
+``` bash
+source env.sh
+```
+
 Code runs on ntuples produced by the Pi0 Analyser module (to be added), a list of produced ntuples are here:
 
 [https://cernbox.cern.ch/index.php/s/8UqObev6XPNhRXn](https://cernbox.cern.ch/index.php/s/8UqObev6XPNhRXn)

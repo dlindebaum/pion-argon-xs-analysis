@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+"""
+Created on: 23/05/2023 12:58
+
+Author: Shyam Bhuller
+
+Description: Applies beam particle selection, photon shower candidate selection and writes out shower energies.
+"""
 import argparse
 import json
 import os
