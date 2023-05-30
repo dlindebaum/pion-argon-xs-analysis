@@ -25,7 +25,7 @@ def run(i, file, n_events, start, selected_events, args):
         fit_values = json.load(f)
 
 
-    mask = BeamParticleSelection.CreateDefaultSelection(events, fit_values, True, False)
+    mask = BeamParticleSelection.CreateDefaultSelection(events, False, fit_values, True, False)
     events.Filter([mask], [mask])
 
     mask = PFOSelection.InitialPi0PhotonSelection(events, verbose = True, return_table = False)
