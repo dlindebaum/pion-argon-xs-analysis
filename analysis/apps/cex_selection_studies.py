@@ -216,12 +216,14 @@ def AnalysePi0Selection(events : Master.Data, data : bool = False, energy_correc
     Returns:
         dict: output data
     """
+    def null_tag():
+        tag = Tags.Tags()
+        tag["null"] = Tags.Tag(mask = (events.eventNum < -1))
+        return tag
+
     output = {}
 
     photonCandidates = PFOSelection.InitialPi0PhotonSelection(events) # repeat the photon candidate selection, but only require the mask
-
-    null_tag = Tags.Tags()
-    null_tag["null"] = Tags.Tag(mask = (events.eventNum < -1))
 
     #* number of photon candidate
     n_photons = ak.sum(photonCandidates, -1)
@@ -234,25 +236,23 @@ def AnalysePi0Selection(events : Master.Data, data : bool = False, energy_correc
     shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photonCandidates)
     angle = ak.flatten(shower_pairs.reco_angle)
     mask = (angle > (10 * np.pi / 180)) & (angle < (80 * np.pi / 180))
-    tags = null_tag if data else Tags.GeneratePi0Tags(events, photonCandidates)
+    tags = null_tag() if data else Tags.GeneratePi0Tags(events, photonCandidates)
     output["angle"] = MakeOutput(angle, tags, [(10 * np.pi / 180), (80 * np.pi / 180)])
     events.Filter([mask], [mask])
     photonCandidates = photonCandidates[mask]
 
-    null_tag["null"] = Tags.Tag(mask = (events.eventNum < -1))
     #* invariant mass
     shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photonCandidates)
     mass = ak.flatten(shower_pairs.reco_mass) / energy_correction_factor # see shower_correction.ipynb
     mask = (mass > 50) & (mass < 250)
-    tags = null_tag if data else Tags.GeneratePi0Tags(events, photonCandidates)
+    tags = null_tag() if data else Tags.GeneratePi0Tags(events, photonCandidates)
     output["mass"] = MakeOutput(mass, tags, [50, 250])
     events.Filter([mask], [mask])
     photonCandidates = photonCandidates[mask]
 
     #* final counts
     output["event_tag"] = MakeOutput(None, Tags.GenerateTrueFinalStateTags(events), None)
-    null_tag["null"] = Tags.Tag(mask = (events.eventNum < -1))
-    tags = null_tag if data else Tags.GeneratePi0Tags(events, photonCandidates)
+    tags = null_tag() if data else Tags.GeneratePi0Tags(events, photonCandidates)
     output["final_tags"] = MakeOutput(None, tags, None) 
 
     return output
@@ -605,7 +605,7 @@ def PiPlusBranchingFractions(output : dir, outDir : str):
     efficiency.T.to_latex(outDir + "pi_final_state_efficiency.tex")
 
 
-def MakeParticleTables(output : dir, outDir : str, exclude = []):
+def MakeParticleTables(output : dir, outDir : str, exclude = [], type : str = "mc"):
     """ Make performance tables based on the true particle tags.
 
     Args:
@@ -628,14 +628,14 @@ def MakeParticleTables(output : dir, outDir : str, exclude = []):
 
     event_counts.columns = event_counts.columns[:-1].insert(0, "no_selection")
 
-    purity, efficiency = CalcualteCountMetrics(event_counts)
     rprint(event_counts)
-    rprint(purity)
-    rprint(efficiency)
-
     event_counts.T.to_latex(outDir + "particle_counts.tex")
-    purity.T.to_latex(outDir + "particle_purity.tex")
-    efficiency.T.to_latex(outDir + "particle_efficiency.tex")
+    if type == "mc":
+        purity, efficiency = CalcualteCountMetrics(event_counts)
+        rprint(purity)
+        rprint(efficiency)
+        purity.T.to_latex(outDir + "particle_purity.tex")
+        efficiency.T.to_latex(outDir + "particle_efficiency.tex")
     return
 
 
@@ -648,26 +648,35 @@ def MergeOutputs(outputs : list) -> dict:
     Returns:
         dict: merged output
     """
-    # rprint("outputs")
-    # rprint(outputs)
+    rprint("outputs")
+    rprint(outputs[0])
 
     merged_output = {}
 
     for output in outputs:
-        for selection_output in output:
-            if selection_output not in merged_output:
-                merged_output[selection_output] = {}
-            for o in output[selection_output]:
-                if o not in merged_output[selection_output]:
-                    merged_output[selection_output][o] = output[selection_output][o]
+        for selection in output:
+            if selection not in merged_output:
+                merged_output[selection] = {}
+            for o in output[selection]:
+                if o not in merged_output[selection]:
+                    merged_output[selection][o] = output[selection][o]
                     continue
                 else:
                     print(o)
-                    merged_output[selection_output][o]["value"] = ak.concatenate([merged_output[selection_output][o]["value"], output[selection_output][o]["value"]]) 
-                    for t in merged_output[selection_output][o]["tags"]:
-                        merged_output[selection_output][o]["tags"][t].mask = ak.concatenate([merged_output[selection_output][o]["tags"][t].mask, output[selection_output][o]["tags"][t]].mask)
-                    for t in merged_output[selection_output][o]["tags"]:
-                        merged_output[selection_output][o]["fs_tags"][t].mask = ak.concatenate([merged_output[selection_output][o]["fs_tags"][t].mask, output[selection_output][o]["fs_tags"][t]].mask)
+                    if output[selection][o]["value"] is not None:
+                        if o in ["pi_beam"]:
+                            for i in merged_output[selection][o]["value"]:
+                                merged_output[selection][o]["value"][i] = merged_output[selection][o]["value"][i] + output[selection][o]["value"][i] 
+                        else:
+                            merged_output[selection][o]["value"] = ak.concatenate([merged_output[selection][o]["value"], output[selection][o]["value"]]) 
+
+                    if output[selection][o]["tags"] is not None:
+                        for t in merged_output[selection][o]["tags"]:
+                            merged_output[selection][o]["tags"][t].mask = ak.concatenate([merged_output[selection][o]["tags"][t].mask, output[selection][o]["tags"][t].mask])
+
+                    if output[selection][o]["fs_tags"] is not None:
+                        for t in merged_output[selection][o]["fs_tags"]:
+                            merged_output[selection][o]["fs_tags"][t].mask = ak.concatenate([merged_output[selection][o]["fs_tags"][t].mask, output[selection][o]["fs_tags"][t].mask])
                     # we shouldn't need to merge cuts because this should be the same for all events
 
     rprint("merged_output")
@@ -683,15 +692,15 @@ def MakeTables(output : dict, out : str, sample : "str"):
     os.makedirs(out + "pi0/", exist_ok = True)
 
     MakeFinalStateTables(output["beam"], out + "beam/")
-    MakeParticleTables(output["pip"]       , out + "daughter_pi/", ["completeness"])
-    MakeParticleTables(output["photon"]    , out + "photon/", ["nHits_completeness", "impact_parameter_completeness"])
-    MakeParticleTables(output["pi0"]       , out + "pi0/", ["n_photons", "event_tag"])
+    MakeParticleTables(output["pip"]       , out + "daughter_pi/", ["completeness"], sample)
+    MakeParticleTables(output["photon"]    , out + "photon/", ["nHits_completeness", "impact_parameter_completeness"], sample)
+    MakeParticleTables(output["pi0"]       , out + "pi0/", ["n_photons", "event_tag"], sample)
     if sample == "mc":
-        MakeParticleTables(output["beam"]      , out + "beam/", ["no_selection"])
+        MakeParticleTables(output["beam"]      , out + "beam/", ["no_selection"], sample)
         PiPlusBranchingFractions(output["beam"], out + "beam/")
     return
 
-
+@Master.timer
 def main(args):
     shower_merging.SetPlotStyle(extend_colors = True)
 
