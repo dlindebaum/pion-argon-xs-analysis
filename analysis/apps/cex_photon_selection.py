@@ -25,7 +25,7 @@ def run(i, file, n_events, start, selected_events, args):
         fit_values = json.load(f)
 
 
-    mask = BeamParticleSelection.CreateDefaultSelection(events, fit_values, True, False)
+    mask = BeamParticleSelection.CreateDefaultSelection(events, False, fit_values, True, False)
     events.Filter([mask], [mask])
 
     mask = PFOSelection.InitialPi0PhotonSelection(events, verbose = True, return_table = False)
@@ -33,6 +33,7 @@ def run(i, file, n_events, start, selected_events, args):
 
     output["reco_energy"] = ak.flatten(events.recoParticles.energy)
     output["true_energy"] = ak.flatten(events.trueParticlesBT.energy)
+    output["true_mother"] = ak.flatten(events.trueParticlesBT.motherPdg)
     return output
 
 def main(args):
