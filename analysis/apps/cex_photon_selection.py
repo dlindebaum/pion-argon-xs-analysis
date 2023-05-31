@@ -33,6 +33,7 @@ def run(i, file, n_events, start, selected_events, args):
 
     output["reco_energy"] = ak.flatten(events.recoParticles.energy)
     output["true_energy"] = ak.flatten(events.trueParticlesBT.energy)
+    output["true_mother"] = ak.flatten(events.trueParticlesBT.motherPdg)
     return output
 
 def main(args):
