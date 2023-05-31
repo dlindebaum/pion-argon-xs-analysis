@@ -14,7 +14,7 @@ import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 from tabulate import tabulate
 
-from apps.prod4a_merge_study import EventSelection, PFOSelection, SignalBackground, SplitSample, ShowerMergeQuantities
+from python.analysis.shower_merging import EventSelection, PFOSelection, SignalBackground, SplitSample, ShowerMergeQuantities
 from python.analysis import Master, vector
 from python.analysis.EventDisplay import EventDisplay
 
