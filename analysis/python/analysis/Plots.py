@@ -288,7 +288,7 @@ class PlotConfig():
                 a.set_facecolor(self.AXIS_FACECOLOR)
                 for spine in a.spines.values():
                     spine.set_edgecolor(self.SPINE_COLOR)
-                if legend:
+                if legend and len(plt.gca().get_legend_handles_labels()[1])>0:
                     a.legend(prop={'size': self.LEGEND_SIZE},
                              facecolor=self.LEGEND_COLOR)
 
@@ -846,6 +846,11 @@ class PairHistsBatchPlotter(HistogramBatchPlotter):
                     save_name=self.image_save_base + save_path_end + "_" + plot_type + ".png")
 
         return
+
+
+def _adjust_text_colour(value, colour, norm, offset=0.2, max_reduction=0.7):
+    scaling = 1-np.round(norm(value)+offset) * max_reduction
+    return tuple(val * scaling for val in colour)
 
 
 def Save(name: str = "plot", directory: str = "", dpi = 300):
@@ -1907,4 +1912,187 @@ def make_truth_comparison_plots(
         fig_e_ii_log.savefig(path + "subleading_photon_energy_log.png")
         fig_dirs_log.savefig(path + "directions_log.png")
     plt.close()
+    return
+
+
+def plot_region_data(
+        regions_dict,
+        plt_cfg=PlotConfig(),
+        title=None,
+        compare_max=0,
+        log_norm=False,
+        colourblind=False):
+    """
+    Creates a plot of the population of the tagged regions.
+
+    Regions should be created using `EventSelection.create_regions()`.
+
+    Parameters
+    ----------
+    regions_dict : dict
+        Dictionary of containing a mask of which events fall in which
+        classification regions. This should be created using
+        `EventSelection.creat_regions()`.
+    plt_cfg : Plots.PlotConfig, optional
+        `PlotConfig` instance to control plotting parameters. Default
+        is a new PlotConfig instance (no showing or saving).
+    title : str or None, optional
+        Title to display above the plot. If None, no title is shown.
+        Default is None.
+    compare_max : int or float, optional
+        Maximum value that will be shown on the colour bar. Used to
+        keep the colour scaling consistent if comparing multiple plots.
+        This will not reduce the maximum colour value if it is set
+        below the highest populated region. Default is 0.
+    log_norm : boolean, optional
+        Whether to use log scaling in the colour mapping. Default is
+        False.
+    colourblind : boolean, optional
+        Changes the text colour to blue to improve constrast. Default
+        is False.
+    """
+    x = np.array([0, 0, 1, 1, 2, 2])
+    y = np.array([0, 1, 0, 1, 0, 1])
+    pi_prod_multi_pi0 = ak.sum(regions_dict["pion_prod_>1_pi0"])
+    weights = np.array([
+        ak.sum(regions_dict["absorption"]),
+        ak.sum(regions_dict["pion_prod_0_pi0"]),
+        ak.sum(regions_dict["charge_exchange"]),
+        ak.sum(regions_dict["pion_prod_1_pi0"]),
+        pi_prod_multi_pi0,
+        pi_prod_multi_pi0])
+    
+    setup_kwargs = {}
+    if title is not None:
+        setup_kwargs.update({"title":title})
+    text_kwargs = {
+        "fontsize":16,
+        "fontweight":"demibold",
+        "horizontalalignment":"center"}
+    if colourblind:
+        colour=(0.55, 0.8, 1)
+    else:
+        colour = (1, 0.65, 0.8)
+
+    plt_cfg.setup_figure(figsize=(14,8), **setup_kwargs)
+    if log_norm:
+        cnorm = matplotlib.colors.LogNorm(
+            vmin=1, vmax=max(np.max(weights), compare_max))
+    else:
+        cnorm = matplotlib.colors.Normalize(
+            vmin=0, vmax=max(np.max(weights), compare_max))
+    cmap = plt.get_cmap("pink")
+    plt.hist2d(x, y, weights=weights, range=[[-0.5, 2.5],[-0.5, 1.5]],
+               bins=[3,2], norm=cnorm, cmap=cmap)
+    plt.text(0,-0.05,f"Absorption\n{weights[0]}", **text_kwargs,
+             color=_adjust_text_colour(weights[0], colour, cnorm))
+    plt.text(0,0.9,f"Pion production,\n0 pi0\n{weights[1]}", **text_kwargs,
+             color=_adjust_text_colour(weights[1], colour, cnorm))
+    plt.text(1,-0.05,f"Charge exchange\n{weights[2]}", **text_kwargs,
+             color=_adjust_text_colour(weights[2], colour, cnorm))
+    plt.text(1,0.9,f"Pion production,\n1 pi0\n{weights[3]}", **text_kwargs,
+             color=_adjust_text_colour(weights[3], colour, cnorm))
+    plt.text(2,0.4,f"Pion production,\n>1 pi0\n{weights[4]}", **text_kwargs,
+             color=_adjust_text_colour(weights[4], colour, cnorm))
+    plt_cfg.format_axis(
+        legend=False, xlabel="Number of pi0", ylabel="Number of pi+")
+    plt.xticks(ticks=[0, 1, 2], labels=["0", "1", ">1"], minor=False)
+    plt.yticks(ticks=[0, 1], labels=["0", ">=1"], minor=False)
+    plt.minorticks_off()
+    cbar = plt.colorbar()
+    cbar.ax.set_ylabel("Number of events", rotation=90)
+    plt_cfg.end_plot()
+    return
+
+
+def compare_truth_reco_regions(
+        reco_regions,
+        truth_regions,
+        plt_cfg=PlotConfig(),
+        title=None,
+        log_norm=False,
+        colourblind=False):
+    """
+    Comparing the classification coincidences between some
+    `reco_regions` and `truth_regions`.
+
+    Regions should be created using `EventSelection.create_regions()`.
+
+    Parameters
+    ----------
+    reco_regions : dict
+        Dictionary of containing a mask of which events fall in which
+        classification regions from reconstructed data. This should be
+        created using `EventSelection.creat_regions()`.
+    reco_regions : dict
+        Dictionary of containing a mask of which events fall in which
+        classification regions from truth data. This should be created
+        using `EventSelection.creat_regions()`.
+    plt_cfg : Plots.PlotConfig, optional
+        `PlotConfig` instance to control plotting parameters. Default
+        is a new PlotConfig instance (no showing or saving).
+    title : str or None, optional
+        Title to display above the plot. If None, no title is shown.
+        Default is None.
+    log_norm : boolean, optional
+        Whether to use log scaling in the colour mapping. Default is
+        False.
+    colourblind : boolean, optional
+        Changes the text colour to blue to improve constrast. Default
+        is False.
+    """
+    index_dict = {
+        "absorption":0,
+        "charge_exchange":1,
+        "pion_prod_0_pi0":2,
+        "pion_prod_1_pi0":3,
+        "pion_prod_>1_pi0":4}
+    tick_labels = [
+        "absorbtion", "cex.", "pi+ prod (0)", "pi+ prod (1)", "pi+ prod (>1)"]
+    ytick_labels = tick_labels.copy()
+    values = np.repeat(np.expand_dims(np.arange(5, dtype=float),1), 5, axis=1)
+    x = values.flatten("C")
+    y = values.flatten("F")
+    num_events = len(list(truth_regions.values())[0])
+    for key_truth in truth_regions.keys():
+        truth_i = index_dict[key_truth]
+        truth_count = np.sum(truth_regions[key_truth])
+        ytick_labels[truth_i] += (
+            f"\n{truth_count} events" +
+            f"\n({100*truth_count/num_events:.1f}% of total)")
+        for key_reco in reco_regions.keys():
+            reco_i = index_dict[key_reco]
+            values[reco_i, truth_i] = 100*np.sum(
+                np.logical_and(reco_regions[key_reco],
+                               truth_regions[key_truth]))/truth_count
+    values = values.flatten("C")
+
+    setup_kwargs = {}
+    if title is not None:
+        setup_kwargs.update({"title":title})
+    text_kwargs = {
+        # "fontsize":16,
+        "fontweight":"semibold",
+        "horizontalalignment":"center"}
+    if colourblind:
+        colour=(0.55, 0.8, 1)
+    else:
+        colour = (1, 0.65, 0.8)
+
+    plt_cfg.setup_figure(figsize=(16,12), **setup_kwargs)
+    if log_norm:
+        cnorm = matplotlib.colors.LogNorm(vmin=1, vmax=100)
+    else:
+        cnorm = matplotlib.colors.Normalize(vmin=0, vmax=100)
+    cmap = plt.get_cmap("pink")
+    plt.hist2d(x, y, weights=values, range=[[-0.5, 4.5],[-0.5, 4.5]], bins=[5,5], norm=cnorm, cmap=cmap)
+    for i, val in enumerate(values):
+        plt.text(i//5, i%5, f"{val:.1f}%", **text_kwargs, color=_adjust_text_colour(val, colour, cnorm))
+    plt_cfg.format_axis(legend=False, xlabel="Reco classifcation", ylabel="Truth classifcation")
+    plt.xticks(ticks=list(index_dict.values()), labels=tick_labels, minor=False)
+    plt.yticks(ticks=list(index_dict.values()), labels=ytick_labels, minor=False)
+    plt.minorticks_off()
+    cbar = plt.colorbar()
+    cbar.ax.set_ylabel("% of events from the truth region", rotation=90)
+    plt_cfg.end_plot()
     return
