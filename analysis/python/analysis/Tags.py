@@ -112,7 +112,11 @@ def GenerateTrueParticleTags(events : Data) -> Tags:
         211, -211, 13, -13, 11, -11, 22, 2212, 321
     ] # anything not in this list is tagged as other
 
-    masks = ParticleMasks(events.trueParticlesBT.pdg, particles_to_tag)
+    if ak.count(events.trueParticlesBT.pdg) == 0: # the ntuple has no MC, so provide some null data base off recoParticles array shape
+        pdg = ak.where(events.recoParticles.number, -1, 0)
+    else:
+        pdg = events.trueParticlesBT.pdg
+    masks = ParticleMasks(pdg, particles_to_tag)
     masks["other"] = OtherMask(masks)
 
     tags = Tags()

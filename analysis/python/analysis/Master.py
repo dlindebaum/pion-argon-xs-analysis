@@ -858,7 +858,7 @@ class TrueParticleData(ParticleData):
             grand_daughter = self.events.io.Get("true_beam_Pi0_decay_parID")
             mother = ak.concatenate([ak.unflatten(beam, 1, -1), daughter, grand_daughter], -1)
             setattr(self, var_name, mother)
-            self.FilterVariable(f"_{type(self).__name__}__mother")
+            self.FilterVariable("mother")
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             self.LoadData("mother", "g4_mother")
         return getattr(self, var_name)
@@ -894,7 +894,7 @@ class TrueParticleData(ParticleData):
                 else:
                     mass = m
             setattr(self, f"_{type(self).__name__}__mass", mass)
-            self.FilterVariable(f"_{type(self).__name__}__mass")
+            self.FilterVariable("mass")
         return getattr(self, f"_{type(self).__name__}__mass")
 
     @property
@@ -904,7 +904,7 @@ class TrueParticleData(ParticleData):
         if self.events.nTuple_type == Ntuple_Type.PDSP:
             e = (vector.magnitude(self.momentum) ** 2 - self.mass ** 2) ** 0.5
             setattr(self, f"_{type(self).__name__}__energy", e)
-            self.FilterVariable(f"_{type(self).__name__}__energy")
+            self.FilterVariable("energy")
         return getattr(self, f"_{type(self).__name__}__energy")
 
     @property
