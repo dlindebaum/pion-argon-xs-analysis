@@ -33,33 +33,33 @@ For further detail on each module you can read the docstrings.
 Shower merging analysis workflow is as follows:
 
 ---
-**selection_studies.py**
+**sm_selection_studies.py**
  - input:
      - <span style="color: maroon">Ntuple file (root)</span>
  - output:
      - <span style="color: red">basic plots (png)</span>
      - <span style="color: red">tables (tex) of selection efficiency</span>
 
-**generate_geometric_quantities.py**
+**sm_generate_geometric_quantities.py**
  - input:
      - <span style="color: maroon">Ntuple file (root)</span>
  - output:
      - <span style="color: magenta">geometric quantities file (csv)</span>
 
-**analyse_geometric_quantities.py**
+**sm_analyse_geometric_quantities.py**
  - input:
      - <span style="color: magenta">geometric quantities file (csv)</span>
  - output:
     - <span style="color: red">plots of geometric quantities (png)</span>
     - <span style="color: green">list of cuts (csv)</span>
 
-**shower_merging.py**
+**sm_shower_merging.py**
  - input:
      - <span style="color: maroon">Ntuple file (root)</span>
      - <span style="color: green">list of cuts (csv)</span>
  - output: <span style="color: blue">shower pair quantities (hdf5)</span>
 
-**plotShowerQuantities.py**
+**sm_plot_shower_quantities.py**
  - input:
      - <span style="color: blue">shower pair quantities (hdf5)</span>
  - output:
