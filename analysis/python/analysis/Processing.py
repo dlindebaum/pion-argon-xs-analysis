@@ -45,7 +45,7 @@ def CalculateBatches(file : str, n_batches : int = None, n_events : int = None) 
     Returns:
         list[int]: list of batches
     """
-    total_events = ak.count(Master.Data(file).eventNum) # get number of events
+    total_events = ak.count(Master.Data(file, nTuple_type = Master.Ntuple_Type.SHOWER_MERGING).eventNum) # get number of events, use shower merging ntuple type to supress false warnings
     print(f"{total_events=}")
 
     if n_batches is None and n_events is None:
