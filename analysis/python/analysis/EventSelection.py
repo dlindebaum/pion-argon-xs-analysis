@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # Imports
-from python.analysis import Master, PFOSelection, BeamParticleSelection
+from python.analysis import Master, PFOSelection, BeamParticleSelection, SelectionTools
 import time
 import warnings
 import awkward as ak
@@ -15,6 +15,36 @@ import pandas as pd
 #######################################################################
 #######################################################################
 
+@SelectionTools.CountsWrapper
+def NPhotonCandidateSelection(events : Master.Data, photon_candidates : ak.Array, n : int):
+    n_photons = ak.sum(photon_candidates, -1)
+    return n_photons == n
+
+@SelectionTools.CountsWrapper
+def Pi0OpeningAngleSelection(events : Master.Data, photon_candidates : ak.Array, min = 10, max = 80):
+    shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photon_candidates)
+    angle = ak.fill_none(ak.pad_none(shower_pairs.reco_angle, 1, -1), False, -1)
+    return (angle > (min * np.pi / 180)) & (angle < (max * np.pi / 180))
+
+@SelectionTools.CountsWrapper
+def Pi0MassSelection(events : Master.Data, photon_candidates : ak.Array, min = 50, max = 250):
+    shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photon_candidates)
+    mass = ak.fill_none(ak.pad_none(shower_pairs.reco_mass, 1, -1), False, -1)
+    return (mass > min) & (mass < max)
+
+
+def Pi0Selection(events: Master.Data, photon_candidates, n : int = 2, angle_cuts = [10, 80], mass_cuts = [50, 250], verbose : bool = False, return_table : bool = False):
+    selections = [
+        NPhotonCandidateSelection,
+        Pi0OpeningAngleSelection,
+        Pi0MassSelection
+    ]
+    arguments = [
+        {"photon_candidates" : photon_candidates, "n" : n},
+        {"photon_candidates" : photon_candidates, "min" : min(angle_cuts), "max" : max(angle_cuts)},
+        {"photon_candidates" : photon_candidates, "min" : min(mass_cuts), "max" : max(mass_cuts)}
+    ]
+    return SelectionTools.CombineSelections(events, selections, 0, arguments, verbose, return_table)
 
 def apply_function(
         name,

@@ -121,9 +121,6 @@ def main(args):
     mask = BeamParticleSelection.PandoraTagCut(events)
     events.Filter([mask], [mask])
 
-    # mask = BeamParticleSelection.MichelScoreCut(events)
-    # events.Filter([mask], [mask])
-
     #* fit gaussians to the start positions
     a, mu, sigma = Fit_Vector(events.recoParticles.beam_startPos, 100)
 
@@ -168,7 +165,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Applies beam particle selection, PFO selection, produces tables and basic plots.", formatter_class = argparse.RawDescriptionHelpFormatter)
     parser.add_argument(dest = "file", help = "NTuple file to study.")
-    parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Master.Ntuple_Type, help = f"type of ntuple I am looking at {Master.Ntuple_Type._member_map_}.", required = True)
+    parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Master.Ntuple_Type, help = f"type of ntuple I am looking at {[m.value for m in Master.Ntuple_Type]}.", required = True)
     parser.add_argument("-S", "--sample-type", dest = "sample_type", type = str, choices = ["mc", "data"], help = f"type of sample I am looking at.", required = True)
 
     parser.add_argument("-o", "--out", dest = "out", type = str, default = None, help = "directory to save plots")
@@ -177,6 +174,7 @@ if __name__ == "__main__":
 
     if args.out is None:
         args.out = args.file.split("/")[-1].split(".")[0] + "/"
+    if args.out[-1] != "/": args.out += "/"
 
     print(vars(args))
     main(args)

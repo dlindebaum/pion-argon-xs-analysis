@@ -11,7 +11,7 @@ import json
 import os
 
 from rich import print as rprint
-from python.analysis import Master, BeamParticleSelection, PFOSelection, Plots, shower_merging, vector, Processing, Tags
+from python.analysis import Master, BeamParticleSelection, EventSelection, PFOSelection, Plots, shower_merging, vector, Processing, Tags, cross_section
 
 import awkward as ak
 import numpy as np
@@ -34,14 +34,14 @@ def MakeOutput(value : ak.Array, tags : Tags.Tags, cuts : list = [], fs_tags : T
     return {"value" : value, "tags" : tags, "cuts" : cuts, "fs_tags" : fs_tags}
 
 
-def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam_quality_fits : str) -> dict:
+def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam_quality_fits : dict) -> dict:
     """ Manually applies the beam selection while storing the value being cut on, cut values and truth tags in order to do plotting
         and produce performance tables.
 
     Args:
         events (Master.Data): events to look at
         beam_instrumentation (bool): use beam instrumentation for beam particle selection
-        beam_quality_fits (str): fit values for the beam quality selection
+        beam_quality_fits (dict): fit values for the beam quality selection
 
     Returns:
         dict: output data.
@@ -71,12 +71,8 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam
     events.Filter([mask], [mask]) # apply the cut
     output["pandora_tag"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events) # store the final state truth tags after the cut is applied
 
-    #* beam quality cuts
-    with open(beam_quality_fits, "r") as f:
-        fit_values = json.load(f)
-
     #* dxy cut
-    dxy = (((events.recoParticles.beam_startPos.x - fit_values["mu_x"]) / fit_values["sigma_x"])**2 + ((events.recoParticles.beam_startPos.y - fit_values["mu_y"]) / fit_values["sigma_y"])**2)**0.5
+    dxy = (((events.recoParticles.beam_startPos.x - beam_quality_fits["mu_x"]) / beam_quality_fits["sigma_x"])**2 + ((events.recoParticles.beam_startPos.y - beam_quality_fits["mu_y"]) / beam_quality_fits["sigma_y"])**2)**0.5
     mask = dxy < 3
     output["dxy"] = MakeOutput(dxy, Tags.GenerateTrueBeamParticleTags(events), [3], Tags.GenerateTrueFinalStateTags(events))
     print(f"dxy cut: {BeamParticleSelection.CountMask(mask)}")
@@ -84,7 +80,7 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam
     output["dxy"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
     #* dz cut
-    delta_z = (events.recoParticles.beam_startPos.z - fit_values["mu_z"]) / fit_values["sigma_z"]
+    delta_z = (events.recoParticles.beam_startPos.z - beam_quality_fits["mu_z"]) / beam_quality_fits["sigma_z"]
     mask = (delta_z > -3) & (delta_z < 3)
     output["dz"] = MakeOutput(delta_z, Tags.GenerateTrueBeamParticleTags(events), [-3, 3], Tags.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
@@ -93,7 +89,7 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam
 
     #* beam direction
     beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos, events.recoParticles.beam_startPos))
-    beam_dir_mu = vector.normalize(vector.vector(fit_values["mu_dir_x"], fit_values["mu_dir_y"], fit_values["mu_dir_z"]))
+    beam_dir_mu = vector.normalize(vector.vector(beam_quality_fits["mu_dir_x"], beam_quality_fits["mu_dir_y"], beam_quality_fits["mu_dir_z"]))
     beam_costh = vector.dot(beam_dir, beam_dir_mu)
     mask = beam_costh > 0.95
     output["cos_theta"] = MakeOutput(beam_costh, Tags.GenerateTrueBeamParticleTags(events), [0.95], Tags.GenerateTrueFinalStateTags(events))
@@ -119,7 +115,6 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam
     output["median_dEdX"] = MakeOutput(median, Tags.GenerateTrueBeamParticleTags(events), [2.4], Tags.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
     output["median_dEdX"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
-
 
     #* true particle population
     output["final_tags"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, Tags.GenerateTrueFinalStateTags(events))
@@ -257,6 +252,15 @@ def AnalysePi0Selection(events : Master.Data, data : bool = False, energy_correc
 
     return output
 
+def AnalyseRegions(events : Master.Data, is_data : bool):
+    truth_regions = EventSelection.create_regions(events.trueParticles.nPi0, events.trueParticles.nPiPlus) if is_data == False else None
+
+    reco_pi0_counts = EventSelection.count_pi0_candidates(events, exactly_two_photons = True)
+    reco_pi_plus_counts_mom_cut = EventSelection.count_charged_pi_candidates(events,energy_cut = None)
+    reco_regions = EventSelection.create_regions(reco_pi0_counts, reco_pi_plus_counts_mom_cut)
+    return truth_regions, reco_regions
+
+
 # @Processing.log_process
 def run(i, file, n_events, start, selected_events, args):
     events = Master.Data(file, nEvents = n_events, start = start, nTuple_type = args["ntuple_type"]) # load data
@@ -266,28 +270,50 @@ def run(i, file, n_events, start, selected_events, args):
     else:
         fit_file = args["mc_beam_quality_fit"]
 
+    #* beam quality cuts
+    with open(fit_file, "r") as f:
+        fit_values = json.load(f)
+
     print("beam particle selection")
-    output_beam = AnalyseBeamSelection(events, args["data"], fit_file) # events are cut after this
+    beam_selection_mask = BeamParticleSelection.CreateDefaultSelection(events, args["data"], fit_values, return_table = False) # make this premptively to save masks to file
+    output_beam = AnalyseBeamSelection(events, args["data"], fit_values) # events are cut after this
 
     print("PFO pre-selection")
-    events.Filter([PFOSelection.GoodShowerSelection(events)])
+    good_PFO_mask = PFOSelection.GoodShowerSelection(events) 
+    events.Filter([good_PFO_mask])
 
     print("pion selection")
+    pi_plus_selection_mask = PFOSelection.DaughterPiPlusSelection(events)
     output_pip = AnalysePiPlusSelection(events.Filter(returnCopy = True)) # pass the PFO selections a copy of the event
 
     print("photon selection")
+    photon_selection_mask = PFOSelection.InitialPi0PhotonSelection(events)
     output_photon = AnalysePhotonCandidateSelection(events.Filter(returnCopy = True))
 
     print("pi0 selection")
+    pi0_selection_mask = EventSelection.Pi0Selection(events, photon_selection_mask)
     output_pi0 = AnalysePi0Selection(events.Filter(returnCopy = True), args["data"], args["shower_correction_factor"])
+
+    print("regions")
+    truth_regions, reco_regions = AnalyseRegions(events, args["data"])
+
+    masks  = {
+        "beam_selection"      : beam_selection_mask,
+        "valid_pfo_selection" : good_PFO_mask,
+        "pi_plus_selection"   : pi_plus_selection_mask,
+        "photon_selection"    : photon_selection_mask,
+        "pi0_selection"       : pi0_selection_mask,
+        "truth_regions"       : truth_regions,
+        "reco_regions"        : reco_regions
+    } # keep masks which select events/PFOs for applying the selection without computing each cut every time
 
     output = {
         "beam" : output_beam,
         "pip" : output_pip,
         "photon" : output_photon,
-        "pi0" : output_pi0
+        "pi0" : output_pi0,
+        "masks" : masks
     }
-
     return output
 
 
@@ -532,6 +558,21 @@ def MakePi0SelectionPlots(output_mc : dict, output_data : dict, outDir : str):
     Plots.Save("mass_fs_tags", outDir)
     return
 
+def MakeRegionPlots(outputs_mc_masks : dict, outputs_data_masks : dict, out : str):
+    # Visualise the regions
+    Plots.plot_region_data(outputs_mc_masks["truth_regions"], compare_max=0, title="truth regions")
+    Plots.Save(out + "mc_truth_regions")
+    Plots.plot_region_data(outputs_mc_masks["reco_regions"], compare_max=0, title="reco regions")
+    Plots.Save(out + "mc_reco_regions")
+    # Compare the regions
+    Plots.compare_truth_reco_regions(outputs_mc_masks["reco_regions"], outputs_mc_masks["truth_regions"], title="")
+    Plots.Save(out + "mc_truth_vs_reco_regions")
+
+    if outputs_data_masks is not None:
+        Plots.plot_region_data(outputs_mc_masks["reco_regions"], compare_max=0, title="reco regions")
+        Plots.Save(out + "data_reco_regions")
+
+
 def CalcualteCountMetrics(counts : pd.DataFrame) -> tuple:
     """ Calculates purity and efficiency from event counts.
 
@@ -657,27 +698,43 @@ def MergeOutputs(outputs : list) -> dict:
         for selection in output:
             if selection not in merged_output:
                 merged_output[selection] = {}
-            for o in output[selection]:
-                if o not in merged_output[selection]:
-                    merged_output[selection][o] = output[selection][o]
-                    continue
-                else:
+            print(selection)
+            if selection == "masks":
+                for o in output[selection]:
+                    if o not in merged_output[selection]:
+                        merged_output[selection][o] = output[selection][o]
+                        continue
                     print(o)
-                    if output[selection][o]["value"] is not None:
-                        if o in ["pi_beam"]:
-                            for i in merged_output[selection][o]["value"]:
-                                merged_output[selection][o]["value"][i] = merged_output[selection][o]["value"][i] + output[selection][o]["value"][i] 
-                        else:
-                            merged_output[selection][o]["value"] = ak.concatenate([merged_output[selection][o]["value"], output[selection][o]["value"]]) 
+                    if output[selection][o] is None: continue
+                    elif type(output[selection][o]) == dict:
+                        for m in output[selection][o]:
+                            print(merged_output[selection][o][m])
+                            print(output[selection][o][m])
+                            merged_output[selection][o][m] = ak.concatenate([merged_output[selection][o][m], output[selection][o][m]])
+                    else:
+                        merged_output[selection][o] = ak.concatenate([merged_output[selection][o], output[selection][o]])
+            else:
+                for o in output[selection]:
+                    if o not in merged_output[selection]:
+                        merged_output[selection][o] = output[selection][o]
+                        continue
+                    else:
+                        print(o)
+                        if output[selection][o]["value"] is not None:
+                            if o in ["pi_beam"]:
+                                for i in merged_output[selection][o]["value"]:
+                                    merged_output[selection][o]["value"][i] = merged_output[selection][o]["value"][i] + output[selection][o]["value"][i] 
+                            else:
+                                merged_output[selection][o]["value"] = ak.concatenate([merged_output[selection][o]["value"], output[selection][o]["value"]]) 
 
-                    if output[selection][o]["tags"] is not None:
-                        for t in merged_output[selection][o]["tags"]:
-                            merged_output[selection][o]["tags"][t].mask = ak.concatenate([merged_output[selection][o]["tags"][t].mask, output[selection][o]["tags"][t].mask])
+                        if output[selection][o]["tags"] is not None:
+                            for t in merged_output[selection][o]["tags"]:
+                                merged_output[selection][o]["tags"][t].mask = ak.concatenate([merged_output[selection][o]["tags"][t].mask, output[selection][o]["tags"][t].mask])
 
-                    if output[selection][o]["fs_tags"] is not None:
-                        for t in merged_output[selection][o]["fs_tags"]:
-                            merged_output[selection][o]["fs_tags"][t].mask = ak.concatenate([merged_output[selection][o]["fs_tags"][t].mask, output[selection][o]["fs_tags"][t].mask])
-                    # we shouldn't need to merge cuts because this should be the same for all events
+                        if output[selection][o]["fs_tags"] is not None:
+                            for t in merged_output[selection][o]["fs_tags"]:
+                                merged_output[selection][o]["fs_tags"][t].mask = ak.concatenate([merged_output[selection][o]["fs_tags"][t].mask, output[selection][o]["fs_tags"][t].mask])
+                        # we shouldn't need to merge cuts because this should be the same for all events
 
     rprint("merged_output")
     rprint(merged_output)
@@ -724,12 +781,19 @@ def main(args):
     os.makedirs(args.out + "plots/beam/", exist_ok = True)
     os.makedirs(args.out + "plots/photon/", exist_ok = True)
     os.makedirs(args.out + "plots/pi0/", exist_ok = True)
+    os.makedirs(args.out + "plots/regions/", exist_ok = True)
 
     # plots
     MakeBeamSelectionPlots(output_mc["beam"], output_data["beam"] if output_data else None, args.out + "plots/beam/")
     MakePiPlusSelectionPlots(output_mc["pip"], output_data["pip"] if output_data else None, args.out + "plots/daughter_pi/")
     MakePhotonCandidateSelectionPlots(output_mc["photon"], output_data["photon"] if output_data else None, args.out + "plots/photon/")
     MakePi0SelectionPlots(output_mc["pi0"], output_data["pi0"] if output_data else None, args.out + "plots/pi0/")
+    MakeRegionPlots(output_mc["masks"], output_data["masks"] if output_data else None, args.out + "plots/regions/")
+
+    # masks
+    cross_section.SaveSelection(args.out + args.mc_file[0].split("/")[-1].split(".")[0] + "_selection_masks.dill", output_mc["masks"])
+    if output_data:
+        cross_section.SaveSelection(args.out + args.data_file[0].split("/")[-1].split(".")[0] + "_selection_masks.dill",output_data["masks"])
     return
 
 
@@ -737,7 +801,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Applies beam particle selection, PFO selection, produces tables and basic plots.", formatter_class = argparse.RawDescriptionHelpFormatter)
     parser.add_argument(dest = "mc_file", nargs = "+", help = "MC NTuple file to study.")
     parser.add_argument("-d", "--data-file", dest = "data_file", nargs = "+", help = "Data Ntuple to study")
-    parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Master.Ntuple_Type, help = f"type of ntuple I am looking at {Master.Ntuple_Type._member_map_}.", required = True)
+    parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Master.Ntuple_Type, help = f"type of ntuple I am looking at {[m.value for m in Master.Ntuple_Type]}.", required = True)
 
     parser.add_argument("--mc_beam_quality_fit", dest = "mc_beam_quality_fit", type = str, help = "mc fit values for the beam quality cut.", required = True)
     parser.add_argument("--data_beam_quality_fit", dest = "data_beam_quality_fit", type = str, default = None, help = "data fit values for the beam quality cut.")

@@ -2366,12 +2366,15 @@ class ShowerPairs:
             for k in vars(ShowerPairs):
                 if search in k:
                     print(k)
-                    q = getattr(self, k)
-                    if hasattr(q, "x"):
-                        # add individual vector components separately to the dataframe
-                        df.update({k + "_x" : ak.ravel(q.x), k + "_y" : ak.ravel(q.y), k + "_z" : ak.ravel(q.z)})
-                    else:
-                        df.update({k: ak.ravel(q)})
+                    try:
+                        q = getattr(self, k)
+                        if hasattr(q, "x"):
+                            # add individual vector components separately to the dataframe
+                            df.update({k + "_x" : ak.ravel(q.x), k + "_y" : ak.ravel(q.y), k + "_z" : ak.ravel(q.z)})
+                        else:
+                            df.update({k: ak.ravel(q)})
+                    except:
+                        print(f"couldn't calculate {k}")
         df = pd.DataFrame(df)
 
         metadata = {
