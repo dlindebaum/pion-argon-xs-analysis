@@ -1986,16 +1986,16 @@ def plot_region_data(
                bins=[3,2], norm=cnorm, cmap=cmap)
     plt.text(0,-0.05,f"Absorption\n{weights[0]}", **text_kwargs,
              color=_adjust_text_colour(weights[0], colour, cnorm))
-    plt.text(0,0.9,f"Pion production,\n0 pi0\n{weights[1]}", **text_kwargs,
+    plt.text(0,0.9,f"Pion production,\n0 $\pi^{0}$\n{weights[1]}", **text_kwargs,
              color=_adjust_text_colour(weights[1], colour, cnorm))
     plt.text(1,-0.05,f"Charge exchange\n{weights[2]}", **text_kwargs,
              color=_adjust_text_colour(weights[2], colour, cnorm))
-    plt.text(1,0.9,f"Pion production,\n1 pi0\n{weights[3]}", **text_kwargs,
+    plt.text(1,0.9,f"Pion production,\n1 $\pi^{0}$\n{weights[3]}", **text_kwargs,
              color=_adjust_text_colour(weights[3], colour, cnorm))
-    plt.text(2,0.4,f"Pion production,\n>1 pi0\n{weights[4]}", **text_kwargs,
+    plt.text(2,0.4,f"Pion production,\n>1 $\pi^{0}$\n{weights[4]}", **text_kwargs,
              color=_adjust_text_colour(weights[4], colour, cnorm))
     plt_cfg.format_axis(
-        legend=False, xlabel="Number of pi0", ylabel="Number of pi+")
+        legend=False, xlabel="Number of $\pi^{0}$", ylabel="Number of $\pi^{+}$")
     plt.xticks(ticks=[0, 1, 2], labels=["0", "1", ">1"], minor=False)
     plt.yticks(ticks=[0, 1], labels=["0", ">=1"], minor=False)
     plt.minorticks_off()
