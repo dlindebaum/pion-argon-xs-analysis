@@ -1041,8 +1041,10 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     plt.ylabel(yl)
 
     h_data, edges = np.histogram(np.array(data), bins = edges, range = x_range) # bin the data in terms of MC
+    p_err = np.sqrt(h_data) # poisson error in each bin
     centres = (edges[:-1] + edges[1:]) / 2
     plt.scatter(centres, h_data, c = "black", label = data_label) # plot data as scatter points
+    plt.errorbar(centres, h_data, p_err, ecolor = "black", capsize = 3, linestyle = "")
 
     plt.legend(loc = legend_loc, ncols = ncols)
     plt.tick_params("x", labelbottom = False) # hide x axes tick labels
@@ -1052,8 +1054,10 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
 
     plt.subplot(212) # ratio plot
     ratio = h_data / h_mc # data / MC
+    ratio_err = ((h_data + p_err) / h_mc) - ratio
     ratio[ratio == np.inf] = -1 # if the ratio is undefined, set it to -1
     plt.scatter(centres, ratio, c = "black")
+    plt.errorbar(centres, ratio, ratio_err, ecolor = "black", capsize = 3, linestyle = "")
     plt.ylabel("Data/MC")
 
     ticks = [0, 0.5, 1, 1.5, 2] # hardcode the yaxis to have 5 ticks
