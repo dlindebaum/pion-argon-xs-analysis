@@ -5,8 +5,8 @@ Author: Shyam Bhuller
 
 Description: Library for code used used in the cross section analysis. Refer to the README to see which apps correspond to the cross section analysis
 """
-
 import awkward as ak
+import numpy as np
 import dill
 
 from python.analysis import Master, BeamParticleSelection, PFOSelection, EventSelection
@@ -63,3 +63,20 @@ def SaveSelection(file : str, masks : dict):
     """
     with open(file, "wb") as f:
         dill.dump(masks, f)
+
+
+def LinearCorrection(x, p0):
+    return x / p0
+
+
+def ResponseFit(x, p0, p1, p2):
+    return p0 * np.log(x - p1) + p2
+
+
+def ResponseCorrection(x, p0, p1, p2):
+    return x / (ResponseFit(x, p0, p1, p2) + 1)
+
+shower_energy_correction = {
+    "linear" : LinearCorrection,
+    "response": ResponseCorrection
+}

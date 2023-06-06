@@ -907,7 +907,7 @@ def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None
     return height, edges
 
 
-def PlotHist2D(data_x, data_y, bins: int = 100, x_range: list = [], y_range: list = [], z_range: list = [None, None], xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", x_scale: str = "linear", y_scale: str = "linear", newFigure: bool = True, annotation: str = None):
+def PlotHist2D(data_x, data_y, bins: int = 100, x_range: list = [], y_range: list = [], z_range: list = [None, None], xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", x_scale: str = "linear", y_scale: str = "linear", newFigure: bool = True, annotation: str = None, cmap : str = "viridis"):
     """ Plot 2D histograms.
 
     Returns:
@@ -932,8 +932,7 @@ def PlotHist2D(data_x, data_y, bins: int = 100, x_range: list = [], y_range: lis
         data_y = data_y[data_y <= y_range[1]]
 
     # plot data with a logarithmic color scale
-    height, xedges, yedges, _ = plt.hist2d(data_x, data_y, bins, norm=matplotlib.colors.LogNorm(
-    ), label=label, vmin=z_range[0], vmax=z_range[1])
+    height, xedges, yedges, _ = plt.hist2d(data_x, data_y, bins, norm = matplotlib.colors.LogNorm(), label = label, vmin = z_range[0], vmax = z_range[1], cmap = cmap)
     plt.colorbar()
 
     plt.xlabel(xlabel)

@@ -23,17 +23,26 @@ def NPhotonCandidateSelection(events : Master.Data, photon_candidates : ak.Array
 @SelectionTools.CountsWrapper
 def Pi0OpeningAngleSelection(events : Master.Data, photon_candidates : ak.Array, min = 10, max = 80):
     shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photon_candidates)
-    angle = ak.fill_none(ak.pad_none(shower_pairs.reco_angle, 1, -1), False, -1)
+    angle = ak.fill_none(ak.pad_none(shower_pairs.reco_angle, 1, -1), -999, -1)
     return (angle > (min * np.pi / 180)) & (angle < (max * np.pi / 180))
 
 @SelectionTools.CountsWrapper
-def Pi0MassSelection(events : Master.Data, photon_candidates : ak.Array, min = 50, max = 250):
+def Pi0MassSelection(events : Master.Data, photon_candidates : ak.Array, min = 50, max = 250, correction = None, correction_params : list = None):
     shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photon_candidates)
-    mass = ak.fill_none(ak.pad_none(shower_pairs.reco_mass, 1, -1), False, -1)
+
+    if correction is None:
+        le = shower_pairs.reco_lead_energy
+        se = shower_pairs.reco_sub_energy
+    else:
+        le = correction(shower_pairs.reco_lead_energy, **correction_params)
+        se = correction(shower_pairs.reco_sub_energy, **correction_params)
+
+    mass = shower_pairs.Mass(le, se, shower_pairs.reco_angle)
+    mass = ak.fill_none(ak.pad_none(mass, 1, -1), -999, -1)
     return (mass > min) & (mass < max)
 
 
-def Pi0Selection(events: Master.Data, photon_candidates, n : int = 2, angle_cuts = [10, 80], mass_cuts = [50, 250], verbose : bool = False, return_table : bool = False):
+def Pi0Selection(events: Master.Data, photon_candidates, n : int = 2, angle_cuts = [10, 80], mass_cuts = [50, 250], correction = None, correction_params : list = None, verbose : bool = False, return_table : bool = False):
     selections = [
         NPhotonCandidateSelection,
         Pi0OpeningAngleSelection,
@@ -42,7 +51,7 @@ def Pi0Selection(events: Master.Data, photon_candidates, n : int = 2, angle_cuts
     arguments = [
         {"photon_candidates" : photon_candidates, "n" : n},
         {"photon_candidates" : photon_candidates, "min" : min(angle_cuts), "max" : max(angle_cuts)},
-        {"photon_candidates" : photon_candidates, "min" : min(mass_cuts), "max" : max(mass_cuts)}
+        {"photon_candidates" : photon_candidates, "min" : min(mass_cuts), "max" : max(mass_cuts), "correction" : correction, "correction_params" : correction_params}
     ]
     return SelectionTools.CombineSelections(events, selections, 0, arguments, verbose, return_table)
 

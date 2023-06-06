@@ -200,7 +200,7 @@ def AnalysePhotonCandidateSelection(events : Master.Data) -> dict:
     return output
 
 
-def AnalysePi0Selection(events : Master.Data, data : bool = False, energy_correction_factor : float = 1) -> dict:
+def AnalysePi0Selection(events : Master.Data, data : bool = False, correction = None, correction_params : dict = None) -> dict:
     """ Analyse the pi0 selection.
 
     Args:
@@ -226,11 +226,12 @@ def AnalysePi0Selection(events : Master.Data, data : bool = False, energy_correc
     output["n_photons"] = MakeOutput(n_photons, None, [2])
     events.Filter([mask], [mask]) # technically is an event level cut as we only try to find 1 pi0 in the final state, two is more complicated
     photonCandidates = photonCandidates[mask]
-    
+
     #* opening angle
     shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photonCandidates)
-    angle = ak.flatten(shower_pairs.reco_angle)
+    angle = ak.fill_none(ak.pad_none(shower_pairs.reco_angle, 1, -1), -999, -1)
     mask = (angle > (10 * np.pi / 180)) & (angle < (80 * np.pi / 180))
+    mask = ak.flatten(mask) # 1 pi0
     tags = null_tag() if data else Tags.GeneratePi0Tags(events, photonCandidates)
     output["angle"] = MakeOutput(angle, tags, [(10 * np.pi / 180), (80 * np.pi / 180)])
     events.Filter([mask], [mask])
@@ -238,8 +239,23 @@ def AnalysePi0Selection(events : Master.Data, data : bool = False, energy_correc
 
     #* invariant mass
     shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photonCandidates)
-    mass = ak.flatten(shower_pairs.reco_mass) / energy_correction_factor # see shower_correction.ipynb
+
+    if correction is None:
+        le = shower_pairs.reco_lead_energy
+        se = shower_pairs.reco_sub_energy
+    else:
+        le = correction(shower_pairs.reco_lead_energy, **correction_params)
+        se = correction(shower_pairs.reco_sub_energy, **correction_params)
+
+    print(le)
+    print(se)
+    print(shower_pairs.reco_angle)
+    mass = shower_pairs.Mass(le, se, shower_pairs.reco_angle)
+    print(f"{mass=}")
+    mass = ak.fill_none(ak.pad_none(mass, 1, -1), -999, -1)
+    print(f"{mass=}")
     mask = (mass > 50) & (mass < 250)
+    mask = ak.flatten(mask) # 1 pi0
     tags = null_tag() if data else Tags.GeneratePi0Tags(events, photonCandidates)
     output["mass"] = MakeOutput(mass, tags, [50, 250])
     events.Filter([mask], [mask])
@@ -274,6 +290,13 @@ def run(i, file, n_events, start, selected_events, args):
     with open(fit_file, "r") as f:
         fit_values = json.load(f)
 
+    #* shower energy correction
+    if "correction_params" in args:
+        with open(args["correction_params"], "r") as f:
+            correction_params = json.load(f)
+    else:
+        correction_params = None
+
     print("beam particle selection")
     beam_selection_mask = BeamParticleSelection.CreateDefaultSelection(events, args["data"], fit_values, return_table = False) # make this premptively to save masks to file
     output_beam = AnalyseBeamSelection(events, args["data"], fit_values) # events are cut after this
@@ -291,8 +314,8 @@ def run(i, file, n_events, start, selected_events, args):
     output_photon = AnalysePhotonCandidateSelection(events.Filter(returnCopy = True))
 
     print("pi0 selection")
-    pi0_selection_mask = EventSelection.Pi0Selection(events, photon_selection_mask)
-    output_pi0 = AnalysePi0Selection(events.Filter(returnCopy = True), args["data"], args["shower_correction_factor"])
+    pi0_selection_mask = EventSelection.Pi0Selection(events, photon_selection_mask, correction = args["correction"], correction_params = correction_params)
+    output_pi0 = AnalysePi0Selection(events.Filter(returnCopy = True), args["data"], args["correction"], correction_params)
 
     print("regions")
     truth_regions, reco_regions = AnalyseRegions(events, args["data"])
@@ -805,7 +828,8 @@ if __name__ == "__main__":
 
     parser.add_argument("--mc_beam_quality_fit", dest = "mc_beam_quality_fit", type = str, help = "mc fit values for the beam quality cut.", required = True)
     parser.add_argument("--data_beam_quality_fit", dest = "data_beam_quality_fit", type = str, default = None, help = "data fit values for the beam quality cut.")
-    parser.add_argument("--shower_correction_factor", dest = "shower_correction_factor", type = str, help = "linear shower energy correction factor.", default = 1)
+
+    parser.add_argument("-c, --shower_correction", nargs = 2, dest = "correction", help = f"shower energy correction method {tuple(cross_section.shower_energy_correction.keys())} followed by a correction parameters json file.", required = False)
 
     parser.add_argument("-b", "--batches", dest = "batches", type = int, default = None, help = "number of batches to split n tuple files into when parallel processing processing data.")
     parser.add_argument("-e", "--events", dest = "events", type = int, default = None, help = "number of events to process when parallel processing data.")
@@ -824,8 +848,14 @@ if __name__ == "__main__":
         else:
             args.out = "selection_studies/" #? how to make a better name for multiple input files?
     if args.out[-1] != "/": args.out += "/"
+
     if args.data_file is not None and args.data_beam_quality_fit is None:
         raise Exception("beam quality fit values for data are required")
+
+    if args.correction:
+        args.correction_params = args.correction[1]
+        args.correction = cross_section.shower_energy_correction[args.correction[0]]
+
 
     rprint(vars(args))
     main(args)
