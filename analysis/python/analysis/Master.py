@@ -159,14 +159,25 @@ class Data:
         MergeShowerBT (Data): Merge showers using bactacked matching for pure pi0 sample.
     """
 
-    def __init__(self, filename: str = None, nEvents: int = -1, start: int = 0, nTuple_type : Ntuple_Type = None):
+    def __init__(self, filename: str = None, nEvents: int = -1, start: int = 0, nTuple_type : Ntuple_Type = None, target_momentum : int = None):
         self.filename = filename
+
         if nTuple_type is None:
             warnings.warn(f"nTuple type is not specified, assuming it is {Ntuple_Type.SHOWER_MERGING}")
             self.nTuple_type = Ntuple_Type.SHOWER_MERGING
         else:
             self.nTuple_type = nTuple_type
         if self.filename != None:
+
+            if "GeV" in self.filename:
+                self.target_mom = float(self.filename.split("GeV")[0][-1])
+            elif target_momentum is not None:
+                print("could not determine the target momentum from the file name, using supplied value")
+                self.target_mom = target_momentum
+            else:
+                warnings.warn("could not determine the target momentum from the file name, please specify it in the constructor")
+                self.target_mom = target_momentum
+
             self.nEvents = nEvents
             self.start = start
             self.io = IO(self.filename, self.nEvents, self.start)
@@ -399,6 +410,7 @@ class Data:
             # copy filtered attributes into new instance
             filtered = Data(nTuple_type = self.nTuple_type)
             filtered.filename = self.filename
+            filtered.target_mom = self.target_mom
             filtered.nEvents = self.nEvents
             filtered.start = self.start
             filtered.io = IO(filtered.filename,
@@ -834,6 +846,16 @@ class TrueParticleData(ParticleData):
             self.FilterVariable(name)
 
     @property
+    def beam_traj_KE(self) -> ak.Array:
+        self.LoadData("beam_traj_KE", "true_beam_traj_KE")
+        return getattr(self, f"_{type(self).__name__}__beam_traj_KE")
+
+    @property
+    def beam_traj_pos(self) -> ak.Record:
+        self.LoadData("beam_traj_pos", ["true_beam_traj_X_SCE", "true_beam_traj_Y_SCE", "true_beam_traj_Z_SCE"], is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__beam_traj_pos")
+
+    @property
     def pdg(self) -> ak.Array:
         if self.events.nTuple_type == Ntuple_Type.PDSP:
             self.PDSPData("pdg", "true_beam_PDG", "true_beam_daughter_PDG", "true_beam_Pi0_decay_PDG")
@@ -1170,6 +1192,11 @@ class RecoParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__beam_startPos")
 
     @property
+    def beam_calo_pos(self) -> ak.Record:
+        self.LoadData("beam_calo_pos", ["reco_beam_calo_X", "reco_beam_calo_Y", "reco_beam_calo_Z"], is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__beam_calo_pos")
+
+    @property
     def beam_caloWire(self) -> ak.Array:
         self.LoadData("beam_caloWire", "reco_beam_calo_wire")
         return getattr(self, f"_{type(self).__name__}__beam_caloWire")
@@ -1213,6 +1240,16 @@ class RecoParticleData(ParticleData):
     def beam_inst_trigger(self) -> ak.Array:
         self.LoadData("beam_inst_trigger", "beam_inst_trigger")
         return getattr(self, f"_{type(self).__name__}__beam_inst_trigger")
+
+    @property
+    def beam_inst_P(self) -> type:
+        self.LoadData("beam_inst_P", "beam_inst_P")
+        return self.events.target_mom * 1000 * getattr(self, f"_{type(self).__name__}__beam_inst_P")
+
+    @property
+    def beam_inst_pos(self) -> ak.Record:
+        self.LoadData("beam_inst_pos", ["beam_inst_X", "beam_inst_Y", "beam_inst_Z"], is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__beam_inst_pos")
 
     @property
     def beam_inst_PDG_candidates(self) -> ak.Array:
