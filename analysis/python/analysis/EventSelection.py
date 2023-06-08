@@ -163,6 +163,7 @@ def load_and_cut_data(
         distance_bounds_cm=[3., 90.],
         max_impact_cm=20.,
         beam_slice_cut=False,
+        at_least_2_pfos=True,
         truth_pi0_count=None,
         truth_pi_charged_count=None,
         print_summary=True,
@@ -263,12 +264,13 @@ def load_and_cut_data(
                 apply_filter, events, beam_selection_mask, truth_filter=True,
                 ts=ts)
         # Require >= 2 PFOs. ETA ~90s:
-        ts = time.time()
-        at_least_2_pfos = Master.NPFPMask(events, -1)
-        apply_function(
-            "PFOs >= 2 (reco)", n,
-            apply_filter, events, at_least_2_pfos,
-            truth_filter=True, ts=ts)
+        if at_least_2_pfos:
+            ts = time.time()
+            at_least_2_pfos = Master.NPFPMask(events, -1)
+            apply_function(
+                "PFOs >= 2 (reco)", n,
+                apply_filter, events, at_least_2_pfos,
+                truth_filter=True, ts=ts)
         if (truth_pi0_count is not None) or (truth_pi_charged_count is not None):
             ts = time.time()
             truth_filter = generate_truth_tags(
