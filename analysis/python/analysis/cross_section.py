@@ -213,7 +213,7 @@ class ApplicationArguments:
 
                 if type(filename) == list:
                     if len(filename) == 1:
-                        args.out = args.filename[0].split("/")[-1].split(".")[0] + "/"
+                        args.out = filename[0].split("/")[-1].split(".")[0] + "/"
                     else:
                         args.out = "output/" #? how to make a better name for multiple input files?
                 else:

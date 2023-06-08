@@ -268,11 +268,11 @@ def AnalysePi0Selection(events : Master.Data, data : bool = False, correction = 
 
     return output
 
-def AnalyseRegions(events : Master.Data, is_data : bool):
+def AnalyseRegions(events : Master.Data, photon_mask : ak.Array, is_data : bool, correction = None, correction_params : dict = None):
     truth_regions = EventSelection.create_regions(events.trueParticles.nPi0, events.trueParticles.nPiPlus) if is_data == False else None
 
-    reco_pi0_counts = EventSelection.count_pi0_candidates(events, exactly_two_photons = True)
-    reco_pi_plus_counts_mom_cut = EventSelection.count_charged_pi_candidates(events,energy_cut = None)
+    reco_pi0_counts = EventSelection.count_pi0_candidates(events, exactly_two_photons = True, photon_mask = photon_mask, correction = correction, correction_params = correction_params)
+    reco_pi_plus_counts_mom_cut = EventSelection.count_charged_pi_candidates(events, energy_cut = None)
     reco_regions = EventSelection.create_regions(reco_pi0_counts, reco_pi_plus_counts_mom_cut)
     return truth_regions, reco_regions
 
@@ -318,7 +318,7 @@ def run(i, file, n_events, start, selected_events, args):
     output_pi0 = AnalysePi0Selection(events.Filter(returnCopy = True), args["data"], args["correction"], correction_params)
 
     print("regions")
-    truth_regions, reco_regions = AnalyseRegions(events, args["data"])
+    truth_regions, reco_regions = AnalyseRegions(events, photon_selection_mask, args["data"], args["correction"], correction_params)
 
     masks  = {
         "beam_selection"      : beam_selection_mask,

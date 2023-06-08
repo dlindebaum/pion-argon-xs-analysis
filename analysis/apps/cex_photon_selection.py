@@ -14,33 +14,42 @@ import awkward as ak
 import pandas as pd
 from rich import print
 
-from python.analysis import Master, Processing, BeamParticleSelection, PFOSelection, cross_section
+from python.analysis import Master, Processing, BeamParticleSelection, PFOSelection, cross_section, EventSelection
 
 def run(i, file, n_events, start, selected_events, args):
     output = {}
 
     events = Master.Data(file, n_events, start, args["ntuple_type"])
 
-    with open(args["beam_quality_fit"], "r") as f:
+    with open(args["mc_beam_quality_fit"], "r") as f:
         fit_values = json.load(f)
 
 
-    mask = BeamParticleSelection.CreateDefaultSelection(events, False, fit_values, True, False)
+    mask = BeamParticleSelection.CreateDefaultSelection(events, False, fit_values, verbose = True, return_table = False)
     events.Filter([mask], [mask])
 
     mask = PFOSelection.InitialPi0PhotonSelection(events, verbose = True, return_table = False)
     events.Filter([mask])
 
+    pairs = EventSelection.NPhotonCandidateSelection(events, mask[mask], 2)
+
+    shower_pairs = Master.ShowerPairs(events, shower_pair_mask = mask[mask] & pairs)
+
+    output["shower_pairs_reco_angle"] = ak.flatten(shower_pairs.reco_angle[pairs])
+    output["shower_pairs_reco_lead_energy"] = ak.flatten(shower_pairs.reco_lead_energy[pairs])
+    output["shower_pairs_reco_sub_energy"] = ak.flatten(shower_pairs.reco_sub_energy[pairs])
+    
+    output["shower_pairs_true_angle"] = ak.flatten(shower_pairs.true_angle[pairs])
+    output["shower_pairs_true_lead_energy"] = ak.flatten(shower_pairs.true_lead_energy[pairs])
+    output["shower_pairs_true_sub_energy"] = ak.flatten(shower_pairs.true_sub_energy[pairs])
+
     output["reco_energy"] = ak.flatten(events.recoParticles.energy)
     output["true_energy"] = ak.flatten(events.trueParticlesBT.energy)
-    for i in ["x", "y", "z"]:
-        output["reco_dir_{i}"] = ak.flatten(events.recoParticles.direction[i])
-        output["true_dir_{i}"] = ak.flatten(events.trueParticlesBT.direction[i])
     output["true_mother"] = ak.flatten(events.trueParticlesBT.motherPdg)
     return output
 
 def main(args):
-    outputs = Processing.mutliprocess(run, args.file, args.batches, args.events, vars(args), args.threads)
+    outputs = Processing.mutliprocess(run, [args.file], args.batches, args.events, vars(args), args.threads)
 
     output = {}
     for o in outputs:
@@ -49,10 +58,14 @@ def main(args):
                 output[k] = v
             else:
                 output[k] = ak.concatenate([output[k], v])
-    output = pd.DataFrame(output)
     print(output)
+    output_photons = pd.DataFrame({i : output[i] for i in output if "shower_pairs" not in i})
+    output_pairs = pd.DataFrame({i : output[i] for i in output if "shower_pairs" in i})
+    print(output_photons)
+    print(output_pairs)
     os.makedirs(args.out, exist_ok = True)
-    output.to_hdf(args.out + "photon_energies.hdf5", "df")
+    output_photons.to_hdf(args.out + "photon_energies.hdf5", "all_photons")
+    output_pairs.to_hdf(args.out + "photon_energies.hdf5", "photon_pairs")
 
 
 
@@ -67,7 +80,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    cross_section.ApplicationArguments.ResolveArgs(parser)
+    cross_section.ApplicationArguments.ResolveArgs(args)
 
     print(vars(args))
-    # main(args)
+    main(args)

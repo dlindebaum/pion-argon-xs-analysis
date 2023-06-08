@@ -168,16 +168,10 @@ class Data:
         else:
             self.nTuple_type = nTuple_type
         if self.filename != None:
-
             if "GeV" in self.filename:
                 self.target_mom = float(self.filename.split("GeV")[0][-1])
-            elif target_momentum is not None:
-                print("could not determine the target momentum from the file name, using supplied value")
-                self.target_mom = target_momentum
             else:
-                warnings.warn("could not determine the target momentum from the file name, please specify it in the constructor")
                 self.target_mom = target_momentum
-
             self.nEvents = nEvents
             self.start = start
             self.io = IO(self.filename, self.nEvents, self.start)
@@ -1763,6 +1757,16 @@ class TrueParticleDataBT(ParticleData):
     def beam_pdg(self) -> ak.Array:
         self.LoadData("beam_pdg", ["reco_beam_PFP_true_byHits_pdg", "reco_beam_true_byHits_PDG"])
         return getattr(self, f"_{type(self).__name__}__beam_pdg")
+
+    @property
+    def beam_origin(self) -> ak.Array:
+        self.LoadData("beam_origin", "reco_beam_true_byHits_origin")
+        return getattr(self, f"_{type(self).__name__}__beam_origin")
+
+    @property
+    def beam_endProcess(self) -> ak.Array:
+        self.LoadData("beam_endProcess", "reco_beam_true_byHits_endProcess")
+        return getattr(self, f"_{type(self).__name__}__beam_endProcess")
 
     @property
     def particleNumber(self) -> ak.Array:
