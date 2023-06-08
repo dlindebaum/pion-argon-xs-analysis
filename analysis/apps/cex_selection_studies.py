@@ -822,40 +822,18 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Applies beam particle selection, PFO selection, produces tables and basic plots.", formatter_class = argparse.RawDescriptionHelpFormatter)
-    parser.add_argument(dest = "mc_file", nargs = "+", help = "MC NTuple file to study.")
-    parser.add_argument("-d", "--data-file", dest = "data_file", nargs = "+", help = "Data Ntuple to study")
-    parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Master.Ntuple_Type, help = f"type of ntuple I am looking at {[m.value for m in Master.Ntuple_Type]}.", required = True)
 
-    parser.add_argument("--mc_beam_quality_fit", dest = "mc_beam_quality_fit", type = str, help = "mc fit values for the beam quality cut.", required = True)
-    parser.add_argument("--data_beam_quality_fit", dest = "data_beam_quality_fit", type = str, default = None, help = "data fit values for the beam quality cut.")
-
-    parser.add_argument("-c, --shower_correction", nargs = 2, dest = "correction", help = f"shower energy correction method {tuple(cross_section.shower_energy_correction.keys())} followed by a correction parameters json file.", required = False)
-
-    parser.add_argument("-b", "--batches", dest = "batches", type = int, default = None, help = "number of batches to split n tuple files into when parallel processing processing data.")
-    parser.add_argument("-e", "--events", dest = "events", type = int, default = None, help = "number of events to process when parallel processing data.")
-
-    parser.add_argument("-t", "--threads", dest = "threads", type = int, default = 1, help = "number of threads to use when processsing")
-
-    parser.add_argument("-o", "--out", dest = "out", type = str, default = None, help = "directory to save plots")
-    parser.add_argument("--nbins", dest = "nbins", type = int, default = 50, help = "number of bins to make for histogram plots.")
-    parser.add_argument("-a", "--annotation", dest = "annotation", type = str, default = None, help = "annotation to add to plots")
+    cross_section.ApplicationArguments.Ntuples(parser, True)
+    cross_section.ApplicationArguments.BeamQualityCuts(parser, True)
+    cross_section.ApplicationArguments.BeamSelection(parser)
+    cross_section.ApplicationArguments.ShowerCorrection(parser)
+    cross_section.ApplicationArguments.Processing(parser)
+    cross_section.ApplicationArguments.Output(parser)
+    cross_section.ApplicationArguments.Plots(parser)
 
     args = parser.parse_args()
 
-    if args.out is None:
-        if len(args.mc_file) == 1:
-            args.out = args.mc_file[0].split("/")[-1].split(".")[0] + "/"
-        else:
-            args.out = "selection_studies/" #? how to make a better name for multiple input files?
-    if args.out[-1] != "/": args.out += "/"
-
-    if args.data_file is not None and args.data_beam_quality_fit is None:
-        raise Exception("beam quality fit values for data are required")
-
-    if args.correction:
-        args.correction_params = args.correction[1]
-        args.correction = cross_section.shower_energy_correction[args.correction[0]]
-
+    cross_section.ApplicationArguments.ResolveArgs(args)
 
     rprint(vars(args))
     main(args)

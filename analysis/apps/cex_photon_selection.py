@@ -14,7 +14,7 @@ import awkward as ak
 import pandas as pd
 from rich import print
 
-from python.analysis import Master, Processing, BeamParticleSelection, PFOSelection
+from python.analysis import Master, Processing, BeamParticleSelection, PFOSelection, cross_section
 
 def run(i, file, n_events, start, selected_events, args):
     output = {}
@@ -33,6 +33,9 @@ def run(i, file, n_events, start, selected_events, args):
 
     output["reco_energy"] = ak.flatten(events.recoParticles.energy)
     output["true_energy"] = ak.flatten(events.trueParticlesBT.energy)
+    for i in ["x", "y", "z"]:
+        output["reco_dir_{i}"] = ak.flatten(events.recoParticles.direction[i])
+        output["true_dir_{i}"] = ak.flatten(events.trueParticlesBT.direction[i])
     output["true_mother"] = ak.flatten(events.trueParticlesBT.motherPdg)
     return output
 
@@ -54,27 +57,17 @@ def main(args):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description = "Applies beam particle selection, PFO selection, produces tables and basic plots.", formatter_class = argparse.RawDescriptionHelpFormatter)
-    parser.add_argument(dest = "file", nargs = "+", help = "NTuple file to study.")
-    parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Master.Ntuple_Type, help = f"type of ntuple I am looking at {[m.value for m in Master.Ntuple_Type]}.", required = True)
+    parser = argparse.ArgumentParser(description = "Applies beam particle selection and saves properties of photon shower candidate PFOs to hdf5 file (MC only)", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument("--beam_quality_fit", dest = "beam_quality_fit", type = str, help = "fit values for the beam quality cut.", required = True)
-
-    parser.add_argument("-b", "--batches", dest = "batches", type = int, default = None, help = "number of batches to split n tuple files into when parallel processing processing data.")
-    parser.add_argument("-e", "--events", dest = "events", type = int, default = None, help = "number of events to process when parallel processing data.")
-
-    parser.add_argument("-t", "--threads", dest = "threads", type = int, default = 1, help = "number of threads to use when processsing")
-
-    parser.add_argument("-o", "--out", dest = "out", type = str, default = None, help = "directory to save plots")
+    cross_section.ApplicationArguments.SingleNtuple(parser, define_sample = False)
+    cross_section.ApplicationArguments.BeamQualityCuts(parser, data = False)
+    cross_section.ApplicationArguments.BeamSelection(parser)
+    cross_section.ApplicationArguments.Processing(parser)
+    cross_section.ApplicationArguments.Output(parser)
 
     args = parser.parse_args()
 
-    if args.out is None:
-        if len(args.file) == 1:
-            args.out = args.file[0].split("/")[-1].split(".")[0] + "/"
-        else:
-            args.out = "photon_energy/" #? how to make a better name for multiple input files?
-    if args.out[-1] != "/": args.out += "/"
+    cross_section.ApplicationArguments.ResolveArgs(parser)
 
     print(vars(args))
-    main(args)
+    # main(args)

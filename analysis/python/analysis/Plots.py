@@ -864,7 +864,7 @@ def Save(name: str = "plot", directory: str = "", dpi = 300):
     plt.close()
 
 
-def Plot(x, y, xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 12, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None):
+def Plot(x, y, xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None):
     """ Make scatter plot.
     """
     if newFigure is True:
