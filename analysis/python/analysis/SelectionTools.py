@@ -147,7 +147,7 @@ def np_to_ak_indicies(indicies: np.ndarray) -> ak.Array:
     # 3. Convert to awkward array
     return ak.Array(np.expand_dims(indicies, 1).tolist())
 
-def insert_values_to_func_str(func_str, values):
+def _insert_values_to_func_str(func_str, values):
     for i in range(len(values)):
         func_str = func_str.replace(f"_{i}_", f"{values[i]}")
     return func_str
@@ -176,7 +176,7 @@ def cuts_to_func(values, *operations, func_str=None):
             return next_cut(len(values)-1)
         return cut_func
     else:
-        formatted_func = insert_values_to_func_str(func_str, values)
+        formatted_func = _insert_values_to_func_str(func_str, values)
         return lambda x: eval(formatted_func)
 
 def cuts_to_str(values, *operations, func_str=None, name_format=False):
@@ -198,4 +198,4 @@ def cuts_to_str(values, *operations, func_str=None, name_format=False):
         return str_ini + " and ".join([f"(x {op} {val})" for val, op in zip(values, operations)])
 
     else:
-        return str_ini + insert_values_to_func_str(func_str, values)
+        return str_ini + _insert_values_to_func_str(func_str, values)
