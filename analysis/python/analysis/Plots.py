@@ -1159,7 +1159,7 @@ def PlotBar(data, width: float = 0.4, xlabel: str = "", title: str = "", label: 
     return unique, counts
 
 
-def PlotBarComparision(data_1, data_2, width: float = 0.4, xlabel: str = "", title: str = "", label_1: str = "", label_2: str = "", newFigure: bool = True, annotation: str = None):
+def PlotBarComparision(data_1, data_2, width: float = 0.4, xlabel: str = "", title: str = "", label_1: str = "", label_2: str = "", newFigure: bool = True, annotation: str = None, ylabel : str = None):
     """ Plot two bar plots of the same data type side-by-side.
     """
     if newFigure is True:
@@ -1199,7 +1199,7 @@ def PlotBarComparision(data_1, data_2, width: float = 0.4, xlabel: str = "", tit
     plt.bar(x + (width/2), counts_2, width, label=label_2)
     plt.xticks(x, unique_1)
     plt.xlabel(xlabel)
-    plt.ylabel("Counts")
+    plt.ylabel("Counts" if ylabel is None else ylabel)
     plt.title(title)
     plt.legend()
     if annotation is not None:

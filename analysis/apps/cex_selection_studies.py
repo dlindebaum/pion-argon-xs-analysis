@@ -367,7 +367,7 @@ def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str):
         for i, j in zip(u, c):
             pandora_tag_scaled.extend([i]* int(scale * j))
 
-        Plots.PlotBarComparision(pandora_tag_scaled, output_data["pandora_tag"]["value"], label_1 = "MC", label_2 = "Data", xlabel = "pandora tag")
+        Plots.PlotBarComparision(pandora_tag_scaled, output_data["pandora_tag"]["value"], label_1 = "MC", label_2 = "Data", xlabel = "pandora tag", ylabel = "Counts (MC scaled to data)")
     Plots.Save("pandora_tag", outDir)
 
     if output_data:
@@ -652,7 +652,7 @@ def PiPlusBranchingFractions(output : dir, outDir : str):
 
     for o in ["no_selection", "final_tags"]:
         row = {}
-        pi_mask = output[o]["tags"]["$\\pi^{+}$"].mask
+        pi_mask = output[o]["tags"]["$\\pi^{+}$:inel"].mask
         for t in output[o]["fs_tags"]:
             count = BeamParticleSelection.CountMask(output[o]["fs_tags"][t].mask & pi_mask)
             row["total"] = ak.sum(pi_mask)
