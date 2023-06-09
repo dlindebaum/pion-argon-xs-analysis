@@ -153,6 +153,47 @@ def _insert_values_to_func_str(func_str, values):
     return func_str
 
 def cuts_to_func(values, *operations, func_str=None):
+    """
+    Generates a cut function  to generate a mask when called on some
+    property.
+
+    A cut function is defined through some set of `values` and
+    corresponding `operations`, or a `func_str` to define a more
+    complex function.
+    
+    For example, to test whether my property `x` satisfies
+    `3 <= x < 8` (equivalent to  `x >= 3 and x < 8`), we run the
+    following:
+    ```
+    cut_func = cuts_to_func([3, 8], [">=", "<"])
+    cut_func(x)
+    ```
+    At index 0 of values and operations, we see `3` and `">="`, so we
+    require `x >= 3`. At index 1, we see `8` and `"<"`, so we also
+    require `x < 8`.
+    
+    Parameters
+    ----------
+    values : list
+        List of cut values to be used
+    *operations : list
+        List of strings containing the operations which should be
+        applied with the value at the equivalent index in `values`.
+        Must have the same length as `values`. Allowed strings are: 
+        {"==", "!=", "<", "<=", ">", ">="}.
+    func_str : str, optional
+        Custom cut function in python as a string. The property to be
+        cut must be name "x". Values in `values` are referenced by
+        calling the corresponding index of the value as "_{index}_".
+        E.g. to require `x == values[0]`, the string should be
+        `"x == _0_"`.
+    
+    Returns
+    -------
+    function
+        Function which returns a boolean mask when applied to a
+        property.
+    """
     ops = {
         "==": operator.eq,
         "!=": operator.ne,
@@ -180,6 +221,53 @@ def cuts_to_func(values, *operations, func_str=None):
         return lambda x: eval(formatted_func)
 
 def cuts_to_str(values, *operations, func_str=None, name_format=False):
+    """
+    Generates a string respresentation of some cut.
+
+    A cut function is defined through some set of `values` and
+    corresponding `operations`, or a `func_str` to define a more
+    complex function.
+    
+    For example, to show we have the cut `"3 <= x < 8"` (equivalent to
+    `"(x >= 3) and (x < 8)"`), we run the following:
+    ```
+    cuts_to_str([3, 8], [">=", "<"])
+    ```
+    Which returns:
+    ```
+    "3 <= x < 8"
+    ```
+    At index 0 of values and operations, we see `3` and `">="`, so we
+    require `x >= 3`. At index 1, we see `8` and `"<"`, so we also
+    require `x < 8`.
+    
+    Parameters
+    ----------
+    values : list
+        List of cut values to be used
+    *operations : list
+        List of strings containing the operations which should be
+        applied with the value at the equivalent index in `values`.
+        Must have the same length as `values`. Allowed strings are: 
+        {"==", "!=", "<", "<=", ">", ">="}.
+    func_str : str, optional
+        Custom cut function in python as a string. Values in `values`
+        are referenced by calling the corresponding index of the value
+        as "_{index}_". E.g. to require `x == values[0]`, the string
+        should be `"x == _0_"`.
+    name_format : bool, optional
+        If True, the string will include a ", " before the cut display,
+        unless only one cut is present. If only 1 cut is present, the
+        leading "x" is skipped, i.e. "x > 5" -> " > 5". This purpose is
+        to auotmatically format the result if used in the following
+        way: `"property x" + cuts_to_str(values, operations)`. Default
+        is False.
+    
+    Returns
+    -------
+    str
+        A string repesntation of the passed function.
+    """
     str_ini = ", " if name_format else ""
     if func_str is None:
         if len(operations) != 1:
