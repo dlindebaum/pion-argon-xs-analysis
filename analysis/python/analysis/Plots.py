@@ -864,7 +864,7 @@ def Save(name: str = "plot", directory: str = "", dpi = 300):
     plt.close()
 
 
-def Plot(x, y, xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 12, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None):
+def Plot(x, y, xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None):
     """ Make scatter plot.
     """
     if newFigure is True:
@@ -1159,7 +1159,7 @@ def PlotBar(data, width: float = 0.4, xlabel: str = "", title: str = "", label: 
     return unique, counts
 
 
-def PlotBarComparision(data_1, data_2, width: float = 0.4, xlabel: str = "", title: str = "", label_1: str = "", label_2: str = "", newFigure: bool = True, annotation: str = None):
+def PlotBarComparision(data_1, data_2, width: float = 0.4, xlabel: str = "", title: str = "", label_1: str = "", label_2: str = "", newFigure: bool = True, annotation: str = None, ylabel : str = None):
     """ Plot two bar plots of the same data type side-by-side.
     """
     if newFigure is True:
@@ -1199,7 +1199,7 @@ def PlotBarComparision(data_1, data_2, width: float = 0.4, xlabel: str = "", tit
     plt.bar(x + (width/2), counts_2, width, label=label_2)
     plt.xticks(x, unique_1)
     plt.xlabel(xlabel)
-    plt.ylabel("Counts")
+    plt.ylabel("Counts" if ylabel is None else ylabel)
     plt.title(title)
     plt.legend()
     if annotation is not None:

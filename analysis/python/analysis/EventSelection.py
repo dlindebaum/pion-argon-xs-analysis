@@ -21,14 +21,25 @@ def NPhotonCandidateSelection(events : Master.Data, photon_candidates : ak.Array
     return n_photons == n
 
 @SelectionTools.CountsWrapper
-def Pi0OpeningAngleSelection(events : Master.Data, photon_candidates : ak.Array, min = 10, max = 80):
-    shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photon_candidates)
+def Pi0OpeningAngleSelection(events : Master.Data, photon_mask : ak.Array = None, photon_coords : ak.Array = None, min = 10, max = 80):
+    if photon_mask is not None:
+        shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photon_mask)
+    elif photon_coords is not None:
+        shower_pairs = Master.ShowerPairs(events, pair_coords = photon_coords)
+    else:
+        raise Exception("photon mask and photon_coords cannot both be None")
+
     angle = ak.fill_none(ak.pad_none(shower_pairs.reco_angle, 1, -1), -999, -1)
     return (angle > (min * np.pi / 180)) & (angle < (max * np.pi / 180))
 
 @SelectionTools.CountsWrapper
-def Pi0MassSelection(events : Master.Data, photon_candidates : ak.Array, min = 50, max = 250, correction = None, correction_params : list = None):
-    shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photon_candidates)
+def Pi0MassSelection(events : Master.Data, photon_mask : ak.Array = None, photon_coords : ak.Array = None, min = 50, max = 250, correction = None, correction_params : list = None):
+    if photon_mask is not None:
+        shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photon_mask)
+    elif photon_coords is not None:
+        shower_pairs = Master.ShowerPairs(events, pair_coords = photon_coords)
+    else:
+        raise Exception("photon mask and photon_coords cannot both be None")
 
     if correction is None:
         le = shower_pairs.reco_lead_energy
@@ -42,18 +53,33 @@ def Pi0MassSelection(events : Master.Data, photon_candidates : ak.Array, min = 5
     return (mass > min) & (mass < max)
 
 
-def Pi0Selection(events: Master.Data, photon_candidates, n : int = 2, angle_cuts = [10, 80], mass_cuts = [50, 250], correction = None, correction_params : list = None, verbose : bool = False, return_table : bool = False):
+def Pi0Selection(
+    events: Master.Data,
+    photon_candidates_mask : ak.Array = None,
+    photon_candidates_coords : ak.Array = None,
+    exact_photon_candidates : bool = True,
+    n : int = 2,
+    angle_cuts = [10, 80],
+    mass_cuts = [50, 250],
+    correction = None,
+    correction_params : list = None,
+    verbose : bool = False,
+    return_table : bool = False):
     selections = [
-        NPhotonCandidateSelection,
         Pi0OpeningAngleSelection,
         Pi0MassSelection
     ]
     arguments = [
-        {"photon_candidates" : photon_candidates, "n" : n},
-        {"photon_candidates" : photon_candidates, "min" : min(angle_cuts), "max" : max(angle_cuts)},
-        {"photon_candidates" : photon_candidates, "min" : min(mass_cuts), "max" : max(mass_cuts), "correction" : correction, "correction_params" : correction_params}
+        {"photon_mask" : photon_candidates_mask, "photon_coords" : photon_candidates_coords , "min" : min(angle_cuts), "max" : max(angle_cuts)},
+        {"photon_mask" : photon_candidates_mask, "photon_coords" : photon_candidates_coords , "min" : min(mass_cuts), "max" : max(mass_cuts), "correction" : correction, "correction_params" : correction_params}
     ]
+
+    if (exact_photon_candidates is True) and (photon_candidates_mask is not None):
+        selections.insert(0, NPhotonCandidateSelection)
+        arguments.insert(0, {"photon_candidates" : photon_candidates_mask, "n" : n})
+
     return SelectionTools.CombineSelections(events, selections, 0, arguments, verbose, return_table)
+
 
 def apply_function(
         name,
@@ -358,8 +384,9 @@ def count_pi0_candidates(
         mass_cut=(50, 250),
         opening_angle_deg=(10, 80),
         exactly_two_photons=False,
-        shower_pairs=None,
         photon_mask=None,
+        correction = None,
+        correction_params : list = None,
         pair_coords=None):
     """
     Returns the number of truth pi0 particles which decay to yy in each
@@ -384,36 +411,48 @@ def count_pi0_candidates(
         Array containing the number of occurances of pi0 -> yy for each
         event.
     """
-    if shower_pairs is None:
-        if pair_coords is not None:
-            shower_pairs = Master.ShowerPairs(events,
-                                              pair_coords=pair_coords)
-        elif photon_mask is not None:
-            shower_pairs = Master.ShowerPairs(events,
-                                              shower_pair_mask=photon_mask)
-        else:
-            shower_pairs = Master.ShowerPairs(
-                events,
-                shower_pair_mask=PFOSelection.InitialPi0PhotonSelection(
-                    events))
+    # if shower_pairs is None:
+    #     if pair_coords is not None:
+    #         shower_pairs = Master.ShowerPairs(events,
+    #                                           pair_coords=pair_coords)
+    #     elif photon_mask is not None:
+    #         shower_pairs = Master.ShowerPairs(events,
+    #                                           shower_pair_mask=photon_mask)
+    #     else:
+    #         shower_pairs = Master.ShowerPairs(
+    #             events,
+    #             shower_pair_mask=PFOSelection.InitialPi0PhotonSelection(
+    #                 events))
     
-    pass_angle = np.logical_and(
-        shower_pairs.reco_angle > opening_angle_deg[0]*np.pi/180,
-        shower_pairs.reco_angle < opening_angle_deg[1]*np.pi/180)
-    pass_mass = np.logical_and(
-        shower_pairs.reco_mass > mass_cut[0],
-        shower_pairs.reco_mass < mass_cut[1])
+    # pass_angle = np.logical_and(
+    #     shower_pairs.reco_angle > opening_angle_deg[0]*np.pi/180,
+    #     shower_pairs.reco_angle < opening_angle_deg[1]*np.pi/180)
+    # pass_mass = np.logical_and(
+    #     shower_pairs.reco_mass > mass_cut[0],
+    #     shower_pairs.reco_mass < mass_cut[1])
 
-    full_pass = np.logical_and(pass_angle, pass_mass)
+    # full_pass = np.logical_and(pass_angle, pass_mass)
 
-    if exactly_two_photons:
-        number = np.logical_and(
-            ak.sum(full_pass, axis=1),
-            ak.num(shower_pairs.pairs['0']) == 1)
-        counts = ak.values_astype(number, int)
-    else:
-        counts = ak.sum(full_pass, axis=1)
-    return counts
+    # if exactly_two_photons:
+    #     number = np.logical_and(
+    #         ak.sum(full_pass, axis=1),
+    #         ak.num(shower_pairs.pairs['0']) == 1)
+    #     counts = ak.values_astype(number, int)
+    # else:
+    #     counts = ak.sum(full_pass, axis=1)
+
+    mask = Pi0Selection(events = events,
+        photon_candidates_mask = photon_mask,
+        photon_candidates_coords = pair_coords,
+        exact_photon_candidates = exactly_two_photons,
+        n = 2,
+        angle_cuts = opening_angle_deg,
+        mass_cuts = mass_cut,
+        correction = correction,
+        correction_params = correction_params,
+        verbose = False,
+        return_table = False)
+    return ak.sum(mask, axis=1)
 
 
 def count_charged_pi_candidates(

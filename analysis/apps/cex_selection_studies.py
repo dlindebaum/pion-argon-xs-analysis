@@ -268,11 +268,11 @@ def AnalysePi0Selection(events : Master.Data, data : bool = False, correction = 
 
     return output
 
-def AnalyseRegions(events : Master.Data, is_data : bool):
+def AnalyseRegions(events : Master.Data, photon_mask : ak.Array, is_data : bool, correction = None, correction_params : dict = None):
     truth_regions = EventSelection.create_regions(events.trueParticles.nPi0, events.trueParticles.nPiPlus) if is_data == False else None
 
-    reco_pi0_counts = EventSelection.count_pi0_candidates(events, exactly_two_photons = True)
-    reco_pi_plus_counts_mom_cut = EventSelection.count_charged_pi_candidates(events,energy_cut = None)
+    reco_pi0_counts = EventSelection.count_pi0_candidates(events, exactly_two_photons = True, photon_mask = photon_mask, correction = correction, correction_params = correction_params)
+    reco_pi_plus_counts_mom_cut = EventSelection.count_charged_pi_candidates(events, energy_cut = None)
     reco_regions = EventSelection.create_regions(reco_pi0_counts, reco_pi_plus_counts_mom_cut)
     return truth_regions, reco_regions
 
@@ -318,7 +318,7 @@ def run(i, file, n_events, start, selected_events, args):
     output_pi0 = AnalysePi0Selection(events.Filter(returnCopy = True), args["data"], args["correction"], correction_params)
 
     print("regions")
-    truth_regions, reco_regions = AnalyseRegions(events, args["data"])
+    truth_regions, reco_regions = AnalyseRegions(events, photon_selection_mask, args["data"], args["correction"], correction_params)
 
     masks  = {
         "beam_selection"      : beam_selection_mask,
@@ -367,7 +367,7 @@ def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str):
         for i, j in zip(u, c):
             pandora_tag_scaled.extend([i]* int(scale * j))
 
-        Plots.PlotBarComparision(pandora_tag_scaled, output_data["pandora_tag"]["value"], label_1 = "MC", label_2 = "Data", xlabel = "pandora tag")
+        Plots.PlotBarComparision(pandora_tag_scaled, output_data["pandora_tag"]["value"], label_1 = "MC", label_2 = "Data", xlabel = "pandora tag", ylabel = "Counts (MC scaled to data)")
     Plots.Save("pandora_tag", outDir)
 
     if output_data:
@@ -652,7 +652,7 @@ def PiPlusBranchingFractions(output : dir, outDir : str):
 
     for o in ["no_selection", "final_tags"]:
         row = {}
-        pi_mask = output[o]["tags"]["$\\pi^{+}$"].mask
+        pi_mask = output[o]["tags"]["$\\pi^{+}$:inel"].mask
         for t in output[o]["fs_tags"]:
             count = BeamParticleSelection.CountMask(output[o]["fs_tags"][t].mask & pi_mask)
             row["total"] = ak.sum(pi_mask)
@@ -822,40 +822,18 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Applies beam particle selection, PFO selection, produces tables and basic plots.", formatter_class = argparse.RawDescriptionHelpFormatter)
-    parser.add_argument(dest = "mc_file", nargs = "+", help = "MC NTuple file to study.")
-    parser.add_argument("-d", "--data-file", dest = "data_file", nargs = "+", help = "Data Ntuple to study")
-    parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Master.Ntuple_Type, help = f"type of ntuple I am looking at {[m.value for m in Master.Ntuple_Type]}.", required = True)
 
-    parser.add_argument("--mc_beam_quality_fit", dest = "mc_beam_quality_fit", type = str, help = "mc fit values for the beam quality cut.", required = True)
-    parser.add_argument("--data_beam_quality_fit", dest = "data_beam_quality_fit", type = str, default = None, help = "data fit values for the beam quality cut.")
-
-    parser.add_argument("-c, --shower_correction", nargs = 2, dest = "correction", help = f"shower energy correction method {tuple(cross_section.shower_energy_correction.keys())} followed by a correction parameters json file.", required = False)
-
-    parser.add_argument("-b", "--batches", dest = "batches", type = int, default = None, help = "number of batches to split n tuple files into when parallel processing processing data.")
-    parser.add_argument("-e", "--events", dest = "events", type = int, default = None, help = "number of events to process when parallel processing data.")
-
-    parser.add_argument("-t", "--threads", dest = "threads", type = int, default = 1, help = "number of threads to use when processsing")
-
-    parser.add_argument("-o", "--out", dest = "out", type = str, default = None, help = "directory to save plots")
-    parser.add_argument("--nbins", dest = "nbins", type = int, default = 50, help = "number of bins to make for histogram plots.")
-    parser.add_argument("-a", "--annotation", dest = "annotation", type = str, default = None, help = "annotation to add to plots")
+    cross_section.ApplicationArguments.Ntuples(parser, True)
+    cross_section.ApplicationArguments.BeamQualityCuts(parser, True)
+    cross_section.ApplicationArguments.BeamSelection(parser)
+    cross_section.ApplicationArguments.ShowerCorrection(parser)
+    cross_section.ApplicationArguments.Processing(parser)
+    cross_section.ApplicationArguments.Output(parser)
+    cross_section.ApplicationArguments.Plots(parser)
 
     args = parser.parse_args()
 
-    if args.out is None:
-        if len(args.mc_file) == 1:
-            args.out = args.mc_file[0].split("/")[-1].split(".")[0] + "/"
-        else:
-            args.out = "selection_studies/" #? how to make a better name for multiple input files?
-    if args.out[-1] != "/": args.out += "/"
-
-    if args.data_file is not None and args.data_beam_quality_fit is None:
-        raise Exception("beam quality fit values for data are required")
-
-    if args.correction:
-        args.correction_params = args.correction[1]
-        args.correction = cross_section.shower_energy_correction[args.correction[0]]
-
+    cross_section.ApplicationArguments.ResolveArgs(args)
 
     rprint(vars(args))
     main(args)
