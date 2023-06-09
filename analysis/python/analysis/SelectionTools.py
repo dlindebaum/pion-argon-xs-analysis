@@ -7,6 +7,7 @@ Description: Generic tools to use when making selections on Data.
 """
 from functools import wraps
 
+import operator
 import awkward as ak
 import numpy as np
 import pandas as pd
@@ -145,3 +146,56 @@ def np_to_ak_indicies(indicies: np.ndarray) -> ak.Array:
     #    index in the event.
     # 3. Convert to awkward array
     return ak.Array(np.expand_dims(indicies, 1).tolist())
+
+def insert_values_to_func_str(func_str, values):
+    for i in range(len(values)):
+        func_str = func_str.replace(f"_{i}_", f"{values[i]}")
+    return func_str
+
+def cuts_to_func(values, *operations, func_str=None):
+    ops = {
+        "==": operator.eq,
+        "!=": operator.ne,
+        "<": operator.lt,
+        "<=": operator.le,
+        ">": operator.gt,
+        ">=": operator.ge}
+
+    if func_str is None:
+        if len(operations) != 1:
+            raise ValueError("operations must be sepcified if func_str is not specified")
+        else:
+            operations = operations[0]
+        def cut_func(property_to_cut):
+            def next_cut(index):
+                curr_cut = ops[operations[index]](property_to_cut, values[index])
+                if index <= 0:
+                    return curr_cut
+                else:
+                    return np.logical_and(curr_cut, next_cut(index-1))
+            return next_cut(len(values)-1)
+        return cut_func
+    else:
+        formatted_func = insert_values_to_func_str(func_str, values)
+        return lambda x: eval(formatted_func)
+
+def cuts_to_str(values, *operations, func_str=None, name_format=False):
+    str_ini = ", " if name_format else ""
+    if func_str is None:
+        if len(operations) != 1:
+            raise ValueError("operations must be sepcified if func_str is not specified")
+        else:
+            operations = operations[0]
+        
+        if len(values) == 1:
+            str_ini = "" if name_format else "x"
+            return str_ini + f" {operations[0]} {values[0]}"
+        elif len(values) == 2:
+            if (">" in operations[0]) and ("<" in operations[1]):
+                return str_ini + f"{values[0]} {operations[0].replace('>','<')} x {operations[1]} {values[1]}"
+            elif (">" in operations[1]) and ("<" in operations[0]):
+                return str_ini + f"{values[1]} {operations[1].replace('>','<')} x {operations[0]} {values[0]}"
+        return str_ini + " and ".join([f"(x {op} {val})" for val, op in zip(values, operations)])
+
+    else:
+        return str_ini + insert_values_to_func_str(func_str, values)
