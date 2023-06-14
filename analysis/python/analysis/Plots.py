@@ -1096,7 +1096,7 @@ def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float
     plt.annotate("", xy = xy1, xytext = xy0, arrowprops=dict(facecolor = color, edgecolor = color, arrowstyle = "->"), xycoords= transform)
 
 
-def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False):
+def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False, title : str = "", newFigure : bool = True):
     """ Makes a stacked histogram and splits the sample based on tags.
 
     Args:
@@ -1119,10 +1119,10 @@ def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = N
             colours[i] = "C" + str(i)
 
     if data2 is None:
-        PlotHist(split_data, stacked = True, label = tags.name.values, bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm))
+        PlotHist(split_data, stacked = True, label = tags.name.values, bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, newFigure = newFigure)
         plt.legend(loc = loc, ncols = ncols)
     else:
-        PlotHistDataMC(ak.ravel(data2), split_data, bins, x_range, True, "Data", tags.name.values, x_label, None, y_scale, loc, ncols, norm, colour = colours)
+        PlotHistDataMC(ak.ravel(data2), split_data, bins, x_range, True, "Data", tags.name.values, x_label, title, y_scale, loc, ncols, norm, colour = colours)
 
 
 def UniqueData(data):
@@ -1159,7 +1159,7 @@ def PlotBar(data, width: float = 0.4, xlabel: str = "", title: str = "", label: 
     return unique, counts
 
 
-def PlotBarComparision(data_1, data_2, width: float = 0.4, xlabel: str = "", title: str = "", label_1: str = "", label_2: str = "", newFigure: bool = True, annotation: str = None, ylabel : str = None):
+def PlotBarComparision(data_1, data_2, width: float = 0.4, xlabel: str = "", title: str = "", label_1: str = "", label_2: str = "", newFigure: bool = True, annotation: str = None, ylabel : str = None, fraction : bool = False, barlabel : bool = True):
     """ Plot two bar plots of the same data type side-by-side.
     """
     if newFigure is True:
@@ -1193,13 +1193,27 @@ def PlotBarComparision(data_1, data_2, width: float = 0.4, xlabel: str = "", tit
     for i in loc:
         counts_2.insert(i, 0)
 
+    if fraction is True:
+        y_1 = counts_1 / np.sum(counts_1)
+        y_2 = counts_2 / np.sum(counts_2)
+        yl = "Fraction"
+    else:
+        y_1 = counts_1
+        y_2 = counts_2
+        yl = "Counts"
+
     x = np.arange(len(unique_1))
 
-    plt.bar(x - (width/2), counts_1, width, label=label_1)
-    plt.bar(x + (width/2), counts_2, width, label=label_2)
+    bar_1 = plt.bar(x - (width/2), y_1, width, label = label_1)
+    bar_2 = plt.bar(x + (width/2), y_2, width, label = label_2)
+
+    if barlabel:
+        plt.bar_label(bar_1, np.char.mod('%.3f', y_1))
+        plt.bar_label(bar_2, np.char.mod('%.3f', y_2))
+
     plt.xticks(x, unique_1)
     plt.xlabel(xlabel)
-    plt.ylabel("Counts" if ylabel is None else ylabel)
+    plt.ylabel(yl if ylabel is None else ylabel)
     plt.title(title)
     plt.legend()
     if annotation is not None:

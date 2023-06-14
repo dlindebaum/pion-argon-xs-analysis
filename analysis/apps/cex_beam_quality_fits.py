@@ -40,7 +40,7 @@ def Fit_Vector(v : ak.Record, bins : int) -> tuple:
 
     print(mu)
     print(sigma)
-    return a, mu, sigma
+    return a, mu, abs(sigma) # sign of sigma has no meaning
 
 
 def plot(value : ak.Array, x_label : str, range : list, mu : float, sigma : float, name : str):

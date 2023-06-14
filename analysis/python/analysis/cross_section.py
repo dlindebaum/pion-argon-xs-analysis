@@ -6,6 +6,7 @@ Author: Shyam Bhuller
 Description: Library for code used used in the cross section analysis. Refer to the README to see which apps correspond to the cross section analysis
 """
 import argparse
+import json
 
 import awkward as ak
 import numpy as np
@@ -14,6 +15,7 @@ from particle import Particle
 from scipy.optimize import curve_fit
 
 from python.analysis import Master, BeamParticleSelection, PFOSelection, EventSelection
+from python.analysis.shower_merging import SetPlotStyle
 
 def LoadSelectionFile(file : str):
     """ Opens and serialises object saved as a dill file. May be remaned to a more general method if dill files are used more commonly.
@@ -131,6 +133,7 @@ class BetheBloch:
         delta = ak.where(y >= BetheBloch.y1, 2 * np.log(10)*y - BetheBloch.C, 0) 
         delta = ak.where((BetheBloch.y0 <= y) & (y < BetheBloch.y1), 2 * np.log(10)*y - BetheBloch.C + BetheBloch.a * (BetheBloch.y1 - y)**BetheBloch.k, delta)
 
+        #* this is the logic implemented above, but uses ak.where in place of if statements, keeping this for documentation sake.
         # if y >= BetheBloch.y1:
         #     delta = 2 * np.log(10)*y - BetheBloch.C
         # elif BetheBloch.y0 <= y < BetheBloch.y1:
@@ -154,33 +157,33 @@ class BetheBloch:
 class ApplicationArguments:
     @staticmethod
     def Ntuples(parser : argparse.ArgumentParser, data : bool = False):
-        parser.add_argument(dest = "mc_file", nargs = "+", help = "MC NTuple file to study.")
-        if data: parser.add_argument("-d", "--data-file", dest = "data_file", nargs = "+", help = "Data Ntuple to study")
-        parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Master.Ntuple_Type, help = f"type of ntuple I am looking at {[m.value for m in Master.Ntuple_Type]}.", required = True)
+        parser.add_argument("-m", "--mc-file", dest = "mc_file", nargs = "+", help = "MC NTuple file to study.", required = False)
+        if data: parser.add_argument("-d", "--data-file", dest = "data_file", nargs = "+", help = "Data Ntuple to study", required = False)
+        parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Master.Ntuple_Type, help = f"type of ntuple I am looking at {[m.value for m in Master.Ntuple_Type]}.", required = False)
         return
 
     @staticmethod
     def SingleNtuple(parser : argparse.ArgumentParser, define_sample : bool = True):
         parser.add_argument(dest = "file", help = "NTuple file to study.")
-        parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Master.Ntuple_Type, help = f"type of ntuple I am looking at {[m.value for m in Master.Ntuple_Type]}.", required = True)
-        if define_sample : parser.add_argument("-S", "--sample-type", dest = "sample_type", type = str, choices = ["mc", "data"], help = f"type of sample I am looking at.", required = True)
+        parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Master.Ntuple_Type, help = f"type of ntuple I am looking at {[m.value for m in Master.Ntuple_Type]}.", required = False)
+        if define_sample : parser.add_argument("-S", "--sample-type", dest = "sample_type", type = str, choices = ["mc", "data"], help = f"type of sample I am looking at.", required = False)
         return
 
     @staticmethod
     def BeamQualityCuts(parser : argparse.ArgumentParser, data : bool = False):
-        parser.add_argument("--mc_beam_quality_fit", dest = "mc_beam_quality_fit", type = str, help = "mc fit values for the beam quality cut.", required = True)
-        if data: parser.add_argument("--data_beam_quality_fit", dest = "data_beam_quality_fit", type = str, default = None, help = "data fit values for the beam quality cut.")
+        parser.add_argument("--mc_beam_quality_fit", dest = "mc_beam_quality_fit", type = str, help = "MC fit values for the beam quality cut.", required = False)
+        if data: parser.add_argument("--data_beam_quality_fit", dest = "data_beam_quality_fit", type = str, default = None, help = "Data fit values for the beam quality cut.", required = False)
         return
     
     @staticmethod
     def Processing(parser : argparse.ArgumentParser):
-        parser.add_argument("-b", "--batches", dest = "batches", type = int, default = None, help = "number of batches to split n tuple files into when parallel processing processing data.")
-        parser.add_argument("-e", "--events", dest = "events", type = int, default = None, help = "number of events to process when parallel processing data.")
-        parser.add_argument("-t", "--threads", dest = "threads", type = int, default = 1, help = "number of threads to use when processsing")
+        parser.add_argument("-b", "--batches", dest = "batches", type = int, default = None, help = "Number of batches to split n tuple files into when parallel processing processing data.")
+        parser.add_argument("-e", "--events", dest = "events", type = int, default = None, help = "Number of events to process when parallel processing data.")
+        parser.add_argument("-t", "--threads", dest = "threads", type = int, default = 1, help = "Number of threads to use when processsing")
 
     @staticmethod
     def Output(parser : argparse.ArgumentParser):
-        parser.add_argument("-o", "--out", dest = "out", type = str, default = None, help = "directory to save plots")
+        parser.add_argument("-o", "--out", dest = "out", type = str, default = None, help = "Directory to save plots")
         return
 
     @staticmethod
@@ -190,17 +193,41 @@ class ApplicationArguments:
 
     @staticmethod
     def ShowerCorrection(parser : argparse.ArgumentParser):
-        parser.add_argument("-c, --shower_correction", nargs = 2, dest = "correction", help = f"shower energy correction method {tuple(shower_energy_correction.keys())} followed by a correction parameters json file.", required = False)
+        parser.add_argument("-C, --shower_correction", nargs = 2, dest = "correction", help = f"Shower energy correction method {tuple(shower_energy_correction.keys())} followed by a correction parameters json file.", required = False)
         return
 
     @staticmethod
     def Plots(parser : argparse.ArgumentParser):
-        parser.add_argument("--nbins", dest = "nbins", type = int, default = 50, help = "number of bins to make for histogram plots.")
-        parser.add_argument("-a", "--annotation", dest = "annotation", type = str, default = None, help = "annotation to add to plots")
+        parser.add_argument("--nbins", dest = "nbins", type = int, default = 50, help = "Number of bins to make for histogram plots.")
+        parser.add_argument("-a", "--annotation", dest = "annotation", type = str, default = None, help = "Annotation to add to plots")
         return
-    
+
+    @staticmethod
+    def Config(parser : argparse.ArgumentParser):
+        parser.add_argument("-c", "--config", dest = "config", type = str, default = None, help = "Analysis configuration file, if supplied will override command line arguments.")
+
     @staticmethod
     def ResolveArgs(args : argparse.Namespace):
+
+        if hasattr(args, "config"):
+            args_copy = argparse.Namespace()
+            for a, v in args._get_kwargs():
+                setattr(args_copy, a, v)
+            args = ApplicationArguments.ResolveConfig(LoadConfiguration(args.config))
+            print(args.mc_file)
+            for a, v in args_copy._get_kwargs():
+                if a not in args:
+                    setattr(args, a, v)
+        else:
+            if hasattr(args, "data_file") and hasattr(args, "data_beam_quality_fit"):
+                if args.data_file is not None and args.data_beam_quality_fit is None:
+                    raise Exception("beam quality fit values for data are required")
+
+            if hasattr(args, "correction") and args.correction:
+                args.correction_params = args.correction[1]
+                args.correction = shower_energy_correction[args.correction[0]]
+        print(args)
+
         if hasattr(args, "out"):
             if args.out is None:
                 filename = None
@@ -217,14 +244,55 @@ class ApplicationArguments:
                     else:
                         args.out = "output/" #? how to make a better name for multiple input files?
                 else:
-                    args.out = args.file.split("/")[-1].split(".")[0] + "/"
+                    args.out = filename.split("/")[-1].split(".")[0] + "/"
             if args.out[-1] != "/": args.out += "/"
 
-        if hasattr(args, "data_file") and hasattr(args, "data_beam_quality_fit"):
-            if args.data_file is not None and args.data_beam_quality_fit is None:
-                raise Exception("beam quality fit values for data are required")
+        return args
 
-        if hasattr(args, "correction") and args.correction:
-            args.correction_params = args.correction[1]
-            args.correction = shower_energy_correction[args.correction[0]]
-        return
+    @staticmethod
+    def __CreateSelection(value : dict, module):
+        selection = {"selections" : [], "arguments" : []}
+        for func, opt in value.items():
+            if opt["enable"] is True:
+                selection["selections"].append(getattr(module, func))
+                copy = opt.copy()
+                copy.pop("enable")
+                selection["arguments"].append(copy)
+        return selection
+
+    @staticmethod
+    def ResolveConfig(config : dict):
+        args = argparse.Namespace()
+        for head, value in config.items():
+            if head == "NTUPLE_FILE":
+                args.mc_file = value["mc"]
+                args.data_file = value["data"]
+                args.ntuple_type = value["type"]
+            elif head == "BEAM_QUALITY_FITS":
+                args.mc_beam_quality_fit = value["mc"]
+                args.data_beam_quality_fit = value["data"]
+            elif head == "BEAM_SCAPER_FITS":
+                args.mc_beam_scraper_fit = value["mc"]
+                args.data_beam_scraper_fit = value["data"]
+            elif head == "ENERGY_CORRECTION":
+                args.correction = value["correction"]
+                args.correction_params = value["correction_params"]
+            elif head == "BEAM_PARTICLE_SELECTION":
+                args.beam_selection = ApplicationArguments.__CreateSelection(value, BeamParticleSelection)
+            elif head == "VALID_PFO_SELECTION":
+                args.valid_pfo_selection = value["enable"]
+            elif head == "FINAL_STATE_PIPLUS_SELECTION":
+                args.piplus_selection = ApplicationArguments.__CreateSelection(value, PFOSelection)
+            elif head == "FINAL_STATE_PHOTON_SELECTION":
+                args.photon_selection = ApplicationArguments.__CreateSelection(value, PFOSelection)
+            elif head == "FINAL_STATE_PI0_SELECTION":
+                args.pi0_selection = ApplicationArguments.__CreateSelection(value, EventSelection)
+            else:
+                continue
+        return args
+
+
+def LoadConfiguration(file : str):
+    with open(file, "rb") as f:
+        config = json.load(f)
+    return config

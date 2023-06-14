@@ -291,7 +291,7 @@ def run(i, file, n_events, start, selected_events, args):
         fit_values = json.load(f)
 
     #* shower energy correction
-    if "correction_params" in args:
+    if args["correction_params"] is not None:
         with open(args["correction_params"], "r") as f:
             correction_params = json.load(f)
     else:
@@ -360,14 +360,7 @@ def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str):
     if output_data is None:
         Plots.PlotBar(output_mc["pandora_tag"]["value"], xlabel = "Pandora tag")
     else:
-        scale = ak.count(output_data["pandora_tag"]["value"]) / ak.count(output_mc["pandora_tag"]["value"])
-
-        pandora_tag_scaled = []
-        u, c = np.unique(output_mc["pandora_tag"]["value"], return_counts = True)
-        for i, j in zip(u, c):
-            pandora_tag_scaled.extend([i]* int(scale * j))
-
-        Plots.PlotBarComparision(pandora_tag_scaled, output_data["pandora_tag"]["value"], label_1 = "MC", label_2 = "Data", xlabel = "pandora tag", ylabel = "Counts (MC scaled to data)")
+        Plots.PlotBarComparision(output_mc["pandora_tag"]["value"], output_data["pandora_tag"]["value"], label_1 = "MC", label_2 = "Data", xlabel = "pandora beam tag", fraction = True, barlabel = True)
     Plots.Save("pandora_tag", outDir)
 
     if output_data:
@@ -461,7 +454,7 @@ def MakePiPlusSelectionPlots(output_mc : dict, output_data : dict, outDir : str)
     Plots.Save("nHits_vs_completeness", outDir)
 
     if output_data:
-        Plots.PlotTagged(output_mc["median_dEdX"]["value"], output_mc["median_dEdX"]["tags"], data2 = output_data["median_dEdX"]["value"], ncols = 3, x_range = [0, 6], x_label = "median $dEdX$", bins = args.nbins, norm = norm)
+        Plots.PlotTagged(output_mc["median_dEdX"]["value"], output_mc["median_dEdX"]["tags"], data2 = output_data["median_dEdX"]["value"], ncols = 3, x_range = [0, 6], x_label = "median $dEdX$ (MeV/cm)", bins = args.nbins, norm = norm)
     else:
         Plots.PlotTagged(output_mc["median_dEdX"]["value"], output_mc["median_dEdX"]["tags"], ncols = 3, x_range = [0, 6], x_label = "median $dEdX$", bins = args.nbins, norm = norm)
     Plots.DrawCutPosition(min(output_mc["median_dEdX"]["cuts"]), arrow_length = 0.5, face = "right")
@@ -551,7 +544,7 @@ def MakePi0SelectionPlots(output_mc : dict, output_data : dict, outDir : str):
         for i, j in zip(u, c):
             n_photons_scaled.extend([i]* int(scale * j))
 
-        Plots.PlotBarComparision(n_photons_scaled, output_data["n_photons"]["value"], xlabel = "number of $\pi^{0}$ photon candidates", label_1 = "MC", label_2 = "Data")
+        Plots.PlotBarComparision(n_photons_scaled, output_data["n_photons"]["value"], xlabel = "number of $\pi^{0}$ photon candidates", label_1 = "MC", label_2 = "Data", ylabel = "Counts (MC scaled to Data)")
     else:
         Plots.PlotBar(output_mc["n_photons"]["value"], xlabel = "number of $\pi^{0}$ photon candidates")
     Plots.Save("n_photons", outDir)
@@ -788,12 +781,12 @@ def main(args):
     func_args["data"] = False
     print(func_args)
 
-    output_mc = MergeOutputs(Processing.mutliprocess(run, args.mc_file, args.batches, args.events, func_args, args.threads)) # run the main analysing method
+    output_mc = MergeOutputs(Processing.mutliprocess(run, [args.mc_file], args.batches, args.events, func_args, args.threads)) # run the main analysing method
 
     output_data = None
     if args.data_file is not None:
         func_args["data"] = True
-        output_data = MergeOutputs(Processing.mutliprocess(run, args.data_file, args.batches, args.events, func_args, args.threads)) # run the main analysing method
+        output_data = MergeOutputs(Processing.mutliprocess(run, [args.data_file], args.batches, args.events, func_args, args.threads)) # run the main analysing method
 
     # tables
     MakeTables(output_mc, args.out + "tables_mc/", "mc")
@@ -830,10 +823,11 @@ if __name__ == "__main__":
     cross_section.ApplicationArguments.Processing(parser)
     cross_section.ApplicationArguments.Output(parser)
     cross_section.ApplicationArguments.Plots(parser)
+    cross_section.ApplicationArguments.Config(parser)
 
     args = parser.parse_args()
 
-    cross_section.ApplicationArguments.ResolveArgs(args)
+    args = cross_section.ApplicationArguments.ResolveArgs(args)
 
     rprint(vars(args))
     main(args)
