@@ -1,0 +1,101 @@
+{
+    "NTUPLE_FILE":{
+        "mc" : "PDSPProd4a_MC_1GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03.root",
+        "data" :"PDSPProd4_data_1GeV_reco2_ntuple_v09_41_00_04.root",
+        "type" : "PDSPAnalyser"
+    },
+    "BEAM_QUALITY_FITS":{
+        "mc" : "",
+        "data" : ""
+    },
+    "ENERGY_CORRECTION":{
+        "correction" : null,
+        "correction_params" : null
+    },
+    "BEAM_PARTICLE_SELECTION":{
+        "PiBeamSelection":{
+            "enable" : true,
+            "use_beam_inst" : false
+        },
+        "PandoraTagCut":{
+            "enable" : true,
+            "cut" : 13
+        },
+        "CaloSizeCut":{
+            "enable" : true
+        },
+        "MichelScoreCut":{
+            "enable" : true,
+            "cut" : 0.5
+        },
+        "BeamQualityCut":{
+            "enable" : true,
+            "dxy_cut" : [-1, 3],
+            "dz_cut" : [-3, 3],
+            "costh_cut" : [0.95, 2]
+        },
+        "APA3Cut":{
+            "enable" : true,
+            "cut" : 220
+        },
+        "MedianDEdXCut":{
+            "enable" : true,
+            "cut" : 2.4
+        },
+        "BeamScraper":{
+            "enable" : true,
+            "pdg_hyp" : 211,
+            "KE_range" : [800, 900],
+            "cut" : 1.5
+        }
+    },
+    "VALID_PFO_SELECTION":{
+        "enable" : true
+    },
+    "FINAL_STATE_PIPLUS_SELECTION":{
+        "TrackScoreCut":{
+            "enable" : true,
+            "cut" : 0.5
+        },
+        "NHitsCut":{
+            "enable" : true,
+            "cut" : 20
+        },
+        "PiPlusSelection":{
+            "enable" : true,
+            "cut" : [0.5, 2.8]
+        }
+    },
+    "FINAL_STATE_PHOTON_SELECTION":{    
+        "EMScoreCut":{
+            "enable" : true,
+            "cut" : 0.5
+        },
+        "NHitsCut":{        
+            "enable" : true,
+            "cut" : 80
+        },
+        "BeamParticleDistanceCut":{
+            "enable" : true,
+            "cut" : [3, 90]
+        },
+        "BeamParticleIPCut":{
+            "enable" : true,
+            "cut" : 20
+        }
+    },
+    "FINAL_STATE_PI0_SELECTION":{
+        "NPhotonCandidateSelection":{
+            "enable" : true,
+            "cut" : 2
+        },
+        "Pi0OpeningAngleSelection":{
+            "enable" : true,
+            "cut" : [10, 80]
+        },
+        "Pi0MassSelection":{
+            "enable" : true,
+            "cut" : [50, 250]
+        }
+    }
+}
