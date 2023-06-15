@@ -125,7 +125,7 @@ def BeamScraperPlots(mc: Master.Data, beam_inst_KE_bins : list, beam_inst_KE : a
             r = m * (sigma_x**2 + sigma_y**2)**0.5
             x = r*np.cos(theta) + mu_x
             y = r*np.sin(theta) + mu_y
-            
+
             plt.plot(x, y, linestyle = "--", color = f"C{7+j}", alpha = 1, label = f"{m}$r$")
         plt.axis('scaled')
         plt.legend()

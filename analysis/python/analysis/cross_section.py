@@ -233,6 +233,8 @@ class ApplicationArguments:
                 filename = None
                 if hasattr(args, "mc_file"):
                     filename = args.mc_file
+                elif hasattr(args, "data_file"):
+                    filename = args.data_file
                 elif hasattr(args, "file"):
                     filename = args.file
                 else:
