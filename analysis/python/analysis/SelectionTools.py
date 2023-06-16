@@ -147,10 +147,12 @@ def np_to_ak_indicies(indicies: np.ndarray) -> ak.Array:
     # 3. Convert to awkward array
     return ak.Array(np.expand_dims(indicies, 1).tolist())
 
+
 def _insert_values_to_func_str(func_str, values):
     for i in range(len(values)):
         func_str = func_str.replace(f"_{i}_", f"{values[i]}")
     return func_str
+
 
 def cuts_to_func(values, *operations, func_str=None):
     """
@@ -207,6 +209,12 @@ def cuts_to_func(values, *operations, func_str=None):
             raise ValueError("operations must be sepcified if func_str is not specified")
         else:
             operations = operations[0]
+        if not isinstance(values, list):
+            values = [values]
+        if not isinstance(operations, list):
+            operations = [operations]
+        if len(operations) != len(values):
+            raise ValueError("values and operations must have equivalent lengths")
         def cut_func(property_to_cut):
             def next_cut(index):
                 curr_cut = ops[operations[index]](property_to_cut, values[index])
@@ -219,6 +227,7 @@ def cuts_to_func(values, *operations, func_str=None):
     else:
         formatted_func = _insert_values_to_func_str(func_str, values)
         return lambda x: eval(formatted_func)
+
 
 def cuts_to_str(values, *operations, func_str=None, name_format=False):
     """
@@ -274,7 +283,12 @@ def cuts_to_str(values, *operations, func_str=None, name_format=False):
             raise ValueError("operations must be sepcified if func_str is not specified")
         else:
             operations = operations[0]
-        
+        if not isinstance(values, list):
+            values = [values]
+        if not isinstance(operations, list):
+            operations = [operations]
+        if len(operations) != len(values):
+            raise ValueError("values and operations must have equivalent lengths")
         if len(values) == 1:
             str_ini = "" if name_format else "x"
             return str_ini + f" {operations[0]} {values[0]}"
