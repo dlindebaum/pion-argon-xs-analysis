@@ -393,7 +393,7 @@ def cuts_to_str(values, *operations, func_str=None, name_format=False):
         return str_ini + _insert_values_to_func_str(func_str, values)
 
 
-def cuts_to_str_multi(param_names, values, *operations, func_str=None):
+def multi_cuts_to_str(param_names, values, *operations, func_str=None):
     """
     Generates a string respresentation of some cut.
 
