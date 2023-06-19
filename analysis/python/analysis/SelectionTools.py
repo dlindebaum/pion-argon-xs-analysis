@@ -154,9 +154,19 @@ def _insert_values_to_func_str(func_str, values):
     return func_str
 
 
+def _count_and_insert_params_to_func_str(func_str):
+    split_func = func_str.split("_")
+    params = [ord(p) for i, p in enumerate(split_func) if (len(p) == 1) and (p not in split_func[:i]) and p.islower()]
+    params.sort()
+    params = [chr(p) for p in params]
+    for i,p in enumerate(params):
+        func_str = func_str.replace(f"_{p}_", f"x[{i}]")
+    return func_str
+
+
 def cuts_to_func(values, *operations, func_str=None):
     """
-    Generates a cut function  to generate a mask when called on some
+    Generates a cut function to generate a mask when called on some
     property.
 
     A cut function is defined through some set of `values` and
@@ -177,7 +187,7 @@ def cuts_to_func(values, *operations, func_str=None):
     Parameters
     ----------
     values : list
-        List of cut values to be used
+        List of cut values to be used.
     *operations : list
         List of strings containing the operations which should be
         applied with the value at the equivalent index in `values`.
@@ -188,7 +198,7 @@ def cuts_to_func(values, *operations, func_str=None):
         cut must be name "x". Values in `values` are referenced by
         calling the corresponding index of the value as "_{index}_".
         E.g. to require `x == values[0]`, the string should be
-        `"x == _0_"`.
+        `"x == _0_"`. Default is None.
     
     Returns
     -------
@@ -229,6 +239,86 @@ def cuts_to_func(values, *operations, func_str=None):
         return lambda x: eval(formatted_func)
 
 
+def multi_cuts_to_func(values, *operations, func_str=None):
+    """
+    Generates a cut function to generate a mask when called on some
+    properties.
+
+    A cut function is defined through some set of `values` and
+    corresponding `operations`, or a `func_str` to define a more
+    complex function. The generated function must be passed a list of
+    properties to be cut upon, with the same length as `values`.
+    
+    For example, to test whether my properties `x` and `y` satisfy
+    `x == 0 and y > 1`, we run the following:
+    ```
+    cut_func = cuts_to_func([0, 1], ["==", ">"])
+    cut_func([x, y])
+    ```
+    At index 0 of values and operations, we see `x` and `"=="`, and we
+    pass `x` at index 0, so we require `x == 0`. At index 1, we see `1`
+    and `">"`, and pass `y` so we also require `y > 1`.
+    
+    Parameters
+    ----------
+    values : list
+        List of cut values to be used.
+    *operations : list
+        List of strings containing the operations which should be
+        applied with the value at the equivalent index in `values`.
+        Must have the same length as `values`. Allowed strings are: 
+        {"==", "!=", "<", "<=", ">", ">="}.
+    func_str : str, optional
+        Custom cut function in python as a string. Values in `values`
+        are referenced by calling the corresponding index of the value
+        as "_{index}_". Properties to be cut are label by some 
+        owercase letters surrounded by underscores, i.e. "_a_".
+        Multiple properties are passed as a list to the resulting
+        function. Values are taken in alphabetical order (so `_a_`
+        points to `x[0]` and `_b_` to `x[2]` if `x` is the input list).
+        E.g. to require `x[1] < values[1] and x[0] == values[0]`, the
+        string would be: `"_b_ < _1_ and _a_ == _0_"`. Default is None.
+    
+    Returns
+    -------
+    function
+        Function which returns a boolean mask when applied to a
+        property.
+    """
+    ops = {
+        "==": operator.eq,
+        "!=": operator.ne,
+        "<": operator.lt,
+        "<=": operator.le,
+        ">": operator.gt,
+        ">=": operator.ge}
+
+    if func_str is None:
+        if len(operations) != 1:
+            raise ValueError("operations must be sepcified if func_str is not specified")
+        else:
+            operations = operations[0]
+        if not isinstance(values, list):
+            values = [values]
+        if not isinstance(operations, list):
+            operations = [operations]
+        if len(operations) != len(values):
+            raise ValueError("values and operations must have equivalent lengths")
+        def cut_func(properties_to_cut):
+            def next_cut(index):
+                curr_cut = ops[operations[index]](properties_to_cut, values[index])
+                if index <= 0:
+                    return curr_cut
+                else:
+                    return np.logical_and(curr_cut, next_cut(index-1))
+            return next_cut(len(values)-1)
+        return cut_func
+    else:
+        formatted_func = _insert_values_to_func_str(func_str, values)
+        formatted_func = _count_and_insert_params_to_func_str(formatted_func)
+        return lambda x: eval(formatted_func)
+
+
 def cuts_to_str(values, *operations, func_str=None, name_format=False):
     """
     Generates a string respresentation of some cut.
@@ -253,7 +343,7 @@ def cuts_to_str(values, *operations, func_str=None, name_format=False):
     Parameters
     ----------
     values : list
-        List of cut values to be used
+        List of cut values to be used.
     *operations : list
         List of strings containing the operations which should be
         applied with the value at the equivalent index in `values`.
@@ -263,7 +353,7 @@ def cuts_to_str(values, *operations, func_str=None, name_format=False):
         Custom cut function in python as a string. Values in `values`
         are referenced by calling the corresponding index of the value
         as "_{index}_". E.g. to require `x == values[0]`, the string
-        should be `"x == _0_"`.
+        should be `"x == _0_"`. Default is None.
     name_format : bool, optional
         If True, the string will include a ", " before the cut display,
         unless only one cut is present. If only 1 cut is present, the
@@ -301,3 +391,78 @@ def cuts_to_str(values, *operations, func_str=None, name_format=False):
 
     else:
         return str_ini + _insert_values_to_func_str(func_str, values)
+
+
+def cuts_to_str_multi(param_names, values, *operations, func_str=None):
+    """
+    Generates a string respresentation of some cut.
+
+    A cut function is defined through some set of `values` and
+    corresponding `operations`, or a `func_str` to define a more
+    complex function. A set of `param_names` define the names given to
+    the properties.
+    
+
+    For example, to show we have the cut on properties `x` and `y`
+    satisfing `x == 0 and y > 1`, we run the following:
+    ```
+    cuts_to_str_multi(['x', 'y'], [0, 1], ["==", ">"])
+    ```
+    Which returns:
+    ```
+    "(x == 0) and (y > 1)"
+    ```
+
+    At index 0 of values and operations, we see `x` and `"=="`, and we
+    pass `x` at index 0, so we require `x == 0`. At index 1, we see `1`
+    and `">"`, and pass `y` so we also require `y > 1`.
+    
+    Parameters
+    ----------
+    param_names : list
+        List of property names.
+    values : list
+        List of cut values to be used.
+    *operations : list
+        List of strings containing the operations which should be
+        applied with the value at the equivalent index in `values`.
+        Must have the same length as `values`. Allowed strings are: 
+        {"==", "!=", "<", "<=", ">", ">="}.
+    func_str : str, optional
+        Custom cut function in python as a string. Values in `values`
+        are referenced by calling the corresponding index of the value
+        as "_{index}_". Properties to be cut are label by some 
+        owercase letters surrounded by underscores, i.e. "_a_".
+        Multiple properties are passed as a list to the resulting
+        function. Values are taken in alphabetical order (so `_a_`
+        points to `param_names[0]` and `_b_` to `param_names[2]`). E.g.
+        to require
+        `(param_names[1] < values[1]) and (param_names[0] == values[0])`
+        , the string would be: `"_b_ < _1_ and _a_ == _0_"`.
+        Alternatively, write the paramter names directly into the
+        string. Default is None.
+    
+    Returns
+    -------
+    str
+        A string repesntation of the passed function.
+    """
+    if func_str is None:
+        if len(operations) != 1:
+            raise ValueError("operations must be sepcified if func_str is not specified")
+        else:
+            operations = operations[0]
+        if not isinstance(values, list):
+            values = [values]
+        if not isinstance(operations, list):
+            operations = [operations]
+        if len(operations) != len(values):
+            raise ValueError("values and operations must have equivalent lengths")
+        return " and ".join([f"({name} {op} {val})" for name, val, op in zip(param_names, values, operations)])
+
+    else:
+        formatted_func =  _insert_values_to_func_str(func_str, values)
+        formatted_func = _count_and_insert_params_to_func_str(formatted_func)
+        for i, name in enumerate(param_names):
+            formatted_func.replace(f"x[{i}]", name)
+        return formatted_func
