@@ -340,7 +340,7 @@ def run(i, file, n_events, start, selected_events, args):
     return output
 
 
-def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str):
+def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, norm : float):
     """ Beam particle selection plots.
 
     Args:
@@ -348,8 +348,6 @@ def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str):
         output_data (dict): data to plot
         outDir (str): output directory
     """
-
-    norm = False if output_data is None else True
 
     bar_data = []
     for tag in output_mc["pi_beam"]["value"]:
@@ -394,9 +392,9 @@ def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str):
     Plots.Save("cos_theta", outDir)
 
     if output_data:
-        Plots.PlotTagged(output_mc["beam_endPos_z"]["value"], output_mc["beam_endPos_z"]["tags"], data2 = output_data["beam_endPos_z"]["value"], bins = args.nbins, x_label = "Beam end position z (cm)", x_range = [0, 600], norm = norm)
+        Plots.PlotTagged(output_mc["beam_endPos_z"]["value"], output_mc["beam_endPos_z"]["tags"], data2 = output_data["beam_endPos_z"]["value"], bins = args.nbins, x_label = "Beam end position z (cm)", x_range = [0, 700], norm = norm)
     else:
-        Plots.PlotTagged(output_mc["beam_endPos_z"]["value"], output_mc["beam_endPos_z"]["tags"], bins = args.nbins, x_label = "Beam end position z (cm)", x_range = [0, 600], norm = norm)
+        Plots.PlotTagged(output_mc["beam_endPos_z"]["value"], output_mc["beam_endPos_z"]["tags"], bins = args.nbins, x_label = "Beam end position z (cm)", x_range = [0, 700], norm = norm)
 
     Plots.DrawCutPosition(output_mc["beam_endPos_z"]["cuts"][0], face = "left", arrow_length = 50)
     Plots.Save("beam_endPos_z", outDir)
@@ -800,7 +798,7 @@ def main(args):
     os.makedirs(args.out + "plots/regions/", exist_ok = True)
 
     # plots
-    MakeBeamSelectionPlots(output_mc["beam"], output_data["beam"] if output_data else None, args.out + "plots/beam/")
+    MakeBeamSelectionPlots(output_mc["beam"], output_data["beam"] if output_data else None, args.out + "plots/beam/", norm = args.norm)
     MakePiPlusSelectionPlots(output_mc["pip"], output_data["pip"] if output_data else None, args.out + "plots/daughter_pi/")
     MakePhotonCandidateSelectionPlots(output_mc["photon"], output_data["photon"] if output_data else None, args.out + "plots/photon/")
     MakePi0SelectionPlots(output_mc["pi0"], output_data["pi0"] if output_data else None, args.out + "plots/pi0/")

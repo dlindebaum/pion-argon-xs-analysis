@@ -24,6 +24,9 @@ def SetPlotStyle(extend_colors : bool = False):
     plt.rcParams.update({'font.size': 10})
     plt.rcParams.update({"axes.titlecolor" : "#555555"})
     plt.rcParams.update({"axes.titlesize" : 12})
+    plt.rcParams['figure.dpi'] = 300
+    plt.rcParams["legend.labelcolor"] = "black"
+    plt.rcParams["text.color"] = "black"
     if extend_colors:
         plt.rcParams.update({"axes.prop_cycle" : plt.cycler("color", get_cmap("tab20").colors)})
 

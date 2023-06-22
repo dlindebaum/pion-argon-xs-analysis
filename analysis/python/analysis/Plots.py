@@ -1037,7 +1037,12 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     plt.scatter(centres, h_data, c = "black", label = data_label) # plot data as scatter points
     plt.errorbar(centres, h_data, p_err, ecolor = "black", capsize = 3, linestyle = "")
 
-    plt.legend(loc = legend_loc, ncols = ncols)
+    plt.legend(loc = legend_loc, ncols = ncols, labelspacing = 0.25)
+
+    if norm:
+        h, l = plt.gca().get_legend_handles_labels()
+        plt.legend(h + [matplotlib.patches.Rectangle((0,0), 0, 0, fill=False, edgecolor='none', visible=False)], l + [f"norm: {scale:.3g}"], loc = legend_loc, ncols = ncols, labelspacing = 0.25,  columnspacing = 0.25)
+
     plt.tick_params("x", labelbottom = False) # hide x axes tick labels
 
     if stacked is True:
@@ -1061,7 +1066,7 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     plt.subplot(211) # do this to set the current figure to the main plot
 
 
-def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float = 0.2, face : str = "right", flip : bool = False, color = "black"):
+def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float = 0.2, face : str = "right", flip : bool = False, color = "black", annotate : bool = False):
     """ Illustrates a cut on a plot. Direction of the arrow indidcates which portion of the plot passes the cut.
 
     Args:
@@ -1093,6 +1098,7 @@ def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float
     else:
         plt.axvline(value, color = color)
 
+    if annotate: plt.annotate(f"{value:.3g}", xy = xy0, xycoords = transform)
     plt.annotate("", xy = xy1, xytext = xy0, arrowprops=dict(facecolor = color, edgecolor = color, arrowstyle = "->"), xycoords= transform)
 
 
@@ -1120,7 +1126,7 @@ def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = N
 
     if data2 is None:
         PlotHist(split_data, stacked = True, label = tags.name.values, bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, newFigure = newFigure)
-        plt.legend(loc = loc, ncols = ncols)
+        plt.legend(loc = loc, ncols = ncols, labelspacing = 0.25,  columnspacing = 0.25)
     else:
         PlotHistDataMC(ak.ravel(data2), split_data, bins, x_range, True, "Data", tags.name.values, x_label, title, y_scale, loc, ncols, norm, colour = colours)
 

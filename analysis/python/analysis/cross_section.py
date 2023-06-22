@@ -91,22 +91,23 @@ def Fit_Gaussian(data : ak.Array, bins : int) -> tuple:
     return curve_fit(Gaussian, bin_centers, y, p0 = (0, np.nanmedian(data), np.nanstd(data)))
 
 
+class EnergyCorrection:
+    @staticmethod
+    def LinearCorrection(x, p0):
+        return x / p0
 
-def LinearCorrection(x, p0):
-    return x / p0
+    @staticmethod
+    def ResponseFit(x, p0, p1, p2):
+        return p0 * np.log(x - p1) + p2
 
+    @staticmethod
+    def ResponseCorrection(x, p0, p1, p2):
+        return x / (EnergyCorrection.ResponseFit(x, p0, p1, p2) + 1)
 
-def ResponseFit(x, p0, p1, p2):
-    return p0 * np.log(x - p1) + p2
-
-
-def ResponseCorrection(x, p0, p1, p2):
-    return x / (ResponseFit(x, p0, p1, p2) + 1)
-
-shower_energy_correction = {
-    "linear" : LinearCorrection,
-    "response": ResponseCorrection
-}
+    shower_energy_correction = {
+        "linear" : LinearCorrection,
+        "response": ResponseCorrection
+    }
 
 
 class BetheBloch:
@@ -193,7 +194,7 @@ class ApplicationArguments:
 
     @staticmethod
     def ShowerCorrection(parser : argparse.ArgumentParser):
-        parser.add_argument("-C, --shower_correction", nargs = 2, dest = "correction", help = f"Shower energy correction method {tuple(shower_energy_correction.keys())} followed by a correction parameters json file.", required = False)
+        parser.add_argument("-C, --shower_correction", nargs = 2, dest = "correction", help = f"Shower energy correction method {tuple(EnergyCorrection.shower_energy_correction.keys())} followed by a correction parameters json file.", required = False)
         return
 
     @staticmethod
@@ -225,7 +226,7 @@ class ApplicationArguments:
 
             if hasattr(args, "correction") and args.correction:
                 args.correction_params = args.correction[1]
-                args.correction = shower_energy_correction[args.correction[0]]
+                args.correction = EnergyCorrection.shower_energy_correction[args.correction[0]]
         print(args)
 
         if hasattr(args, "out"):
@@ -290,7 +291,7 @@ class ApplicationArguments:
             elif head == "FINAL_STATE_PI0_SELECTION":
                 args.pi0_selection = ApplicationArguments.__CreateSelection(value, EventSelection)
             else:
-                continue
+                setattr(args, head, value) # allow for generic configurations in the json file
         return args
 
 
