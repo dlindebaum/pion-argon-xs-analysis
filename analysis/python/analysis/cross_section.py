@@ -11,10 +11,12 @@ import json
 import awkward as ak
 import numpy as np
 import dill
+import matplotlib.pyplot as plt
 from particle import Particle
 from scipy.optimize import curve_fit
 
-from python.analysis import Master, BeamParticleSelection, PFOSelection, EventSelection
+
+from python.analysis import Master, BeamParticleSelection, PFOSelection, EventSelection, Plots
 from python.analysis.shower_merging import SetPlotStyle
 
 def LoadSelectionFile(file : str):
@@ -152,7 +154,7 @@ class BetheBloch:
         w_max = 2 * BetheBloch.me * (beta * gamma)**2 / (1 + (2 * BetheBloch.me * (gamma/particle.mass)) + (BetheBloch.me/particle.mass)**2)
 
         dEdX = (BetheBloch.rho * BetheBloch.K * BetheBloch.Z * (particle.charge)**2) / ( BetheBloch.A * beta**2 * (0.5 * np.log(2 * BetheBloch.me * (gamma**2) * (beta**2) * w_max / (BetheBloch.I**2))) - beta**2 - (BetheBloch.densityCorrection(beta, gamma) / 2) )
-        return dEdX
+        return np.nan_to_num(dEdX)
     
 
 class ApplicationArguments:
@@ -299,3 +301,44 @@ def LoadConfiguration(file : str):
     with open(file, "rb") as f:
         config = json.load(f)
     return config
+
+
+class Fitting:
+    @staticmethod
+    def Fit(x, y_obs, y_err, func, xlabel = "", ylabel = "", ylim = None):
+        x_interp = np.linspace(min(x), max(x), 1000)
+
+        y_obs = np.array(y_obs, dtype = float)
+        y_err = np.array(y_err, dtype = float)
+
+        mask = ~np.isnan(np.array(y_obs, dtype = float))
+
+        x = np.array(x[mask], dtype = float)
+        y_obs = np.array(y_obs[mask], dtype = float)
+        y_err = np.array(y_err[mask], dtype = float)
+
+        popt, pcov = curve_fit(func, x, y_obs, sigma = y_err, maxfev = int(10E4))
+        perr = np.sqrt(np.diag(pcov))
+
+        y_pred = func(x, *popt)
+        y_pred_min = func(x, *(popt - perr))
+        y_pred_max = func(x, *(popt + perr))
+        y_pred_err = (abs(y_pred - y_pred_min) + abs(y_pred - y_pred_max)) / 2
+
+        chisqr = np.nansum(((y_obs - y_pred)/y_pred_err)**2)
+        ndf = len(y_obs) - len(popt)
+
+        plt.errorbar(x, y_obs, y_err, marker = "x", linestyle = "", capsize = 6, color = "C0", zorder = 10)
+        Plots.Plot(x_interp, func(x_interp, *popt), newFigure = False, x_scale = "linear", xlabel = xlabel, ylabel = ylabel, color = "C1")
+        plt.fill_between(x_interp, func(x_interp, *(popt + perr)), func(x_interp, *(popt - perr)), color = "C3", alpha = 0.5)
+        if ylim:
+            plt.ylim(*sorted(ylim))
+
+        text = ""
+        for j in range(len(popt)):
+            text += f"\np{j}: ${popt[j]:.2f}\pm${perr[j]:.2g}"
+        text += "\n$\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2g}"
+        legend = plt.gca().legend(handlelength = 0, labels = [text[1:]])
+        for l in legend.legendHandles:
+            l.set_visible(False)
+        return popt
