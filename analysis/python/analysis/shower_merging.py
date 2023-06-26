@@ -18,13 +18,13 @@ from python.analysis import Master, Plots, vector, Tags
 from python.analysis import LegacyBeamParticleSelection, BeamParticleSelection, PFOSelection
 
 
-def SetPlotStyle(extend_colors : bool = False):
+def SetPlotStyle(extend_colors : bool = False, dpi : int = 300):
     plt.style.use('ggplot')
     plt.rcParams.update({'patch.linewidth': 1})
     plt.rcParams.update({'font.size': 10})
     plt.rcParams.update({"axes.titlecolor" : "#555555"})
     plt.rcParams.update({"axes.titlesize" : 12})
-    plt.rcParams['figure.dpi'] = 300
+    plt.rcParams['figure.dpi'] = dpi
     plt.rcParams["legend.labelcolor"] = "black"
     plt.rcParams["text.color"] = "black"
     if extend_colors:

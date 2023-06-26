@@ -864,12 +864,71 @@ def Save(name: str = "plot", directory: str = "", dpi = 300):
     plt.close()
 
 
-def Plot(x, y, xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None):
+def FigureDimensions(x : int, orientation : str = "horizontal") -> tuple[int]:
+    """ Compute dimensions for a multiplot which makes the grid as "square" as possible.
+
+    Args:
+        x (int): number of plots in multiplot
+        orientation (str, optional): which axis of the grid is longer. Defaults to "horizontal".
+
+    Returns:
+        tuple[int]: length of each grid axes
+    """
+    nearest_square = int(np.ceil(x**0.5)) # get the nearest square number, always round up to ensure there is enough space in the grid to contain all the plots
+
+    if x < 4: # the special case where the the smallest axis is 1
+        dim = (1, x)
+    elif (nearest_square - 1) * nearest_square >= x: # check if we can fit the plots in a smaller grid than a square to reduce whitespace
+        dim = ((nearest_square - 1), nearest_square)
+    else:
+        dim = (nearest_square, nearest_square)
+    
+    if orientation == "vertical": # reverse orientation if needed
+        dim = dim[::-1]
+    return dim
+
+
+def MultiPlot(n : int):
+    """ Generator for subplots.
+
+    Args:
+        n (int): number of plots
+
+    Yields:
+        Iterator[int]: ith plot
+    """
+    dim = FigureDimensions(n)
+    plt.subplots(figsize = [6.4 * dim[1], 4.8 * dim[0]])
+    for i in range(n):
+        plt.subplot(dim[0], dim[1], i + 1)
+        yield i
+
+
+def IterMultiPlot(x):
+    """ Generator for subplots but also iterates with the data to plot to reduce boilerplate.
+
+    Args:
+        x (_type_): data set to plot, must be multidimensional and contains less than 100 samples i.e. plots to make
+
+    Raises:
+        Exception: if the length of x is too large
+
+    Yields:
+        tuple: ith plot and sample to plot.
+    """
+    if len(x) > 100:
+        raise Exception("Too many plots specified, did you pass the correct shape data?")
+    for i, j in zip(MultiPlot(len(x)), x):
+        yield i, j
+
+
+def Plot(x, y, xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None, xerr = None, yerr = None, capsize : float = 3):
     """ Make scatter plot.
     """
     if newFigure is True:
         plt.figure()
-    plt.plot(x, y, marker=marker, linestyle=linestyle, label=label, color=color, markersize = markersize, alpha = alpha)
+    plt.errorbar(x, y, yerr, xerr, marker = marker, linestyle = linestyle, label = label, color = color, markersize = markersize, alpha = alpha, capsize = capsize)
+
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.xscale(x_scale)
@@ -880,6 +939,17 @@ def Plot(x, y, xlabel: str = "", ylabel: str = "", title: str = "", label: str =
     if annotation is not None:
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
     plt.tight_layout()
+
+
+def PlotComparison(x, y, labels: list, xlabel: str = "", ylabel: str = "", title: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, xerr = None, yerr = None, capsize : float = 3):
+    """ Make multiple scatter plots in the same axes.
+    """
+    if newFigure is True: plt.figure()
+    for i in range(len(labels)):
+        Plot(x[i], y[i], xlabel, ylabel, title, labels[i], marker, linestyle, markersize, alpha, False, x_scale, y_scale, None, None, xerr, yerr, capsize)
+    plt.tight_layout()
+    if annotation is not None:
+        plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
 def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None, alpha : int = 1, histtype : str = "bar", sf : int = 2, density : bool = False, x_scale : str = "linear", y_scale : str = "linear", newFigure : bool = True, annotation : str = None, stacked : bool = False, color = None, range : list = None):
@@ -960,39 +1030,36 @@ def PlotHistComparison(datas, xRange: list = [], bins: int = 100, xlabel: str = 
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
-def PlotHist2DComparison(x: list, y: list, bins: int = 50, xlabels: list = [None] * 2, ylabels: list = [None] * 2, colourmap="plasma", figsize=[6.4, 4.8], x_range = None, y_range = None):
-    edges = [bins, bins]
-    if x_range is None:
-        x_r = [np.min(x), np.max(x)]
-    else:
-        x_r = x_range
-    if y_range is None:
-        y_r = [np.min(y), np.max(y)]
-    else:
-        y_r = y_range
-    h_range = [x_r, y_r]
+def PlotHist2DComparison(x : list, y : list, x_range : list, y_range : list, x_labels = None, y_labels = None, titles = None, bins = 50, cmap = "plasma", func = None, orientation = "horizontal"):
+    """ Plots multiple 2D histograms with a shared colour bar.
+    """
+    if x_labels is None: x_labels = [""]*len(x)
+    if y_labels is None: y_labels = [""]*len(y)
+    if titles is None: titles = [""] * len(x)
 
-    heights = []
-    for i, j in zip(x, y):
-        h, edges[0], edges[1] = np.histogram2d(
-            np.array(i), np.array(j), bins=edges, range=h_range)
-        h[h == 0] = np.nan
-        heights.append(h.T)
+    dim = FigureDimensions(len(x), orientation)
+    fig_size = (6.4 * dim[1], 4.8 * dim[0])
+    ranges = [x_range, y_range]
 
-    fig, ax = plt.subplots(nrows=1, ncols=2, figsize=figsize)
-    extent = [edges[0][0], edges[0][-1], edges[1][0], edges[1][-1]]
+    vmax = 0
+    for xs, ys in zip(x, y):
+        h, _, _ = np.histogram2d(xs, ys, bins, range = ranges)
+        vmax = max(vmax, np.max(h))
 
-    cmin = np.nanmin(heights)
-    cmax = np.nanmax(heights)
-
-    for i in range(len(heights)):
-        im = ax[i].imshow(heights[i], origin="lower", interpolation="nearest",
-                          extent=extent, vmin=cmin, vmax=cmax, cmap=colourmap)
-        ax[i].set_xlabel(xlabels[i])
-        ax[i].set_ylabel(ylabels[i])
-
-    fig.tight_layout()
-    fig.colorbar(im, ax=ax.ravel().tolist())
+    fig = plt.figure(figsize = fig_size)
+    for i in range(len(x)):
+        plt.subplot(*dim, i + 1)
+        if func is None:
+            _, _, _, im = plt.hist2d(x[i], y[i], bins, range = ranges, cmin = 1, vmin = 0, vmax = vmax, cmap = cmap)
+        else:
+            _, _, _, im = func(x = x[i], y = y[i], bins = bins, ranges = ranges, cmin = 1, vmin = 0, vmax = vmax, cmap = cmap)
+        plt.xlabel(x_labels[i])
+        plt.ylabel(y_labels[i])
+        plt.title(titles[i])
+    plt.tight_layout()
+    cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
+    fig.subplots_adjust(right=0.84)
+    fig.colorbar(im, cax = cbar_ax)
 
 
 def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : list = None, stacked : bool = False, data_label : str = "Data", mc_labels = "MC", xlabel : str = None, title : str = None, yscale : str = "linear", legend_loc : str = "best", ncols : int = 2, norm : bool = False, sf : int = 2, colour : str = None):
