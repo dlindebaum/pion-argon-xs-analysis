@@ -193,17 +193,16 @@ def MedianDEdXCut(events: Data) -> ak.Array:
 
 
 @CountsWrapper
-def BeamScraper(events : Data, pdg_hyp : int = 211, KE_range : list = None, mu : dict = None, sigma : dict = None, cut : float = 1.5) -> ak.Array:
+def BeamScraper(events : Data, KE_range : int, fit_values : dict, pdg_hyp : int = 211, cut : float = 1.5) -> ak.Array:
     """ Beam scraper cut. Required to exclude events with poor consistency between
         the beam insturmention KE and front facing KE
         (front facing means the first calorimetry point in the TPC).
 
     Args:
         events (Data): events to study
+        fit_values (dict): beam scraper fit values
+        KE_range (int): index of kinetic energy range in fit_values.
         pdg_hyp (int, optional): the particle species we assume our sample to be composed of. Defaults to 211.
-        KE_range (list, optional): kinetic energy range to compute cut values. Defaults to None.
-        mu (dict, optional): user specified mean positions. Defaults to None.
-        sigma (dict, optional): user specified position sigmas. Defaults to None.
         cut (float, optional): user specified cut value (normalised). Defaults to 1.5.
 
     Returns:
@@ -215,20 +214,12 @@ def BeamScraper(events : Data, pdg_hyp : int = 211, KE_range : list = None, mu :
     beam_pdg_mass = Particle.from_pdgid(pdg_hyp).mass
     beam_inst_KE = (events.recoParticles.beam_inst_P**2 + beam_pdg_mass**2)**0.5 - beam_pdg_mass
 
-
-    if (mu is None) or (sigma is None):
-        print("mu or sigma was not specified, manually calculating beam scraper cut values")
-        in_range = (beam_inst_KE > min(KE_range)) & (beam_inst_KE < max(KE_range))
-        nx = norm("x")
-        ny = norm("y")
-    else:
-        nx = (events.recoParticles.beam_inst_pos.x - mu["x"]) / sigma["x"]
-        ny = (events.recoParticles.beam_inst_pos.y - mu["y"]) / sigma["y"]
-
+    in_range = (beam_inst_KE > min(fit_values[str(KE_range)]["bins"])) & (beam_inst_KE < max(fit_values[str(KE_range)]["bins"]))
+    nx = norm("x")
+    ny = norm("y")
 
     print(nx)
     print(ny)
-
     return (abs(nx) < cut) & (abs(ny) < cut)
 
 
@@ -237,8 +228,8 @@ def CreateDefaultSelection(events: Data,
     beam_quality_fits : dict = None,
     pdg_hyp : int = 211,
     scraper : bool = False,
-    scraper_mu : dict = None,
-    scraper_sigma : dict = None,
+    scraper_fits : dict = None,
+    scraper_KE_range : int = None,
     scraper_cut : float = None,
     verbose: bool = True, return_table: bool = True) -> ak.Array:
     """ Create boolean mask for default MC beam particle selection
@@ -274,5 +265,5 @@ def CreateDefaultSelection(events: Data,
     ]
     if scraper is True:
         selection.append(BeamScraper)
-        arguments.append({"pdg_hyp" : pdg_hyp, "mu" : scraper_mu, "sigma" : scraper_sigma, "cut" : scraper_cut})
+        arguments.append({"KE_range" : scraper_KE_range, "fit_values" : scraper_fits, "pdg_hyp" : pdg_hyp, "cut" : scraper_cut})
     return CombineSelections(events, selection, 0, arguments, verbose, return_table)
