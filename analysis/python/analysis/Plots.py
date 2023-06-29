@@ -1062,7 +1062,7 @@ def PlotHist2DComparison(x : list, y : list, x_range : list, y_range : list, x_l
     fig.colorbar(im, cax = cbar_ax)
 
 
-def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : list = None, stacked : bool = False, data_label : str = "Data", mc_labels = "MC", xlabel : str = None, title : str = None, yscale : str = "linear", legend_loc : str = "best", ncols : int = 2, norm : bool = False, sf : int = 2, colour : str = None):
+def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : list = None, stacked : bool = False, data_label : str = "Data", mc_labels = "MC", xlabel : str = None, title : str = None, yscale : str = "linear", legend_loc : str = "best", ncols : int = 2, norm : bool = False, sf : int = 2, colour : str = None, alpha : float = None):
     """ Make Data MC histograms as seen in most typical particle physics analyses (but looks better).
 
     Args:
@@ -1087,7 +1087,19 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
         h, edges = np.histogram(np.array(m), bins, range = x_range)
         h_mc.append(h * scale)
     
-    plt.hist([edges[:-1]]*len(h_mc), edges, weights = h_mc, range = x_range, stacked = stacked, label = mc_labels, color = colour)
+    sum_mc = np.sum(h_mc, 1, dtype = int) # number of each species in MC
+    ind = np.argsort(sum_mc)[::-1]
+    centres = (edges[:-1] + edges[1:]) / 2
+
+    for i in range(len(mc_labels)):
+        mc_labels[i] = mc_labels[i] + f" ({sum_mc[i]})"
+
+    if stacked is True:
+        plt.hist([edges[:-1]]*len(h_mc), edges, weights = np.array(h_mc)[ind].T, range = x_range, stacked = True, label = np.array(mc_labels)[ind], color = np.array(colour)[ind], alpha = alpha)
+    else:
+        for m in ind:
+            plt.hist(edges[:-1], edges, weights = h_mc[m], range = x_range, stacked = False, label = mc_labels[m], color = colour[m], alpha = alpha)
+        plt.scatter(centres, np.sum(h_mc, 0), c = "black", label = "MC total" + f" ({np.sum(h_mc, dtype = int)})", marker = "x")
     plt.yscale(yscale)
     plt.title(title)
 
@@ -1100,20 +1112,19 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
 
     h_data, edges = np.histogram(np.array(data), bins = edges, range = x_range) # bin the data in terms of MC
     p_err = np.sqrt(h_data) # poisson error in each bin
-    centres = (edges[:-1] + edges[1:]) / 2
-    plt.scatter(centres, h_data, c = "black", label = data_label) # plot data as scatter points
+    plt.scatter(centres, h_data, c = "black", label = data_label + f" ({np.sum(h_mc, dtype = int)})") # plot data as scatter points
     plt.errorbar(centres, h_data, p_err, ecolor = "black", capsize = 3, linestyle = "")
 
     plt.legend(loc = legend_loc, ncols = ncols, labelspacing = 0.25)
 
     if norm:
         h, l = plt.gca().get_legend_handles_labels()
-        plt.legend(h + [matplotlib.patches.Rectangle((0,0), 0, 0, fill=False, edgecolor='none', visible=False)], l + [f"norm: {scale:.3g}"], loc = legend_loc, ncols = ncols, labelspacing = 0.25,  columnspacing = 0.25)
+        plt.legend(h + [matplotlib.patches.Rectangle((0,0), 0, 0, fill = False, edgecolor='none', visible=False)], l + [f"norm: {scale:.3g}"], loc = legend_loc, ncols = ncols, labelspacing = 0.25,  columnspacing = 0.25)
 
     plt.tick_params("x", labelbottom = False) # hide x axes tick labels
 
-    if stacked is True:
-        h_mc = np.sum(h_mc, axis = 0)
+    # if stacked is True:
+    h_mc = np.sum(h_mc, axis = 0)
 
     plt.subplot(212) # ratio plot
     ratio = h_data / h_mc # data / MC
@@ -1169,7 +1180,7 @@ def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float
     plt.annotate("", xy = xy1, xytext = xy0, arrowprops=dict(facecolor = color, edgecolor = color, arrowstyle = "->"), xycoords= transform)
 
 
-def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False, title : str = "", newFigure : bool = True):
+def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False, title : str = "", newFigure : bool = True, stacked : bool = True, alpha : float = None):
     """ Makes a stacked histogram and splits the sample based on tags.
 
     Args:
@@ -1192,10 +1203,10 @@ def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = N
             colours[i] = "C" + str(i)
 
     if data2 is None:
-        PlotHist(split_data, stacked = True, label = tags.name.values, bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, newFigure = newFigure)
+        PlotHist(split_data, stacked = stacked, label = tags.name.values, bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, newFigure = newFigure, alpha = alpha)
         plt.legend(loc = loc, ncols = ncols, labelspacing = 0.25,  columnspacing = 0.25)
     else:
-        PlotHistDataMC(ak.ravel(data2), split_data, bins, x_range, True, "Data", tags.name.values, x_label, title, y_scale, loc, ncols, norm, colour = colours)
+        PlotHistDataMC(ak.ravel(data2), split_data, bins, x_range, stacked, "Data", tags.name.values, x_label, title, y_scale, loc, ncols, norm, colour = colours, alpha = alpha)
 
 
 def UniqueData(data):
