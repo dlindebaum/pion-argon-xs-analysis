@@ -189,7 +189,14 @@ def ReformatRowLabels(row_labels : np.array) -> list[str]:
         "cos_theta" : "$\\cos(\\theta)$",
         "beam_endPos_z" : "beam end z",
         "michel_score" : "michel score",
-        "median_dEdX" : "median $dEdX$"
+        "median_dEdX" : "median $dEdX$",
+        "track_score" : "track score",
+        "em_score" : "em score",
+        "beam_separation" : "beam separation",
+        "impact_parameter" : "impact parameter",
+        "nHits" : "nHits",
+        "mass" : "invariant mass",
+        "angle" : "opening angle",
     }
     fancy_row_labels = [mapping[i] for i in row_labels]
     return fancy_row_labels
@@ -212,7 +219,7 @@ def CreateMergedTable(merged_rows : list, formatted_columns : str, row_labels : 
     return merged_table
 
 
-def AddLatexCode(merged_table : list, column_headers : np.array, n : int, add_resize_box : bool = True) -> list[str]:
+def AddLatexCode(merged_table : list, column_headers : np.array, n : int, add_resize_box : bool = True, table_col_sep : int = 2, hskip : bool = True) -> list[str]:
     """ Adds latex code to the table so it actually compiles.
 
     Args:
@@ -240,8 +247,14 @@ def AddLatexCode(merged_table : list, column_headers : np.array, n : int, add_re
     final_table.append(hline)
     final_table.append("\\end{tabular}\n")
     if add_resize_box:
-        final_table.insert(0, "\\resizebox{1\linewidth}{!}{\n")
+        final_table.insert(0, "\\resizebox{1.05\linewidth}{!}{\n")
         final_table.append("}\n")
+
+    if table_col_sep:
+        final_table.insert(1, "\\renewcommand{\\tabcolsep}{" + str(table_col_sep) + "pt}\n")
+    if hskip:
+        final_table.insert(1, "\hskip-1cm\n")
+
     return final_table
 
 
@@ -264,9 +277,9 @@ def main(args):
     with open(args.out, "w") as f:
         f.writelines(final_table)
         if args.generate_split_tables:
-            for i in range(4, len(final_table)-3): # writes the mini tables which only shows the current row and the row before it.
+            for i in range(6, len(final_table)-3): # writes the mini tables which only shows the current row and the row before it.
                 f.writelines("".join(["-"]*80) + "\n")
-                f.writelines(final_table[0:5] + final_table[i:i+2] + final_table[-3:])
+                f.writelines(final_table[0:7] + final_table[i:i+2] + final_table[-3:])
 
     return
 
