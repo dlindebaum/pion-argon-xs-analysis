@@ -278,7 +278,6 @@ class ApplicationArguments:
                 args.data_beam_quality_fit = value["data"]
             elif head == "BEAM_SCAPER_FITS":
                 args.mc_beam_scraper_fit = value["mc"]
-                args.data_beam_scraper_fit = value["data"]
             elif head == "ENERGY_CORRECTION":
                 args.correction = value["correction"]
                 args.correction_params = value["correction_params"]
