@@ -133,16 +133,16 @@ class BetheBloch:
     def densityCorrection(beta, gamma):
         y = np.log10(beta * gamma)
 
-        delta = ak.where(y >= BetheBloch.y1, 2 * np.log(10)*y - BetheBloch.C, 0) 
-        delta = ak.where((BetheBloch.y0 <= y) & (y < BetheBloch.y1), 2 * np.log(10)*y - BetheBloch.C + BetheBloch.a * (BetheBloch.y1 - y)**BetheBloch.k, delta)
-
-        #* this is the logic implemented above, but uses ak.where in place of if statements, keeping this for documentation sake.
-        # if y >= BetheBloch.y1:
-        #     delta = 2 * np.log(10)*y - BetheBloch.C
-        # elif BetheBloch.y0 <= y < BetheBloch.y1:
-        #     delta = 2 * np.log(10)*y - BetheBloch.C + BetheBloch.a * (BetheBloch.y1 - y)**BetheBloch.k
-        # else:
-        #     delta = 0
+        if hasattr(y, "__iter__"):
+            delta = ak.where(y >= BetheBloch.y1, 2 * np.log(10)*y - BetheBloch.C, 0) 
+            delta = ak.where((BetheBloch.y0 <= y) & (y < BetheBloch.y1), 2 * np.log(10)*y - BetheBloch.C + BetheBloch.a * (BetheBloch.y1 - y)**BetheBloch.k, delta)
+        else:
+            if y >= BetheBloch.y1:
+                delta = 2 * np.log(10)*y - BetheBloch.C
+            elif BetheBloch.y0 <= y < BetheBloch.y1:
+                delta = 2 * np.log(10)*y - BetheBloch.C + BetheBloch.a * (BetheBloch.y1 - y)**BetheBloch.k
+            else:
+                delta = 0
 
         return delta
 
