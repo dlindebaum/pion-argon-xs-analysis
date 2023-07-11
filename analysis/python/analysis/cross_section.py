@@ -139,10 +139,10 @@ class BetheBloch:
         else:
             if y >= BetheBloch.y1:
                 delta = 2 * np.log(10)*y - BetheBloch.C
-            elif BetheBloch.y0 <= y < BetheBloch.y1:
-                delta = 2 * np.log(10)*y - BetheBloch.C + BetheBloch.a * (BetheBloch.y1 - y)**BetheBloch.k
-            else:
+            elif y < BetheBloch.y0:
                 delta = 0
+            else:
+                delta = 2 * np.log(10)*y - BetheBloch.C + BetheBloch.a * (BetheBloch.y1 - y)**BetheBloch.k
 
         return delta
 
@@ -153,8 +153,14 @@ class BetheBloch:
 
         w_max = 2 * BetheBloch.me * (beta * gamma)**2 / (1 + (2 * BetheBloch.me * (gamma/particle.mass)) + (BetheBloch.me/particle.mass)**2)
 
-        dEdX = (BetheBloch.rho * BetheBloch.K * BetheBloch.Z * (particle.charge)**2) / ( BetheBloch.A * beta**2 * (0.5 * np.log(2 * BetheBloch.me * (gamma**2) * (beta**2) * w_max / (BetheBloch.I**2))) - beta**2 - (BetheBloch.densityCorrection(beta, gamma) / 2) )
-        return np.nan_to_num(dEdX)
+        dEdX = (BetheBloch.rho * BetheBloch.K * BetheBloch.Z * (particle.charge)**2) / (BetheBloch.A * beta**2) * (0.5 * np.log(2 * BetheBloch.me * (gamma**2) * (beta**2) * w_max / (BetheBloch.I**2)) - beta**2 - (BetheBloch.densityCorrection(beta, gamma) / 2))
+
+        dEdX = np.nan_to_num(dEdX)
+        if hasattr(KE, "__iter__"):
+            dEdX = ak.where(dEdX < 0, 0, dEdX) # handle when np.log is -infinity i.e. when KE = 0
+        else:
+            if dEdX < 0: dEdX = 0
+        return dEdX
     
 
 class ApplicationArguments:
