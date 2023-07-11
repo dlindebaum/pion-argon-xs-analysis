@@ -952,12 +952,14 @@ def PlotComparison(x, y, labels: list, xlabel: str = "", ylabel: str = "", title
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
-def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None, alpha : int = 1, histtype : str = "bar", sf : int = 2, density : bool = False, x_scale : str = "linear", y_scale : str = "linear", newFigure : bool = True, annotation : str = None, stacked : bool = False, color = None, range : list = None):
+def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None, alpha : int = 1, histtype : str = "bar", sf : int = 2, density : bool = False, x_scale : str = "linear", y_scale : str = "linear", newFigure : bool = True, annotation : str = None, stacked : bool = False, color = None, range : list = None, truncate : bool = False):
     """ Plot 1D histograms.
     Returns:
         np.arrays : bin heights and edges
     """
     if newFigure is True: plt.figure()
+    if truncate == True:
+        data = np.clip(data, min(range), max(range))
     height, edges, _ = plt.hist(data, bins, label = label, alpha = alpha, density = density, histtype = histtype, stacked = stacked, color = color, range = range)
     binWidth = round((edges[-1] - edges[0]) / len(edges), sf)
     # TODO: make ylabel a parameter
@@ -977,7 +979,36 @@ def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None
     return height, edges
 
 
-def PlotHist2D(data_x, data_y, bins: int = 100, x_range: list = None, y_range: list = None, z_range: list = [None, None], xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", x_scale: str = "linear", y_scale: str = "linear", newFigure: bool = True, annotation: str = None, cmap : str = "viridis"):
+def PlotHist2DMarginal(data_x, data_y, bins: int = 100, x_range: list = None, y_range: list = None, z_range: list = [None, None], xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", x_scale: str = "linear", y_scale: str = "linear", newFigure: bool = True, annotation: str = None, cmap : str = "viridis", norm : bool = True, whitespace : float = 0.0):
+    plt.subplots(2, 2, figsize = (6.4, 4.8 * 1.2), gridspec_kw={"height_ratios" : [1, 5], "width_ratios" : [4, 1], "wspace" : whitespace, "hspace" : whitespace} , sharex = False, sharey = False) # set to that the ratio plot is 1/5th the default plot height
+    plt.subplot(2, 2, 2).set_visible(False) # top right
+
+    plt.subplot(2, 2, 3) # bottom left (main plot)
+    h, (x_e, y_e) = PlotHist2D(data_x, data_y, bins, x_range, y_range, z_range, xlabel, ylabel, title, label, x_scale, y_scale, False, annotation, cmap, norm, False)
+
+    plt.subplot(2, 2, 1) # top right (x projection)
+    plt.hist(x_e[:-1], bins = x_e, weights = np.sum(h, 1), density = True)
+    plt.xticks(ticks = x_e, labels = [])
+    plt.locator_params(axis='both', nbins=4)
+    plt.xlim(min(x_e), max(x_e))
+    plt.ylabel("fraction")
+    plt.gca().yaxis.get_major_ticks()[0].label1.set_visible(False)
+
+    plt.subplot(2, 2, 4) # bottom right (y projection)
+    plt.hist(y_e[:-1], bins = y_e, weights = np.sum(h, 0), density = True, orientation="horizontal")
+    plt.yticks(ticks = y_e, labels = [])
+    plt.locator_params(axis='both', nbins=4)
+    plt.ylim(min(y_e), max(y_e))
+    plt.xlabel("fraction")
+    plt.gca().xaxis.get_major_ticks()[0].label1.set_visible(False)
+
+    plt.colorbar(ax = plt.gca())
+    plt.tight_layout()
+    plt.subplot(2, 2, 3) # switch back to main plot at the end
+    return
+
+
+def PlotHist2D(data_x, data_y, bins: int = 100, x_range: list = None, y_range: list = None, z_range: list = [None, None], xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", x_scale: str = "linear", y_scale: str = "linear", newFigure: bool = True, annotation: str = None, cmap : str = "viridis", norm : bool = True, colorbar : bool = True):
     """ Plot 2D histograms.
 
     Returns:
@@ -987,8 +1018,12 @@ def PlotHist2D(data_x, data_y, bins: int = 100, x_range: list = None, y_range: l
         plt.figure()
 
     # plot data with a logarithmic color scale
-    height, xedges, yedges, _ = plt.hist2d(np.array(data_x), np.array(data_y), bins, range = [x_range, y_range], norm = matplotlib.colors.LogNorm(), label = label, vmin = z_range[0], vmax = z_range[1], cmap = cmap)
-    plt.colorbar()
+    if norm is True:
+        norm_scale = matplotlib.colors.LogNorm()
+    else:
+        norm_scale = None
+    height, xedges, yedges, _ = plt.hist2d(np.array(data_x), np.array(data_y), bins, range = [x_range, y_range], norm = norm_scale, label = label, vmin = z_range[0], vmax = z_range[1], cmap = cmap)
+    if colorbar: plt.colorbar()
 
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
@@ -1062,7 +1097,7 @@ def PlotHist2DComparison(x : list, y : list, x_range : list, y_range : list, x_l
     fig.colorbar(im, cax = cbar_ax)
 
 
-def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : list = None, stacked : bool = False, data_label : str = "Data", mc_labels = "MC", xlabel : str = None, title : str = None, yscale : str = "linear", legend_loc : str = "best", ncols : int = 2, norm : bool = False, sf : int = 2, colour : str = None, alpha : float = None):
+def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : list = None, stacked = False, data_label : str = "Data", mc_labels = "MC", xlabel : str = None, title : str = None, yscale : str = "linear", legend_loc : str = "best", ncols : int = 2, norm : bool = False, sf : int = 2, colour : str = None, alpha : float = None, truncate : bool = True):
     """ Make Data MC histograms as seen in most typical particle physics analyses (but looks better).
 
     Args:
@@ -1080,6 +1115,10 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     else:
         raise Exception("not a valid value for the normalisation")
 
+    if truncate == True:
+        data = np.clip(data, min(x_range), max(x_range))
+        mc = [np.clip(m, min(x_range), max(x_range)) for m in mc]
+
     plt.subplot(211) # MC histogram
     if x_range is None: x_range = [ak.min([mc, data]), ak.max([mc, data])]
     h_mc = []
@@ -1089,17 +1128,19 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     
     sum_mc = np.sum(h_mc, 1, dtype = int) # number of each species in MC
     ind = np.argsort(sum_mc)[::-1]
+    if stacked == "ascending":
+        ind = ind[::-1]
     centres = (edges[:-1] + edges[1:]) / 2
 
     for i in range(len(mc_labels)):
         mc_labels[i] = mc_labels[i] + f" ({sum_mc[i]})"
 
-    if stacked is True:
+    if stacked:
         plt.hist([edges[:-1]]*len(h_mc), edges, weights = np.array(h_mc)[ind].T, range = x_range, stacked = True, label = np.array(mc_labels)[ind], color = np.array(colour)[ind], alpha = alpha)
     else:
         for m in ind:
             plt.hist(edges[:-1], edges, weights = h_mc[m], range = x_range, stacked = False, label = mc_labels[m], color = colour[m], alpha = alpha)
-        plt.scatter(centres, np.sum(h_mc, 0), c = "black", label = "MC total" + f" ({np.sum(h_mc, dtype = int)})", marker = "x")
+    plt.errorbar(centres, np.sum(h_mc, 0), np.sum(h_mc, 0)**0.5, c = "black", label = "MC total" + f" ({np.sum(h_mc, dtype = int)})", marker = "x", capsize = 3, linestyle = "")
     plt.yscale(yscale)
     plt.title(title)
 
@@ -1111,9 +1152,8 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     plt.ylabel(yl)
 
     h_data, edges = np.histogram(np.array(data), bins = edges, range = x_range) # bin the data in terms of MC
-    p_err = np.sqrt(h_data) # poisson error in each bin
-    plt.scatter(centres, h_data, c = "black", label = data_label + f" ({np.sum(h_mc, dtype = int)})") # plot data as scatter points
-    plt.errorbar(centres, h_data, p_err, ecolor = "black", capsize = 3, linestyle = "")
+    data_err = np.sqrt(h_data) # poisson error in each bin
+    plt.errorbar(centres, h_data, data_err, marker = "o", c = "black", capsize = 3, linestyle = "", label = data_label + f" ({np.sum(h_mc, dtype = int)})")
 
     plt.legend(loc = legend_loc, ncols = ncols, labelspacing = 0.25)
 
@@ -1125,13 +1165,14 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
 
     # if stacked is True:
     h_mc = np.sum(h_mc, axis = 0)
+    mc_error = np.sqrt(h_mc)
 
     plt.subplot(212) # ratio plot
     ratio = h_data / h_mc # data / MC
-    ratio_err = ((h_data + p_err) / h_mc) - ratio
+    ratio_err = ratio * np.sqrt((data_err/h_data)**2 + (mc_error/h_mc)**2)
+    # ratio_err = ((h_data + data_err) / h_mc) - ratio
     ratio[ratio == np.inf] = -1 # if the ratio is undefined, set it to -1
-    plt.scatter(centres, ratio, c = "black")
-    plt.errorbar(centres, ratio, ratio_err, ecolor = "black", capsize = 3, linestyle = "")
+    plt.errorbar(centres, ratio, ratio_err, c = "black", marker = "o", capsize = 3, linestyle = "")
     plt.ylabel("Data/MC")
 
     ticks = [0, 0.5, 1, 1.5, 2] # hardcode the yaxis to have 5 ticks
@@ -1180,7 +1221,7 @@ def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float
     plt.annotate("", xy = xy1, xytext = xy0, arrowprops=dict(facecolor = color, edgecolor = color, arrowstyle = "->"), xycoords= transform)
 
 
-def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False, title : str = "", newFigure : bool = True, stacked : bool = True, alpha : float = None):
+def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False, title : str = "", newFigure : bool = True, stacked : bool = True, alpha : float = None, truncate : bool = False):
     """ Makes a stacked histogram and splits the sample based on tags.
 
     Args:
@@ -1203,10 +1244,10 @@ def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = N
             colours[i] = "C" + str(i)
 
     if data2 is None:
-        PlotHist(split_data, stacked = stacked, label = tags.name.values, bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, newFigure = newFigure, alpha = alpha)
+        PlotHist(split_data, stacked = stacked, label = tags.name.values, bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, newFigure = newFigure, alpha = alpha, truncate = truncate)
         plt.legend(loc = loc, ncols = ncols, labelspacing = 0.25,  columnspacing = 0.25)
     else:
-        PlotHistDataMC(ak.ravel(data2), split_data, bins, x_range, stacked, "Data", tags.name.values, x_label, title, y_scale, loc, ncols, norm, colour = colours, alpha = alpha)
+        PlotHistDataMC(ak.ravel(data2), split_data, bins, x_range, stacked, "Data", tags.name.values, x_label, title, y_scale, loc, ncols, norm, colour = colours, alpha = alpha, truncate = truncate)
 
 
 def UniqueData(data):
