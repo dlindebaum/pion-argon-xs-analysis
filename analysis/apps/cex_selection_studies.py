@@ -72,7 +72,7 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam
     output["pandora_tag"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events) # store the final state truth tags after the cut is applied
 
     #* dxy cut
-    dxy = (((events.recoParticles.beam_startPos.x - beam_quality_fits["mu_x"]) / beam_quality_fits["sigma_x"])**2 + ((events.recoParticles.beam_startPos.y - beam_quality_fits["mu_y"]) / beam_quality_fits["sigma_y"])**2)**0.5
+    dxy = (((events.recoParticles.beam_startPos_SCE.x - beam_quality_fits["mu_x"]) / beam_quality_fits["sigma_x"])**2 + ((events.recoParticles.beam_startPos_SCE.y - beam_quality_fits["mu_y"]) / beam_quality_fits["sigma_y"])**2)**0.5
     mask = dxy < 3
     output["dxy"] = MakeOutput(dxy, Tags.GenerateTrueBeamParticleTags(events), [3], Tags.GenerateTrueFinalStateTags(events))
     print(f"dxy cut: {BeamParticleSelection.CountMask(mask)}")
@@ -80,7 +80,7 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam
     output["dxy"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
     #* dz cut
-    delta_z = (events.recoParticles.beam_startPos.z - beam_quality_fits["mu_z"]) / beam_quality_fits["sigma_z"]
+    delta_z = (events.recoParticles.beam_startPos_SCE.z - beam_quality_fits["mu_z"]) / beam_quality_fits["sigma_z"]
     mask = (delta_z > -3) & (delta_z < 3)
     output["dz"] = MakeOutput(delta_z, Tags.GenerateTrueBeamParticleTags(events), [-3, 3], Tags.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
@@ -88,9 +88,10 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam
     output["dz"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
     #* beam direction
-    beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos, events.recoParticles.beam_startPos))
+    beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos_SCE, events.recoParticles.beam_startPos_SCE))
     beam_dir_mu = vector.normalize(vector.vector(beam_quality_fits["mu_dir_x"], beam_quality_fits["mu_dir_y"], beam_quality_fits["mu_dir_z"]))
     beam_costh = vector.dot(beam_dir, beam_dir_mu)
+
     mask = beam_costh > 0.95
     output["cos_theta"] = MakeOutput(beam_costh, Tags.GenerateTrueBeamParticleTags(events), [0.95], Tags.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
@@ -98,7 +99,7 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam
 
     #* APA3 cut
     mask = BeamParticleSelection.APA3Cut(events)
-    output["beam_endPos_z"] = MakeOutput(events.recoParticles.beam_endPos.z, Tags.GenerateTrueBeamParticleTags(events), [220], Tags.GenerateTrueFinalStateTags(events))
+    output["beam_endPos_z"] = MakeOutput(events.recoParticles.beam_endPos_SCE.z, Tags.GenerateTrueBeamParticleTags(events), [220], Tags.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
     output["beam_endPos_z"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
@@ -206,7 +207,6 @@ def AnalysePi0Selection(events : Master.Data, data : bool = False, correction = 
     Args:
         events (Master.Data): events to look at
         data (bool): is the ntuple file data or MC
-        energy_correction_factor (float, optional): linear correction factor to shower energies. Defaults to 1.
 
     Returns:
         dict: output data
@@ -267,7 +267,7 @@ def AnalysePi0Selection(events : Master.Data, data : bool = False, correction = 
 def AnalyseRegions(events : Master.Data, photon_mask : ak.Array, is_data : bool, correction = None, correction_params : dict = None):
     truth_regions = EventSelection.create_regions(events.trueParticles.nPi0, events.trueParticles.nPiPlus) if is_data == False else None
 
-    reco_pi0_counts = EventSelection.count_pi0_candidates(events, exactly_two_photons = True, photon_mask = photon_mask, correction = correction, correction_params = correction_params)
+    reco_pi0_counts = EventSelection.count_pi0_candidates(events, exactly_two_photons = True, photon_mask = photon_mask, correction = cross_section.EnergyCorrection.shower_energy_correction[correction], correction_params = correction_params)
     reco_pi_plus_counts_mom_cut = EventSelection.count_charged_pi_candidates(events, energy_cut = None)
     reco_regions = EventSelection.create_regions(reco_pi0_counts, reco_pi_plus_counts_mom_cut)
     return truth_regions, reco_regions
@@ -310,8 +310,8 @@ def run(i, file, n_events, start, selected_events, args):
     output_photon = AnalysePhotonCandidateSelection(events.Filter(returnCopy = True))
 
     print("pi0 selection")
-    pi0_selection_mask = EventSelection.Pi0Selection(events, photon_selection_mask, correction = args["correction"], correction_params = correction_params)
-    output_pi0 = AnalysePi0Selection(events.Filter(returnCopy = True), args["data"], args["correction"], correction_params)
+    pi0_selection_mask = EventSelection.Pi0Selection(events, photon_selection_mask, correction = cross_section.EnergyCorrection.shower_energy_correction[args["correction"]], correction_params = correction_params)
+    output_pi0 = AnalysePi0Selection(events.Filter(returnCopy = True), args["data"], cross_section.EnergyCorrection.shower_energy_correction[args["correction"]], correction_params)
 
     print("regions")
     truth_regions, reco_regions = AnalyseRegions(events, photon_selection_mask, args["data"], args["correction"], correction_params)
@@ -445,8 +445,11 @@ def MakePiPlusSelectionPlots(output_mc : dict, output_data : dict, outDir : str,
     
     Plots.Save("nHits", outDir)
 
-    Plots.PlotHist2D(ak.ravel(output_mc["completeness"]["value"]), ak.ravel(output_mc["nHits"]["value"]), xlabel = "completeness", ylabel = "nHits", y_range = [0, 500], bins = args.nbins)
-    Plots.DrawCutPosition(output_mc["nHits"]["cuts"][0], flip = True, arrow_length = 100, arrow_loc = 0.1, color = "red")
+    # Plots.PlotHist2D(ak.ravel(output_mc["completeness"]["value"]), ak.ravel(output_mc["nHits"]["value"]), xlabel = "completeness", ylabel = "nHits", y_range = [0, 500], bins = args.nbins)
+    # Plots.DrawCutPosition(output_mc["nHits"]["cuts"][0], flip = True, arrow_length = 100, arrow_loc = 0.1, color = "red")
+    Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc["nHits"]["value"]), ak.ravel(output_mc["completeness"]["value"]), ylabel = "completeness", xlabel = "nHits", x_range = [0, 500], bins = 50, norm = "column", c_scale = "linear")
+    Plots.DrawCutPosition(output_mc["nHits"]["cuts"][0], arrow_length = 100, arrow_loc = 0.1, color = "C6")
+
     Plots.Save("nHits_vs_completeness", outDir)
 
     if output_data:
@@ -491,14 +494,18 @@ def MakePhotonCandidateSelectionPlots(output_mc : dict, output_data : dict, outD
     Plots.DrawCutPosition(output_mc["nHits"]["cuts"][0], arrow_length = 100)
     Plots.Save("nHits", outDir)
 
-    Plots.PlotHist2D(ak.ravel(output_mc["nHits_completeness"]["value"]), ak.ravel(output_mc["nHits"]["value"]), bins = args.nbins, x_range = [0, 1],y_range = [0, 1000], xlabel = "completeness", ylabel = "number of hits")
-    Plots.DrawCutPosition(output_mc["nHits"]["cuts"][0], flip = True, arrow_length = 100, color = "red")
+
+    Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc["nHits"]["value"]), ak.ravel(output_mc["nHits_completeness"]["value"]), bins = 50, y_range = [0, 1],x_range = [0, 800], ylabel = "completeness", xlabel = "number of hits", norm = "column")
+    Plots.DrawCutPosition(80, flip = False, arrow_length = 100, color = "C6")
+
+    # Plots.PlotHist2D(ak.ravel(output_mc["nHits_completeness"]["value"]), ak.ravel(output_mc["nHits"]["value"]), bins = args.nbins, x_range = [0, 1],y_range = [0, 1000], xlabel = "completeness", ylabel = "number of hits")
+    # Plots.DrawCutPosition(output_mc["nHits"]["cuts"][0], flip = True, arrow_length = 100, color = "red")
     Plots.Save("nHits_vs_completeness", outDir)
 
     if output_data:
-        Plots.PlotTagged(output_mc["beam_separation"]["value"], output_mc["beam_separation"]["tags"], data2 = output_data["beam_separation"]["value"], bins = args.nbins, x_range = [0, 150], x_label = "distance from PFO start to beam end position (cm)", norm = norm)
+        Plots.PlotTagged(output_mc["beam_separation"]["value"], output_mc["beam_separation"]["tags"], data2 = output_data["beam_separation"]["value"], bins = 31, x_range = [0, 93], x_label = "distance from PFO start to beam end position (cm)", norm = norm)
     else:
-        Plots.PlotTagged(output_mc["beam_separation"]["value"], output_mc["beam_separation"]["tags"], bins = args.nbins, x_range = [0, 150], x_label = "distance from PFO start to beam end position (cm)", norm = norm)
+        Plots.PlotTagged(output_mc["beam_separation"]["value"], output_mc["beam_separation"]["tags"], bins = 31, x_range = [0, 93], x_label = "distance from PFO start to beam end position (cm)", norm = norm)
     Plots.DrawCutPosition(min(output_mc["beam_separation"]["cuts"]), arrow_length = 30)
     Plots.DrawCutPosition(max(output_mc["beam_separation"]["cuts"]), face = "left", arrow_length = 30)
     Plots.Save("beam_separation", outDir)
@@ -510,8 +517,11 @@ def MakePhotonCandidateSelectionPlots(output_mc : dict, output_data : dict, outD
     Plots.DrawCutPosition(output_mc["impact_parameter"]["cuts"][0], arrow_length = 20, face = "left")
     Plots.Save("impact_parameter", outDir)
 
-    Plots.PlotHist2D(ak.ravel(output_mc["impact_parameter_completeness"]["value"]), ak.ravel(output_mc["impact_parameter"]["value"]), bins = args.nbins, x_range = [0, 1], y_range = [0, 50], xlabel = "completeness", ylabel = "impact parameter wrt beam (cm)")
-    Plots.DrawCutPosition(output_mc["impact_parameter"]["cuts"][0], arrow_loc = 0.2, arrow_length = 20, face = "left", flip = True, color ="red")
+    Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc["impact_parameter"]["value"]), ak.ravel(output_mc["impact_parameter_completeness"]["value"]), x_range = [0, 40], y_range = [0, 1], bins = 20, norm = "column", c_scale = "linear", ylabel = "completeness", xlabel = "impact parameter wrt beam (cm)")
+    Plots.DrawCutPosition(20, arrow_length = 20, face = "left", color = "red")
+
+    # Plots.PlotHist2D(ak.ravel(output_mc["impact_parameter_completeness"]["value"]), ak.ravel(output_mc["impact_parameter"]["value"]), bins = args.nbins, x_range = [0, 1], y_range = [0, 50], xlabel = "completeness", ylabel = "impact parameter wrt beam (cm)")
+    # Plots.DrawCutPosition(output_mc["impact_parameter"]["cuts"][0], arrow_loc = 0.2, arrow_length = 20, face = "left", flip = True, color ="red")
     Plots.Save("impact_parameter_vs_completeness", outDir)
 
 

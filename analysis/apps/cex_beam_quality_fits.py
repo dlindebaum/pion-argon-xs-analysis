@@ -84,8 +84,8 @@ def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data
         data_ranges = [] if data_fits is None else plot_range(data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"])
 
         plot_ranges = mc_ranges + data_ranges
-        if mc_events is not None: plot(mc_events.recoParticles.beam_startPos[i], f"Beam start position {i} (cm)", mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"], "C0", "MC", range = [min(plot_ranges), max(plot_ranges)])
-        if data_events is not None: plot(data_events.recoParticles.beam_startPos[i], f"Beam start position {i} (cm)", data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"], "C1", "Data", range = [min(plot_ranges), max(plot_ranges)])
+        if mc_events is not None: plot(mc_events.recoParticles.beam_startPos_SCE[i], f"Beam start position {i} (cm)", mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"], "C0", "MC", range = [min(plot_ranges), max(plot_ranges)])
+        if data_events is not None: plot(data_events.recoParticles.beam_startPos_SCE[i], f"Beam start position {i} (cm)", data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"], "C1", "Data", range = [min(plot_ranges), max(plot_ranges)])
         Plots.Save(out + i)
     return
 
@@ -103,10 +103,10 @@ def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str):
     mask = BeamParticleSelection.CaloSizeCut(events)
     events.Filter([mask], [mask])
     #* fit gaussians to the start positions
-    mu, sigma, mu_err, sigma_err = Fit_Vector(events.recoParticles.beam_startPos, 100)
+    mu, sigma, mu_err, sigma_err = Fit_Vector(events.recoParticles.beam_startPos_SCE, 100)
 
     #* compute the mean of beam direction components
-    beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos, events.recoParticles.beam_startPos))
+    beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos_SCE, events.recoParticles.beam_startPos_SCE))
     mu_dir = {i : ak.mean(beam_dir[i]) for i in ["x", "y", "z"]}
     mu_dir_err = {i : ak.std(beam_dir[i])/np.sqrt(ak.count(beam_dir[i])) for i in ["x", "y", "z"]}
 

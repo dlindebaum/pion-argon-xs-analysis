@@ -161,7 +161,7 @@ def APA3Cut(events: Data) -> ak.Array:
         ak.Array: boolean mask.
     """
     # APA3 cut
-    return events.recoParticles.beam_endPos.z < 220  # cm
+    return events.recoParticles.beam_endPos_SCE.z < 220  # cm
 
 
 @CountsWrapper
