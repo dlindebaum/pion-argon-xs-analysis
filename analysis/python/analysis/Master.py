@@ -1166,21 +1166,41 @@ class RecoParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__beam_cosmicScore")
 
     @property
+    def beam_endPos_SCE(self) -> ak.Record:
+        nTuples = [
+            ["reco_beam_calo_endX"],
+            ["reco_beam_calo_endY"],
+            ["reco_beam_calo_endZ"]
+        ]
+        self.LoadData("beam_endPos_SCE", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__beam_endPos_SCE")
+
+    @property
     def beam_endPos(self) -> ak.Record:
         nTuples = [
-            ["reco_beam_calo_endX", "reco_beam_endX"],
-            ["reco_beam_calo_endY", "reco_beam_endY"],
-            ["reco_beam_calo_endZ", "reco_beam_endZ"]
+            ["reco_beam_endX"],
+            ["reco_beam_endY"],
+            ["reco_beam_endZ"]
         ]
         self.LoadData("beam_endPos", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__beam_endPos")
 
     @property
+    def beam_startPos_SCE(self) -> ak.Record:
+        nTuples = [
+            ["reco_beam_calo_startX"], # the first name in the list is prioritised.
+            ["reco_beam_calo_startY"],
+            ["reco_beam_calo_startZ"]
+        ]
+        self.LoadData("beam_startPos_SCE", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__beam_startPos_SCE")
+
+    @property
     def beam_startPos(self) -> ak.Record:
         nTuples = [
-            ["reco_beam_calo_startX", "reco_beam_startX"], # the first name in the list is prioritised.
-            ["reco_beam_calo_startY", "reco_beam_startY"],
-            ["reco_beam_calo_startZ", "reco_beam_startZ"]
+            ["reco_beam_startX"], # the first name in the list is prioritised.
+            ["reco_beam_startY"],
+            ["reco_beam_startZ"]
         ]
         self.LoadData("beam_startPos", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__beam_startPos")

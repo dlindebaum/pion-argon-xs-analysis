@@ -113,9 +113,9 @@ def BeamQualityCut(events: Data, fit_values : dict = None) -> ak.Array:
     has_angle_cut = True
 
     # do only MC for now.
-    beam_dx = (events.recoParticles.beam_startPos.x - fits["mu_x"]) / fits["sigma_x"]
-    beam_dy = (events.recoParticles.beam_startPos.y - fits["mu_y"]) / fits["sigma_y"]
-    beam_dz = (events.recoParticles.beam_startPos.z - fits["mu_z"]) / fits["sigma_z"]
+    beam_dx = (events.recoParticles.beam_startPos_SCE.x - fits["mu_x"]) / fits["sigma_x"]
+    beam_dy = (events.recoParticles.beam_startPos_SCE.y - fits["mu_y"]) / fits["sigma_y"]
+    beam_dz = (events.recoParticles.beam_startPos_SCE.z - fits["mu_z"]) / fits["sigma_z"]
     beam_dxy = (beam_dx**2 + beam_dy**2)**0.5
 
     beam_dir = vector.normalize(vector.sub(
