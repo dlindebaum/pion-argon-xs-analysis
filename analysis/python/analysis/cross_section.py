@@ -15,7 +15,6 @@ import matplotlib.pyplot as plt
 from particle import Particle
 from scipy.optimize import curve_fit
 
-
 from python.analysis import Master, BeamParticleSelection, PFOSelection, EventSelection, Plots
 from python.analysis.shower_merging import SetPlotStyle
 
@@ -133,27 +132,34 @@ class BetheBloch:
     def densityCorrection(beta, gamma):
         y = np.log10(beta * gamma)
 
+        delta_0 = 2 * np.log(10) * y - BetheBloch.C
+        delta_1 = delta_0 + BetheBloch.a * (BetheBloch.y1 - y)**BetheBloch.k
+
         if hasattr(y, "__iter__"):
-            delta = ak.where(y >= BetheBloch.y1, 2 * np.log(10)*y - BetheBloch.C, 0) 
-            delta = ak.where((BetheBloch.y0 <= y) & (y < BetheBloch.y1), 2 * np.log(10)*y - BetheBloch.C + BetheBloch.a * (BetheBloch.y1 - y)**BetheBloch.k, delta)
+            delta = ak.where(y >= BetheBloch.y1, delta_0, 0) 
+            delta = ak.where((BetheBloch.y0 <= y) & (y < BetheBloch.y1), delta_1, delta)
         else:
             if y >= BetheBloch.y1:
-                delta = 2 * np.log(10)*y - BetheBloch.C
+                delta = delta_0
             elif y < BetheBloch.y0:
                 delta = 0
             else:
-                delta = 2 * np.log(10)*y - BetheBloch.C + BetheBloch.a * (BetheBloch.y1 - y)**BetheBloch.k
+                delta = delta_1
 
         return delta
 
     @staticmethod
     def meandEdX(KE, particle : Particle):
         gamma = (KE / particle.mass) + 1
-        beta = (1 - (1/(gamma**2)))**0.5
-
+        beta = (1 - (1/gamma)**2)**0.5
+        
         w_max = 2 * BetheBloch.me * (beta * gamma)**2 / (1 + (2 * BetheBloch.me * (gamma/particle.mass)) + (BetheBloch.me/particle.mass)**2)
+        N = np.divide((BetheBloch.rho * BetheBloch.K * BetheBloch.Z * (particle.charge)**2), (BetheBloch.A * (beta**2)))
+        A = 0.5 * np.log(2 * BetheBloch.me * (gamma**2) * (beta**2) * w_max / ((BetheBloch.I) **2))
+        B = beta**2
+        C = 0.5 * BetheBloch.densityCorrection(beta, gamma)
 
-        dEdX = (BetheBloch.rho * BetheBloch.K * BetheBloch.Z * (particle.charge)**2) / (BetheBloch.A * beta**2) * (0.5 * np.log(2 * BetheBloch.me * (gamma**2) * (beta**2) * w_max / (BetheBloch.I**2)) - beta**2 - (BetheBloch.densityCorrection(beta, gamma) / 2))
+        dEdX = N * (A - B - C)
 
         dEdX = np.nan_to_num(dEdX)
         if hasattr(KE, "__iter__"):
