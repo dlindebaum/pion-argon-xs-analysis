@@ -922,15 +922,15 @@ def IterMultiPlot(x, sharex : bool = False, sharey : bool = False):
         yield i, j
 
 
-def Plot(x, y, xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None, xerr = None, yerr = None, capsize : float = 3):
+def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = "", label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None, xerr = None, yerr = None, capsize : float = 3):
     """ Make scatter plot.
     """
     if newFigure is True:
         plt.figure()
     plt.errorbar(x, y, yerr, xerr, marker = marker, linestyle = linestyle, label = label, color = color, markersize = markersize, alpha = alpha, capsize = capsize)
 
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
+    if xlabel is not None: plt.xlabel(xlabel)
+    if ylabel is not None: plt.ylabel(ylabel)
     plt.xscale(x_scale)
     plt.yscale(y_scale)
     plt.title(title)
@@ -979,7 +979,7 @@ def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None
     return height, edges
 
 
-def PlotHist2DMarginal(data_x, data_y, bins: int = 100, x_range: list = None, y_range: list = None, z_range: list = [None, None], xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", x_scale: str = "linear", y_scale: str = "linear", newFigure: bool = True, annotation: str = None, cmap : str = "viridis", norm : bool = True, whitespace : float = 0.0):
+def PlotHist2DMarginal(data_x, data_y, bins: int = 100, x_range: list = None, y_range: list = None, z_range: list = [None, None], xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", x_scale: str = "linear", y_scale: str = "linear", annotation: str = None, cmap : str = "viridis", norm : bool = True, whitespace : float = 0.0):
     plt.subplots(2, 2, figsize = (6.4, 4.8 * 1.2), gridspec_kw={"height_ratios" : [1, 5], "width_ratios" : [4, 1], "wspace" : whitespace, "hspace" : whitespace} , sharex = False, sharey = False) # set to that the ratio plot is 1/5th the default plot height
     plt.subplot(2, 2, 2).set_visible(False) # top right
 
