@@ -1185,6 +1185,66 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     plt.subplot(211) # do this to set the current figure to the main plot
 
 
+def PlotHist2DImshow(x : ak.Array, y : ak.Array, bins : int = 100, x_range : list = None, y_range : list = None, c_range : list = None, xlabel : str = None, ylabel : str = None, title : str = None, c_scale : str = "linear", norm : str = None, newFigure : bool = True, colorbar : bool = True, cmap : str = "viridis"):
+    """ Same as Hist2D, but uses numpy.histogram2d and imshow to allow more options for plot normalisation,
+        but is harder to use in subplots.
+    """
+    h, x_e, y_e = np.histogram2d(np.array(x), np.array(y), bins = bins, range = [x_range, y_range])
+
+    if norm == "row":
+        h_norm = h / np.max(h, 0) # normalised by row
+    elif norm == "column":
+        h_norm = h / np.max(h, axis = 1)[:, np.newaxis] # normalised by column
+    else:
+        h_norm = h # don't normalise
+
+    if c_range is None: c_range = [np.min(h_norm), np.max(h_norm)]
+
+    if c_scale == "log":
+        cnorm = matplotlib.colors.LogNorm(vmin = max(min(c_range), 1) , vmax = max(c_range))
+    else:
+        cnorm = matplotlib.colors.Normalize(vmin = min(c_range), vmax = max(c_range))
+
+    if newFigure is True: plt.figure()
+
+    plt.imshow(h_norm.T, origin = "lower", extent=[min(x_e), max(x_e), min(y_e), max(y_e)], norm = cnorm, aspect = "auto")
+    plt.grid(False)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.title(title)
+    if colorbar: plt.colorbar()
+    return h, (x_e, y_e)
+
+
+def PlotHist2DImshowMarginal(data_x, data_y, bins: int = 100, x_range: list = None, y_range: list = None, xlabel: str = "", ylabel: str = "", title: str = "", cmap : str = "viridis", norm : bool = True, whitespace : float = 0.0, c_range : list = None, c_scale : str = "linear"):
+    plt.subplots(2, 2, figsize = (6.4, 4.8 * 1.2), gridspec_kw={"height_ratios" : [1, 5], "width_ratios" : [4, 1], "wspace" : whitespace, "hspace" : whitespace} , sharex = False, sharey = False) # set to that the ratio plot is 1/5th the default plot height
+    plt.subplot(2, 2, 2).set_visible(False) # top right
+
+    plt.subplot(2, 2, 3) # bottom left (main plot)
+    h, (x_e, y_e) = PlotHist2DImshow(data_x, data_y, bins, x_range, y_range, c_range, xlabel, ylabel, title, c_scale, norm, False, False, cmap)
+
+    plt.subplot(2, 2, 1) # top right (x projection)
+    plt.hist(x_e[:-1], bins = x_e, weights = np.sum(h, 1), density = True)
+    plt.xticks(ticks = x_e, labels = [])
+    plt.locator_params(axis='both', nbins=4)
+    plt.xlim(min(x_e), max(x_e))
+    # plt.ylabel("fraction")
+    plt.gca().yaxis.get_major_ticks()[0].label1.set_visible(False)
+
+    plt.subplot(2, 2, 4) # bottom right (y projection)
+    plt.hist(y_e[:-1], bins = y_e, weights = np.sum(h, 0), density = True, orientation="horizontal")
+    plt.yticks(ticks = y_e, labels = [])
+    plt.locator_params(axis='both', nbins=4)
+    plt.ylim(min(y_e), max(y_e))
+    # plt.xlabel("fraction")
+    plt.gca().xaxis.get_major_ticks()[0].label1.set_visible(False)
+
+    plt.colorbar(ax = plt.gca())
+    plt.tight_layout()
+    plt.subplot(2, 2, 3) # switch back to main plot at the end
+    return
+
+
 def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float = 0.2, face : str = "right", flip : bool = False, color = "black", annotate : bool = False):
     """ Illustrates a cut on a plot. Direction of the arrow indidcates which portion of the plot passes the cut.
 
