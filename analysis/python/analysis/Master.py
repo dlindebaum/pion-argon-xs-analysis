@@ -1012,6 +1012,11 @@ class TrueParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__nNucleus")
 
     @property
+    def true_beam_endProcess(self) -> ak.Array:
+        self.LoadData("true_beam_endProcess", "true_beam_endProcess")
+        return getattr(self, f"_{type(self).__name__}__true_beam_endProcess")
+
+    @property
     def pi0_MC(self) -> bool:
         if not hasattr(self, f"_{type(self).__name__}__pi0_MC"):
             # check if we are looking at pure pi0 MC or beam MC
