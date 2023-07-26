@@ -316,7 +316,7 @@ def LoadConfiguration(file : str):
 
 class Fitting:
     @staticmethod
-    def Fit(x, y_obs, y_err, func, xlabel = "", ylabel = "", ylim = None):
+    def Fit(x, y_obs, y_err, func, xlabel = "", ylabel = "", ylim = None, p0 = None):
         x_interp = np.linspace(min(x), max(x), 1000)
 
         y_obs = np.array(y_obs, dtype = float)
@@ -328,7 +328,10 @@ class Fitting:
         y_obs = np.array(y_obs[mask], dtype = float)
         y_err = np.array(y_err[mask], dtype = float)
 
-        popt, pcov = curve_fit(func, x, y_obs, sigma = y_err, maxfev = int(10E4))
+        if p0 is not None:
+            popt, pcov = curve_fit(func, x, y_obs, sigma = y_err, maxfev = int(10E4), p0 = p0)
+        else: 
+            popt, pcov = curve_fit(func, x, y_obs, sigma = y_err, maxfev = int(10E4))
         perr = np.sqrt(np.diag(pcov))
 
         y_pred = func(x, *popt)
@@ -339,17 +342,22 @@ class Fitting:
         chisqr = np.nansum(((y_obs - y_pred)/y_pred_err)**2)
         ndf = len(y_obs) - len(popt)
 
-        plt.errorbar(x, y_obs, y_err, marker = "x", linestyle = "", capsize = 6, color = "C0", zorder = 10)
-        Plots.Plot(x_interp, func(x_interp, *popt), newFigure = False, x_scale = "linear", xlabel = xlabel, ylabel = ylabel, color = "C1")
-        plt.fill_between(x_interp, func(x_interp, *(popt + perr)), func(x_interp, *(popt - perr)), color = "C3", alpha = 0.5)
+        Plots.Plot(x_interp, func(x_interp, *popt), newFigure = False, x_scale = "linear", xlabel = xlabel, ylabel = ylabel, color = "#1f77b4", zorder = 11, label = "fit")
+        plt.fill_between(x_interp, func(x_interp, *(popt + perr)), func(x_interp, *(popt - perr)), color = "#7f7f7f", alpha = 0.5, zorder = 10, label = "$1\sigma$ error region")
+        Plots.Plot(x, y_obs, yerr = y_err, marker = "x", linestyle = "", color = "#d62728", label = "sample points", newFigure = False)
         if ylim:
             plt.ylim(*sorted(ylim))
+
+        main_legend = plt.legend(loc = "upper left")
+
+        plt.gca().add_artist(main_legend)
 
         text = ""
         for j in range(len(popt)):
             text += f"\np{j}: ${popt[j]:.2f}\pm${perr[j]:.2g}"
         text += "\n$\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2g}"
-        legend = plt.gca().legend(handlelength = 0, labels = [text[1:]])
+        legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = "upper right")
         for l in legend.legendHandles:
             l.set_visible(False)
+
         return popt
