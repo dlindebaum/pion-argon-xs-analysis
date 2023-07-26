@@ -14,6 +14,7 @@ from rich import print as rprint
 from python.analysis import Master, BeamParticleSelection, EventSelection, PFOSelection, Plots, shower_merging, vector, Processing, Tags, cross_section
 
 import awkward as ak
+from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 import pandas as pd
 
@@ -50,12 +51,6 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam
 
     output["no_selection"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, Tags.GenerateTrueFinalStateTags(events))
 
-    #* calo size cut
-    mask = BeamParticleSelection.CaloSizeCut(events)
-    output["calo_size"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None)
-    events.Filter([mask], [mask])
-    output["calo_size"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
-
     #* pi+ beam selection
     mask = BeamParticleSelection.PiBeamSelection(events, beam_instrumentation)
     counts = Tags.GenerateTrueBeamParticleTags(events)
@@ -64,6 +59,12 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam
     output["pi_beam"] = MakeOutput(counts, Tags.GenerateTrueBeamParticleTags(events), None)
     events.Filter([mask], [mask])
     output["pi_beam"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
+
+    #* calo size cut
+    mask = BeamParticleSelection.CaloSizeCut(events)
+    output["calo_size"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None)
+    events.Filter([mask], [mask])
+    output["calo_size"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
     #* beam pandora tag selection
     mask = BeamParticleSelection.PandoraTagCut(events) # create the mask for the cut
@@ -346,70 +347,71 @@ def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, n
     """
 
     norm = False if output_data is None else norm
+    with PdfPages(outDir + "beam.pdf") as pdf:
 
-    bar_data = []
-    for tag in output_mc["pi_beam"]["value"]:
-        bar_data.extend([tag] * output_mc["pi_beam"]["value"][tag])
-    Plots.PlotBar(bar_data, xlabel = "True particle ID")
-    Plots.Save("pi_beam", outDir)
+        bar_data = []
+        for tag in output_mc["pi_beam"]["value"]:
+            bar_data.extend([tag] * output_mc["pi_beam"]["value"][tag])
+        Plots.PlotBar(bar_data, xlabel = "True particle ID")
+        pdf.savefig()
 
-    if output_data is None:
-        Plots.PlotBar(output_mc["pandora_tag"]["value"], xlabel = "Pandora tag")
-    else:
-        Plots.PlotBarComparision(output_mc["pandora_tag"]["value"], output_data["pandora_tag"]["value"], label_1 = "MC", label_2 = "Data", xlabel = "pandora beam tag", fraction = True, barlabel = True)
-    Plots.Save("pandora_tag", outDir)
+        if output_data is None:
+            Plots.PlotBar(output_mc["pandora_tag"]["value"], xlabel = "Pandora tag")
+        else:
+            Plots.PlotBarComparision(output_mc["pandora_tag"]["value"], output_data["pandora_tag"]["value"], label_1 = "MC", label_2 = "Data", xlabel = "pandora beam tag", fraction = True, barlabel = True)
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["michel_score"]["value"], output_mc["michel_score"]["tags"], data2 = output_data["michel_score"]["value"], x_range = (0, 1), y_scale = "log", bins = args.nbins, x_label = "Michel score", ncols = 2, norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["michel_score"]["value"], output_mc["michel_score"]["tags"], x_range = (0, 1), y_scale = "log", bins = args.nbins, x_label = "Michel score", ncols = 2, norm = norm)
-    Plots.DrawCutPosition(output_mc["michel_score"]["cuts"][0], face = "left")
-    Plots.Save("michel_score", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["dxy"]["value"], output_mc["dxy"]["tags"], data2 = output_data["dxy"]["value"], bins = args.nbins, x_label = "$\delta_{xy}$", y_scale = "log", x_range = [0, 5], norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["dxy"]["value"], output_mc["dxy"]["tags"], bins = args.nbins, x_label = "$\delta_{xy}$", y_scale = "log", x_range = [0, 5], norm = norm)
+        Plots.DrawCutPosition(output_mc["dxy"]["cuts"][0], arrow_length = 1, face = "left")
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["dxy"]["value"], output_mc["dxy"]["tags"], data2 = output_data["dxy"]["value"], bins = args.nbins, x_label = "$\delta_{xy}$", y_scale = "log", x_range = [0, 5], norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["dxy"]["value"], output_mc["dxy"]["tags"], bins = args.nbins, x_label = "$\delta_{xy}$", y_scale = "log", x_range = [0, 5], norm = norm)
-    Plots.DrawCutPosition(output_mc["dxy"]["cuts"][0], arrow_length = 1, face = "left")
-    Plots.Save("dxy", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["dz"]["value"], output_mc["dz"]["tags"], data2 = output_data["dz"]["value"], bins = args.nbins, x_label = "$\delta_{z}$", y_scale = "log", x_range = [-10, 10], norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["dz"]["value"], output_mc["dz"]["tags"], bins = args.nbins, x_label = "$\delta_{z}$", y_scale = "log", x_range = [-10, 10], norm = norm)
+        Plots.DrawCutPosition(min(output_mc["dz"]["cuts"]), arrow_length = 1, face = "right")
+        Plots.DrawCutPosition(max(output_mc["dz"]["cuts"]), arrow_length = 1, face = "left")
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["dz"]["value"], output_mc["dz"]["tags"], data2 = output_data["dz"]["value"], bins = args.nbins, x_label = "$\delta_{z}$", y_scale = "log", x_range = [-10, 10], norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["dz"]["value"], output_mc["dz"]["tags"], bins = args.nbins, x_label = "$\delta_{z}$", y_scale = "log", x_range = [-10, 10], norm = norm)
-    Plots.DrawCutPosition(min(output_mc["dz"]["cuts"]), arrow_length = 1, face = "right")
-    Plots.DrawCutPosition(max(output_mc["dz"]["cuts"]), arrow_length = 1, face = "left")
-    Plots.Save("dz", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["cos_theta"]["value"], output_mc["cos_theta"]["tags"], data2 = output_data["cos_theta"]["value"], x_label = "$\cos(\\theta)$", y_scale = "log", bins = args.nbins, x_range = [0.9, 1], norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["cos_theta"]["value"], output_mc["cos_theta"]["tags"], x_label = "$\cos(\\theta)$", y_scale = "log", bins = args.nbins, x_range = [0.9, 1], norm = norm)
 
-    if output_data:
-        Plots.PlotTagged(output_mc["cos_theta"]["value"], output_mc["cos_theta"]["tags"], data2 = output_data["cos_theta"]["value"], x_label = "$\cos(\\theta)$", y_scale = "log", bins = args.nbins, x_range = [0.9, 1], norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["cos_theta"]["value"], output_mc["cos_theta"]["tags"], x_label = "$\cos(\\theta)$", y_scale = "log", bins = args.nbins, x_range = [0.9, 1], norm = norm)
+        Plots.DrawCutPosition(output_mc["cos_theta"]["cuts"][0], arrow_length = 0.02)
+        pdf.savefig()
 
-    Plots.DrawCutPosition(output_mc["cos_theta"]["cuts"][0], arrow_length = 0.02)
-    Plots.Save("cos_theta", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["beam_endPos_z"]["value"], output_mc["beam_endPos_z"]["tags"], data2 = output_data["beam_endPos_z"]["value"], bins = args.nbins, x_label = "Beam end position z (cm)", x_range = [0, 700], norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["beam_endPos_z"]["value"], output_mc["beam_endPos_z"]["tags"], bins = args.nbins, x_label = "Beam end position z (cm)", x_range = [0, 700], norm = norm)
 
-    if output_data:
-        Plots.PlotTagged(output_mc["beam_endPos_z"]["value"], output_mc["beam_endPos_z"]["tags"], data2 = output_data["beam_endPos_z"]["value"], bins = args.nbins, x_label = "Beam end position z (cm)", x_range = [0, 700], norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["beam_endPos_z"]["value"], output_mc["beam_endPos_z"]["tags"], bins = args.nbins, x_label = "Beam end position z (cm)", x_range = [0, 700], norm = norm)
+        Plots.DrawCutPosition(output_mc["beam_endPos_z"]["cuts"][0], face = "left", arrow_length = 50)
+        pdf.savefig()
 
-    Plots.DrawCutPosition(output_mc["beam_endPos_z"]["cuts"][0], face = "left", arrow_length = 50)
-    Plots.Save("beam_endPos_z", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["michel_score"]["value"], output_mc["michel_score"]["tags"], data2 = output_data["michel_score"]["value"], x_range = (0, 1), y_scale = "log", bins = args.nbins, x_label = "Michel score", ncols = 2, norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["michel_score"]["value"], output_mc["michel_score"]["tags"], x_range = (0, 1), y_scale = "log", bins = args.nbins, x_label = "Michel score", ncols = 2, norm = norm)
+        Plots.DrawCutPosition(output_mc["michel_score"]["cuts"][0], face = "left")
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["median_dEdX"]["value"], output_mc["median_dEdX"]["tags"], data2 = output_data["median_dEdX"]["value"], bins = args.nbins, y_scale = "log", x_range = [0, 10], x_label = "Median $dE/dX$ (MeV/cm)", norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["median_dEdX"]["value"], output_mc["median_dEdX"]["tags"], bins = args.nbins, y_scale = "log", x_range = [0, 10], x_label = "Median $dE/dX$ (MeV/cm)", norm = norm)
+        if output_data:
+            Plots.PlotTagged(output_mc["median_dEdX"]["value"], output_mc["median_dEdX"]["tags"], data2 = output_data["median_dEdX"]["value"], bins = args.nbins, y_scale = "log", x_range = [0, 10], x_label = "Median $dE/dX$ (MeV/cm)", norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["median_dEdX"]["value"], output_mc["median_dEdX"]["tags"], bins = args.nbins, y_scale = "log", x_range = [0, 10], x_label = "Median $dE/dX$ (MeV/cm)", norm = norm)
 
-    Plots.DrawCutPosition(output_mc["median_dEdX"]["cuts"][0], face = "left", arrow_length = 2)
-    Plots.Save("median_dEdX", outDir)
+        Plots.DrawCutPosition(output_mc["median_dEdX"]["cuts"][0], face = "left", arrow_length = 2)
+        pdf.savefig()
 
-    bar_data = []
-    for t in output_mc["final_tags"]["tags"]:
-        bar_data.extend([t] * ak.sum(output_mc["final_tags"]["tags"][t].mask))
-    Plots.PlotBar(bar_data, xlabel = "True particle ID")
-    Plots.Save("final_tags", outDir)
+        bar_data = []
+        for t in output_mc["final_tags"]["tags"]:
+            bar_data.extend([t] * ak.sum(output_mc["final_tags"]["tags"][t].mask))
+        Plots.PlotBar(bar_data, xlabel = "True particle ID")
+        pdf.savefig()
     return
 
 
@@ -422,50 +424,45 @@ def MakePiPlusSelectionPlots(output_mc : dict, output_data : dict, outDir : str,
     """
 
     norm = False if output_data is None else norm
+    with PdfPages(outDir + "piplus.pdf") as pdf:
+        if "track_score_all" in output_mc:
+            if output_data:
+                Plots.PlotTagged(output_mc["track_score_all"]["value"], output_mc["track_score_all"]["tags"], data2 = output_data["track_score_all"]["value"], y_scale = "log", x_label = "track score", norm = norm)
+            else:
+                Plots.PlotTagged(output_mc["track_score_all"]["value"], output_mc["track_score_all"]["tags"], y_scale = "log", x_label = "track score", norm = norm)
+            pdf.savefig()
 
-    if "track_score_all" in output_mc:
         if output_data:
-            Plots.PlotTagged(output_mc["track_score_all"]["value"], output_mc["track_score_all"]["tags"], data2 = output_data["track_score_all"]["value"], y_scale = "log", x_label = "track score", norm = norm)
+            Plots.PlotTagged(output_mc["track_score"]["value"], output_mc["track_score"]["tags"], data2 = output_data["track_score"]["value"], x_range = [0, 1], y_scale = "linear", bins = args.nbins, ncols = 4, x_label = "track score", norm = norm)
         else:
-            Plots.PlotTagged(output_mc["track_score_all"]["value"], output_mc["track_score_all"]["tags"], y_scale = "log", x_label = "track score", norm = norm)
-        Plots.Save("track_score_all", outDir)
+            Plots.PlotTagged(output_mc["track_score"]["value"], output_mc["track_score"]["tags"], x_range = [0, 1], y_scale = "linear", bins = args.nbins, ncols = 4, x_label = "track score", norm = norm)
+        
+        Plots.DrawCutPosition(output_mc["track_score"]["cuts"][0], face = "right")
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["track_score"]["value"], output_mc["track_score"]["tags"], data2 = output_data["track_score"]["value"], x_range = [0, 1], y_scale = "linear", bins = args.nbins, ncols = 4, x_label = "track score", norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["track_score"]["value"], output_mc["track_score"]["tags"], x_range = [0, 1], y_scale = "linear", bins = args.nbins, ncols = 4, x_label = "track score", norm = norm)
-    
-    Plots.DrawCutPosition(output_mc["track_score"]["cuts"][0], face = "right")
-    Plots.Save("track_score", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["nHits"]["value"], output_mc["nHits"]["tags"], data2 = output_data["nHits"]["value"], bins = args.nbins, ncols = 2, x_range = [0, 500], x_label = "nHits", norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["nHits"]["value"], output_mc["nHits"]["tags"], bins = args.nbins, ncols = 2, x_range = [0, 500], x_label = "nHits", norm = norm)
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["nHits"]["value"], output_mc["nHits"]["tags"], data2 = output_data["nHits"]["value"], bins = args.nbins, ncols = 2, x_range = [0, 500], x_label = "nHits", norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["nHits"]["value"], output_mc["nHits"]["tags"], bins = args.nbins, ncols = 2, x_range = [0, 500], x_label = "nHits", norm = norm)
-    
-    Plots.Save("nHits", outDir)
+        Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc["nHits"]["value"]), ak.ravel(output_mc["completeness"]["value"]), ylabel = "completeness", xlabel = "nHits", x_range = [0, 500], bins = 50, norm = "column", c_scale = "linear")
+        Plots.DrawCutPosition(output_mc["nHits"]["cuts"][0], arrow_length = 100, arrow_loc = 0.1, color = "C6")
+        pdf.savefig()
 
-    # Plots.PlotHist2D(ak.ravel(output_mc["completeness"]["value"]), ak.ravel(output_mc["nHits"]["value"]), xlabel = "completeness", ylabel = "nHits", y_range = [0, 500], bins = args.nbins)
-    # Plots.DrawCutPosition(output_mc["nHits"]["cuts"][0], flip = True, arrow_length = 100, arrow_loc = 0.1, color = "red")
-    Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc["nHits"]["value"]), ak.ravel(output_mc["completeness"]["value"]), ylabel = "completeness", xlabel = "nHits", x_range = [0, 500], bins = 50, norm = "column", c_scale = "linear")
-    Plots.DrawCutPosition(output_mc["nHits"]["cuts"][0], arrow_length = 100, arrow_loc = 0.1, color = "C6")
+        if output_data:
+            Plots.PlotTagged(output_mc["median_dEdX"]["value"], output_mc["median_dEdX"]["tags"], data2 = output_data["median_dEdX"]["value"], ncols = 2, x_range = [0, 5], x_label = "median $dEdX$ (MeV/cm)", bins = args.nbins, norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["median_dEdX"]["value"], output_mc["median_dEdX"]["tags"], ncols = 2, x_range = [0, 5], x_label = "median $dEdX$", bins = args.nbins, norm = norm)
+        Plots.DrawCutPosition(min(output_mc["median_dEdX"]["cuts"]), arrow_length = 0.5, face = "right")
+        Plots.DrawCutPosition(max(output_mc["median_dEdX"]["cuts"]), arrow_length = 0.5, face = "left")
+        pdf.savefig()
 
-    Plots.Save("nHits_vs_completeness", outDir)
-
-    if output_data:
-        Plots.PlotTagged(output_mc["median_dEdX"]["value"], output_mc["median_dEdX"]["tags"], data2 = output_data["median_dEdX"]["value"], ncols = 2, x_range = [0, 5], x_label = "median $dEdX$ (MeV/cm)", bins = args.nbins, norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["median_dEdX"]["value"], output_mc["median_dEdX"]["tags"], ncols = 2, x_range = [0, 5], x_label = "median $dEdX$", bins = args.nbins, norm = norm)
-    Plots.DrawCutPosition(min(output_mc["median_dEdX"]["cuts"]), arrow_length = 0.5, face = "right")
-    Plots.DrawCutPosition(max(output_mc["median_dEdX"]["cuts"]), arrow_length = 0.5, face = "left")
-    Plots.Save("median_dEdX", outDir)
-
-
-    bar_data = []
-    for t in output_mc["final_tags"]["tags"]:
-        bar_data.extend([t] * ak.sum(output_mc["final_tags"]["tags"][t].mask))
-    Plots.PlotBar(bar_data, xlabel = "true particle ID")
-    Plots.Save("true_particle_ID", outDir)
+        bar_data = []
+        for t in output_mc["final_tags"]["tags"]:
+            bar_data.extend([t] * ak.sum(output_mc["final_tags"]["tags"][t].mask))
+        Plots.PlotBar(bar_data, xlabel = "true particle ID")
+        pdf.savefig()
     return
 
 
@@ -478,58 +475,50 @@ def MakePhotonCandidateSelectionPlots(output_mc : dict, output_data : dict, outD
     """
     
     norm = False if output_data is None else norm
-    
-    if output_data:
-        Plots.PlotTagged(output_mc["em_score"]["value"], output_mc["em_score"]["tags"], data2 = output_data["em_score"]["value"], bins = args.nbins, x_range = [0, 1], ncols = 4, x_label = "em score", norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["em_score"]["value"], output_mc["em_score"]["tags"], bins = args.nbins, x_range = [0, 1], ncols = 4, x_label = "em score", norm = norm)
+    with PdfPages(outDir + "photon.pdf") as pdf:    
+        if output_data:
+            Plots.PlotTagged(output_mc["em_score"]["value"], output_mc["em_score"]["tags"], data2 = output_data["em_score"]["value"], bins = args.nbins, x_range = [0, 1], ncols = 4, x_label = "em score", norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["em_score"]["value"], output_mc["em_score"]["tags"], bins = args.nbins, x_range = [0, 1], ncols = 4, x_label = "em score", norm = norm)
 
-    Plots.DrawCutPosition(output_mc["em_score"]["cuts"][0])
-    Plots.Save("em_score", outDir)
+        Plots.DrawCutPosition(output_mc["em_score"]["cuts"][0])
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["nHits"]["value"], output_mc["nHits"]["tags"], data2 = output_data["nHits"]["value"], bins = args.nbins, x_label = "number of hits", x_range = [0, 1000], norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["nHits"]["value"], output_mc["nHits"]["tags"], bins = args.nbins, x_label = "number of hits", x_range = [0, 1000], norm = norm)
-    Plots.DrawCutPosition(output_mc["nHits"]["cuts"][0], arrow_length = 100)
-    Plots.Save("nHits", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["nHits"]["value"], output_mc["nHits"]["tags"], data2 = output_data["nHits"]["value"], bins = args.nbins, x_label = "number of hits", x_range = [0, 1000], norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["nHits"]["value"], output_mc["nHits"]["tags"], bins = args.nbins, x_label = "number of hits", x_range = [0, 1000], norm = norm)
+        Plots.DrawCutPosition(output_mc["nHits"]["cuts"][0], arrow_length = 100)
+        pdf.savefig()
 
+        Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc["nHits"]["value"]), ak.ravel(output_mc["nHits_completeness"]["value"]), bins = 50, y_range = [0, 1],x_range = [0, 800], ylabel = "completeness", xlabel = "number of hits", norm = "column")
+        Plots.DrawCutPosition(80, flip = False, arrow_length = 100, color = "C6")
+        pdf.savefig()
 
-    Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc["nHits"]["value"]), ak.ravel(output_mc["nHits_completeness"]["value"]), bins = 50, y_range = [0, 1],x_range = [0, 800], ylabel = "completeness", xlabel = "number of hits", norm = "column")
-    Plots.DrawCutPosition(80, flip = False, arrow_length = 100, color = "C6")
+        if output_data:
+            Plots.PlotTagged(output_mc["beam_separation"]["value"], output_mc["beam_separation"]["tags"], data2 = output_data["beam_separation"]["value"], bins = 31, x_range = [0, 93], x_label = "distance from PFO start to beam end position (cm)", norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["beam_separation"]["value"], output_mc["beam_separation"]["tags"], bins = 31, x_range = [0, 93], x_label = "distance from PFO start to beam end position (cm)", norm = norm)
+        Plots.DrawCutPosition(min(output_mc["beam_separation"]["cuts"]), arrow_length = 30)
+        Plots.DrawCutPosition(max(output_mc["beam_separation"]["cuts"]), face = "left", arrow_length = 30)
+        pdf.savefig()
 
-    # Plots.PlotHist2D(ak.ravel(output_mc["nHits_completeness"]["value"]), ak.ravel(output_mc["nHits"]["value"]), bins = args.nbins, x_range = [0, 1],y_range = [0, 1000], xlabel = "completeness", ylabel = "number of hits")
-    # Plots.DrawCutPosition(output_mc["nHits"]["cuts"][0], flip = True, arrow_length = 100, color = "red")
-    Plots.Save("nHits_vs_completeness", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["impact_parameter"]["value"], output_mc["impact_parameter"]["tags"], data2 = output_data["impact_parameter"]["value"], bins = args.nbins, x_range = [0, 50], x_label = "impact parameter wrt beam (cm)", norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["impact_parameter"]["value"], output_mc["impact_parameter"]["tags"], bins = args.nbins, x_range = [0, 50], x_label = "impact parameter wrt beam (cm)", norm = norm)
+        Plots.DrawCutPosition(output_mc["impact_parameter"]["cuts"][0], arrow_length = 20, face = "left")
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["beam_separation"]["value"], output_mc["beam_separation"]["tags"], data2 = output_data["beam_separation"]["value"], bins = 31, x_range = [0, 93], x_label = "distance from PFO start to beam end position (cm)", norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["beam_separation"]["value"], output_mc["beam_separation"]["tags"], bins = 31, x_range = [0, 93], x_label = "distance from PFO start to beam end position (cm)", norm = norm)
-    Plots.DrawCutPosition(min(output_mc["beam_separation"]["cuts"]), arrow_length = 30)
-    Plots.DrawCutPosition(max(output_mc["beam_separation"]["cuts"]), face = "left", arrow_length = 30)
-    Plots.Save("beam_separation", outDir)
+        Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc["impact_parameter"]["value"]), ak.ravel(output_mc["impact_parameter_completeness"]["value"]), x_range = [0, 40], y_range = [0, 1], bins = 20, norm = "column", c_scale = "linear", ylabel = "completeness", xlabel = "impact parameter wrt beam (cm)")
+        Plots.DrawCutPosition(20, arrow_length = 20, face = "left", color = "red")
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["impact_parameter"]["value"], output_mc["impact_parameter"]["tags"], data2 = output_data["impact_parameter"]["value"], bins = args.nbins, x_range = [0, 50], x_label = "impact parameter wrt beam (cm)", norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["impact_parameter"]["value"], output_mc["impact_parameter"]["tags"], bins = args.nbins, x_range = [0, 50], x_label = "impact parameter wrt beam (cm)", norm = norm)
-    Plots.DrawCutPosition(output_mc["impact_parameter"]["cuts"][0], arrow_length = 20, face = "left")
-    Plots.Save("impact_parameter", outDir)
-
-    Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc["impact_parameter"]["value"]), ak.ravel(output_mc["impact_parameter_completeness"]["value"]), x_range = [0, 40], y_range = [0, 1], bins = 20, norm = "column", c_scale = "linear", ylabel = "completeness", xlabel = "impact parameter wrt beam (cm)")
-    Plots.DrawCutPosition(20, arrow_length = 20, face = "left", color = "red")
-
-    # Plots.PlotHist2D(ak.ravel(output_mc["impact_parameter_completeness"]["value"]), ak.ravel(output_mc["impact_parameter"]["value"]), bins = args.nbins, x_range = [0, 1], y_range = [0, 50], xlabel = "completeness", ylabel = "impact parameter wrt beam (cm)")
-    # Plots.DrawCutPosition(output_mc["impact_parameter"]["cuts"][0], arrow_loc = 0.2, arrow_length = 20, face = "left", flip = True, color ="red")
-    Plots.Save("impact_parameter_vs_completeness", outDir)
-
-
-    bar_data = []
-    for t in output_mc["final_tags"]["tags"]:
-        bar_data.extend([t] * ak.sum(output_mc["final_tags"]["tags"][t].mask))
-    Plots.PlotBar(bar_data, xlabel = "true particle ID")
-    Plots.Save("true_particle_ID", outDir)
+        bar_data = []
+        for t in output_mc["final_tags"]["tags"]:
+            bar_data.extend([t] * ak.sum(output_mc["final_tags"]["tags"][t].mask))
+        Plots.PlotBar(bar_data, xlabel = "true particle ID")
+        pdf.savefig()
     return
 
 
@@ -542,57 +531,68 @@ def MakePi0SelectionPlots(output_mc : dict, output_data : dict, outDir : str, no
     """
     norm = False if output_data is None else norm
 
-    if output_data is not None:
-        scale = ak.count(output_data["n_photons"]["value"]) / ak.count(output_mc["n_photons"]["value"])
+    with PdfPages(outDir + "pi0.pdf") as pdf:
+        if output_data is not None:
+            scale = ak.count(output_data["n_photons"]["value"]) / ak.count(output_mc["n_photons"]["value"])
 
-        n_photons_scaled = []
-        u, c = np.unique(output_mc["n_photons"]["value"], return_counts = True)
-        for i, j in zip(u, c):
-            n_photons_scaled.extend([i]* int(scale * j))
+            n_photons_scaled = []
+            u, c = np.unique(output_mc["n_photons"]["value"], return_counts = True)
+            for i, j in zip(u, c):
+                n_photons_scaled.extend([i]* int(scale * j))
 
-        Plots.PlotBarComparision(n_photons_scaled, output_data["n_photons"]["value"], xlabel = "number of $\pi^{0}$ photon candidates", label_1 = "MC", label_2 = "Data", fraction = True, barlabel = False)
-    else:
-        Plots.PlotBar(output_mc["n_photons"]["value"], xlabel = "number of $\pi^{0}$ photon candidates")
-    Plots.Save("n_photons", outDir)
+            Plots.PlotBarComparision(n_photons_scaled, output_data["n_photons"]["value"], xlabel = "number of $\pi^{0}$ photon candidates", label_1 = "MC", label_2 = "Data", fraction = True, barlabel = False)
+        else:
+            Plots.PlotBar(output_mc["n_photons"]["value"], xlabel = "number of $\pi^{0}$ photon candidates")
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["angle"]["value"], output_mc["angle"]["tags"], data2 = output_data["angle"]["value"], bins = args.nbins, x_label = "Opening angle (rad)", norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["angle"]["value"], output_mc["angle"]["tags"], bins = args.nbins, x_label = "Opening angle (rad)", norm = norm)
-    Plots.DrawCutPosition(min(output_mc["angle"]["cuts"]), face = "right", arrow_length = 0.25)
-    Plots.DrawCutPosition(max(output_mc["angle"]["cuts"]), face = "left", arrow_length = 0.25)
-    Plots.Save("angle", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["mass"]["value"], output_mc["mass"]["tags"], data2 = output_data["mass"]["value"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["mass"]["value"], output_mc["mass"]["tags"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
+        Plots.DrawCutPosition(min(output_mc["mass"]["cuts"]), face = "right", arrow_length = 50)
+        Plots.DrawCutPosition(max(output_mc["mass"]["cuts"]), face = "left", arrow_length = 50)
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["mass"]["value"], output_mc["mass"]["tags"], data2 = output_data["mass"]["value"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["mass"]["value"], output_mc["mass"]["tags"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
-    Plots.DrawCutPosition(min(output_mc["mass"]["cuts"]), face = "right", arrow_length = 50)
-    Plots.DrawCutPosition(max(output_mc["mass"]["cuts"]), face = "left", arrow_length = 50)
-    Plots.Save("mass_pi0_tags", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["mass"]["value"], output_mc["mass_event_tag"]["tags"], data2 = output_data["mass"]["value"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["mass"]["value"], output_mc["mass_event_tag"]["tags"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
+        Plots.DrawCutPosition(min(output_mc["mass"]["cuts"]), face = "right", arrow_length = 50)
+        Plots.DrawCutPosition(max(output_mc["mass"]["cuts"]), face = "left", arrow_length = 50)
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["mass"]["value"], output_mc["mass_event_tag"]["tags"], data2 = output_data["mass"]["value"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["mass"]["value"], output_mc["mass_event_tag"]["tags"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
-    Plots.DrawCutPosition(min(output_mc["mass"]["cuts"]), face = "right", arrow_length = 50)
-    Plots.DrawCutPosition(max(output_mc["mass"]["cuts"]), face = "left", arrow_length = 50)
-    Plots.Save("mass_fs_tags", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["angle"]["value"], output_mc["angle"]["tags"], data2 = output_data["angle"]["value"], bins = args.nbins, x_label = "Opening angle (rad)", norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["angle"]["value"], output_mc["angle"]["tags"], bins = args.nbins, x_label = "Opening angle (rad)", norm = norm)
+        Plots.DrawCutPosition(min(output_mc["angle"]["cuts"]), face = "right", arrow_length = 0.25)
+        Plots.DrawCutPosition(max(output_mc["angle"]["cuts"]), face = "left", arrow_length = 0.25)
+        pdf.savefig()
+
     return
 
-def MakeRegionPlots(outputs_mc_masks : dict, outputs_data_masks : dict, out : str):
-    # Visualise the regions
-    Plots.plot_region_data(outputs_mc_masks["truth_regions"], compare_max=0, title="truth regions")
-    Plots.Save(out + "mc_truth_regions")
-    Plots.plot_region_data(outputs_mc_masks["reco_regions"], compare_max=0, title="reco regions")
-    Plots.Save(out + "mc_reco_regions")
-    # Compare the regions
-    Plots.compare_truth_reco_regions(outputs_mc_masks["reco_regions"], outputs_mc_masks["truth_regions"], title="")
-    Plots.Save(out + "mc_truth_vs_reco_regions")
 
-    if outputs_data_masks is not None:
+def MakeRegionPlots(outputs_mc_masks : dict, outputs_data_masks : dict, outDir : str):
+    """ Correlation matrices for truth and reco region selection.
+
+    Args:
+        outputs_mc_masks (dict): mc masks for each region
+        outputs_data_masks (dict): data masks for each region
+        outDir (str): output directory
+    """
+    with PdfPages(outDir + "regions.pdf") as pdf:
+        # Visualise the regions
+        Plots.plot_region_data(outputs_mc_masks["truth_regions"], compare_max=0, title="truth regions")
+        pdf.savefig()
         Plots.plot_region_data(outputs_mc_masks["reco_regions"], compare_max=0, title="reco regions")
-        Plots.Save(out + "data_reco_regions")
+        pdf.savefig()
+        # Compare the regions
+        Plots.compare_truth_reco_regions(outputs_mc_masks["reco_regions"], outputs_mc_masks["truth_regions"], title="")
+        pdf.savefig()
+
+        if outputs_data_masks is not None:
+            Plots.plot_region_data(outputs_mc_masks["reco_regions"], compare_max=0, title="reco regions")
+            pdf.savefig()
 
 
 def CalcualteCountMetrics(counts : pd.DataFrame) -> tuple:
@@ -799,18 +799,19 @@ def main(args):
     if output_data is not None: MakeTables(output_data, args.out + "tables_data/", "data")
 
     # output directories
-    os.makedirs(args.out + "plots/daughter_pi/", exist_ok = True)
-    os.makedirs(args.out + "plots/beam/", exist_ok = True)
-    os.makedirs(args.out + "plots/photon/", exist_ok = True)
-    os.makedirs(args.out + "plots/pi0/", exist_ok = True)
-    os.makedirs(args.out + "plots/regions/", exist_ok = True)
+    os.makedirs(args.out + "plots/", exist_ok = True)
+    # os.makedirs(args.out + "plots/daughter_pi/", exist_ok = True)
+    # os.makedirs(args.out + "plots/beam/", exist_ok = True)
+    # os.makedirs(args.out + "plots/photon/", exist_ok = True)
+    # os.makedirs(args.out + "plots/pi0/", exist_ok = True)
+    # os.makedirs(args.out + "plots/regions/", exist_ok = True)
 
     # plots
-    MakeBeamSelectionPlots(output_mc["beam"], output_data["beam"] if output_data else None, args.out + "plots/beam/", norm = args.norm)
-    MakePiPlusSelectionPlots(output_mc["pip"], output_data["pip"] if output_data else None, args.out + "plots/daughter_pi/", norm = args.norm)
-    MakePhotonCandidateSelectionPlots(output_mc["photon"], output_data["photon"] if output_data else None, args.out + "plots/photon/", norm = args.norm)
-    MakePi0SelectionPlots(output_mc["pi0"], output_data["pi0"] if output_data else None, args.out + "plots/pi0/", norm = args.norm)
-    MakeRegionPlots(output_mc["masks"], output_data["masks"] if output_data else None, args.out + "plots/regions/")
+    MakeBeamSelectionPlots(output_mc["beam"], output_data["beam"] if output_data else None, args.out + "plots/", norm = args.norm)
+    MakePiPlusSelectionPlots(output_mc["pip"], output_data["pip"] if output_data else None, args.out + "plots/", norm = args.norm)
+    MakePhotonCandidateSelectionPlots(output_mc["photon"], output_data["photon"] if output_data else None, args.out + "plots/", norm = args.norm)
+    MakePi0SelectionPlots(output_mc["pi0"], output_data["pi0"] if output_data else None, args.out + "plots/", norm = args.norm)
+    MakeRegionPlots(output_mc["masks"], output_data["masks"] if output_data else None, args.out + "plots/")
 
     # masks
     cross_section.SaveSelection(args.out + args.mc_file[0].split("/")[-1].split(".")[0] + "_selection_masks.dill", output_mc["masks"])
