@@ -922,12 +922,12 @@ def IterMultiPlot(x, sharex : bool = False, sharey : bool = False):
         yield i, j
 
 
-def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = "", label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None, xerr = None, yerr = None, capsize : float = 3):
+def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = "", label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None, xerr = None, yerr = None, capsize : float = 3, zorder : int = None):
     """ Make scatter plot.
     """
     if newFigure is True:
         plt.figure()
-    plt.errorbar(x, y, yerr, xerr, marker = marker, linestyle = linestyle, label = label, color = color, markersize = markersize, alpha = alpha, capsize = capsize)
+    plt.errorbar(x, y, yerr, xerr, marker = marker, linestyle = linestyle, label = label, color = color, markersize = markersize, alpha = alpha, capsize = capsize, zorder = zorder)
 
     if xlabel is not None: plt.xlabel(xlabel)
     if ylabel is not None: plt.ylabel(ylabel)
@@ -1097,7 +1097,7 @@ def PlotHist2DComparison(x : list, y : list, x_range : list, y_range : list, x_l
     fig.colorbar(im, cax = cbar_ax)
 
 
-def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : list = None, stacked = False, data_label : str = "Data", mc_labels = "MC", xlabel : str = None, title : str = None, yscale : str = "linear", legend_loc : str = "best", ncols : int = 2, norm : bool = False, sf : int = 2, colour : str = None, alpha : float = None, truncate : bool = True):
+def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : list = None, stacked = False, data_label : str = "Data", mc_labels = "MC", xlabel : str = None, title : str = None, yscale : str = "linear", legend_loc : str = "best", ncols : int = 2, norm : bool = False, sf : int = 2, colour : str = None, alpha : float = None, truncate : bool = False):
     """ Make Data MC histograms as seen in most typical particle physics analyses (but looks better).
 
     Args:
@@ -1122,11 +1122,13 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     plt.subplot(211) # MC histogram
     if x_range is None: x_range = [ak.min([mc, data]), ak.max([mc, data])]
     h_mc = []
+    sum_mc = []
     for m in mc:
+        sum_mc.append(int(ak.count(m) * scale))
         h, edges = np.histogram(np.array(m), bins, range = x_range)
         h_mc.append(h * scale)
     
-    sum_mc = np.sum(h_mc, 1, dtype = int) # number of each species in MC
+    # sum_mc = np.sum(h_mc, 1, dtype = int) # number of each species in MC
     ind = np.argsort(sum_mc)[::-1]
     if stacked == "ascending":
         ind = ind[::-1]
@@ -1140,7 +1142,7 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     else:
         for m in ind:
             plt.hist(edges[:-1], edges, weights = h_mc[m], range = x_range, stacked = False, label = mc_labels[m], color = colour[m], alpha = alpha)
-    plt.errorbar(centres, np.sum(h_mc, 0), np.sum(h_mc, 0)**0.5, c = "black", label = "MC total" + f" ({np.sum(h_mc, dtype = int)})", marker = "x", capsize = 3, linestyle = "")
+    plt.errorbar(centres, np.sum(h_mc, 0), np.sum(h_mc, 0)**0.5, c = "black", label = "MC total" + f" ({int(ak.count(mc) * scale)})", marker = "x", capsize = 3, linestyle = "")
     plt.yscale(yscale)
     plt.title(title)
 
@@ -1153,7 +1155,7 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
 
     h_data, edges = np.histogram(np.array(data), bins = edges, range = x_range) # bin the data in terms of MC
     data_err = np.sqrt(h_data) # poisson error in each bin
-    plt.errorbar(centres, h_data, data_err, marker = "o", c = "black", capsize = 3, linestyle = "", label = data_label + f" ({np.sum(h_mc, dtype = int)})")
+    plt.errorbar(centres, h_data, data_err, marker = "o", c = "black", capsize = 3, linestyle = "", label = data_label + f" ({ak.count(data)})")
 
     plt.legend(loc = legend_loc, ncols = ncols, labelspacing = 0.25)
 
