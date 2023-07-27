@@ -14,12 +14,13 @@ import awkward as ak
 import numpy as np
 import matplotlib.pyplot as plt
 
+from matplotlib.backends.backend_pdf import PdfPages
 from rich import print
-from python.analysis import Master, BeamParticleSelection, vector, Plots, cross_section
+from python.analysis import Master, BeamParticleSelection, vector, Plots, cross_section, Fitting
 from python.analysis.shower_merging import SetPlotStyle
 
 
-def Fit_Vector(v : ak.Record, bins : int) -> tuple:
+def Fit_Vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
     """ Gaussian fit to each component in the vector.
 
     Args:
@@ -34,18 +35,23 @@ def Fit_Vector(v : ak.Record, bins : int) -> tuple:
     sigma = {}
     sigma_err = {}
     for i in ["x", "y", "z"]:
-        popt, pcov = cross_section.Fit_Gaussian(v[i], bins = bins)
+        data = v[i]
+        y, bins_edges = np.histogram(np.array(data[~np.isnan(data)]), bins = bins, range = sorted([np.nanpercentile(data, 10), np.nanpercentile(data, 90)])) # fit only to  data within the 10th and 90th percentile of data to exclude large tails in the distriubtion.
+        bin_centers = (bins_edges[1:] + bins_edges[:-1]) / 2
+        yerr = np.sqrt(y) # Poisson error
+
+        popt, perr = Fitting.Fit(bin_centers, y, yerr, Fitting.gaussian)
 
         mu[i] = popt[1]
         sigma[i] = abs(popt[2])
-        mu_err[i] = abs(pcov[1][1])
-        sigma_err[i] = abs(pcov[2][2])
+        mu_err[i] = abs(perr[1])
+        sigma_err[i] = abs(perr[2])
 
     return mu, sigma, mu_err, sigma_err
 
 
 def plot(value : ak.Array, x_label : str, mu : float, sigma : float, color : str = None, label : str = None, range : list = None):
-    """ Plot data pluse the gaussian fit made on the data.
+    """ Plot data plus the gaussian fit made on the data.
 
     Args:
         value (ak.Array): date to plot
@@ -57,36 +63,58 @@ def plot(value : ak.Array, x_label : str, mu : float, sigma : float, color : str
     """
     y, edges = np.histogram(np.array(value), bins = 50, range = [mu - 5 * sigma, mu + 5 * sigma] if range is None else range)
     x = (edges[1:] + edges[:-1]) / 2
-    y_pred = cross_section.Gaussian(x, max(y), mu, sigma)
+
+    y_pred = Fitting.gaussian.func(x, max(y), mu, sigma)
 
     x_interp = np.linspace(min(x), max(x), 200)
-    y_interp = cross_section.Gaussian(x_interp, max(y), mu, sigma)
+    y_interp = Fitting.gaussian.func(x_interp, max(y), mu, sigma)
 
     yerr = (y * (1 - (y / np.sum(y))))**0.5
 
     chisqr = np.sum(((y - y_pred)/ yerr)**2)
     ndf = len(y) - 2
 
-    plt.errorbar(x, y / np.sum(y), yerr / np.sum(y), color = color, fmt = "x", capsize = 3, linestyle = "")
-    Plots.Plot(x_interp, y_interp / np.sum(y), xlabel = x_label, ylabel = "Area normalised", color = color, linestyle = "-", label = label + " $\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2f}", newFigure = False)
+    Plots.Plot(x, y/np.sum(y), yerr = yerr/np.sum(y), color = color, marker = "x", linestyle = "", capsize = 3, newFigure = False)
+    Plots.Plot(x_interp, y_interp / np.sum(y), xlabel = x_label, ylabel = "Counts (area normalised)", color = color, linestyle = "-", label = label + " $\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2f}", newFigure = False)
     plt.ylim(0)
-    # Plots.Save(name)
 
-def plot_range(mu : float, sigma : float, tolerance : float = 5):
+
+def plot_range(mu : float, sigma : float, tolerance : float = 5) -> list:
+    """ Compute range of plot based on properties of the Gaussian.
+
+    Args:
+        mu (float): mean
+        sigma (float): rms
+        tolerance (float, optional): how many standard deviations to extend the range by. Defaults to 5.
+
+    Returns:
+        list: plot range
+    """
     return sorted([mu - tolerance * sigma, mu + tolerance * sigma])
 
 
 def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data, data_fits : dict, out : str):
+    """ Make plots showing the fits for MC and or Data.
+
+    Args:
+        mc_events (Master.Data): mc
+        mc_fits (dict): fits made on mc
+        data_events (Master.Data): data
+        data_fits (dict): fits made on data
+        out (str): output directory
+    """
     SetPlotStyle()
 
-    for i in ["x", "y", "z"]:
-        mc_ranges = [] if mc_fits is None else plot_range(mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"])
-        data_ranges = [] if data_fits is None else plot_range(data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"])
+    with PdfPages(out + "beam_quality_fits.pdf") as pdf:
+        for i in ["x", "y", "z"]:
+            plt.figure()
+            mc_ranges = [] if mc_fits is None else plot_range(mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"])
+            data_ranges = [] if data_fits is None else plot_range(data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"])
 
-        plot_ranges = mc_ranges + data_ranges
-        if mc_events is not None: plot(mc_events.recoParticles.beam_startPos_SCE[i], f"Beam start position {i} (cm)", mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"], "C0", "MC", range = [min(plot_ranges), max(plot_ranges)])
-        if data_events is not None: plot(data_events.recoParticles.beam_startPos_SCE[i], f"Beam start position {i} (cm)", data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"], "C1", "Data", range = [min(plot_ranges), max(plot_ranges)])
-        Plots.Save(out + i)
+            plot_ranges = mc_ranges + data_ranges
+            if mc_events is not None: plot(mc_events.recoParticles.beam_startPos_SCE[i], f"Beam start position {i} (cm)", mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"], "C0", "MC", range = [min(plot_ranges), max(plot_ranges)])
+            if data_events is not None: plot(data_events.recoParticles.beam_startPos_SCE[i], f"Beam start position {i} (cm)", data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"], "C1", "Data", range = [min(plot_ranges), max(plot_ranges)])
+            pdf.savefig()
     return
 
 
@@ -137,7 +165,7 @@ def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str):
     os.makedirs(args.out, exist_ok = True)
     name = out + file.split("/")[-1].split(".")[0] + "_fit_values.json"
     with open(name, "w") as f:
-        json.dump(fit_values, f)
+        json.dump(fit_values, f, indent = 2)
     print(f"fit values written to {name}")
 
     return events, fit_values

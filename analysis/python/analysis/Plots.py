@@ -967,8 +967,7 @@ def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None
         yl = "Number of entries (bin width=" + str(binWidth) + ")"
     else:
         yl = "Normalized number of entries (bin width=" + str(binWidth) + ")"
-    plt.ylabel(yl)
-    plt.xlabel(xlabel)
+    if xlabel is not None: plt.xlabel(xlabel)
     plt.xscale(x_scale)
     plt.yscale(y_scale)
     plt.title(title)
@@ -1025,8 +1024,8 @@ def PlotHist2D(data_x, data_y, bins: int = 100, x_range: list = None, y_range: l
     height, xedges, yedges, _ = plt.hist2d(np.array(data_x), np.array(data_y), bins, range = [x_range, y_range], norm = norm_scale, label = label, vmin = z_range[0], vmax = z_range[1], cmap = cmap)
     if colorbar: plt.colorbar()
 
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
+    if xlabel is not None: plt.xlabel(xlabel)
+    if ylabel is not None: plt.ylabel(ylabel)
     plt.xscale(x_scale)
     plt.yscale(y_scale)
     plt.title(title)
@@ -1211,8 +1210,8 @@ def PlotHist2DImshow(x : ak.Array, y : ak.Array, bins : int = 100, x_range : lis
 
     plt.imshow(h_norm.T, origin = "lower", extent=[min(x_e), max(x_e), min(y_e), max(y_e)], norm = cnorm, aspect = "auto")
     plt.grid(False)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
+    if xlabel is not None: plt.xlabel(xlabel)
+    if ylabel is not None: plt.ylabel(ylabel)
     plt.title(title)
     if colorbar: plt.colorbar()
     return h, (x_e, y_e)
@@ -1336,7 +1335,7 @@ def PlotBar(data, width: float = 0.4, xlabel: str = "", title: str = "", label: 
     bar = plt.bar(unique, counts, width, label=label, alpha=alpha, color = color)
     if bar_labels: plt.bar_label(bar, counts)
     plt.ylabel("Counts")
-    plt.xlabel(xlabel)
+    if xlabel is not None: plt.xlabel(xlabel)
     plt.title(title)
     if label != "":
         plt.legend()
@@ -1451,113 +1450,6 @@ def PlotStackedBar(bars, labels, xlabel : str = None, colours : list = None, alp
 
     if annotation is not None:
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
-
-
-def BW(x, A : float, M : float, T : float):
-    """ Breit Wigner distribution.
-
-    Args:
-        x : COM energy (data)
-        M : particle mass
-        T : decay width
-        A : amplitude to scale PDF to data
-    """
-    # see https://en.wikipedia.org/wiki/Relativistic_Breit%E2%80%93Wigner_distribution for its definition
-    # formula is complex, so split it into multiple terms
-    gamma = np.sqrt(M**2 * (M**2 + T**2))
-    k = A * ((2 * 2**0.5)/np.pi) * (M * T * gamma)/((M**2 + gamma)**0.5)
-    return k/((x**2 - M**2)**2 + (M*T)**2)
-
-
-def Gaussian(x, A: float, mu: float, sigma: float):
-    """ Gaussain distribution (not normalised).
-    Args:
-        x : sample data
-        A : amplitude to scale
-        mu : mean value
-        sigma : standard deviation
-    """
-    return A * np.exp(-0.5 * ((x-mu) / sigma)**2)
-
-
-def ChiSqrPDF(x, ndf: int):
-    """ Chi Squared PDF.
-    Args:
-        x : sample data
-        ndf : degrees of freedom
-        scale : pdf normalisation?
-        poly : power term
-        exponent : exponential term
-    """
-    scale = 1 / (np.power(2, ndf/2) * gamma(ndf/2))
-    poly = np.power(x, ndf - 2)
-    exponent = np.exp(- (x**2) / 2)
-    return scale * poly * exponent
-
-
-def LeastSqrFit(data, nbins: int = 25, function=Gaussian, pinit: list = None, xlabel: str = "", sf: int = 3, interpolation: int = 500, capsize: float = 1):
-    """ Fit a function to binned data using the least squares method, implemented in Scipy.
-        Plots the fitted function and histogram with y error bars.
-    Args:
-        hist : height of each histogram bin
-        bins : data range of each bin
-        x : ceneterd value of each bin
-        binWidth : width of the bins
-        uncertainty : poisson uncertainty of each bin
-        scale : normalisation of data for curve fitting
-        popt : paramters of the fitting function which minimises the chi-qsr
-        cov : covarianc matrix of least sqares fit
-        ndf : number of degrees of freedom
-        chi_sqr : chi squared
-        x_inter : interplolated x values of the best fit curve to show the fit in a plot
-        y_inter : interpolated y values
-    """
-    data = data[data != -999]  # reject null data
-    hist, bins = np.histogram(data, nbins)  # bin data
-    x = (bins[:-1] + bins[1:])/2  # get center of bins
-    x = np.array(x, dtype=float)  # convert from object to float
-    binWidth = bins[1] - bins[0]  # calculate bin width
-
-    uncertainty = np.sqrt(hist)  # calculate poisson uncertainty if each bin
-
-    # normalise data
-    scale = 1 / max(hist)
-    uncertainty = uncertainty * scale
-    hist = hist * scale
-
-    # perform least squares curve fit, get the optimal function parameters and covariance matrix
-    popt, cov = curve_fit(function, x, hist, pinit, uncertainty)
-
-    ndf = nbins - len(popt)  # degrees of freedom
-    chi_sqr = np.sum((hist - Gaussian(x, *popt))**2 /
-                     Gaussian(x, *popt))  # calculate chi squared
-
-    # calculate the p value, integrate the chi-qsr function from the chi-qsr to infinity to get p(x > chi-sqr)
-    p = quad(ChiSqrPDF, np.sqrt(chi_sqr), np.Infinity, args=(ndf))
-
-    print("chi_sqaured / ndf: " + str(chi_sqr / ndf))
-    print("p value and compuational error: " + str(p))
-
-    popt[0] = popt[0] / scale
-    print("optimised parameters: " + str(popt))
-
-    cov = np.sqrt(cov)  # get standard deviations
-    print("uncertainty in optimised parameters: " +
-          str([cov[0, 0], cov[1, 1], cov[2, 2]]))
-
-    # calculate plot points for optimised curve
-    # create x values to draw the best fit curve
-    x_inter = np.linspace(x[0], x[-1], interpolation)
-    y_inter = function(x_inter, *popt)
-
-    # plot data / fitted curve
-    plt.bar(x, hist/scale, binWidth, yerr=uncertainty /
-            scale, capsize=capsize, color="C0")
-    Plot(x_inter, y_inter)
-    binWidth = round(binWidth, sf)
-    plt.ylabel("Number of events (bin width=" + str(binWidth) + ")")
-    plt.xlabel(xlabel)
-    plt.tight_layout()
 
 
 def simple_sig_bkg_hist(

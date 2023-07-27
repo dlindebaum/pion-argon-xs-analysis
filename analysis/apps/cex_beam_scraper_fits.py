@@ -4,7 +4,7 @@ Created on: 13/06/2023 11:19
 
 Author: Shyam Bhuller
 
-Description: Produces plots and fits for the beam scraper study, producing thresholds which dictate what events are beam scrapers 
+Description: Produces plots and fits for the beam scraper study, producing thresholds which dictate what events are beam scrapers.
 """
 import argparse
 import json
@@ -13,16 +13,18 @@ import os
 import awkward as ak
 import matplotlib.pyplot as plt
 import numpy as np
+
+from matplotlib.backends.backend_pdf import PdfPages
 from particle import Particle
 from rich import print
 
-from python.analysis import Master, cross_section, vector, Plots
+from python.analysis import Master, cross_section, vector, Plots, Fitting
 
 def KE(p, m):
     return np.sqrt(p**2 + m**2) - m
 
 
-def GetTrueFFKE(KE_tpc, length_to_ff):
+def GetTrueFFKE(KE_tpc : ak.Array, length_to_ff : ak.Array) -> ak.Array:
     """ True Front facing kinetic energy is the kinetic energy of the first particle trajectory point in the tpc,
         plus the energy lost between the first trajectory point in the TPC and trajectory point before.
 
@@ -45,7 +47,7 @@ def dist_into_tpc(arr : ak.Array, ind : int) -> ak.Array:
         ind (int): index of point which is just before the TPC
 
     Returns:
-        any: distance between points
+        ak.Array: distance between points
     """
     outside_tpc = arr[ind]
     if ind + 1 >= ak.count(arr):
@@ -55,7 +57,7 @@ def dist_into_tpc(arr : ak.Array, ind : int) -> ak.Array:
     return ff_tpc - outside_tpc
 
 
-def ff_value(arr : ak.Array, ind : int):
+def ff_value(arr : ak.Array, ind : int) -> any:
     """ returns a quantity of any trajectory point at the first trajectory point in the TPC.
 
     Args:
@@ -71,7 +73,19 @@ def ff_value(arr : ak.Array, ind : int):
         return arr[ind + 1]
 
 
-def GetScraperFits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : ak.Array, fit_bins : int, residual_range : list, out : str) -> ak.Array:
+def GetScraperFits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : ak.Array, fit_bins : int, residual_range : list) -> dict:
+    """ Fit gaussians to front facing kinetic energies to extract values required to define events as beam scrapers.
+
+    Args:
+        ke_bins (list): bins of Kinetic energy to split the sample in.
+        beam_inst_KE (ak.Array): beam instrumentation kinetic energy.
+        delta_KE_upstream (ak.Array): difference in the front facing KE and beam kinetic energy.
+        fit_bins (int): number of bins to histogram the data for the fit.
+        residual_range (list): plot range.
+
+    Returns:
+        dict: fit parameters
+    """
     plt.subplots(2, 2, figsize = [6.4 * 2, 4.8 * 2], num = 1)
     plt.gcf().set_size_inches(6.4 * 2, 4.8 * 2)
 
@@ -80,25 +94,42 @@ def GetScraperFits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : 
         bin_label = "$KE_{inst}$:" + f"[{ke_bins[i-1]},{ke_bins[i]}] (MeV)"
         e = (beam_inst_KE < ke_bins[i]) & (beam_inst_KE > ke_bins[i-1])
 
-        popt, pcov = cross_section.Fit_Gaussian(delta_KE_upstream[e], fit_bins)
-        print(popt, pcov)
+        data = delta_KE_upstream[e]
+
+        y, bin_edges = np.histogram(np.array(data[~np.isnan(data)]), bins = fit_bins, range = sorted([np.nanpercentile(data, 10), np.nanpercentile(data, 90)]))
+        bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
+        yerr = np.sqrt(y) # Poisson error
+
+        print(f"{(max(y), np.nanmedian(data), np.nanstd(data))=}")
+
+        popt, perr = Fitting.Fit(bin_centers, y, yerr, Fitting.gaussian, method = "dogbox")
+        print(f"{popt=}")
+        print(f"{perr=}")
 
         plt.figure(1)
         plt.subplot(2, 2, i)
-        heights, _ = Plots.PlotHist(delta_KE_upstream[e], newFigure = False, bins = fit_bins, range = residual_range)
+        heights, _ = Plots.PlotHist(data, newFigure = False, bins = fit_bins, range = residual_range)
 
-        x_interp = np.linspace(min(delta_KE_upstream[e]), max(delta_KE_upstream[e]), 5 * fit_bins)
-        y_interp = cross_section.Gaussian(x_interp, max(heights), popt[1], popt[2])
+        x_interp = np.linspace(min(data), max(data), 10 * fit_bins)
+        y_interp = Fitting.gaussian.func(x_interp, max(heights), popt[1], popt[2])
         Plots.Plot(x_interp, y_interp, color = "black", label = "fit", title = bin_label, xlabel = "$KE_{inst} - KE_{true}$ (MeV)", newFigure = False)
         plt.axvline(popt[1] + 3 * abs(popt[2]), color = "black", linestyle = "--", label = "$\mu{+}+3\sigma$")
         plt.xlim(*residual_range)
 
         scraper_fit[(ke_bins[i-1], ke_bins[i])] = {"mu" : popt[1], "sigma" : abs(popt[2])}
-    Plots.Save("KE_fits", out)
     return scraper_fit
 
 
-def BeamScraperPlots(mc: Master.Data, beam_inst_KE_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : ak.Array, scraper_fits : dict, out : str):
+def BeamScraperPlots(mc: Master.Data, beam_inst_KE_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : ak.Array, scraper_fits : dict):
+    """ Scatter plots of events to show beam scraper events as a function of the XY position at the beam instrumentation.
+
+    Args:
+        mc (Master.Data): events to look at.
+        beam_inst_KE_bins (list): beam kinetic energy bins.
+        beam_inst_KE (ak.Array): beam instrumentation kinetic energy.
+        delta_KE_upstream (ak.Array): difference in the front facing KE and beam kinetic energy.
+        scraper_fits (dict): _description_
+    """
 
     for i in Plots.MultiPlot(len(beam_inst_KE_bins)-1, sharex = True, sharey = True):
         if i == len(beam_inst_KE_bins): continue
@@ -129,7 +160,7 @@ def BeamScraperPlots(mc: Master.Data, beam_inst_KE_bins : list, beam_inst_KE : a
         plt.title(bin_label)
         plt.axis('scaled')
         plt.legend()
-    Plots.Save("scraper_plots", out)
+
 
 def main(args : argparse.Namespace):
     cross_section.SetPlotStyle(True)
@@ -142,7 +173,7 @@ def main(args : argparse.Namespace):
     beam_inst_KE = KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
 
     true_ff_ind = ak.num(mc.trueParticles.beam_traj_pos.z) - ak.argmax((mc.trueParticles.beam_traj_pos.z < 0)[:, ::-1], -1) - 1
-    reco_ff_ind = ak.num(mc.recoParticles.beam_calo_pos.z) - ak.argmax((mc.recoParticles.beam_calo_pos.z < 0)[:, ::-1], -1) - 1
+    # reco_ff_ind = ak.num(mc.recoParticles.beam_calo_pos.z) - ak.argmax((mc.recoParticles.beam_calo_pos.z < 0)[:, ::-1], -1) - 1
 
     pitches = vector.magnitude(vector.vector(**{i : ak.Array(map(dist_into_tpc, mc.trueParticles.beam_traj_pos[i], true_ff_ind)) for i in ["x", "y", "z"]}))
 
@@ -152,20 +183,25 @@ def main(args : argparse.Namespace):
     delta_KE_upstream = beam_inst_KE - true_ffKE
 
     residual_range = [-300, 300] # range of residual for plots
-    bins = 100
+    bins = 50
 
     os.makedirs(args.out + "beam_scraper/", exist_ok = True)
 
-    Plots.Plot(args.energy_range, args.energy_range, color = "red")
-    Plots.PlotHist2D(beam_inst_KE, true_ffKE, xlabel = "$KE_{inst}$ (MeV)", ylabel = "$KE_{true}$ (MeV)", x_range = args.energy_range, y_range = args.energy_range, newFigure = False)
-    Plots.Save("beam_inst_KE_vs_true_KE", args.out + "beam_scraper/")
+    with PdfPages(args.out + "beam_scraper/" + "beam_scraper_fits.pdf") as pdf:
+        Plots.Plot(args.energy_range, args.energy_range, color = "red")
+        Plots.PlotHist2D(beam_inst_KE, true_ffKE, xlabel = "$KE_{inst}$ (MeV)", ylabel = "$KE_{true}$ (MeV)", x_range = args.energy_range, y_range = args.energy_range, newFigure = False)
+        pdf.savefig()
 
-    Plots.PlotHist2D(beam_inst_KE, delta_KE_upstream, xlabel = "$KE_{inst}$ (MeV)", ylabel = "$KE_{inst} - KE_{true}$ (MeV)", x_range = args.energy_range, y_range = residual_range)
-    for i in args.beam_inst_KE_bins: plt.axvline(i, color = "red")
-    Plots.Save("beam_inst_KE_vs_delta_KE", args.out + "beam_scraper/")
+        Plots.PlotHist2D(beam_inst_KE, delta_KE_upstream, xlabel = "$KE_{inst}$ (MeV)", ylabel = "$KE_{inst} - KE_{true}$ (MeV)", x_range = args.energy_range, y_range = residual_range)
+        for i in args.beam_inst_KE_bins: plt.axvline(i, color = "red")
+        pdf.savefig()
 
-    scraper_thresholds = GetScraperFits(args.beam_inst_KE_bins, beam_inst_KE, delta_KE_upstream, bins, residual_range, args.out + "beam_scraper/")
-    print(scraper_thresholds)
+        scraper_thresholds = GetScraperFits(args.beam_inst_KE_bins, beam_inst_KE, delta_KE_upstream, bins, residual_range)
+        pdf.savefig()
+        print(scraper_thresholds)
+
+        BeamScraperPlots(mc, args.beam_inst_KE_bins, beam_inst_KE, delta_KE_upstream, scraper_thresholds)
+        pdf.savefig()
 
     json_dict = {}
     for i, (k, v) in enumerate(scraper_thresholds.items()):
@@ -173,11 +209,8 @@ def main(args : argparse.Namespace):
 
     name = args.out + args.mc_file[0].split("/")[-1].split(".")[0] + "_beam_scraper_fit_values.json"
     with open(name, "w") as f:
-        json.dump(json_dict, f)
+        json.dump(json_dict, f, indent = 4)
     print(f"fit values written to {name}")
-
-    BeamScraperPlots(mc, args.beam_inst_KE_bins, beam_inst_KE, delta_KE_upstream, scraper_thresholds, args.out + "beam_scraper/")
-
     return
 
 

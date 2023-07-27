@@ -3,7 +3,7 @@ Created on: 02/06/2023 10:37
 
 Author: Shyam Bhuller
 
-Description: Library for code used used in the cross section analysis. Refer to the README to see which apps correspond to the cross section analysis
+Description: Library for code used in the cross section analysis. Refer to the README to see which apps correspond to the cross section analysis.
 """
 import argparse
 import json
@@ -11,11 +11,9 @@ import json
 import awkward as ak
 import numpy as np
 import dill
-import matplotlib.pyplot as plt
 from particle import Particle
-from scipy.optimize import curve_fit
 
-from python.analysis import Master, BeamParticleSelection, PFOSelection, EventSelection, Plots
+from python.analysis import Master, BeamParticleSelection, PFOSelection, EventSelection, Fitting
 from python.analysis.shower_merging import SetPlotStyle
 
 def LoadSelectionFile(file : str):
@@ -72,38 +70,37 @@ def SaveSelection(file : str, masks : dict):
         dill.dump(masks, f)
 
 
-def Gaussian(x : np.array, a : float, x0 : float, sigma : float) -> np.array:
-    return a * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
-
-
-def Fit_Gaussian(data : ak.Array, bins : int) -> tuple:
-    """ Fits a gaussian function to a histogram of data, using the least squares method.
-
-    Args:
-        data (ak.Array): data to fit
-        bins (int): number of bins
-        range (list, optional): range of values to fit to. Defaults to None.
-
-    Returns:
-        tuple : fit parameters and covariance matrix
-    """
-    y, bins_edges = np.histogram(np.array(data[~np.isnan(data)]), bins = bins, range = sorted([np.nanpercentile(data, 10), np.nanpercentile(data, 90)])) # fit only to  data within the 10th and 90th percentile of data to exclude large tails in the distriubtion.
-    bin_centers = (bins_edges[1:] + bins_edges[:-1]) / 2
-    return curve_fit(Gaussian, bin_centers, y, p0 = (0, np.nanmedian(data), np.nanstd(data)))
-
-
 class EnergyCorrection:
     @staticmethod
     def LinearCorrection(x, p0):
         return x / p0
 
-    @staticmethod
-    def ResponseFit(x, p0, p1, p2):
-        return p0 * np.log(x - p1) + p2
+    class ResponseFit(Fitting.FitFunction):
+        n_params = 3
+
+        @staticmethod
+        def func(x, p0, p1, p2):
+            return p0 * np.log(x - p1) + p2
+
+        @staticmethod
+        def bounds(x, y):
+            return (-np.inf, np.inf)
+
+        @staticmethod
+        def p0(x, y):
+            return None
+
+        @staticmethod
+        def mu():
+            pass
+        
+        @staticmethod
+        def var():
+            pass
 
     @staticmethod
     def ResponseCorrection(x, p0, p1, p2):
-        return x / (EnergyCorrection.ResponseFit(x, p0, p1, p2) + 1)
+        return x / (EnergyCorrection.ResponseFit.func(x, p0, p1, p2) + 1)
 
     shower_energy_correction = {
         "linear" : LinearCorrection,
@@ -312,52 +309,3 @@ def LoadConfiguration(file : str):
     with open(file, "rb") as f:
         config = json.load(f)
     return config
-
-
-class Fitting:
-    @staticmethod
-    def Fit(x, y_obs, y_err, func, xlabel = "", ylabel = "", ylim = None, p0 = None):
-        x_interp = np.linspace(min(x), max(x), 1000)
-
-        y_obs = np.array(y_obs, dtype = float)
-        y_err = np.array(y_err, dtype = float)
-
-        mask = ~np.isnan(np.array(y_obs, dtype = float))
-
-        x = np.array(x[mask], dtype = float)
-        y_obs = np.array(y_obs[mask], dtype = float)
-        y_err = np.array(y_err[mask], dtype = float)
-
-        if p0 is not None:
-            popt, pcov = curve_fit(func, x, y_obs, sigma = y_err, maxfev = int(10E4), p0 = p0)
-        else: 
-            popt, pcov = curve_fit(func, x, y_obs, sigma = y_err, maxfev = int(10E4))
-        perr = np.sqrt(np.diag(pcov))
-
-        y_pred = func(x, *popt)
-        y_pred_min = func(x, *(popt - perr))
-        y_pred_max = func(x, *(popt + perr))
-        y_pred_err = (abs(y_pred - y_pred_min) + abs(y_pred - y_pred_max)) / 2
-
-        chisqr = np.nansum(((y_obs - y_pred)/y_pred_err)**2)
-        ndf = len(y_obs) - len(popt)
-
-        Plots.Plot(x_interp, func(x_interp, *popt), newFigure = False, x_scale = "linear", xlabel = xlabel, ylabel = ylabel, color = "#1f77b4", zorder = 11, label = "fit")
-        plt.fill_between(x_interp, func(x_interp, *(popt + perr)), func(x_interp, *(popt - perr)), color = "#7f7f7f", alpha = 0.5, zorder = 10, label = "$1\sigma$ error region")
-        Plots.Plot(x, y_obs, yerr = y_err, marker = "x", linestyle = "", color = "#d62728", label = "sample points", newFigure = False)
-        if ylim:
-            plt.ylim(*sorted(ylim))
-
-        main_legend = plt.legend(loc = "upper left")
-
-        plt.gca().add_artist(main_legend)
-
-        text = ""
-        for j in range(len(popt)):
-            text += f"\np{j}: ${popt[j]:.2f}\pm${perr[j]:.2g}"
-        text += "\n$\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2g}"
-        legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = "upper right")
-        for l in legend.legendHandles:
-            l.set_visible(False)
-
-        return popt

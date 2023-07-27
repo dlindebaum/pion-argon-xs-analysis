@@ -202,16 +202,18 @@ def AnalysePhotonCandidateSelection(events : Master.Data) -> dict:
     return output
 
 
-def AnalysePi0Selection(events : Master.Data, data : bool = False, correction = None, correction_params : dict = None) -> dict:
+def AnalysePi0Selection(events : Master.Data, data : bool = False, correction : callable = None, correction_params : dict = None) -> dict:
     """ Analyse the pi0 selection.
 
     Args:
         events (Master.Data): events to look at
         data (bool): is the ntuple file data or MC
+        correction (callable, optional): shower energy correction. Defaults to None.
+        correction_params (dict, optional): shower energy correction parameters. Defaults to None.
 
     Returns:
         dict: output data
-    """
+    """    
     def null_tag():
         tag = Tags.Tags()
         tag["null"] = Tags.Tag(mask = (events.eventNum < -1))
@@ -265,7 +267,20 @@ def AnalysePi0Selection(events : Master.Data, data : bool = False, correction = 
 
     return output
 
-def AnalyseRegions(events : Master.Data, photon_mask : ak.Array, is_data : bool, correction = None, correction_params : dict = None):
+
+def AnalyseRegions(events : Master.Data, photon_mask : ak.Array, is_data : bool, correction : callable = None, correction_params : dict = None) -> tuple[dict, dict]:
+    """ Create masks which desribe the truth and reco regions for various exlusive cross sections.
+
+    Args:
+        events (Master.Data): events to look at
+        photon_mask (ak.Array): mask for pi0 photon shower candidates
+        is_data (bool): is this a data ntuple?
+        correction (callable, optional): shower energy correction. Defaults to None.
+        correction_params (dict, optional): shower energy correction parameters. Defaults to None.
+
+    Returns:
+        tuple[dict, dict]: truth and reco regions
+    """
     truth_regions = EventSelection.create_regions(events.trueParticles.nPi0, events.trueParticles.nPiPlus) if is_data == False else None
 
     reco_pi0_counts = EventSelection.count_pi0_candidates(events, exactly_two_photons = True, photon_mask = photon_mask, correction = cross_section.EnergyCorrection.shower_energy_correction[correction], correction_params = correction_params)
@@ -275,7 +290,7 @@ def AnalyseRegions(events : Master.Data, photon_mask : ak.Array, is_data : bool,
 
 
 # @Processing.log_process
-def run(i, file, n_events, start, selected_events, args):
+def run(i, file, n_events, start, selected_events, args) -> dict:
     events = Master.Data(file, nEvents = n_events, start = start, nTuple_type = args["ntuple_type"]) # load data
 
     if args["data"] == True:
@@ -344,6 +359,7 @@ def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, n
         output_mc (dict): mc to plot
         output_data (dict): data to plot
         outDir (str): output directory
+        norm (float): plot normalisation
     """
 
     norm = False if output_data is None else norm
@@ -419,8 +435,10 @@ def MakePiPlusSelectionPlots(output_mc : dict, output_data : dict, outDir : str,
     """ Pi plus selection plots.
 
     Args:
-        output (dict): data to plot
+        output_mc (dict): mc to plot
+        output_data (dict): data to plot
         outDir (str): output directory
+        norm (float): plot normalisation
     """
 
     norm = False if output_data is None else norm
@@ -470,8 +488,10 @@ def MakePhotonCandidateSelectionPlots(output_mc : dict, output_data : dict, outD
     """ Photon candidate plots.
 
     Args:
-        output (dict): data to plot
+        output_mc (dict): mc to plot
+        output_data (dict): data to plot
         outDir (str): output directory
+        norm (float): plot normalisation
     """
     
     norm = False if output_data is None else norm
@@ -526,8 +546,10 @@ def MakePi0SelectionPlots(output_mc : dict, output_data : dict, outDir : str, no
     """ Pi0 selection plots.
 
     Args:
-        output (dict): data to plot
+        output_mc (dict): mc to plot
+        output_data (dict): data to plot
         outDir (str): output directory
+        norm (float): plot normalisation
     """
     norm = False if output_data is None else norm
 
@@ -763,7 +785,14 @@ def MergeOutputs(outputs : list) -> dict:
     return merged_output
 
 
-def MakeTables(output : dict, out : str, sample : "str"):
+def MakeTables(output : dict, out : str, sample : str):
+    """ Create cutflow tables.
+
+    Args:
+        output (dict): output data
+        out (str): output name
+        sample (str): sample name i.e. mc or data
+    """
     # output directories
     os.makedirs(out + "daughter_pi/", exist_ok = True)
     os.makedirs(out + "beam/", exist_ok = True)
@@ -800,11 +829,6 @@ def main(args):
 
     # output directories
     os.makedirs(args.out + "plots/", exist_ok = True)
-    # os.makedirs(args.out + "plots/daughter_pi/", exist_ok = True)
-    # os.makedirs(args.out + "plots/beam/", exist_ok = True)
-    # os.makedirs(args.out + "plots/photon/", exist_ok = True)
-    # os.makedirs(args.out + "plots/pi0/", exist_ok = True)
-    # os.makedirs(args.out + "plots/regions/", exist_ok = True)
 
     # plots
     MakeBeamSelectionPlots(output_mc["beam"], output_data["beam"] if output_data else None, args.out + "plots/", norm = args.norm)
