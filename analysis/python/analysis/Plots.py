@@ -968,6 +968,7 @@ def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None
     else:
         yl = "Normalized number of entries (bin width=" + str(binWidth) + ")"
     if xlabel is not None: plt.xlabel(xlabel)
+    plt.ylabel(yl)
     plt.xscale(x_scale)
     plt.yscale(y_scale)
     plt.title(title)

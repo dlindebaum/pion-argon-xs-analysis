@@ -9,9 +9,11 @@ from abc import ABC, abstractmethod
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 from scipy.optimize import curve_fit
 from scipy.special import gamma, erf
+from scipy.stats import ks_2samp
 
 from python.analysis import Plots
 
@@ -245,15 +247,133 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
             plt.ylim(*sorted(ylim))
 
         main_legend = plt.legend(loc = "upper left")
+        main_legend.set_zorder(12)
 
         #* add fit metrics to the plot in a second legend
         plt.gca().add_artist(main_legend)
         text = ""
         for j in range(len(popt)):
-            text += f"\np{j}: ${popt[j]:.2f}\pm${perr[j]:.2g}"
+            text += f"\np{j}: ${popt[j]:.2g}\pm${perr[j]:.2g}"
         text += "\n$\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2g}"
         legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = "upper right")
+        legend.set_zorder(12)
         for l in legend.legendHandles:
             l.set_visible(False)
 
     return popt, perr
+
+
+def create_bins_df(value : pd.Series, n_entries, v_range : list = None):
+    sorted_value = value.sort_values()
+    n_bins = len(sorted_value) // n_entries
+
+    bins = []
+    for i in range(n_bins + 1):
+        mi = sorted_value.values[i * n_entries]
+        bins.append(mi)
+    if v_range:
+        bins[0] = min(v_range)
+        bins[-1] = max(v_range)
+    return np.array(bins)
+
+
+def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : str, v_range : list, funcs, data_bins : list, hist_bins : int, log : bool = False, rms_err : bool = True):
+    """ Estimate a central value in each reco energy bin based on some FitFunction or collection of FitFunctions.
+
+    Args:
+        bin_variable (str): variable to bin in
+        variable (str): variable to fit to
+        v_range (list): variable range
+        funcs (FitFunction): functions to try fit
+        reco_bins (list): reco energy bins
+        hist_bins (int): number of bins for variable histograms
+        log (bool, optional): verbose printout. Defaults to False.
+    """
+    def print_log(x):
+        if log: print(x)
+
+    cv = []
+    cv_err = []
+    fig_handles = None
+    fig_labels = None
+    for i in Plots.MultiPlot(len(data_bins) - 1):
+        if i == len(data_bins): continue
+        print_log(i)
+        binned_data = df[(df[bin_variable] > data_bins[i]) & (df[bin_variable] < data_bins[i+1])]
+    
+        y, edges = np.histogram(binned_data[variable], bins = hist_bins, range = [min(v_range), max(v_range)])
+        x = (edges[1:] + edges[:-1]) / 2
+        x_interp = np.linspace(min(x), max(x), hist_bins*5)
+
+        best_f = None
+        best_popt = None
+        best_perr = None
+        k_best = None
+        p_best = None
+
+        for f in funcs:
+            function = f()
+            popt = None
+            pcov = None
+            perr = None
+            try:
+                popt, pcov = curve_fit(function.func, x, y, p0 = function.p0(x, y), method = "dogbox", bounds = function.bounds(x, y), maxfev = 500000)
+                perr = np.sqrt(np.diag(pcov))
+                print_log(popt)
+                print_log(perr)
+                print_log(pcov)
+            except Exception as e:
+                print_log("could not fit, reason:")
+                print_log(e)
+                pass
+            y_pred = function.func(x, *popt) if popt is not None else None
+            if y_pred is not None:
+                k, p = ks_2samp(y, y_pred)
+            else:
+                k = 1
+                p = 0
+
+            if p_best is None or p > p_best : # larger p value suggests a better fit
+                p_best = p
+                k_best = k
+                best_popt = popt
+                best_perr = perr
+                best_f = f
+
+        mean = None
+        mean_error = None
+        if best_popt is not None:
+            function = best_f()
+            mean = function.mu(*best_popt)
+            if rms_err:
+                mean_error = np.sqrt(abs(function.var(*best_popt))/len(binned_data[variable]))
+            else:
+                mean_error = mean - function.mu(*(best_popt + best_perr))
+            y_pred = function.func(x, *best_popt)
+            y_pred_interp = function.func(x_interp, *best_popt)
+            k, p = ks_2samp(y, y_pred)
+
+            Plots.Plot(x_interp, y_pred_interp, marker = "", color = "black", newFigure = False, label = "fit")
+            plt.axvline(mean, color = "black", linestyle = "--", label = "central value")
+        Plots.PlotHist(binned_data[variable], bins = hist_bins, newFigure = False, title = f"bin : {[data_bins[i], data_bins[i+1]]}", range = [min(v_range), max(v_range)])
+
+        plt.axvline(np.mean(binned_data[variable]), linestyle = "--", color = "C1", label = "mean")
+
+        if not fig_handles: fig_handles, fig_labels = plt.gca().get_legend_handles_labels()
+
+        if best_popt is not None:
+            text = ""
+            for j in range(len(best_popt)):
+                text += f"\np{j}: ${best_popt[j]:.2f}\pm${best_perr[j]:.2f}"
+            text += f"\nks : {k_best:.2f}, p : {p_best:.2f}"
+            legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], title = best_f.__name__.replace("_", " "))
+            for l in legend.legendHandles:
+                l.set_visible(False)
+
+        cv.append(mean)
+        cv_err.append(abs(mean_error) if mean_error is not None else mean_error)
+    
+    plt.gcf().legend(fig_handles, fig_labels, loc = "lower right", ncols = 3)
+    plt.gcf().supxlabel(variable.replace("_", " "))
+    plt.tight_layout()
+    return np.array(cv), np.array(cv_err)

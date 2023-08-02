@@ -1232,8 +1232,13 @@ class RecoParticleData(ParticleData):
 
     @property
     def beam_dEdX(self) -> ak.Array:
-        self.LoadData("beam_dEdX", "reco_beam_calibrated_dEdX_SCE")
+        self.LoadData("beam_dEdX", "reco_beam_dEdX_SCE")
         return getattr(self, f"_{type(self).__name__}__beam_dEdX")
+
+    @property
+    def beam_dEdX_calibrated(self) -> ak.Array:
+        self.LoadData("beam_dEdX_calibrated", "reco_beam_calibrated_dEdX_SCE")
+        return getattr(self, f"_{type(self).__name__}__beam_dEdX_calibrated")
 
     @property
     def reco_reconstructable_beam_event(self) -> ak.Array:
