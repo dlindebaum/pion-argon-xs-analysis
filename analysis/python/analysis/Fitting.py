@@ -198,6 +198,22 @@ class crystal_ball(FitFunction):
         return sigma
 
 
+class poly2d(FitFunction):
+    n_params = 3
+
+    @staticmethod
+    def func(x, a, b, c):
+        return a + (b * x) + c * (x**2)
+
+    @staticmethod
+    def p0(x, y):
+        return None
+
+    @staticmethod
+    def bounds(x, y):
+        return ([-np.inf, -np.inf, -np.inf], [np.inf]*3)
+
+
 def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, method = "trf", maxfev = int(10E4), plot : bool = False, xlabel : str = "", ylabel : str = "", ylim : list = None) -> tuple[np.array, np.array]:
     """ Implementation of scipy's curve fit, with some constraints, checks to handle nan data and optional plotting.
 

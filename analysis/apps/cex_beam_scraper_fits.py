@@ -20,9 +20,6 @@ from rich import print
 
 from python.analysis import Master, cross_section, vector, Plots, Fitting
 
-def KE(p, m):
-    return np.sqrt(p**2 + m**2) - m
-
 
 def GetTrueFFKE(KE_tpc : ak.Array, length_to_ff : ak.Array) -> ak.Array:
     """ True Front facing kinetic energy is the kinetic energy of the first particle trajectory point in the tpc,
@@ -170,10 +167,10 @@ def main(args : argparse.Namespace):
     mask = cross_section.BeamParticleSelection.CreateDefaultSelection(mc, False, bq_fit, return_table = False)
     mc.Filter([mask], [mask]) # apply default beam selection
 
-    beam_inst_KE = KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
+    beam_inst_KE = cross_section.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
 
-    true_ff_ind = ak.num(mc.trueParticles.beam_traj_pos.z) - ak.argmax((mc.trueParticles.beam_traj_pos.z < 0)[:, ::-1], -1) - 1
-    # reco_ff_ind = ak.num(mc.recoParticles.beam_calo_pos.z) - ak.argmax((mc.recoParticles.beam_calo_pos.z < 0)[:, ::-1], -1) - 1
+    true_ff_ind = ak.argmax(mc.trueParticles.beam_traj_pos.z >= 0, -1, keepdims = True)
+    # true_ff_ind = ak.num(mc.trueParticles.beam_traj_pos.z) - ak.argmax((mc.trueParticles.beam_traj_pos.z < 0)[:, ::-1], -1) - 1
 
     pitches = vector.magnitude(vector.vector(**{i : ak.Array(map(dist_into_tpc, mc.trueParticles.beam_traj_pos[i], true_ff_ind)) for i in ["x", "y", "z"]}))
 

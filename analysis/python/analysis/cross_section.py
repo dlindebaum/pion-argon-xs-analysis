@@ -8,13 +8,21 @@ Description: Library for code used in the cross section analysis. Refer to the R
 import argparse
 import json
 
+from collections import namedtuple
+
 import awkward as ak
 import numpy as np
 import dill
+import uproot
 from particle import Particle
 
-from python.analysis import Master, BeamParticleSelection, PFOSelection, EventSelection, Fitting
+from python.analysis import Master, BeamParticleSelection, PFOSelection, EventSelection, Fitting, Plots, vector
 from python.analysis.shower_merging import SetPlotStyle
+
+
+def KE(p, m):
+    return (p**2 + m**2)**0.5 - m
+
 
 def LoadSelectionFile(file : str):
     """ Opens and serialises object saved as a dill file. May be remaned to a more general method if dill files are used more commonly.
@@ -122,8 +130,6 @@ class BetheBloch:
     y1 = 3
     a = 0.19559
     k = 3
-
-    pip_charge = 1
 
     @staticmethod
     def densityCorrection(beta, gamma):
@@ -309,3 +315,370 @@ def LoadConfiguration(file : str):
     with open(file, "rb") as f:
         config = json.load(f)
     return config
+
+
+def UpstreamEnergyLoss(KE_inst : ak.Array, function : Fitting.FitFunction, params : np.array) -> ak.Array:
+    return Fitting.poly2d.func(KE_inst, *params)
+
+
+def DepositedEnergy(events : Master.Data, ff_KE : ak.Array, method : str) -> ak.Array:
+    reco_pitch = vector.dist(events.recoParticles.beam_calo_pos[:, :-1], events.recoParticles.beam_calo_pos[:, 1:]) # distance between reconstructed calorimetry points
+    
+    if method == "calo":
+        dE = ak.sum(events.recoParticles.beam_dEdX[:, :-1] * reco_pitch, -1)
+    elif method == "bb":
+        reco_pitch_padded = ak.fill_none(ak.pad_none(reco_pitch, max(ak.num(reco_pitch)), -1), 0) # pad so all beam particles have the same number ov pitches (padded values are set to zero)
+        KE_int_bb = ff_KE
+        for d in range(max(ak.num(reco_pitch_padded))): # loop through all trajectoty points and compute dEdX simultaneously for all particles
+            KE_int_bb = KE_int_bb - reco_pitch_padded[:, d] * BetheBloch.meandEdX(KE_int_bb, Particle.from_pdgid(211))
+        dE = ff_KE - KE_int_bb
+    else:
+        raise Exception(f"{method} not a valid method, pick 'calo' or 'bb'")
+    return dE
+
+
+class Slices:
+    """ Describes slices of a variable, equivilant to a list of bin edges but has more functionality. 
+
+    Slice : a Single slice, has properies number (integer) and "position" in the parameter space of the value you want to slice up. 
+    """
+    Slice = namedtuple("Slice", "num pos")
+    def __init__(self, width, _min, _max, reversed : bool = False):
+        self.width = width
+        self.min = _min
+        self.max = _max
+        self.reversed = reversed
+        
+        self.max_num = max(self.num)
+        self.min_num = min(self.num)
+        self.max_pos = max(self.pos)
+        self.min_pos = min(self.pos)
+
+
+    def __conversion__(self, x):
+        """ convert a value to its slice number.
+
+        Args:
+            x: value, array of float
+
+        Returns:
+            slice: slice number/s
+        """
+        if self.reversed:
+            numerator = self.max - x
+        else:
+            numerator = x
+        c = np.floor(numerator // self.width)
+        if hasattr(c, "__iter__"):
+            return ak.values_astype(c, int)
+        else:
+            return int(c)
+
+
+    def __create_slice__(self, i) -> Slice:
+        """ using the slice number, create the Slice object.
+
+        Args:
+            i (int): slice number/s
+
+        Returns:
+            Slice: slice
+        """
+        if self.reversed:
+            p = self.max - i * self.width
+        else:
+            p = i * self.width
+        return self.Slice(i, p)
+
+
+    def __call__(self, x):
+        """ get the slice number for a set of values
+
+        Args:
+            x: values
+
+        Returns:
+            array or int: slice numbers
+        """
+        return self.__create_slice__(self.__conversion__(x))
+
+
+    def __getitem__(self, i : int) -> Slice:
+        """ Creates slices from slice numbers.
+
+        Args:
+            i (int): slice number
+
+        Raises:
+            StopIteration
+
+        Returns:
+            Slice: ith slice
+        """
+        if i * self.width > (self.max - self.min):
+            raise StopIteration
+        else:
+            if self.reversed:
+                return self.__create_slice__(i + self.__conversion__(self.max))
+            else:
+                return self.__create_slice__(i + self.__conversion__(self.min))
+
+    @property
+    def num(self) -> np.array:
+        """ Return all slice numbers.
+
+        Returns:
+            np.array: slice numbers
+        """
+        return np.array([ s.num for s in self], dtype = int)
+
+    @property
+    def pos(self) -> np.array:
+        """ Return all slice positions.
+
+        Returns:
+            np.array: slice positions
+        """
+        return np.array([ s.pos for s in self])
+
+
+    def pos_to_num(self, pos):
+        """ Convert slice positions to numbers
+
+        Args:
+            pos: positions
+
+        Returns:
+            array or int: slice numbers
+        """
+        slice_num = self.__conversion__(pos)
+        if hasattr(pos, "__iter__"):
+            slice_num = ak.where(slice_num > max(self.num), max(self.num), slice_num)
+            slice_num = ak.where(slice_num < 0, min(self.num), slice_num)
+        else:
+            if pos > max(self.pos): 
+                slice_num = max(self.num) # above range go into overflow bin
+            if pos < 0:
+                slice_num = min(self.num) # below range go into the underflow bin
+        return slice_num
+
+
+class GeantCrossSections:
+    """ Object for accessing Geant 4 cross sections from the root file generated with Geant4reweight tools.
+    """
+    labels = {"abs_KE;1" : "absorption", "inel_KE;1" : "quasielastic", "cex_KE;1" : "charge_exchange", "dcex_KE;1" : "double_charge_exchange", "prod_KE;1" : "pion_production", "total_inel_KE;1" : "total_inelastic"}
+
+    def __init__(self, file : str = "data/g4_xs.root", energy_range : list = None) -> None:
+        self.file = uproot.open(file) # open root file
+
+        self.KE = self.file["abs_KE;1"].all_members["fX"] # load kinetic energy from one channel (shared for all cross section channels)
+        if energy_range:
+            self.KE = self.KE[(self.KE <= max(energy_range)) & (self.KE >= min(energy_range))]
+
+        for k in self.file.keys():
+            if "KE" in k:
+                g = self.file[k]
+                setattr(self, self.labels[k], g.all_members["fY"][0:len(self.KE)]) # assign class variables for each cross section channel
+        pass
+
+    def __PlotAll(self):
+        """ Plot all cross section channels.
+        """
+        for k in self.labels.values():
+            Plots.Plot(self.KE, getattr(self, k), label = k.replace("_", " "), newFigure = False, xlabel = "KE (MeV)", ylabel = "$\sigma (mb)$")
+
+    def Plot(self, xs : str, color : str = None, label : str = None, title : str = None):
+        """ Plot cross sections. To be used in conjunction with other plots for comparisons.
+
+        Args:
+            xs (str): cross section channel to plot, if given all, will plot all cross section channels
+            color (str, optional): colour of single plot. Defaults to None.
+            label (str, optional): label of plot, if None, the channel name is used. Defaults to None.
+            title (str, optional): title of plot, set to the channel name if label is provided. Defaults to None.
+        """
+        if xs == "all":
+            self.__PlotAll()
+        else:
+            if label is None:
+                label = xs.replace("_", " ")
+            else:
+                if title is None:
+                    title = xs.replace("_", " ")
+            Plots.Plot(self.KE, getattr(self, xs), label = label, title = title, newFigure = False, xlabel = "KE (MeV)", ylabel = "$\sigma (mb)$", color = color)
+
+
+class ThinSlice:
+    """ Methods for implementing the thin slice measurement method.
+    """
+    @staticmethod
+    def CountingExperiment(endPos : ak.Array, channel : ak.Array, slices : Slices) -> tuple[ak.Array, ak.Array]:
+        """ Creates the interacting and incident histograms.
+
+        Args:
+            endPos (ak.Array): end position of particle or "interaction vertex"
+            channel (ak.Array): mask which selects particles which interact in the channel you are interested in
+            slices (Slices): spatial slices
+
+        Returns:
+            tuple[ak.Array, ak.Array]: n_interact and n_incident histograms
+        """
+        end_slice_pos = slices.pos_to_num(endPos) # using trajectory points gives wierd results, compare the two to see what is different.
+        slice_nums = slices.num
+
+        n_interact = np.histogram(end_slice_pos[channel], slice_nums)[0]
+
+        total_interact = np.histogram(end_slice_pos, slice_nums)[0]
+        n_incident = np.cumsum(total_interact[::-1])[::-1]
+        return n_interact, n_incident
+
+    @staticmethod
+    def MeanSliceEnergy(energy : ak.Array, endPos : ak.Array, slices : Slices) -> tuple[ak.Array, ak.Array]:
+        """ Compute the average energy in a spatial slice.
+
+        Args:
+            energy (ak.Array): particle energies over its lifetime in the tpc
+            endPos (ak.Array): end position of particle or "interaction vertex"
+            slices (Slices): spatial slices
+
+        Returns:
+            tuple[ak.Array, ak.Array]: means slice energy, error in the mean slice energy
+        """
+        beam_traj_slice = slices.pos_to_num(endPos)
+        slice_nums = slices.num
+
+        counts = np.histogram(ak.ravel(beam_traj_slice), slice_nums)[0] # histogram of positions will give the counts
+
+        sum_energy = np.histogram(ak.ravel(beam_traj_slice), slice_nums, weights = ak.ravel(energy))[0] # total energy in each bin if you weight by energy
+        sum_energy_sqr = np.histogram(ak.ravel(beam_traj_slice), slice_nums, weights = ak.ravel(energy)**2)[0] # same as above
+
+        mean_energy = sum_energy / counts
+
+        std_energy = np.divide(sum_energy_sqr, counts) - mean_energy**2
+        error_mean_energy = np.sqrt(np.divide(std_energy, counts))
+        # error_mean_energy = np.divide((sum_energy_sqr)**0.5, counts)
+
+        return mean_energy, error_mean_energy
+
+    @staticmethod 
+    def CrossSection(n_incident : np.array, n_interact : np.array, slice_width : float) -> tuple[np.array, np.array]:
+        """ Returns cross section in mb.
+
+        Args:
+            n_incident (np.array): incident histogram
+            n_interact (np.array): interacting histogram
+            slice_width (float): spatial width of thin slice
+
+        Returns:
+            tuple[np.array, np.array]: cross section, statistical uncertainty
+        """
+        xs = np.log(n_incident / (n_incident - n_interact)) # calculate a dimensionless cross section
+
+        v_incident = n_incident # poisson uncertainty
+        v_interact = n_interact*(1- (n_interact/n_incident)) # binomial uncertainty
+
+        xs_e = (1/n_incident) * (1/(n_incident - n_interact)) * (n_interact**2 * v_incident + n_incident**2 * v_interact)**0.5
+
+        NA = 6.02214076e23
+        factor = 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * slice_width)
+
+        return factor * xs, abs(factor * xs_e)
+
+
+class EnergySlice:
+    """ Methods for implementing the energy slice measurement method.
+    """
+    @staticmethod
+    def TrunacteSlices(slice_array : ak.Array, energy_slices : Slices) -> ak.Array:
+        """ Custom method for truncating slice numbers due to the fact energy slices should be in reverse order vs kinetic energy.
+
+        Args:
+            slice_array (ak.Array): slices to truncate
+            energy_slices (Slices): energy slices
+
+        Returns:
+            ak.Array: truncated slices
+        """
+        # set minimum to -1 (underflow i.e. energy > plim)
+        slice_array = ak.where(slice_array < 0, -1, slice_array)
+        # set maxslice (overflow i.e. energy < dE)
+        slice_array = ak.where(slice_array > energy_slices.max_num, energy_slices.max_num, slice_array)
+        return slice_array
+
+    @staticmethod
+    def CountingExperiment(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices) -> tuple[np.array, np.array]:
+        """ Creates the interacting and incident histograms.
+
+        Args:
+            int_energy (ak.Array): interacting enrgy
+            ff_energy (ak.Array): front facing energy
+            outside_tpc (ak.Array): mask which selects particles decaying outside the tpc
+            channel (ak.Array): mask which selects particles which interact in the channel you are interested in
+            energy_slices (Slices): energy slices
+
+        Returns:
+            tuple[np.array, np.array]: n_interact and n_incident histograms
+        """
+        true_init_slice = energy_slices(ff_energy).num + 1 # equivilant to ceil
+        true_int_slice = energy_slices(int_energy).num
+
+        true_init_slice = EnergySlice.TrunacteSlices(true_init_slice, energy_slices)
+        true_int_slice = EnergySlice.TrunacteSlices(true_int_slice, energy_slices)
+
+        # just in case we encounter an instance where E_int > E_ini (unphysical)
+        bad_slices = true_int_slice < true_init_slice
+        true_init_slice = ak.where(bad_slices < 0, -1, true_init_slice)
+        true_int_slice = ak.where(bad_slices, -1, true_int_slice)
+
+        n_incident = np.zeros(energy_slices.max_num + 1)
+        n_interact = np.zeros(energy_slices.max_num + 1)
+
+        true_int_slice_in_tpc = true_int_slice[~outside_tpc]
+        true_init_slice_in_tpc = true_init_slice[~outside_tpc]
+
+        #! slowest but most explict version
+        # n_incident = np.zeros(max_slice + 1)
+        # for i in range(len(n_incident)):
+        #     for p in range(len(true_int_slice_in_tpc)):
+        #         if (true_init_slice_in_tpc[p] <= i) and (true_int_slice_in_tpc[p] >= i):
+        #             n_incident[i] += 1
+        #! faster, order log(n) because it skips checking for empty entries
+        # true_init_slice_in_tpc = ak.where(true_init_slice_in_tpc == -1, 0, true_init_slice_in_tpc) #! done because -n index in python means you add to the last nth bin
+        # for p in range(len(true_int_slice_in_tpc)):
+        #     n_incident[true_init_slice_in_tpc[p] : true_int_slice_in_tpc[p] + 1] += 1
+        # print(n_incident)
+
+        #! fastest, vectorised version of the first but c++ loops are faster. 
+        n_incident = np.array([ak.sum(ak.where((true_init_slice_in_tpc <= i) & (true_int_slice_in_tpc >= i), 1, 0)) for i in range(energy_slices.max_num + 1)])
+    
+        n_interact = np.histogram(np.array(true_int_slice_in_tpc[channel[~outside_tpc]]), range(-1, energy_slices.max_num + 1))[0]
+        n_interact = np.roll(n_interact, -1) # shift the underflow bin to the location of the overflow bin in n_incident i.e. merge them.
+        return n_interact, n_incident
+
+    @staticmethod
+    def Slice_dEdX(energy_slices : Slices, particle : Particle) -> np.array:
+        """ Computes the mean dEdX between energy slices.
+
+        Args:
+            energy_slices (Slices): energy slices
+            particle (Particle): particle
+
+        Returns:
+            np.array: mean dEdX
+        """
+        return BetheBloch.meandEdX(energy_slices.pos - energy_slices.width/2, particle)
+
+    @staticmethod
+    def CrossSection(n_interact : np.array, n_incident : np.array, dEdX : np.array, dE : float) -> tuple[np.array, np.array]:
+        """ Compute cross section using ThinSlice.CrossSection, by passing an effective spatial slice width.
+
+        Args:
+            n_interact (np.array): interacting histogram
+            n_incident (np.array): incident histogram
+            dEdX (np.array): mean slice dEdX
+            dE (float): energy slice width
+
+        Returns:
+            tuple[np.array, np.array]: Cross section and statistical uncertainty.
+        """
+        return ThinSlice.CrossSection(n_incident, n_interact, dE/dEdX)
+
