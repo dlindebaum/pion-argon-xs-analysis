@@ -170,13 +170,12 @@ def main(args : argparse.Namespace):
     beam_inst_KE = cross_section.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
 
     true_ff_ind = ak.argmax(mc.trueParticles.beam_traj_pos.z >= 0, -1, keepdims = True)
-    # true_ff_ind = ak.num(mc.trueParticles.beam_traj_pos.z) - ak.argmax((mc.trueParticles.beam_traj_pos.z < 0)[:, ::-1], -1) - 1
+    # not_int_tpc = true_ff_ind == 0
 
-    pitches = vector.magnitude(vector.vector(**{i : ak.Array(map(dist_into_tpc, mc.trueParticles.beam_traj_pos[i], true_ff_ind)) for i in ["x", "y", "z"]}))
+    pitches = ak.ravel(vector.dist(mc.trueParticles.beam_traj_pos[true_ff_ind], mc.trueParticles.beam_traj_pos[true_ff_ind + 1]))
+    first_KE = mc.trueParticles.beam_traj_KE[true_ff_ind]
 
-    first_KE = ak.Array(map(ff_value, mc.trueParticles.beam_traj_KE, true_ff_ind))
-
-    true_ffKE = GetTrueFFKE(first_KE, pitches) # get the true Kinetic energy as the front face of the TPC
+    true_ffKE = ak.ravel(GetTrueFFKE(first_KE, pitches)) # get the true Kinetic energy as the front face of the TPC
     delta_KE_upstream = beam_inst_KE - true_ffKE
 
     residual_range = [-300, 300] # range of residual for plots
@@ -204,7 +203,7 @@ def main(args : argparse.Namespace):
     for i, (k, v) in enumerate(scraper_thresholds.items()):
         json_dict[str(i)] = {**{"bins" : k}, **v}
 
-    name = args.out + args.mc_file[0].split("/")[-1].split(".")[0] + "_beam_scraper_fit_values.json"
+    name = args.out + "beam_scraper/" + "mc_beam_scraper_fit_values.json"
     with open(name, "w") as f:
         json.dump(json_dict, f, indent = 4)
     print(f"fit values written to {name}")

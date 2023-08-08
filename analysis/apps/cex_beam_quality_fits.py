@@ -118,7 +118,7 @@ def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data
     return
 
 
-def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str):
+def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str, tag : str):
     events = Master.Data(file, nTuple_type = ntuple_type)
 
 
@@ -163,7 +163,7 @@ def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str):
 
     #* write to json file
     os.makedirs(args.out, exist_ok = True)
-    name = out + file.split("/")[-1].split(".")[0] + "_fit_values.json"
+    name = out + tag + "_beam_quality_fit_values.json"
     with open(name, "w") as f:
         json.dump(fit_values, f, indent = 2)
     print(f"fit values written to {name}")
@@ -174,17 +174,20 @@ def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str):
 def main(args):
     mc, fit_values_mc = None, None
     data, fit_values_data = None, None
-    if args.mc_file is not None:
-        mc, fit_values_mc = run(args.mc_file[0], False, args.ntuple_type, args.out)
-    if args.data_file is not None:
-        data, fit_values_data = run(args.data_file[0], True, args.ntuple_type, args.out)
 
-    MakePlots(mc, fit_values_mc, data, fit_values_data, args.out)
+    os.makedirs(args.out + "beam_quality/", exist_ok = True)
+
+    if args.mc_file is not None:
+        mc, fit_values_mc = run(args.mc_file[0], False, args.ntuple_type, args.out + "beam_quality/", "mc")
+    if args.data_file is not None:
+        data, fit_values_data = run(args.data_file[0], True, args.ntuple_type, args.out + "beam_quality/", "data")
+
+    MakePlots(mc, fit_values_mc, data, fit_values_data, args.out + "beam_quality/")
 
     return
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description = "Applies beam particle selection, PFO selection, produces tables and basic plots.", formatter_class = argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(description = "Computes Guassian fit paramters needed for the beam quality cuts in the beam particle selection.", formatter_class = argparse.RawDescriptionHelpFormatter)
 
     cross_section.ApplicationArguments.Ntuples(parser, data = True)
     
