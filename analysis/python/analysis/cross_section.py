@@ -7,6 +7,7 @@ Description: Library for code used in the cross section analysis. Refer to the R
 """
 import argparse
 import json
+import os
 
 from collections import namedtuple
 
@@ -468,7 +469,7 @@ class GeantCrossSections:
     """
     labels = {"abs_KE;1" : "absorption", "inel_KE;1" : "quasielastic", "cex_KE;1" : "charge_exchange", "dcex_KE;1" : "double_charge_exchange", "prod_KE;1" : "pion_production", "total_inel_KE;1" : "total_inelastic"}
 
-    def __init__(self, file : str = "data/g4_xs.root", energy_range : list = None) -> None:
+    def __init__(self, file : str = os.environ["PYTHONPATH"] + "/data/g4_xs.root", energy_range : list = None) -> None:
         self.file = uproot.open(file) # open root file
 
         self.KE = self.file["abs_KE;1"].all_members["fX"] # load kinetic energy from one channel (shared for all cross section channels)

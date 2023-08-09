@@ -1038,7 +1038,7 @@ def PlotHist2D(data_x, data_y, bins: int = 100, x_range: list = None, y_range: l
     return height, [xedges, yedges]
 
 
-def PlotHistComparison(datas, xRange: list = [], bins: int = 100, xlabel: str = "", title: str = "", labels: list = [], alpha: int = 1, histtype: str = "step", x_scale: str = "linear", y_scale: str = "linear", sf: int = 2, density: bool = True, annotation: str = None, newFigure: bool = True):
+def PlotHistComparison(datas, xRange: list = [], bins: int = 100, xlabel: str = "", title: str = "", labels: list = [], alpha: int = 1, histtype: str = "step", x_scale: str = "linear", y_scale: str = "linear", sf: int = 2, density: bool = True, annotation: str = None, newFigure: bool = True, colours : list = None):
     """ Plots multiple histograms on one plot
 
     Args:
@@ -1047,6 +1047,8 @@ def PlotHistComparison(datas, xRange: list = [], bins: int = 100, xlabel: str = 
     """
     if newFigure is True:
         plt.figure()
+    if colours is None:
+        colours = [None]*len(labels)
     for i in range(len(labels)):
         data = datas[i]
         if xRange and len(xRange) == 2:
@@ -1054,10 +1056,10 @@ def PlotHistComparison(datas, xRange: list = [], bins: int = 100, xlabel: str = 
             data = data[data < xRange[1]]
         if i == 0:
             _, edges = PlotHist(
-                data, bins, xlabel, title, labels[i], alpha, histtype, sf, density, newFigure=False)
+                data, bins, xlabel, title, labels[i], alpha, histtype, sf, density, color = colours[i], newFigure=False)
         else:
             PlotHist(data, edges, xlabel, title,
-                     labels[i], alpha, histtype, sf, density, newFigure=False)
+                     labels[i], alpha, histtype, sf, density, color = colours[i], newFigure=False)
     plt.xscale(x_scale)
     plt.yscale(y_scale)
     plt.tight_layout()

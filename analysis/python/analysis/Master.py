@@ -1018,7 +1018,7 @@ class TrueParticleData(ParticleData):
 
     @property
     def KE_front_face(self) -> type:
-        ind = ak.argmax(self.beam_traj_pos.z >= 0, -1, keepdims = True)
+        ind = ak.argmax(self.beam_traj_pos.z > 0, -1, keepdims = True)
         return ak.flatten(self.beam_traj_KE[ind])
 
     @property
