@@ -279,20 +279,6 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
     return popt, perr
 
 
-def create_bins_df(value : pd.Series, n_entries, v_range : list = None):
-    sorted_value = value.sort_values()
-    n_bins = len(sorted_value) // n_entries
-
-    bins = []
-    for i in range(n_bins + 1):
-        mi = sorted_value.values[i * n_entries]
-        bins.append(mi)
-    if v_range:
-        bins[0] = min(v_range)
-        bins[-1] = max(v_range)
-    return np.array(bins)
-
-
 def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : str, v_range : list, funcs, data_bins : list, hist_bins : int, log : bool = False, rms_err : bool = False):
     """ Estimate a central value in each reco energy bin based on some FitFunction or collection of FitFunctions.
 

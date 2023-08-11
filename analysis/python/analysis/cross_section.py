@@ -7,7 +7,6 @@ Description: Library for code used in the cross section analysis. Refer to the R
 """
 import argparse
 import json
-import os
 
 from collections import namedtuple
 
@@ -38,7 +37,7 @@ def LoadSelectionFile(file : str):
         obj = dill.load(f)
     return obj
 
-
+#! currently not used, wait until the new cut handling is done.
 def GenerateSelectionAndMasks(events : Master.Data, fits : dict) -> dict:
     beam_selection_mask = BeamParticleSelection.CreateDefaultSelection(events, False, fits, False, False)
     events.Filter([beam_selection_mask], [beam_selection_mask])
@@ -226,8 +225,15 @@ class ApplicationArguments:
         parser.add_argument("-c", "--config", dest = "config", type = str, default = None, help = "Analysis configuration file, if supplied will override command line arguments.")
 
     @staticmethod
-    def ResolveArgs(args : argparse.Namespace):
+    def ResolveArgs(args : argparse.Namespace) -> argparse.Namespace:
+        """ Parses command line arguements.
 
+        Args:
+            args (argparse.Namespace): arguements to parse
+
+        Returns:
+            argparse.Namespace: parsed arguements
+        """
         if hasattr(args, "config"):
             args_copy = argparse.Namespace()
             for a, v in args._get_kwargs():
@@ -271,7 +277,16 @@ class ApplicationArguments:
         return args
 
     @staticmethod
-    def __CreateSelection(value : dict, module):
+    def __CreateSelection(value : dict, module) -> dict:
+        """ Creates a dictionary of selection functions and their argumenets as specified in the analysise configuration file. 
+
+        Args:
+            value (dict): dicionary describing a particular selection, key value is the function name, value is a list of function arguements.
+            module (module): which python module does this selection belong to.
+
+        Returns:
+            _type_: _description_
+        """
         selection = {"selections" : [], "arguments" : []}
         for func, opt in value.items():
             if opt["enable"] is True:
@@ -282,7 +297,15 @@ class ApplicationArguments:
         return selection
 
     @staticmethod
-    def ResolveConfig(config : dict):
+    def ResolveConfig(config : dict) -> argparse.Namespace:
+        """ Reads analysis configuration file and unpacks/serializes relavent objects.
+
+        Args:
+            config (dict): file path
+
+        Returns:
+            argparse.Namespace: unpacked configuration
+        """
         args = argparse.Namespace()
         for head, value in config.items():
             if head == "NTUPLE_FILE":
@@ -312,17 +335,45 @@ class ApplicationArguments:
         return args
 
 
-def LoadConfiguration(file : str):
+def LoadConfiguration(file : str) -> dict:
+    """ Loads a json file.
+
+    Args:
+        file (str): file path
+
+    Returns:
+        dict: unpacked json 
+    """
     with open(file, "rb") as f:
         config = json.load(f)
     return config
 
 
-def UpstreamEnergyLoss(KE_inst : ak.Array, function : Fitting.FitFunction, params : np.array) -> ak.Array:
-    return Fitting.poly2d.func(KE_inst, *params)
+def UpstreamEnergyLoss(KE_inst : ak.Array, params : np.array, function : Fitting.FitFunction = Fitting.poly2d) -> ak.Array:
+    """ compute the upstream loss based on a repsonse function and it's fit parameters.
+
+    Args:
+        KE_inst (ak.Array): kinetic energy measured by the beam instrumentation
+        function (Fitting.FitFunction): repsonse function, defaults to Fitting.poly2d. 
+        params (np.array): function paramters
+
+    Returns:
+        ak.Array: _description_
+    """
+    return function.func(KE_inst, *params)
 
 
-def DepositedEnergy(events : Master.Data, ff_KE : ak.Array, method : str) -> ak.Array:
+def RecoDepositedEnergy(events : Master.Data, ff_KE : ak.Array, method : str) -> ak.Array:
+    """ Calcuales the energy deposited by the beam particle in the TPC, either using calorimetric information or the bethe bloch formula (spatial information).
+
+    Args:
+        events (Master.Data): events to look at
+        ff_KE (ak.Array): front facing kinetic energy
+        method (str): method to calcualte the deposited energy, either "calo" or "bb"
+
+    Returns:
+        ak.Array: depotisted energy
+    """
     reco_pitch = vector.dist(events.recoParticles.beam_calo_pos[:, :-1], events.recoParticles.beam_calo_pos[:, 1:]) # distance between reconstructed calorimetry points
     
     if method == "calo":
@@ -682,4 +733,3 @@ class EnergySlice:
             tuple[np.array, np.array]: Cross section and statistical uncertainty.
         """
         return ThinSlice.CrossSection(n_incident, n_interact, dE/dEdX)
-

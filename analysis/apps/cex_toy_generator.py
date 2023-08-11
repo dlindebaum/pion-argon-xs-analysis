@@ -21,7 +21,7 @@ from python.analysis.Master import timer
 from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle
 
 @timer
-def GeneratePDFs(l : float) -> np.array:
+def GeneratePDFs(l : float) -> dict:
     """ Creates PDF for a given cross section channel and slice thickness (i.e. step size)
 
     Args:
@@ -29,7 +29,7 @@ def GeneratePDFs(l : float) -> np.array:
         l (float): slice thickness
 
     Returns:
-        np.array: _description_
+        dict: pdfs for the inclusive and exclusive channels
     """
     xs_sim = GeantCrossSections()
 
@@ -40,21 +40,41 @@ def GeneratePDFs(l : float) -> np.array:
     return pdfs
 
 
-def P_int(sigma, l) -> np.array:
+def P_int(sigma : np.array, l : float) -> np.array:
+    """ Formula to calcualte the interaction probability for the thin slab approximation. 
+
+    Args:
+        sigma (np.array): cross section as a function of energy
+        l (float): slab thickness
+
+    Returns:
+        np.array: interaction proabability
+    """
     return 1 - np.exp(-1E-27 * sigma * 6.02214076e23 * BetheBloch.rho * l / BetheBloch.A)
 
 
 def GenerateStackedPDFs(l : float) -> dict:
+    """ Creates a PDF of the inclusive cross section and a stacked PDF of the exclusive process,
+        such that rejection sampling can be used to allocate an exclusive process for a given inclusive process.
+
+    Args:
+        l (float): slice thickness
+
+    Returns:
+        dict: dictionaty of pdfs
+    """
     xs_sim = GeantCrossSections()
 
     pdfs = {}
-    pdfs["total_inelastic"] = interpolate.interp1d(xs_sim.KE, P_int(xs_sim.total_inelastic, l), fill_value = "extrapolate")
+    pdfs["total_inelastic"] = interpolate.interp1d(xs_sim.KE, P_int(xs_sim.total_inelastic, l), fill_value = "extrapolate") # total inelastic pdf
 
+    # sort the exclusice channels based on area under curve
     area = {}
     for v in vars(xs_sim):
         if v in ["KE", "file", "total_inelastic"]: continue
         area[v] = np.trapz(P_int(getattr(xs_sim, v), l))
 
+    # stack the pdfs in ascending order
     y = np.zeros(len(xs_sim.KE))
     for v, _ in sorted(area.items(), key=lambda x: x[1]):
         y = y + P_int(getattr(xs_sim, v), l)
@@ -62,7 +82,20 @@ def GenerateStackedPDFs(l : float) -> dict:
     return pdfs
 
 
-def GenerateIntialKEs(n, particle : Particle, cv : float, width : float, profile : str) -> np.array:
+def GenerateIntialKEs(n : int, particle : Particle, cv : float, width : float, profile : str) -> np.array:
+    """ Create a distribution of initial kinetic energy based on a profile i.e. pdf.
+        Currently supported profiles are "uniform" and "gaussian".
+
+
+    Args:
+        n (int): number of particles/events.
+        particle (Particle): particle type
+        cv (float): central value of profile
+        width (float): width of profile
+        profile (str): profile type
+    Returns:
+        np.array: initial kinetic energies.
+    """
     central_KE = (cv**2 + particle.mass**2)**0.5 - particle.mass
     if profile == "gaussian":
         return np.random.normal(central_KE, width, n)
@@ -73,28 +106,40 @@ def GenerateIntialKEs(n, particle : Particle, cv : float, width : float, profile
 
 
 @timer
-def Simulate(KE_init : np.array, stepsize, particle : Particle, pdfs : dict) -> tuple[np.array, np.array, np.array]:
-    survived = ~np.zeros(len(KE_init), dtype = bool)
-    i = np.zeros(len(KE_init), dtype = int)
-    KE_int = KE_init
+def Simulate(KE_init : np.array, stepsize : float, particle : Particle, pdfs : dict) -> tuple:
+    """ Generates interacting kinetic energies and position based on the initial kinetic energy with the bethe bloch formula,
+        the total inelastic pdf is used to decide when a particle interacts (using rejection sampling) and then each particle which
+        interacts is assosiated a particular exclusive interaction process, using rejection sampling. Particles which reach zero KE are considered
+        to be particle decays. The precision of these calculations depends on the step size, which is essentially the slab thickness.
 
-    # process = np.zeros(len(KE_init), dtype = object)
+    Args:
+        KE_init (np.array): initial Kinetic energy distribution
+        stepsize (float): position step size or "slab thickness"
+        particle (Particle): particle type
+        pdfs (dict): cross section pdfs
 
-    inclusive_process = np.repeat(["decay"], len(KE_init)).astype(object)
+    Returns:
+        tuple: interacting kinetic energy, interacting position, whether it interacted or decay, exclusive process
+    """
+    survived = ~np.zeros(len(KE_init), dtype = bool) # keep track of which particles survived
+    i = np.zeros(len(KE_init), dtype = int) # slab number i.e. position each particle interacted at
+    KE_int = KE_init # set interacting kinetic energy to the initial at the start
+
+    # setup arrays which tag each particle based on interaction and interaction type
+    inclusive_process = np.repeat(["decay"], len(KE_init)).astype(object) 
     exclusive_process = np.repeat([""], len(KE_init)).astype(object)
 
 
-    with progress.Progress(progress.SpinnerColumn(), *progress.Progress.get_default_columns(), progress.TimeElapsedColumn()) as p:
-        task = p.add_task("Propagating...", total = len(survived))
+    with progress.Progress(progress.SpinnerColumn(), *progress.Progress.get_default_columns(), progress.TimeElapsedColumn()) as p: # fancy spinners
+        task = p.add_task("Simulating...", total = len(survived))
         previous = sum(survived)
         current = sum(survived)
         while any(survived):
-
-            U = np.random.uniform(0, 1, len(KE_int))
-            inelastic = U < pdfs["total_inelastic"](KE_int)
-            inclusive_process[inelastic] = "total_inelastic"
-            for pdf in reversed(pdfs):
-                if pdf == "total_inelastic": continue
+            U = np.random.uniform(0, 1, len(KE_int)) # sample from a uniform distribution
+            inelastic = U < pdfs["total_inelastic"](KE_int) # did the partcile interact?
+            inclusive_process[inelastic] = "total_inelastic" # add label to all particles which did interact
+            for pdf in reversed(pdfs): # do this in reverse order, such that the least probable exlcusive process is check last
+                if pdf == "total_inelastic": continue # only exclusive processes
                 exclusive = inelastic & (U < pdfs[pdf](KE_int))
                 exclusive_process[exclusive] = pdf
 
@@ -102,18 +147,23 @@ def Simulate(KE_init : np.array, stepsize, particle : Particle, pdfs : dict) -> 
             survived = survived & (survived != (KE_int < 1)) # particle is pretty much stationary so decays
 
             i = i + survived # distance travelled in step numbers
-            KE_int = KE_int - survived * stepsize * BetheBloch.meandEdX(KE_int, particle)
+            KE_int = KE_int - survived * stepsize * BetheBloch.meandEdX(KE_int, particle) # update KE if it survived
 
+            # metrics to update the spinner
             current = sum(survived)
             p.update(task, advance = previous - current)
-
             previous = current
-        p.finished
-    z_int = i * stepsize
+        p.finished # when we finish the loop the spiner should stop
+    z_int = i * stepsize # convert interaction index to interacting position
     return KE_int, z_int, inclusive_process, exclusive_process
 
 
 def CountProcesses(proc : np.array):
+    """ Count unique processes for particles
+
+    Args:
+        proc (np.array): array of processes
+    """
     for p in Counter(proc):
         print(p, sum(proc == p))
 
