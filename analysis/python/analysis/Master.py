@@ -162,6 +162,9 @@ class Data:
     def __init__(self, filename: str = None, nEvents: int = -1, start: int = 0, nTuple_type : Ntuple_Type = None, target_momentum : int = None):
         self.filename = filename
 
+        if start < 0:
+            raise ValueError("start cannot be less than zero")
+
         if nTuple_type is None:
             warnings.warn(f"nTuple type is not specified, assuming it is {Ntuple_Type.SHOWER_MERGING}")
             self.nTuple_type = Ntuple_Type.SHOWER_MERGING

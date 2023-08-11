@@ -88,7 +88,7 @@ def GetScraperFits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : 
 
     scraper_fit = {}
     for i in range(1, len(ke_bins)):
-        bin_label = "$KE_{inst}$:" + f"[{ke_bins[i-1]},{ke_bins[i]}] (MeV)"
+        bin_label = "$KE^{reco}_{inst}$:" + f"[{ke_bins[i-1]},{ke_bins[i]}] (MeV)"
         e = (beam_inst_KE < ke_bins[i]) & (beam_inst_KE > ke_bins[i-1])
 
         data = delta_KE_upstream[e]
@@ -109,7 +109,7 @@ def GetScraperFits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : 
 
         x_interp = np.linspace(min(data), max(data), 10 * fit_bins)
         y_interp = Fitting.gaussian.func(x_interp, max(heights), popt[1], popt[2])
-        Plots.Plot(x_interp, y_interp, color = "black", label = "fit", title = bin_label, xlabel = "$KE_{inst} - KE_{true}$ (MeV)", newFigure = False)
+        Plots.Plot(x_interp, y_interp, color = "black", label = "fit", title = bin_label, xlabel = "$KE^{reco}_{inst} - KE^{true}_{ff}$ (MeV)", newFigure = False)
         plt.axvline(popt[1] + 3 * abs(popt[2]), color = "black", linestyle = "--", label = "$\mu{+}+3\sigma$")
         plt.xlim(*residual_range)
 
@@ -130,7 +130,7 @@ def BeamScraperPlots(mc: Master.Data, beam_inst_KE_bins : list, beam_inst_KE : a
 
     for i in Plots.MultiPlot(len(beam_inst_KE_bins)-1, sharex = True, sharey = True):
         if i == len(beam_inst_KE_bins): continue
-        bin_label = "$KE_{inst}$:" + f"[{beam_inst_KE_bins[i]},{beam_inst_KE_bins[i+1]}] (MeV)"
+        bin_label = "$KE^{reco}_{inst}$:" + f"[{beam_inst_KE_bins[i]},{beam_inst_KE_bins[i+1]}] (MeV)"
         e = (beam_inst_KE < beam_inst_KE_bins[i+1]) & (beam_inst_KE > beam_inst_KE_bins[i])
         fit_values = scraper_fits[(beam_inst_KE_bins[i], beam_inst_KE_bins[i+1])]
 
@@ -141,6 +141,8 @@ def BeamScraperPlots(mc: Master.Data, beam_inst_KE_bins : list, beam_inst_KE : a
 
         mu_x = ak.mean(mc.recoParticles.beam_inst_pos[e].x)
         mu_y = ak.mean(mc.recoParticles.beam_inst_pos[e].y)
+        print(bin_label)
+        print(mu_x, mu_y)
         sigma_x = ak.std(mc.recoParticles.beam_inst_pos[e].x)
         sigma_y = ak.std(mc.recoParticles.beam_inst_pos[e].y)
 
@@ -152,8 +154,8 @@ def BeamScraperPlots(mc: Master.Data, beam_inst_KE_bins : list, beam_inst_KE : a
             y = r*np.sin(theta) + mu_y
 
             Plots.Plot(x, y, linestyle = "--", color = f"C{7+j}", alpha = 1, label = f"{m}$r$", newFigure = False)
-        plt.xlabel("$X_{inst}$ (cm)")
-        plt.ylabel("$Y_{inst}$ (cm)")
+        plt.xlabel("$X^{reco}_{inst}$ (cm)")
+        plt.ylabel("$Y^{reco}_{inst}$ (cm)")
         plt.title(bin_label)
         plt.axis('scaled')
         plt.legend()
@@ -185,10 +187,10 @@ def main(args : argparse.Namespace):
 
     with PdfPages(args.out + "beam_scraper/" + "beam_scraper_fits.pdf") as pdf:
         Plots.Plot(args.energy_range, args.energy_range, color = "red")
-        Plots.PlotHist2D(beam_inst_KE, true_ffKE, xlabel = "$KE_{inst}$ (MeV)", ylabel = "$KE_{true}$ (MeV)", x_range = args.energy_range, y_range = args.energy_range, newFigure = False)
+        Plots.PlotHist2D(beam_inst_KE, true_ffKE, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$KE^{true}_{ff}$ (MeV)", x_range = args.energy_range, y_range = args.energy_range, newFigure = False)
         pdf.savefig()
 
-        Plots.PlotHist2D(beam_inst_KE, delta_KE_upstream, xlabel = "$KE_{inst}$ (MeV)", ylabel = "$KE_{inst} - KE_{true}$ (MeV)", x_range = args.energy_range, y_range = residual_range)
+        Plots.PlotHist2D(beam_inst_KE, delta_KE_upstream, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$KE^{reco}_{inst} - KE^{true}_{ff}$ (MeV)", x_range = args.energy_range, y_range = residual_range)
         for i in args.beam_inst_KE_bins: plt.axvline(i, color = "red")
         pdf.savefig()
 

@@ -197,6 +197,7 @@ def ReformatRowLabels(row_labels : np.array) -> list[str]:
         "nHits" : "nHits",
         "mass" : "invariant mass",
         "angle" : "opening angle",
+        "beam_scraper" : "beam scraper"
     }
     fancy_row_labels = [mapping[i] for i in row_labels]
     return fancy_row_labels
