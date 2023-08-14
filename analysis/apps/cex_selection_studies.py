@@ -48,13 +48,13 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam
     """
     output = {}
 
-    output["no_selection"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, Tags.GenerateTrueFinalStateTags(events))
+    output["no_selection"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, EventSelection.GenerateTrueFinalStateTags(events))
 
     #* calo size cut
     mask = BeamParticleSelection.CaloSizeCut(events)
     output["calo_size"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None)
     events.Filter([mask], [mask])
-    output["calo_size"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
+    output["calo_size"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
 
     #* pi+ beam selection
     mask = BeamParticleSelection.PiBeamSelection(events, beam_instrumentation)
@@ -63,61 +63,61 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam
         counts[i] = ak.sum(counts[i].mask)
     output["pi_beam"] = MakeOutput(counts, Tags.GenerateTrueBeamParticleTags(events), None)
     events.Filter([mask], [mask])
-    output["pi_beam"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
+    output["pi_beam"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
 
     #* beam pandora tag selection
     mask = BeamParticleSelection.PandoraTagCut(events) # create the mask for the cut
     output["pandora_tag"] = MakeOutput(events.recoParticles.beam_pandora_tag, Tags.GenerateTrueBeamParticleTags(events), [13]) # store the data to cut, cut value and truth tags
     events.Filter([mask], [mask]) # apply the cut
-    output["pandora_tag"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events) # store the final state truth tags after the cut is applied
+    output["pandora_tag"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events) # store the final state truth tags after the cut is applied
 
     #* dxy cut
     dxy = (((events.recoParticles.beam_startPos.x - beam_quality_fits["mu_x"]) / beam_quality_fits["sigma_x"])**2 + ((events.recoParticles.beam_startPos.y - beam_quality_fits["mu_y"]) / beam_quality_fits["sigma_y"])**2)**0.5
     mask = dxy < 3
-    output["dxy"] = MakeOutput(dxy, Tags.GenerateTrueBeamParticleTags(events), [3], Tags.GenerateTrueFinalStateTags(events))
+    output["dxy"] = MakeOutput(dxy, Tags.GenerateTrueBeamParticleTags(events), [3], EventSelection.GenerateTrueFinalStateTags(events))
     print(f"dxy cut: {BeamParticleSelection.CountMask(mask)}")
     events.Filter([mask], [mask])
-    output["dxy"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
+    output["dxy"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
 
     #* dz cut
     delta_z = (events.recoParticles.beam_startPos.z - beam_quality_fits["mu_z"]) / beam_quality_fits["sigma_z"]
     mask = (delta_z > -3) & (delta_z < 3)
-    output["dz"] = MakeOutput(delta_z, Tags.GenerateTrueBeamParticleTags(events), [-3, 3], Tags.GenerateTrueFinalStateTags(events))
+    output["dz"] = MakeOutput(delta_z, Tags.GenerateTrueBeamParticleTags(events), [-3, 3], EventSelection.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
     print(f"dz cut: {BeamParticleSelection.CountMask(mask)}")
-    output["dz"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
+    output["dz"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
 
     #* beam direction
     beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos, events.recoParticles.beam_startPos))
     beam_dir_mu = vector.normalize(vector.vector(beam_quality_fits["mu_dir_x"], beam_quality_fits["mu_dir_y"], beam_quality_fits["mu_dir_z"]))
     beam_costh = vector.dot(beam_dir, beam_dir_mu)
     mask = beam_costh > 0.95
-    output["cos_theta"] = MakeOutput(beam_costh, Tags.GenerateTrueBeamParticleTags(events), [0.95], Tags.GenerateTrueFinalStateTags(events))
+    output["cos_theta"] = MakeOutput(beam_costh, Tags.GenerateTrueBeamParticleTags(events), [0.95], EventSelection.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
-    output["cos_theta"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
+    output["cos_theta"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
 
     #* APA3 cut
     mask = BeamParticleSelection.APA3Cut(events)
-    output["beam_endPos_z"] = MakeOutput(events.recoParticles.beam_endPos.z, Tags.GenerateTrueBeamParticleTags(events), [220], Tags.GenerateTrueFinalStateTags(events))
+    output["beam_endPos_z"] = MakeOutput(events.recoParticles.beam_endPos.z, Tags.GenerateTrueBeamParticleTags(events), [220], EventSelection.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
-    output["beam_endPos_z"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
+    output["beam_endPos_z"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
 
     #* michel score cut
     score = ak.where(events.recoParticles.beam_nHits != 0, events.recoParticles.beam_michelScore / events.recoParticles.beam_nHits, -999)
     mask = BeamParticleSelection.MichelScoreCut(events)
-    output["michel_score"] = MakeOutput(score, Tags.GenerateTrueBeamParticleTags(events), [0.55], Tags.GenerateTrueFinalStateTags(events))
+    output["michel_score"] = MakeOutput(score, Tags.GenerateTrueBeamParticleTags(events), [0.55], EventSelection.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
-    output["michel_score"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
+    output["michel_score"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
 
     #* median dE/dX
     mask = BeamParticleSelection.MedianDEdXCut(events)
     median = PFOSelection.Median(events.recoParticles.beam_dEdX)
-    output["median_dEdX"] = MakeOutput(median, Tags.GenerateTrueBeamParticleTags(events), [2.4], Tags.GenerateTrueFinalStateTags(events))
+    output["median_dEdX"] = MakeOutput(median, Tags.GenerateTrueBeamParticleTags(events), [2.4], EventSelection.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
-    output["median_dEdX"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
+    output["median_dEdX"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
 
     #* true particle population
-    output["final_tags"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, Tags.GenerateTrueFinalStateTags(events))
+    output["final_tags"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, EventSelection.GenerateTrueFinalStateTags(events))
     return output
 
 
@@ -262,7 +262,7 @@ def AnalysePi0Selection(events : Master.Data, data : bool = False, correction = 
     photonCandidates = photonCandidates[mask]
 
     #* final counts
-    output["event_tag"] = MakeOutput(None, Tags.GenerateTrueFinalStateTags(events), None)
+    output["event_tag"] = MakeOutput(None, EventSelection.GenerateTrueFinalStateTags(events), None)
     tags = null_tag() if data else Tags.GeneratePi0Tags(events, photonCandidates)
     output["final_tags"] = MakeOutput(None, tags, None) 
 

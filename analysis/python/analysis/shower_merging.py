@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 from tabulate import tabulate
 
-from python.analysis import Master, Plots, vector, Tags
+from python.analysis import Master, Plots, vector, EventSelection
 from python.analysis import LegacyBeamParticleSelection, BeamParticleSelection, PFOSelection
 
 
@@ -839,7 +839,7 @@ def ShowerMergingPFOPerformance(events : Master.Data, start_showers : ak.Array, 
 
     match = actual_num == target_num
 
-    tags = Tags.GenerateTrueFinalStateTags(events)
+    tags = EventSelection.GenerateTrueFinalStateTags(events)
 
     data = {
         "PFOs" : signal,
@@ -909,7 +909,7 @@ def ShowerMergingEventPerformance(events : Master.Data, start_showers : ak.Array
     signal_only = (nFp == 0) & (nTp > 0)
     background_only = (nFp > 0) & (nTp == 0)
 
-    tags = Tags.GenerateTrueFinalStateTags(events)
+    tags = EventSelection.GenerateTrueFinalStateTags(events)
 
     data = {
         "events after selection" : events.eventNum,

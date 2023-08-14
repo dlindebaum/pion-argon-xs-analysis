@@ -10,8 +10,9 @@ from dataclasses import dataclass
 import awkward as ak
 from particle import Particle
 
-from python.analysis.Master import Data
-from python.analysis.EventSelection import generate_truth_tags
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from python.analysis.Master import Data
 
 @dataclass(slots = True)
 class Tag:
@@ -99,7 +100,7 @@ def OtherMask(masks : dict) -> ak.Array:
     return ~other
 
 
-def GenerateTrueParticleTags(events : Data) -> Tags:
+def GenerateTrueParticleTags(events):# : Data) -> Tags:
     """ Creates true particle tags with boolean masks. Does this for all PFOs.
 
     Args:
@@ -126,7 +127,7 @@ def GenerateTrueParticleTags(events : Data) -> Tags:
     return tags
 
 
-def GenerateTrueBeamParticleTags(events : Data) -> Tags:
+def GenerateTrueBeamParticleTags(events):# : Data) -> Tags:
     """ Creates true particle tags with boolean masks for beam particles.
 
     Args:
@@ -149,7 +150,7 @@ def GenerateTrueBeamParticleTags(events : Data) -> Tags:
     return tags
 
 
-def GeneratePi0Tags(events : Data, photon_PFOs : ak.Array) -> Tags:
+def GeneratePi0Tags(events, photon_PFOs : ak.Array) -> Tags:# : Data, photon_PFOs : ak.Array) -> Tags:
     """ Truth tags for pi0s.
         Categories are:
             two photons from the same pi0
@@ -178,21 +179,3 @@ def GeneratePi0Tags(events : Data, photon_PFOs : ak.Array) -> Tags:
     pi0_tags["1 $\gamma$"]                        = Tag("1 $\gamma$"                   , "one photon"         , mask = correctly_matched_photons == 1, number = 2) # one PFO is a pi0 photon
     pi0_tags["0 $\gamma$"]                       = Tag("0 $\gamma$"                   , "no photons"          , mask = correctly_matched_photons == 0, number = 3) # no PFO is a pi0 photon
     return pi0_tags
-
-
-def GenerateTrueFinalStateTags(events : Data = None) -> Tags:
-    """ Generate truth tags for final state of the beam interaction.
-
-    Args:
-        events (Data, optional): events to look at. Defaults to None.
-
-    Returns:
-        Tags: tags
-    """
-    tags = Tags()
-    tags["$1\pi^{0} + 0\pi^{+}$"     ]          = Tag("$1\pi^{0} + 0\pi^{+}$"              , "exclusive signal", "#8EBA42", generate_truth_tags(events, 1, 0      , only_diphoton = False) if events is not None else None, 0)
-    tags["$0\pi^{0} + 0\pi^{+}$"     ]          = Tag("$0\pi^{0} + 0\pi^{+}$"              , "background",       "#777777", generate_truth_tags(events, 0, 0      , only_diphoton = False) if events is not None else None, 1)
-    tags["$1\pi^{0} + \geq 1\pi^{+}$"]          = Tag("$1\pi^{0} + \geq 1\pi^{+}$"         , "sideband",         "#E24A33", generate_truth_tags(events, 1, (1,)   , only_diphoton = False) if events is not None else None, 2)
-    tags["$0\pi^{0} + \geq 1\pi^{+}$"]          = Tag("$0\pi^{0} + \geq 1\pi^{+}$"         , "sideband",         "#988ED5", generate_truth_tags(events, 0, (1,)   , only_diphoton = False) if events is not None else None, 3)
-    tags["$\greater 1\pi^{0} + \geq 0\pi^{+}$"] = Tag("$> 1\pi^{0} + \geq 0\pi^{+}$"       , "sideband",         "#348ABD", generate_truth_tags(events, (2,), (0,), only_diphoton = False) if events is not None else None, 4)
-    return tags
