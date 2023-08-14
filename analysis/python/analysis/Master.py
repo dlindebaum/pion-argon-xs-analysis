@@ -19,7 +19,7 @@ import uproot
 from rich import print
 
 # custom modules
-from python.analysis import vector
+from python.analysis import vector, CutTable
 
 
 def timer(func):
@@ -189,6 +189,7 @@ class Data:
             self.trueParticles = TrueParticleData(self)
             self.recoParticles = RecoParticleData(self)
             self.trueParticlesBT = TrueParticleDataBT(self)
+            self.cutTable = CutTable.CutHandler(self)
 
     @property
     def SortedTrueEnergyMask(self) -> ak.Array:
@@ -402,6 +403,7 @@ class Data:
                 self.trueParticlesBT.Filter(reco_filters, returnCopy)
 
             __GenericFilter__(self, reco_filters)
+            CutTable.apply_filters(self, reco_filters)
             self.trueParticles.events = self
             self.recoParticles.events = self
             if hasattr(self, "trueParticlesBT"):
@@ -415,6 +417,7 @@ class Data:
             filtered.start = self.start
             filtered.io = IO(filtered.filename,
                              filtered.nEvents, filtered.start)
+            filtered.cutTable = self.cutTable
             filtered.event_index = self.event_index
             filtered.eventNum = self.eventNum
             filtered.subRun = self.subRun
@@ -429,6 +432,7 @@ class Data:
                 filtered.trueParticlesBT.events = filtered
             # ? should true_filters also be applied?
             __GenericFilter__(filtered, reco_filters)
+            CutTable.apply_filters(filtered, reco_filters)
             return filtered
 
     @timer
@@ -713,6 +717,10 @@ class Data:
         mask = ak.Array(mask)
 
         self.Filter([mask], [mask])
+
+    @property
+    def table(self, **kwargs):
+        return self.cutTable.get_table(**kwargs)
 
 
 
