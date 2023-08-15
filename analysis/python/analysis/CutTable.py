@@ -155,7 +155,7 @@ class CutHandler():
         self._end_sig = ()
         self.curr_mask_index = 0
         self.concat_index = 0
-        self._concat_indicies = [0]
+        self.concat_indicies = [0]
         self._pfos_init = False
         self._init_data = None
         self._particle_tags = None
@@ -310,6 +310,49 @@ class CutHandler():
     def copy(self):
         return copy.deepcopy(self)
     
+    def get_masks(
+            self,
+            initial_concat_index: int = 0,
+            final_concat_index: int = None,
+            initial_true_index: int = None,
+            final_true_index: int = None):
+        """
+        Returns the stored masks
+
+        Parameters
+        ----------
+        initial_concat_index : int, optional
+            Concatenation from which to begin fetching masks.
+            Will be overwritten by `true_index_start` if
+            passed. Default is 0.
+        final_concat_index : int, optional
+            Concatenation from which to finish fetching
+            masks (the first resut of this concatenation
+            will _not_ be inculded). Will be overwritten by
+            `true_index_end` if `true_index_start` is passed.
+            Default is None.
+        initial_true_index : int, optional
+            Index from which to begin fetching masks.
+            Overwrites `concat_index_start` if passed.
+            Default is None.
+        final_true_index : int, optional
+            Index to finish fetching masks (the supplied
+            index will not be included). Only used if
+            `true_index_start` is passed. Default is None.
+        
+        Returns
+        -------
+        list
+            List of requested masks
+        """
+        if initial_true_index is None:
+            initial_true_index = self.concat_indicies[initial_concat_index]
+            if final_concat_index is not None:
+                final_true_index = self.concat_indicies[final_concat_index]+1
+            else:
+                final_true_index = None
+        return self._masks[initial_true_index:final_true_index]
+
     def apply_masks(
             self, data: ak.Array,
             return_table: bool = False,
@@ -356,7 +399,7 @@ class CutHandler():
         if application_true_index is not None:
             initial_index = application_true_index
         else:
-            initial_index = self._concat_indicies[application_concat_index]
+            initial_index = self.concat_indicies[application_concat_index]
         result = data
         for application_func in self._mask_appliers()[initial_index:]:
             _, result = application_func(result)
@@ -367,7 +410,7 @@ class CutHandler():
     
     # def get_filters_list(self, application_concat_index=0):
     #     new_data = data
-    #     for application_func in self._mask_appliers()[self._concat_indicies[application_concat_index]:]:
+    #     for application_func in self._mask_appliers()[self.concat_indicies[application_concat_index]:]:
     #         mask, _ = application_func(result)
         
 
@@ -414,7 +457,9 @@ class CutHandler():
     def get_table(
             self, init_data_name: str = "Initial data",
             initial_concat_index: int = 0,
+            final_concat_index: int = None,
             initial_true_index: int = None,
+            final_true_index: int = None,
             latex: bool = False,
             particles_list: list = _default_particles,
             events: bool = True, pfos: bool = True,
@@ -433,12 +478,15 @@ class CutHandler():
             Name to be displayed for the pre-cuts row. Default is
             `"Initial data"`
         initial_concat_index : int, optional
-            DO NOT USE - Not fully implmented - use `initial_true_index` instead.
             Initial concatenation from which to generate the table
             This can be used to i.e. removing initial event
             selection cuts if they are not of interest. Current
             concatenation index can be seen using
             `self.concate_index`. Default is 0.
+        final_concat_index : int, optional
+            Final concatenation at which to stop generating the
+            table. Current concatenation index can be seen using
+            `self.concate_index`. Default is None.
         initial_true_index : int, optional
             Selects an arbitray mask as the starting point from
             which to generate the table. This can be used
@@ -446,6 +494,13 @@ class CutHandler():
             Current mask index can be seen using
             `self.curr_mask_index`. This will override
             `initial_concat_index` if set. Default is None.
+        final_true_index : int, optional
+            Selects an arbitray mask as the final point at which
+            to stop generating the table. Indexed mask will _not_
+            be included. Current mask index can be seen using
+            `self.curr_mask_index`. This will override
+            `final_concat_index1` if `initial_concat_index` is
+            set. Default is None.
         latex : bool, optional
             If `True`, result is a string which may be copied
             directly into LaTeX. Default is False.
@@ -503,15 +558,17 @@ class CutHandler():
         for p in particles_list:
             cols_to_use += self._gen_particle_cols_array(p)[cols_to_keep].tolist()
             col_names += self._gen_particle_cols_array_read(p, latex)[cols_to_keep].tolist()
-        
-        if initial_true_index is not None:
-            initial_index = initial_true_index
-        else:
-            initial_index = self._concat_indicies[initial_concat_index]
+
+        if initial_true_index is None:
+            initial_true_index = self.concat_indicies[initial_concat_index]
+            if final_concat_index is not None:
+                final_true_index = self.concat_indicies[final_concat_index]+1
+            else:
+                final_true_index = None
         data = {}
         for col, name in zip(cols_to_use, col_names):
             data[name] = self._new_init_events(
-                col, initial_index, init_data_name)
+                col, initial_true_index, init_data_name)[:final_true_index]
         if latex:
             return pd.DataFrame(data).to_latex()
         else:
@@ -519,25 +576,60 @@ class CutHandler():
 
     def concatenate(self, other, return_copy=False):
         """
-        DO NOT USE - Not fully implmented
+        Concatenates a second `CutHandler` instance.
+
+        Also usable via the addition operator (which returns
+        a copy).
+
+        The combined result will include data from both
+        instances with this instance first and the `other`
+        instance second.
+
+        The `other` instance must have a consequtive type
+        signature (i.e. the first mask of the `other` object
+        must be appliable to the result of the final mask of
+        this instance)
+
+        The index of this concatenation is stored in
+        `self.concat_indicies`, and the current index is
+        stored as `self.concat_index`. The concatenation
+        index may be used in `get_masks` and `get_table` to
+        index a particular set of cuts.
+
+        Parameters
+        ----------
+        other : CutHandler
+            Other CutHandler object to be concatenate to
+            this instance.
+        return_copy : bool, optional
+            If True, a new instance is created to contain
+            the concatenation, whilst this instance does
+            not change. Default is False.
+        
+        Returns
+        -------
+        CutHandler, optional
+            Combine CutHandler instance, if `return_copy`
+            was set to True.
         """
-        raise NotImplementedError
         if not isinstance(other, CutHandler):
             raise NotImplementedError("CutHandler object can only be added to another CutHandler object")
+        this_set = (self._start_sig != ())
         # Make sure the new set is consequtive
-        if not self._validate_signature(other._signatures[0], raise_exception=False):
+        if (not self._validate_signature(other._signatures[0], raise_exception=False)) and this_set:
             raise ValueError(f"Combining CutHandler objects requires consequtively matching signatures: "
                              + f"{self._end_sig} and {other._signatures[0]} do not match.")
         if return_copy:
             result = self.copy()
         else:
             result = self
-        result._masks = other._masks
-        result._signatures += other._signatures[1:]
+        result.concat_indicies += [i + len(result._masks) for i in other.concat_indicies]
+        result._masks += other._masks
+        result._names += other._names
+        result._signatures += other._signatures
         result._start_sig = other._start_sig
         result._end_sig = other._end_sig
         result.concat_index += 1
-        result._concat_indicies += [i + len(result._concat_indicies) for i in other._concat_indicies]
         if (result._init_data is None) and (other._init_data is not None):
             result._init_data = other._init_data
             result._init_data_sig = other._init_data_sig
