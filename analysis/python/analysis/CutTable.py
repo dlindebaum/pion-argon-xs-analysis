@@ -3,6 +3,7 @@ import numpy as np
 import awkward as ak
 import pandas as pd
 import copy
+import functools
 from particle import Particle
 from python.analysis import Tags
 from typing import TYPE_CHECKING
@@ -11,25 +12,25 @@ if TYPE_CHECKING:
 
 
 class MaskIter():
-    def __init__(self, start_sigs, masks):
+    def __init__(self, start_sigs, simultaneous, masks):
         self.sigs = start_sigs
         self.masks = masks
         self.iter_max = len(masks)
         self.index = 0
-        self.curr_mask = self.masks[self.index]
 
         if self.iter_max != len(self.sigs):
             raise ValueError(f"masks and sigs must have the same length: {self.iter_max} and {len(self.sigs)}")
         if self.index >= self.iter_max:
             raise IndexError(f"Start index {self.index} is out of bounds for masks length of {self.iter_max}")
 
+        self.curr_evts = []
+        self.curr_pfos = []
+
         self.mask_inds = list(range(self.iter_max))
-        self.simultaneous_masks = []
-        simul_list = [False] + [self.check_simul_masks(prev, this) for prev, this in zip(self.sigs[:-1], self.sigs[1:])]
-        self.next_simul = simul_list[1:] + [False]
+        self.next_simul = simultaneous[1:] + [False]
         self.init_simul = []
         last_simul = 0
-        for i, this_simul in enumerate(simul_list):
+        for i, this_simul in enumerate(simultaneous):
             if not this_simul:
                 last_simul = i
             self.init_simul.append(last_simul)
@@ -43,27 +44,57 @@ class MaskIter():
     def check_simul_masks(self, sig1, sig2):
         return (sig1[0] == sig2[0]) and ((sig1[1] == sig2[-1]) or (sig1[1] == -1) or (sig2[1] == -1))
 
-    def get_mask_func(self, mask, next_simul):
+    def comb_masks(self, mask_list):
+        return functools.reduce(lambda x, y: np.logical_and(x, y), mask_list)
+
+    def gen_mask_applier(self):
+        if len(self.curr_evts) == 0:
+            mask = self.comb_masks(self.curr_pfos)
+            def mask_applier(data):
+                return data[mask]
+        elif len(self.curr_pfos) == 0:
+            mask = self.comb_masks(self.curr_evts)
+            def mask_applier(data):
+                return data[mask]
+        else:
+            evt_mask = self.comb_masks(self.curr_evts)
+            pfo_mask = self.comb_masks(self.curr_pfos)
+            def mask_applier(data):
+                return data[pfo_mask][evt_mask]
+        return mask_applier
+    
+    def add_mask_at_index(self, index):
+        if self.sigs[index][1] == -1:
+            self.curr_evts.append(self.masks[index])
+        else:
+            self.curr_pfos.append(self.masks[index])
+        return
+
+    def get_mask_func(self, apply_func, next_simul):
         if next_simul:
             def apply_mask_func(data):
-                return mask, data
+                return apply_func, data
         else:
             def apply_mask_func(data):
-                return mask, data[mask]
+                return apply_func, apply_func(data)
         return apply_mask_func
 
     def __next__(self):
         if self.index >= self.iter_max:
             raise StopIteration
-
         if self.init_simul[self.index] == self.index:
-            self.curr_mask = self.masks[self.index]
-        else:
-            self.curr_mask = np.logical_and(self.curr_mask, self.masks[self.index])
+            self.curr_evts = []
+            self.curr_pfos = []
+        self.add_mask_at_index(self.index)
+        self.curr_func = self.gen_mask_applier()
         self.index += 1
-        return self.get_mask_func(self.curr_mask, self.next_simul[self.index-1])
+        return self.get_mask_func(self.curr_func, self.next_simul[self.index-1])
         
     def __getitem__(self, sli : slice):
+        """
+        NOT YET UPDATED TO PROPERLY HANDLE PFO/EVENT MIXING
+        """
+        raise NotImplementedError
         if (sli.step is not None) and (sli.step < 0):
             rev_slice = slice(None, None, -1)
             sli = slice(sli.stop + 1, sli.start + 1, abs(sli.step))
@@ -151,6 +182,7 @@ class CutHandler():
         """
         self._masks = []
         self._signatures = []
+        self._simultaneous = []
         self._start_sig = ()
         self._end_sig = ()
         self.curr_mask_index = 0
@@ -187,9 +219,10 @@ class CutHandler():
         last_pfo_count = init_pfo_count
         data = self._init_data
         for name, application_func in zip(self._names, self):
-            this_mask, new_data = application_func(data)
-            this_evt_count = ak.num(data[this_mask], axis=0)
-            this_pfo_count = ak.count(data[this_mask])
+            this_applier, new_data = application_func(data)
+            cut_data = this_applier(data)
+            this_evt_count = ak.num(cut_data, axis=0)
+            this_pfo_count = ak.count(cut_data)
             results["Name"].append(name)
             results["Remaining events"].append(this_evt_count)
             results["Percentage of total events remaining"].append(100.*this_evt_count/init_evt_count)
@@ -212,13 +245,14 @@ class CutHandler():
             "average per event": [init_count/ak.num(init_list, axis=0)]}
         data = init_list
         for application_func in self:
-            this_mask, new_data = application_func(data)
-            particle_count = np.sum(data[this_mask])
+            this_applier, new_data = application_func(data)
+            cut_data = this_applier(data)
+            particle_count = np.sum(cut_data)
             results["remaining"].append(particle_count)
             results["percentage remaining"].append(100. * particle_count/init_count)
             results["relative percentage remaining"].append(
                 100. * particle_count/results["remaining"][-2])
-            results["average per event"].append(particle_count/ak.num(data[this_mask], axis=0))
+            results["average per event"].append(particle_count/ak.num(cut_data, axis=0))
             data = new_data
         return results
 
@@ -256,21 +290,69 @@ class CutHandler():
         self.init_events_set = True
         return
 
+    def _comb_masks(self, mask_list):
+        if len(mask_list) >= 2:
+            return [functools.reduce(lambda x, y: np.logical_and(x, y), mask_list)]
+        else:
+            return mask_list
+
+    def _group_masks(self, start_index=None, end_index=None, rcount=np.inf):
+        groups_count = 0
+        curr_pfos_like = []
+        curr_evts_like = []
+        ordered_results = []
+        if start_index is not None:
+            if start_index == 0:
+                start_index = None
+            else:
+                start_index -= 1
+        if end_index is not None:
+            if end_index == 0:
+                return []
+            end_index -= 1
+        for mask, sig, simul in zip(
+                self._masks[end_index:start_index:-1],
+                self._signatures[end_index:start_index:-1],
+                self._simultaneous[end_index:start_index:-1]):
+            if groups_count >= rcount:
+                break
+            if sig[1] == -1:
+                curr_evts_like = [mask] + curr_evts_like
+            else:
+                curr_pfos_like = [mask] + curr_pfos_like
+            if (not simul) is True:
+                ordered_results = (
+                    self._comb_masks(curr_pfos_like)
+                    + self._comb_masks(curr_evts_like)
+                    + ordered_results)
+                curr_evts_like = []
+                curr_pfos_like = []
+                groups_count += 1
+        ordered_results = (
+            self._comb_masks(curr_pfos_like)
+            + self._comb_masks(curr_evts_like)
+            + ordered_results)
+        return ordered_results
+
     def _get_mask_signature(self, mask, end=False):
         flat_array = isinstance(ak.count(mask, axis=0), int)
         if not end:
             pfo_level = -1 if flat_array else ak.count(mask)
             start_sig = (ak.num(mask, axis=0), pfo_level)
             return start_sig
+        curr_simul_masks = self._group_masks(rcount=1)
+        mask = curr_simul_masks[0]
+        for m in curr_simul_masks[1:]:
+            mask = mask[m]
         if flat_array:
             end_sig = (ak.sum(mask), -1)
         else:
             end_sig = (ak.num(mask, axis=0), ak.sum(mask))
         return end_sig
     
-    def _validate_signature(self, signature, raise_exception=True):
+    def _validate_signature(self, signature, raise_exception=True, return_simul=False):
         if self._start_sig == ():
-            return
+            return False
         simul_mask = (self._start_sig[0] == signature[0]) and ((self._start_sig[-1] == signature[-1]) or (self._start_sig[-1] == -1) or (signature[-1] == -1))
         good_mask = simul_mask or (self._end_sig[0] == signature[0] and ((self._end_sig[-1] == signature[-1]) or (self._end_sig[-1] == -1) or (signature[-1] == -1)))
         if (not good_mask) and raise_exception:
@@ -278,6 +360,8 @@ class CutHandler():
                              + f" the required signature of ({self._start_sig[0]} events, "
                              + f"{self._start_sig[1]} PFOs) for a simultaenous mask, or ({self._end_sig[0]}"
                              + f" events, {self._end_sig[1]} PFOs) for a consequtive mask.")
+        if return_simul:
+            return simul_mask
         return good_mask
 
     def add_mask(self, mask: ak.Array, name: str = "-"):
@@ -292,17 +376,18 @@ class CutHandler():
             Name indicating what the cut did.
         """
         this_sig = self._get_mask_signature(mask)
-        self._validate_signature(this_sig)
+        self._simultaneous.append(self._validate_signature(this_sig, return_simul=True))
         self._start_sig = this_sig
-        self._end_sig = self._get_mask_signature(mask, end=True)
         self._masks.append(mask)
         self._signatures.append(this_sig)
+        # Must occur after _masks, _signatures, and _simultaneous are set
+        self._end_sig = self._get_mask_signature(mask, end=True)
         self._names.append(name)
         self.curr_mask_index += 1
         return
 
     def _mask_appliers(self):
-        return MaskIter(self._signatures, self._masks)
+        return MaskIter(self._signatures, self._simultaneous, self._masks)
 
     def __iter__(self):
         return self._mask_appliers()
@@ -351,7 +436,10 @@ class CutHandler():
                 final_true_index = self.concat_indicies[final_concat_index]+1
             else:
                 final_true_index = None
-        return self._masks[initial_true_index:final_true_index]
+        reco_masks = self._group_masks(
+            start_index=initial_true_index, end_index=final_true_index)
+        truth_masks = [m for m in reco_masks if isinstance(ak.count(m, axis=0), int)]
+        return reco_masks, truth_masks
 
     def apply_masks(
             self, data: ak.Array,
@@ -585,10 +673,9 @@ class CutHandler():
         instances with this instance first and the `other`
         instance second.
 
-        The `other` instance must have a consequtive type
-        signature (i.e. the first mask of the `other` object
-        must be appliable to the result of the final mask of
-        this instance)
+        The `other` instance have a compatible initial mask
+        signature with that of the final mask in this
+        instance.
 
         The index of this concatenation is stored in
         `self.concat_indicies`, and the current index is
@@ -627,13 +714,14 @@ class CutHandler():
         result._masks += other._masks
         result._names += other._names
         result._signatures += other._signatures
+        result._simultaneous += other._simultaneous
         result._start_sig = other._start_sig
         result._end_sig = other._end_sig
         result.concat_index += 1
+        result._data_changed = True
         if (result._init_data is None) and (other._init_data is not None):
             result._init_data = other._init_data
             result._init_data_sig = other._init_data_sig
-            result._data_changed = True
             result.init_events_set = other.init_events_set
             if result._particles != other._particles:
                 warnings.warn("Concatenated data has a different set of watched particles, re-running set_init_evts() is recommended.")
