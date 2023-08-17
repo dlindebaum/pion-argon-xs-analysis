@@ -12,6 +12,7 @@ from collections import namedtuple
 
 import awkward as ak
 import numpy as np
+import pandas as pd
 import dill
 import uproot
 from particle import Particle
@@ -155,7 +156,7 @@ class BetheBloch:
     def meandEdX(KE, particle : Particle):
         gamma = (KE / particle.mass) + 1
         beta = (1 - (1/gamma)**2)**0.5
-        
+
         w_max = 2 * BetheBloch.me * (beta * gamma)**2 / (1 + (2 * BetheBloch.me * (gamma/particle.mass)) + (BetheBloch.me/particle.mass)**2)
         N = np.divide((BetheBloch.rho * BetheBloch.K * BetheBloch.Z * (particle.charge)**2), (BetheBloch.A * (beta**2)))
         A = 0.5 * np.log(2 * BetheBloch.me * (gamma**2) * (beta**2) * w_max / ((BetheBloch.I) **2))
@@ -349,6 +350,62 @@ def LoadConfiguration(file : str) -> dict:
     return config
 
 
+def NumericalCV(bins : np.array, KE_reco_inst : np.array, KE_true_ff : np.array) -> tuple[np.array, np.array]:
+    """ central value in reco bin using the arithmetic mean.
+
+    Args:
+        bins (np.array): bin edges
+        KE_reco_inst (np.array): reco KE at instrumentation
+        KE_true_ff (np.array): true front facing KE
+
+    Returns:
+        tuple[np.array, np.array]: arithmetc mean in each bin, error in the mean
+    """
+    binned_data = {"KE_inst": [], "KEff_true" : [], "KE_first_true" : []}
+    for i in range(len(bins)-1):
+        mask = (KE_reco_inst > bins[i]) & (KE_reco_inst < bins[i + 1])
+        mask = mask & (KE_true_ff > 0)
+
+        binned_data["KE_inst"].append( KE_reco_inst[mask] )
+        binned_data["KEff_true"].append( KE_true_ff[mask] )
+    binned_data = {i : ak.Array(binned_data[i]) for i in binned_data}
+
+    print(ak.num(binned_data["KE_inst"]))
+    residual_energy = binned_data["KE_inst"] - binned_data["KEff_true"]
+
+    mean_residual_energy = ak.mean(residual_energy, axis = -1)
+    mean_error_residual_energy = ak.std(residual_energy, axis = -1) / np.sqrt(ak.num(residual_energy))
+    return mean_residual_energy, mean_error_residual_energy
+
+
+def UpstreamLossFit(bins : np.array, KE_reco_inst : np.array, KE_true_ff : np.array, cv_function : Fitting.FitFunction = None, response_function : Fitting.FitFunction = Fitting.poly2d) -> tuple[np.array, np.array]:
+    """ Estiamte upstream loss using a reponse function to correct the reco KE at the instrumentaiton to get the KE at the front face of the TPC.
+        estiamtes the central value of residuals in bins of KE_reco_inst using a fitting function.
+
+    Args:
+        bins (np.array): reco KE bins
+        KE_reco_inst (np.array): reco KE at instrumentation
+        KE_true_ff (np.array): true front facing KE
+        cv_function (Fitting.FitFunction, optional): function to fit residuals to in order to get the central value. Defaults to None.
+        response_function (Fitting.FitFunction, optional): response function to fit to central values. Defaults to Fitting.poly2d.
+
+    Returns:
+        tuple[np.array, np.array]: response function fit parameters, error in fit parameters
+    """
+    if cv_function is None:
+        cv = NumericalCV(bins, KE_reco_inst, KE_true_ff)
+    else:
+        df = pd.DataFrame({"KE_inst" : KE_reco_inst, "true_ffKE" : KE_true_ff})
+        df["residual"] = df.KE_inst - df.true_ffKE
+        cv = Fitting.ExtractCentralValues_df(df, "KE_inst", "residual", [-250, 250], [cv_function], bins, 50, rms_err = False)
+
+    x = (bins[1:] + bins[:-1]) / 2
+    xerr = abs(x - bins[1:])
+
+    params = Fitting.Fit(x, cv[0], cv[1], Fitting.poly2d, plot = False, maxfev = int(5E5))
+    return params
+
+
 def UpstreamEnergyLoss(KE_inst : ak.Array, params : np.array, function : Fitting.FitFunction = Fitting.poly2d) -> ak.Array:
     """ compute the upstream loss based on a repsonse function and it's fit parameters.
 
@@ -379,10 +436,12 @@ def RecoDepositedEnergy(events : Master.Data, ff_KE : ak.Array, method : str) ->
     if method == "calo":
         dE = ak.sum(events.recoParticles.beam_dEdX[:, :-1] * reco_pitch, -1)
     elif method == "bb":
-        reco_pitch_padded = ak.fill_none(ak.pad_none(reco_pitch, max(ak.num(reco_pitch)), -1), 0) # pad so all beam particles have the same number ov pitches (padded values are set to zero)
+        # reco_pitch_padded = ak.fill_none(ak.pad_none(reco_pitch, max(ak.num(reco_pitch)), -1), 0) # pad so all beam particles have the same number ov pitches (padded values are set to zero)
+        reco_pitch_padded = ak.pad_none(reco_pitch, max(ak.num(reco_pitch)), -1) # pad so all beam particles have the same number ov pitches (padded values are set to zero)
         KE_int_bb = ff_KE
         for d in range(max(ak.num(reco_pitch_padded))): # loop through all trajectoty points and compute dEdX simultaneously for all particles
-            KE_int_bb = KE_int_bb - reco_pitch_padded[:, d] * BetheBloch.meandEdX(KE_int_bb, Particle.from_pdgid(211))
+            E_temp = reco_pitch_padded[:, d] * BetheBloch.meandEdX(KE_int_bb, Particle.from_pdgid(211))
+            KE_int_bb = ak.where(ak.is_none(E_temp), KE_int_bb, KE_int_bb - E_temp)
         dE = ff_KE - KE_int_bb
     else:
         raise Exception(f"{method} not a valid method, pick 'calo' or 'bb'")
@@ -700,11 +759,11 @@ class EnergySlice:
         # print(n_incident)
 
         #! fastest, vectorised version of the first but c++ loops are faster. 
-        n_incident = np.array([ak.sum(ak.where((true_init_slice_in_tpc <= i) & (true_int_slice_in_tpc >= i), 1, 0)) for i in range(energy_slices.max_num + 1)])
+        n_incident = np.array([ak.sum(ak.where((true_init_slice_in_tpc <= i) & (true_int_slice_in_tpc > i), 1, 0)) for i in range(energy_slices.max_num + 1)])
     
         n_interact = np.histogram(np.array(true_int_slice_in_tpc[channel[~outside_tpc]]), range(-1, energy_slices.max_num + 1))[0]
         n_interact = np.roll(n_interact, -1) # shift the underflow bin to the location of the overflow bin in n_incident i.e. merge them.
-        return n_interact, n_incident
+        return n_interact, n_incident + n_interact
 
     @staticmethod
     def Slice_dEdX(energy_slices : Slices, particle : Particle) -> np.array:
