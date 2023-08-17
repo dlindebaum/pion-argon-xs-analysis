@@ -1174,13 +1174,11 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     plt.subplot(212) # ratio plot
     ratio = h_data / h_mc # data / MC
     ratio_err = ratio * np.sqrt((data_err/h_data)**2 + (mc_error/h_mc)**2)
-    # ratio_err = ((h_data + data_err) / h_mc) - ratio
     ratio[ratio == np.inf] = -1 # if the ratio is undefined, set it to -1
     plt.errorbar(centres, ratio, ratio_err, c = "black", marker = "o", capsize = 3, linestyle = "")
     plt.ylabel("Data/MC")
 
     ticks = [0, 0.5, 1, 1.5, 2] # hardcode the yaxis to have 5 ticks
-    # ticks = np.linspace(np.nanmin(ratio) * 1.1, np.nanmax(ratio)*1.1, 4) # hardcode the yaxis to have 4 ticks
     plt.yticks(ticks, np.char.mod("%.2f", ticks))
     plt.ylim(0, 2)
 
@@ -1453,6 +1451,51 @@ def PlotStackedBar(bars, labels, xlabel : str = None, colours : list = None, alp
 
     if annotation is not None:
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
+
+
+class RatioPlot():
+    def __init__(self, x = None, y1 = None, y2 = None, y1_err = None, y2_err = None, xlabel = "x", ylabel = "y1/y2") -> None:
+        self.x = x
+        self.y1 = y1
+        self.y1_err = y1_err
+        self.y2 = y2
+        self.y2_err = y2_err
+        self.xlabel = xlabel
+        self.ylabel = ylabel
+    def __enter__(self) -> None:
+        plt.subplots(2, 1, figsize = (6.4, 4.8 * 1.2), gridspec_kw={"height_ratios" : [5, 1]} , sharex = True) # set to that the ratio plot is 1/5th the default plot height
+        plt.subplot(211)
+        
+        return self
+    def __exit__(self, type, value, traceback) -> None:
+        plt.subplot(212)
+        if self.x is None:
+            raise Exception("x has not been assigned")
+        if self.y1 is None:
+            raise Exception("y1 has not been assigned")
+        if self.y2 is None:
+            raise Exception("y2 has not been assigned")
+        if (self.y2_err is None) and (self.y1_err is not None):
+            self.y2_err = np.zeros(len(self.y2))
+        if (self.y1_err is None) and (self.y2_err is not None):
+            self.y1_err = np.zeros(len(self.y1))
+
+        ratio = self.y1 / self.y2
+        
+        if (self.y2_err is None) and (self.y1_err is None):
+            ratio_err = None
+        else:
+            ratio_err = ratio * np.sqrt((self.y1_err/self.y1)**2 + (self.y2_err/self.y2)**2)
+
+
+        Plot(self.x, ratio, yerr = ratio_err, xlabel = self.xlabel, ylabel = self.ylabel, marker = "o", color = "black", linestyle = "", newFigure = False)
+        ticks = [0, 0.5, 1, 1.5, 2] # hardcode the yaxis to have 5 ticks
+        plt.yticks(ticks, np.char.mod("%.2f", ticks))
+        plt.ylim(0, 2)
+
+        return True
+    def subplot(n):
+        plt.subplot(int(f"21{n}"))
 
 
 def simple_sig_bkg_hist(
