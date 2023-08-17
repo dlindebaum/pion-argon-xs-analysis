@@ -14,6 +14,7 @@ from rich import print as rprint
 from python.analysis import Master, BeamParticleSelection, EventSelection, PFOSelection, Plots, shower_merging, vector, Processing, Tags, cross_section
 
 import awkward as ak
+from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 import pandas as pd
 
@@ -34,7 +35,7 @@ def MakeOutput(value : ak.Array, tags : Tags.Tags, cuts : list = [], fs_tags : T
     return {"value" : value, "tags" : tags, "cuts" : cuts, "fs_tags" : fs_tags}
 
 
-def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam_quality_fits : dict) -> dict:
+def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam_quality_fits : dict, beam_scraper_fits : dict, args : argparse.Namespace) -> dict:
     """ Manually applies the beam selection while storing the value being cut on, cut values and truth tags in order to do plotting
         and produce performance tables.
 
@@ -50,12 +51,6 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam
 
     output["no_selection"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, Tags.GenerateTrueFinalStateTags(events))
 
-    #* calo size cut
-    mask = BeamParticleSelection.CaloSizeCut(events)
-    output["calo_size"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None)
-    events.Filter([mask], [mask])
-    output["calo_size"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
-
     #* pi+ beam selection
     mask = BeamParticleSelection.PiBeamSelection(events, beam_instrumentation)
     counts = Tags.GenerateTrueBeamParticleTags(events)
@@ -65,56 +60,69 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam
     events.Filter([mask], [mask])
     output["pi_beam"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
+    #* calo size cut
+    mask = BeamParticleSelection.CaloSizeCut(events)
+    output["calo_size"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None)
+    events.Filter([mask], [mask])
+    output["calo_size"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
+
     #* beam pandora tag selection
     mask = BeamParticleSelection.PandoraTagCut(events) # create the mask for the cut
-    output["pandora_tag"] = MakeOutput(events.recoParticles.beam_pandora_tag, Tags.GenerateTrueBeamParticleTags(events), [13]) # store the data to cut, cut value and truth tags
+    output["pandora_tag"] = MakeOutput(events.recoParticles.beam_pandora_tag, Tags.GenerateTrueBeamParticleTags(events), [args["beam_selection"]["arguments"][1]["cut"]]) # store the data to cut, cut value and truth tags
     events.Filter([mask], [mask]) # apply the cut
     output["pandora_tag"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events) # store the final state truth tags after the cut is applied
 
     #* dxy cut
-    dxy = (((events.recoParticles.beam_startPos.x - beam_quality_fits["mu_x"]) / beam_quality_fits["sigma_x"])**2 + ((events.recoParticles.beam_startPos.y - beam_quality_fits["mu_y"]) / beam_quality_fits["sigma_y"])**2)**0.5
-    mask = dxy < 3
-    output["dxy"] = MakeOutput(dxy, Tags.GenerateTrueBeamParticleTags(events), [3], Tags.GenerateTrueFinalStateTags(events))
+    dxy = (((events.recoParticles.beam_startPos_SCE.x - beam_quality_fits["mu_x"]) / beam_quality_fits["sigma_x"])**2 + ((events.recoParticles.beam_startPos_SCE.y - beam_quality_fits["mu_y"]) / beam_quality_fits["sigma_y"])**2)**0.5
+    mask = dxy < args["beam_selection"]["arguments"][4]["dxy_cut"][1]
+    output["dxy"] = MakeOutput(dxy, Tags.GenerateTrueBeamParticleTags(events), [args["beam_selection"]["arguments"][4]["dxy_cut"][1]], Tags.GenerateTrueFinalStateTags(events))
     print(f"dxy cut: {BeamParticleSelection.CountMask(mask)}")
     events.Filter([mask], [mask])
     output["dxy"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
     #* dz cut
-    delta_z = (events.recoParticles.beam_startPos.z - beam_quality_fits["mu_z"]) / beam_quality_fits["sigma_z"]
-    mask = (delta_z > -3) & (delta_z < 3)
-    output["dz"] = MakeOutput(delta_z, Tags.GenerateTrueBeamParticleTags(events), [-3, 3], Tags.GenerateTrueFinalStateTags(events))
+    delta_z = (events.recoParticles.beam_startPos_SCE.z - beam_quality_fits["mu_z"]) / beam_quality_fits["sigma_z"]
+    mask = (delta_z > args["beam_selection"]["arguments"][4]["dz_cut"][0]) & (delta_z < args["beam_selection"]["arguments"][4]["dz_cut"][1])
+    output["dz"] = MakeOutput(delta_z, Tags.GenerateTrueBeamParticleTags(events), args["beam_selection"]["arguments"][4]["dz_cut"], Tags.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
     print(f"dz cut: {BeamParticleSelection.CountMask(mask)}")
     output["dz"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
     #* beam direction
-    beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos, events.recoParticles.beam_startPos))
+    beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos_SCE, events.recoParticles.beam_startPos_SCE))
     beam_dir_mu = vector.normalize(vector.vector(beam_quality_fits["mu_dir_x"], beam_quality_fits["mu_dir_y"], beam_quality_fits["mu_dir_z"]))
     beam_costh = vector.dot(beam_dir, beam_dir_mu)
-    mask = beam_costh > 0.95
-    output["cos_theta"] = MakeOutput(beam_costh, Tags.GenerateTrueBeamParticleTags(events), [0.95], Tags.GenerateTrueFinalStateTags(events))
+
+    mask = beam_costh > args["beam_selection"]["arguments"][4]["costh_cut"][0]
+    output["cos_theta"] = MakeOutput(beam_costh, Tags.GenerateTrueBeamParticleTags(events), [args["beam_selection"]["arguments"][4]["costh_cut"][0]], Tags.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
     output["cos_theta"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
     #* APA3 cut
     mask = BeamParticleSelection.APA3Cut(events)
-    output["beam_endPos_z"] = MakeOutput(events.recoParticles.beam_endPos.z, Tags.GenerateTrueBeamParticleTags(events), [220], Tags.GenerateTrueFinalStateTags(events))
+    output["beam_endPos_z"] = MakeOutput(events.recoParticles.beam_endPos_SCE.z, Tags.GenerateTrueBeamParticleTags(events), [args["beam_selection"]["arguments"][5]["cut"]], Tags.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
     output["beam_endPos_z"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
     #* michel score cut
     score = ak.where(events.recoParticles.beam_nHits != 0, events.recoParticles.beam_michelScore / events.recoParticles.beam_nHits, -999)
     mask = BeamParticleSelection.MichelScoreCut(events)
-    output["michel_score"] = MakeOutput(score, Tags.GenerateTrueBeamParticleTags(events), [0.55], Tags.GenerateTrueFinalStateTags(events))
+    output["michel_score"] = MakeOutput(score, Tags.GenerateTrueBeamParticleTags(events), [args["beam_selection"]["arguments"][3]["cut"]], Tags.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
     output["michel_score"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
     #* median dE/dX
     mask = BeamParticleSelection.MedianDEdXCut(events)
     median = PFOSelection.Median(events.recoParticles.beam_dEdX)
-    output["median_dEdX"] = MakeOutput(median, Tags.GenerateTrueBeamParticleTags(events), [2.4], Tags.GenerateTrueFinalStateTags(events))
+    output["median_dEdX"] = MakeOutput(median, Tags.GenerateTrueBeamParticleTags(events), [args["beam_selection"]["arguments"][6]["cut"]], Tags.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
     output["median_dEdX"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
+
+    #* beam scraper
+    mask = BeamParticleSelection.BeamScraper(events, args["beam_selection"]["arguments"][-1]["KE_range"], beam_scraper_fits, args["beam_selection"]["arguments"][-1]["pdg_hyp"], args["beam_selection"]["arguments"][-1]["cut"])
+    output["beam_scraper"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), [args["beam_selection"]["arguments"][-1]["cut"]], Tags.GenerateTrueFinalStateTags(events))
+    events.Filter([mask], [mask])
+    output["beam_scraper"]["fs_tags"] = Tags.GenerateTrueFinalStateTags(events)
 
     #* true particle population
     output["final_tags"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, Tags.GenerateTrueFinalStateTags(events))
@@ -200,17 +208,18 @@ def AnalysePhotonCandidateSelection(events : Master.Data) -> dict:
     return output
 
 
-def AnalysePi0Selection(events : Master.Data, data : bool = False, correction = None, correction_params : dict = None) -> dict:
+def AnalysePi0Selection(events : Master.Data, data : bool = False, correction : callable = None, correction_params : dict = None) -> dict:
     """ Analyse the pi0 selection.
 
     Args:
         events (Master.Data): events to look at
         data (bool): is the ntuple file data or MC
-        energy_correction_factor (float, optional): linear correction factor to shower energies. Defaults to 1.
+        correction (callable, optional): shower energy correction. Defaults to None.
+        correction_params (dict, optional): shower energy correction parameters. Defaults to None.
 
     Returns:
         dict: output data
-    """
+    """    
     def null_tag():
         tag = Tags.Tags()
         tag["null"] = Tags.Tag(mask = (events.eventNum < -1))
@@ -227,16 +236,6 @@ def AnalysePi0Selection(events : Master.Data, data : bool = False, correction = 
     events.Filter([mask], [mask]) # technically is an event level cut as we only try to find 1 pi0 in the final state, two is more complicated
     photonCandidates = photonCandidates[mask]
 
-    #* opening angle
-    shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photonCandidates)
-    angle = ak.fill_none(ak.pad_none(shower_pairs.reco_angle, 1, -1), -999, -1)
-    mask = (angle > (10 * np.pi / 180)) & (angle < (80 * np.pi / 180))
-    mask = ak.flatten(mask) # 1 pi0
-    tags = null_tag() if data else Tags.GeneratePi0Tags(events, photonCandidates)
-    output["angle"] = MakeOutput(angle, tags, [(10 * np.pi / 180), (80 * np.pi / 180)])
-    events.Filter([mask], [mask])
-    photonCandidates = photonCandidates[mask]
-
     #* invariant mass
     shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photonCandidates)
 
@@ -247,17 +246,23 @@ def AnalysePi0Selection(events : Master.Data, data : bool = False, correction = 
         le = correction(shower_pairs.reco_lead_energy, **correction_params)
         se = correction(shower_pairs.reco_sub_energy, **correction_params)
 
-    print(le)
-    print(se)
-    print(shower_pairs.reco_angle)
     mass = shower_pairs.Mass(le, se, shower_pairs.reco_angle)
-    print(f"{mass=}")
     mass = ak.fill_none(ak.pad_none(mass, 1, -1), -999, -1)
-    print(f"{mass=}")
     mask = (mass > 50) & (mass < 250)
     mask = ak.flatten(mask) # 1 pi0
     tags = null_tag() if data else Tags.GeneratePi0Tags(events, photonCandidates)
     output["mass"] = MakeOutput(mass, tags, [50, 250])
+    output["mass_event_tag"] = MakeOutput(None, Tags.GenerateTrueFinalStateTags(events), None)
+    events.Filter([mask], [mask])
+    photonCandidates = photonCandidates[mask]
+
+    #* opening angle
+    shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photonCandidates)
+    angle = ak.fill_none(ak.pad_none(shower_pairs.reco_angle, 1, -1), -999, -1)
+    mask = (angle > (10 * np.pi / 180)) & (angle < (80 * np.pi / 180))
+    mask = ak.flatten(mask) # 1 pi0
+    tags = null_tag() if data else Tags.GeneratePi0Tags(events, photonCandidates)
+    output["angle"] = MakeOutput(angle, tags, [(10 * np.pi / 180), (80 * np.pi / 180)])
     events.Filter([mask], [mask])
     photonCandidates = photonCandidates[mask]
 
@@ -268,38 +273,57 @@ def AnalysePi0Selection(events : Master.Data, data : bool = False, correction = 
 
     return output
 
-def AnalyseRegions(events : Master.Data, photon_mask : ak.Array, is_data : bool, correction = None, correction_params : dict = None):
+
+def AnalyseRegions(events : Master.Data, photon_mask : ak.Array, is_data : bool, correction : callable = None, correction_params : dict = None) -> tuple[dict, dict]:
+    """ Create masks which desribe the truth and reco regions for various exlusive cross sections.
+
+    Args:
+        events (Master.Data): events to look at
+        photon_mask (ak.Array): mask for pi0 photon shower candidates
+        is_data (bool): is this a data ntuple?
+        correction (callable, optional): shower energy correction. Defaults to None.
+        correction_params (dict, optional): shower energy correction parameters. Defaults to None.
+
+    Returns:
+        tuple[dict, dict]: truth and reco regions
+    """
     truth_regions = EventSelection.create_regions(events.trueParticles.nPi0, events.trueParticles.nPiPlus) if is_data == False else None
 
-    reco_pi0_counts = EventSelection.count_pi0_candidates(events, exactly_two_photons = True, photon_mask = photon_mask, correction = correction, correction_params = correction_params)
+    reco_pi0_counts = EventSelection.count_pi0_candidates(events, exactly_two_photons = True, photon_mask = photon_mask, correction = cross_section.EnergyCorrection.shower_energy_correction[correction], correction_params = correction_params)
     reco_pi_plus_counts_mom_cut = EventSelection.count_charged_pi_candidates(events, energy_cut = None)
     reco_regions = EventSelection.create_regions(reco_pi0_counts, reco_pi_plus_counts_mom_cut)
     return truth_regions, reco_regions
 
 
 # @Processing.log_process
-def run(i, file, n_events, start, selected_events, args):
+def run(i, file, n_events, start, selected_events, args) -> dict:
     events = Master.Data(file, nEvents = n_events, start = start, nTuple_type = args["ntuple_type"]) # load data
 
     if args["data"] == True:
-        fit_file = args["data_beam_quality_fit"]
+        beam_quality_fit_file = args["data_beam_quality_fit"]
     else:
-        fit_file = args["mc_beam_quality_fit"]
+        beam_quality_fit_file = args["mc_beam_quality_fit"]
 
     #* beam quality cuts
-    with open(fit_file, "r") as f:
-        fit_values = json.load(f)
+    with open(beam_quality_fit_file, "r") as f:
+        beam_quality_fit_values = json.load(f)
+
+    beam_quality_fit_values = cross_section.LoadConfiguration(beam_quality_fit_file)
+
+    do_scraper_cut = any(s == BeamParticleSelection.BeamScraper for s in args["beam_selection"]["selections"]) # remove with new cut handling
+
+    beam_scraper_fit_values = cross_section.LoadConfiguration(args["mc_beam_scraper_fit"])
 
     #* shower energy correction
-    if "correction_params" in args:
+    if args["correction_params"] is not None:
         with open(args["correction_params"], "r") as f:
             correction_params = json.load(f)
     else:
         correction_params = None
 
     print("beam particle selection")
-    beam_selection_mask = BeamParticleSelection.CreateDefaultSelection(events, args["data"], fit_values, return_table = False) # make this premptively to save masks to file
-    output_beam = AnalyseBeamSelection(events, args["data"], fit_values) # events are cut after this
+    beam_selection_mask = BeamParticleSelection.CreateDefaultSelection(events, args["data"], beam_quality_fit_values, args["beam_selection"]["arguments"][-1]["pdg_hyp"], do_scraper_cut, beam_scraper_fit_values, args["beam_selection"]["arguments"][-1]["KE_range"], args["beam_selection"]["arguments"][-1]["cut"], return_table = False) # make this premptively to save masks to file
+    output_beam = AnalyseBeamSelection(events, args["data"], beam_quality_fit_values, beam_scraper_fit_values, args) # events are cut after this
 
     print("PFO pre-selection")
     good_PFO_mask = PFOSelection.GoodShowerSelection(events) 
@@ -314,8 +338,8 @@ def run(i, file, n_events, start, selected_events, args):
     output_photon = AnalysePhotonCandidateSelection(events.Filter(returnCopy = True))
 
     print("pi0 selection")
-    pi0_selection_mask = EventSelection.Pi0Selection(events, photon_selection_mask, correction = args["correction"], correction_params = correction_params)
-    output_pi0 = AnalysePi0Selection(events.Filter(returnCopy = True), args["data"], args["correction"], correction_params)
+    pi0_selection_mask = EventSelection.Pi0Selection(events, photon_selection_mask, correction = cross_section.EnergyCorrection.shower_energy_correction[args["correction"]], correction_params = correction_params)
+    output_pi0 = AnalysePi0Selection(events.Filter(returnCopy = True), args["data"], cross_section.EnergyCorrection.shower_energy_correction[args["correction"]], correction_params)
 
     print("regions")
     truth_regions, reco_regions = AnalyseRegions(events, photon_selection_mask, args["data"], args["correction"], correction_params)
@@ -340,260 +364,269 @@ def run(i, file, n_events, start, selected_events, args):
     return output
 
 
-def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str):
+def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, norm : float):
     """ Beam particle selection plots.
 
     Args:
         output_mc (dict): mc to plot
         output_data (dict): data to plot
         outDir (str): output directory
+        norm (float): plot normalisation
     """
 
-    norm = False if output_data is None else True
+    norm = False if output_data is None else norm
+    with PdfPages(outDir + "beam.pdf") as pdf:
 
-    bar_data = []
-    for tag in output_mc["pi_beam"]["value"]:
-        bar_data.extend([tag] * output_mc["pi_beam"]["value"][tag])
-    Plots.PlotBar(bar_data, xlabel = "True particle ID")
-    Plots.Save("pi_beam", outDir)
+        bar_data = []
+        for tag in output_mc["pi_beam"]["value"]:
+            bar_data.extend([tag] * output_mc["pi_beam"]["value"][tag])
+        Plots.PlotBar(bar_data, xlabel = "True particle ID")
+        pdf.savefig()
 
-    if output_data is None:
-        Plots.PlotBar(output_mc["pandora_tag"]["value"], xlabel = "Pandora tag")
-    else:
-        scale = ak.count(output_data["pandora_tag"]["value"]) / ak.count(output_mc["pandora_tag"]["value"])
+        if output_data is None:
+            Plots.PlotBar(output_mc["pandora_tag"]["value"], xlabel = "Pandora tag")
+        else:
+            Plots.PlotBarComparision(output_mc["pandora_tag"]["value"], output_data["pandora_tag"]["value"], label_1 = "MC", label_2 = "Data", xlabel = "pandora beam tag", fraction = True, barlabel = True)
+        pdf.savefig()
 
-        pandora_tag_scaled = []
-        u, c = np.unique(output_mc["pandora_tag"]["value"], return_counts = True)
-        for i, j in zip(u, c):
-            pandora_tag_scaled.extend([i]* int(scale * j))
+        if output_data:
+            Plots.PlotTagged(output_mc["dxy"]["value"], output_mc["dxy"]["tags"], data2 = output_data["dxy"]["value"], bins = args.nbins, x_label = "$\delta_{xy}$", y_scale = "log", x_range = [0, 5], norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["dxy"]["value"], output_mc["dxy"]["tags"], bins = args.nbins, x_label = "$\delta_{xy}$", y_scale = "log", x_range = [0, 5], norm = norm)
+        Plots.DrawCutPosition(output_mc["dxy"]["cuts"][0], arrow_length = 1, face = "left")
+        pdf.savefig()
 
-        Plots.PlotBarComparision(pandora_tag_scaled, output_data["pandora_tag"]["value"], label_1 = "MC", label_2 = "Data", xlabel = "pandora tag", ylabel = "Counts (MC scaled to data)")
-    Plots.Save("pandora_tag", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["dz"]["value"], output_mc["dz"]["tags"], data2 = output_data["dz"]["value"], bins = args.nbins, x_label = "$\delta_{z}$", y_scale = "log", x_range = [-10, 10], norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["dz"]["value"], output_mc["dz"]["tags"], bins = args.nbins, x_label = "$\delta_{z}$", y_scale = "log", x_range = [-10, 10], norm = norm)
+        Plots.DrawCutPosition(min(output_mc["dz"]["cuts"]), arrow_length = 1, face = "right")
+        Plots.DrawCutPosition(max(output_mc["dz"]["cuts"]), arrow_length = 1, face = "left")
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["michel_score"]["value"], output_mc["michel_score"]["tags"], data2 = output_data["michel_score"]["value"], x_range = (0, 1), y_scale = "log", bins = args.nbins, x_label = "Michel score", ncols = 3, norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["michel_score"]["value"], output_mc["michel_score"]["tags"], x_range = (0, 1), y_scale = "log", bins = args.nbins, x_label = "Michel score", ncols = 3, norm = norm)
-    Plots.DrawCutPosition(output_mc["michel_score"]["cuts"][0], face = "left")
-    Plots.Save("michel_score", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["cos_theta"]["value"], output_mc["cos_theta"]["tags"], data2 = output_data["cos_theta"]["value"], x_label = "$\cos(\\theta)$", y_scale = "log", bins = args.nbins, x_range = [0.9, 1], norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["cos_theta"]["value"], output_mc["cos_theta"]["tags"], x_label = "$\cos(\\theta)$", y_scale = "log", bins = args.nbins, x_range = [0.9, 1], norm = norm)
 
-    if output_data:
-        Plots.PlotTagged(output_mc["dxy"]["value"], output_mc["dxy"]["tags"], data2 = output_data["dxy"]["value"], bins = args.nbins, x_label = "$\delta_{xy}$", y_scale = "log", x_range = [0, 5], norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["dxy"]["value"], output_mc["dxy"]["tags"], bins = args.nbins, x_label = "$\delta_{xy}$", y_scale = "log", x_range = [0, 5], norm = norm)
-    Plots.DrawCutPosition(output_mc["dxy"]["cuts"][0], arrow_length = 1, face = "left")
-    Plots.Save("dxy", outDir)
+        Plots.DrawCutPosition(output_mc["cos_theta"]["cuts"][0], arrow_length = 0.02)
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["dz"]["value"], output_mc["dz"]["tags"], data2 = output_data["dz"]["value"], bins = args.nbins, x_label = "$\delta_{z}$", y_scale = "log", x_range = [-10, 10], norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["dz"]["value"], output_mc["dz"]["tags"], bins = args.nbins, x_label = "$\delta_{z}$", y_scale = "log", x_range = [-10, 10], norm = norm)
-    Plots.DrawCutPosition(min(output_mc["dz"]["cuts"]), arrow_length = 1, face = "right")
-    Plots.DrawCutPosition(max(output_mc["dz"]["cuts"]), arrow_length = 1, face = "left")
-    Plots.Save("dz", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["beam_endPos_z"]["value"], output_mc["beam_endPos_z"]["tags"], data2 = output_data["beam_endPos_z"]["value"], bins = args.nbins, x_label = "Beam end position z (cm)", x_range = [0, 700], norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["beam_endPos_z"]["value"], output_mc["beam_endPos_z"]["tags"], bins = args.nbins, x_label = "Beam end position z (cm)", x_range = [0, 700], norm = norm)
 
-    if output_data:
-        Plots.PlotTagged(output_mc["cos_theta"]["value"], output_mc["cos_theta"]["tags"], data2 = output_data["cos_theta"]["value"], x_label = "$\cos(\\theta)$", y_scale = "log", bins = args.nbins, x_range = [0.9, 1], norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["cos_theta"]["value"], output_mc["cos_theta"]["tags"], x_label = "$\cos(\\theta)$", y_scale = "log", bins = args.nbins, x_range = [0.9, 1], norm = norm)
+        Plots.DrawCutPosition(output_mc["beam_endPos_z"]["cuts"][0], face = "left", arrow_length = 50)
+        pdf.savefig()
 
-    Plots.DrawCutPosition(output_mc["cos_theta"]["cuts"][0], arrow_length = 0.02)
-    Plots.Save("cos_theta", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["michel_score"]["value"], output_mc["michel_score"]["tags"], data2 = output_data["michel_score"]["value"], x_range = (0, 1), y_scale = "log", bins = args.nbins, x_label = "Michel score", ncols = 2, norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["michel_score"]["value"], output_mc["michel_score"]["tags"], x_range = (0, 1), y_scale = "log", bins = args.nbins, x_label = "Michel score", ncols = 2, norm = norm)
+        Plots.DrawCutPosition(output_mc["michel_score"]["cuts"][0], face = "left")
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["beam_endPos_z"]["value"], output_mc["beam_endPos_z"]["tags"], data2 = output_data["beam_endPos_z"]["value"], bins = args.nbins, x_label = "Beam end position z (cm)", x_range = [0, 600], norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["beam_endPos_z"]["value"], output_mc["beam_endPos_z"]["tags"], bins = args.nbins, x_label = "Beam end position z (cm)", x_range = [0, 600], norm = norm)
+        if output_data:
+            Plots.PlotTagged(output_mc["median_dEdX"]["value"], output_mc["median_dEdX"]["tags"], data2 = output_data["median_dEdX"]["value"], bins = args.nbins, y_scale = "log", x_range = [0, 10], x_label = "Median $dE/dX$ (MeV/cm)", norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["median_dEdX"]["value"], output_mc["median_dEdX"]["tags"], bins = args.nbins, y_scale = "log", x_range = [0, 10], x_label = "Median $dE/dX$ (MeV/cm)", norm = norm)
 
-    Plots.DrawCutPosition(output_mc["beam_endPos_z"]["cuts"][0], face = "left", arrow_length = 50)
-    Plots.Save("beam_endPos_z", outDir)
+        Plots.DrawCutPosition(output_mc["median_dEdX"]["cuts"][0], face = "left", arrow_length = 2)
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["median_dEdX"]["value"], output_mc["median_dEdX"]["tags"], data2 = output_data["median_dEdX"]["value"], bins = args.nbins, y_scale = "log", x_range = [0, 10], x_label = "Median $dE/dX$ (MeV/cm)", norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["median_dEdX"]["value"], output_mc["median_dEdX"]["tags"], bins = args.nbins, y_scale = "log", x_range = [0, 10], x_label = "Median $dE/dX$ (MeV/cm)", norm = norm)
-
-    Plots.DrawCutPosition(output_mc["median_dEdX"]["cuts"][0], face = "left", arrow_length = 2)
-    Plots.Save("median_dEdX", outDir)
-
-    bar_data = []
-    for t in output_mc["final_tags"]["tags"]:
-        bar_data.extend([t] * ak.sum(output_mc["final_tags"]["tags"][t].mask))
-    Plots.PlotBar(bar_data, xlabel = "True particle ID")
-    Plots.Save("final_tags", outDir)
+        bar_data = []
+        for t in output_mc["final_tags"]["tags"]:
+            bar_data.extend([t] * ak.sum(output_mc["final_tags"]["tags"][t].mask))
+        Plots.PlotBar(bar_data, xlabel = "True particle ID")
+        pdf.savefig()
     return
 
 
-def MakePiPlusSelectionPlots(output_mc : dict, output_data : dict, outDir : str):
+def MakePiPlusSelectionPlots(output_mc : dict, output_data : dict, outDir : str, norm : float):
     """ Pi plus selection plots.
 
     Args:
-        output (dict): data to plot
+        output_mc (dict): mc to plot
+        output_data (dict): data to plot
         outDir (str): output directory
+        norm (float): plot normalisation
     """
 
-    norm = False if output_data is None else True
+    norm = False if output_data is None else norm
+    with PdfPages(outDir + "piplus.pdf") as pdf:
+        if "track_score_all" in output_mc:
+            if output_data:
+                Plots.PlotTagged(output_mc["track_score_all"]["value"], output_mc["track_score_all"]["tags"], data2 = output_data["track_score_all"]["value"], y_scale = "log", x_label = "track score", norm = norm)
+            else:
+                Plots.PlotTagged(output_mc["track_score_all"]["value"], output_mc["track_score_all"]["tags"], y_scale = "log", x_label = "track score", norm = norm)
+            pdf.savefig()
 
-    if "track_score_all" in output_mc:
         if output_data:
-            Plots.PlotTagged(output_mc["track_score_all"]["value"], output_mc["track_score_all"]["tags"], data2 = output_data["track_score_all"]["value"], y_scale = "log", x_label = "track score", norm = norm)
+            Plots.PlotTagged(output_mc["track_score"]["value"], output_mc["track_score"]["tags"], data2 = output_data["track_score"]["value"], x_range = [0, 1], y_scale = "linear", bins = args.nbins, ncols = 4, x_label = "track score", norm = norm)
         else:
-            Plots.PlotTagged(output_mc["track_score_all"]["value"], output_mc["track_score_all"]["tags"], y_scale = "log", x_label = "track score", norm = norm)
-        Plots.Save("track_score_all", outDir)
+            Plots.PlotTagged(output_mc["track_score"]["value"], output_mc["track_score"]["tags"], x_range = [0, 1], y_scale = "linear", bins = args.nbins, ncols = 4, x_label = "track score", norm = norm)
+        
+        Plots.DrawCutPosition(output_mc["track_score"]["cuts"][0], face = "right")
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["track_score"]["value"], output_mc["track_score"]["tags"], data2 = output_data["track_score"]["value"], x_range = [0, 1], y_scale = "log", bins = args.nbins, ncols = 5, x_label = "track score", norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["track_score"]["value"], output_mc["track_score"]["tags"], x_range = [0, 1], y_scale = "log", bins = args.nbins, ncols = 5, x_label = "track score", norm = norm)
-    
-    Plots.DrawCutPosition(output_mc["track_score"]["cuts"][0], face = "right")
-    Plots.Save("track_score", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["nHits"]["value"], output_mc["nHits"]["tags"], data2 = output_data["nHits"]["value"], bins = args.nbins, ncols = 2, x_range = [0, 500], x_label = "nHits", norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["nHits"]["value"], output_mc["nHits"]["tags"], bins = args.nbins, ncols = 2, x_range = [0, 500], x_label = "nHits", norm = norm)
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["nHits"]["value"], output_mc["nHits"]["tags"], data2 = output_data["nHits"]["value"], bins = args.nbins, ncols = 5, x_range = [0, 500], x_label = "nHits", norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["nHits"]["value"], output_mc["nHits"]["tags"], bins = args.nbins, ncols = 5, x_range = [0, 500], x_label = "nHits", norm = norm)
-    
-    Plots.Save("nHits", outDir)
+        Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc["nHits"]["value"]), ak.ravel(output_mc["completeness"]["value"]), ylabel = "completeness", xlabel = "nHits", x_range = [0, 500], bins = 50, norm = "column", c_scale = "linear")
+        Plots.DrawCutPosition(output_mc["nHits"]["cuts"][0], arrow_length = 100, arrow_loc = 0.1, color = "C6")
+        pdf.savefig()
 
-    Plots.PlotHist2D(ak.ravel(output_mc["completeness"]["value"]), ak.ravel(output_mc["nHits"]["value"]), xlabel = "completeness", ylabel = "nHits", y_range = [0, 500], bins = args.nbins)
-    Plots.DrawCutPosition(output_mc["nHits"]["cuts"][0], flip = True, arrow_length = 100, arrow_loc = 0.1, color = "red")
-    Plots.Save("nHits_vs_completeness", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["median_dEdX"]["value"], output_mc["median_dEdX"]["tags"], data2 = output_data["median_dEdX"]["value"], ncols = 2, x_range = [0, 5], x_label = "median $dEdX$ (MeV/cm)", bins = args.nbins, norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["median_dEdX"]["value"], output_mc["median_dEdX"]["tags"], ncols = 2, x_range = [0, 5], x_label = "median $dEdX$", bins = args.nbins, norm = norm)
+        Plots.DrawCutPosition(min(output_mc["median_dEdX"]["cuts"]), arrow_length = 0.5, face = "right")
+        Plots.DrawCutPosition(max(output_mc["median_dEdX"]["cuts"]), arrow_length = 0.5, face = "left")
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["median_dEdX"]["value"], output_mc["median_dEdX"]["tags"], data2 = output_data["median_dEdX"]["value"], ncols = 3, x_range = [0, 6], x_label = "median $dEdX$", bins = args.nbins, norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["median_dEdX"]["value"], output_mc["median_dEdX"]["tags"], ncols = 3, x_range = [0, 6], x_label = "median $dEdX$", bins = args.nbins, norm = norm)
-    Plots.DrawCutPosition(min(output_mc["median_dEdX"]["cuts"]), arrow_length = 0.5, face = "right")
-    Plots.DrawCutPosition(max(output_mc["median_dEdX"]["cuts"]), arrow_length = 0.5, face = "left")
-    Plots.Save("median_dEdX", outDir)
-
-
-    bar_data = []
-    for t in output_mc["final_tags"]["tags"]:
-        bar_data.extend([t] * ak.sum(output_mc["final_tags"]["tags"][t].mask))
-    Plots.PlotBar(bar_data, xlabel = "true particle ID")
-    Plots.Save("true_particle_ID", outDir)
+        bar_data = []
+        for t in output_mc["final_tags"]["tags"]:
+            bar_data.extend([t] * ak.sum(output_mc["final_tags"]["tags"][t].mask))
+        Plots.PlotBar(bar_data, xlabel = "true particle ID")
+        pdf.savefig()
     return
 
 
-def MakePhotonCandidateSelectionPlots(output_mc : dict, output_data : dict, outDir : str):
+def MakePhotonCandidateSelectionPlots(output_mc : dict, output_data : dict, outDir : str, norm : float):
     """ Photon candidate plots.
 
     Args:
-        output (dict): data to plot
+        output_mc (dict): mc to plot
+        output_data (dict): data to plot
         outDir (str): output directory
+        norm (float): plot normalisation
     """
     
-    norm = False if output_data is None else True
-    
-    if output_data:
-        Plots.PlotTagged(output_mc["em_score"]["value"], output_mc["em_score"]["tags"], data2 = output_data["em_score"]["value"], bins = args.nbins, x_range = [0, 1], ncols = 5, x_label = "em score", norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["em_score"]["value"], output_mc["em_score"]["tags"], bins = args.nbins, x_range = [0, 1], ncols = 5, x_label = "em score", norm = norm)
+    norm = False if output_data is None else norm
+    with PdfPages(outDir + "photon.pdf") as pdf:    
+        if output_data:
+            Plots.PlotTagged(output_mc["em_score"]["value"], output_mc["em_score"]["tags"], data2 = output_data["em_score"]["value"], bins = args.nbins, x_range = [0, 1], ncols = 4, x_label = "em score", norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["em_score"]["value"], output_mc["em_score"]["tags"], bins = args.nbins, x_range = [0, 1], ncols = 4, x_label = "em score", norm = norm)
 
-    Plots.DrawCutPosition(output_mc["em_score"]["cuts"][0])
-    Plots.Save("em_score", outDir)
+        Plots.DrawCutPosition(output_mc["em_score"]["cuts"][0])
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["nHits"]["value"], output_mc["nHits"]["tags"], data2 = output_data["nHits"]["value"], bins = args.nbins, x_label = "number of hits", x_range = [0, 1000], norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["nHits"]["value"], output_mc["nHits"]["tags"], bins = args.nbins, x_label = "number of hits", x_range = [0, 1000], norm = norm)
-    Plots.DrawCutPosition(output_mc["nHits"]["cuts"][0], arrow_length = 100)
-    Plots.Save("nHits", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["nHits"]["value"], output_mc["nHits"]["tags"], data2 = output_data["nHits"]["value"], bins = args.nbins, x_label = "number of hits", x_range = [0, 1000], norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["nHits"]["value"], output_mc["nHits"]["tags"], bins = args.nbins, x_label = "number of hits", x_range = [0, 1000], norm = norm)
+        Plots.DrawCutPosition(output_mc["nHits"]["cuts"][0], arrow_length = 100)
+        pdf.savefig()
 
-    Plots.PlotHist2D(ak.ravel(output_mc["nHits_completeness"]["value"]), ak.ravel(output_mc["nHits"]["value"]), bins = args.nbins, x_range = [0, 1],y_range = [0, 1000], xlabel = "completeness", ylabel = "number of hits")
-    Plots.DrawCutPosition(output_mc["nHits"]["cuts"][0], flip = True, arrow_length = 100, color = "red")
-    Plots.Save("nHits_vs_completeness", outDir)
+        Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc["nHits"]["value"]), ak.ravel(output_mc["nHits_completeness"]["value"]), bins = 50, y_range = [0, 1],x_range = [0, 800], ylabel = "completeness", xlabel = "number of hits", norm = "column")
+        Plots.DrawCutPosition(80, flip = False, arrow_length = 100, color = "C6")
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["beam_separation"]["value"], output_mc["beam_separation"]["tags"], data2 = output_data["beam_separation"]["value"], bins = args.nbins, x_range = [0, 150], x_label = "distance from PFO start to beam end position (cm)", norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["beam_separation"]["value"], output_mc["beam_separation"]["tags"], bins = args.nbins, x_range = [0, 150], x_label = "distance from PFO start to beam end position (cm)", norm = norm)
-    Plots.DrawCutPosition(min(output_mc["beam_separation"]["cuts"]), arrow_length = 30)
-    Plots.DrawCutPosition(max(output_mc["beam_separation"]["cuts"]), face = "left", arrow_length = 30)
-    Plots.Save("beam_separation", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["beam_separation"]["value"], output_mc["beam_separation"]["tags"], data2 = output_data["beam_separation"]["value"], bins = 31, x_range = [0, 93], x_label = "distance from PFO start to beam end position (cm)", norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["beam_separation"]["value"], output_mc["beam_separation"]["tags"], bins = 31, x_range = [0, 93], x_label = "distance from PFO start to beam end position (cm)", norm = norm)
+        Plots.DrawCutPosition(min(output_mc["beam_separation"]["cuts"]), arrow_length = 30)
+        Plots.DrawCutPosition(max(output_mc["beam_separation"]["cuts"]), face = "left", arrow_length = 30)
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["impact_parameter"]["value"], output_mc["impact_parameter"]["tags"], data2 = output_data["impact_parameter"]["value"], bins = args.nbins, x_range = [0, 60], x_label = "impact parameter wrt beam (cm)", norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["impact_parameter"]["value"], output_mc["impact_parameter"]["tags"], bins = args.nbins, x_range = [0, 60], x_label = "impact parameter wrt beam (cm)", norm = norm)
-    Plots.DrawCutPosition(output_mc["impact_parameter"]["cuts"][0], arrow_length = 20, face = "left")
-    Plots.Save("impact_parameter", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["impact_parameter"]["value"], output_mc["impact_parameter"]["tags"], data2 = output_data["impact_parameter"]["value"], bins = args.nbins, x_range = [0, 50], x_label = "impact parameter wrt beam (cm)", norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["impact_parameter"]["value"], output_mc["impact_parameter"]["tags"], bins = args.nbins, x_range = [0, 50], x_label = "impact parameter wrt beam (cm)", norm = norm)
+        Plots.DrawCutPosition(output_mc["impact_parameter"]["cuts"][0], arrow_length = 20, face = "left")
+        pdf.savefig()
 
-    Plots.PlotHist2D(ak.ravel(output_mc["impact_parameter_completeness"]["value"]), ak.ravel(output_mc["impact_parameter"]["value"]), bins = args.nbins, x_range = [0, 1], y_range = [0, 60], xlabel = "completeness", ylabel = "impact parameter wrt beam (cm)")
-    Plots.DrawCutPosition(output_mc["impact_parameter"]["cuts"][0], arrow_loc = 0.2, arrow_length = 20, face = "left", flip = True, color ="red")
-    Plots.Save("impact_parameter_vs_completeness", outDir)
+        Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc["impact_parameter"]["value"]), ak.ravel(output_mc["impact_parameter_completeness"]["value"]), x_range = [0, 40], y_range = [0, 1], bins = 20, norm = "column", c_scale = "linear", ylabel = "completeness", xlabel = "impact parameter wrt beam (cm)")
+        Plots.DrawCutPosition(20, arrow_length = 20, face = "left", color = "red")
+        pdf.savefig()
 
-
-    bar_data = []
-    for t in output_mc["final_tags"]["tags"]:
-        bar_data.extend([t] * ak.sum(output_mc["final_tags"]["tags"][t].mask))
-    Plots.PlotBar(bar_data, xlabel = "true particle ID")
-    Plots.Save("true_particle_ID", outDir)
+        bar_data = []
+        for t in output_mc["final_tags"]["tags"]:
+            bar_data.extend([t] * ak.sum(output_mc["final_tags"]["tags"][t].mask))
+        Plots.PlotBar(bar_data, xlabel = "true particle ID")
+        pdf.savefig()
     return
 
 
-def MakePi0SelectionPlots(output_mc : dict, output_data : dict, outDir : str):
+def MakePi0SelectionPlots(output_mc : dict, output_data : dict, outDir : str, norm : float):
     """ Pi0 selection plots.
 
     Args:
-        output (dict): data to plot
+        output_mc (dict): mc to plot
+        output_data (dict): data to plot
         outDir (str): output directory
+        norm (float): plot normalisation
     """
-    norm = False if output_data is None else True
+    norm = False if output_data is None else norm
 
-    if output_data is not None:
-        scale = ak.count(output_data["n_photons"]["value"]) / ak.count(output_mc["n_photons"]["value"])
+    with PdfPages(outDir + "pi0.pdf") as pdf:
+        if output_data is not None:
+            scale = ak.count(output_data["n_photons"]["value"]) / ak.count(output_mc["n_photons"]["value"])
 
-        n_photons_scaled = []
-        u, c = np.unique(output_mc["n_photons"]["value"], return_counts = True)
-        for i, j in zip(u, c):
-            n_photons_scaled.extend([i]* int(scale * j))
+            n_photons_scaled = []
+            u, c = np.unique(output_mc["n_photons"]["value"], return_counts = True)
+            for i, j in zip(u, c):
+                n_photons_scaled.extend([i]* int(scale * j))
 
-        Plots.PlotBarComparision(n_photons_scaled, output_data["n_photons"]["value"], xlabel = "number of $\pi^{0}$ photon candidates", label_1 = "MC", label_2 = "Data")
-    else:
-        Plots.PlotBar(output_mc["n_photons"]["value"], xlabel = "number of $\pi^{0}$ photon candidates")
-    Plots.Save("n_photons", outDir)
+            Plots.PlotBarComparision(n_photons_scaled, output_data["n_photons"]["value"], xlabel = "number of $\pi^{0}$ photon candidates", label_1 = "MC", label_2 = "Data", fraction = True, barlabel = False)
+        else:
+            Plots.PlotBar(output_mc["n_photons"]["value"], xlabel = "number of $\pi^{0}$ photon candidates")
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["angle"]["value"], output_mc["angle"]["tags"], data2 = output_data["angle"]["value"], bins = args.nbins, x_label = "Opening angle (rad)", norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["angle"]["value"], output_mc["angle"]["tags"], bins = args.nbins, x_label = "Opening angle (rad)", norm = norm)
-    Plots.DrawCutPosition(min(output_mc["angle"]["cuts"]), face = "right", arrow_length = 0.25)
-    Plots.DrawCutPosition(max(output_mc["angle"]["cuts"]), face = "left", arrow_length = 0.25)
-    Plots.Save("angle", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["mass"]["value"], output_mc["mass"]["tags"], data2 = output_data["mass"]["value"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["mass"]["value"], output_mc["mass"]["tags"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
+        Plots.DrawCutPosition(min(output_mc["mass"]["cuts"]), face = "right", arrow_length = 50)
+        Plots.DrawCutPosition(max(output_mc["mass"]["cuts"]), face = "left", arrow_length = 50)
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["mass"]["value"], output_mc["mass"]["tags"], data2 = output_data["mass"]["value"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["mass"]["value"], output_mc["mass"]["tags"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
-    Plots.DrawCutPosition(min(output_mc["mass"]["cuts"]), face = "right", arrow_length = 50)
-    Plots.DrawCutPosition(max(output_mc["mass"]["cuts"]), face = "left", arrow_length = 50)
-    Plots.Save("mass_pi0_tags", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["mass"]["value"], output_mc["mass_event_tag"]["tags"], data2 = output_data["mass"]["value"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["mass"]["value"], output_mc["mass_event_tag"]["tags"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
+        Plots.DrawCutPosition(min(output_mc["mass"]["cuts"]), face = "right", arrow_length = 50)
+        Plots.DrawCutPosition(max(output_mc["mass"]["cuts"]), face = "left", arrow_length = 50)
+        pdf.savefig()
 
-    if output_data:
-        Plots.PlotTagged(output_mc["mass"]["value"], output_mc["event_tag"]["tags"], data2 = output_data["mass"]["value"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
-    else:
-        Plots.PlotTagged(output_mc["mass"]["value"], output_mc["event_tag"]["tags"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
-    Plots.DrawCutPosition(min(output_mc["mass"]["cuts"]), face = "right", arrow_length = 50)
-    Plots.DrawCutPosition(max(output_mc["mass"]["cuts"]), face = "left", arrow_length = 50)
-    Plots.Save("mass_fs_tags", outDir)
+        if output_data:
+            Plots.PlotTagged(output_mc["angle"]["value"], output_mc["angle"]["tags"], data2 = output_data["angle"]["value"], bins = args.nbins, x_label = "Opening angle (rad)", norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["angle"]["value"], output_mc["angle"]["tags"], bins = args.nbins, x_label = "Opening angle (rad)", norm = norm)
+        Plots.DrawCutPosition(min(output_mc["angle"]["cuts"]), face = "right", arrow_length = 0.25)
+        Plots.DrawCutPosition(max(output_mc["angle"]["cuts"]), face = "left", arrow_length = 0.25)
+        pdf.savefig()
+
     return
 
-def MakeRegionPlots(outputs_mc_masks : dict, outputs_data_masks : dict, out : str):
-    # Visualise the regions
-    Plots.plot_region_data(outputs_mc_masks["truth_regions"], compare_max=0, title="truth regions")
-    Plots.Save(out + "mc_truth_regions")
-    Plots.plot_region_data(outputs_mc_masks["reco_regions"], compare_max=0, title="reco regions")
-    Plots.Save(out + "mc_reco_regions")
-    # Compare the regions
-    Plots.compare_truth_reco_regions(outputs_mc_masks["reco_regions"], outputs_mc_masks["truth_regions"], title="")
-    Plots.Save(out + "mc_truth_vs_reco_regions")
 
-    if outputs_data_masks is not None:
+def MakeRegionPlots(outputs_mc_masks : dict, outputs_data_masks : dict, outDir : str):
+    """ Correlation matrices for truth and reco region selection.
+
+    Args:
+        outputs_mc_masks (dict): mc masks for each region
+        outputs_data_masks (dict): data masks for each region
+        outDir (str): output directory
+    """
+    with PdfPages(outDir + "regions.pdf") as pdf:
+        # Visualise the regions
+        Plots.plot_region_data(outputs_mc_masks["truth_regions"], compare_max=0, title="truth regions")
+        pdf.savefig()
         Plots.plot_region_data(outputs_mc_masks["reco_regions"], compare_max=0, title="reco regions")
-        Plots.Save(out + "data_reco_regions")
+        pdf.savefig()
+        # Compare the regions
+        Plots.compare_truth_reco_regions(outputs_mc_masks["reco_regions"], outputs_mc_masks["truth_regions"], title="")
+        pdf.savefig()
+
+        if outputs_data_masks is not None:
+            Plots.plot_region_data(outputs_mc_masks["reco_regions"], compare_max=0, title="reco regions")
+            pdf.savefig()
 
 
 def CalcualteCountMetrics(counts : pd.DataFrame) -> tuple:
@@ -764,7 +797,14 @@ def MergeOutputs(outputs : list) -> dict:
     return merged_output
 
 
-def MakeTables(output : dict, out : str, sample : "str"):
+def MakeTables(output : dict, out : str, sample : str):
+    """ Create cutflow tables.
+
+    Args:
+        output (dict): output data
+        out (str): output name
+        sample (str): sample name i.e. mc or data
+    """
     # output directories
     os.makedirs(out + "daughter_pi/", exist_ok = True)
     os.makedirs(out + "beam/", exist_ok = True)
@@ -774,7 +814,7 @@ def MakeTables(output : dict, out : str, sample : "str"):
     MakeFinalStateTables(output["beam"], out + "beam/")
     MakeParticleTables(output["pip"]       , out + "daughter_pi/", ["completeness"], sample)
     MakeParticleTables(output["photon"]    , out + "photon/", ["nHits_completeness", "impact_parameter_completeness"], sample)
-    MakeParticleTables(output["pi0"]       , out + "pi0/", ["n_photons", "event_tag"], sample)
+    MakeParticleTables(output["pi0"]       , out + "pi0/", ["n_photons", "event_tag", "mass_event_tag"], sample)
     if sample == "mc":
         MakeParticleTables(output["beam"]      , out + "beam/", ["no_selection"], sample)
         PiPlusBranchingFractions(output["beam"], out + "beam/")
@@ -788,30 +828,26 @@ def main(args):
     func_args["data"] = False
     print(func_args)
 
-    output_mc = MergeOutputs(Processing.mutliprocess(run, args.mc_file, args.batches, args.events, func_args, args.threads)) # run the main analysing method
+    output_mc = MergeOutputs(Processing.mutliprocess(run, [args.mc_file], args.batches, args.events, func_args, args.threads)) # run the main analysing method
 
     output_data = None
     if args.data_file is not None:
         func_args["data"] = True
-        output_data = MergeOutputs(Processing.mutliprocess(run, args.data_file, args.batches, args.events, func_args, args.threads)) # run the main analysing method
+        output_data = MergeOutputs(Processing.mutliprocess(run, [args.data_file], args.batches, args.events, func_args, args.threads)) # run the main analysing method
 
     # tables
     MakeTables(output_mc, args.out + "tables_mc/", "mc")
     if output_data is not None: MakeTables(output_data, args.out + "tables_data/", "data")
 
     # output directories
-    os.makedirs(args.out + "plots/daughter_pi/", exist_ok = True)
-    os.makedirs(args.out + "plots/beam/", exist_ok = True)
-    os.makedirs(args.out + "plots/photon/", exist_ok = True)
-    os.makedirs(args.out + "plots/pi0/", exist_ok = True)
-    os.makedirs(args.out + "plots/regions/", exist_ok = True)
+    os.makedirs(args.out + "plots/", exist_ok = True)
 
     # plots
-    MakeBeamSelectionPlots(output_mc["beam"], output_data["beam"] if output_data else None, args.out + "plots/beam/")
-    MakePiPlusSelectionPlots(output_mc["pip"], output_data["pip"] if output_data else None, args.out + "plots/daughter_pi/")
-    MakePhotonCandidateSelectionPlots(output_mc["photon"], output_data["photon"] if output_data else None, args.out + "plots/photon/")
-    MakePi0SelectionPlots(output_mc["pi0"], output_data["pi0"] if output_data else None, args.out + "plots/pi0/")
-    MakeRegionPlots(output_mc["masks"], output_data["masks"] if output_data else None, args.out + "plots/regions/")
+    MakeBeamSelectionPlots(output_mc["beam"], output_data["beam"] if output_data else None, args.out + "plots/", norm = args.norm)
+    MakePiPlusSelectionPlots(output_mc["pip"], output_data["pip"] if output_data else None, args.out + "plots/", norm = args.norm)
+    MakePhotonCandidateSelectionPlots(output_mc["photon"], output_data["photon"] if output_data else None, args.out + "plots/", norm = args.norm)
+    MakePi0SelectionPlots(output_mc["pi0"], output_data["pi0"] if output_data else None, args.out + "plots/", norm = args.norm)
+    MakeRegionPlots(output_mc["masks"], output_data["masks"] if output_data else None, args.out + "plots/")
 
     # masks
     cross_section.SaveSelection(args.out + args.mc_file[0].split("/")[-1].split(".")[0] + "_selection_masks.dill", output_mc["masks"])
@@ -830,10 +866,11 @@ if __name__ == "__main__":
     cross_section.ApplicationArguments.Processing(parser)
     cross_section.ApplicationArguments.Output(parser)
     cross_section.ApplicationArguments.Plots(parser)
+    cross_section.ApplicationArguments.Config(parser)
 
     args = parser.parse_args()
 
-    cross_section.ApplicationArguments.ResolveArgs(args)
+    args = cross_section.ApplicationArguments.ResolveArgs(args)
 
     rprint(vars(args))
     main(args)

@@ -162,6 +162,9 @@ class Data:
     def __init__(self, filename: str = None, nEvents: int = -1, start: int = 0, nTuple_type : Ntuple_Type = None, target_momentum : int = None):
         self.filename = filename
 
+        if start < 0:
+            raise ValueError("start cannot be less than zero")
+
         if nTuple_type is None:
             warnings.warn(f"nTuple type is not specified, assuming it is {Ntuple_Type.SHOWER_MERGING}")
             self.nTuple_type = Ntuple_Type.SHOWER_MERGING
@@ -846,7 +849,7 @@ class TrueParticleData(ParticleData):
 
     @property
     def beam_traj_pos(self) -> ak.Record:
-        self.LoadData("beam_traj_pos", ["true_beam_traj_X_SCE", "true_beam_traj_Y_SCE", "true_beam_traj_Z_SCE"], is_vector = True)
+        self.LoadData("beam_traj_pos", ["true_beam_traj_X", "true_beam_traj_Y", "true_beam_traj_Z"], is_vector = True)
         return getattr(self, f"_{type(self).__name__}__beam_traj_pos")
 
     @property
@@ -1012,6 +1015,16 @@ class TrueParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__nNucleus")
 
     @property
+    def true_beam_endProcess(self) -> ak.Array:
+        self.LoadData("true_beam_endProcess", "true_beam_endProcess")
+        return getattr(self, f"_{type(self).__name__}__true_beam_endProcess")
+
+    @property
+    def KE_front_face(self) -> type:
+        ind = ak.argmax(self.beam_traj_pos.z > 0, -1, keepdims = True)
+        return ak.flatten(self.beam_traj_KE[ind])
+
+    @property
     def pi0_MC(self) -> bool:
         if not hasattr(self, f"_{type(self).__name__}__pi0_MC"):
             # check if we are looking at pure pi0 MC or beam MC
@@ -1166,21 +1179,41 @@ class RecoParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__beam_cosmicScore")
 
     @property
+    def beam_endPos_SCE(self) -> ak.Record:
+        nTuples = [
+            ["reco_beam_calo_endX"],
+            ["reco_beam_calo_endY"],
+            ["reco_beam_calo_endZ"]
+        ]
+        self.LoadData("beam_endPos_SCE", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__beam_endPos_SCE")
+
+    @property
     def beam_endPos(self) -> ak.Record:
         nTuples = [
-            ["reco_beam_calo_endX", "reco_beam_endX"],
-            ["reco_beam_calo_endY", "reco_beam_endY"],
-            ["reco_beam_calo_endZ", "reco_beam_endZ"]
+            ["reco_beam_endX"],
+            ["reco_beam_endY"],
+            ["reco_beam_endZ"]
         ]
         self.LoadData("beam_endPos", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__beam_endPos")
 
     @property
+    def beam_startPos_SCE(self) -> ak.Record:
+        nTuples = [
+            ["reco_beam_calo_startX"], # the first name in the list is prioritised.
+            ["reco_beam_calo_startY"],
+            ["reco_beam_calo_startZ"]
+        ]
+        self.LoadData("beam_startPos_SCE", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__beam_startPos_SCE")
+
+    @property
     def beam_startPos(self) -> ak.Record:
         nTuples = [
-            ["reco_beam_calo_startX", "reco_beam_startX"], # the first name in the list is prioritised.
-            ["reco_beam_calo_startY", "reco_beam_startY"],
-            ["reco_beam_calo_startZ", "reco_beam_startZ"]
+            ["reco_beam_startX"], # the first name in the list is prioritised.
+            ["reco_beam_startY"],
+            ["reco_beam_startZ"]
         ]
         self.LoadData("beam_startPos", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__beam_startPos")
@@ -1207,8 +1240,13 @@ class RecoParticleData(ParticleData):
 
     @property
     def beam_dEdX(self) -> ak.Array:
-        self.LoadData("beam_dEdX", "reco_beam_calibrated_dEdX_SCE")
+        self.LoadData("beam_dEdX", "reco_beam_dEdX_SCE")
         return getattr(self, f"_{type(self).__name__}__beam_dEdX")
+
+    @property
+    def beam_dEdX_calibrated(self) -> ak.Array:
+        self.LoadData("beam_dEdX_calibrated", "reco_beam_calibrated_dEdX_SCE")
+        return getattr(self, f"_{type(self).__name__}__beam_dEdX_calibrated")
 
     @property
     def reco_reconstructable_beam_event(self) -> ak.Array:
