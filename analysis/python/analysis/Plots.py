@@ -1038,12 +1038,12 @@ def PlotHist2D(data_x, data_y, bins: int = 100, x_range: list = None, y_range: l
     return height, [xedges, yedges]
 
 
-def PlotHistComparison(datas, xRange: list = [], bins: int = 100, xlabel: str = "", title: str = "", labels: list = [], alpha: int = 1, histtype: str = "step", x_scale: str = "linear", y_scale: str = "linear", sf: int = 2, density: bool = True, annotation: str = None, newFigure: bool = True, colours : list = None):
+def PlotHistComparison(datas, x_range: list = [], bins: int = 100, xlabel: str = "", title: str = "", labels: list = [], alpha: int = 1, histtype: str = "step", x_scale: str = "linear", y_scale: str = "linear", sf: int = 2, density: bool = True, annotation: str = None, newFigure: bool = True, colours : list = None):
     """ Plots multiple histograms on one plot
 
     Args:
         datas (any): list of data sets to plot
-        xRange (list, optional): plot range for all data. Defaults to [].
+        x_range (list, optional): plot range for all data. Defaults to [].
     """
     if newFigure is True:
         plt.figure()
@@ -1051,9 +1051,9 @@ def PlotHistComparison(datas, xRange: list = [], bins: int = 100, xlabel: str = 
         colours = [None]*len(labels)
     for i in range(len(labels)):
         data = datas[i]
-        if xRange and len(xRange) == 2:
-            data = data[data > xRange[0]]
-            data = data[data < xRange[1]]
+        if x_range and len(x_range) == 2:
+            data = data[data > x_range[0]]
+            data = data[data < x_range[1]]
         if i == 0:
             _, edges = PlotHist(
                 data, bins, xlabel, title, labels[i], alpha, histtype, sf, density, color = colours[i], newFigure=False)
@@ -1067,11 +1067,11 @@ def PlotHistComparison(datas, xRange: list = [], bins: int = 100, xlabel: str = 
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
-def PlotHist2DComparison(x : list, y : list, x_range : list, y_range : list, x_labels = None, y_labels = None, titles = None, bins = 50, cmap = "plasma", func = None, orientation = "horizontal"):
+def PlotHist2DComparison(x : list, y : list, x_range : list, y_range : list, xlabels = None, ylabels = None, titles = None, bins = 50, cmap = "plasma", func = None, orientation = "horizontal"):
     """ Plots multiple 2D histograms with a shared colour bar.
     """
-    if x_labels is None: x_labels = [""]*len(x)
-    if y_labels is None: y_labels = [""]*len(y)
+    if xlabels is None: xlabels = [""]*len(x)
+    if ylabels is None: ylabels = [""]*len(y)
     if titles is None: titles = [""] * len(x)
 
     dim = FigureDimensions(len(x), orientation)
@@ -1090,8 +1090,8 @@ def PlotHist2DComparison(x : list, y : list, x_range : list, y_range : list, x_l
             _, _, _, im = plt.hist2d(x[i], y[i], bins, range = ranges, cmin = 1, vmin = 0, vmax = vmax, cmap = cmap)
         else:
             _, _, _, im = func(x = x[i], y = y[i], bins = bins, ranges = ranges, cmin = 1, vmin = 0, vmax = vmax, cmap = cmap)
-        plt.xlabel(x_labels[i])
-        plt.ylabel(y_labels[i])
+        plt.xlabel(xlabels[i])
+        plt.ylabel(ylabels[i])
         plt.title(titles[i])
     plt.tight_layout()
     cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
