@@ -849,7 +849,7 @@ class TrueParticleData(ParticleData):
 
     @property
     def beam_traj_pos(self) -> ak.Record:
-        self.LoadData("beam_traj_pos", ["true_beam_traj_X_SCE", "true_beam_traj_Y_SCE", "true_beam_traj_Z_SCE"], is_vector = True)
+        self.LoadData("beam_traj_pos", ["true_beam_traj_X", "true_beam_traj_Y", "true_beam_traj_Z"], is_vector = True)
         return getattr(self, f"_{type(self).__name__}__beam_traj_pos")
 
     @property
