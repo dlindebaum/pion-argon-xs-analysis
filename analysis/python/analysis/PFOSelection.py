@@ -234,7 +234,7 @@ def get_impact_parameter(direction, start_pos, beam_vertex):
     return vector.magnitude(cross)
 
 
-def find_beam_impact_parameters(events):
+def find_beam_impact_parameters(events : Master.Data):
     """
     Finds the impact parameter of each reconstructed PFO in `events`
     with the reconstructed beam vertex.
@@ -274,7 +274,7 @@ def find_beam_separations(events):
         Separations between the PFOs starts and beam vertex.
     """
     starts = events.recoParticles.startPos
-    beam_vertex = events.recoParticles.beam_endPos
+    beam_vertex = events.recoParticles.beam_endPos # Note: this is uncorrected for space charge effects beacuase no PFO position were corrected in the reconstruction.
     return vector.dist(starts, beam_vertex)
 
 

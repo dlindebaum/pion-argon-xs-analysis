@@ -14,12 +14,13 @@ import awkward as ak
 import numpy as np
 import matplotlib.pyplot as plt
 
+from matplotlib.backends.backend_pdf import PdfPages
 from rich import print
-from python.analysis import Master, BeamParticleSelection, vector, Plots, cross_section
+from python.analysis import Master, BeamParticleSelection, vector, Plots, cross_section, Fitting
 from python.analysis.shower_merging import SetPlotStyle
 
 
-def Fit_Vector(v : ak.Record, bins : int) -> tuple:
+def Fit_Vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
     """ Gaussian fit to each component in the vector.
 
     Args:
@@ -29,22 +30,28 @@ def Fit_Vector(v : ak.Record, bins : int) -> tuple:
     Returns:
         tuple: fit paramaters for each component.
     """
-    a = {}
     mu = {}
+    mu_err = {}
     sigma = {}
+    sigma_err = {}
     for i in ["x", "y", "z"]:
-        popt, _ = cross_section.Fit_Gaussian(v[i], bins = bins)
-        a[i] = popt[0]
+        data = v[i]
+        y, bins_edges = np.histogram(np.array(data[~np.isnan(data)]), bins = bins, range = sorted([np.nanpercentile(data, 10), np.nanpercentile(data, 90)])) # fit only to  data within the 10th and 90th percentile of data to exclude large tails in the distriubtion.
+        bin_centers = (bins_edges[1:] + bins_edges[:-1]) / 2
+        yerr = np.sqrt(y) # Poisson error
+
+        popt, perr = Fitting.Fit(bin_centers, y, yerr, Fitting.gaussian)
+
         mu[i] = popt[1]
-        sigma[i] =popt[2]
+        sigma[i] = abs(popt[2])
+        mu_err[i] = abs(perr[1])
+        sigma_err[i] = abs(perr[2])
 
-    print(mu)
-    print(sigma)
-    return a, mu, sigma
+    return mu, sigma, mu_err, sigma_err
 
 
-def plot(value : ak.Array, x_label : str, range : list, mu : float, sigma : float, name : str):
-    """ Plot data pluse the gaussian fit made on the data.
+def plot(value : ak.Array, x_label : str, mu : float, sigma : float, color : str = None, label : str = None, range : list = None):
+    """ Plot data plus the gaussian fit made on the data.
 
     Args:
         value (ak.Array): date to plot
@@ -54,106 +61,141 @@ def plot(value : ak.Array, x_label : str, range : list, mu : float, sigma : floa
         sigma (float): rms of fit
         name (str): plot name
     """
-    heights, edges = Plots.PlotHist(value, xlabel = x_label, bins = 50, range = [mu - range, mu + range])
+    y, edges = np.histogram(np.array(value), bins = 50, range = [mu - 5 * sigma, mu + 5 * sigma] if range is None else range)
     x = (edges[1:] + edges[:-1]) / 2
-    y = cross_section.Gaussian(x, max(heights), mu, sigma)
+
+    y_pred = Fitting.gaussian.func(x, max(y), mu, sigma)
 
     x_interp = np.linspace(min(x), max(x), 200)
-    y_interp = cross_section.Gaussian(x_interp, max(heights), mu, sigma)
+    y_interp = Fitting.gaussian.func(x_interp, max(y), mu, sigma)
 
-    mse = np.sqrt(np.mean((heights - y)**2))
-    plt.errorbar(x, y, mse, fmt = "x",color = "black") # use mse for errors for now, if the fit is poor, then perhaps 1 sigma deviations in the fit or residual
-    plt.errorbar(x_interp, y_interp, color = "black")
+    yerr = (y * (1 - (y / np.sum(y))))**0.5
+
+    chisqr = np.sum(((y - y_pred)/ yerr)**2)
+    ndf = len(y) - 2
+
+    Plots.Plot(x, y/np.sum(y), yerr = yerr/np.sum(y), color = color, marker = "x", linestyle = "", capsize = 3, newFigure = False)
+    Plots.Plot(x_interp, y_interp / np.sum(y), xlabel = x_label, ylabel = "Counts (area normalised)", color = color, linestyle = "-", label = label + " $\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2f}", newFigure = False)
     plt.ylim(0)
-    Plots.Save(name)
 
 
-def MakePlots(events : Master.Data, fit_values : dict, out : str):
-    """ make plots to see how well the gaussian fit performs.
+def plot_range(mu : float, sigma : float, tolerance : float = 5) -> list:
+    """ Compute range of plot based on properties of the Gaussian.
 
     Args:
-        events (Master.Data): data to look at
-        fit_values (dict): fit values
+        mu (float): mean
+        sigma (float): rms
+        tolerance (float, optional): how many standard deviations to extend the range by. Defaults to 5.
+
+    Returns:
+        list: plot range
+    """
+    return sorted([mu - tolerance * sigma, mu + tolerance * sigma])
+
+
+def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data, data_fits : dict, out : str):
+    """ Make plots showing the fits for MC and or Data.
+
+    Args:
+        mc_events (Master.Data): mc
+        mc_fits (dict): fits made on mc
+        data_events (Master.Data): data
+        data_fits (dict): fits made on data
+        out (str): output directory
     """
     SetPlotStyle()
-    plot(events.recoParticles.beam_startPos.x, "x (cm)", 25, fit_values["mu_x"], fit_values["sigma_x"], args.out + "x")
-    plot(events.recoParticles.beam_startPos.y, "y (cm)", 25, fit_values["mu_y"], fit_values["sigma_y"], args.out + "y")
-    plot(events.recoParticles.beam_startPos.z, "z (cm)", 10, fit_values["mu_z"], fit_values["sigma_z"],args.out + "z")
 
-    beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos, events.recoParticles.beam_startPos))
-    plot(beam_dir.x, "x direction", 1, fit_values["mu_dir_x"], fit_values["sigma_dir_x"], args.out + "dir_x")
-    plot(beam_dir.y, "y direction", 1, fit_values["mu_dir_y"], fit_values["sigma_dir_y"], args.out + "dir_y")
-    plot(beam_dir.z, "z direction", 1, fit_values["mu_dir_z"], fit_values["sigma_dir_z"], args.out + "dir_z")
+    with PdfPages(out + "beam_quality_fits.pdf") as pdf:
+        for i in ["x", "y", "z"]:
+            plt.figure()
+            mc_ranges = [] if mc_fits is None else plot_range(mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"])
+            data_ranges = [] if data_fits is None else plot_range(data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"])
+
+            plot_ranges = mc_ranges + data_ranges
+            if mc_events is not None: plot(mc_events.recoParticles.beam_startPos_SCE[i], f"Beam start position {i} (cm)", mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"], "C0", "MC", range = [min(plot_ranges), max(plot_ranges)])
+            if data_events is not None: plot(data_events.recoParticles.beam_startPos_SCE[i], f"Beam start position {i} (cm)", data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"], "C1", "Data", range = [min(plot_ranges), max(plot_ranges)])
+            pdf.savefig()
     return
 
-def main(args):
-    events = Master.Data(args.file, nTuple_type = args.ntuple_type)
 
-    #* apply the following cuts before fitting (following the order in BeamParticleSelection)
-    #? allow the option to to the fit without any cuts?
-    mask = BeamParticleSelection.CaloSizeCut(events)
-    events.Filter([mask], [mask])
+def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str, tag : str):
+    events = Master.Data(file, nTuple_type = ntuple_type)
 
-    mask = BeamParticleSelection.PiBeamSelection(events, args.sample_type == "data")
+
+    mask = BeamParticleSelection.PiBeamSelection(events, data)
     events.Filter([mask], [mask])
 
     mask = BeamParticleSelection.PandoraTagCut(events)
     events.Filter([mask], [mask])
 
+    mask = BeamParticleSelection.CaloSizeCut(events)
+    events.Filter([mask], [mask])
     #* fit gaussians to the start positions
-    a, mu, sigma = Fit_Vector(events.recoParticles.beam_startPos, 100)
+    mu, sigma, mu_err, sigma_err = Fit_Vector(events.recoParticles.beam_startPos_SCE, 100)
 
-    #* fit gaussians to beam directions
-    beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos, events.recoParticles.beam_startPos))
-    a_dir, mu_dir, sigma_dir = Fit_Vector(beam_dir, 50)
+    #* compute the mean of beam direction components
+    beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos_SCE, events.recoParticles.beam_startPos_SCE))
+    mu_dir = {i : ak.mean(beam_dir[i]) for i in ["x", "y", "z"]}
+    mu_dir_err = {i : ak.std(beam_dir[i])/np.sqrt(ak.count(beam_dir[i])) for i in ["x", "y", "z"]}
 
     #* convert to dictionary undestood by the BeamQualityCut function
     fit_values = {
-        "mu_x"        : mu["x"],
-        "mu_y"        : mu["y"],
-        "mu_z"        : mu["z"],
-        "sigma_x"     : sigma["x"],
-        "sigma_y"     : sigma["y"],
-        "sigma_z"     : sigma["z"],
-        "mu_dir_x"    : mu_dir["x"],
-        "mu_dir_y"    : mu_dir["y"],
-        "mu_dir_z"    : mu_dir["z"],
-        "sigma_dir_x" : sigma_dir["x"],
-        "sigma_dir_y" : sigma_dir["y"],
-        "sigma_dir_z" : sigma_dir["z"],
-        "a_x"         : a["x"],
-        "a_y"         : a["y"],
-        "a_z"         : a["z"],
-        "a_dir_x"         : a_dir["x"],
-        "a_dir_y"         : a_dir["y"],
-        "a_dir_z"         : a_dir["z"]
+        "mu_x"         : mu["x"],
+        "mu_y"         : mu["y"],
+        "mu_z"         : mu["z"],
+        "sigma_x"      : sigma["x"],
+        "sigma_y"      : sigma["y"],
+        "sigma_z"      : sigma["z"],
+        "mu_dir_x"     : mu_dir["x"],
+        "mu_dir_y"     : mu_dir["y"],
+        "mu_dir_z"     : mu_dir["z"],
+        "mu_err_x"     : mu_err["x"],
+        "mu_err_y"     : mu_err["y"],
+        "mu_err_z"     : mu_err["z"],
+        "sigma_err_x"  : sigma_err["x"],
+        "sigma_err_y"  : sigma_err["y"],
+        "sigma_err_z"  : sigma_err["z"],
+        "mu_dir_err_x" : mu_dir_err["x"],
+        "mu_dir_err_y" : mu_dir_err["y"],
+        "mu_dir_err_z" : mu_dir_err["z"],
     }
     print(fit_values)
 
     #* write to json file
     os.makedirs(args.out, exist_ok = True)
-    name = args.out + args.file.split("/")[-1].split(".")[0] + "_fit_values.json"
+    name = out + tag + "_beam_quality_fit_values.json"
     with open(name, "w") as f:
-        json.dump(fit_values, f)
-
-    MakePlots(events, fit_values, args.out)
-
+        json.dump(fit_values, f, indent = 2)
     print(f"fit values written to {name}")
+
+    return events, fit_values
+
+@Master.timer
+def main(args):
+    mc, fit_values_mc = None, None
+    data, fit_values_data = None, None
+
+    os.makedirs(args.out + "beam_quality/", exist_ok = True)
+
+    if args.mc_file is not None:
+        mc, fit_values_mc = run(args.mc_file[0], False, args.ntuple_type, args.out + "beam_quality/", "mc")
+    if args.data_file is not None:
+        data, fit_values_data = run(args.data_file[0], True, args.ntuple_type, args.out + "beam_quality/", "data")
+
+    MakePlots(mc, fit_values_mc, data, fit_values_data, args.out + "beam_quality/")
+
     return
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description = "Applies beam particle selection, PFO selection, produces tables and basic plots.", formatter_class = argparse.RawDescriptionHelpFormatter)
-    parser.add_argument(dest = "file", help = "NTuple file to study.")
-    parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Master.Ntuple_Type, help = f"type of ntuple I am looking at {[m.value for m in Master.Ntuple_Type]}.", required = True)
-    parser.add_argument("-S", "--sample-type", dest = "sample_type", type = str, choices = ["mc", "data"], help = f"type of sample I am looking at.", required = True)
+    parser = argparse.ArgumentParser(description = "Computes Guassian fit paramters needed for the beam quality cuts in the beam particle selection.", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    parser.add_argument("-o", "--out", dest = "out", type = str, default = None, help = "directory to save plots")
+    cross_section.ApplicationArguments.Ntuples(parser, data = True)
+    
+    cross_section.ApplicationArguments.Output(parser)
 
     args = parser.parse_args()
 
-    if args.out is None:
-        args.out = args.file.split("/")[-1].split(".")[0] + "/"
-    if args.out[-1] != "/": args.out += "/"
+    cross_section.ApplicationArguments.ResolveArgs(args)
 
     print(vars(args))
     main(args)

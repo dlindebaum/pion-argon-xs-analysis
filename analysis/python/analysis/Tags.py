@@ -143,9 +143,21 @@ def GenerateTrueBeamParticleTags(events):# : Data) -> Tags:
     masks = ParticleMasks(events.trueParticlesBT.beam_pdg, particles_to_tag)
     masks["other"] = OtherMask(masks)
 
+    inel = events.trueParticlesBT.beam_endProcess == "pi+Inelastic"
+    cosmic = events.trueParticlesBT.beam_origin == 2
+
+    new_mask = {"$\\pi^{+}$:inel" : masks["$\\pi^{+}$"] & inel, "$\\pi^{+}$:decay" : masks["$\\pi^{+}$"] & ~inel, }
+
+    masks.pop("$\\pi^{+}$")
+
+    new_mask.update(masks)
+    masks = new_mask
+
     tags = Tags()
     for i, m in enumerate(masks):
-        tags[m] = Tag(m, m, "C" + str(i), masks[m], i)
+        tags[m] = Tag(m, m, "C" + str(i), masks[m] & ~cosmic, i)
+
+    tags["cosmics"] = Tag("cosmics", "cosmics", "C" + str(i + 1), cosmic, i+1)
 
     return tags
 
