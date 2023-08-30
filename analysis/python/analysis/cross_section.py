@@ -6,6 +6,7 @@ Author: Shyam Bhuller
 Description: Library for code used in the cross section analysis. Refer to the README to see which apps correspond to the cross section analysis.
 """
 import argparse
+import copy
 import json
 
 from collections import namedtuple
@@ -240,7 +241,6 @@ class ApplicationArguments:
             for a, v in args._get_kwargs():
                 setattr(args_copy, a, v)
             args = ApplicationArguments.ResolveConfig(LoadConfiguration(args.config))
-            print(args.mc_file)
             for a, v in args_copy._get_kwargs():
                 if a not in args:
                     setattr(args, a, v)
@@ -252,7 +252,6 @@ class ApplicationArguments:
             if hasattr(args, "correction") and args.correction:
                 args.correction_params = args.correction[1]
                 args.correction = EnergyCorrection.shower_energy_correction[args.correction[0]]
-        print(args)
 
         if hasattr(args, "out"):
             if args.out is None:
@@ -313,14 +312,6 @@ class ApplicationArguments:
                 args.mc_file = value["mc"]
                 args.data_file = value["data"]
                 args.ntuple_type = value["type"]
-            elif head == "BEAM_QUALITY_FITS":
-                args.mc_beam_quality_fit = value["mc"]
-                args.data_beam_quality_fit = value["data"]
-            elif head == "BEAM_SCAPER_FITS":
-                args.mc_beam_scraper_fit = value["mc"]
-            elif head == "ENERGY_CORRECTION":
-                args.correction = value["correction"]
-                args.correction_params = value["correction_params"]
             elif head == "BEAM_PARTICLE_SELECTION":
                 args.beam_selection = ApplicationArguments.__CreateSelection(value, BeamParticleSelection)
             elif head == "VALID_PFO_SELECTION":
@@ -331,9 +322,36 @@ class ApplicationArguments:
                 args.photon_selection = ApplicationArguments.__CreateSelection(value, PFOSelection)
             elif head == "FINAL_STATE_PI0_SELECTION":
                 args.pi0_selection = ApplicationArguments.__CreateSelection(value, EventSelection)
+            elif head == "BEAM_QUALITY_FITS":
+                args.mc_beam_quality_fit = LoadConfiguration(value["mc"])
+                args.data_beam_quality_fit = LoadConfiguration(value["data"])
+            elif head == "BEAM_SCAPER_FITS":
+                args.mc_beam_scraper_fit = LoadConfiguration(value["mc"])
+            elif head == "ENERGY_CORRECTION":
+                args.correction = value["correction"]
+                args.correction_params = value["correction_params"]
             else:
                 setattr(args, head, value) # allow for generic configurations in the json file
+        ApplicationArguments.DataMCSelectionArgs(args)
         return args
+
+    @staticmethod
+    def DataMCSelectionArgs(args : argparse.Namespace):
+        args.beam_selection["mc_arguments"] = copy.deepcopy(args.beam_selection["arguments"])
+        args.beam_selection["data_arguments"] = copy.deepcopy(args.beam_selection["arguments"])
+
+        for i, s in enumerate(args.beam_selection["selections"]):
+            if s  == BeamParticleSelection.BeamQualityCut:
+                args.beam_selection["mc_arguments"][i]["fits"] = args.mc_beam_quality_fit
+                args.beam_selection["data_arguments"][i]["fits"] = args.data_beam_quality_fit
+            elif s == BeamParticleSelection.BeamScraper:
+                args.beam_selection["mc_arguments"][i]["fits"] = args.mc_beam_scraper_fit
+                args.beam_selection["data_arguments"][i]["fits"] = args.mc_beam_scraper_fit
+            else:
+                continue
+        args.beam_selection.pop("arguments")
+        return args
+
 
 
 def LoadConfiguration(file : str) -> dict:

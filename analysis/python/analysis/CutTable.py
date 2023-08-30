@@ -158,8 +158,9 @@ class CutHandler():
     # @_init_doc
     def __init__(
             self,
-            evts=None,#: Master.Data = None,
-            particles_to_tag: list = _default_particles):
+            evts = None,#: Master.Data = None,
+            particles_to_tag: list = _default_particles,
+            tags : Tags = None):
         """
         Create new a `CutHandler` object to store applied masks
         and return a table of tracked particles when asked.
@@ -201,6 +202,9 @@ class CutHandler():
         self._particles = particles_to_tag
 
         self._table_data = {}
+
+        self._tags = tags
+
         return
 
     def _gen_basic_counts(self):
@@ -345,9 +349,9 @@ class CutHandler():
         for m in curr_simul_masks[1:]:
             mask = mask[m]
         if flat_array:
-            end_sig = (ak.sum(mask), -1)
+            end_sig = (len(mask[mask]), -1)
         else:
-            end_sig = (ak.num(mask, axis=0), ak.sum(mask))
+            end_sig = (len(mask), ak.sum(mask))
         return end_sig
     
     def _validate_signature(self, signature, raise_exception=True, return_simul=False):
@@ -384,6 +388,7 @@ class CutHandler():
         self._end_sig = self._get_mask_signature(mask, end=True)
         self._names.append(name)
         self.curr_mask_index += 1
+        self._data_changed = True
         return
 
     def _mask_appliers(self):
@@ -510,9 +515,13 @@ class CutHandler():
         if not self._data_changed:
             return
         self._table_data.update(self._gen_basic_counts())
-        for particle in self._particles:
-            p_data = self._gen_particle_counts(self._particle_tags[f"${Particle.from_pdgid(particle).latex_name}$"].mask)
-            self._table_data.update(dict((f"{particle} {key}", value) for (key, value) in p_data.items()))
+        if self._tags is not None:
+            for t in self._tags:
+                p_data = self._gen_particle_counts(self._tags[t].mask)
+                self._table_data.update(dict((f"{t} {key}", value) for (key, value) in p_data.items()))
+        # for particle in self._particles:
+            # p_data = self._gen_particle_counts(self._particle_tags[f"${Particle.from_pdgid(particle).latex_name}$"].mask)
+            # self._table_data.update(dict((f"{particle} {key}", value) for (key, value) in p_data.items()))
         self._data_changed = False
         return
 
@@ -522,10 +531,10 @@ class CutHandler():
     def _gen_particle_cols_array(self, pdg):
         return np.array(list(map(lambda c: f"{pdg} {c}", self._particle_table_cols)))
     def _gen_particle_cols_array_read(self, pdg, latex):
-        if latex:
-            return np.array(list(map(lambda c: f"${Particle.from_pdgid(pdg).latex_name}$ {c}", self._particle_table_cols)))
-        else:
-            return np.array(list(map(lambda c: f"{Particle.from_pdgid(pdg)} {c}", self._particle_table_cols)))
+        # if latex:
+        #     return np.array(list(map(lambda c: f"${Particle.from_pdgid(pdg).latex_name}$ {c}", self._particle_table_cols)))
+        # else:
+        return np.array(list(map(lambda c: f"{pdg} {c}", self._particle_table_cols)))
 
     def _new_init_events(self, col, index, init_name):
         if index == 0:
@@ -643,9 +652,12 @@ class CutHandler():
             cols = self._pfo_table_cols[cols_to_keep].tolist()
             cols_to_use += cols
             col_names += cols
-        for p in particles_list:
-            cols_to_use += self._gen_particle_cols_array(p)[cols_to_keep].tolist()
-            col_names += self._gen_particle_cols_array_read(p, latex)[cols_to_keep].tolist()
+        # for t in self._tags:
+        #     cols_to_use += self._gen_particle_cols_array()
+        if self._tags is not None:
+            for t in self._tags:
+                cols_to_use += self._gen_particle_cols_array(t)[cols_to_keep].tolist()
+                col_names += self._gen_particle_cols_array_read(t, latex)[cols_to_keep].tolist()
 
         if initial_true_index is None:
             initial_true_index = self.concat_indicies[initial_concat_index]
