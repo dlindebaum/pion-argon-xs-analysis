@@ -17,8 +17,15 @@ from python.analysis.Master import Data
 from python.analysis.PFOSelection import Median
 from python.analysis.SelectionTools import *
 
-@CountsWrapper
-def PiBeamSelection(events: Data, use_beam_inst : bool = False) -> ak.Array:
+def CreateMask(values, operations, property, return_property : bool):
+    mask = cuts_to_func(values, operations)(property)
+    if return_property is True:
+        return mask, property
+    else:
+        return mask
+
+
+def PiBeamSelection(events: Data, use_beam_inst : bool = False, return_property : bool = False) -> ak.Array:
     """ Pi+ beam particle selection. For MC only.
 
     Args:
@@ -39,16 +46,18 @@ def PiBeamSelection(events: Data, use_beam_inst : bool = False) -> ak.Array:
         # 13 is used for the mu+ pdg in the beam instrumentation.
         mask = mask & ak.any(compare_beam_pdg(211) | compare_beam_pdg(13), axis = -1)
         mask = mask & events.recoParticles.reco_reconstructable_beam_event
+        beam_pdg = None # return None output if property is specified for data ntuples
     else:
         # return both 211 and -13 as you can't distinguish between pi+ and mu+ in data
         beam_pdg = ak.flatten(events.trueParticles.pdg[events.trueParticles.number == 1])
-        # mask = (events.trueParticlesBT.beam_pdg == 211) | (events.trueParticlesBT.beam_pdg == -13)
         mask = (beam_pdg == 211) | (beam_pdg == 13) | (beam_pdg == -13)
-    return mask
+    if return_property is True:
+        return mask, beam_pdg
+    else:
+        return mask
 
 
-@CountsWrapper
-def PandoraTagCut(events: Data, cut : int = 13) -> ak.Array:
+def PandoraTagCut(events: Data, cut : int = 13, return_property : bool = False) -> ak.Array:
     """ Cut on Pandora slice tag, selects track like beam particles.
 
     Args:
@@ -57,11 +66,10 @@ def PandoraTagCut(events: Data, cut : int = 13) -> ak.Array:
     Returns:
         ak.Array: boolean mask.
     """
-    return events.recoParticles.beam_pandora_tag == cut
+    return CreateMask(cut, "==", events.recoParticles.beam_pandora_tag, return_property)
 
 
-@CountsWrapper
-def CaloSizeCut(events: Data) -> ak.Array:
+def CaloSizeCut(events: Data, return_property : bool = False) -> ak.Array:
     """ Cut which checks the beam particle has a calorimetry object (required for median dEdX cut).
 
     Args:
@@ -73,10 +81,10 @@ def CaloSizeCut(events: Data) -> ak.Array:
     calo_wire = events.recoParticles.beam_caloWire
     # Analyser fills the empty entry with a -999
     calo_wire = calo_wire[calo_wire != -999]
-    return ak.num(calo_wire, 1) > 0
+
+    return CreateMask(0, ">", ak.num(calo_wire, 1), return_property)
 
 
-@CountsWrapper
 def BeamQualityCut(events: Data, fits : dict, dxy_cut : list = [-3, 3], dz_cut : list = [-3, 3], costh_cut : list = [0.95, 2]) -> ak.Array:
     """ Cut on beam particle start position and trajectory, 
         Selects beam particles with values consistent to the beam plug.
@@ -87,11 +95,10 @@ def BeamQualityCut(events: Data, fits : dict, dxy_cut : list = [-3, 3], dz_cut :
     Returns:
         ak.Array: boolean mask.
     """
-    # do only MC for now.
     beam_dx = (events.recoParticles.beam_startPos_SCE.x - fits["mu_x"]) / fits["sigma_x"]
     beam_dy = (events.recoParticles.beam_startPos_SCE.y - fits["mu_y"]) / fits["sigma_y"]
-    beam_dz = (events.recoParticles.beam_startPos_SCE.z - fits["mu_z"]) / fits["sigma_z"]
     beam_dxy = (beam_dx**2 + beam_dy**2)**0.5
+    beam_dz = (events.recoParticles.beam_startPos_SCE.z - fits["mu_z"]) / fits["sigma_z"]
 
     beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos_SCE, events.recoParticles.beam_startPos_SCE))
 
@@ -113,8 +120,33 @@ def BeamQualityCut(events: Data, fits : dict, dxy_cut : list = [-3, 3], dz_cut :
     return beam_quality_mask
 
 
-@CountsWrapper
-def APA3Cut(events: Data, cut : float = 220) -> ak.Array:
+def DxyCut(events: Data, fits : dict, cut, return_property : bool = False):
+    beam_dx = (events.recoParticles.beam_startPos_SCE.x - fits["mu_x"]) / fits["sigma_x"]
+    beam_dy = (events.recoParticles.beam_startPos_SCE.y - fits["mu_y"]) / fits["sigma_y"]
+    beam_dxy = (beam_dx**2 + beam_dy**2)**0.5
+    return CreateMask(cut, "<", beam_dxy, return_property)
+
+
+def DzCut(events: Data, fits : dict, cut, return_property : bool = False):
+    beam_dz = (events.recoParticles.beam_startPos_SCE.z - fits["mu_z"]) / fits["sigma_z"]
+    return CreateMask(cut, [">", "<"], beam_dz, return_property)
+
+
+def CosThetaCut(events: Data, fits : dict, cut, return_property : bool = False):
+    beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos_SCE, events.recoParticles.beam_startPos_SCE))
+
+    beam_dir_mc = vector.vector(
+        fits["mu_dir_x"],
+        fits["mu_dir_y"],
+        fits["mu_dir_z"]
+    )
+    beam_dir_mc = vector.normalize(beam_dir_mc)
+
+    beam_costh = vector.dot(beam_dir, beam_dir_mc)
+    return CreateMask(cut, ">", beam_costh, return_property)
+
+
+def APA3Cut(events: Data, cut : float = 220, return_property : bool = False) -> ak.Array:
     """ Cuts on beam end z position to select beam particles which end in APA3.
 
     Args:
@@ -124,11 +156,10 @@ def APA3Cut(events: Data, cut : float = 220) -> ak.Array:
         ak.Array: boolean mask.
     """
     # APA3 cut
-    return events.recoParticles.beam_endPos_SCE.z < cut  # cm
+    return CreateMask(cut, "<", events.recoParticles.beam_endPos_SCE.z, return_property)
 
 
-@CountsWrapper
-def MichelScoreCut(events: Data, cut : float = 0.55) -> ak.Array:
+def MichelScoreCut(events: Data, cut : float = 0.55, return_property : bool = False) -> ak.Array:
     """ Cut on michel score to remove muon like beam particles.
 
     Args:
@@ -138,11 +169,10 @@ def MichelScoreCut(events: Data, cut : float = 0.55) -> ak.Array:
         ak.Array: boolean mask.
     """
     score = ak.where(events.recoParticles.beam_nHits != 0, events.recoParticles.beam_michelScore / events.recoParticles.beam_nHits, -999)
-    return score < cut
+    return CreateMask(cut, "<", score, return_property)
 
 
-@CountsWrapper
-def MedianDEdXCut(events: Data, cut : float = 2.4) -> ak.Array:
+def MedianDEdXCut(events: Data, cut : float = 2.4, return_property : bool = False) -> ak.Array:
     """ cut on median dEdX to exlude proton background.
 
     Args:
@@ -152,11 +182,10 @@ def MedianDEdXCut(events: Data, cut : float = 2.4) -> ak.Array:
         ak.Array: boolean mask.
     """
     median = Median(events.recoParticles.beam_dEdX)
-    return median < cut
+    return CreateMask(cut, "<", median, return_property)
 
 
-@CountsWrapper
-def BeamScraper(events : Data, KE_range : int, fits : dict, pdg_hyp : int = 211, cut : float = 1.5) -> ak.Array:
+def BeamScraper(events : Data, KE_range : int, fits : dict, pdg_hyp : int = 211, cut : float = 1.5, return_property : bool = False) -> ak.Array:
     """ Beam scraper cut. Required to exclude events with poor consistency between
         the beam insturmention KE and front facing KE
         (front facing means the first calorimetry point in the TPC).
@@ -180,7 +209,9 @@ def BeamScraper(events : Data, KE_range : int, fits : dict, pdg_hyp : int = 211,
     in_range = (beam_inst_KE > min(fits[str(KE_range)]["bins"])) & (beam_inst_KE < max(fits[str(KE_range)]["bins"]))
     nx = norm("x")
     ny = norm("y")
-    return (abs(nx) < cut) & (abs(ny) < cut)
+
+    r = np.sqrt(nx**2 + ny**2)
+    return CreateMask(cut, "<", r, return_property)
 
 
 def CreateDefaultSelection(events: Data,

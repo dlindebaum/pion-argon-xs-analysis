@@ -70,70 +70,66 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam
     output["calo_size"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
 
     #* beam pandora tag selection
-    mask = BeamParticleSelection.PandoraTagCut(events) # create the mask for the cut
+    mask, property = BeamParticleSelection.PandoraTagCut(events, **args[2], return_property = True) # create the mask for the cut
     cut_table.add_mask(mask, "pandora_tag")
-    output["pandora_tag"] = MakeOutput(events.recoParticles.beam_pandora_tag, Tags.GenerateTrueBeamParticleTags(events), [args["beam_selection"]["mc_arguments"][1]["cut"]]) # store the data to cut, cut value and truth tags
+    output["pandora_tag"] = MakeOutput(property, Tags.GenerateTrueBeamParticleTags(events), [args[2]["cut"]]) # store the data to cut, cut value and truth tags
     events.Filter([mask], [mask]) # apply the cut
     output["pandora_tag"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events) # store the final state truth tags after the cut is applied
 
     #* dxy cut
-    dxy = (((events.recoParticles.beam_startPos_SCE.x - beam_quality_fits["mu_x"]) / beam_quality_fits["sigma_x"])**2 + ((events.recoParticles.beam_startPos_SCE.y - beam_quality_fits["mu_y"]) / beam_quality_fits["sigma_y"])**2)**0.5
-    mask = dxy < 3
+    mask, property = BeamParticleSelection.DxyCut(events, beam_quality_fits, **args[3], return_property = True)
     cut_table.add_mask(mask, "dxy")
-    output["dxy"] = MakeOutput(dxy, Tags.GenerateTrueBeamParticleTags(events), [3], EventSelection.GenerateTrueFinalStateTags(events))
-    print(f"dxy cut: {BeamParticleSelection.CountMask(mask)}")
+    output["dxy"] = MakeOutput(property, Tags.GenerateTrueBeamParticleTags(events), [args[3]["cut"]], EventSelection.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
     output["dxy"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
 
     #* dz cut
-    delta_z = (events.recoParticles.beam_startPos_SCE.z - beam_quality_fits["mu_z"]) / beam_quality_fits["sigma_z"]
-    mask = (delta_z > -3) & (delta_z < 3)
+    mask, property = BeamParticleSelection.DzCut(events, beam_quality_fits, **args[4], return_property = True)
     cut_table.add_mask(mask, "dz")
-    output["dz"] = MakeOutput(delta_z, Tags.GenerateTrueBeamParticleTags(events), [-3, 3], EventSelection.GenerateTrueFinalStateTags(events))
+    output["dz"] = MakeOutput(property, Tags.GenerateTrueBeamParticleTags(events), args[4]["cut"], EventSelection.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
-    print(f"dz cut: {BeamParticleSelection.CountMask(mask)}")
     output["dz"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
 
     #* beam direction
-    beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos_SCE, events.recoParticles.beam_startPos_SCE))
-    beam_dir_mu = vector.normalize(vector.vector(beam_quality_fits["mu_dir_x"], beam_quality_fits["mu_dir_y"], beam_quality_fits["mu_dir_z"]))
-    beam_costh = vector.dot(beam_dir, beam_dir_mu)
-    mask = beam_costh > 0.95
+    mask, property = BeamParticleSelection.CosThetaCut(events, beam_quality_fits, **args[5], return_property = True)
     cut_table.add_mask(mask, "cos_theta")
-    output["cos_theta"] = MakeOutput(beam_costh, Tags.GenerateTrueBeamParticleTags(events), [0.95], EventSelection.GenerateTrueFinalStateTags(events))
+    output["cos_theta"] = MakeOutput(property, Tags.GenerateTrueBeamParticleTags(events), [args[5]["cut"]], EventSelection.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
     output["cos_theta"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
 
     #* APA3 cut
-    mask = BeamParticleSelection.APA3Cut(events)
+    mask, property = BeamParticleSelection.APA3Cut(events, **args[6], return_property = True)
     cut_table.add_mask(mask, "beam_endPos_z")
-    output["beam_endPos_z"] = MakeOutput(events.recoParticles.beam_endPos_SCE.z, Tags.GenerateTrueBeamParticleTags(events), [220], EventSelection.GenerateTrueFinalStateTags(events))
+    output["beam_endPos_z"] = MakeOutput(property, Tags.GenerateTrueBeamParticleTags(events), [args[6]["cut"]], EventSelection.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
     output["beam_endPos_z"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
 
     #* michel score cut
-    score = ak.where(events.recoParticles.beam_nHits != 0, events.recoParticles.beam_michelScore / events.recoParticles.beam_nHits, -999)
-    mask = BeamParticleSelection.MichelScoreCut(events)
+    mask, property = BeamParticleSelection.MichelScoreCut(events, **args[7], return_property = True)
     cut_table.add_mask(mask, "michel_score")
-    output["michel_score"] = MakeOutput(score, Tags.GenerateTrueBeamParticleTags(events), [0.55], EventSelection.GenerateTrueFinalStateTags(events))
+    output["michel_score"] = MakeOutput(property, Tags.GenerateTrueBeamParticleTags(events), [args[7]["cut"]], EventSelection.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
     output["michel_score"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
 
     #* median dE/dX
-    mask = BeamParticleSelection.MedianDEdXCut(events)
+    mask, property = BeamParticleSelection.MedianDEdXCut(events, **args[8], return_property = True)
     cut_table.add_mask(mask, "median_dEdX")
-    median = PFOSelection.Median(events.recoParticles.beam_dEdX)
-    output["median_dEdX"] = MakeOutput(median, Tags.GenerateTrueBeamParticleTags(events), [2.4], EventSelection.GenerateTrueFinalStateTags(events))
+    output["median_dEdX"] = MakeOutput(property, Tags.GenerateTrueBeamParticleTags(events), [args[8]["cut"]], EventSelection.GenerateTrueFinalStateTags(events))
     events.Filter([mask], [mask])
     output["median_dEdX"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
 
-    # #* beam scraper
-    # mask = BeamParticleSelection.BeamScraper(events, **args["beam_selection"]["mc_arguments"][-1])
-    # cut_table.add_mask(mask, "beam_scraper")
-
+    #* beam scraper
+    mask, property = BeamParticleSelection.BeamScraper(events, **args[9], return_property = True)
+    cut_table.add_mask(mask, "beam_scraper")
+    output["beam_scraper"] = MakeOutput(property, Tags.GenerateTrueBeamParticleTags(events), [args[9]["cut"]], EventSelection.GenerateTrueFinalStateTags(events))
+    output["beam_scraper"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
+    
     #* true particle population
     output["final_tags"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, EventSelection.GenerateTrueFinalStateTags(events))
-    return output, cut_table.get_table(init_data_name = "no selection", pfos = False, percent_remain = False, relative_percent = False, ave_per_event = False)
+
+    df = cut_table.get_table(init_data_name = "no selection", pfos = False, percent_remain = False, relative_percent = False, ave_per_event = False)
+    print(df)
+    return output, df
 
 
 def AnalysePiPlusSelection(events : Master.Data) -> tuple[dict, pd.DataFrame]:
@@ -322,8 +318,10 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
 
     if args["data"] == True:
         beam_quality_fit_values = args["data_beam_quality_fit"]
+        selection_args = "data_arguments"
     else:
         beam_quality_fit_values = args["mc_beam_quality_fit"]
+        selection_args = "mc_arguments"
 
     do_scraper_cut = any(s == BeamParticleSelection.BeamScraper for s in args["beam_selection"]["selections"]) # remove with new cut handling
 
@@ -335,7 +333,7 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
         correction_params = None
 
     print("beam particle selection")
-    output_beam, table_beam = AnalyseBeamSelection(events, args["data"], beam_quality_fit_values, args["mc_beam_scraper_fit"], args) # events are cut after this
+    output_beam, table_beam = AnalyseBeamSelection(events, args["data"], beam_quality_fit_values, args["mc_beam_scraper_fit"], args["beam_selection"][selection_args]) # events are cut after this
 
     print("PFO pre-selection")
     good_PFO_mask = PFOSelection.GoodShowerSelection(events)
