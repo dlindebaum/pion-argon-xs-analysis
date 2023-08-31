@@ -626,9 +626,9 @@ def main(args):
     output_mc = MergeOutputs(Processing.mutliprocess(run, [args.mc_file], args.batches, args.events, func_args, args.threads)) # run the main analysing method
 
     output_data = None
-    # if args.data_file is not None:
-    #     func_args["data"] = True
-    #     output_data = MergeOutputs(Processing.mutliprocess(run, [args.data_file], args.batches, args.events, func_args, args.threads)) # run the main analysing method
+    if args.data_file is not None:
+        func_args["data"] = True
+        output_data = MergeOutputs(Processing.mutliprocess(run, [args.data_file], args.batches, args.events, func_args, args.threads)) # run the main analysing method
     # tables
     MakeTables(output_mc, args.out + "tables_mc/", "mc")
     if output_data is not None: MakeTables(output_data, args.out + "tables_data/", "data")
