@@ -86,9 +86,11 @@ def BothPhotonsBacktracked(events : Master.Data) -> ak.Array:
     not_null = np.logical_not(np.logical_or(events.recoParticles.startPos.x == -999, events.recoParticles.momentum.x == -999))
     f = f_combined & not_null
 
+    f = f & (events.trueParticlesBT.number != -999)
+
     daughters = events.trueParticlesBT.number[f]
     unique_daughters = events.trueParticlesBT.GetUniqueParticleNumbers(daughters)
-    unique_daughters = ak.count(unique_daughters, -1)
+    unique_daughters = ak.num(unique_daughters)
 
     mask = unique_daughters == 2
     return mask

@@ -14,7 +14,7 @@ import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 from tabulate import tabulate
 
-from apps.prod4a_merge_study import EventSelection, PFOSelection, SignalBackground, SplitSample, ShowerMergeQuantities
+from python.analysis.shower_merging import EventSelection, PFOSelection, SignalBackground, SplitSample, ShowerMergeQuantities
 from python.analysis import Master, vector
 from python.analysis.EventDisplay import EventDisplay
 
@@ -167,9 +167,9 @@ def main():
     events = Master.Data("work/ROOTFiles/Prod4a_6MeV_BeamSim_00_evd.root")
 
     #* create hit space point arrays
-    events.recoParticles.spacePoints = ak.zip({"x" : events.io.Get("reco_daughter_allShower_spacePointX"), 
-                                            "y" : events.io.Get("reco_daughter_allShower_spacePointY"),
-                                            "z" : events.io.Get("reco_daughter_allShower_spacePointZ")})
+    events.recoParticles.spacePoints = ak.zip({"x" : events.io.LoadData("reco_daughter_allShower_spacePointX"), 
+                                            "y" : events.io.LoadData("reco_daughter_allShower_spacePointY"),
+                                            "z" : events.io.LoadData("reco_daughter_allShower_spacePointZ")})
     EventSelection(events)
     PFOSelection(events)
     start_showers, to_merge = SplitSample(events)

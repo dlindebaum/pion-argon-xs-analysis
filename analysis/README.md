@@ -1,5 +1,16 @@
 # pi0-analysis
-Python code for the Pi0 analysis, requires python 3.10.0 or greater.
+Python code for the Pi0 analysis, requires python 3.10.0 or greater. Installing the requirements to run the code is as follows:
+
+Run this once.
+``` bash
+pip install -r requirements.txt
+```
+
+and each time you load the python environment:
+``` bash
+source env.sh
+```
+
 Code runs on ntuples produced by the Pi0 Analyser module (to be added), a list of produced ntuples are here:
 
 [https://cernbox.cern.ch/index.php/s/8UqObev6XPNhRXn](https://cernbox.cern.ch/index.php/s/8UqObev6XPNhRXn)
@@ -22,35 +33,61 @@ For further detail on each module you can read the docstrings.
 Shower merging analysis workflow is as follows:
 
 ---
-**selection_studies.py**
+**sm_selection_studies.py**
  - input:
      - <span style="color: maroon">Ntuple file (root)</span>
  - output:
      - <span style="color: red">basic plots (png)</span>
      - <span style="color: red">tables (tex) of selection efficiency</span>
 
-**generate_geometric_quantities.py**
+**sm_generate_geometric_quantities.py**
  - input:
      - <span style="color: maroon">Ntuple file (root)</span>
  - output:
      - <span style="color: magenta">geometric quantities file (csv)</span>
 
-**analyse_geometric_quantities.py**
+**sm_analyse_geometric_quantities.py**
  - input:
      - <span style="color: magenta">geometric quantities file (csv)</span>
  - output:
     - <span style="color: red">plots of geometric quantities (png)</span>
     - <span style="color: green">list of cuts (csv)</span>
 
-**shower_merging.py**
+**sm_shower_merging.py**
  - input:
      - <span style="color: maroon">Ntuple file (root)</span>
      - <span style="color: green">list of cuts (csv)</span>
  - output: <span style="color: blue">shower pair quantities (hdf5)</span>
 
-**plotShowerQuantities.py**
+**sm_plot_shower_quantities.py**
  - input:
      - <span style="color: blue">shower pair quantities (hdf5)</span>
  - output:
      - <span style="color: red">various plots of shower quantities (png)</span>
 ---
+
+## Run CEX analysis
+
+For now, just plots for the selection can be made:
+
+**cex_beam_quality_fits.py**
+ - input:
+    - <span style="color: maroon">Ntuple file (root)</span>
+ - output:
+    - <span style="color: green">beam quality fit parameters (json)</span>
+
+
+**cex_photon_selection.py**
+ - input:
+    - <span style="color: maroon">Ntuple file (root)</span>
+ - output:
+    - <span style="color: pink">reco and true shower energies (hdf5)</span>
+
+**cex_selection_studies.py**
+ - input:
+    - <span style="color: maroon">Ntuple file (root)</span>
+    - <span style="color: green">beam quality fit parameters (json)</span>
+    - <span style="color: blue">linear shower energy correction value (optional)</span>
+ - output:
+    - <span style="color: red">performance metrics table of each selection (tex)</span>
+    - <span style="color: red">plots of each selection (png)</span>

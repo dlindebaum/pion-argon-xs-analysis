@@ -7,8 +7,7 @@ import pandas as pd
 
 import argparse
 
-import apps.prod4a_merge_study as merge_study
-from python.analysis import Master
+from python.analysis import Master, shower_merging
 
 def GetSharedHitsMask(particleData : Master.ParticleData, e, a, b):
     #! returns the mask for particle b only
@@ -119,8 +118,8 @@ def GetEnergy(events : Master.Data, showers : ak.Array, all_energy : bool = Fals
 
 def main(args):
     events = Master.Data(args.file, nEvents = args.nEvents[0], start = args.nEvents[1])
-    merge_study.EventSelection(events)
-    start_showers, _ = merge_study.SplitSample(events)
+    shower_merging.EventSelection(events)
+    start_showers, _ = shower_merging.SplitSample(events)
 
     mask = np.logical_or(*start_showers)
     start_shower_indices = ak.local_index(events.recoParticles.number)[mask]
