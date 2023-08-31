@@ -17,13 +17,6 @@ from python.analysis.Master import Data
 from python.analysis.PFOSelection import Median
 from python.analysis.SelectionTools import *
 
-def CreateMask(values, operations, property, return_property : bool):
-    mask = cuts_to_func(values, operations)(property)
-    if return_property is True:
-        return mask, property
-    else:
-        return mask
-
 
 def PiBeamSelection(events: Data, use_beam_inst : bool = False, return_property : bool = False) -> ak.Array:
     """ Pi+ beam particle selection. For MC only.
@@ -185,7 +178,7 @@ def MedianDEdXCut(events: Data, cut : float = 2.4, return_property : bool = Fals
     return CreateMask(cut, "<", median, return_property)
 
 
-def BeamScraper(events : Data, KE_range : int, fits : dict, pdg_hyp : int = 211, cut : float = 1.5, return_property : bool = False) -> ak.Array:
+def BeamScraperCut(events : Data, KE_range : int, fits : dict, pdg_hyp : int = 211, cut : float = 1.5, return_property : bool = False) -> ak.Array:
     """ Beam scraper cut. Required to exclude events with poor consistency between
         the beam insturmention KE and front facing KE
         (front facing means the first calorimetry point in the TPC).
@@ -255,6 +248,6 @@ def CreateDefaultSelection(events: Data,
         {}
     ]
     if scraper is True:
-        selection.append(BeamScraper)
+        selection.append(BeamScraperCut)
         arguments.append({"KE_range" : scraper_KE_range, "fits" : scraper_fits, "pdg_hyp" : pdg_hyp, "cut" : scraper_cut})
     return CombineSelections(events, selection, 0, arguments, verbose, return_table)

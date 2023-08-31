@@ -102,6 +102,14 @@ def CombineSelections(events : Data, selection: list, levels: int, args: list = 
         return mask
 
 
+def CreateMask(values, operations, property, return_property : bool):
+    mask = cuts_to_func(values, operations)(property)
+    if return_property is True:
+        return mask, property
+    else:
+        return mask
+
+
 def del_prop(obj, property_name: str) -> None:
     """
     Deletes a properties from the supplied `RecoPaticleData` type

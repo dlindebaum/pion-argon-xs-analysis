@@ -287,13 +287,13 @@ class ApplicationArguments:
         Returns:
             _type_: _description_
         """
-        selection = {"selections" : [], "arguments" : []}
+        selection = {"selections" : {}, "arguments" : {}}
         for func, opt in value.items():
             if opt["enable"] is True:
-                selection["selections"].append(getattr(module, func))
+                selection["selections"][func] = getattr(module, func)
                 copy = opt.copy()
                 copy.pop("enable")
-                selection["arguments"].append(copy)
+                selection["arguments"][func] = copy
         return selection
 
     @staticmethod
@@ -337,19 +337,23 @@ class ApplicationArguments:
 
     @staticmethod
     def DataMCSelectionArgs(args : argparse.Namespace):
-        args.beam_selection["mc_arguments"] = copy.deepcopy(args.beam_selection["arguments"])
-        args.beam_selection["data_arguments"] = copy.deepcopy(args.beam_selection["arguments"])
+        for a in vars(args):
+            print(getattr(args, a))
+            if ("selection" in a) and (type(getattr(args, a)) == dict):
+                if "arguments" in getattr(args, a): 
+                    getattr(args, a)["mc_arguments"] = copy.deepcopy(getattr(args, a)["arguments"])
+                    getattr(args, a)["data_arguments"] = copy.deepcopy(getattr(args, a)["arguments"])
+                    getattr(args, a).pop("arguments")
 
-        for i, s in enumerate(args.beam_selection["selections"]):
-            if s  == BeamParticleSelection.BeamQualityCut:
+        for i, s in args.beam_selection["selections"].items():
+            if s in [BeamParticleSelection.BeamQualityCut, BeamParticleSelection.DxyCut, BeamParticleSelection.DzCut, BeamParticleSelection.CosThetaCut]:
                 args.beam_selection["mc_arguments"][i]["fits"] = args.mc_beam_quality_fit
                 args.beam_selection["data_arguments"][i]["fits"] = args.data_beam_quality_fit
-            elif s == BeamParticleSelection.BeamScraper:
+            elif s == BeamParticleSelection.BeamScraperCut:
                 args.beam_selection["mc_arguments"][i]["fits"] = args.mc_beam_scraper_fit
                 args.beam_selection["data_arguments"][i]["fits"] = args.mc_beam_scraper_fit
             else:
                 continue
-        args.beam_selection.pop("arguments")
         return args
 
 
