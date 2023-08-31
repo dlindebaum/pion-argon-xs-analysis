@@ -150,7 +150,7 @@ def AnalysePhotonCandidateSelection(events : Master.Data, functions : dict, args
     return output, df
 
 
-def AnalysePi0Selection(events : Master.Data, data : bool = False, correction : callable = None, correction_params : dict = None) -> tuple[dict, pd.DataFrame]:
+def AnalysePi0Selection(events : Master.Data, data : bool, correction : callable, correction_params : dict, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
     """ Analyse the pi0 selection.
 
     Args:
@@ -172,52 +172,32 @@ def AnalysePi0Selection(events : Master.Data, data : bool = False, correction : 
 
     photonCandidates = PFOSelection.InitialPi0PhotonSelection(events) # repeat the photon candidate selection, but only require the mask
 
-    #* number of photon candidate
-    n_photons = ak.sum(photonCandidates, -1)
-    mask = n_photons == 2
-    cut_table.add_mask(mask, "n_photons")
-    output["n_photons"] = MakeOutput(n_photons, None, [2])
-    events.Filter([mask], [mask]) # technically is an event level cut as we only try to find 1 pi0 in the final state, two is more complicated
-    photonCandidates = photonCandidates[mask]
-
-    #* invariant mass
-    shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photonCandidates)
-
-    if correction is None:
-        le = shower_pairs.reco_lead_energy
-        se = shower_pairs.reco_sub_energy
-    else:
-        le = correction(shower_pairs.reco_lead_energy, **correction_params)
-        se = correction(shower_pairs.reco_sub_energy, **correction_params)
-
-    mass = shower_pairs.Mass(le, se, shower_pairs.reco_angle)
-    mass = ak.fill_none(ak.pad_none(mass, 1, -1), -999, -1)
-    mask = (mass > 50) & (mass < 250)
-    mask = ak.flatten(mask) # 1 pi0
-    cut_table.add_mask(mask, "mass")
-    tags = null_tag() if data else Tags.GeneratePi0Tags(events, photonCandidates)
-    output["mass"] = MakeOutput(mass, tags, [50, 250])
-    output["mass_event_tag"] = MakeOutput(None, EventSelection.GenerateTrueFinalStateTags(events), None)
-    events.Filter([mask], [mask])
-    photonCandidates = photonCandidates[mask]
-
-    #* opening angle
-    shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photonCandidates)
-    angle = ak.fill_none(ak.pad_none(shower_pairs.reco_angle, 1, -1), -999, -1)
-    mask = (angle > (10 * np.pi / 180)) & (angle < (80 * np.pi / 180))
-    mask = ak.flatten(mask) # 1 pi0
-    tags = null_tag() if data else Tags.GeneratePi0Tags(events, photonCandidates)
-    output["angle"] = MakeOutput(angle, tags, [(10 * np.pi / 180), (80 * np.pi / 180)])
-    cut_table.add_mask(mask, "angle")
-    events.Filter([mask], [mask])
-    photonCandidates = photonCandidates[mask]
+    for a in args:
+        print(a)
+        if a == "Pi0MassSelection":
+            mask, property = functions[a](events, **args[a], return_property = True, correction = correction, correction_params = correction_params, photon_mask = photonCandidates)
+            output["mass_event_tag"] = MakeOutput(None, EventSelection.GenerateTrueFinalStateTags(events), None)
+        elif a == "NPhotonCandidateSelection":
+            mask, property = functions[a](events, **args[a], photon_candidates = photonCandidates, return_property = True)
+        else:
+            mask, property = functions[a](events, **args[a], return_property = True, photon_mask = photonCandidates)
+        if a != "NPhotonCandidateSelection":
+            mask = ak.flatten(mask)
+        cut_table.add_mask(mask, a)
+        cut_values = args[a]["cut"] if "cut" in args[a] else None
+        output[a] = MakeOutput(property, Tags.GeneratePi0Tags(events, photonCandidates), cut_values)
+        events.Filter([mask], [mask])
+        photonCandidates = photonCandidates[mask]
+        output[a]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
 
     #* final counts
     output["event_tag"] = MakeOutput(None, EventSelection.GenerateTrueFinalStateTags(events), None)
     tags = null_tag() if data else Tags.GeneratePi0Tags(events, photonCandidates)
     output["final_tags"] = MakeOutput(None, tags, None) 
 
-    return output, cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, pfos = False)
+    df = cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, pfos = False)
+    print(df)
+    return output, df
 
 
 def AnalyseRegions(events : Master.Data, photon_mask : ak.Array, is_data : bool, correction : callable = None, correction_params : dict = None) -> tuple[dict, dict]:
@@ -273,7 +253,7 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
     output_photon, table_photon = AnalysePhotonCandidateSelection(events.Filter(returnCopy = True), args["photon_selection"]["selections"], args["photon_selection"][selection_args])
 
     print("pi0 selection")
-    output_pi0, table_pi0 = AnalysePi0Selection(events.Filter(returnCopy = True), args["data"], cross_section.EnergyCorrection.shower_energy_correction[args["correction"]], correction_params)
+    output_pi0, table_pi0 = AnalysePi0Selection(events.Filter(returnCopy = True), args["data"], cross_section.EnergyCorrection.shower_energy_correction[args["correction"]], correction_params, args["pi0_selection"]["selections"], args["pi0_selection"][selection_args])
 
     print("regions")
     photon_selection_mask = PFOSelection.InitialPi0PhotonSelection(events)
@@ -503,40 +483,40 @@ def MakePi0SelectionPlots(output_mc : dict, output_data : dict, outDir : str, no
 
     with PdfPages(outDir + "pi0.pdf") as pdf:
         if output_data is not None:
-            scale = ak.count(output_data["n_photons"]["value"]) / ak.count(output_mc["n_photons"]["value"])
+            scale = ak.count(output_data["NPhotonCandidateSelection"]["value"]) / ak.count(output_mc["n_photons"]["value"])
 
             n_photons_scaled = []
-            u, c = np.unique(output_mc["n_photons"]["value"], return_counts = True)
+            u, c = np.unique(output_mc["NPhotonCandidateSelection"]["value"], return_counts = True)
             for i, j in zip(u, c):
                 n_photons_scaled.extend([i]* int(scale * j))
 
-            Plots.PlotBarComparision(n_photons_scaled, output_data["n_photons"]["value"], xlabel = "number of $\pi^{0}$ photon candidates", label_1 = "MC", label_2 = "Data", fraction = True, barlabel = False)
+            Plots.PlotBarComparision(n_photons_scaled, output_data["NPhotonCandidateSelection"]["value"], xlabel = "number of $\pi^{0}$ photon candidates", label_1 = "MC", label_2 = "Data", fraction = True, barlabel = False)
         else:
-            Plots.PlotBar(output_mc["n_photons"]["value"], xlabel = "number of $\pi^{0}$ photon candidates")
+            Plots.PlotBar(output_mc["NPhotonCandidateSelection"]["value"], xlabel = "number of $\pi^{0}$ photon candidates")
         pdf.savefig()
 
         if output_data:
-            Plots.PlotTagged(output_mc["mass"]["value"], output_mc["mass"]["tags"], data2 = output_data["mass"]["value"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
+            Plots.PlotTagged(output_mc["Pi0MassSelection"]["value"], output_mc["Pi0MassSelection"]["tags"], data2 = output_data["Pi0MassSelection"]["value"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
         else:
-            Plots.PlotTagged(output_mc["mass"]["value"], output_mc["mass"]["tags"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
-        Plots.DrawCutPosition(min(output_mc["mass"]["cuts"]), face = "right", arrow_length = 50)
-        Plots.DrawCutPosition(max(output_mc["mass"]["cuts"]), face = "left", arrow_length = 50)
+            Plots.PlotTagged(output_mc["Pi0MassSelection"]["value"], output_mc["Pi0MassSelection"]["tags"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
+        Plots.DrawCutPosition(min(output_mc["Pi0MassSelection"]["cuts"]), face = "right", arrow_length = 50)
+        Plots.DrawCutPosition(max(output_mc["Pi0MassSelection"]["cuts"]), face = "left", arrow_length = 50)
         pdf.savefig()
 
         if output_data:
-            Plots.PlotTagged(output_mc["mass"]["value"], output_mc["mass_event_tag"]["tags"], data2 = output_data["mass"]["value"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
+            Plots.PlotTagged(output_mc["Pi0MassSelection"]["value"], output_mc["mass_event_tag"]["tags"], data2 = output_data["mass"]["value"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
         else:
-            Plots.PlotTagged(output_mc["mass"]["value"], output_mc["mass_event_tag"]["tags"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
-        Plots.DrawCutPosition(min(output_mc["mass"]["cuts"]), face = "right", arrow_length = 50)
-        Plots.DrawCutPosition(max(output_mc["mass"]["cuts"]), face = "left", arrow_length = 50)
+            Plots.PlotTagged(output_mc["Pi0MassSelection"]["value"], output_mc["mass_event_tag"]["tags"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
+        Plots.DrawCutPosition(min(output_mc["Pi0MassSelection"]["cuts"]), face = "right", arrow_length = 50)
+        Plots.DrawCutPosition(max(output_mc["Pi0MassSelection"]["cuts"]), face = "left", arrow_length = 50)
         pdf.savefig()
 
         if output_data:
-            Plots.PlotTagged(output_mc["angle"]["value"], output_mc["angle"]["tags"], data2 = output_data["angle"]["value"], bins = args.nbins, x_label = "Opening angle (rad)", norm = norm)
+            Plots.PlotTagged(output_mc["Pi0OpeningAngleSelection"]["value"], output_mc["Pi0OpeningAngleSelection"]["tags"], data2 = output_data["Pi0OpeningAngleSelection"]["value"], bins = args.nbins, x_label = "Opening angle (rad)", norm = norm)
         else:
-            Plots.PlotTagged(output_mc["angle"]["value"], output_mc["angle"]["tags"], bins = args.nbins, x_label = "Opening angle (rad)", norm = norm)
-        Plots.DrawCutPosition(min(output_mc["angle"]["cuts"]), face = "right", arrow_length = 0.25)
-        Plots.DrawCutPosition(max(output_mc["angle"]["cuts"]), face = "left", arrow_length = 0.25)
+            Plots.PlotTagged(output_mc["Pi0OpeningAngleSelection"]["value"], output_mc["Pi0OpeningAngleSelection"]["tags"], bins = args.nbins, x_label = "Opening angle (rad)", norm = norm)
+        Plots.DrawCutPosition(min(output_mc["Pi0OpeningAngleSelection"]["cuts"]) * np.pi / 180, face = "right", arrow_length = 0.25)
+        Plots.DrawCutPosition(max(output_mc["Pi0OpeningAngleSelection"]["cuts"]) * np.pi / 180, face = "left", arrow_length = 0.25)
         pdf.savefig()
 
     return
