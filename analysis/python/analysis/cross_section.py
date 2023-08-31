@@ -6,6 +6,7 @@ Author: Shyam Bhuller
 Description: Library for code used in the cross section analysis. Refer to the README to see which apps correspond to the cross section analysis.
 """
 import argparse
+import copy
 import json
 
 from collections import namedtuple
@@ -240,7 +241,6 @@ class ApplicationArguments:
             for a, v in args._get_kwargs():
                 setattr(args_copy, a, v)
             args = ApplicationArguments.ResolveConfig(LoadConfiguration(args.config))
-            print(args.mc_file)
             for a, v in args_copy._get_kwargs():
                 if a not in args:
                     setattr(args, a, v)
@@ -252,7 +252,6 @@ class ApplicationArguments:
             if hasattr(args, "correction") and args.correction:
                 args.correction_params = args.correction[1]
                 args.correction = EnergyCorrection.shower_energy_correction[args.correction[0]]
-        print(args)
 
         if hasattr(args, "out"):
             if args.out is None:
@@ -288,13 +287,13 @@ class ApplicationArguments:
         Returns:
             _type_: _description_
         """
-        selection = {"selections" : [], "arguments" : []}
+        selection = {"selections" : {}, "arguments" : {}}
         for func, opt in value.items():
             if opt["enable"] is True:
-                selection["selections"].append(getattr(module, func))
+                selection["selections"][func] = getattr(module, func)
                 copy = opt.copy()
                 copy.pop("enable")
-                selection["arguments"].append(copy)
+                selection["arguments"][func] = copy
         return selection
 
     @staticmethod
@@ -313,14 +312,6 @@ class ApplicationArguments:
                 args.mc_file = value["mc"]
                 args.data_file = value["data"]
                 args.ntuple_type = value["type"]
-            elif head == "BEAM_QUALITY_FITS":
-                args.mc_beam_quality_fit = value["mc"]
-                args.data_beam_quality_fit = value["data"]
-            elif head == "BEAM_SCAPER_FITS":
-                args.mc_beam_scraper_fit = value["mc"]
-            elif head == "ENERGY_CORRECTION":
-                args.correction = value["correction"]
-                args.correction_params = value["correction_params"]
             elif head == "BEAM_PARTICLE_SELECTION":
                 args.beam_selection = ApplicationArguments.__CreateSelection(value, BeamParticleSelection)
             elif head == "VALID_PFO_SELECTION":
@@ -331,9 +322,40 @@ class ApplicationArguments:
                 args.photon_selection = ApplicationArguments.__CreateSelection(value, PFOSelection)
             elif head == "FINAL_STATE_PI0_SELECTION":
                 args.pi0_selection = ApplicationArguments.__CreateSelection(value, EventSelection)
+            elif head == "BEAM_QUALITY_FITS":
+                args.mc_beam_quality_fit = LoadConfiguration(value["mc"])
+                args.data_beam_quality_fit = LoadConfiguration(value["data"])
+            elif head == "BEAM_SCAPER_FITS":
+                args.mc_beam_scraper_fit = LoadConfiguration(value["mc"])
+            elif head == "ENERGY_CORRECTION":
+                args.correction = value["correction"]
+                args.correction_params = value["correction_params"]
             else:
                 setattr(args, head, value) # allow for generic configurations in the json file
+        ApplicationArguments.DataMCSelectionArgs(args)
         return args
+
+    @staticmethod
+    def DataMCSelectionArgs(args : argparse.Namespace):
+        for a in vars(args):
+            print(getattr(args, a))
+            if ("selection" in a) and (type(getattr(args, a)) == dict):
+                if "arguments" in getattr(args, a): 
+                    getattr(args, a)["mc_arguments"] = copy.deepcopy(getattr(args, a)["arguments"])
+                    getattr(args, a)["data_arguments"] = copy.deepcopy(getattr(args, a)["arguments"])
+                    getattr(args, a).pop("arguments")
+
+        for i, s in args.beam_selection["selections"].items():
+            if s in [BeamParticleSelection.BeamQualityCut, BeamParticleSelection.DxyCut, BeamParticleSelection.DzCut, BeamParticleSelection.CosThetaCut]:
+                args.beam_selection["mc_arguments"][i]["fits"] = args.mc_beam_quality_fit
+                args.beam_selection["data_arguments"][i]["fits"] = args.data_beam_quality_fit
+            elif s == BeamParticleSelection.BeamScraperCut:
+                args.beam_selection["mc_arguments"][i]["fits"] = args.mc_beam_scraper_fit
+                args.beam_selection["data_arguments"][i]["fits"] = args.mc_beam_scraper_fit
+            else:
+                continue
+        return args
+
 
 
 def LoadConfiguration(file : str) -> dict:

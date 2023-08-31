@@ -19,7 +19,7 @@ import uproot
 from rich import print
 
 # custom modules
-from python.analysis import vector
+from python.analysis import vector, CutTable
 
 
 def timer(func):
@@ -165,7 +165,7 @@ class Data:
         if start < 0:
             raise ValueError("start cannot be less than zero")
 
-        if nTuple_type is None:
+        if (filename is not None) and (nTuple_type is None):
             warnings.warn(f"nTuple type is not specified, assuming it is {Ntuple_Type.SHOWER_MERGING}")
             self.nTuple_type = Ntuple_Type.SHOWER_MERGING
         else:
@@ -186,6 +186,7 @@ class Data:
             self.trueParticles = TrueParticleData(self)
             self.recoParticles = RecoParticleData(self)
             self.trueParticlesBT = TrueParticleDataBT(self)
+            self.cutTable = CutTable.CutHandler(self)
 
     @property
     def SortedTrueEnergyMask(self) -> ak.Array:
@@ -399,6 +400,7 @@ class Data:
                 self.trueParticlesBT.Filter(reco_filters, returnCopy)
 
             __GenericFilter__(self, reco_filters)
+            CutTable.apply_filters(self, reco_filters)
             self.trueParticles.events = self
             self.recoParticles.events = self
             if hasattr(self, "trueParticlesBT"):
@@ -412,6 +414,7 @@ class Data:
             filtered.start = self.start
             filtered.io = IO(filtered.filename,
                              filtered.nEvents, filtered.start)
+            filtered.cutTable = self.cutTable.copy()
             filtered.event_index = self.event_index
             filtered.eventNum = self.eventNum
             filtered.subRun = self.subRun
@@ -426,6 +429,8 @@ class Data:
                 filtered.trueParticlesBT.events = filtered
             # ? should true_filters also be applied?
             __GenericFilter__(filtered, reco_filters)
+            CutTable.apply_filters(filtered, reco_filters)
+            # CutTable.apply_filters(filtered, reco_filters)
             return filtered
 
     @timer
@@ -711,6 +716,10 @@ class Data:
 
         self.Filter([mask], [mask])
 
+    @property
+    def table(self, **kwargs):
+        return self.cutTable.get_table(**kwargs)
+
 
 
 class ParticleData(ABC):
@@ -788,7 +797,7 @@ class ParticleData(ABC):
         else:
             # get the class which is of type ParticleData
             subclass = globals()[type(self).__name__]
-            filtered = subclass(Data())  # create a new instance of the class
+            filtered = subclass(Data())
             # populate new instance
             for var in vars(self):
                 setattr(filtered, var, getattr(self, var))

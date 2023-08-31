@@ -1,0 +1,112 @@
+{
+    "NTUPLE_FILE":{
+        "mc" : "/home/sb16165/Documents/pi0-analysis/analysis/work/ROOTFiles/PDSPAnalyser/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03.root",
+        "data" :"/home/sb16165/Documents/pi0-analysis/analysis/work/ROOTFiles/PDSPAnalyser/PDSPProd4_data_2GeV_reco2_ntuple_v09_42_03_01.root",
+        "type" : "PDSPAnalyser"
+    },
+    "BEAM_QUALITY_FITS":{
+        "mc" : "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03/beam_quality/mc_beam_quality_fit_values.json",
+        "data" : "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03/beam_quality/data_beam_quality_fit_values.json"
+    },
+    "BEAM_SCAPER_FITS":{
+        "mc" : "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03/beam_scraper/mc_beam_scraper_fit_values.json"
+    },
+    "norm" : 2.78,
+    "norm_area": true,
+    "ENERGY_CORRECTION":{
+        "correction" : "response",
+        "correction_params" : "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03/shower_energy_correction/gaussian.json"
+    },
+    "BEAM_PARTICLE_SELECTION":{
+        "PiBeamSelection":{
+            "enable" : true,
+            "use_beam_inst" : false
+        },
+        "CaloSizeCut":{
+            "enable" : true
+        },
+        "PandoraTagCut":{
+            "enable" : true,
+            "cut" : 13
+        },
+        "DxyCut":{
+            "enable" : true,
+            "cut" : 3
+        },
+        "DzCut":{
+            "enable" : true,
+            "cut" : [-3, 3]
+        },
+        "CosThetaCut":{
+            "enable" : true,
+            "cut" : 0.95
+        },
+        "APA3Cut":{
+            "enable" : true,
+            "cut" : 220
+        },
+        "MichelScoreCut":{
+            "enable" : true,
+            "cut" : 0.55
+        },
+        "MedianDEdXCut":{
+            "enable" : true,
+            "cut" : 2.4
+        },
+        "BeamScraperCut":{
+            "enable" : true,
+            "pdg_hyp" : 211,
+            "KE_range" : 1,
+            "cut" : 1.5
+        }
+    },
+    "VALID_PFO_SELECTION":{
+        "enable" : true
+    },
+    "FINAL_STATE_PIPLUS_SELECTION":{
+        "TrackScoreCut":{
+            "enable" : true,
+            "cut" : 0.5
+        },
+        "NHitsCut":{
+            "enable" : true,
+            "cut" : 20
+        },
+        "PiPlusSelection":{
+            "enable" : true,
+            "cut" : [0.5, 2.8]
+        }
+    },
+    "FINAL_STATE_PHOTON_SELECTION":{    
+        "EMScoreCut":{
+            "enable" : true,
+            "cut" : 0.5
+        },
+        "NHitsCut":{        
+            "enable" : true,
+            "cut" : 80
+        },
+        "BeamParticleDistanceCut":{
+            "enable" : true,
+            "cut" : [3, 90]
+        },
+        "BeamParticleIPCut":{
+            "enable" : true,
+            "cut" : 20
+        }
+    },
+    "FINAL_STATE_PI0_SELECTION":{
+        "NPhotonCandidateSelection":{
+            "enable" : true,
+            "cut" : 2
+        },
+        "Pi0MassSelection":{
+            "enable" : true,
+            "cut" : [50, 250]
+        },
+        "Pi0OpeningAngleSelection":{
+            "enable" : true,
+            "cut" : [10, 80]
+        }
+    }
+}
