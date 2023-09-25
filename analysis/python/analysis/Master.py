@@ -1029,9 +1029,19 @@ class TrueParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__true_beam_endProcess")
 
     @property
-    def KE_front_face(self) -> type:
-        ind = ak.argmax(self.beam_traj_pos.z > 0, -1, keepdims = True)
-        return ak.flatten(self.beam_traj_KE[ind])
+    def beam_ind_in_tpc(self) -> ak.Array:
+        return ak.argmax(self.beam_traj_pos.z > 0, -1, keepdims = True)
+
+    @property
+    def beam_KE_front_face(self) -> ak.Array:
+        return ak.flatten(self.beam_traj_KE[self.beam_ind_in_tpc])
+
+    @property
+    def beam_track_length(self) -> ak.Array:
+        in_tpc = (self.beam_traj_pos.z > 0) & (self.beam_traj_pos.z < 700)
+        pos_in_tpc = self.beam_traj_pos[in_tpc]
+        return ak.sum(vector.dist(pos_in_tpc[:, 1:], pos_in_tpc[:, :-1]), -1)
+
 
     @property
     def pi0_MC(self) -> bool:
