@@ -175,17 +175,18 @@ def AnalysePi0Selection(events : Master.Data, data : bool, correction : callable
     for a in args:
         print(a)
         if a == "Pi0MassSelection":
-            mask, property = functions[a](events, **args[a], return_property = True, correction = correction, correction_params = correction_params, photon_mask = photonCandidates)
+            mask, property = functions[a](events, **args[a], return_property = True, photon_mask = photonCandidates)
             output["mass_event_tag"] = MakeOutput(None, EventSelection.GenerateTrueFinalStateTags(events), None)
         elif a == "NPhotonCandidateSelection":
-            mask, property = functions[a](events, **args[a], photon_candidates = photonCandidates, return_property = True)
+            mask, property = functions[a](events, **args[a], photon_mask = photonCandidates, return_property = True)
         else:
             mask, property = functions[a](events, **args[a], return_property = True, photon_mask = photonCandidates)
         if a != "NPhotonCandidateSelection":
             mask = ak.flatten(mask)
         cut_table.add_mask(mask, a)
         cut_values = args[a]["cut"] if "cut" in args[a] else None
-        output[a] = MakeOutput(property, Tags.GeneratePi0Tags(events, photonCandidates), cut_values)
+        tags = null_tag() if data else Tags.GeneratePi0Tags(events, photonCandidates)
+        output[a] = MakeOutput(property, tags, cut_values)
         events.Filter([mask], [mask])
         photonCandidates = photonCandidates[mask]
         output[a]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
@@ -397,7 +398,7 @@ def MakePiPlusSelectionPlots(output_mc : dict, output_data : dict, outDir : str,
         pdf.savefig()
 
         if output_data:
-            Plots.PlotTagged(output_mc["median_dEdX"]["value"], output_mc["median_dEdX"]["tags"], data2 = output_data["median_dEdX"]["value"], ncols = 2, x_range = [0, 5], x_label = "median $dEdX$ (MeV/cm)", bins = args.nbins, norm = norm)
+            Plots.PlotTagged(output_mc["PiPlusSelection"]["value"], output_mc["PiPlusSelection"]["tags"], data2 = output_data["PiPlusSelection"]["value"], ncols = 2, x_range = [0, 5], x_label = "median $dEdX$ (MeV/cm)", bins = args.nbins, norm = norm)
         else:
             Plots.PlotTagged(output_mc["PiPlusSelection"]["value"], output_mc["PiPlusSelection"]["tags"], ncols = 2, x_range = [0, 5], x_label = "median $dEdX$", bins = args.nbins, norm = norm)
         Plots.DrawCutPosition(min(output_mc["PiPlusSelection"]["cuts"]), arrow_length = 0.5, face = "right")
@@ -483,7 +484,7 @@ def MakePi0SelectionPlots(output_mc : dict, output_data : dict, outDir : str, no
 
     with PdfPages(outDir + "pi0.pdf") as pdf:
         if output_data is not None:
-            scale = ak.count(output_data["NPhotonCandidateSelection"]["value"]) / ak.count(output_mc["n_photons"]["value"])
+            scale = ak.count(output_data["NPhotonCandidateSelection"]["value"]) / ak.count(output_mc["NPhotonCandidateSelection"]["value"])
 
             n_photons_scaled = []
             u, c = np.unique(output_mc["NPhotonCandidateSelection"]["value"], return_counts = True)
@@ -504,7 +505,7 @@ def MakePi0SelectionPlots(output_mc : dict, output_data : dict, outDir : str, no
         pdf.savefig()
 
         if output_data:
-            Plots.PlotTagged(output_mc["Pi0MassSelection"]["value"], output_mc["mass_event_tag"]["tags"], data2 = output_data["mass"]["value"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
+            Plots.PlotTagged(output_mc["Pi0MassSelection"]["value"], output_mc["mass_event_tag"]["tags"], data2 = output_data["Pi0MassSelection"]["value"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
         else:
             Plots.PlotTagged(output_mc["Pi0MassSelection"]["value"], output_mc["mass_event_tag"]["tags"], bins = args.nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm)
         Plots.DrawCutPosition(min(output_mc["Pi0MassSelection"]["cuts"]), face = "right", arrow_length = 50)
@@ -541,7 +542,7 @@ def MakeRegionPlots(outputs_mc_masks : dict, outputs_data_masks : dict, outDir :
         pdf.savefig()
 
         if outputs_data_masks is not None:
-            Plots.plot_region_data(outputs_mc_masks["reco_regions"], compare_max=0, title="reco regions")
+            Plots.plot_region_data(outputs_data_masks["reco_regions"], compare_max=0, title="reco regions")
             pdf.savefig()
 
 

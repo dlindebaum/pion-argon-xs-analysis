@@ -26,11 +26,11 @@ def GenerateTrueFinalStateTags(events : Master.Data = None) -> Tags.Tags:
         Tags: tags
     """
     tags = Tags.Tags()
-    tags["$1\pi^{0} + 0\pi^{+}$"     ]          = Tags.Tag("$1\pi^{0} + 0\pi^{+}$"              , "exclusive signal", "#8EBA42", generate_truth_tags(events, 1, 0      , only_diphoton = False) if events is not None else None, 0)
-    tags["$0\pi^{0} + 0\pi^{+}$"     ]          = Tags.Tag("$0\pi^{0} + 0\pi^{+}$"              , "background",       "#777777", generate_truth_tags(events, 0, 0      , only_diphoton = False) if events is not None else None, 1)
-    tags["$1\pi^{0} + \geq 1\pi^{+}$"]          = Tags.Tag("$1\pi^{0} + \geq 1\pi^{+}$"         , "sideband",         "#E24A33", generate_truth_tags(events, 1, (1,)   , only_diphoton = False) if events is not None else None, 2)
-    tags["$0\pi^{0} + \geq 1\pi^{+}$"]          = Tags.Tag("$0\pi^{0} + \geq 1\pi^{+}$"         , "sideband",         "#988ED5", generate_truth_tags(events, 0, (1,)   , only_diphoton = False) if events is not None else None, 3)
-    tags["$\greater 1\pi^{0} + \geq 0\pi^{+}$"] = Tags.Tag("$> 1\pi^{0} + \geq 0\pi^{+}$"       , "sideband",         "#348ABD", generate_truth_tags(events, (2,), (0,), only_diphoton = False) if events is not None else None, 4)
+    tags["charge_exchange" ] = Tags.Tag("$1\pi^{0} + 0\pi^{+}$"              , "charge_exchange" , "#8EBA42", generate_truth_tags(events, 1, 0      , only_diphoton = False) if events is not None else None, 0)
+    tags["absorption"      ] = Tags.Tag("$0\pi^{0} + 0\pi^{+}$"              , "absorption"      , "#777777", generate_truth_tags(events, 0, 0      , only_diphoton = False) if events is not None else None, 1)
+    tags["pion_prod_1_pi0" ] = Tags.Tag("$1\pi^{0} + \geq 1\pi^{+}$"         , "pion_prod_1_pi0" , "#E24A33", generate_truth_tags(events, 1, (1,)   , only_diphoton = False) if events is not None else None, 2)
+    tags["pion_prod_0_pi0" ] = Tags.Tag("$0\pi^{0} + \geq 1\pi^{+}$"         , "pion_prod_0_pi0" , "#988ED5", generate_truth_tags(events, 0, (1,)   , only_diphoton = False) if events is not None else None, 3)
+    tags["pion_prod_>1_pi0"] = Tags.Tag("$> 1\pi^{0} + \geq 0\pi^{+}$"       , "pion_prod_>1_pi0", "#348ABD", generate_truth_tags(events, (2,), (0,), only_diphoton = False) if events is not None else None, 4)
     return tags
 
 
@@ -41,8 +41,8 @@ def GenerateTrueFinalStateTags(events : Master.Data = None) -> Tags.Tags:
 #######################################################################
 
 
-def NPhotonCandidateSelection(events : Master.Data, photon_candidates : ak.Array, cut : int, return_property : bool = False):
-    n_photons = ak.sum(photon_candidates, -1)
+def NPhotonCandidateSelection(events : Master.Data, photon_mask : ak.Array, cut : int, return_property : bool = False):
+    n_photons = ak.sum(photon_mask, -1)
     return SelectionTools.CreateMask(cut, "==", n_photons, return_property)
 
 
@@ -103,7 +103,7 @@ def Pi0Selection(
 
     if (exact_photon_candidates is True) and (photon_candidates_mask is not None):
         selections.insert(0, NPhotonCandidateSelection)
-        arguments.insert(0, {"photon_candidates" : photon_candidates_mask, "cut" : n})
+        arguments.insert(0, {"photon_mask" : photon_candidates_mask, "cut" : n})
 
     print("Pi0Selection")
     return SelectionTools.CombineSelections(events, selections, 0, arguments, verbose, return_table)

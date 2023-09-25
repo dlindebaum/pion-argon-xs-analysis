@@ -1283,7 +1283,7 @@ def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float
     plt.annotate("", xy = xy1, xytext = xy0, arrowprops=dict(facecolor = color, edgecolor = color, arrowstyle = "->"), xycoords= transform)
 
 
-def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False, title : str = "", newFigure : bool = True, stacked : bool = True, alpha : float = None, truncate : bool = False):
+def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False, title : str = "", newFigure : bool = True, stacked : bool = True, alpha : float = None, truncate : bool = False, histtype : str = "stepfilled", reverse_sort : bool = False):
     """ Makes a stacked histogram and splits the sample based on tags.
 
     Args:
@@ -1298,18 +1298,26 @@ def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = N
         data2 (np.array): second sample to plot. if specified it will make a data MC plot (data is MC, data2 is Data).
     """
     split_data = [ak.ravel(data[tags[t].mask]) for t in tags]
-    
-    colours = tags.colour.values
+
+    sorted_index = np.argsort(ak.num(split_data))[::-1]
+    if reverse_sort:
+        sorted_index = sorted_index[::-1]
+    split_data = [split_data[i] for i in sorted_index]
+    sorted_tags = Tags.Tags()
+    for i in sorted_index:
+        sorted_tags[tags.number[i].name] = tags.number[i]
+
+    colours = sorted_tags.colour.values
     if ak.any(ak.is_none(colours)):
         print("some tags do not have colours, will override them for the default ones")
-        for i in range(len(tags)):
+        for i in range(len(sorted_tags)):
             colours[i] = "C" + str(i)
 
     if data2 is None:
-        PlotHist(split_data, stacked = stacked, label = tags.name.values, bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, newFigure = newFigure, alpha = alpha, truncate = truncate)
+        PlotHist(split_data, stacked = stacked, label = sorted_tags.name.values, bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, newFigure = newFigure, alpha = alpha, truncate = truncate, histtype = histtype)
         plt.legend(loc = loc, ncols = ncols, labelspacing = 0.25,  columnspacing = 0.25)
     else:
-        PlotHistDataMC(ak.ravel(data2), split_data, bins, x_range, stacked, "Data", tags.name.values, x_label, title, y_scale, loc, ncols, norm, colour = colours, alpha = alpha, truncate = truncate)
+        PlotHistDataMC(ak.ravel(data2), split_data, bins, x_range, stacked, "Data", sorted_tags.name.values, x_label, title, y_scale, loc, ncols, norm, colour = colours, alpha = alpha, truncate = truncate)
 
 
 def UniqueData(data):
