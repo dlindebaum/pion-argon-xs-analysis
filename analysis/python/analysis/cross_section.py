@@ -172,7 +172,15 @@ class BetheBloch:
         else:
             if dEdX < 0: dEdX = 0
         return dEdX
-    
+
+
+    def InteractingKE(KE_init : ak.Array, track_length : ak.Array, particle : Particle, n : int):
+        KE_int = KE_init
+        for i in range(n):
+            KE_int = KE_int - BetheBloch.meandEdX(KE_int, particle)*track_length/n
+        KE_int = ak.where(KE_int < 0, 0, KE_int)
+        return KE_int
+
 
 class ApplicationArguments:
     @staticmethod
@@ -333,12 +341,21 @@ class ApplicationArguments:
             else:
                 setattr(args, head, value) # allow for generic configurations in the json file
         ApplicationArguments.DataMCSelectionArgs(args)
+        ApplicationArguments.AddEnergyCorrection(args)
         return args
+
+
+    @staticmethod
+    def AddEnergyCorrection(args):
+        args.pi0_selection["mc_arguments"]["Pi0MassSelection"]["correction"] = EnergyCorrection.shower_energy_correction[args.correction]
+        args.pi0_selection["mc_arguments"]["Pi0MassSelection"]["correction_params"] = LoadConfiguration(args.correction_params)
+        args.pi0_selection["data_arguments"]["Pi0MassSelection"]["correction"] = EnergyCorrection.shower_energy_correction[args.correction]
+        args.pi0_selection["data_arguments"]["Pi0MassSelection"]["correction_params"] = LoadConfiguration(args.correction_params)
+        
 
     @staticmethod
     def DataMCSelectionArgs(args : argparse.Namespace):
         for a in vars(args):
-            print(getattr(args, a))
             if ("selection" in a) and (type(getattr(args, a)) == dict):
                 if "arguments" in getattr(args, a): 
                     getattr(args, a)["mc_arguments"] = copy.deepcopy(getattr(args, a)["arguments"])
@@ -458,12 +475,7 @@ def RecoDepositedEnergy(events : Master.Data, ff_KE : ak.Array, method : str) ->
     if method == "calo":
         dE = ak.sum(events.recoParticles.beam_dEdX[:, :-1] * reco_pitch, -1)
     elif method == "bb":
-        # reco_pitch_padded = ak.fill_none(ak.pad_none(reco_pitch, max(ak.num(reco_pitch)), -1), 0) # pad so all beam particles have the same number ov pitches (padded values are set to zero)
-        reco_pitch_padded = ak.pad_none(reco_pitch, max(ak.num(reco_pitch)), -1) # pad so all beam particles have the same number ov pitches (padded values are set to zero)
-        KE_int_bb = ff_KE
-        for d in range(max(ak.num(reco_pitch_padded))): # loop through all trajectoty points and compute dEdX simultaneously for all particles
-            E_temp = reco_pitch_padded[:, d] * BetheBloch.meandEdX(KE_int_bb, Particle.from_pdgid(211))
-            KE_int_bb = ak.where(ak.is_none(E_temp), KE_int_bb, KE_int_bb - E_temp)
+        KE_int_bb = BetheBloch.InteractingKE(ff_KE, ak.sum(reco_pitch, -1), Particle.from_pdgid(211), 50)
         dE = ff_KE - KE_int_bb
     else:
         raise Exception(f"{method} not a valid method, pick 'calo' or 'bb'")
