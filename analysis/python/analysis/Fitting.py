@@ -13,7 +13,7 @@ import pandas as pd
 
 from scipy.optimize import curve_fit
 from scipy.special import gamma, erf
-from scipy.stats import ks_2samp
+from scipy.stats import ks_2samp, chi2
 
 from python.analysis import Plots
 
@@ -251,8 +251,9 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         y_pred_max = func.func(x, *(popt + perr)) # y values predicted from the upper limit of the fit
         y_pred_err = (abs(y_pred - y_pred_min) + abs(y_pred - y_pred_max)) / 2 # error in the predicted fit value, taken to be the average deviation from the lower and upper limits
 
-        chisqr = np.nansum(((y_obs - y_pred)/y_pred_err)**2)
+        chisqr = np.nansum(((y_obs - y_pred))**2/y_pred)
         ndf = len(y_obs) - len(popt)
+        p_value = 1 - chi2.cdf(chisqr, ndf)
 
         #* main plotting
         x_interp = np.linspace(min(x), max(x), 1000)
@@ -270,7 +271,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         text = ""
         for j in range(len(popt)):
             text += f"\np{j}: ${popt[j]:.2g}\pm${perr[j]:.2g}"
-        text += "\n$\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2g}"
+        text += "\n$\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2g}, p : " + f"{p_value:.1g}"
         legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = "upper right")
         legend.set_zorder(12)
         for l in legend.legendHandles:
