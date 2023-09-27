@@ -770,3 +770,37 @@ class EnergySlice:
             tuple[np.array, np.array]: Cross section and statistical uncertainty.
         """
         return ThinSlice.CrossSection(n_incident, n_interact, dE/dEdX)
+
+    @staticmethod
+    def ModifiedCrossSection(n_int_exclusive : np.array, n_inc_exclusive, n_int_inclusive : np.array, n_inc_inclusive : np.array, dEdX : float, dE : float) -> tuple[np.array, np.array]:
+        def nandiv(num, den):
+            return np.divide(num, np.where(den == 0, np.nan, den))
+
+        NA = 6.02214076e23
+        factor = np.array(dEdX) * 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * dE)
+
+        n_interact_ratio = nandiv(n_int_exclusive, n_int_inclusive)
+        n_survived_inclusive = n_inc_inclusive - n_int_inclusive
+
+        # print(f"{factor=}")
+
+        var_inc_inclusive = n_inc_inclusive # poisson variance
+        var_int_inclusive = n_int_inclusive * (1 - nandiv(n_int_inclusive, n_inc_inclusive)) # binomial uncertainty
+        var_int_exclusive = n_int_exclusive * (1 - nandiv(n_int_exclusive, n_inc_exclusive)) # binomial uncertainty
+
+        # print(f"{var_inc_inclusive=}")
+        # print(f"{var_int_inclusive=}")
+        # print(f"{var_int_exclusive=}")
+
+        xs = factor * n_interact_ratio * np.log(nandiv(n_inc_inclusive, n_inc_inclusive - n_int_inclusive))
+
+        diff_n_int_exclusive = nandiv(xs, n_int_exclusive)
+        diff_n_inc_inclusive = factor * n_interact_ratio * (nandiv(1, n_inc_inclusive) - nandiv(1, n_survived_inclusive))
+        diff_n_int_inclusive = factor * n_interact_ratio * nandiv(1, n_survived_inclusive) - nandiv(xs, n_int_inclusive)
+
+        # print(f"{diff_n_int_exclusive=}")
+        # print(f"{diff_n_inc_inclusive=}")
+        # print(f"{diff_n_int_inclusive=}")
+
+        xs_err = ((diff_n_int_exclusive**2 * var_int_exclusive) + (diff_n_inc_inclusive**2 * var_inc_inclusive) + (diff_n_int_inclusive**2 * var_int_inclusive))**0.5
+        return xs, xs_err
