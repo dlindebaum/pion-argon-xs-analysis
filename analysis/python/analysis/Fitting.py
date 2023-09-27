@@ -202,8 +202,8 @@ class poly2d(FitFunction):
     n_params = 3
 
     @staticmethod
-    def func(x, a, b, c):
-        return a + (b * x) + c * (x**2)
+    def func(x, p0, p1, p2):
+        return p0 + (p1 * x) + p2 * (x**2)
 
     @staticmethod
     def p0(x, y):

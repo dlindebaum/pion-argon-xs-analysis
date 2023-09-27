@@ -18,7 +18,7 @@ import scipy.interpolate as interpolate
 from rich import print
 
 from python.analysis.Master import timer
-from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle
+from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle, Fitting
 
 @timer
 def GeneratePDFs(l : float) -> dict:

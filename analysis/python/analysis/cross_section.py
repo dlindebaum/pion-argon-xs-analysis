@@ -398,9 +398,9 @@ def UpstreamEnergyLoss(KE_inst : ak.Array, params : np.array, function : Fitting
         params (np.array): function paramters
 
     Returns:
-        ak.Array: _description_
+        ak.Array: upstream energy loss
     """
-    return function.func(KE_inst, *params)
+    return function.func(KE_inst, **params)
 
 
 def RecoDepositedEnergy(events : Master.Data, ff_KE : ak.Array, method : str) -> ak.Array:

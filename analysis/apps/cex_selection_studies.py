@@ -14,7 +14,6 @@ from rich import print as rprint
 from python.analysis import Master, BeamParticleSelection, EventSelection, PFOSelection, Plots, shower_merging, vector, Processing, Tags, cross_section
 
 import awkward as ak
-from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 import pandas as pd
 
@@ -286,7 +285,7 @@ def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, n
     """
 
     norm = False if output_data is None else norm
-    with PdfPages(outDir + "beam.pdf") as pdf:
+    with Plots.PdfPages(outDir + "beam.pdf") as pdf:
 
         bar_data = []
         for tag in output_mc["PiBeamSelection"]["value"]:
@@ -371,7 +370,7 @@ def MakePiPlusSelectionPlots(output_mc : dict, output_data : dict, outDir : str,
     """
 
     norm = False if output_data is None else norm
-    with PdfPages(outDir + "piplus.pdf") as pdf:
+    with Plots.PdfPages(outDir + "piplus.pdf") as pdf:
         if "track_score_all" in output_mc:
             if output_data:
                 Plots.PlotTagged(output_mc["track_score_all"]["value"], output_mc["track_score_all"]["tags"], data2 = output_data["track_score_all"]["value"], y_scale = "log", x_label = "track score", norm = norm)
@@ -424,7 +423,7 @@ def MakePhotonCandidateSelectionPlots(output_mc : dict, output_data : dict, outD
     """
     
     norm = False if output_data is None else norm
-    with PdfPages(outDir + "photon.pdf") as pdf:    
+    with Plots.PdfPages(outDir + "photon.pdf") as pdf:    
         if output_data:
             Plots.PlotTagged(output_mc["EMScoreCut"]["value"], output_mc["EMScoreCut"]["tags"], data2 = output_data["EMScoreCut"]["value"], bins = args.nbins, x_range = [0, 1], ncols = 4, x_label = "em score", norm = norm)
         else:
@@ -482,7 +481,7 @@ def MakePi0SelectionPlots(output_mc : dict, output_data : dict, outDir : str, no
     """
     norm = False if output_data is None else norm
 
-    with PdfPages(outDir + "pi0.pdf") as pdf:
+    with Plots.PdfPages(outDir + "pi0.pdf") as pdf:
         if output_data is not None:
             scale = ak.count(output_data["NPhotonCandidateSelection"]["value"]) / ak.count(output_mc["NPhotonCandidateSelection"]["value"])
 
@@ -531,7 +530,7 @@ def MakeRegionPlots(outputs_mc_masks : dict, outputs_data_masks : dict, outDir :
         outputs_data_masks (dict): data masks for each region
         outDir (str): output directory
     """
-    with PdfPages(outDir + "regions.pdf") as pdf:
+    with Plots.PdfPages(outDir + "regions.pdf") as pdf:
         # Visualise the regions
         Plots.plot_region_data(outputs_mc_masks["truth_regions"], compare_max=0, title="truth regions")
         pdf.savefig()

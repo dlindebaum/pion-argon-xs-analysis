@@ -170,11 +170,14 @@ class Data:
             self.nTuple_type = Ntuple_Type.SHOWER_MERGING
         else:
             self.nTuple_type = nTuple_type
-        if self.filename != None:
-            if "GeV" in self.filename:
-                self.target_mom = float(self.filename.split("GeV")[0][-1])
+        if (self.filename != None):
+            if "_data_" in self.filename:
+                self.target_mom = 1
             else:
-                self.target_mom = target_momentum
+                if "GeV" in self.filename:
+                    self.target_mom = float(self.filename.split("GeV")[0][-1])
+                else:
+                    self.target_mom = target_momentum
             self.nEvents = nEvents
             self.start = start
             self.io = IO(self.filename, self.nEvents, self.start)
