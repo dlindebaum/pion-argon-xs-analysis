@@ -7,37 +7,44 @@ Author: Shyam Bhuller
 Description: Generates toy events for inelastic pion interactions.
 """
 import argparse
+import os
 
 from collections import Counter
 
 import numpy as np
 import pandas as pd
-import rich.progress as progress
-import scipy.interpolate as interpolate
 
+from pathos.pools import ProcessPool
 from rich import print
+from scipy.interpolate import interp1d
 
 from python.analysis.Master import timer
-from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle, Fitting
+from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle
 
-@timer
-def GeneratePDFs(l : float) -> dict:
-    """ Creates PDF for a given cross section channel and slice thickness (i.e. step size)
+
+def ComputeEnergyLoss(inital_KE : float, stepsize : float) -> interp1d:
+    """ Calculate the mean dEdX profile for a given initial kinetic energy and position step size.
+        Then produce a function to map kinetic energy to dEdX given the outputs, and allow for interpolation.
 
     Args:
-        channel (str): cross section channel
-        l (float): slice thickness
+        inital_KE (float): Initial kinetic energy
+        stepsize (float): position step size (cm)
 
     Returns:
-        dict: pdfs for the inclusive and exclusive channels
+        interp1d: interpolated map of KE and dEdX
     """
-    xs_sim = GeantCrossSections()
-
-    pdfs = {}
-    for v in vars(xs_sim):
-        if v in ["KE", "file"]: continue
-        pdfs[v] = interpolate.interp1d(xs_sim.KE, P_int(getattr(xs_sim, v), l), fill_value = "extrapolate")
-    return pdfs
+    e = inital_KE
+    KE = []
+    dEdX = []
+    counter = 0
+    while e >= 0:
+        KE.append(e)
+        dEdX.append(BetheBloch.meandEdX(e, Particle.from_pdgid(211)))
+        e = e - stepsize * dEdX[-1]
+        counter += 1
+    KE.append(0)
+    dEdX.append(np.inf)
+    return interp1d(KE, dEdX, fill_value = 0, bounds_error = False) # if outside the interpolation range, return 0
 
 
 def P_int(sigma : np.array, l : float) -> np.array:
@@ -53,7 +60,7 @@ def P_int(sigma : np.array, l : float) -> np.array:
     return 1 - np.exp(-1E-27 * sigma * 6.02214076e23 * BetheBloch.rho * l / BetheBloch.A)
 
 
-def GenerateStackedPDFs(l : float) -> dict:
+def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split(os.pathsep)[0] + "/data/g4_xs.root") -> dict:
     """ Creates a PDF of the inclusive cross section and a stacked PDF of the exclusive process,
         such that rejection sampling can be used to allocate an exclusive process for a given inclusive process.
 
@@ -63,10 +70,10 @@ def GenerateStackedPDFs(l : float) -> dict:
     Returns:
         dict: dictionaty of pdfs
     """
-    xs_sim = GeantCrossSections()
+    xs_sim = GeantCrossSections(file = path)
 
     pdfs = {}
-    pdfs["total_inelastic"] = interpolate.interp1d(xs_sim.KE, P_int(xs_sim.total_inelastic, l), fill_value = "extrapolate") # total inelastic pdf
+    pdfs["total_inelastic"] = interp1d(xs_sim.KE, P_int(xs_sim.total_inelastic, l), fill_value = "extrapolate") # total inelastic pdf
 
     # sort the exclusice channels based on area under curve
     area = {}
@@ -78,7 +85,7 @@ def GenerateStackedPDFs(l : float) -> dict:
     y = np.zeros(len(xs_sim.KE))
     for v, _ in sorted(area.items(), key=lambda x: x[1]):
         y = y + P_int(getattr(xs_sim, v), l)
-        pdfs[v] = interpolate.interp1d(xs_sim.KE, y, fill_value = "extrapolate")
+        pdfs[v] = interp1d(xs_sim.KE, y, fill_value = "extrapolate")
     return pdfs
 
 
@@ -104,9 +111,8 @@ def GenerateIntialKEs(n : int, particle : Particle, cv : float, width : float, p
     else:
         raise ValueError(f"{profile} not a valid beam profile")
 
-
 @timer
-def Simulate(KE_init : np.array, stepsize : float, particle : Particle, pdfs : dict) -> tuple:
+def Simulate(KE_init : np.array, stepsize : float, pdfs : dict) -> tuple:
     """ Generates interacting kinetic energies and position based on the initial kinetic energy with the bethe bloch formula,
         the total inelastic pdf is used to decide when a particle interacts (using rejection sampling) and then each particle which
         interacts is assosiated a particular exclusive interaction process, using rejection sampling. Particles which reach zero KE are considered
@@ -121,6 +127,8 @@ def Simulate(KE_init : np.array, stepsize : float, particle : Particle, pdfs : d
     Returns:
         tuple: interacting kinetic energy, interacting position, whether it interacted or decay, exclusive process
     """
+    interpolated_energy_loss = ComputeEnergyLoss(2*max(KE_init), stepsize/2) # precompute the energy loss and create a function to interpolate between them
+
     survived = ~np.zeros(len(KE_init), dtype = bool) # keep track of which particles survived
     i = np.zeros(len(KE_init), dtype = int) # slab number i.e. position each particle interacted at
     KE_int = KE_init # set interacting kinetic energy to the initial at the start
@@ -130,32 +138,29 @@ def Simulate(KE_init : np.array, stepsize : float, particle : Particle, pdfs : d
     exclusive_process = np.repeat([""], len(KE_init)).astype(object)
 
 
-    with progress.Progress(progress.SpinnerColumn(), *progress.Progress.get_default_columns(), progress.TimeElapsedColumn()) as p: # fancy spinners
-        task = p.add_task("Simulating...", total = len(survived))
-        previous = sum(survived)
-        current = sum(survived)
-        while any(survived):
-            U = np.random.uniform(0, 1, len(KE_int)) # sample from a uniform distribution
-            inelastic = U < pdfs["total_inelastic"](KE_int) # did the partcile interact?
-            inclusive_process[inelastic] = "total_inelastic" # add label to all particles which did interact
-            for pdf in reversed(pdfs): # do this in reverse order, such that the least probable exlcusive process is check last
-                if pdf == "total_inelastic": continue # only exclusive processes
-                exclusive = inelastic & (U < pdfs[pdf](KE_int))
-                exclusive_process[exclusive] = pdf
+    while any(survived):
+        U = np.random.uniform(0, 1, len(KE_int)) # sample from a uniform distribution
+        inelastic = U < pdfs["total_inelastic"](KE_int) # did the partcile interact?
+        inclusive_process[inelastic] = "total_inelastic" # add label to all particles which did interact
+        for pdf in reversed(pdfs): # do this in reverse order, such that the least probable exlcusive process is checked last
+            if pdf == "total_inelastic": continue # only exclusive processes
+            exclusive = inelastic & (U < pdfs[pdf](KE_int))
+            exclusive_process[exclusive] = pdf
 
-            survived = survived & (survived != (inelastic)) # interacts inelasticly do does not survive
-            survived = survived & (survived != (KE_int < 1)) # particle is pretty much stationary so decays
+        survived = survived & (survived != (inelastic)) # interacts inelasticly do does not survive
+        survived = survived & (survived != (KE_int < 1)) # particle is pretty much stationary so decays
 
-            i = i + survived # distance travelled in step numbers
-            KE_int = KE_int - survived * stepsize * BetheBloch.meandEdX(KE_int, particle) # update KE if it survived
+        i = i + survived # distance travelled in step numbers
+        KE_int = KE_int - survived * stepsize * interpolated_energy_loss(KE_int) # update KE if it survived
 
-            # metrics to update the spinner
-            current = sum(survived)
-            p.update(task, advance = previous - current)
-            previous = current
-        p.finished # when we finish the loop the spiner should stop
     z_int = i * stepsize # convert interaction index to interacting position
-    return KE_int, z_int, inclusive_process, exclusive_process
+
+    return pd.DataFrame({
+        "KE_int" : KE_int,
+        "z_int" : z_int,
+        "inclusive_process" : inclusive_process,
+        "exclusive_process" : exclusive_process
+    })
 
 
 def CountProcesses(proc : np.array):
@@ -168,27 +173,43 @@ def CountProcesses(proc : np.array):
         print(p, sum(proc == p))
 
 
+def CreateMasks(toy : pd.DataFrame) -> dict:
+    """ Creates masks for each inclusive process and exclusive process based on particle tags from the toy mc.
+
+    Args:
+        toy (pd.DataFrame): toy mc to look at
+
+    Returns:
+        dict: masks of processes
+    """
+    masks = {}
+    for c in np.unique(toy.exclusive_process)[1:]:
+        masks[c] = toy.exclusive_process == c
+    for c in np.unique(toy.inclusive_process)[1:]:
+        masks[c] = toy.inclusive_process == c
+    return masks
+
+
 def main(args : argparse.Namespace):
     particle = Particle.from_pdgid(211)
 
-    # pdfs = GeneratePDFs(args.step)
     pdfs = GenerateStackedPDFs(args.step)
-    print(f"{pdfs=}")
 
     KE_init = GenerateIntialKEs(args.events, particle, args.momentum, args.width, args.beam_profile)
 
-    KE_int, z_int, inclusive_process, exclusive_process  = Simulate(KE_init, args.step, particle, pdfs)
+    nodes = os.cpu_count() if args.events > 1E4 else 1
+    pools = ProcessPool(nodes = nodes)
+    KE_init_split = np.array_split(KE_init, nodes)
+    sim_args = (KE_init_split, [args.step]*nodes, [pdfs]*nodes)
 
-    df = pd.DataFrame({
-        "KE_init" : KE_init,
-        "KE_int" : KE_int,
-        "z_int" : z_int,
-        "inclusive_process" : inclusive_process,
-        "exclusive_process" : exclusive_process
-    })
+    df = pd.concat(pools.map(Simulate, *sim_args), ignore_index = True)
 
-    CountProcesses(inclusive_process)
-    CountProcesses(exclusive_process)
+    masks = CreateMasks(df)
+    for m in masks:
+        df[m] = masks[m]
+
+    CountProcesses(df.inclusive_process)
+    CountProcesses(df.exclusive_process)
 
     print(df)
     df.to_hdf(args.out + ".hdf5", key = "df")
