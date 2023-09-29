@@ -138,7 +138,7 @@ class double_gaussian(FitFunction):
 
     @staticmethod
     def p0(x, y):
-        return [max(y), np.mean(x), np.std(x), max(y), np.mean(x), np.std(x)]
+        return [max(y), np.mean(x) + np.std(x)/2, np.std(x), max(y), np.mean(x) - np.std(x)/2, np.std(x)]
 
     @staticmethod
     def mu(A_1, mu_1, sigma_1, A_2, mu_2, sigma_2):
@@ -272,7 +272,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         for j in range(len(popt)):
             text += f"\np{j}: ${popt[j]:.2g}\pm${perr[j]:.2g}"
         text += "\n$\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2g}, p : " + f"{p_value:.1g}"
-        legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = "upper right")
+        legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = "upper right", title = func.__name__)
         legend.set_zorder(12)
         for l in legend.legendHandles:
             l.set_visible(False)

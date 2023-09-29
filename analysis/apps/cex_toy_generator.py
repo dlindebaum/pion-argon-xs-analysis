@@ -155,7 +155,10 @@ def Simulate(KE_init : np.array, stepsize : float, pdfs : dict) -> tuple:
 
     z_int = i * stepsize # convert interaction index to interacting position
 
+    KE_int[KE_int < 0] = 0
+
     return pd.DataFrame({
+        "KE_init" : KE_init,
         "KE_int" : KE_int,
         "z_int" : z_int,
         "inclusive_process" : inclusive_process,
