@@ -1427,17 +1427,17 @@ class RecoParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__integral")
 
     @property
-    def hit_energy(self) -> type:
+    def hit_energy(self) -> ak.Array:
         self.LoadData("hit_energy", "reco_daughter_allShower_hit_energy") # not in PDSPAnalyser
         return getattr(self, f"_{type(self).__name__}__hit_energy")
 
     @property
-    def track_dEdX(self) -> type:
+    def track_dEdX(self) -> ak.Array:
         self.LoadData("track_dEdX", "reco_daughter_allTrack_calibrated_dEdX_SCE")
         return getattr(self, f"_{type(self).__name__}__track_dEdX")
 
     @property
-    def beam_pandora_tag(self) -> type:
+    def beam_pandora_tag(self) -> ak.Array:
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             tag = self.events.recoParticles.pandoraTag[self.events.recoParticles.beam_number == self.events.recoParticles.number]
             tag = ak.flatten(ak.fill_none(ak.pad_none(tag, 1), -999))
@@ -1445,6 +1445,25 @@ class RecoParticleData(ParticleData):
         if self.events.nTuple_type == Ntuple_Type.PDSP:
             self.LoadData("beam_pandora_tag", "reco_beam_type")
         return getattr(self, f"_{type(self).__name__}__beam_pandora_tag")
+
+
+    @property
+    def beam_track_length(self) -> ak.Array:
+        setattr(self, f"_{type(self).__name__}__beam_track_length", self.track_length(self.beam_calo_pos))
+        return getattr(self, f"_{type(self).__name__}__beam_track_length")
+
+    def track_length(self, trajectory_points, threshold = int(2E5)):
+        if ak.num(trajectory_points, 0) > threshold:
+            n_chunks =  ak.num(trajectory_points, 0) // threshold
+            trk_len = []
+            for i in range(n_chunks + 1):
+                chunk = trajectory_points[i*threshold:(i+1)*threshold]
+                trk_len.append(ak.sum(vector.dist(chunk[:, 1:], chunk[:, :-1]), axis = -1))
+            trk_len = ak.concatenate(trk_len)
+        else:
+            trk_len = ak.sum(vector.dist(trajectory_points[:, 1:], trajectory_points[:, :-1]), axis = -1)
+        return trk_len
+
 
     def CalculatePairQuantities(self, useBT: bool = False) -> tuple:
         """ Calculate reconstructed shower pair quantities.
