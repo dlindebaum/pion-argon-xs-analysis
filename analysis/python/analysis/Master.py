@@ -1848,6 +1848,25 @@ class TrueParticleDataBT(ParticleData):
         return getattr(self, f"_{type(self).__name__}__beam_endProcess")
 
     @property
+    def is_beam_pi0(self) -> ak.Array:
+        if not hasattr(self, f"_{type(self).__name__}__is_beam_pi0"):
+            if ak.count(self.motherPdg) != 0:
+                pi0_daughter = self.motherPdg == 111
+
+                beam_pi0 = self.events.trueParticles.number[(self.events.trueParticles.pdg == 111) & (self.events.trueParticles.mother == 1)]
+                beam_pi0 = ak.fill_none(ak.pad_none(beam_pi0, 1, axis = -1), False)
+
+                beam_pi0_bt = []
+                for pi0, m in zip(beam_pi0, self.mother):
+                    beam_pi0_bt.append(np.isin(m, pi0))
+                beam_pi0_bt = ak.Array(beam_pi0_bt) & pi0_daughter
+            else:
+                beam_pi0_bt = self.motherPdg
+
+            setattr(self, f"_{type(self).__name__}__is_beam_pi0", beam_pi0_bt)
+        return getattr(self, f"_{type(self).__name__}__is_beam_pi0")
+
+    @property
     def particleNumber(self) -> ak.Array:
         """ Gets the true particle number of each true particle backtracked to reco
 

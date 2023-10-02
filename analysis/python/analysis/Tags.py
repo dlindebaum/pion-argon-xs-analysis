@@ -162,6 +162,84 @@ def GenerateTrueBeamParticleTags(events):# : Data) -> Tags:
     return tags
 
 
+def GenerateTrueParticleTagsPiPlus(events):# : Data) -> Tags:
+    """ Creates true particle tags with boolean masks, with specific tags related to pi+ particles. Does this for all PFOs.
+
+    Args:
+        events (Master.Data): events to look at
+
+    Returns:
+        Tags: tags
+    """
+    particles_to_tag = [
+        211, -211, 13, -13, -11, 22, 2212
+    ] # anything not in this list is tagged as other
+    # particles_to_tag = [
+    #     211, -211, 13, -13, 11, -11, 22, 2212, 321
+    # ]
+
+    if ak.count(events.trueParticlesBT.pdg) == 0: # the ntuple has no MC, so provide some null data base off recoParticles array shape
+        pdg = ak.where(events.recoParticles.number, -1, 0)
+        beam_daughter = pdg
+
+    else:
+        pdg = events.trueParticlesBT.pdg
+        beam_daughter = events.trueParticlesBT.mother == 1
+
+    masks = ParticleMasks(pdg, particles_to_tag)
+    masks["other"] = OtherMask(masks)
+
+    print(f"{beam_daughter=}")
+
+    print(f"{masks=}")
+
+    for p in ["$\\pi^{+}$", "$\\pi^{-}$"]:
+        new_mask = {p : masks[p] & beam_daughter, f"{p}:2nd" : masks[p] & (~beam_daughter)}
+        masks.pop(p)
+        new_mask.update(masks)
+        masks = new_mask
+
+    tags = Tags()
+    for i, m in enumerate(masks):
+        tags[m] = Tag(m, m, "C" + str(i), masks[m], i)
+
+    return tags
+
+
+def GenerateTrueParticleTagsPi0Shower(events):# : Data) -> Tags:
+    """ Creates true particle tags with boolean masks with specific tags for pi0 photon showers. Does this for all PFOs.
+
+    Args:
+        events (Master.Data): events to look at
+
+    Returns:
+        Tags: tags
+    """
+    particles_to_tag = [
+        211, -211, 13, -13, 11, -11, 22, 2212
+    ]
+    if ak.count(events.trueParticlesBT.pdg) == 0: # the ntuple has no MC, so provide some null data base off recoParticles array shape
+        pdg = ak.where(events.recoParticles.number, -1, 0)
+        beam_pi0 = pdg
+    else:
+        pdg = events.trueParticlesBT.pdg
+        beam_pi0 = events.trueParticlesBT.is_beam_pi0
+    masks = ParticleMasks(pdg, particles_to_tag)
+    masks["other"] = OtherMask(masks)
+
+    for p in ["$\\gamma$"]:
+        new_mask = {p : masks[p] & (~beam_pi0), f"{p}:beam $\pi^{0}$" : masks[p] & beam_pi0}
+        masks.pop(p)
+        new_mask.update(masks)
+        masks = new_mask
+
+    tags = Tags()
+    for i, m in enumerate(masks):
+        tags[m] = Tag(m, m, "C" + str(i), masks[m], i)
+
+    return tags
+
+
 def GeneratePi0Tags(events, photon_PFOs : ak.Array) -> Tags:# : Data, photon_PFOs : ak.Array) -> Tags:
     """ Truth tags for pi0s.
         Categories are:
