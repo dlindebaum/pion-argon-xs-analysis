@@ -4,6 +4,7 @@ Created on: 27/07/2023 14:26
 Author: Shyam Bhuller
 
 Description: Code for fitting functions to data using scipy's curve fit.
+#TODO Move function and rejection sampling code to it's own module
 """
 from abc import ABC, abstractmethod
 
@@ -33,6 +34,10 @@ class FitFunction(ABC):
         """ number of fit parameters
         """
         pass
+
+    @abstractmethod
+    def __new__(cls, x) -> np.array:
+        return cls.func(x)
 
     @staticmethod
     @abstractmethod
@@ -66,9 +71,12 @@ class FitFunction(ABC):
 class gaussian(FitFunction):
     n_params = 3
 
+    def __new__(cls, x, p0, p1, p2) -> np.array:
+        return cls.func(x, p0, p1, p2)
+
     @staticmethod
-    def func(x, A, mu, sigma):
-        return A * np.exp(-(x - mu) ** 2 / (2 * sigma ** 2))
+    def func(x, p0, p1, p2):
+        return p0 * np.exp(-(x - p1) ** 2 / (2 * p2 ** 2))
 
     @staticmethod
     def bounds(x, y):
@@ -79,24 +87,24 @@ class gaussian(FitFunction):
         return [max(y), np.median(x), np.std(x)]
     
     @staticmethod
-    def mu(A, mu, sigma):
-        return mu
+    def mu(p0, p1, p2):
+        return p1
 
     @staticmethod
-    def var(A, mu, sigma):
-        return sigma**2
+    def var(p0, p1, p2):
+        return p2**2
 
 
 class student_t(FitFunction):
     n_params = 4
-    
-    def __init__(self) -> None:
-        pass
+
+    def __new__(cls, x, p0, p1, p2, p3) -> np.array:
+        return cls.func(x, p0, p1, p2, p3)
 
     @staticmethod
-    def func(x, A, mu, nu, l):
-        t = (x - mu)/ l
-        return (A**2 / l) * (gamma((nu + 1)/2) / (np.sqrt(nu * np.pi) * gamma(nu/2))) * (1 + t**2/nu)**(-(nu + 1)/2)
+    def func(x, p0, p1, p2, p3):
+        t = (x - p1)/ p3
+        return (p0**2 / p3) * (gamma((p2 + 1)/2) / (np.sqrt(p2 * np.pi) * gamma(p2/2))) * (1 + t**2/p2)**(-(p2 + 1)/2)
 
     @staticmethod
     def bounds(x, y):
@@ -108,14 +116,14 @@ class student_t(FitFunction):
         return [max(y), np.median(x), 2, np.std(x)]
 
     @staticmethod
-    def mu(A, mu, nu, l):
-        return mu
+    def mu(p0, p1, p2, p3):
+        return p1
 
     @staticmethod
-    def var(A, mu, nu, l):
-        if nu > 2:
-            return nu / (nu - 2)
-        elif (nu <= 2) and nu > 1:
+    def var(p0, p1, p2, p3):
+        if p2 > 2:
+            return p2 / (p2 - 2)
+        elif (p2 <= 2) and p2 > 1:
             return np.Inf
         else:
             return np.NaN
@@ -124,12 +132,12 @@ class student_t(FitFunction):
 class double_gaussian(FitFunction):
     n_params = 6
 
-    def __init__(self) -> None:
-        pass
+    def __new__(cls, x, p0, p1, p2, p3, p4, p5) -> np.array:
+        return cls.func(x, p0, p1, p2, p3, p4, p5)
 
     @staticmethod
-    def func(x, A_1, mu_1, sigma_1, A_2, mu_2, sigma_2):
-        return A_1 * np.exp(-(x - mu_1)**2 / (2 * sigma_1**2)) + A_2 * np.exp(-(x - mu_2)**2 / (2 * sigma_2**2))
+    def func(x, p0, p1, p2, p3, p4, p5):
+        return p0 * np.exp(-(x - p1)**2 / (2 * p2**2)) + p3 * np.exp(-(x - p4)**2 / (2 * p5**2))
 
     @staticmethod
     def bounds(x, y):
@@ -141,44 +149,44 @@ class double_gaussian(FitFunction):
         return [max(y), np.mean(x) + np.std(x)/2, np.std(x), max(y), np.mean(x) - np.std(x)/2, np.std(x)]
 
     @staticmethod
-    def mu(A_1, mu_1, sigma_1, A_2, mu_2, sigma_2):
-        w_1 = A_1 / (A_1 + A_2)
-        w_2 = A_2 / (A_1 + A_2)
-        return (w_1 * mu_1) + (w_2 * mu_2)
+    def mu(p0, p1, p2, p3, p4, p5):
+        w_1 = p0 / (p0 + p3)
+        w_2 = p3 / (p0 + p3)
+        return (w_1 * p1) + (w_2 * p4)
 
     @staticmethod
-    def var(A_1, mu_1, sigma_1, A_2, mu_2, sigma_2):
-        w_1 = A_1 / (A_1 + A_2)
-        w_2 = A_2 / (A_1 + A_2)
+    def var(p0, p1, p2, p3, p4, p5):
+        w_1 = p0 / (p0 + p3)
+        w_2 = p3 / (p0 + p3)
 
-        return w_1 * (sigma_1**2) + w_2 * (sigma_2**2) + (w_1 * (mu_1**2) + w_2 * (mu_2**2) - (w_1*mu_1 + w_2*mu_2)**2)
+        return w_1 * (p2**2) + w_2 * (p5**2) + (w_1 * (p1**2) + w_2 * (p4**2) - (w_1*p1 + w_2*p4)**2)
 
 
 class crystal_ball(FitFunction):
     n_params = 5
 
-    def __init__(self) -> None:
-        pass
+    def __new__(cls, x, p0, p1, p2, p3, p4) -> np.array:
+        return cls.func(x, p0, p1, p2, p3, p4)
 
     @staticmethod
-    def func(x, S, mu, sigma, alpha, n):
-        t = (x - mu) / sigma
+    def func(x, p0, p1, p2, p3, p4):
+        t = (x - p1) / p2
 
-        a_alpha = abs(alpha)
-        n_alpha = n / a_alpha
+        a_alpha = abs(p3)
+        n_alpha = p4 / a_alpha
 
-        A = (n_alpha)**n * np.exp(-a_alpha**2 / 2)
+        A = (n_alpha)**p4 * np.exp(-a_alpha**2 / 2)
 
         B = n_alpha - a_alpha
 
-        C = (n_alpha) * (1/(n - 1)) * np.exp(-a_alpha**2/2)
+        C = (n_alpha) * (1/(p4 - 1)) * np.exp(-a_alpha**2/2)
 
         D = np.sqrt(np.pi / 2) *(1 + erf(a_alpha/np.sqrt(2)))
 
         N = 1 / (C + D) # should be 1 / sigma * (C + D), but I dont want to normalise the function
 
-        y = np.where(t > -alpha, np.exp(-t**2 / 2), A * (B - t)**-n)
-        return S * N * y
+        y = np.where(t > -p3, np.exp(-t**2 / 2), A * (B - t)**-p4)
+        return p0 * N * y
 
     @staticmethod
     def bounds(x, y):
@@ -190,16 +198,19 @@ class crystal_ball(FitFunction):
         return [max(y), np.mean(x), np.std(x), 1, 2]
 
     @staticmethod
-    def mu(S, mu, sigma, alpha, n):
-        return mu
+    def mu(p0, p1, p2, p3, p4):
+        return p1
 
     @staticmethod
-    def var(S, mu, sigma, alpha, n):
-        return sigma
+    def var(p0, p1, p2, p3, p4):
+        return p2
 
 
 class poly2d(FitFunction):
     n_params = 3
+
+    def __new__(cls, x, p0, p1, p2) -> np.array:
+        return cls.func(x, p0, p1, p2)
 
     @staticmethod
     def func(x, p0, p1, p2):
@@ -214,7 +225,75 @@ class poly2d(FitFunction):
         return ([-np.inf, -np.inf, -np.inf], [np.inf]*3)
 
 
-def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, method = "trf", maxfev = int(10E4), plot : bool = False, xlabel : str = "", ylabel : str = "", ylim : list = None) -> tuple[np.array, np.array]:
+class double_crystal_ball(FitFunction):
+    n_params = 7
+
+    def __new__(cls, x, p0, p1, p2, p3, p4, p5, p6) -> np.array:
+        return cls.func(x, p0, p1, p2, p3, p4, p5, p6)
+
+    @staticmethod
+    def ExponentNormalisation(alpha, n):
+        A = (n/abs(alpha))**n * np.exp(-0.5 * abs(alpha)**2)
+        B = (n/abs(alpha)) - abs(alpha)
+        return A, B
+
+    @staticmethod
+    def func(x, p0, p1, p2, p3, p4, p5, p6):
+        z = (x - p1) / p2
+        A, B = double_crystal_ball.ExponentNormalisation(p3, p4)
+        C, D = double_crystal_ball.ExponentNormalisation(p5, p6)
+        E1 = A * (B-z)**(-p4)
+        E2 = C * (D+z)**(-p6)
+        y = np.exp(-0.5*(z**2))
+        y = np.where(z < -p3, E1, y)
+        y = np.where(z > p5, E2, y)
+        return p0 * y
+
+    @staticmethod
+    def bounds(x, y):
+        # note p4 and p6 can be unbounded, but negative values have weird distribution shapes
+        return [(0, min(x), 0.001, 0.001, 0, 0.001, 0), (np.inf, max(x), max(x) - min(x), np.inf, 10, np.inf, 10)]
+
+    @staticmethod
+    def p0(x, y):
+        return [max(y), np.median(x), np.std(x), 1, 1, 1, 1]
+
+    @staticmethod
+    def mu(p0, p1, p2, p3, p4, p5, p6):
+        return p1
+    
+    @staticmethod
+    def var(p0, p1, p2, p3, p4, p5, p6):
+        return p2
+
+
+def RejectionSampling(num : int, low : float, high : float, func : FitFunction, params : dict, scale_param : str = "p0") -> np.array:
+    """ Performs Rejection sampling for a given function which describes a pdf.
+
+    Args:
+        num (int): number of samples to generate.
+        low (float): minimum range.
+        high (float): maximum range.
+        func (FitFunction): function which desribes a pdf, by default should be a function whose amplitude or scale parameter is p0.
+        params (dict): parameters of the function.
+        scale_param (str, optional): name of amplitude/scale parameter. Defaults to "p0".
+
+    Returns:
+        np.array: sampled values.
+    """
+    pdf_params = {i : params[i] for i in params}
+    pdf_params[scale_param] = 1 # fix ampltiude parameter to 1
+
+    x = np.array([])
+    while len(x) < num:
+        u = np.random.uniform(low, high, num) # generate a random range of values
+        v = np.random.uniform(0, 1, num) # generate a random probability
+        keep = v <= func(u, **pdf_params) # reject if v > probability of observing u
+        x = np.concatenate([x, u[keep]]) # concatenate x
+    return x[:num] #? is there a way to generate only the desired number rather than truncating x?
+
+
+def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, method = "trf", maxfev = int(10E4), plot : bool = False, xlabel : str = "", ylabel : str = "", ylim : list = None, plot_style : str = "scatter", title : str = "", plot_range : list = None, return_chi_sqr : bool = False) -> tuple[np.array, np.array]:
     """ Implementation of scipy's curve fit, with some constraints, checks to handle nan data and optional plotting.
 
     Args:
@@ -228,6 +307,10 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         xlabel (str, optional): plot x label. Defaults to "".
         ylabel (str, optional): plot y label. Defaults to "".
         ylim (list, optional): y limit of plot. Defaults to None.
+        plot_style (str, optional): plot style of the oberved data points, either "hist" or "scatter". Defaults to "scatter".
+        title (str, optional): plot title.s Defaults to "".
+        plot_range (list, optional): plot range. Defaults to None.
+        return_chi_sqr (bool, optional): additionally returns chi_sqr ndf and p value in a tuple (chi_sqr, ndf, p), defaults to False
 
     Returns:
         tuple[np.array, np.array]: fit parameters and errors in the parameters
@@ -245,11 +328,15 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
     popt, pcov = curve_fit(func.func, x, y_obs, sigma = y_err, maxfev = maxfev, p0 = func.p0(x, y_obs), bounds = func.bounds(x, y_obs), method = method, absolute_sigma = True)
     perr = np.sqrt(np.diag(pcov))
 
+    y_pred = func.func(x, *popt) # y values predicted from the fit
+    chisqr = np.nansum(((y_obs - y_pred))**2/y_pred)
+    ndf = len(y_obs) - len(popt)
+    p_value = 1 - chi2.cdf(chisqr, ndf)
+
     if plot is True:
-        y_pred = func.func(x, *popt) # y values predicted from the fit
-        y_pred_min = func.func(x, *(popt - perr)) # y values predicted from the lower limit of the fit
-        y_pred_max = func.func(x, *(popt + perr)) # y values predicted from the upper limit of the fit
-        y_pred_err = (abs(y_pred - y_pred_min) + abs(y_pred - y_pred_max)) / 2 # error in the predicted fit value, taken to be the average deviation from the lower and upper limits
+        # y_pred_min = func.func(x, *(popt - perr)) # y values predicted from the lower limit of the fit
+        # y_pred_max = func.func(x, *(popt + perr)) # y values predicted from the upper limit of the fit
+        # y_pred_err = (abs(y_pred - y_pred_min) + abs(y_pred - y_pred_max)) / 2 # error in the predicted fit value, taken to be the average deviation from the lower and upper limits
 
         chisqr = np.nansum(((y_obs - y_pred))**2/y_pred)
         ndf = len(y_obs) - len(popt)
@@ -257,9 +344,21 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
 
         #* main plotting
         x_interp = np.linspace(min(x), max(x), 1000)
-        Plots.Plot(x_interp, func.func(x_interp, *popt), newFigure = False, x_scale = "linear", xlabel = xlabel, ylabel = ylabel, color = "#1f77b4", zorder = 11, label = "fit")
+        Plots.Plot(x_interp, func.func(x_interp, *popt), newFigure = False, x_scale = "linear", xlabel = xlabel, ylabel = ylabel, color = "#1f77b4", zorder = 11, label = "fit", title = title)
         plt.fill_between(x_interp, func.func(x_interp, *(popt + perr)), func.func(x_interp, *(popt - perr)), color = "#7f7f7f", alpha = 0.5, zorder = 10, label = "$1\sigma$ error region")
-        Plots.Plot(x, y_obs, yerr = y_err, marker = "x", linestyle = "", color = "#d62728", label = "sample points", newFigure = False)
+
+        if plot_style == "hist":
+            marker = ""
+            colour = "black"
+            label = "observed uncertainty"
+            widths = (x[1] - x[0])/2
+            Plots.PlotHist(x - widths, x - widths, weights = y_obs, color = "#d62728", label = "observed", newFigure = False, range = plot_range)
+        else:
+            marker = "x"
+            colour = "#d62728"
+            label = "observed"
+
+        Plots.Plot(x, y_obs, yerr = y_err, marker = marker, linestyle = "", color = colour, label = label, newFigure = False)
         if ylim:
             plt.ylim(*sorted(ylim))
 
@@ -277,7 +376,10 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         for l in legend.legendHandles:
             l.set_visible(False)
 
-    return popt, perr
+    if return_chi_sqr == True:
+        return popt, perr, (chisqr, ndf, p_value)
+    else:
+        return popt, perr
 
 
 def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : str, v_range : list, funcs, data_bins : list, hist_bins : int, log : bool = False, rms_err : bool = False):
