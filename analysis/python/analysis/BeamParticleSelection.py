@@ -193,15 +193,24 @@ def BeamScraperCut(events : Data, KE_range : int, fits : dict, pdg_hyp : int = 2
     Returns:
         ak.Array: boolean mask
     """
-    def norm(x : str):
-        return (events.recoParticles.beam_inst_pos[x] - ak.mean(events.recoParticles.beam_inst_pos[x][in_range])) / ak.std(events.recoParticles.beam_inst_pos[x][in_range])
+    # def norm(x : str):
+    #     return (events.recoParticles.beam_inst_pos[x] - ak.mean(events.recoParticles.beam_inst_pos[x][in_range])) / ak.std(events.recoParticles.beam_inst_pos[x][in_range])
 
     beam_pdg_mass = Particle.from_pdgid(pdg_hyp).mass
     beam_inst_KE = (events.recoParticles.beam_inst_P**2 + beam_pdg_mass**2)**0.5 - beam_pdg_mass
 
-    in_range = (beam_inst_KE > min(fits[str(KE_range)]["bins"])) & (beam_inst_KE < max(fits[str(KE_range)]["bins"]))
-    nx = norm("x")
-    ny = norm("y")
+    # in_range = (beam_inst_KE > min(fits[str(KE_range)]["bins"])) & (beam_inst_KE < max(fits[str(KE_range)]["bins"]))
+    key = str(KE_range)
+    mu_x = fits[key]["mu_x_inst"]
+    mu_y = fits[key]["mu_y_inst"]
+    sigma_x = fits[key]["sigma_x_inst"]
+    sigma_y = fits[key]["sigma_y_inst"]
+
+    nx = (events.recoParticles.beam_inst_pos.x - mu_x)/sigma_x
+    ny = (events.recoParticles.beam_inst_pos.y - mu_y)/sigma_y
+
+    # nx = norm("x")
+    # ny = norm("y")
 
     r = np.sqrt(nx**2 + ny**2)
     return CreateMask(cut, "<", r, return_property)
