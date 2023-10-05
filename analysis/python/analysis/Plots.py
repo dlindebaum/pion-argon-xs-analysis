@@ -865,6 +865,27 @@ def Save(name: str = "plot", directory: str = "", dpi = 300):
     plt.close()
 
 
+def ClipJagged(array, min, max):
+    """ Clips a jagged (awkward) array, if the type of aray is an awkward array, returns as an awkward array, otherwise it returns a list of nested arrays
+
+    Args:
+        array: array
+
+    Returns:
+        clipped array
+    """
+    orig_type = type(array)
+    if orig_type != ak.Array:
+        array = ak.Array(array)
+
+    array = ak.where(array < min, min, array)
+    array = ak.where(array > max, max, array)
+
+    if orig_type != ak.Array:
+        array = list(array)
+    return array
+
+
 def FigureDimensions(x : int, orientation : str = "horizontal") -> tuple[int]:
     """ Compute dimensions for a multiplot which makes the grid as "square" as possible.
 
@@ -960,7 +981,11 @@ def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None
     """
     if newFigure is True: plt.figure()
     if truncate == True:
-        data = np.clip(data, min(range), max(range))
+        if range is None:
+            raise Exception("if truncate is true, range must be provided")
+        # data = np.clip(data, min(range), max(range))
+        data = ClipJagged(data, min(range), max(range))
+
     height, edges, _ = plt.hist(data, bins, label = label, alpha = alpha, density = density, histtype = histtype, stacked = stacked, color = color, range = range, weights = weights)
     binWidth = round((edges[-1] - edges[0]) / len(edges), sf)
     # TODO: make ylabel a parameter
