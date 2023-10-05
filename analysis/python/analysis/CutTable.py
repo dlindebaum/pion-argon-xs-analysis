@@ -446,6 +446,24 @@ class CutHandler():
         truth_masks = [m for m in reco_masks if isinstance(ak.count(m, axis=0), int)]
         return reco_masks, truth_masks
 
+
+    def get_masks_dict(self) -> dict:
+        """ 
+        Returns the masks and if applicable their names in a dictionary.
+        if no name was provided for the mask, a number is assigned.
+
+        Returns:
+            dict: dcitionary of masks
+        """
+        masks = {}
+        for i, (n, m) in enumerate(zip(self._names, self._masks)):
+            if (n in masks) or (n == "-"):
+                masks[i] = m
+            else:
+                masks[n] = m
+        return masks
+
+
     def apply_masks(
             self, data: ak.Array,
             return_table: bool = False,

@@ -34,7 +34,7 @@ def MakeOutput(value : ak.Array, tags : Tags.Tags, cuts : list = [], fs_tags : T
     return {"value" : value, "tags" : tags, "cuts" : cuts, "fs_tags" : fs_tags}
 
 
-def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam_quality_fits : dict, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
+def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam_quality_fits : dict, functions : dict, args : dict) -> tuple[dict, pd.DataFrame, dict]:
     """ Manually applies the beam selection while storing the value being cut on, cut values and truth tags in order to do plotting
         and produce performance tables.
 
@@ -76,10 +76,10 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, beam
 
     df = cut_table.get_table(init_data_name = "no selection", pfos = False, percent_remain = False, relative_percent = False, ave_per_event = False)
     print(df)
-    return output, df
+    return output, df, cut_table.get_masks_dict()
 
 
-def AnalysePiPlusSelection(events : Master.Data, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
+def AnalysePiPlusSelection(events : Master.Data, functions : dict, args : dict) -> tuple[dict, pd.DataFrame, dict]:
     """ Analyse the daughter pi+ selection.
 
     Args:
@@ -115,10 +115,10 @@ def AnalysePiPlusSelection(events : Master.Data, functions : dict, args : dict) 
     
     df = cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, events = False)
     print(df)
-    return output, df
+    return output, df, cut_table.get_masks_dict()
 
 
-def AnalysePhotonCandidateSelection(events : Master.Data, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
+def AnalysePhotonCandidateSelection(events : Master.Data, functions : dict, args : dict) -> tuple[dict, pd.DataFrame, dict]:
     """ Analyse the photon candidate selection.
 
     Args:
@@ -146,10 +146,10 @@ def AnalysePhotonCandidateSelection(events : Master.Data, functions : dict, args
 
     df = cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, events = False)
     print(df)
-    return output, df
+    return output, df, cut_table.get_masks_dict()
 
 
-def AnalysePi0Selection(events : Master.Data, data : bool, correction : callable, correction_params : dict, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
+def AnalysePi0Selection(events : Master.Data, data : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame, dict]:
     """ Analyse the pi0 selection.
 
     Args:
@@ -197,7 +197,7 @@ def AnalysePi0Selection(events : Master.Data, data : bool, correction : callable
 
     df = cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, pfos = False)
     print(df)
-    return output, df
+    return output, df, cut_table.get_masks_dict()
 
 
 def AnalyseRegions(events : Master.Data, photon_mask : ak.Array, is_data : bool, correction : callable = None, correction_params : dict = None) -> tuple[dict, dict]:
@@ -240,20 +240,20 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
         correction_params = None
 
     print("beam particle selection")
-    output_beam, table_beam = AnalyseBeamSelection(events, args["data"], beam_quality_fit_values, args["beam_selection"]["selections"], args["beam_selection"][selection_args]) # events are cut after this
+    output_beam, table_beam, beam_masks = AnalyseBeamSelection(events, args["data"], beam_quality_fit_values, args["beam_selection"]["selections"], args["beam_selection"][selection_args]) # events are cut after this
 
     print("PFO pre-selection")
     good_PFO_mask = PFOSelection.GoodShowerSelection(events)
     events.Filter([good_PFO_mask])
 
     print("pion selection")
-    output_pip, table_pip = AnalysePiPlusSelection(events.Filter(returnCopy = True), args["piplus_selection"]["selections"], args["piplus_selection"][selection_args]) # pass the PFO selections a copy of the event
+    output_pip, table_pip, pip_masks = AnalysePiPlusSelection(events.Filter(returnCopy = True), args["piplus_selection"]["selections"], args["piplus_selection"][selection_args]) # pass the PFO selections a copy of the event
 
     print("photon selection")
-    output_photon, table_photon = AnalysePhotonCandidateSelection(events.Filter(returnCopy = True), args["photon_selection"]["selections"], args["photon_selection"][selection_args])
+    output_photon, table_photon, photon_masks = AnalysePhotonCandidateSelection(events.Filter(returnCopy = True), args["photon_selection"]["selections"], args["photon_selection"][selection_args])
 
     print("pi0 selection")
-    output_pi0, table_pi0 = AnalysePi0Selection(events.Filter(returnCopy = True), args["data"], cross_section.EnergyCorrection.shower_energy_correction[args["correction"]], correction_params, args["pi0_selection"]["selections"], args["pi0_selection"][selection_args])
+    output_pi0, table_pi0, pi0_masks = AnalysePi0Selection(events.Filter(returnCopy = True), args["data"], args["pi0_selection"]["selections"], args["pi0_selection"][selection_args])
 
     print("regions")
     photon_selection_mask = PFOSelection.InitialPi0PhotonSelection(events)
@@ -265,11 +265,11 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
     }
 
     output = {
-        "beam" : {"data" : output_beam, "table" : table_beam},
-        "pip" : {"data" : output_pip, "table" : table_pip},
-        "photon" : {"data" : output_photon, "table" : table_photon},
-        "pi0" : {"data" : output_pi0, "table" : table_pi0},
-        "regions" : regions
+        "beam" : {"data" : output_beam, "table" : table_beam, "masks" : beam_masks},
+        "pip" : {"data" : output_pip, "table" : table_pip, "masks" : pip_masks},
+        "photon" : {"data" : output_photon, "table" : table_photon, "masks" : photon_masks},
+        "pi0" : {"data" : output_pi0, "table" : table_pi0, "masks" : pi0_masks},
+        "regions" : regions 
     }
     return output
 
@@ -574,6 +574,9 @@ def MergeOutputs(outputs : list) -> dict:
                         tmp = merged_output[selection][o] + output[selection][o]
                         tmp.Name = merged_output[selection][o].Name
                         merged_output[selection][o] = tmp
+                    elif o == "masks":
+                        for c in output[selection][o]:
+                            merged_output[selection][o][c] = ak.concatenate([merged_output[selection][o][c], output[selection][o][c]])
                     else:
                         for c in output[selection][o]:
                             if output[selection][o][c]["value"] is not None:
@@ -616,6 +619,13 @@ def MakeTables(output : dict, out : str, sample : str):
             efficiency.style.to_latex(outdir + s + "_efficiency.tex")
     return
 
+
+def SaveMasks(output : dict, out : str):
+    os.makedirs(out, exist_ok = True)
+    for head in output:
+        if "masks" not in output[head]: continue 
+        cross_section.SaveSelection(out + f"{head}_selection_masks.dill", output[head]["masks"])
+
 @Master.timer
 def main(args):
     shower_merging.SetPlotStyle(extend_colors = True)
@@ -626,12 +636,18 @@ def main(args):
     output_mc = MergeOutputs(Processing.mutliprocess(run, [args.mc_file], args.batches, args.events, func_args, args.threads)) # run the main analysing method
 
     output_data = None
-    if args.data_file is not None:
-        func_args["data"] = True
-        output_data = MergeOutputs(Processing.mutliprocess(run, [args.data_file], args.batches, args.events, func_args, args.threads)) # run the main analysing method
+    if args.mc_only != True:
+        if args.data_file is not None:
+            func_args["data"] = True
+            output_data = MergeOutputs(Processing.mutliprocess(run, [args.data_file], args.batches, args.events, func_args, args.threads)) # run the main analysing method
+
     # tables
     MakeTables(output_mc, args.out + "tables_mc/", "mc")
     if output_data is not None: MakeTables(output_data, args.out + "tables_data/", "data")
+
+    # save masks used in selection
+    SaveMasks(output_mc, args.out + "masks_mc/")
+    if output_data is not None: SaveMasks(output_data, args.out + "masks_data/")
 
     # output directories
     os.makedirs(args.out + "plots/", exist_ok = True)
@@ -657,6 +673,8 @@ if __name__ == "__main__":
     cross_section.ApplicationArguments.Output(parser)
     cross_section.ApplicationArguments.Plots(parser)
     cross_section.ApplicationArguments.Config(parser)
+
+    parser.add_argument("--mc", dest = "mc_only", action = "store_true", help = "Only analyse at MC file.")
 
     args = parser.parse_args()
 
