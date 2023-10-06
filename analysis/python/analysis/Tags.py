@@ -189,10 +189,6 @@ def GenerateTrueParticleTagsPiPlus(events):# : Data) -> Tags:
     masks = ParticleMasks(pdg, particles_to_tag)
     masks["other"] = OtherMask(masks)
 
-    print(f"{beam_daughter=}")
-
-    print(f"{masks=}")
-
     for p in ["$\\pi^{+}$", "$\\pi^{-}$"]:
         new_mask = {p : masks[p] & beam_daughter, f"{p}:2nd" : masks[p] & (~beam_daughter)}
         masks.pop(p)
@@ -269,3 +265,25 @@ def GeneratePi0Tags(events, photon_PFOs : ak.Array) -> Tags:# : Data, photon_PFO
     pi0_tags["1 $\gamma$"]                        = Tag("1 $\gamma$"                   , "one photon"         , mask = correctly_matched_photons == 1, number = 2) # one PFO is a pi0 photon
     pi0_tags["0 $\gamma$"]                       = Tag("0 $\gamma$"                   , "no photons"          , mask = correctly_matched_photons == 0, number = 3) # no PFO is a pi0 photon
     return pi0_tags
+
+
+def ExclusiveProcessTags(true_masks):
+    tags = Tags.Tags()
+
+    colours = {
+        "charge_exchange" : "#8EBA42",
+        "absorption"      : "#777777",
+        "single_pion_production" : "#E24A33",
+        "pion_production" : "#988ED5",
+    }
+    name_simple = {
+        "charge_exchange" : "cex",
+        "absorption" :"abs",
+        "single_pion_production" : "spip",
+        "pion_production" : "pip"
+    }
+
+    for i, t in enumerate(true_masks):
+        tags[t] = Tag(t, name_simple[t], colours[t], true_masks[t], i)
+    return tags
+

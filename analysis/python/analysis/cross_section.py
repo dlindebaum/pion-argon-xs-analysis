@@ -338,6 +338,13 @@ class ApplicationArguments:
             elif head == "ENERGY_CORRECTION":
                 args.correction = value["correction"]
                 args.correction_params = value["correction_params"]
+            elif head == "UPSTREAM_ENERGY_LOSS":
+                args.upstream_loss_bins = value["bins"]
+                args.upstream_loss_correction_params = LoadConfiguration(value["correction_params"])
+            elif head == "SELECTION_MASKS":
+                args.selection_masks = {}
+                for k, v in value.items():
+                    args.selection_masks[k] = {i : LoadSelectionFile(j) for i, j in v.items()}
             else:
                 setattr(args, head, value) # allow for generic configurations in the json file
         ApplicationArguments.DataMCSelectionArgs(args)
@@ -782,25 +789,15 @@ class EnergySlice:
         n_interact_ratio = nandiv(n_int_exclusive, n_int_inclusive)
         n_survived_inclusive = n_inc_inclusive - n_int_inclusive
 
-        # print(f"{factor=}")
-
         var_inc_inclusive = n_inc_inclusive # poisson variance
         var_int_inclusive = n_int_inclusive * (1 - nandiv(n_int_inclusive, n_inc_inclusive)) # binomial uncertainty
         var_int_exclusive = n_int_exclusive * (1 - nandiv(n_int_exclusive, n_inc_exclusive)) # binomial uncertainty
-
-        # print(f"{var_inc_inclusive=}")
-        # print(f"{var_int_inclusive=}")
-        # print(f"{var_int_exclusive=}")
 
         xs = factor * n_interact_ratio * np.log(nandiv(n_inc_inclusive, n_inc_inclusive - n_int_inclusive))
 
         diff_n_int_exclusive = nandiv(xs, n_int_exclusive)
         diff_n_inc_inclusive = factor * n_interact_ratio * (nandiv(1, n_inc_inclusive) - nandiv(1, n_survived_inclusive))
         diff_n_int_inclusive = factor * n_interact_ratio * nandiv(1, n_survived_inclusive) - nandiv(xs, n_int_inclusive)
-
-        # print(f"{diff_n_int_exclusive=}")
-        # print(f"{diff_n_inc_inclusive=}")
-        # print(f"{diff_n_int_inclusive=}")
 
         xs_err = ((diff_n_int_exclusive**2 * var_int_exclusive) + (diff_n_inc_inclusive**2 * var_inc_inclusive) + (diff_n_int_inclusive**2 * var_int_inclusive))**0.5
         return xs, xs_err

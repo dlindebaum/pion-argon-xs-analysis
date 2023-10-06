@@ -84,7 +84,7 @@ def main(args : argparse.Namespace):
         mc.Filter([mask], [mask])
         print(mc.cutTable.get_table())
 
-    bins = ak.Array(args.UPSTREAM_ENERGY_LOSS["bins"])
+    bins = ak.Array(args.upstream_loss_bins)
     x = (bins[1:] + bins[:-1]) / 2
 
     os.makedirs(args.out, exist_ok = True)
@@ -92,7 +92,7 @@ def main(args : argparse.Namespace):
         reco_KE_inst = cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass)
         cv = CentralValueEstimation(bins, reco_KE_inst, mc.trueParticles.beam_KE_front_face, cv_method[args.cv_function])
         pdf.savefig()
-        
+
         Plots.plt.figure()
         params = cross_section.Fitting.Fit(x, cv[0], cv[1], cross_section.Fitting.poly2d, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$(MeV)", ylabel = "$\mu(KE^{reco}_{inst} - KE^{true}_{ff})$(MeV)")
         pdf.savefig()

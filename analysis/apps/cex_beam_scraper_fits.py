@@ -203,22 +203,22 @@ def main(args : argparse.Namespace):
 
     os.makedirs(args.out + "beam_scraper/", exist_ok = True)
 
-    with PdfPages(args.out + "beam_scraper/" + "beam_scraper_fits.pdf") as pdf:
+    with Plots.PlotBook(args.out + "beam_scraper/" + "beam_scraper_fits.pdf") as pdf:
         Plots.Plot(args.energy_range, args.energy_range, color = "red")
         Plots.PlotHist2D(beam_inst_KE, true_ffKE, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$KE^{true}_{ff}$ (MeV)", x_range = args.energy_range, y_range = args.energy_range, newFigure = False)
-        pdf.savefig()
+        pdf.Save()
 
         Plots.PlotHist2D(beam_inst_KE, delta_KE_upstream, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$KE^{reco}_{inst} - KE^{true}_{ff}$ (MeV)", x_range = args.energy_range, y_range = residual_range)
         for i in args.beam_inst_KE_bins: plt.axvline(i, color = "red")
-        pdf.savefig()
+        pdf.Save()
 
         scraper_thresholds = GetScraperFits(args.beam_inst_KE_bins, beam_inst_KE, delta_KE_upstream, bins, residual_range)
-        pdf.savefig()
+        pdf.Save()
         print(scraper_thresholds)
 
         position_means = BeamScraperPlots(mc, args.beam_inst_KE_bins, beam_inst_KE, delta_KE_upstream, scraper_thresholds)
         print(position_means)
-        pdf.savefig()
+        pdf.Save()
 
     json_dict = {}
     for i, k in enumerate(scraper_thresholds):

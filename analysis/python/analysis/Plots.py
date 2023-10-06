@@ -15,9 +15,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.ticker import AutoMinorLocator, MultipleLocator
-from scipy.integrate import quad
-from scipy.optimize import curve_fit
-from scipy.special import gamma
 from scipy.stats import iqr
 
 from python.analysis import vector, Tags
@@ -852,6 +849,43 @@ class PairHistsBatchPlotter(HistogramBatchPlotter):
 def _adjust_text_colour(value, colour, norm, offset=0.2, max_reduction=0.7):
     scaling = 1-np.round(norm(value)+offset) * max_reduction
     return tuple(val * scaling for val in colour)
+
+
+class PlotBook:
+    def __init__(self, name : str, open : bool = True) -> None:
+        self.name = name
+        if ".pdf" not in self.name: self.name += ".pdf" 
+        if open: self.open()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.close()
+
+    def Save(self):
+        if hasattr(self, "pdf"):
+            try:
+                self.pdf.savefig(bbox_inches='tight')
+            except AttributeError:
+                pass
+
+    def open(self):
+        if not hasattr(self, "pdf"):
+            self.pdf = PdfPages(self.name)
+            print(f"pdf {self.name} has been opened")
+        else:
+            warnings.warn("pdf has already been opened")
+        return
+
+    def close(self):
+        if hasattr(self, "pdf"):
+            self.pdf.close()
+            delattr(self, "pdf")
+            print(f"pdf {self.name} has been closed")
+        else:
+            warnings.warn("pdf has not been opened.")
+        return
 
 
 def Save(name: str = "plot", directory: str = "", dpi = 300):
