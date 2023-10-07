@@ -8,18 +8,70 @@ Description: Generates toy events for inelastic pion interactions.
 """
 import argparse
 import os
+import warnings
 
 from collections import Counter
 
 import numpy as np
 import pandas as pd
+import tables
 
 from pathos.pools import ProcessPool
 from rich import print
 from scipy.interpolate import interp1d
 
 from python.analysis.Master import timer
-from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle
+from python.analysis import Fitting
+from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle, LoadConfiguration
+
+warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # supress annoying pandas warnings
+
+
+def ReadHDF5File(file : str):
+    """ Reads a HDF5 file and unpacks the contents into pandas dataframes.
+
+    Args:
+        file (str): file path.
+
+    Returns:
+        pd.DataFrame : if hdf5 file only has 1 key
+        dict L if phdf5 file contains more than 1 key
+    """
+    keys = []
+    with tables.open_file(file, driver = "H5FD_CORE") as hdf5file:
+        for c in hdf5file.root: 
+            keys.append(c._v_pathname[1:])
+    if len(keys) == 1:
+        return pd.read_hdf(file)
+    else:
+        return {k : pd.read_hdf(file, k) for k in keys}
+
+
+def ResolveConfig(args : argparse.Namespace) -> argparse.Namespace:
+    """ Parse Toy configuration file.
+
+    Args:
+        args (argparse.Namespace): application arguments
+
+    Returns:
+        argparse.Namespace: parsed configuration
+    """
+    config = LoadConfiguration(args.config)
+
+    for k, v in config.items():
+        if k == "smearing_params":
+            args.smearing_params = {}
+            for i in v:
+                args.smearing_params[i] = LoadConfiguration(v[i])
+                args.smearing_params[i]["function"] = getattr(Fitting, args.smearing_params[i]["function"])
+        elif k == "reco_region_fractions":
+            args.reco_region_fractions = ReadHDF5File(v)
+        elif k == "beam_selection_efficiencies":
+            #* that complex unpacking with pytables
+            args.beam_selection_efficiencies = ReadHDF5File(v)
+        else:
+            setattr(args, k, v)
+    return args
 
 
 def ComputeEnergyLoss(inital_KE : float, stepsize : float) -> interp1d:
@@ -192,13 +244,103 @@ def CreateMasks(toy : pd.DataFrame) -> dict:
         masks[c] = toy.inclusive_process == c
     return masks
 
+@timer
+def Smearing(n : int, resolutions : dict) -> pd.DataFrame:
+    """ Produces a dataframe of smearings for each kinematic output of the toy.
+        Emulates detector effects.
 
+    Args:
+        n (int): number of events
+        resolutions (dict): smearing parameters
+
+    Returns:
+        pd.DataFrame: smearing terms
+    """
+    return pd.DataFrame({
+        "KE_int_smearing" : Fitting.RejectionSampling(n, min(resolutions["KE_int"]["range"]), max(resolutions["KE_int"]["range"]), resolutions["KE_int"]["function"], resolutions["KE_int"]["values"]),
+        "KE_init_smearing" : Fitting.RejectionSampling(n, min(resolutions["KE_init"]["range"]), max(resolutions["KE_init"]["range"]), resolutions["KE_init"]["function"], resolutions["KE_init"]["values"]),
+        "z_int_smearing" : Fitting.RejectionSampling(n, min(resolutions["z_int"]["range"]), max(resolutions["z_int"]["range"]), resolutions["z_int"]["function"], resolutions["z_int"]["values"]),
+    })
+
+@timer
+def BeamSelectionEfficiency(toy : pd.DataFrame, key : str, beam_selection_params : dict):
+    """ Produces a mask of events which would have passed the beam selection,
+        based on the selection efficiency of a particular observable.
+
+    Args:
+        toy (pd.DataFrame): toy
+        key (str): observable
+        beam_selection_params (dict): selection efficiencies
+
+    Returns:
+        np.array: mask of events which pass the selection.
+    """
+    probability_index = np.digitize(toy[key].values, beam_selection_params["bins"][key])
+    probability_index = np.clip(probability_index, 0, len(beam_selection_params["efficiency"][key]) - 1)
+    probability = beam_selection_params["efficiency"][key][probability_index]
+
+    U = np.random.uniform(0, 1, len(toy))
+    return pd.DataFrame({"beam_selection_mask" : U < probability}).reset_index(drop = True)
+
+@timer
+def GenerateRecoRegions(exclusive_process : pd.Series, fractions : pd.DataFrame) -> pd.DataFrame:
+    """ Returns a Dataframe of masks which represent the reco and true regions of each event.
+        Truth regions are remade because they differ slighly from the exclusive process.
+
+    Args:
+        exclusive_process (pd.Series): exclusive processes.
+        fractions (pd.DataFrame): fractions of reco regions in true regions.
+
+    Returns:
+        pd.DataFrame: region masks.
+    """
+    exclusive_processes = np.unique(exclusive_process.values)
+
+    keys = list(fractions.columns)
+
+    toy_reco_regions = np.array(["-"]*len(exclusive_process))
+    for i in exclusive_processes:
+        if i == "": continue
+        if i in ["quasielastic", "double_charge_exchange"]: # can't distinguish these two processes in reco
+            sample_from = "single_pion_production"
+            # this is single pion production
+        else:
+            sample_from = i
+        toy_reco_regions = np.where(exclusive_process == i, np.random.choice(keys, len(exclusive_process), p = fractions[sample_from]), toy_reco_regions)
+
+    toy_reco_region_masks = {}
+    for c in keys:
+        if c == "-": continue
+        toy_reco_region_masks[c] = toy_reco_regions == c
+
+    toy_true_region_masks = {}
+    for i in exclusive_processes:
+        if i == "": continue
+        if i in ["quasielastic", "double_charge_exchange"]:
+            sample_from = "single_pion_production"
+            # this is single pion production
+        else:
+            sample_from = i
+        toy_true_region_masks[sample_from] = exclusive_process.values == i
+
+    regions_df = {}
+    for i in toy_reco_region_masks:
+        regions_df[f"reco_regions_{i}"] = toy_reco_region_masks[i]
+
+    for i in toy_true_region_masks:
+        regions_df[f"truth_regions_{i}"] = toy_true_region_masks[i]
+
+    regions_df = pd.DataFrame(regions_df)
+
+    return regions_df
+
+@timer
 def main(args : argparse.Namespace):
     particle = Particle.from_pdgid(211)
 
     pdfs = GenerateStackedPDFs(args.step)
 
-    KE_init = GenerateIntialKEs(args.events, particle, args.momentum, args.width, args.beam_profile)
+    KE_init = GenerateIntialKEs(args.events, particle, args.p_init, args.beam_width, args.beam_profile)
 
     nodes = os.cpu_count() if args.events > 1E4 else 1
     pools = ProcessPool(nodes = nodes)
@@ -214,23 +356,26 @@ def main(args : argparse.Namespace):
     CountProcesses(df.inclusive_process)
     CountProcesses(df.exclusive_process)
 
-    print(df)
-    df.to_hdf(args.out + ".hdf5", key = "df")
-    return
+    smearings = Smearing(args.events, args.smearing_params)
+    beam_selection_mask = BeamSelectionEfficiency(df, "z_int", args.beam_selection_efficiencies)
+    region_masks = GenerateRecoRegions(df.exclusive_process, args.reco_region_fractions)
+
+    df = pd.concat([df, smearings, beam_selection_mask, region_masks], axis = 1)
+
+    # allow the app to be run in other scripts or notebooks.
+    if __name__ == "__main__":
+        print(df)
+        df.to_hdf(args.out + ".hdf5", key = "df")
+    else:
+        return df
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Generates toy events for inelastic pion interactions.")
-    parser.add_argument("-e", "--events", type = float, help = "number of events to generate.", required = True)
-    parser.add_argument("-s", "--step", type = float, help = "step size of propagation (cm).", required = True)
-    parser.add_argument("-p", "--momentum", type = float, help = "initial momentum to generate particles at (MeV).", required = True)
-    parser.add_argument("-b", "--beam-profile", type = str, choices = ["gaussian", "uniform"], help = "what kind of pdf is the beam spread modelled by", required = True)
-    parser.add_argument("-w", "--width", type = float, help = "width of beam spread.", required = True)
-
+    parser.add_argument("-c", "--config", type = str, default = None, help = "Config json file.")
     ApplicationArguments.Output(parser)
 
-    args = parser.parse_args()
-
+    args = ResolveConfig(parser.parse_args())
     args.events = int(args.events)
     if args.out is None:
         args.out = "toy_mc"

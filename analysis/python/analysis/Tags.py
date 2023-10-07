@@ -268,8 +268,7 @@ def GeneratePi0Tags(events, photon_PFOs : ak.Array) -> Tags:# : Data, photon_PFO
 
 
 def ExclusiveProcessTags(true_masks):
-    tags = Tags.Tags()
-
+    tags = Tags()
     colours = {
         "charge_exchange" : "#8EBA42",
         "absorption"      : "#777777",
