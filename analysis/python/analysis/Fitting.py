@@ -417,12 +417,11 @@ def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : st
         p_best = None
 
         for f in funcs:
-            function = f()
             popt = None
             pcov = None
             perr = None
             try:
-                popt, pcov = curve_fit(function.func, x, y, p0 = function.p0(x, y), method = "dogbox", bounds = function.bounds(x, y), maxfev = 500000)
+                popt, pcov = curve_fit(f, x, y, p0 = f.p0(x, y), method = "dogbox", bounds = f.bounds(x, y), maxfev = 500000)
                 perr = np.sqrt(np.diag(pcov))
                 print_log(popt)
                 print_log(perr)
@@ -431,7 +430,7 @@ def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : st
                 print_log("could not fit, reason:")
                 print_log(e)
                 pass
-            y_pred = function.func(x, *popt) if popt is not None else None
+            y_pred = f.func(x, *popt) if popt is not None else None
             if y_pred is not None:
                 k, p = ks_2samp(y, y_pred)
             else:
@@ -448,14 +447,13 @@ def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : st
         mean = None
         mean_error = None
         if best_popt is not None:
-            function = best_f()
-            mean = function.mu(*best_popt)
+            mean = best_f.mu(*best_popt)
             if rms_err:
-                mean_error = np.sqrt(abs(function.var(*best_popt))/len(binned_data[variable]))
+                mean_error = np.sqrt(abs(best_f.var(*best_popt))/len(binned_data[variable]))
             else:
-                mean_error = mean - function.mu(*(best_popt + best_perr))
-            y_pred = function.func(x, *best_popt)
-            y_pred_interp = function.func(x_interp, *best_popt)
+                mean_error = mean - best_f.mu(*(best_popt + best_perr))
+            y_pred = best_f.func(x, *best_popt)
+            y_pred_interp = best_f.func(x_interp, *best_popt)
             k, p = ks_2samp(y, y_pred)
 
             Plots.Plot(x_interp, y_pred_interp, marker = "", color = "black", newFigure = False, label = "fit")

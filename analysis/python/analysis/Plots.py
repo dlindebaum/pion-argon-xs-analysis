@@ -1269,7 +1269,7 @@ def PlotHist2DImshow(x : ak.Array, y : ak.Array, bins : int = 100, x_range : lis
 
     if newFigure is True: plt.figure()
 
-    plt.imshow(h_norm.T, origin = "lower", extent=[min(x_e), max(x_e), min(y_e), max(y_e)], norm = cnorm, aspect = "auto")
+    plt.imshow(h_norm.T, origin = "lower", extent=[min(x_e), max(x_e), min(y_e), max(y_e)], norm = cnorm, aspect = "auto", cmap = cmap)
     plt.grid(False)
     if xlabel is not None: plt.xlabel(xlabel)
     if ylabel is not None: plt.ylabel(ylabel)

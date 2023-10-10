@@ -114,7 +114,8 @@ class EnergyCorrection:
 
     shower_energy_correction = {
         "linear" : LinearCorrection,
-        "response": ResponseCorrection
+        "response": ResponseCorrection,
+        None : None
     }
 
 
@@ -355,11 +356,18 @@ class ApplicationArguments:
 
     @staticmethod
     def AddEnergyCorrection(args):
-        args.pi0_selection["mc_arguments"]["Pi0MassSelection"]["correction"] = EnergyCorrection.shower_energy_correction[args.correction]
-        args.pi0_selection["mc_arguments"]["Pi0MassSelection"]["correction_params"] = LoadConfiguration(args.correction_params)
-        args.pi0_selection["data_arguments"]["Pi0MassSelection"]["correction"] = EnergyCorrection.shower_energy_correction[args.correction]
-        args.pi0_selection["data_arguments"]["Pi0MassSelection"]["correction_params"] = LoadConfiguration(args.correction_params)
-        
+        if hasattr(args, "correction"):
+            method = EnergyCorrection.shower_energy_correction[args.correction]
+            params = LoadConfiguration(args.correction_params)
+        else:
+            method = None
+            params = None
+            args.correction = None
+            args.correction_params = None
+        args.pi0_selection["mc_arguments"]["Pi0MassSelection"]["correction"] = method
+        args.pi0_selection["mc_arguments"]["Pi0MassSelection"]["correction_params"] = params
+        args.pi0_selection["data_arguments"]["Pi0MassSelection"]["correction"] = method
+        args.pi0_selection["data_arguments"]["Pi0MassSelection"]["correction_params"] = params
 
     @staticmethod
     def DataMCSelectionArgs(args : argparse.Namespace):

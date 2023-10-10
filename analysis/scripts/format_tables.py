@@ -199,7 +199,7 @@ def ReformatRowLabels(row_labels : np.array) -> list[str]:
         "angle" : "opening angle",
         "beam_scraper" : "beam scraper"
     }
-    fancy_row_labels = [mapping[i] for i in row_labels]
+    fancy_row_labels = [mapping[i] if i in mapping else i for i in row_labels]
     return fancy_row_labels
 
 
