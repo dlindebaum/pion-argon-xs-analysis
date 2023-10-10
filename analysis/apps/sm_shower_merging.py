@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 from rich import print as rprint
 
-from python.analysis import Master, Tags, shower_merging, Processing
+from python.analysis import Master, EventSelection, shower_merging, Processing
 
 
 def RecoShowerPairsDataFrame(events : Master.Data, start_showers : ak.Array, to_merge : ak.Array, cuts : str, cut_type : str, cheat : bool) -> tuple:
@@ -60,7 +60,7 @@ def run(i, file, n_events, start, selected_events, args):
         events.Filter([mask])
 
     #* tag the shower pairs based on event topology
-    tags = Tags.GenerateTrueFinalStateTags(events)
+    tags = EventSelection.GenerateTrueFinalStateTags(events)
 
     tags_number = [-1] * len(tags.number[0].mask)
     tags_map = {"not tagged" : [-1]}

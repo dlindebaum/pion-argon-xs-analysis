@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 from rich import print
 
-from python.analysis import Plots, Tags, shower_merging
+from python.analysis import Plots, shower_merging, EventSelection
 
 
 class info:
@@ -201,7 +201,7 @@ def main(args):
         tag_map = pd.read_hdf(args.file, "tag_map")
         tag_number = pd.read_hdf(args.file, "metadata")["tag"]
         
-        tags = Tags.GenerateTrueFinalStateTags()
+        tags = EventSelection.GenerateTrueFinalStateTags()
         for t in tags.name_simple.values:
             if t not in args.tags:
                 print(f"dont look at {tags.name_simple[t].name}")
@@ -255,7 +255,7 @@ if __name__ == "__main__":
     
     quantities = ["mass", "angle", "lead_energy", "sub_energy", "pi0_mom_mag"]
     plots = ["diff", "hist", "qq"]
-    tag_simple_names = list(set(Tags.GenerateTrueFinalStateTags().name_simple.values))
+    tag_simple_names = list(set(EventSelection.GenerateTrueFinalStateTags().name_simple.values))
 
     parser = argparse.ArgumentParser(description = "Plot Shower pair quantities produced from ParticleData classes (in csv format)")
     parser.add_argument(dest = "file", type = str, help = "csv file/s to open.")

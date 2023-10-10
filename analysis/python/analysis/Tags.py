@@ -10,8 +10,9 @@ from dataclasses import dataclass
 import awkward as ak
 from particle import Particle
 
-from python.analysis.Master import Data
-from python.analysis.EventSelection import generate_truth_tags
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from python.analysis.Master import Data
 
 @dataclass(slots = True)
 class Tag:
@@ -99,7 +100,7 @@ def OtherMask(masks : dict) -> ak.Array:
     return ~other
 
 
-def GenerateTrueParticleTags(events : Data) -> Tags:
+def GenerateTrueParticleTags(events):# : Data) -> Tags:
     """ Creates true particle tags with boolean masks. Does this for all PFOs.
 
     Args:
@@ -126,7 +127,7 @@ def GenerateTrueParticleTags(events : Data) -> Tags:
     return tags
 
 
-def GenerateTrueBeamParticleTags(events : Data) -> Tags:
+def GenerateTrueBeamParticleTags(events):# : Data) -> Tags:
     """ Creates true particle tags with boolean masks for beam particles.
 
     Args:
@@ -161,7 +162,81 @@ def GenerateTrueBeamParticleTags(events : Data) -> Tags:
     return tags
 
 
-def GeneratePi0Tags(events : Data, photon_PFOs : ak.Array) -> Tags:
+def GenerateTrueParticleTagsPiPlus(events):# : Data) -> Tags:
+    """ Creates true particle tags with boolean masks, with specific tags related to pi+ particles. Does this for all PFOs.
+
+    Args:
+        events (Master.Data): events to look at
+
+    Returns:
+        Tags: tags
+    """
+    particles_to_tag = [
+        211, -211, 13, -13, -11, 22, 2212
+    ] # anything not in this list is tagged as other
+    # particles_to_tag = [
+    #     211, -211, 13, -13, 11, -11, 22, 2212, 321
+    # ]
+
+    if ak.count(events.trueParticlesBT.pdg) == 0: # the ntuple has no MC, so provide some null data base off recoParticles array shape
+        pdg = ak.where(events.recoParticles.number, -1, 0)
+        beam_daughter = pdg
+
+    else:
+        pdg = events.trueParticlesBT.pdg
+        beam_daughter = events.trueParticlesBT.mother == 1
+
+    masks = ParticleMasks(pdg, particles_to_tag)
+    masks["other"] = OtherMask(masks)
+
+    for p in ["$\\pi^{+}$", "$\\pi^{-}$"]:
+        new_mask = {p : masks[p] & beam_daughter, f"{p}:2nd" : masks[p] & (~beam_daughter)}
+        masks.pop(p)
+        new_mask.update(masks)
+        masks = new_mask
+
+    tags = Tags()
+    for i, m in enumerate(masks):
+        tags[m] = Tag(m, m, "C" + str(i), masks[m], i)
+
+    return tags
+
+
+def GenerateTrueParticleTagsPi0Shower(events):# : Data) -> Tags:
+    """ Creates true particle tags with boolean masks with specific tags for pi0 photon showers. Does this for all PFOs.
+
+    Args:
+        events (Master.Data): events to look at
+
+    Returns:
+        Tags: tags
+    """
+    particles_to_tag = [
+        211, -211, 13, -13, 11, -11, 22, 2212
+    ]
+    if ak.count(events.trueParticlesBT.pdg) == 0: # the ntuple has no MC, so provide some null data base off recoParticles array shape
+        pdg = ak.where(events.recoParticles.number, -1, 0)
+        beam_pi0 = pdg
+    else:
+        pdg = events.trueParticlesBT.pdg
+        beam_pi0 = events.trueParticlesBT.is_beam_pi0
+    masks = ParticleMasks(pdg, particles_to_tag)
+    masks["other"] = OtherMask(masks)
+
+    for p in ["$\\gamma$"]:
+        new_mask = {p : masks[p] & (~beam_pi0), f"{p}:beam $\pi^{0}$" : masks[p] & beam_pi0}
+        masks.pop(p)
+        new_mask.update(masks)
+        masks = new_mask
+
+    tags = Tags()
+    for i, m in enumerate(masks):
+        tags[m] = Tag(m, m, "C" + str(i), masks[m], i)
+
+    return tags
+
+
+def GeneratePi0Tags(events, photon_PFOs : ak.Array) -> Tags:# : Data, photon_PFOs : ak.Array) -> Tags:
     """ Truth tags for pi0s.
         Categories are:
             two photons from the same pi0
@@ -192,19 +267,22 @@ def GeneratePi0Tags(events : Data, photon_PFOs : ak.Array) -> Tags:
     return pi0_tags
 
 
-def GenerateTrueFinalStateTags(events : Data = None) -> Tags:
-    """ Generate truth tags for final state of the beam interaction.
-
-    Args:
-        events (Data, optional): events to look at. Defaults to None.
-
-    Returns:
-        Tags: tags
-    """
+def ExclusiveProcessTags(true_masks):
     tags = Tags()
-    tags["$1\pi^{0} + 0\pi^{+}$"     ]          = Tag("$1\pi^{0} + 0\pi^{+}$"              , "exclusive signal", "#8EBA42", generate_truth_tags(events, 1, 0      , only_diphoton = False) if events is not None else None, 0)
-    tags["$0\pi^{0} + 0\pi^{+}$"     ]          = Tag("$0\pi^{0} + 0\pi^{+}$"              , "background",       "#777777", generate_truth_tags(events, 0, 0      , only_diphoton = False) if events is not None else None, 1)
-    tags["$1\pi^{0} + \geq 1\pi^{+}$"]          = Tag("$1\pi^{0} + \geq 1\pi^{+}$"         , "sideband",         "#E24A33", generate_truth_tags(events, 1, (1,)   , only_diphoton = False) if events is not None else None, 2)
-    tags["$0\pi^{0} + \geq 1\pi^{+}$"]          = Tag("$0\pi^{0} + \geq 1\pi^{+}$"         , "sideband",         "#988ED5", generate_truth_tags(events, 0, (1,)   , only_diphoton = False) if events is not None else None, 3)
-    tags["$\greater 1\pi^{0} + \geq 0\pi^{+}$"] = Tag("$> 1\pi^{0} + \geq 0\pi^{+}$"       , "sideband",         "#348ABD", generate_truth_tags(events, (2,), (0,), only_diphoton = False) if events is not None else None, 4)
+    colours = {
+        "charge_exchange" : "#8EBA42",
+        "absorption"      : "#777777",
+        "single_pion_production" : "#E24A33",
+        "pion_production" : "#988ED5",
+    }
+    name_simple = {
+        "charge_exchange" : "cex",
+        "absorption" :"abs",
+        "single_pion_production" : "spip",
+        "pion_production" : "pip"
+    }
+
+    for i, t in enumerate(true_masks):
+        tags[t] = Tag(t, name_simple[t], colours[t], true_masks[t], i)
     return tags
+

@@ -7,33 +7,50 @@ Author: Shyam Bhuller
 Description: Applies beam particle selection, photon shower candidate selection and writes out shower energies.
 """
 import argparse
-import json
 import os
 
 import awkward as ak
 import pandas as pd
 from rich import print
 
-from python.analysis import Master, Processing, BeamParticleSelection, PFOSelection, cross_section, EventSelection, Tags
+from python.analysis import Master, Processing, cross_section, EventSelection, Tags
+
+
+def CreatePFOMasks(masks : dict):
+    mask = None
+    for m in masks:
+        if mask is None:
+            mask = masks[m]
+        else:
+            mask = mask & masks[m]
+    return mask
+
 
 def run(i, file, n_events, start, selected_events, args):
     output = {}
 
     events = Master.Data(file, n_events, start, args["ntuple_type"])
 
-    with open(args["mc_beam_quality_fit"], "r") as f:
-        fit_values = json.load(f)
+    if "selection_masks" in args:
+        for m in args["selection_masks"]["mc"]["beam"].values():
+            events.Filter([m], [m])
+        events.Filter([args["selection_masks"]["mc"]["null_pfo"]])
+        photon_mask = CreatePFOMasks(args["selection_masks"]["mc"]["photon"])
+        events.Filter([photon_mask])
+    else:
+        for s, a in zip(args["beam_selection"]["selections"].values(), args["beam_selection"]["mc_arguments"].values()):
+            mask = s(events, **a)
+            events.Filter([mask], [mask])
+        photon_masks = {}
+        if args["valid_pfo_selection"] is True:
+            for k, s, a in zip(args["photon_selection"]["selections"].keys(), args["photon_selection"]["selections"].values(), args["photon_selection"]["mc_arguments"].values()):
+                photon_masks[k] = s(events, **a)
+        photon_mask = CreatePFOMasks(photon_masks)
+        events.Filter([photon_mask])        
 
+    pairs = EventSelection.NPhotonCandidateSelection(events, photon_mask[photon_mask], 2)
 
-    mask = BeamParticleSelection.CreateDefaultSelection(events, False, fit_values, verbose = True, return_table = False)
-    events.Filter([mask], [mask])
-
-    mask = PFOSelection.InitialPi0PhotonSelection(events, verbose = True, return_table = False)
-    events.Filter([mask])
-
-    pairs = EventSelection.NPhotonCandidateSelection(events, mask[mask], 2)
-
-    shower_pairs = Master.ShowerPairs(events, shower_pair_mask = mask[mask] & pairs)
+    shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photon_mask[photon_mask] & pairs)
 
     params = ["angle", "sub_energy", "lead_energy", "mass"]
 
@@ -55,12 +72,12 @@ def run(i, file, n_events, start, selected_events, args):
 
     output["true_mother"] = ak.flatten(events.trueParticlesBT.motherPdg)
 
-    pi0_tags = Tags.GeneratePi0Tags(events, mask[mask] & pairs)
+    pi0_tags = Tags.GeneratePi0Tags(events, photon_mask[photon_mask] & pairs)
     for t in pi0_tags:
         pi0_tags[t].mask = pi0_tags[t].mask[pairs]
     output["pi0_tags"] = pi0_tags
     
-    fs_tags = Tags.GenerateTrueFinalStateTags(events)
+    fs_tags = EventSelection.GenerateTrueFinalStateTags(events)
     for t in fs_tags:
         fs_tags[t].mask = fs_tags[t].mask[pairs]
     output["final_state_tags"] = fs_tags
@@ -68,7 +85,7 @@ def run(i, file, n_events, start, selected_events, args):
     return output
 
 def main(args):
-    outputs = Processing.mutliprocess(run, [args.file], args.batches, args.events, vars(args), args.threads)
+    outputs = Processing.mutliprocess(run, [args.mc_file], args.batches, args.events, vars(args), args.threads)
 
     output = {}
     for o in outputs:
@@ -100,15 +117,12 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Applies beam particle selection and saves properties of photon shower candidate PFOs to hdf5 file (MC only)", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    cross_section.ApplicationArguments.SingleNtuple(parser, define_sample = False)
-    cross_section.ApplicationArguments.BeamQualityCuts(parser, data = False)
-    cross_section.ApplicationArguments.BeamSelection(parser)
     cross_section.ApplicationArguments.Processing(parser)
     cross_section.ApplicationArguments.Output(parser)
+    cross_section.ApplicationArguments.Config(parser)
 
     args = parser.parse_args()
-
-    cross_section.ApplicationArguments.ResolveArgs(args)
+    args = cross_section.ApplicationArguments.ResolveArgs(args)
 
     print(vars(args))
     main(args)

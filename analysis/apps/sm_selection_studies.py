@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 from rich import print as rprint
 
-from python.analysis import Master, Tags, Plots, shower_merging, Processing
+from python.analysis import Master, Plots, shower_merging, Processing, EventSelection
 
 
 def BasicQuantities(events : Master.Data, start_showers_all : ak.Array, to_merge : ak.Array, signal_all : ak.Array, background : ak.Array) -> dict:
@@ -260,7 +260,7 @@ def run(i, file, n_events, start, selected_events, args):
             daughter_pip_event_counts = {"before" : ak.count(events_mask), "after" : ak.sum(events_mask)}
             events.Filter([events_mask], [events_mask])
 
-            tags = Tags.GenerateTrueFinalStateTags(events)
+            tags = EventSelection.GenerateTrueFinalStateTags(events)
 
             #* select events which have exactly 2 photon candidates, will deal with > 2 later
             n_photon_candidates = ak.num(events.recoParticles.number[shower_merging.PFOSelection.InitialPi0PhotonSelection(events)]) # get pi0 shower candidates
@@ -272,7 +272,7 @@ def run(i, file, n_events, start, selected_events, args):
             # n_photon_candidates = n_photon_candidates[events_mask]
             # photon_candidates = photon_candidates[events_mask]
 
-            photon_candidate_tags = Tags.GenerateTrueFinalStateTags()
+            photon_candidate_tags = EventSelection.GenerateTrueFinalStateTags()
             for k in tags:
                 mask = ak.Array(tags[k].mask)
                 photon_candidate_tags[k].mask = mask[photon_candidates] # apply photon candidate masks to the tags
@@ -318,8 +318,8 @@ def main(args):
     output = Processing.mutliprocess(run, args.file, args.batches, args.events, vars(args), args.threads) # run the main analysing method
 
     #* merge output from processes
-    tags = Tags.GenerateTrueFinalStateTags()
-    selected_tags = Tags.GenerateTrueFinalStateTags()
+    tags = EventSelection.GenerateTrueFinalStateTags()
+    selected_tags = EventSelection.GenerateTrueFinalStateTags()
     n_photon_candidates = []
     daughter_pip_event_counts = {}
 

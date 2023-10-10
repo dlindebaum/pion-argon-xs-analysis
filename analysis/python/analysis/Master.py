@@ -19,7 +19,7 @@ import uproot
 from rich import print
 
 # custom modules
-from python.analysis import vector
+from python.analysis import vector, CutTable
 
 
 def timer(func):
@@ -165,16 +165,19 @@ class Data:
         if start < 0:
             raise ValueError("start cannot be less than zero")
 
-        if nTuple_type is None:
+        if (filename is not None) and (nTuple_type is None):
             warnings.warn(f"nTuple type is not specified, assuming it is {Ntuple_Type.SHOWER_MERGING}")
             self.nTuple_type = Ntuple_Type.SHOWER_MERGING
         else:
             self.nTuple_type = nTuple_type
-        if self.filename != None:
-            if "GeV" in self.filename:
-                self.target_mom = float(self.filename.split("GeV")[0][-1])
+        if (self.filename != None):
+            if "_data_" in self.filename:
+                self.target_mom = 1
             else:
-                self.target_mom = target_momentum
+                if "GeV" in self.filename:
+                    self.target_mom = float(self.filename.split("GeV")[0][-1])
+                else:
+                    self.target_mom = target_momentum
             self.nEvents = nEvents
             self.start = start
             self.io = IO(self.filename, self.nEvents, self.start)
@@ -186,6 +189,7 @@ class Data:
             self.trueParticles = TrueParticleData(self)
             self.recoParticles = RecoParticleData(self)
             self.trueParticlesBT = TrueParticleDataBT(self)
+            self.cutTable = CutTable.CutHandler(self)
 
     @property
     def SortedTrueEnergyMask(self) -> ak.Array:
@@ -399,6 +403,7 @@ class Data:
                 self.trueParticlesBT.Filter(reco_filters, returnCopy)
 
             __GenericFilter__(self, reco_filters)
+            CutTable.apply_filters(self, reco_filters)
             self.trueParticles.events = self
             self.recoParticles.events = self
             if hasattr(self, "trueParticlesBT"):
@@ -412,6 +417,7 @@ class Data:
             filtered.start = self.start
             filtered.io = IO(filtered.filename,
                              filtered.nEvents, filtered.start)
+            filtered.cutTable = self.cutTable.copy()
             filtered.event_index = self.event_index
             filtered.eventNum = self.eventNum
             filtered.subRun = self.subRun
@@ -426,6 +432,8 @@ class Data:
                 filtered.trueParticlesBT.events = filtered
             # ? should true_filters also be applied?
             __GenericFilter__(filtered, reco_filters)
+            CutTable.apply_filters(filtered, reco_filters)
+            # CutTable.apply_filters(filtered, reco_filters)
             return filtered
 
     @timer
@@ -711,6 +719,10 @@ class Data:
 
         self.Filter([mask], [mask])
 
+    @property
+    def table(self, **kwargs):
+        return self.cutTable.get_table(**kwargs)
+
 
 
 class ParticleData(ABC):
@@ -788,7 +800,7 @@ class ParticleData(ABC):
         else:
             # get the class which is of type ParticleData
             subclass = globals()[type(self).__name__]
-            filtered = subclass(Data())  # create a new instance of the class
+            filtered = subclass(Data())
             # populate new instance
             for var in vars(self):
                 setattr(filtered, var, getattr(self, var))
@@ -1020,9 +1032,19 @@ class TrueParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__true_beam_endProcess")
 
     @property
-    def KE_front_face(self) -> type:
-        ind = ak.argmax(self.beam_traj_pos.z > 0, -1, keepdims = True)
-        return ak.flatten(self.beam_traj_KE[ind])
+    def beam_ind_in_tpc(self) -> ak.Array:
+        return ak.argmax(self.beam_traj_pos.z > 0, -1, keepdims = True)
+
+    @property
+    def beam_KE_front_face(self) -> ak.Array:
+        return ak.flatten(self.beam_traj_KE[self.beam_ind_in_tpc])
+
+    @property
+    def beam_track_length(self) -> ak.Array:
+        in_tpc = (self.beam_traj_pos.z > 0) & (self.beam_traj_pos.z < 700)
+        pos_in_tpc = self.beam_traj_pos[in_tpc]
+        return ak.sum(vector.dist(pos_in_tpc[:, 1:], pos_in_tpc[:, :-1]), -1)
+
 
     @property
     def pi0_MC(self) -> bool:
@@ -1405,17 +1427,17 @@ class RecoParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__integral")
 
     @property
-    def hit_energy(self) -> type:
+    def hit_energy(self) -> ak.Array:
         self.LoadData("hit_energy", "reco_daughter_allShower_hit_energy") # not in PDSPAnalyser
         return getattr(self, f"_{type(self).__name__}__hit_energy")
 
     @property
-    def track_dEdX(self) -> type:
+    def track_dEdX(self) -> ak.Array:
         self.LoadData("track_dEdX", "reco_daughter_allTrack_calibrated_dEdX_SCE")
         return getattr(self, f"_{type(self).__name__}__track_dEdX")
 
     @property
-    def beam_pandora_tag(self) -> type:
+    def beam_pandora_tag(self) -> ak.Array:
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             tag = self.events.recoParticles.pandoraTag[self.events.recoParticles.beam_number == self.events.recoParticles.number]
             tag = ak.flatten(ak.fill_none(ak.pad_none(tag, 1), -999))
@@ -1423,6 +1445,25 @@ class RecoParticleData(ParticleData):
         if self.events.nTuple_type == Ntuple_Type.PDSP:
             self.LoadData("beam_pandora_tag", "reco_beam_type")
         return getattr(self, f"_{type(self).__name__}__beam_pandora_tag")
+
+
+    @property
+    def beam_track_length(self) -> ak.Array:
+        setattr(self, f"_{type(self).__name__}__beam_track_length", self.track_length(self.beam_calo_pos))
+        return getattr(self, f"_{type(self).__name__}__beam_track_length")
+
+    def track_length(self, trajectory_points, threshold = int(2E5)):
+        if ak.num(trajectory_points, 0) > threshold:
+            n_chunks =  ak.num(trajectory_points, 0) // threshold
+            trk_len = []
+            for i in range(n_chunks + 1):
+                chunk = trajectory_points[i*threshold:(i+1)*threshold]
+                trk_len.append(ak.sum(vector.dist(chunk[:, 1:], chunk[:, :-1]), axis = -1))
+            trk_len = ak.concatenate(trk_len)
+        else:
+            trk_len = ak.sum(vector.dist(trajectory_points[:, 1:], trajectory_points[:, :-1]), axis = -1)
+        return trk_len
+
 
     def CalculatePairQuantities(self, useBT: bool = False) -> tuple:
         """ Calculate reconstructed shower pair quantities.
@@ -1805,6 +1846,25 @@ class TrueParticleDataBT(ParticleData):
     def beam_endProcess(self) -> ak.Array:
         self.LoadData("beam_endProcess", "reco_beam_true_byHits_endProcess")
         return getattr(self, f"_{type(self).__name__}__beam_endProcess")
+
+    @property
+    def is_beam_pi0(self) -> ak.Array:
+        if not hasattr(self, f"_{type(self).__name__}__is_beam_pi0"):
+            if ak.count(self.motherPdg) != 0:
+                pi0_daughter = self.motherPdg == 111
+
+                beam_pi0 = self.events.trueParticles.number[(self.events.trueParticles.pdg == 111) & (self.events.trueParticles.mother == 1)]
+                beam_pi0 = ak.fill_none(ak.pad_none(beam_pi0, 1, axis = -1), False)
+
+                beam_pi0_bt = []
+                for pi0, m in zip(beam_pi0, self.mother):
+                    beam_pi0_bt.append(np.isin(m, pi0))
+                beam_pi0_bt = ak.Array(beam_pi0_bt) & pi0_daughter
+            else:
+                beam_pi0_bt = self.motherPdg
+
+            setattr(self, f"_{type(self).__name__}__is_beam_pi0", beam_pi0_bt)
+        return getattr(self, f"_{type(self).__name__}__is_beam_pi0")
 
     @property
     def particleNumber(self) -> ak.Array:

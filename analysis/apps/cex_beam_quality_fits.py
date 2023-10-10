@@ -14,7 +14,6 @@ import awkward as ak
 import numpy as np
 import matplotlib.pyplot as plt
 
-from matplotlib.backends.backend_pdf import PdfPages
 from rich import print
 from python.analysis import Master, BeamParticleSelection, vector, Plots, cross_section, Fitting
 from python.analysis.shower_merging import SetPlotStyle
@@ -105,7 +104,7 @@ def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data
     """
     SetPlotStyle()
 
-    with PdfPages(out + "beam_quality_fits.pdf") as pdf:
+    with Plots.PlotBook(out + "beam_quality_fits.pdf") as pdf:
         for i in ["x", "y", "z"]:
             plt.figure()
             mc_ranges = [] if mc_fits is None else plot_range(mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"])
@@ -114,7 +113,7 @@ def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data
             plot_ranges = mc_ranges + data_ranges
             if mc_events is not None: plot(mc_events.recoParticles.beam_startPos_SCE[i], f"Beam start position {i} (cm)", mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"], "C0", "MC", range = [min(plot_ranges), max(plot_ranges)])
             if data_events is not None: plot(data_events.recoParticles.beam_startPos_SCE[i], f"Beam start position {i} (cm)", data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"], "C1", "Data", range = [min(plot_ranges), max(plot_ranges)])
-            pdf.savefig()
+            pdf.Save()
     return
 
 

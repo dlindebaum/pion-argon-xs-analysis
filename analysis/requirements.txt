@@ -10,3 +10,6 @@ xgboost==1.6.2
 ipykernel==6.16.1
 pathos==0.3.0
 particle==0.22.0
+Jinja2==3.1.2
+pyhf==0.7.4
+iminuit==2.24.0

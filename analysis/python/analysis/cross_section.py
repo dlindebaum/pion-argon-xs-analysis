@@ -6,6 +6,7 @@ Author: Shyam Bhuller
 Description: Library for code used in the cross section analysis. Refer to the README to see which apps correspond to the cross section analysis.
 """
 import argparse
+import copy
 import json
 
 from collections import namedtuple
@@ -113,7 +114,8 @@ class EnergyCorrection:
 
     shower_energy_correction = {
         "linear" : LinearCorrection,
-        "response": ResponseCorrection
+        "response": ResponseCorrection,
+        None : None
     }
 
 
@@ -171,7 +173,15 @@ class BetheBloch:
         else:
             if dEdX < 0: dEdX = 0
         return dEdX
-    
+
+
+    def InteractingKE(KE_init : ak.Array, track_length : ak.Array, particle : Particle, n : int):
+        KE_int = KE_init
+        for i in range(n):
+            KE_int = KE_int - BetheBloch.meandEdX(KE_int, particle)*track_length/n
+        KE_int = ak.where(KE_int < 0, 0, KE_int)
+        return KE_int
+
 
 class ApplicationArguments:
     @staticmethod
@@ -240,7 +250,6 @@ class ApplicationArguments:
             for a, v in args._get_kwargs():
                 setattr(args_copy, a, v)
             args = ApplicationArguments.ResolveConfig(LoadConfiguration(args.config))
-            print(args.mc_file)
             for a, v in args_copy._get_kwargs():
                 if a not in args:
                     setattr(args, a, v)
@@ -252,7 +261,6 @@ class ApplicationArguments:
             if hasattr(args, "correction") and args.correction:
                 args.correction_params = args.correction[1]
                 args.correction = EnergyCorrection.shower_energy_correction[args.correction[0]]
-        print(args)
 
         if hasattr(args, "out"):
             if args.out is None:
@@ -288,13 +296,13 @@ class ApplicationArguments:
         Returns:
             _type_: _description_
         """
-        selection = {"selections" : [], "arguments" : []}
+        selection = {"selections" : {}, "arguments" : {}}
         for func, opt in value.items():
             if opt["enable"] is True:
-                selection["selections"].append(getattr(module, func))
+                selection["selections"][func] = getattr(module, func)
                 copy = opt.copy()
                 copy.pop("enable")
-                selection["arguments"].append(copy)
+                selection["arguments"][func] = copy
         return selection
 
     @staticmethod
@@ -313,14 +321,6 @@ class ApplicationArguments:
                 args.mc_file = value["mc"]
                 args.data_file = value["data"]
                 args.ntuple_type = value["type"]
-            elif head == "BEAM_QUALITY_FITS":
-                args.mc_beam_quality_fit = value["mc"]
-                args.data_beam_quality_fit = value["data"]
-            elif head == "BEAM_SCAPER_FITS":
-                args.mc_beam_scraper_fit = value["mc"]
-            elif head == "ENERGY_CORRECTION":
-                args.correction = value["correction"]
-                args.correction_params = value["correction_params"]
             elif head == "BEAM_PARTICLE_SELECTION":
                 args.beam_selection = ApplicationArguments.__CreateSelection(value, BeamParticleSelection)
             elif head == "VALID_PFO_SELECTION":
@@ -331,8 +331,62 @@ class ApplicationArguments:
                 args.photon_selection = ApplicationArguments.__CreateSelection(value, PFOSelection)
             elif head == "FINAL_STATE_PI0_SELECTION":
                 args.pi0_selection = ApplicationArguments.__CreateSelection(value, EventSelection)
+            elif head == "BEAM_QUALITY_FITS":
+                args.mc_beam_quality_fit = LoadConfiguration(value["mc"])
+                args.data_beam_quality_fit = LoadConfiguration(value["data"])
+            elif head == "BEAM_SCAPER_FITS":
+                args.mc_beam_scraper_fit = LoadConfiguration(value["mc"])
+            elif head == "ENERGY_CORRECTION":
+                args.correction = value["correction"]
+                args.correction_params = value["correction_params"]
+            elif head == "UPSTREAM_ENERGY_LOSS":
+                args.upstream_loss_bins = value["bins"]
+                args.upstream_loss_correction_params = LoadConfiguration(value["correction_params"])
+            elif head == "SELECTION_MASKS":
+                args.selection_masks = {}
+                for k, v in value.items():
+                    args.selection_masks[k] = {i : LoadSelectionFile(j) for i, j in v.items()}
             else:
                 setattr(args, head, value) # allow for generic configurations in the json file
+        ApplicationArguments.DataMCSelectionArgs(args)
+        ApplicationArguments.AddEnergyCorrection(args)
+        args.beam_selection["data_arguments"]["PiBeamSelection"]["use_beam_inst"] = True # make sure to set the correct settings for data.
+        return args
+
+
+    @staticmethod
+    def AddEnergyCorrection(args):
+        if hasattr(args, "correction"):
+            method = EnergyCorrection.shower_energy_correction[args.correction]
+            params = LoadConfiguration(args.correction_params)
+        else:
+            method = None
+            params = None
+            args.correction = None
+            args.correction_params = None
+        args.pi0_selection["mc_arguments"]["Pi0MassSelection"]["correction"] = method
+        args.pi0_selection["mc_arguments"]["Pi0MassSelection"]["correction_params"] = params
+        args.pi0_selection["data_arguments"]["Pi0MassSelection"]["correction"] = method
+        args.pi0_selection["data_arguments"]["Pi0MassSelection"]["correction_params"] = params
+
+    @staticmethod
+    def DataMCSelectionArgs(args : argparse.Namespace):
+        for a in vars(args):
+            if ("selection" in a) and (type(getattr(args, a)) == dict):
+                if "arguments" in getattr(args, a): 
+                    getattr(args, a)["mc_arguments"] = copy.deepcopy(getattr(args, a)["arguments"])
+                    getattr(args, a)["data_arguments"] = copy.deepcopy(getattr(args, a)["arguments"])
+                    getattr(args, a).pop("arguments")
+
+        for i, s in args.beam_selection["selections"].items():
+            if s in [BeamParticleSelection.BeamQualityCut, BeamParticleSelection.DxyCut, BeamParticleSelection.DzCut, BeamParticleSelection.CosThetaCut]:
+                args.beam_selection["mc_arguments"][i]["fits"] = args.mc_beam_quality_fit
+                args.beam_selection["data_arguments"][i]["fits"] = args.data_beam_quality_fit
+            elif s == BeamParticleSelection.BeamScraperCut:
+                args.beam_selection["mc_arguments"][i]["fits"] = args.mc_beam_scraper_fit
+                args.beam_selection["data_arguments"][i]["fits"] = args.mc_beam_scraper_fit
+            else:
+                continue
         return args
 
 
@@ -350,62 +404,6 @@ def LoadConfiguration(file : str) -> dict:
     return config
 
 
-def NumericalCV(bins : np.array, KE_reco_inst : np.array, KE_true_ff : np.array) -> tuple[np.array, np.array]:
-    """ central value in reco bin using the arithmetic mean.
-
-    Args:
-        bins (np.array): bin edges
-        KE_reco_inst (np.array): reco KE at instrumentation
-        KE_true_ff (np.array): true front facing KE
-
-    Returns:
-        tuple[np.array, np.array]: arithmetc mean in each bin, error in the mean
-    """
-    binned_data = {"KE_inst": [], "KEff_true" : [], "KE_first_true" : []}
-    for i in range(len(bins)-1):
-        mask = (KE_reco_inst > bins[i]) & (KE_reco_inst < bins[i + 1])
-        mask = mask & (KE_true_ff > 0)
-
-        binned_data["KE_inst"].append( KE_reco_inst[mask] )
-        binned_data["KEff_true"].append( KE_true_ff[mask] )
-    binned_data = {i : ak.Array(binned_data[i]) for i in binned_data}
-
-    print(ak.num(binned_data["KE_inst"]))
-    residual_energy = binned_data["KE_inst"] - binned_data["KEff_true"]
-
-    mean_residual_energy = ak.mean(residual_energy, axis = -1)
-    mean_error_residual_energy = ak.std(residual_energy, axis = -1) / np.sqrt(ak.num(residual_energy))
-    return mean_residual_energy, mean_error_residual_energy
-
-
-def UpstreamLossFit(bins : np.array, KE_reco_inst : np.array, KE_true_ff : np.array, cv_function : Fitting.FitFunction = None, response_function : Fitting.FitFunction = Fitting.poly2d) -> tuple[np.array, np.array]:
-    """ Estiamte upstream loss using a reponse function to correct the reco KE at the instrumentaiton to get the KE at the front face of the TPC.
-        estiamtes the central value of residuals in bins of KE_reco_inst using a fitting function.
-
-    Args:
-        bins (np.array): reco KE bins
-        KE_reco_inst (np.array): reco KE at instrumentation
-        KE_true_ff (np.array): true front facing KE
-        cv_function (Fitting.FitFunction, optional): function to fit residuals to in order to get the central value. Defaults to None.
-        response_function (Fitting.FitFunction, optional): response function to fit to central values. Defaults to Fitting.poly2d.
-
-    Returns:
-        tuple[np.array, np.array]: response function fit parameters, error in fit parameters
-    """
-    if cv_function is None:
-        cv = NumericalCV(bins, KE_reco_inst, KE_true_ff)
-    else:
-        df = pd.DataFrame({"KE_inst" : KE_reco_inst, "true_ffKE" : KE_true_ff})
-        df["residual"] = df.KE_inst - df.true_ffKE
-        cv = Fitting.ExtractCentralValues_df(df, "KE_inst", "residual", [-250, 250], [cv_function], bins, 50, rms_err = False)
-
-    x = (bins[1:] + bins[:-1]) / 2
-    xerr = abs(x - bins[1:])
-
-    params = Fitting.Fit(x, cv[0], cv[1], Fitting.poly2d, plot = False, maxfev = int(5E5))
-    return params
-
-
 def UpstreamEnergyLoss(KE_inst : ak.Array, params : np.array, function : Fitting.FitFunction = Fitting.poly2d) -> ak.Array:
     """ compute the upstream loss based on a repsonse function and it's fit parameters.
 
@@ -415,9 +413,9 @@ def UpstreamEnergyLoss(KE_inst : ak.Array, params : np.array, function : Fitting
         params (np.array): function paramters
 
     Returns:
-        ak.Array: _description_
+        ak.Array: upstream energy loss
     """
-    return function.func(KE_inst, *params)
+    return function.func(KE_inst, **params)
 
 
 def RecoDepositedEnergy(events : Master.Data, ff_KE : ak.Array, method : str) -> ak.Array:
@@ -436,12 +434,7 @@ def RecoDepositedEnergy(events : Master.Data, ff_KE : ak.Array, method : str) ->
     if method == "calo":
         dE = ak.sum(events.recoParticles.beam_dEdX[:, :-1] * reco_pitch, -1)
     elif method == "bb":
-        # reco_pitch_padded = ak.fill_none(ak.pad_none(reco_pitch, max(ak.num(reco_pitch)), -1), 0) # pad so all beam particles have the same number ov pitches (padded values are set to zero)
-        reco_pitch_padded = ak.pad_none(reco_pitch, max(ak.num(reco_pitch)), -1) # pad so all beam particles have the same number ov pitches (padded values are set to zero)
-        KE_int_bb = ff_KE
-        for d in range(max(ak.num(reco_pitch_padded))): # loop through all trajectoty points and compute dEdX simultaneously for all particles
-            E_temp = reco_pitch_padded[:, d] * BetheBloch.meandEdX(KE_int_bb, Particle.from_pdgid(211))
-            KE_int_bb = ak.where(ak.is_none(E_temp), KE_int_bb, KE_int_bb - E_temp)
+        KE_int_bb = BetheBloch.InteractingKE(ff_KE, ak.sum(reco_pitch, -1), Particle.from_pdgid(211), 50)
         dE = ff_KE - KE_int_bb
     else:
         raise Exception(f"{method} not a valid method, pick 'calo' or 'bb'")
@@ -792,3 +785,27 @@ class EnergySlice:
             tuple[np.array, np.array]: Cross section and statistical uncertainty.
         """
         return ThinSlice.CrossSection(n_incident, n_interact, dE/dEdX)
+
+    @staticmethod
+    def ModifiedCrossSection(n_int_exclusive : np.array, n_inc_exclusive, n_int_inclusive : np.array, n_inc_inclusive : np.array, dEdX : float, dE : float) -> tuple[np.array, np.array]:
+        def nandiv(num, den):
+            return np.divide(num, np.where(den == 0, np.nan, den))
+
+        NA = 6.02214076e23
+        factor = np.array(dEdX) * 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * dE)
+
+        n_interact_ratio = nandiv(n_int_exclusive, n_int_inclusive)
+        n_survived_inclusive = n_inc_inclusive - n_int_inclusive
+
+        var_inc_inclusive = n_inc_inclusive # poisson variance
+        var_int_inclusive = n_int_inclusive * (1 - nandiv(n_int_inclusive, n_inc_inclusive)) # binomial uncertainty
+        var_int_exclusive = n_int_exclusive * (1 - nandiv(n_int_exclusive, n_inc_exclusive)) # binomial uncertainty
+
+        xs = factor * n_interact_ratio * np.log(nandiv(n_inc_inclusive, n_inc_inclusive - n_int_inclusive))
+
+        diff_n_int_exclusive = nandiv(xs, n_int_exclusive)
+        diff_n_inc_inclusive = factor * n_interact_ratio * (nandiv(1, n_inc_inclusive) - nandiv(1, n_survived_inclusive))
+        diff_n_int_inclusive = factor * n_interact_ratio * nandiv(1, n_survived_inclusive) - nandiv(xs, n_int_inclusive)
+
+        xs_err = ((diff_n_int_exclusive**2 * var_int_exclusive) + (diff_n_inc_inclusive**2 * var_inc_inclusive) + (diff_n_int_inclusive**2 * var_int_inclusive))**0.5
+        return xs, xs_err

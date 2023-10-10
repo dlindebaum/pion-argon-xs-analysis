@@ -13,10 +13,8 @@ import awkward as ak
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.ticker import AutoMinorLocator, MultipleLocator
-from scipy.integrate import quad
-from scipy.optimize import curve_fit
-from scipy.special import gamma
 from scipy.stats import iqr
 
 from python.analysis import vector, Tags
@@ -853,6 +851,43 @@ def _adjust_text_colour(value, colour, norm, offset=0.2, max_reduction=0.7):
     return tuple(val * scaling for val in colour)
 
 
+class PlotBook:
+    def __init__(self, name : str, open : bool = True) -> None:
+        self.name = name
+        if ".pdf" not in self.name: self.name += ".pdf" 
+        if open: self.open()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.close()
+
+    def Save(self):
+        if hasattr(self, "pdf"):
+            try:
+                self.pdf.savefig(bbox_inches='tight')
+            except AttributeError:
+                pass
+
+    def open(self):
+        if not hasattr(self, "pdf"):
+            self.pdf = PdfPages(self.name)
+            print(f"pdf {self.name} has been opened")
+        else:
+            warnings.warn("pdf has already been opened")
+        return
+
+    def close(self):
+        if hasattr(self, "pdf"):
+            self.pdf.close()
+            delattr(self, "pdf")
+            print(f"pdf {self.name} has been closed")
+        else:
+            warnings.warn("pdf has not been opened.")
+        return
+
+
 def Save(name: str = "plot", directory: str = "", dpi = 300):
     """ Saves the last created plot to file. Run after one the functions below.
 
@@ -862,6 +897,27 @@ def Save(name: str = "plot", directory: str = "", dpi = 300):
     """
     plt.savefig(directory + name + ".png", dpi = dpi, bbox_inches='tight')
     plt.close()
+
+
+def ClipJagged(array, min, max):
+    """ Clips a jagged (awkward) array, if the type of aray is an awkward array, returns as an awkward array, otherwise it returns a list of nested arrays
+
+    Args:
+        array: array
+
+    Returns:
+        clipped array
+    """
+    orig_type = type(array)
+    if orig_type != ak.Array:
+        array = ak.Array(array)
+
+    array = ak.where(array < min, min, array)
+    array = ak.where(array > max, max, array)
+
+    if orig_type != ak.Array:
+        array = list(array)
+    return array
 
 
 def FigureDimensions(x : int, orientation : str = "horizontal") -> tuple[int]:
@@ -952,15 +1008,19 @@ def PlotComparison(x, y, labels: list, xlabel: str = "", ylabel: str = "", title
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
-def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None, alpha : int = 1, histtype : str = "bar", sf : int = 2, density : bool = False, x_scale : str = "linear", y_scale : str = "linear", newFigure : bool = True, annotation : str = None, stacked : bool = False, color = None, range : list = None, truncate : bool = False):
+def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None, alpha : int = 1, histtype : str = "bar", sf : int = 2, density : bool = False, x_scale : str = "linear", y_scale : str = "linear", newFigure : bool = True, annotation : str = None, stacked : bool = False, color = None, range : list = None, truncate : bool = False, weights : ak.Array = None):
     """ Plot 1D histograms.
     Returns:
         np.arrays : bin heights and edges
     """
     if newFigure is True: plt.figure()
     if truncate == True:
-        data = np.clip(data, min(range), max(range))
-    height, edges, _ = plt.hist(data, bins, label = label, alpha = alpha, density = density, histtype = histtype, stacked = stacked, color = color, range = range)
+        if range is None:
+            raise Exception("if truncate is true, range must be provided")
+        # data = np.clip(data, min(range), max(range))
+        data = ClipJagged(data, min(range), max(range))
+
+    height, edges, _ = plt.hist(data, bins, label = label, alpha = alpha, density = density, histtype = histtype, stacked = stacked, color = color, range = range, weights = weights)
     binWidth = round((edges[-1] - edges[0]) / len(edges), sf)
     # TODO: make ylabel a parameter
     if density == False:
@@ -1209,7 +1269,7 @@ def PlotHist2DImshow(x : ak.Array, y : ak.Array, bins : int = 100, x_range : lis
 
     if newFigure is True: plt.figure()
 
-    plt.imshow(h_norm.T, origin = "lower", extent=[min(x_e), max(x_e), min(y_e), max(y_e)], norm = cnorm, aspect = "auto")
+    plt.imshow(h_norm.T, origin = "lower", extent=[min(x_e), max(x_e), min(y_e), max(y_e)], norm = cnorm, aspect = "auto", cmap = cmap)
     plt.grid(False)
     if xlabel is not None: plt.xlabel(xlabel)
     if ylabel is not None: plt.ylabel(ylabel)
@@ -1283,7 +1343,7 @@ def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float
     plt.annotate("", xy = xy1, xytext = xy0, arrowprops=dict(facecolor = color, edgecolor = color, arrowstyle = "->"), xycoords= transform)
 
 
-def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False, title : str = "", newFigure : bool = True, stacked : bool = True, alpha : float = None, truncate : bool = False):
+def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False, title : str = "", newFigure : bool = True, stacked : bool = True, alpha : float = None, truncate : bool = False, histtype : str = "stepfilled", reverse_sort : bool = False):
     """ Makes a stacked histogram and splits the sample based on tags.
 
     Args:
@@ -1298,18 +1358,26 @@ def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = N
         data2 (np.array): second sample to plot. if specified it will make a data MC plot (data is MC, data2 is Data).
     """
     split_data = [ak.ravel(data[tags[t].mask]) for t in tags]
-    
-    colours = tags.colour.values
+
+    sorted_index = np.argsort(ak.num(split_data))[::-1]
+    if reverse_sort:
+        sorted_index = sorted_index[::-1]
+    split_data = [split_data[i] for i in sorted_index]
+    sorted_tags = Tags.Tags()
+    for i in sorted_index:
+        sorted_tags[tags.number[i].name] = tags.number[i]
+
+    colours = sorted_tags.colour.values
     if ak.any(ak.is_none(colours)):
         print("some tags do not have colours, will override them for the default ones")
-        for i in range(len(tags)):
+        for i in range(len(sorted_tags)):
             colours[i] = "C" + str(i)
 
     if data2 is None:
-        PlotHist(split_data, stacked = stacked, label = tags.name.values, bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, newFigure = newFigure, alpha = alpha, truncate = truncate)
+        PlotHist(split_data, stacked = stacked, label = sorted_tags.name.values, bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, newFigure = newFigure, alpha = alpha, truncate = truncate, histtype = histtype)
         plt.legend(loc = loc, ncols = ncols, labelspacing = 0.25,  columnspacing = 0.25)
     else:
-        PlotHistDataMC(ak.ravel(data2), split_data, bins, x_range, stacked, "Data", tags.name.values, x_label, title, y_scale, loc, ncols, norm, colour = colours, alpha = alpha, truncate = truncate)
+        PlotHistDataMC(ak.ravel(data2), split_data, bins, x_range, stacked, "Data", sorted_tags.name.values, x_label, title, y_scale, loc, ncols, norm, colour = colours, alpha = alpha, truncate = truncate)
 
 
 def UniqueData(data):
