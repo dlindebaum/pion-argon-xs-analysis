@@ -149,37 +149,27 @@ def GetRegions(mc : Master.Data, args : argparse.Namespace) -> tuple[dict, dict]
     return true_regions, reco_regions
 
 
-def ComputeFractions(true_regions : dict, reco_regions : dict, return_counts = False) -> np.array:
-    """ Computes the fractions of each combination of reco and true regions.
-        Optionally returns the counts.
+def ComputeCounts(true_regions : dict, reco_regions : dict) -> np.array:
+    """ Computes the counts of each combination of reco and true regions.
 
     Args:
-        true_regions (dict): true regions
-        reco_regions (dict): reco regions
+        true_regions (dict): true region masks
+        reco_regions (dict): reco region masks
         return_counts (bool, optional): return matrix of counts. Defaults to False.
 
     Returns:
-        np.array: fractions and optinally counts.
+        np.array: counts.
     """
-    correlation_matrix_count = []
-    correlation_matrix_fraction = []
+    counts = []
     for t in true_regions:
-        reco_probs_count = []
-        reco_probs_fraction = []
+        true_counts = []
         for r in reco_regions:
-            count = ak.sum(true_regions[t] & reco_regions[r])
-            fraction = count / ak.sum(true_regions[t])
-            reco_probs_count.append(count)
-            reco_probs_fraction.append(fraction)
-        correlation_matrix_count.append(reco_probs_count)
-        correlation_matrix_fraction.append(reco_probs_fraction)
-    if return_counts == True:
-        return correlation_matrix_fraction, correlation_matrix_count
-    else:
-        return correlation_matrix_fraction
+            true_counts.append(ak.sum(true_regions[t] & reco_regions[r])) # true counts for each reco region
+        counts.append(true_counts)
+    return counts
 
 
-def PlotCorrelationMatrix(true_regions : dict, reco_regions : dict, title : str = None):
+def PlotCorrelationMatrix(counts : np.array = None, true_labels = None, reco_labels = None, title : str = None):
     """ Plots Correlation matrix of two sets of regions.
 
     Args:
@@ -187,13 +177,22 @@ def PlotCorrelationMatrix(true_regions : dict, reco_regions : dict, title : str 
         reco_regions (dict): reco regions
         title (str, optional): title. Defaults to None.
     """
-    fractions, counts = ComputeFractions(true_regions, reco_regions, return_counts = True)
+    fractions = counts / np.sum(counts, axis = 1)[:, np.newaxis]
+
+    # fractions, counts = ComputeFractions(true_regions, reco_regions, return_counts = True)
     Plots.plt.figure()
     Plots.plt.imshow(counts, cmap = "cool", origin = "lower")
     Plots.plt.colorbar()
 
-    true_counts = [f"{t.replace('_', ' ')}\n({sum(true_regions[t])})" for t in true_regions]
-    reco_counts = [f"{r.replace('_', ' ')}\n({sum(reco_regions[r])})" for r in reco_regions]
+    # true_counts = [f"{t.replace('_', ' ')}\n({sum(true_regions[t])})" for t in true_regions]
+    # reco_counts = [f"{r.replace('_', ' ')}\n({sum(reco_regions[r])})" for r in reco_regions]
+
+    true_counts = np.sum(counts, axis = 1)
+    reco_counts = np.sum(counts, axis = 0)
+
+    true_counts = [f"{true_labels[t].replace('_', ' ')}\n({true_counts[t]})" for t in range(len(true_labels))]
+    reco_counts = [f"{reco_labels[r].replace('_', ' ')}\n({reco_counts[r]})" for r in range(len(reco_labels))]
+
 
     Plots.plt.gca().set_xticks(np.arange(len(reco_counts)), labels=reco_counts)
     Plots.plt.gca().set_yticks(np.arange(len(true_counts)), labels=true_counts)
@@ -358,7 +357,7 @@ def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace):
     pdf.Save()
     pdf.close()
 
-    fractions_df = pd.DataFrame(np.array(ComputeFractions(true_regions, reco_regions)).T, columns = true_regions, index = reco_regions)# columns are the true regions, so index over those to get the fractions
+    fractions_df = pd.DataFrame(np.array(ComputeCounts(true_regions, reco_regions)).T, columns = true_regions, index = reco_regions)# columns are the true regions, so index over those to get the fractions
     fractions_df.to_hdf(args.out + "reco_regions/reco_region_fractions.hdf5", "df")
     return
 

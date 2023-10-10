@@ -237,13 +237,6 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
         beam_quality_fit_values = args["mc_beam_quality_fit"]
         selection_args = "mc_arguments"
 
-    #* shower energy correction
-    if args["correction_params"] is not None:
-        with open(args["correction_params"], "r") as f:
-            correction_params = json.load(f)
-    else:
-        correction_params = None
-
     print("beam particle selection")
     output_beam, table_beam, beam_masks = AnalyseBeamSelection(events, args["data"], beam_quality_fit_values, args["beam_selection"]["selections"], args["beam_selection"][selection_args]) # events are cut after this
 
@@ -272,7 +265,7 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
     pi0_masks = CreatePFOMasks(events, args["pi0_selection"], selection_args, {"photon_mask" : photon_selection_mask})
 
     print("regions")
-    truth_regions, reco_regions = AnalyseRegions(events, photon_selection_mask, args["data"], args["correction"], correction_params)
+    truth_regions, reco_regions = AnalyseRegions(events, photon_selection_mask, args["data"], args["correction"], args["correction_params"])
 
     regions  = {
         "truth_regions"       : truth_regions,
@@ -630,9 +623,11 @@ def MakeTables(output : dict, out : str, sample : str):
             df = output[s]["table"]
             purity = pd.concat([df["Name"], df.iloc[:, df.columns.to_list().index("Name") + 1:].div(df.iloc[:, df.columns.to_list().index("Name") + 1], axis = 0)], axis = 1)
             efficiency = pd.concat([df["Name"], df.iloc[:, df.columns.to_list().index("Name") + 1:].div(df.iloc[0, df.columns.to_list().index("Name") + 1:], axis = 1)], axis = 1)
-            df.style.to_latex(outdir + s + "_counts.tex")
-            purity.style.to_latex(outdir + s + "_purity.tex")
-            efficiency.style.to_latex(outdir + s + "_efficiency.tex")
+            
+            df = df.rename(columns = {i : i.split(" ")[0] for i in df})
+            df.style.hide(axis = "index").to_latex(outdir + s + "_counts.tex")
+            purity.style.hide(axis = "index").to_latex(outdir + s + "_purity.tex")
+            efficiency.style.hide(axis = "index").to_latex(outdir + s + "_efficiency.tex")
     return
 
 
@@ -681,10 +676,6 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Applies beam particle selection, PFO selection, produces tables and basic plots.", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    cross_section.ApplicationArguments.Ntuples(parser, True)
-    cross_section.ApplicationArguments.BeamQualityCuts(parser, True)
-    cross_section.ApplicationArguments.BeamSelection(parser)
-    cross_section.ApplicationArguments.ShowerCorrection(parser)
     cross_section.ApplicationArguments.Processing(parser)
     cross_section.ApplicationArguments.Output(parser)
     cross_section.ApplicationArguments.Plots(parser)

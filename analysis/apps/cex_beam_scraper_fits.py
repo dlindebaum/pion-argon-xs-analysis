@@ -100,7 +100,6 @@ def GetScraperFits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : 
 
         next(plot)
         popt, perr, metrics = Fitting.Fit(bin_centers, y, yerr, Fitting.gaussian, method = "dogbox", return_chi_sqr = True)#, plot = True, plot_style = "scatter", xlabel = "$KE^{reco}_{inst} - KE^{true}_{ff}$ (MeV)", title = bin_label, plot_range = residual_range)
-
         heights, _ = Plots.PlotHist(np.array(data[~np.isnan(data)]), newFigure = False, bins = fit_bins, range = residual_range, label = "observed")
         x_interp = np.linspace(min(np.array(data[~np.isnan(data)])), max(np.array(data[~np.isnan(data)])), 10 * fit_bins)
         y_interp = Fitting.gaussian.func(x_interp, max(heights), popt[1], popt[2])
@@ -188,14 +187,8 @@ def main(args : argparse.Namespace):
     mc.Filter([mask], [mask]) # apply default beam selection
 
     beam_inst_KE = cross_section.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
+    true_ffKE = mc.trueParticles.beam_KE_front_face
 
-    true_ff_ind = ak.argmax(mc.trueParticles.beam_traj_pos.z >= 0, -1, keepdims = True)
-    # not_int_tpc = true_ff_ind == 0
-
-    pitches = ak.ravel(vector.dist(mc.trueParticles.beam_traj_pos[true_ff_ind], mc.trueParticles.beam_traj_pos[true_ff_ind + 1]))
-    first_KE = mc.trueParticles.beam_traj_KE[true_ff_ind]
-
-    true_ffKE = ak.ravel(GetTrueFFKE(first_KE, pitches)) # get the true Kinetic energy as the front face of the TPC
     delta_KE_upstream = beam_inst_KE - true_ffKE
 
     residual_range = [-300, 300] # range of residual for plots
