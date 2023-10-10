@@ -149,27 +149,7 @@ def GetRegions(mc : Master.Data, args : argparse.Namespace) -> tuple[dict, dict]
     return true_regions, reco_regions
 
 
-def ComputeCounts(true_regions : dict, reco_regions : dict) -> np.array:
-    """ Computes the counts of each combination of reco and true regions.
-
-    Args:
-        true_regions (dict): true region masks
-        reco_regions (dict): reco region masks
-        return_counts (bool, optional): return matrix of counts. Defaults to False.
-
-    Returns:
-        np.array: counts.
-    """
-    counts = []
-    for t in true_regions:
-        true_counts = []
-        for r in reco_regions:
-            true_counts.append(ak.sum(true_regions[t] & reco_regions[r])) # true counts for each reco region
-        counts.append(true_counts)
-    return counts
-
-
-def PlotCorrelationMatrix(counts : np.array = None, true_labels = None, reco_labels = None, title : str = None):
+def PlotCorrelationMatrix(counts : np.array = None, true_labels = None, reco_labels = None, title : str = None, newFigure : bool = True):
     """ Plots Correlation matrix of two sets of regions.
 
     Args:
@@ -180,9 +160,9 @@ def PlotCorrelationMatrix(counts : np.array = None, true_labels = None, reco_lab
     fractions = counts / np.sum(counts, axis = 1)[:, np.newaxis]
 
     # fractions, counts = ComputeFractions(true_regions, reco_regions, return_counts = True)
-    Plots.plt.figure()
-    Plots.plt.imshow(counts, cmap = "cool", origin = "lower")
-    Plots.plt.colorbar()
+    if newFigure: Plots.plt.figure()
+    Plots.plt.imshow(counts/np.max(counts, axis = 0), cmap = "cool", origin = "lower")
+    Plots.plt.colorbar(label = "counts (column normalised)")
 
     # true_counts = [f"{t.replace('_', ' ')}\n({sum(true_regions[t])})" for t in true_regions]
     # reco_counts = [f"{r.replace('_', ' ')}\n({sum(reco_regions[r])})" for r in reco_regions]
@@ -208,8 +188,10 @@ def PlotCorrelationMatrix(counts : np.array = None, true_labels = None, reco_lab
         Plots.plt.title("Key: (counts, fraction(%))")
 
     for (i, j), z in np.ndenumerate(counts):
-        Plots.plt.gca().text(j, i, f"{z}, {fractions[i][j]*100:.2g}%", ha='center', va='center')
+        Plots.plt.gca().text(j, i, f"{z},\n{fractions[i][j]*100:.2g}%", ha='center', va='center', fontsize = 8)
     Plots.plt.grid(False)
+    Plots.plt.tight_layout()
+
 
 
 @Master.timer
@@ -357,7 +339,7 @@ def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace):
     pdf.Save()
     pdf.close()
 
-    fractions_df = pd.DataFrame(np.array(ComputeCounts(true_regions, reco_regions)).T, columns = true_regions, index = reco_regions)# columns are the true regions, so index over those to get the fractions
+    fractions_df = pd.DataFrame(np.array(cross_section.Toy.ComputeCounts(true_regions, reco_regions)).T, columns = true_regions, index = reco_regions)# columns are the true regions, so index over those to get the fractions
     fractions_df.to_hdf(args.out + "reco_regions/reco_region_fractions.hdf5", "df")
     return
 
