@@ -335,11 +335,14 @@ def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace):
 
     os.makedirs(args.out + "reco_regions/", exist_ok = True)
     pdf = Plots.PlotBook(args.out + "reco_regions/reco_regions_study")
-    PlotCorrelationMatrix(true_regions, reco_regions)
+    counts = cross_section.Toy.ComputeCounts(true_regions, reco_regions)
+    PlotCorrelationMatrix(counts, list(true_regions.keys()), list(reco_regions.keys()))
     pdf.Save()
     pdf.close()
 
-    fractions_df = pd.DataFrame(np.array(cross_section.Toy.ComputeCounts(true_regions, reco_regions)).T, columns = true_regions, index = reco_regions)# columns are the true regions, so index over those to get the fractions
+
+    fractions_df = counts / np.sum(counts, axis = 1)[:, np.newaxis]
+    fractions_df = pd.DataFrame(np.array(fractions_df).T, columns = true_regions, index = reco_regions)# columns are the true regions, so index over those to get the fractions
     fractions_df.to_hdf(args.out + "reco_regions/reco_region_fractions.hdf5", "df")
     return
 

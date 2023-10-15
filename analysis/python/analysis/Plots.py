@@ -978,7 +978,7 @@ def IterMultiPlot(x, sharex : bool = False, sharey : bool = False):
         yield i, j
 
 
-def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = "", label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None, xerr = None, yerr = None, capsize : float = 3, zorder : int = None):
+def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None, xerr = None, yerr = None, capsize : float = 3, zorder : int = None):
     """ Make scatter plot.
     """
     if newFigure is True:
@@ -987,9 +987,9 @@ def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = "", label: s
 
     if xlabel is not None: plt.xlabel(xlabel)
     if ylabel is not None: plt.ylabel(ylabel)
+    if title is not None: plt.title(title)
     plt.xscale(x_scale)
     plt.yscale(y_scale)
-    plt.title(title)
     if label != "":
         plt.legend()
     if annotation is not None:

@@ -12,6 +12,7 @@ import json
 from collections import namedtuple
 
 import awkward as ak
+import cabinetry
 import dill
 import numpy as np
 import pandas as pd
@@ -20,7 +21,7 @@ import uproot
 
 from particle import Particle
 
-from python.analysis import Master, BeamParticleSelection, PFOSelection, EventSelection, Fitting, Plots, vector
+from python.analysis import Master, BeamParticleSelection, PFOSelection, EventSelection, Fitting, Plots, vector, Tags
 from python.analysis.shower_merging import SetPlotStyle
 
 
@@ -814,14 +815,18 @@ class EnergySlice:
 
 
 class Toy:
-    def __init__(self, file : str = None, smearing : bool = False) -> None:
+    def __init__(self, file : str = None, df : str = None, smearing : bool = False) -> None:
         if file is not None:
             self.df = pd.read_hdf(file)
-
-            if smearing:
-                self.df = pd.concat([self.df, self.RecoQuantities(self.df)], axis = 1)
-            self.exclusive_processes = np.unique(self.df.exclusive_process)
-            self.exclusive_processes = self.exclusive_processes[self.exclusive_processes != ""]
+        elif df is not None:
+            self.df = df
+        else:
+            return
+    
+        if smearing:
+            self.df = pd.concat([self.df, self.RecoQuantities(self.df)], axis = 1)
+        self.exclusive_processes = np.unique(self.df.exclusive_process)
+        self.exclusive_processes = self.exclusive_processes[self.exclusive_processes != ""]
 
     @staticmethod
     def RecoQuantities(toy : pd.DataFrame) -> pd.DataFrame:
@@ -890,6 +895,12 @@ class Toy:
     def truth_region_labels(self):
         return self.GetRegionNames("truth_regions_")
 
+    @staticmethod
+    def PlotObservablesInRegions(observable : pd.Series, reco_regions : pd.DataFrame, true_regions : pd.DataFrame, label, norm : bool = False, stacked : bool = False, histtype = "step"):
+        for _, r in Plots.IterMultiPlot(reco_regions.columns):
+            tmp_regions = {t : true_regions[t].values & reco_regions[r].values & (observable > 0) for t in true_regions.columns} # filter the reco events for this region only
+            Plots.PlotTagged(observable, Tags.ExclusiveProcessTags(tmp_regions), bins = 50, newFigure = False, title = f"reco region : {r}", reverse_sort = False, stacked = stacked, histtype = histtype, x_label = label, ncols = 1, norm = norm)
+        return
 
 class BackgroundFit:
 
@@ -901,7 +912,7 @@ class BackgroundFit:
                 "samples":[
                     {
                         "name" : f"sample_{i}",
-                        "data" : s,
+                        "data" : s.tolist(),
                         "modifiers" : [
                             {'name': f"mu_{i}", 'type': 'normfactor', 'data': None},
                             ]
@@ -911,7 +922,7 @@ class BackgroundFit:
             }
             if mc_stat_unc == True:
                 for i in range(len(samples)):
-                    channel["samples"][i]["modifiers"].append({'name': f"sample_stat_err_{i}", 'type': 'staterror', 'data': np.sqrt(samples[i])})
+                    channel["samples"][i]["modifiers"].append({'name': f"sample_{i}_pois_err_{num}", 'type': 'shapesys', 'data': np.sqrt(samples[i]).astype(int).tolist()})
 
             return channel
         spec = {"channels" : [channel(n, samples_binned[n]) for n in range(channels)]}
@@ -937,7 +948,9 @@ class BackgroundFit:
 
     @staticmethod
     def Fit(observations, model : pyhf.Model, verbose : bool = True):
-        result = pyhf.infer.mle.fit(data=observations, pdf=model, return_uncertainties = True)
+        pyhf.set_backend(backend = "numpy", custom_optimizer = "minuit")
+        result = cabinetry.fit.fit(model, observations)
+        # result = pyhf.infer.mle.fit(data=observations, pdf=model, return_uncertainties = True)
         if verbose is True: print(f"{model.config.poi_index=}")
         if verbose is True: print(f"{result=}")
         return result

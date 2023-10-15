@@ -48,7 +48,7 @@ def ReadHDF5File(file : str):
         return {k : pd.read_hdf(file, k) for k in keys}
 
 
-def ResolveConfig(args : argparse.Namespace) -> argparse.Namespace:
+def ResolveConfig(config : dict) -> argparse.Namespace:
     """ Parse Toy configuration file.
 
     Args:
@@ -57,8 +57,7 @@ def ResolveConfig(args : argparse.Namespace) -> argparse.Namespace:
     Returns:
         argparse.Namespace: parsed configuration
     """
-    config = LoadConfiguration(args.config)
-
+    args = argparse.Namespace()
     for k, v in config.items():
         if k == "smearing_params":
             args.smearing_params = {}
@@ -322,7 +321,10 @@ def GenerateRecoRegions(exclusive_process : pd.Series, fractions : pd.DataFrame)
             # this is single pion production
         else:
             sample_from = i
-        toy_true_region_masks[sample_from] = exclusive_process.values == i
+        if sample_from in toy_true_region_masks:
+            toy_true_region_masks[sample_from] = toy_true_region_masks[sample_from] | (exclusive_process.values == i)
+        else:
+            toy_true_region_masks[sample_from] = exclusive_process.values == i
 
     regions_df = {}
     for i in toy_reco_region_masks:
@@ -343,26 +345,29 @@ def main(args : argparse.Namespace):
 
     KE_init = GenerateIntialKEs(args.events, particle, args.p_init, args.beam_width, args.beam_profile)
 
-    if args.events < 1E4:
+    if args.events < 1E5:
         nodes = 1
     else:
-        nodes = ceil(args.events / 1E4)
+        nodes = ceil(args.events / 1E5)
 
     # nodes = os.cpu_count() if args.events > 1E4 else 1
     # pools = ProcessPool(nodes = nodes)
     KE_init_split = np.array_split(KE_init, nodes)
 
 
-    batches = ceil(nodes / os.cpu_count())
+    batches = ceil(nodes / (os.cpu_count()-1))
 
     df = []
     for i in range(batches):
-        KE_init_batches = KE_init_split[os.cpu_count() * i:os.cpu_count() * (i+1)]
+        KE_init_batches = KE_init_split[(os.cpu_count()-1) * i:(os.cpu_count()-1) * (i+1)]
         cpus = len(KE_init_batches)
         # with get_context("spawn").Pool() as pool:
+        print(f"starting batch : {i}, cpus : {cpus}")
         pools = ProcessPool(nodes = cpus)
         sim_args = (KE_init_batches, [args.step]*cpus, [pdfs]*cpus)
         df.extend(pools.imap(Simulate, *sim_args))
+    
+    print("Done! Creating dataframe...")
     df = pd.concat(df, ignore_index = True)
 
     masks = CreateMasks(df)
@@ -391,10 +396,13 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--config", type = str, default = None, help = "Config json file.")
     ApplicationArguments.Output(parser)
 
-    args = ResolveConfig(parser.parse_args())
+    args = parser.parse_args()
+    config = LoadConfiguration(args.config)
+    args = argparse.Namespace(**vars(args), **vars(ResolveConfig(config)))
     args.events = int(args.events)
     if args.out is None:
         args.out = "toy_mc"
+    args.out = args.out.split(".")[0]
 
     print(vars(args))
     main(args)
