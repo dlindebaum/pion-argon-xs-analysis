@@ -12,13 +12,16 @@ import json
 from collections import namedtuple
 
 import awkward as ak
+import cabinetry
+import dill
 import numpy as np
 import pandas as pd
-import dill
+import pyhf
 import uproot
+
 from particle import Particle
 
-from python.analysis import Master, BeamParticleSelection, PFOSelection, EventSelection, Fitting, Plots, vector
+from python.analysis import Master, BeamParticleSelection, PFOSelection, EventSelection, Fitting, Plots, vector, Tags
 from python.analysis.shower_merging import SetPlotStyle
 
 
@@ -809,3 +812,157 @@ class EnergySlice:
 
         xs_err = ((diff_n_int_exclusive**2 * var_int_exclusive) + (diff_n_inc_inclusive**2 * var_inc_inclusive) + (diff_n_int_inclusive**2 * var_int_inclusive))**0.5
         return xs, xs_err
+
+
+class Toy:
+    def __init__(self, file : str = None, df : str = None, smearing : bool = False) -> None:
+        if file is not None:
+            self.df = pd.read_hdf(file)
+        elif df is not None:
+            self.df = df
+        else:
+            return
+    
+        if smearing:
+            self.df = pd.concat([self.df, self.RecoQuantities(self.df)], axis = 1)
+        self.exclusive_processes = np.unique(self.df.exclusive_process)
+        self.exclusive_processes = self.exclusive_processes[self.exclusive_processes != ""]
+
+    @staticmethod
+    def RecoQuantities(toy : pd.DataFrame) -> pd.DataFrame:
+        smeared = {}
+        for q in ["z_int","KE_init", "KE_int"]:
+            s = toy.filter(regex = q)
+            smeared[f"{q}_smeared"] = s.iloc[:, 0] + s.iloc[:, 1]
+        return pd.DataFrame(smeared)
+
+    @staticmethod
+    def GetRegion(toy : pd.DataFrame, region : str) -> pd.DataFrame:
+        regions = toy.filter(regex = region)
+        new_col_names = {}
+        for i in regions:
+            new_col_names[i] = i.split(region)[1]
+        regions = regions.rename(columns = new_col_names)
+        return regions
+
+    @staticmethod
+    def ComputeCounts(true_regions : dict, reco_regions : dict) -> np.array:
+        """ Computes the counts of each combination of reco and true regions.
+
+        Args:
+            true_regions (dict): true region masks
+            reco_regions (dict): reco region masks
+            return_counts (bool, optional): return matrix of counts. Defaults to False.
+
+        Returns:
+            np.array: counts.
+        """
+        counts = []
+        for t in true_regions:
+            true_counts = []
+            for r in reco_regions:
+                true_counts.append(ak.sum(true_regions[t] & reco_regions[r])) # true counts for each reco region
+            counts.append(true_counts)
+        return counts
+
+    @staticmethod
+    def GetCorrelationMatrix(toy : pd.DataFrame):
+        reco_regions = Toy.GetRegion(toy, "reco_regions_")
+        true_regions = Toy.GetRegion(toy, "truth_regions_")
+        return Toy.ComputeCounts(true_regions, reco_regions)
+
+    @property
+    def truth_regions(self):
+        if not hasattr(self, f"_{type(self).__name__}__truth_regions"):
+            setattr(self, f"_{type(self).__name__}__truth_regions", self.GetRegion(self.df, "truth_regions_"))
+        return getattr(self, f"_{type(self).__name__}__truth_regions")
+
+    @property
+    def reco_regions(self):
+        if not hasattr(self, f"_{type(self).__name__}__reco_regions"):
+            setattr(self, f"_{type(self).__name__}__reco_regions", self.GetRegion(self.df, "reco_regions_"))
+        return getattr(self, f"_{type(self).__name__}__reco_regions")
+
+    def GetRegionNames(self, name : str):
+        labels = self.df.filter(regex = name).columns
+        return [s.split(name)[-1] for s in labels]
+
+    @property
+    def reco_region_labels(self):
+        return self.GetRegionNames("reco_regions_")
+
+    @property
+    def truth_region_labels(self):
+        return self.GetRegionNames("truth_regions_")
+
+    @staticmethod
+    def PlotObservablesInRegions(observable : pd.Series, reco_regions : pd.DataFrame, true_regions : pd.DataFrame, label, norm : bool = False, stacked : bool = False, histtype = "step"):
+        for _, r in Plots.IterMultiPlot(reco_regions.columns):
+            tmp_regions = {t : true_regions[t].values & reco_regions[r].values & (observable > 0) for t in true_regions.columns} # filter the reco events for this region only
+            Plots.PlotTagged(observable, Tags.ExclusiveProcessTags(tmp_regions), bins = 50, newFigure = False, title = f"reco region : {r}", reverse_sort = False, stacked = stacked, histtype = histtype, x_label = label, ncols = 1, norm = norm)
+        return
+
+class BackgroundFit:
+
+    @staticmethod    
+    def CreateModel(channels : int, samples_binned : np.array, mc_stat_unc : bool = False):
+        def channel(num : int, samples : np.array):
+            channel = {
+                "name": f"channel_{num}",
+                "samples":[
+                    {
+                        "name" : f"sample_{i}",
+                        "data" : s.tolist(),
+                        "modifiers" : [
+                            {'name': f"mu_{i}", 'type': 'normfactor', 'data': None},
+                            ]
+                    }
+                for i, s in enumerate(samples)
+                ]
+            }
+            if mc_stat_unc == True:
+                for i in range(len(samples)):
+                    channel["samples"][i]["modifiers"].append({'name': f"sample_{i}_pois_err_{num}", 'type': 'shapesys', 'data': np.sqrt(samples[i]).astype(int).tolist()})
+
+            return channel
+        spec = {"channels" : [channel(n, samples_binned[n]) for n in range(channels)]}
+        model = pyhf.Model(spec, poi_name = "mu_0")
+        return model
+
+    @staticmethod
+    def PrintModelSpecs(model : pyhf.Model):
+        print(f"  channels: {model.config.channels}")
+        print(f"     nbins: {model.config.channel_nbins}")
+        print(f"   samples: {model.config.samples}")
+        print(f" modifiers: {model.config.modifiers}")
+        print(f"parameters: {model.config.parameters}")
+        print(f"  nauxdata: {model.config.nauxdata}")
+        print(f"   auxdata: {model.config.auxdata}")
+
+    @staticmethod
+    def GenerateObservations(data : list[np.array], model : pyhf.Model, verbose : bool = True):
+        if verbose is True: print(f"{model.config.suggested_init()=}")
+        observations = np.concatenate(data + [model.config.auxdata])
+        if verbose is True: print(f"{model.logpdf(pars=model.config.suggested_init(), data=observations)=}")
+        return observations
+
+    @staticmethod
+    def Fit(observations, model : pyhf.Model, verbose : bool = True):
+        pyhf.set_backend(backend = "numpy", custom_optimizer = "minuit")
+        result = cabinetry.fit.fit(model, observations)
+        # result = pyhf.infer.mle.fit(data=observations, pdf=model, return_uncertainties = True)
+        if verbose is True: print(f"{model.config.poi_index=}")
+        if verbose is True: print(f"{result=}")
+        return result
+
+    @staticmethod
+    def GetPredictedCorrelationMatrix(model : pyhf.Model, mu : np.array):
+        counts_matrix = []
+        for channel in model.spec["channels"]:
+            counts = []
+            for sample in channel["samples"]:
+                counts.append(sum(sample["data"]))
+            counts_matrix.append(counts * mu)
+        counts_matrix = np.array(counts_matrix).T
+        counts_matrix = np.array(counts_matrix, dtype = int)
+        return counts_matrix
