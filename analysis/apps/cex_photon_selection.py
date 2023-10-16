@@ -34,7 +34,7 @@ def run(i, file, n_events, start, selected_events, args):
     if "selection_masks" in args:
         for m in args["selection_masks"]["mc"]["beam"].values():
             events.Filter([m], [m])
-        events.Filter([args["selection_masks"]["mc"]["null_pfo"]])
+        events.Filter([args["selection_masks"]["mc"]["null_pfo"]["ValidPFOSelection"]])
         photon_mask = CreatePFOMasks(args["selection_masks"]["mc"]["photon"])
         events.Filter([photon_mask])
     else:
@@ -46,8 +46,8 @@ def run(i, file, n_events, start, selected_events, args):
             for k, s, a in zip(args["photon_selection"]["selections"].keys(), args["photon_selection"]["selections"].values(), args["photon_selection"]["mc_arguments"].values()):
                 photon_masks[k] = s(events, **a)
         photon_mask = CreatePFOMasks(photon_masks)
-        events.Filter([photon_mask])        
-
+        events.Filter([photon_mask])
+    print("making pairs")
     pairs = EventSelection.NPhotonCandidateSelection(events, photon_mask[photon_mask], 2)
 
     shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photon_mask[photon_mask] & pairs)
@@ -71,6 +71,8 @@ def run(i, file, n_events, start, selected_events, args):
                     output[f"{k}_{p}"] = ak.flatten(v)
 
     output["true_mother"] = ak.flatten(events.trueParticlesBT.motherPdg)
+    pfo_tags = Tags.GenerateTrueParticleTagsPi0Shower(events)
+    output["pi0_photon"] = ak.flatten(pfo_tags["$\\gamma$:beam $\\pi^0$"].mask | pfo_tags["$\\gamma$:other $\\pi^0$"].mask)
 
     pi0_tags = Tags.GeneratePi0Tags(events, photon_mask[photon_mask] & pairs)
     for t in pi0_tags:

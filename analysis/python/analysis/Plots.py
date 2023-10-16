@@ -1521,6 +1521,16 @@ def PlotStackedBar(bars, labels, xlabel : str = None, colours : list = None, alp
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
+def PlotTags(tags : Tags.Tags, xlabel : str = "name"):
+    plt.figure()
+    counts = [ak.sum(m) for m in tags.mask.values]
+    bar = plt.bar(tags.name.values, counts, color = tags.colour.values)
+    plt.xlabel(xlabel)
+    plt.ylabel("Counts")
+    plt.bar_label(bar)
+    plt.xticks(rotation = 30)
+
+
 class RatioPlot():
     def __init__(self, x = None, y1 = None, y2 = None, y1_err = None, y2_err = None, xlabel = "x", ylabel = "y1/y2") -> None:
         self.x = x

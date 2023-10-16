@@ -202,7 +202,7 @@ def GenerateTrueParticleTagsPiPlus(events):# : Data) -> Tags:
     return tags
 
 
-def GenerateTrueParticleTagsPi0Shower(events):# : Data) -> Tags:
+def GenerateTrueParticleTagsPi0Shower(events) -> Tags:# : Data):
     """ Creates true particle tags with boolean masks with specific tags for pi0 photon showers. Does this for all PFOs.
 
     Args:
@@ -217,14 +217,16 @@ def GenerateTrueParticleTagsPi0Shower(events):# : Data) -> Tags:
     if ak.count(events.trueParticlesBT.pdg) == 0: # the ntuple has no MC, so provide some null data base off recoParticles array shape
         pdg = ak.where(events.recoParticles.number, -1, 0)
         beam_pi0 = pdg
+        other_pi0 = pdg
     else:
         pdg = events.trueParticlesBT.pdg
         beam_pi0 = events.trueParticlesBT.is_beam_pi0
+        other_pi0 = (events.trueParticlesBT.motherPdg == 111) & (~events.trueParticlesBT.is_beam_pi0)
     masks = ParticleMasks(pdg, particles_to_tag)
     masks["other"] = OtherMask(masks)
 
     for p in ["$\\gamma$"]:
-        new_mask = {p : masks[p] & (~beam_pi0), f"{p}:beam $\pi^{0}$" : masks[p] & beam_pi0}
+        new_mask = {p : masks[p] & ~beam_pi0 & ~other_pi0, f"{p}:beam $\pi^{0}$" : masks[p] & beam_pi0, f"{p}:other $\pi^{0}$" : masks[p] & other_pi0}
         masks.pop(p)
         new_mask.update(masks)
         masks = new_mask
@@ -285,4 +287,3 @@ def ExclusiveProcessTags(true_masks):
     for i, t in enumerate(true_masks):
         tags[t] = Tag(t, name_simple[t], colours[t], true_masks[t], i)
     return tags
-

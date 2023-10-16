@@ -205,14 +205,19 @@ def AnalyseRegions(events : Master.Data, photon_mask : ak.Array, is_data : bool,
         photon_mask (ak.Array): mask for pi0 photon shower candidates
         is_data (bool): is this a data ntuple?
         correction (callable, optional): shower energy correction. Defaults to None.
-        correction_params (dict, optional): shower energy correction parameters. Defaults to None.
+        correction_params (str, optional): shower energy correction parameters file. Defaults to None.
 
     Returns:
         tuple[dict, dict]: truth and reco regions
     """
     truth_regions = EventSelection.create_regions(events.trueParticles.nPi0, events.trueParticles.nPiPlus) if is_data == False else None
 
-    reco_pi0_counts = EventSelection.count_pi0_candidates(events, exactly_two_photons = True, photon_mask = photon_mask, correction = cross_section.EnergyCorrection.shower_energy_correction[correction], correction_params = correction_params)
+    if correction_params is None:
+        params = None
+    else:
+        params = cross_section.LoadConfiguration(correction_params)
+
+    reco_pi0_counts = EventSelection.count_pi0_candidates(events, exactly_two_photons = True, photon_mask = photon_mask, correction = cross_section.EnergyCorrection.shower_energy_correction[correction], correction_params = params)
     reco_pi_plus_counts_mom_cut = EventSelection.count_charged_pi_candidates(events, energy_cut = None)
     reco_regions = EventSelection.create_regions(reco_pi0_counts, reco_pi_plus_counts_mom_cut)
     return truth_regions, reco_regions
@@ -296,10 +301,7 @@ def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, n
     norm = False if output_data is None else norm
     with Plots.PlotBook(outDir + "beam.pdf") as pdf:
 
-        bar_data = []
-        for tag in output_mc["PiBeamSelection"]["value"]:
-            bar_data.extend([tag] * output_mc["PiBeamSelection"]["value"][tag])
-        Plots.PlotBar(bar_data, xlabel = "True particle ID")
+        Plots.PlotTags(output_mc["PiBeamSelection"]["tags"], "True particle ID")
         pdf.Save()
 
         if output_data is None:
@@ -360,10 +362,7 @@ def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, n
         Plots.DrawCutPosition(output_mc["BeamScraperCut"]["cuts"], face = "left", arrow_length = 2)
         pdf.Save()
 
-        bar_data = []
-        for t in output_mc["final_tags"]["tags"]:
-            bar_data.extend([t] * ak.sum(output_mc["final_tags"]["tags"][t].mask))
-        Plots.PlotBar(bar_data, xlabel = "True particle ID")
+        Plots.PlotTags(output_mc["final_tags"]["tags"], "True particle ID")        
         pdf.Save()
     return
 
@@ -413,10 +412,7 @@ def MakePiPlusSelectionPlots(output_mc : dict, output_data : dict, outDir : str,
         Plots.DrawCutPosition(max(output_mc["PiPlusSelection"]["cuts"]), arrow_length = 0.5, face = "left")
         pdf.Save()
 
-        bar_data = []
-        for t in output_mc["final_tags"]["tags"]:
-            bar_data.extend([t] * ak.sum(output_mc["final_tags"]["tags"][t].mask))
-        Plots.PlotBar(bar_data, xlabel = "true particle ID")
+        Plots.PlotTags(output_mc["final_tags"]["tags"], xlabel = "true particle ID")
         pdf.Save()
     return
 
@@ -471,10 +467,7 @@ def MakePhotonCandidateSelectionPlots(output_mc : dict, output_data : dict, outD
         Plots.DrawCutPosition(20, arrow_length = 20, face = "left", color = "red")
         pdf.Save()
 
-        bar_data = []
-        for t in output_mc["final_tags"]["tags"]:
-            bar_data.extend([t] * ak.sum(output_mc["final_tags"]["tags"][t].mask))
-        Plots.PlotBar(bar_data, xlabel = "true particle ID")
+        Plots.PlotTags(output_mc["final_tags"]["tags"], xlabel = "true particle ID")
         pdf.Save()
     return
 
