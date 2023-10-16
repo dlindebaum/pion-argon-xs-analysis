@@ -167,9 +167,9 @@ def AnalysePi0Selection(events : Master.Data, data : bool, functions : dict, arg
         return tag
 
     output = {}
-    cut_table = Master.CutTable.CutHandler(events, tags = EventSelection.GenerateTrueFinalStateTags(events))
-
     photonCandidates = PFOSelection.InitialPi0PhotonSelection(events) # repeat the photon candidate selection, but only require the mask
+    cut_table = Master.CutTable.CutHandler(events, tags = Tags.GeneratePi0Tags(events, photonCandidates))
+
 
     for a in args:
         if a == "Pi0MassSelection":
@@ -398,6 +398,7 @@ def MakePiPlusSelectionPlots(output_mc : dict, output_data : dict, outDir : str,
             Plots.PlotTagged(output_mc["NHitsCut"]["value"], output_mc["NHitsCut"]["tags"], data2 = output_data["NHitsCut"]["value"], bins = args.nbins, ncols = 2, x_range = [0, 500], x_label = "nHits", norm = norm)
         else:
             Plots.PlotTagged(output_mc["NHitsCut"]["value"], output_mc["NHitsCut"]["tags"], bins = args.nbins, ncols = 2, x_range = [0, 500], x_label = "nHits", norm = norm)
+        Plots.DrawCutPosition(output_mc["NHitsCut"]["cuts"], arrow_length = 100, color = "black")
         pdf.Save()
 
         Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc["NHitsCut"]["value"]), ak.ravel(output_mc["NHitsCut_completeness"]["value"]), ylabel = "completeness", xlabel = "nHits", x_range = [0, 500], bins = 50, norm = "column", c_scale = "linear")
