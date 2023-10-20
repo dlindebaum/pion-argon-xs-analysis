@@ -790,7 +790,7 @@ class EnergySlice:
         return ThinSlice.CrossSection(n_incident, n_interact, dE/dEdX)
 
     @staticmethod
-    def ModifiedCrossSection(n_int_exclusive : np.array, n_inc_exclusive, n_int_inclusive : np.array, n_inc_inclusive : np.array, dEdX : float, dE : float) -> tuple[np.array, np.array]:
+    def ModifiedCrossSection(n_int_exclusive : np.array, n_int_inclusive : np.array, n_inc_inclusive : np.array, dEdX : float, dE : float) -> tuple[np.array, np.array]:
         def nandiv(num, den):
             return np.divide(num, np.where(den == 0, np.nan, den))
 
@@ -802,7 +802,7 @@ class EnergySlice:
 
         var_inc_inclusive = n_inc_inclusive # poisson variance
         var_int_inclusive = n_int_inclusive * (1 - nandiv(n_int_inclusive, n_inc_inclusive)) # binomial uncertainty
-        var_int_exclusive = n_int_exclusive * (1 - nandiv(n_int_exclusive, n_inc_exclusive)) # binomial uncertainty
+        var_int_exclusive = n_int_exclusive * (1 - nandiv(n_int_exclusive, n_inc_inclusive)) # binomial uncertainty
 
         xs = factor * n_interact_ratio * np.log(nandiv(n_inc_inclusive, n_inc_inclusive - n_int_inclusive))
 
@@ -949,7 +949,7 @@ class BackgroundFit:
     @staticmethod
     def Fit(observations, model : pyhf.Model, verbose : bool = True):
         pyhf.set_backend(backend = "numpy", custom_optimizer = "minuit")
-        result = cabinetry.fit.fit(model, observations)
+        result = cabinetry.fit.fit(model, observations, custom_fit = False, tolerance = 0.001)
         # result = pyhf.infer.mle.fit(data=observations, pdf=model, return_uncertainties = True)
         if verbose is True: print(f"{model.config.poi_index=}")
         if verbose is True: print(f"{result=}")

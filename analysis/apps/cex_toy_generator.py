@@ -27,6 +27,11 @@ from python.analysis.cross_section import ApplicationArguments, BetheBloch, Gean
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # supress annoying pandas warnings
 
+global verbose
+
+def vprint(*args, **kwags):
+    if verbose is True:
+        print(*args, **kwags)
 
 def ReadHDF5File(file : str):
     """ Reads a HDF5 file and unpacks the contents into pandas dataframes.
@@ -36,7 +41,7 @@ def ReadHDF5File(file : str):
 
     Returns:
         pd.DataFrame : if hdf5 file only has 1 key
-        dict L if phdf5 file contains more than 1 key
+        dict : if hdf5 file contains more than 1 key
     """
     keys = []
     with tables.open_file(file, driver = "H5FD_CORE") as hdf5file:
@@ -112,7 +117,7 @@ def P_int(sigma : np.array, l : float) -> np.array:
     return 1 - np.exp(-1E-27 * sigma * 6.02214076e23 * BetheBloch.rho * l / BetheBloch.A)
 
 
-def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split(os.pathsep)[0] + "/data/g4_xs.root") -> dict:
+def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split(os.pathsep)[0] + "/data/g4_xs.root", scale_factors : dict = None) -> dict:
     """ Creates a PDF of the inclusive cross section and a stacked PDF of the exclusive process,
         such that rejection sampling can be used to allocate an exclusive process for a given inclusive process.
 
@@ -124,19 +129,33 @@ def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split
     """
     xs_sim = GeantCrossSections(file = path)
 
+    exclusive_processes = [k for k in vars(xs_sim) if k not in ["KE", "file", "total_inelastic"]]
+
+    if scale_factors is not None:
+        sum_xs = np.zeros(len(xs_sim.KE))
+        for k, v in scale_factors.items():
+            sum_xs = sum_xs + v * getattr(xs_sim, k)
+        ratio = sum_xs / xs_sim.total_inelastic # the amount per data point to scale each exclusive process by, such that the total inelastic cross section remains unchanged
+    else:
+        ratio = 1
+
+    if scale_factors is not None:
+        factors = {k : v/ratio for k, v in scale_factors.items()}
+    else:
+        factors = {k : 1 for k in exclusive_processes}
+
     pdfs = {}
     pdfs["total_inelastic"] = interp1d(xs_sim.KE, P_int(xs_sim.total_inelastic, l), fill_value = "extrapolate") # total inelastic pdf
 
     # sort the exclusice channels based on area under curve
     area = {}
-    for v in vars(xs_sim):
-        if v in ["KE", "file", "total_inelastic"]: continue
-        area[v] = np.trapz(P_int(getattr(xs_sim, v), l))
+    for v in exclusive_processes:
+        area[v] = np.trapz(P_int(factors[v] * getattr(xs_sim, v), l))
 
     # stack the pdfs in ascending order
     y = np.zeros(len(xs_sim.KE))
     for v, _ in sorted(area.items(), key=lambda x: x[1]):
-        y = y + P_int(getattr(xs_sim, v), l)
+        y = y + P_int(factors[v] * getattr(xs_sim, v), l)
         pdfs[v] = interp1d(xs_sim.KE, y, fill_value = "extrapolate")
     return pdfs
 
@@ -225,7 +244,7 @@ def CountProcesses(proc : np.array):
         proc (np.array): array of processes
     """
     for p in Counter(proc):
-        print(p, sum(proc == p))
+        vprint(p, sum(proc == p))
 
 
 def CreateMasks(toy : pd.DataFrame) -> dict:
@@ -339,9 +358,18 @@ def GenerateRecoRegions(exclusive_process : pd.Series, fractions : pd.DataFrame)
 
 @timer
 def main(args : argparse.Namespace):
+    global verbose
+    if hasattr(args, "verbose"):
+        verbose = args.verbose
+    else:
+        verbose = True
+
+    if not verbose:
+        warnings.filterwarnings("ignore") # bad but removes clutter in the terminal output
+
     particle = Particle.from_pdgid(211)
 
-    pdfs = GenerateStackedPDFs(args.step)
+    pdfs = GenerateStackedPDFs(args.step, scale_factors = args.pdf_scale_factors)
 
     KE_init = GenerateIntialKEs(args.events, particle, args.p_init, args.beam_width, args.beam_profile)
 
@@ -350,25 +378,25 @@ def main(args : argparse.Namespace):
     else:
         nodes = ceil(args.events / 1E5)
 
-    # nodes = os.cpu_count() if args.events > 1E4 else 1
-    # pools = ProcessPool(nodes = nodes)
-    KE_init_split = np.array_split(KE_init, nodes)
+    if nodes == 1:
+        df = Simulate(KE_init, args.step, pdfs) # don't need to do multiprocessing
+    else:
+        KE_init_split = np.array_split(KE_init, nodes)
+        batches = ceil(nodes / (os.cpu_count()-1))
 
-
-    batches = ceil(nodes / (os.cpu_count()-1))
-
-    df = []
-    for i in range(batches):
-        KE_init_batches = KE_init_split[(os.cpu_count()-1) * i:(os.cpu_count()-1) * (i+1)]
-        cpus = len(KE_init_batches)
-        # with get_context("spawn").Pool() as pool:
-        print(f"starting batch : {i}, cpus : {cpus}")
-        pools = ProcessPool(nodes = cpus)
-        sim_args = (KE_init_batches, [args.step]*cpus, [pdfs]*cpus)
-        df.extend(pools.imap(Simulate, *sim_args))
-    
-    print("Done! Creating dataframe...")
-    df = pd.concat(df, ignore_index = True)
+        df = []
+        for i in range(batches):
+            KE_init_batches = KE_init_split[(os.cpu_count()-1) * i:(os.cpu_count()-1) * (i+1)]
+            cpus = len(KE_init_batches)
+            vprint(f"starting batch : {i}, cpus : {cpus}")
+            pools = ProcessPool(nodes = cpus)
+            pools.restart()
+            sim_args = (KE_init_batches, [args.step]*cpus, [pdfs]*cpus)
+            df.extend(pools.imap(Simulate, *sim_args))
+            pools.close()
+        
+        vprint("Done! Creating dataframe...")
+        df = pd.concat(df, ignore_index = True)
 
     masks = CreateMasks(df)
     for m in masks:
@@ -385,7 +413,7 @@ def main(args : argparse.Namespace):
 
     # allow the app to be run in other scripts or notebooks.
     if __name__ == "__main__":
-        print(df)
+        vprint(df)
         df.to_hdf(args.out + ".hdf5", key = "df")
     else:
         return df
