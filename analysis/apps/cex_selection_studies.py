@@ -7,7 +7,6 @@ Author: Shyam Bhuller
 Description: Selection studies for the charge exchange analysis.
 """
 import argparse
-import json
 import os
 
 from rich import print as rprint
@@ -168,8 +167,7 @@ def AnalysePi0Selection(events : Master.Data, data : bool, functions : dict, arg
 
     output = {}
     photonCandidates = PFOSelection.InitialPi0PhotonSelection(events) # repeat the photon candidate selection, but only require the mask
-    cut_table = Master.CutTable.CutHandler(events, tags = Tags.GeneratePi0Tags(events, photonCandidates))
-
+    cut_table = Master.CutTable.CutHandler(events, tags = Tags.GeneratePi0Tags(events, photonCandidates) if data is False else None)
 
     for a in args:
         if a == "Pi0MassSelection":
@@ -247,6 +245,8 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
 
     print("PFO pre-selection")
     good_PFO_mask = PFOSelection.GoodShowerSelection(events)
+    good_PFO_cut_table = Master.CutTable.CutHandler(events, tags = None)
+    good_PFO_cut_table.add_mask(good_PFO_mask, "GoodShowerSelection")
     events.Filter([good_PFO_mask])
 
     print("pion selection")
@@ -279,11 +279,11 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
 
     output = {
         "beam" : {"data" : output_beam, "table" : table_beam, "masks" : beam_masks},
-        "null_pfo" : {"masks" : {"ValidPFOSelection" : good_PFO_mask}},
+        "null_pfo" : {"table" : good_PFO_cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, events = False), "masks" : {"ValidPFOSelection" : good_PFO_mask}},
         "pip" : {"data" : output_pip, "table" : table_pip, "masks" : pip_masks},
         "photon" : {"data" : output_photon, "table" : table_photon, "masks" : photon_masks},
         "pi0" : {"data" : output_pi0, "table" : table_pi0, "masks" : pi0_masks},
-        "regions" : regions 
+        "regions" : regions
     }
     return output
 
@@ -333,13 +333,13 @@ def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, n
         Plots.DrawCutPosition(output_mc["CosThetaCut"]["cuts"], arrow_length = 0.02)
         pdf.Save()
 
-        if output_data:
-            Plots.PlotTagged(output_mc["APA3Cut"]["value"], output_mc["APA3Cut"]["tags"], data2 = output_data["APA3Cut"]["value"], bins = args.nbins, x_label = "Beam end position z (cm)", x_range = [0, 700], norm = norm)
-        else:
-            Plots.PlotTagged(output_mc["APA3Cut"]["value"], output_mc["APA3Cut"]["tags"], bins = args.nbins, x_label = "Beam end position z (cm)", x_range = [0, 700], norm = norm)
-
-        Plots.DrawCutPosition(output_mc["APA3Cut"]["cuts"], face = "left", arrow_length = 50)
-        pdf.Save()
+        for y_scale in ["linear", "log"]:
+            if output_data:
+                Plots.PlotTagged(output_mc["APA3Cut"]["value"], output_mc["APA3Cut"]["tags"], data2 = output_data["APA3Cut"]["value"], bins = args.nbins, x_label = "Beam end position z (cm)", x_range = [0, 700], norm = norm, y_scale = y_scale)
+            else:
+                Plots.PlotTagged(output_mc["APA3Cut"]["value"], output_mc["APA3Cut"]["tags"], bins = args.nbins, x_label = "Beam end position z (cm)", x_range = [0, 700], norm = norm, y_scale = y_scale)
+            Plots.DrawCutPosition(output_mc["APA3Cut"]["cuts"], face = "left", arrow_length = 50)
+            pdf.Save()
 
         if output_data:
             Plots.PlotTagged(output_mc["MichelScoreCut"]["value"], output_mc["MichelScoreCut"]["tags"], data2 = output_data["MichelScoreCut"]["value"], x_range = (0, 1), y_scale = "log", bins = args.nbins, x_label = "Michel score", ncols = 2, norm = norm)
@@ -615,10 +615,10 @@ def MakeTables(output : dict, out : str, sample : str):
             outdir = out + s + "/"
             os.makedirs(outdir, exist_ok = True)
             df = output[s]["table"]
+            df = df.rename(columns = {i : i.split(" ")[0] for i in df})
             purity = pd.concat([df["Name"], df.iloc[:, df.columns.to_list().index("Name") + 1:].div(df.iloc[:, df.columns.to_list().index("Name") + 1], axis = 0)], axis = 1)
             efficiency = pd.concat([df["Name"], df.iloc[:, df.columns.to_list().index("Name") + 1:].div(df.iloc[0, df.columns.to_list().index("Name") + 1:], axis = 1)], axis = 1)
             
-            df = df.rename(columns = {i : i.split(" ")[0] for i in df})
             df.style.hide(axis = "index").to_latex(outdir + s + "_counts.tex")
             purity.style.hide(axis = "index").to_latex(outdir + s + "_purity.tex")
             efficiency.style.hide(axis = "index").to_latex(outdir + s + "_efficiency.tex")

@@ -189,7 +189,11 @@ def GenerateTrueParticleTagsPiPlus(events):# : Data) -> Tags:
     masks = ParticleMasks(pdg, particles_to_tag)
     masks["other"] = OtherMask(masks)
 
+    masks["charged $\\pi$"] = masks["$\\pi^{+}$"] | masks["$\\pi^{-}$"]
     for p in ["$\\pi^{+}$", "$\\pi^{-}$"]:
+        masks.pop(p) 
+
+    for p in ["charged $\\pi$"]:
         new_mask = {p : masks[p] & beam_daughter, f"{p}:2nd" : masks[p] & (~beam_daughter)}
         masks.pop(p)
         new_mask.update(masks)
