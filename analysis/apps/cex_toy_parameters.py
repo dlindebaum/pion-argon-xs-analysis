@@ -14,6 +14,7 @@ import os
 import awkward as ak
 import numpy as np
 import pandas as pd
+import scipy.stats as stats
 
 from python.analysis import cross_section, Master, Plots, Tags
 
@@ -105,7 +106,17 @@ def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_q
     return params_formatted
 
 
-def get_counts(masks : dict) -> ak.Array:
+def GetPFOMasks(masks : dict) -> ak.Array:
+    mask = None
+    for m in masks:
+        if mask is None:
+            mask = masks[m]
+        else:
+            mask = mask & masks[m]
+    return mask
+
+
+def GetCounts(masks : dict) -> ak.Array:
     """ Compute counts for pfo selection masks. 
 
     Args:
@@ -114,14 +125,7 @@ def get_counts(masks : dict) -> ak.Array:
     Returns:
         ak.Array: number of selected PFOs in each event
     """
-    n = None
-    for m in masks:
-        if n is None:
-            n = masks[m]
-        else:
-            n = n & masks[m]
-    n = ak.sum(n, -1)
-    return n
+    return ak.sum(GetPFOMasks(masks), -1)
 
 
 def GetRegions(mc : Master.Data, args : argparse.Namespace) -> tuple[dict, dict]:
@@ -134,8 +138,8 @@ def GetRegions(mc : Master.Data, args : argparse.Namespace) -> tuple[dict, dict]
     Returns:
         tuple[dict, dict]: regions
     """
-    n_pi = get_counts(args.selection_masks["mc"]["pi"])
-    n_pi0 = get_counts(args.selection_masks["mc"]["pi0"])
+    n_pi = GetCounts(args.selection_masks["mc"]["pi"])
+    n_pi0 = GetCounts(args.selection_masks["mc"]["pi0"])
 
     n_pi_true = mc.trueParticles.nPiMinus + mc.trueParticles.nPiPlus
     n_pi0_true = mc.trueParticles.nPi0
@@ -163,9 +167,6 @@ def PlotCorrelationMatrix(counts : np.array = None, true_labels = None, reco_lab
     if newFigure: Plots.plt.figure()
     Plots.plt.imshow(counts/np.max(counts, axis = 0), cmap = "cool", origin = "lower")
     Plots.plt.colorbar(label = "counts (column normalised)")
-
-    # true_counts = [f"{t.replace('_', ' ')}\n({sum(true_regions[t])})" for t in true_regions]
-    # reco_counts = [f"{r.replace('_', ' ')}\n({sum(reco_regions[r])})" for r in reco_regions]
 
     true_counts = np.sum(counts, axis = 1)
     reco_counts = np.sum(counts, axis = 0)
@@ -347,6 +348,31 @@ def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace):
     return
 
 @Master.timer
+def MeanTrackScoreKDE(mc : Master.Data, args : argparse.Namespace):
+    mc_copy = mc.Filter(returnCopy = True)
+
+    for s, m in args.selection_masks["mc"]["beam"].items():
+        print(s)
+        mc_copy.Filter([m], [m])
+    mc_copy.Filter([args.selection_masks["mc"]['null_pfo']['ValidPFOSelection']])
+
+    has_pfo = cross_section.BeamParticleSelection.HasFinalStatePFOsCut(mc_copy)
+    mc_copy.Filter([has_pfo], [has_pfo])
+
+    mean_track_score = ak.fill_none(ak.mean(mc_copy.recoParticles.trackScore, axis = -1), -0.05)
+
+    true_processes = cross_section.EventSelection.create_regions_new(mc_copy.trueParticles.nPi0, mc_copy.trueParticles.nPiPlus + mc_copy.trueParticles.nPiMinus)
+
+    kdes = {}
+    for k, v in true_processes.items():
+        kdes[k] = stats.gaussian_kde(mean_track_score[v])
+        kdes[k].set_bandwidth(0.2)
+
+    os.makedirs(args.out + "meanTrackScoreKDE/", exist_ok = True)
+    cross_section.SaveSelection(args.out + "meanTrackScoreKDE/kdes.dill", kdes)
+    return
+
+@Master.timer
 def main(args : argparse.Namespace):
     cross_section.SetPlotStyle(True, 100)
 
@@ -371,6 +397,8 @@ def main(args : argparse.Namespace):
     BeamSelectionEfficiency(cross_section_quantities["true"], pion_inel_mask, args, ranges, labels, bins)
 
     RecoRegionSelection(mc, args)
+
+    MeanTrackScoreKDE(mc, args)
     return
 
 if __name__ == "__main__":

@@ -23,7 +23,7 @@ from scipy.interpolate import interp1d
 
 from python.analysis.Master import timer
 from python.analysis import Fitting
-from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle, LoadConfiguration
+from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle, LoadConfiguration, LoadSelectionFile
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # supress annoying pandas warnings
 
@@ -74,6 +74,8 @@ def ResolveConfig(config : dict) -> argparse.Namespace:
         elif k == "beam_selection_efficiencies":
             #* that complex unpacking with pytables
             args.beam_selection_efficiencies = ReadHDF5File(v)
+        elif k == "mean_track_score_kde":
+            args.mean_track_score_kde = LoadSelectionFile(v)
         else:
             setattr(args, k, v)
     return args
@@ -356,6 +358,35 @@ def GenerateRecoRegions(exclusive_process : pd.Series, fractions : pd.DataFrame)
 
     return regions_df
 
+
+def GenerateMeanTrackScores(kde : "stats.gaussian_kde", n : int) -> np.array:
+    values = kde.resample(n)[0]
+    mask = (values > 1) | (values < 0)
+    counter = 0
+    while any(mask):
+        values = values[~mask]
+        values = np.concatenate([values, kde.resample(sum(mask))[0]])
+        mask = (values > 1) | (values < 0)
+    # values = np.where(values > 1, 1, values)
+    # values = np.where(values < 0, 0, values)
+    return values
+
+@timer
+def MeanTrackScore(exclusive_process : pd.Series, kdes : dict) -> np.array:
+    scores = np.array([None]*len(exclusive_process))
+    exclusive_processes, counts = np.unique(exclusive_process.values, return_counts = True)
+
+    for i, c in zip(exclusive_processes, counts):
+        if i == "": continue
+        if i in ["quasielastic", "double_charge_exchange"]:
+            sample_from = "single_pion_production"
+            # this is single pion production
+        else:
+            sample_from = i
+        scores = np.where(exclusive_process == i, GenerateMeanTrackScores(kdes[sample_from], len(exclusive_process)), scores)
+    return pd.DataFrame({"mean_track_score" : scores}).reset_index(drop = True)
+
+
 @timer
 def main(args : argparse.Namespace):
     global verbose
@@ -408,13 +439,20 @@ def main(args : argparse.Namespace):
     smearings = Smearing(args.events, args.smearing_params)
     beam_selection_mask = BeamSelectionEfficiency(df, "z_int", args.beam_selection_efficiencies)
     region_masks = GenerateRecoRegions(df.exclusive_process, args.reco_region_fractions)
+    scores = MeanTrackScore(df.exclusive_process, args.mean_track_score_kde)
 
-    df = pd.concat([df, smearings, beam_selection_mask, region_masks], axis = 1)
+    df = pd.concat([df, smearings, beam_selection_mask, region_masks, scores], axis = 1)
 
     # allow the app to be run in other scripts or notebooks.
     if __name__ == "__main__":
         vprint(df)
-        df.to_hdf(args.out + ".hdf5", key = "df")
+
+        if hasattr(args, "df_format"):
+            fmt = args.df_format
+        else:
+            fmt = "f" # fixed format, fastest read/writes
+
+        df.to_hdf(args.out + ".hdf5", key = "df", format = fmt)
     else:
         return df
 
