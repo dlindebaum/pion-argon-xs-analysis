@@ -978,12 +978,26 @@ def IterMultiPlot(x, sharex : bool = False, sharey : bool = False):
         yield i, j
 
 
-def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None, xerr = None, yerr = None, capsize : float = 3, zorder : int = None):
+def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None, xerr = None, yerr = None, capsize : float = 3, zorder : int = None, style : str = "scatter"):
     """ Make scatter plot.
     """
     if newFigure is True:
         plt.figure()
-    plt.errorbar(x, y, yerr, xerr, marker = marker, linestyle = linestyle, label = label, color = color, markersize = markersize, alpha = alpha, capsize = capsize, zorder = zorder)
+
+    if style == "bar":
+        width = min(x[1:] - x[:-1]) # until I figure out how to do varaible widths
+        plt.bar(x, y, width, xerr = xerr, yerr = yerr, linestyle = linestyle, label = label, color = color, alpha = alpha, capsize = capsize, zorder = zorder)
+    elif style == "step":
+        if (xerr is not None): warnings.warn("x error bars are not supported with style 'step'")
+        plt.step(x, y, where = "mid", linestyle = linestyle, label = label, color = color, alpha = alpha, zorder = zorder)
+        if yerr is not None:
+            plt.fill_between(x, y + yerr, y - yerr, step = "mid", alpha = 0.25, color = color)
+
+    elif style == "scatter":
+        plt.errorbar(x, y, yerr, xerr, marker = marker, linestyle = linestyle, label = label, color = color, markersize = markersize, alpha = alpha, capsize = capsize, zorder = zorder)
+    else:
+        raise Exception(f"{style} not a valid style")
+
 
     if xlabel is not None: plt.xlabel(xlabel)
     if ylabel is not None: plt.ylabel(ylabel)
@@ -1566,7 +1580,7 @@ class RatioPlot():
             ratio_err = ratio * np.sqrt((self.y1_err/self.y1)**2 + (self.y2_err/self.y2)**2)
 
 
-        Plot(self.x, ratio, yerr = ratio_err, xlabel = self.xlabel, ylabel = self.ylabel, marker = "o", color = "black", linestyle = "", newFigure = False)
+        Plot(self.x, ratio, yerr = abs(ratio_err), xlabel = self.xlabel, ylabel = self.ylabel, marker = "o", color = "black", linestyle = "", newFigure = False)
         ticks = [0, 0.5, 1, 1.5, 2] # hardcode the yaxis to have 5 ticks
         plt.yticks(ticks, np.char.mod("%.2f", ticks))
         plt.ylim(0, 2)
