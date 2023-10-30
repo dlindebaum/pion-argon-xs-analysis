@@ -267,7 +267,7 @@ class double_crystal_ball(FitFunction):
         return p2
 
 
-def RejectionSampling(num : int, low : float, high : float, func : FitFunction, params : dict, scale_param : str = "p0") -> np.array:
+def RejectionSampling(num : int, low : float, high : float, func : FitFunction, params : dict, scale_param : str = "p0", rng : np.random.default_rng = None) -> np.array:
     """ Performs Rejection sampling for a given function which describes a pdf.
 
     Args:
@@ -281,13 +281,17 @@ def RejectionSampling(num : int, low : float, high : float, func : FitFunction, 
     Returns:
         np.array: sampled values.
     """
+
+    if rng is None:
+        rng = np.random.default_rng()
+
     pdf_params = {i : params[i] for i in params}
     pdf_params[scale_param] = 1 # fix ampltiude parameter to 1
 
     x = np.array([])
     while len(x) < num:
-        u = np.random.uniform(low, high, num) # generate a random range of values
-        v = np.random.uniform(0, 1, num) # generate a random probability
+        u = rng.uniform(low, high, num) # generate a random range of values
+        v = rng.uniform(0, 1, num) # generate a random probability
         keep = v <= func(u, **pdf_params) # reject if v > probability of observing u
         x = np.concatenate([x, u[keep]]) # concatenate x
     return x[:num] #? is there a way to generate only the desired number rather than truncating x?
