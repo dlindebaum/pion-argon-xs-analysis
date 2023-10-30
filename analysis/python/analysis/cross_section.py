@@ -696,7 +696,7 @@ class EnergySlice:
     """
     @staticmethod
     def TrunacteSlices(slice_array : ak.Array, energy_slices : Slices) -> ak.Array:
-        """ Custom method for truncating slice numbers due to the fact energy slices should be in reverse order vs kinetic energy.
+        """ Method for truncating slice numbers due to the fact energy slices should be in reverse order vs kinetic energy.
 
         Args:
             slice_array (ak.Array): slices to truncate
@@ -712,7 +712,7 @@ class EnergySlice:
         return slice_array
 
     @staticmethod
-    def CountingExperiment(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices) -> tuple[np.array, np.array]:
+    def CountingExperiment(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices, interact_only : bool = False) -> tuple[np.array, np.array]:
         """ Creates the interacting and incident histograms.
 
         Args:
@@ -725,22 +725,20 @@ class EnergySlice:
         Returns:
             tuple[np.array, np.array]: n_interact and n_incident histograms
         """
-        true_init_slice = energy_slices(ff_energy).num + 1 # equivilant to ceil
-        true_int_slice = energy_slices(int_energy).num
+        true_init_slice = energy_slices(ff_energy[~outside_tpc]).num + 1 # equivilant to ceil
+        true_int_slice = energy_slices(int_energy[~outside_tpc]).num
 
         true_init_slice = EnergySlice.TrunacteSlices(true_init_slice, energy_slices)
         true_int_slice = EnergySlice.TrunacteSlices(true_int_slice, energy_slices)
 
-        # just in case we encounter an instance where E_int > E_ini (unphysical)
+        # removes instances where the particle incident energy and interacting energy are in the same slice (Yinrui calls this an incomplete slice)
+        # i.e. this happens if the particle interacting in its first slice, must be an artifact of the energy slicing but not sure why.
         bad_slices = true_int_slice < true_init_slice
-        true_init_slice = ak.where(bad_slices < 0, -1, true_init_slice)
+        true_init_slice = ak.where(bad_slices, -1, true_init_slice)
         true_int_slice = ak.where(bad_slices, -1, true_int_slice)
 
         n_incident = np.zeros(energy_slices.max_num + 1)
         n_interact = np.zeros(energy_slices.max_num + 1)
-
-        true_int_slice_in_tpc = true_int_slice[~outside_tpc]
-        true_init_slice_in_tpc = true_init_slice[~outside_tpc]
 
         #! slowest but most explict version
         # n_incident = np.zeros(max_slice + 1)
@@ -754,12 +752,16 @@ class EnergySlice:
         #     n_incident[true_init_slice_in_tpc[p] : true_int_slice_in_tpc[p] + 1] += 1
         # print(n_incident)
 
-        #! fastest, vectorised version of the first but c++ loops are faster. 
-        n_incident = np.array([ak.sum(ak.where((true_init_slice_in_tpc <= i) & (true_int_slice_in_tpc > i), 1, 0)) for i in range(energy_slices.max_num + 1)])
-    
-        n_interact = np.histogram(np.array(true_int_slice_in_tpc[channel[~outside_tpc]]), range(-1, energy_slices.max_num + 1))[0]
+        n_interact = np.histogram(np.array(true_int_slice[channel[~outside_tpc]]), range(-1, energy_slices.max_num + 1))[0]
         n_interact = np.roll(n_interact, -1) # shift the underflow bin to the location of the overflow bin in n_incident i.e. merge them.
-        return n_interact, n_incident + n_interact
+
+        if interact_only:
+            return n_interact
+        else:
+            #! fastest, vectorised version of the first but c++ loops are faster. 
+            n_incident = np.array([ak.sum(ak.where((true_init_slice <= i) & (true_int_slice > i), 1, 0)) for i in range(energy_slices.max_num + 1)])
+
+            return n_interact, n_incident + n_interact
 
     @staticmethod
     def Slice_dEdX(energy_slices : Slices, particle : Particle) -> np.array:
@@ -871,17 +873,29 @@ class Toy:
         true_regions = Toy.GetRegion(toy, "truth_regions_")
         return Toy.ComputeCounts(true_regions, reco_regions)
 
+
+    def SetProperty(self, name : str, value : any):
+        hidden_name = f"_{type(self).__name__}__{name}"
+        if not hasattr(self, hidden_name):
+            setattr(self, hidden_name, value)
+        return getattr(self, hidden_name)
+
+
+    @property
+    def outside_tpc(self):
+        return self.SetProperty("outside_tpc", (self.df.z_int < 0) | (self.df.z_int > 700))
+
+    @property
+    def outside_tpc_smeared(self):
+        return self.SetProperty("outside_tpc_smeared", (self.df.z_int_smeared < 0) | (self.df.z_int_smeared > 700))
+
     @property
     def truth_regions(self):
-        if not hasattr(self, f"_{type(self).__name__}__truth_regions"):
-            setattr(self, f"_{type(self).__name__}__truth_regions", self.GetRegion(self.df, "truth_regions_"))
-        return getattr(self, f"_{type(self).__name__}__truth_regions")
+        return self.SetProperty("truth_regions", self.GetRegion(self.df, "truth_regions_"))
 
     @property
     def reco_regions(self):
-        if not hasattr(self, f"_{type(self).__name__}__reco_regions"):
-            setattr(self, f"_{type(self).__name__}__reco_regions", self.GetRegion(self.df, "reco_regions_"))
-        return getattr(self, f"_{type(self).__name__}__reco_regions")
+        return self.SetProperty("reco_regions", self.GetRegion(self.df, "reco_regions_"))
 
     def GetRegionNames(self, name : str):
         labels = self.df.filter(regex = name).columns
@@ -902,13 +916,13 @@ class Toy:
             Plots.PlotTagged(observable, Tags.ExclusiveProcessTags(tmp_regions), bins = 50, newFigure = False, title = f"reco region : {r}", reverse_sort = False, stacked = stacked, histtype = histtype, x_label = label, ncols = 1, norm = norm)
         return
 
-class BackgroundFit:
+class RegionFit:
 
     @staticmethod    
-    def CreateModel(channels : int, samples_binned : np.array, mc_stat_unc : bool = False):
-        def channel(num : int, samples : np.array):
-            channel = {
-                "name": f"channel_{num}",
+    def CreateModel(n_channels : int, KE_int_templates : np.array, mean_track_score_templates : np.array = None, mc_stat_unc : bool = False):
+        def channel(channel_name : str, samples : np.array, mc_stat_unc : bool):
+            ch = {
+                "name": channel_name,
                 "samples":[
                     {
                         "name" : f"sample_{i}",
@@ -922,10 +936,14 @@ class BackgroundFit:
             }
             if mc_stat_unc == True:
                 for i in range(len(samples)):
-                    channel["samples"][i]["modifiers"].append({'name': f"sample_{i}_pois_err_{num}", 'type': 'shapesys', 'data': np.sqrt(samples[i]).astype(int).tolist()})
+                    ch["samples"][i]["modifiers"].append({'name': f"{channel_name}_sample_{i}_pois_err", 'type': 'shapesys', 'data': np.sqrt(samples[i]).astype(int).tolist()})
+            return ch
 
-            return channel
-        spec = {"channels" : [channel(n, samples_binned[n]) for n in range(channels)]}
+        spec = {"channels" : [channel(f"channel_{n}", KE_int_templates[n], mc_stat_unc) for n in range(n_channels)]}
+
+        if mean_track_score_templates is not None:
+            spec["channels"] += [channel("mean_track_score", mean_track_score_templates, mc_stat_unc)]
+        
         model = pyhf.Model(spec, poi_name = "mu_0")
         return model
 
@@ -949,7 +967,7 @@ class BackgroundFit:
     @staticmethod
     def Fit(observations, model : pyhf.Model, verbose : bool = True):
         pyhf.set_backend(backend = "numpy", custom_optimizer = "minuit")
-        result = cabinetry.fit.fit(model, observations, custom_fit = False, tolerance = 0.001)
+        result = cabinetry.fit.fit(model, observations, custom_fit = False, tolerance = 0.01)
         # result = pyhf.infer.mle.fit(data=observations, pdf=model, return_uncertainties = True)
         if verbose is True: print(f"{model.config.poi_index=}")
         if verbose is True: print(f"{result=}")

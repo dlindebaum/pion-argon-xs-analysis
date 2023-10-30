@@ -216,6 +216,20 @@ def BeamScraperCut(events : Data, KE_range : int, fits : dict, pdg_hyp : int = 2
     return CreateMask(cut, "<", r, return_property)
 
 
+def HasFinalStatePFOsCut(events: Data, return_property : bool = False) -> ak.Array:
+    """ Selects events which have final state PFOs.
+
+    Args:
+        events (Data): events to look at
+        return_property (bool, optional): returns quantity cut on. Defaults to False.
+
+    Returns:
+        ak.Array: _description_
+    """
+    nPFO = ak.num(events.recoParticles.number)
+    return CreateMask(0, ">", nPFO, return_property)
+
+
 def CreateDefaultSelection(events: Data,
     use_beam_inst : bool = False,
     beam_quality_fits : dict = None,
