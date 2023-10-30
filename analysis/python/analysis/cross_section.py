@@ -10,6 +10,7 @@ import copy
 import json
 
 from collections import namedtuple
+from dataclasses import dataclass
 
 import awkward as ak
 import cabinetry
@@ -881,6 +882,10 @@ class Toy:
         return getattr(self, hidden_name)
 
 
+    def GetRegionNames(self, name : str):
+        labels = self.df.filter(regex = name).columns
+        return [s.split(name)[-1] for s in labels]
+
     @property
     def outside_tpc(self):
         return self.SetProperty("outside_tpc", (self.df.z_int < 0) | (self.df.z_int > 700))
@@ -897,10 +902,6 @@ class Toy:
     def reco_regions(self):
         return self.SetProperty("reco_regions", self.GetRegion(self.df, "reco_regions_"))
 
-    def GetRegionNames(self, name : str):
-        labels = self.df.filter(regex = name).columns
-        return [s.split(name)[-1] for s in labels]
-
     @property
     def reco_region_labels(self):
         return self.GetRegionNames("reco_regions_")
@@ -916,10 +917,32 @@ class Toy:
             Plots.PlotTagged(observable, Tags.ExclusiveProcessTags(tmp_regions), bins = 50, newFigure = False, title = f"reco region : {r}", reverse_sort = False, stacked = stacked, histtype = histtype, x_label = label, ncols = 1, norm = norm)
         return
 
+
+    def NInteract(self, energy_slice : Slices, process : np.array, mask : np.array = None):
+        if mask is None: mask = np.ones(len(self.df), dtype = bool)
+        n_interact = EnergySlice.CountingExperiment(self.df.KE_int_smeared[mask].values, self.df.KE_init_smeared[mask].values, self.outside_tpc_smeared[mask].values, process[mask].values, energy_slice, interact_only = True)
+        return n_interact[:-1]
+
 class RegionFit:
 
+    @dataclass
+    class FitInput:
+        # masks
+        regions : dict[np.array]
+        outside_tpc : np.array
+
+        # observables
+        KE_int : np.array
+        KE_init : np.array
+        mean_track_score : np.array
+
+        def NInteract(self, energy_slice : Slices, process: np.array):
+            n_interact = EnergySlice.CountingExperiment(self.KE_int, self.KE_init, self.outside_tpc, process, energy_slice, interact_only = True)
+            return n_interact[:-1]
+
+
     @staticmethod    
-    def CreateModel(n_channels : int, KE_int_templates : np.array, mean_track_score_templates : np.array = None, mc_stat_unc : bool = False):
+    def Model(n_channels : int, KE_int_templates : np.array, mean_track_score_templates : np.array = None, mc_stat_unc : bool = False):
         def channel(channel_name : str, samples : np.array, mc_stat_unc : bool):
             ch = {
                 "name": channel_name,
@@ -958,7 +981,8 @@ class RegionFit:
         print(f"   auxdata: {model.config.auxdata}")
 
     @staticmethod
-    def GenerateObservations(data : list[np.array], model : pyhf.Model, verbose : bool = True):
+    def GenerateObservations(fit_input : FitInput, energy_slices : Slices, mean_track_score_bins : np.array, model : pyhf.Model, verbose : bool = True) -> np.array:
+        data = RegionFit.CreateObservedInputData(fit_input, energy_slices, mean_track_score_bins)
         if verbose is True: print(f"{model.config.suggested_init()=}")
         observations = np.concatenate(data + [model.config.auxdata])
         if verbose is True: print(f"{model.logpdf(pars=model.config.suggested_init(), data=observations)=}")
@@ -968,7 +992,6 @@ class RegionFit:
     def Fit(observations, model : pyhf.Model, verbose : bool = True):
         pyhf.set_backend(backend = "numpy", custom_optimizer = "minuit")
         result = cabinetry.fit.fit(model, observations, custom_fit = False, tolerance = 0.01)
-        # result = pyhf.infer.mle.fit(data=observations, pdf=model, return_uncertainties = True)
         if verbose is True: print(f"{model.config.poi_index=}")
         if verbose is True: print(f"{result=}")
         return result
@@ -984,3 +1007,83 @@ class RegionFit:
         counts_matrix = np.array(counts_matrix).T
         counts_matrix = np.array(counts_matrix, dtype = int)
         return counts_matrix
+
+
+    @staticmethod
+    def CreateKEIntTemplates(toy : Toy, slices : Slices) -> np.array:
+        """ Create template histograms for the interacting kinetic energy histogram i.e. N_interact.
+
+        Args:
+            toy (Toy): toy model
+            slices (Slices): energy slices
+
+        Returns:
+            np.array: template histograms (number of templates = number of reco regions * number of true process)
+        """
+        model_input_data = []
+
+        for c in toy.reco_region_labels:
+            tmp = []
+            for s in toy.truth_region_labels:
+                tmp.append(toy.NInteract(slices, toy.truth_regions[s], toy.reco_regions[c]))
+            model_input_data.append(tmp)
+        return model_input_data
+
+    @staticmethod
+    def CreateMeanTrackScoreTemplates(toy : Toy, bins : np.array) -> np.array:
+        """ Create template histograms for the mean track score.
+
+        Args:
+            toy (Toy): toy model
+            bins (np.array): bins edges for mean track score
+
+        Returns:
+            np.array: template histogram, 1 for each true process.
+        """
+        templates = []
+        for t in toy.truth_regions:
+            templates.append(np.histogram(toy.df.mean_track_score[toy.truth_regions[t]], bins)[0])
+        return np.array(templates)
+
+    @staticmethod
+    def CreateModel(toy_template : Toy, energy_slice : Slices, mean_track_score_bins : np.array, return_templates : bool = False) -> pyhf.Model:
+        """ Creates the model required to make the region fit. Optionally returns the templates as separate arrays
+
+        Args:
+            toy_template (cross_section.Toy): toy model used to create the templates
+            energy_slice (cross_section.Slices): energy slices
+            mean_track_score_bins (np.array): mean track score bin edges
+            return_templates (bool, optional): return template histograms. Defaults to False.
+
+        Returns:
+            cross_section.pyhf.Model: model for region fit
+        """
+        templates_energy = RegionFit.CreateKEIntTemplates(toy_template, energy_slice)
+        templates_mean_track_score = RegionFit.CreateMeanTrackScoreTemplates(toy_template, mean_track_score_bins)
+        model = RegionFit.Model(len(toy_template.reco_region_labels), templates_energy, templates_mean_track_score, mc_stat_unc = True)
+        RegionFit.PrintModelSpecs(model)
+        if return_templates is True:
+            return model, templates_energy, templates_mean_track_score
+        else:
+            return model
+
+
+    @staticmethod
+    def CreateFitInputToy(toy : Toy):
+        inclusive_events = (toy.df.inclusive_process != "decay").values
+        regions = {k : v[inclusive_events] for k, v in toy.reco_regions.items()}
+        return RegionFit.FitInput(regions, toy.outside_tpc_smeared[inclusive_events].values, toy.df.KE_int_smeared[inclusive_events].values, toy.df.KE_init_smeared[inclusive_events].values, toy.df.mean_track_score[inclusive_events].values)
+
+    @staticmethod
+    def CreateFitInputNtuple():
+        # TODO
+        return
+
+    @staticmethod
+    def CreateObservedInputData(fit_input : FitInput, slices : Slices, mean_track_score_bins : np.array = None) -> np.array:
+        observed_binned = []
+        for v in fit_input.regions.values():
+            observed_binned.append(fit_input.NInteract(slices, v))        
+        if mean_track_score_bins is not None:
+            observed_binned.append(np.histogram(fit_input.mean_track_score, mean_track_score_bins)[0])
+        return observed_binned
