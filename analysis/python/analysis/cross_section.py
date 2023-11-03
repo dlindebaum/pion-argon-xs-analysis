@@ -580,13 +580,19 @@ class GeantCrossSections:
         self.file = uproot.open(file) # open root file
 
         self.KE = self.file["abs_KE;1"].all_members["fX"] # load kinetic energy from one channel (shared for all cross section channels)
+
         if energy_range:
             self.KE = self.KE[(self.KE <= max(energy_range)) & (self.KE >= min(energy_range))]
 
         for k in self.file.keys():
             if "KE" in k:
                 g = self.file[k]
-                setattr(self, self.labels[k], g.all_members["fY"][0:len(self.KE)]) # assign class variables for each cross section channel
+                if energy_range:
+                    mask = (g.all_members["fX"] <= max(energy_range)) & (g.all_members["fX"] >= min(energy_range))
+                    xs = g.all_members["fY"][mask]
+                else:
+                    xs = g.all_members["fY"]
+                setattr(self, self.labels[k], xs[0:len(self.KE)]) # assign class variables for each cross section channel
         pass
 
     def __PlotAll(self):
@@ -712,8 +718,48 @@ class EnergySlice:
         slice_array = ak.where(slice_array > energy_slices.max_num, energy_slices.max_num, slice_array)
         return slice_array
 
+
     @staticmethod
-    def CountingExperiment(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices, interact_only : bool = False) -> tuple[np.array, np.array]:
+    def NIncident(n_initial, n_end):
+        n_survived_all = np.cumsum(n_initial - n_end)
+        # n_survived_all[:-1] = n_survived_all[:-1] + (n_init_all[-1] - n_int_all[-1])
+        n_incident = n_survived_all + n_end
+        return n_incident
+
+    @staticmethod
+    def SliceNumbers(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, energy_slices : Slices):
+        init_slice = energy_slices(ff_energy[~outside_tpc]).num + 1 # equivilant to ceil
+        int_slice = energy_slices(int_energy[~outside_tpc]).num
+
+        init_slice = EnergySlice.TrunacteSlices(init_slice, energy_slices)
+        int_slice = EnergySlice.TrunacteSlices(int_slice, energy_slices)
+
+        # removes instances where the particle incident energy and interacting energy are in the same slice (Yinrui calls this an incomplete slice)
+        # i.e. this happens if the particle interacting in its first slice, must be an artifact of the energy slicing but not sure why.
+        bad_slices = int_slice < init_slice
+        init_slice = ak.where(bad_slices, -1, init_slice)
+        int_slice = ak.where(bad_slices, -1, int_slice)
+        return init_slice, int_slice
+
+    @staticmethod
+    def CountingExperiment(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices, interact_only : bool = False):
+        init_slice, int_slice = EnergySlice.SliceNumbers(int_energy, ff_energy, outside_tpc, energy_slices)
+
+        slice_bins = range(-1, energy_slices.max_num + 1)
+
+        n_interact_exclusive = np.roll(np.histogram(np.array(int_slice[channel[~outside_tpc]]), slice_bins)[0], -1)
+        if interact_only == False:
+            n_initial = np.roll(np.histogram(np.array(init_slice), slice_bins)[0], -1)
+            n_interact_inelastic = np.roll(np.histogram(np.array(int_slice), slice_bins)[0], -1)
+
+            n_incident = EnergySlice.NIncident(n_initial, n_interact_inelastic)
+
+            return n_initial, n_interact_inelastic, n_interact_exclusive, n_incident
+        else:
+            return n_interact_exclusive
+
+    @staticmethod
+    def CountingExperimentOld(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices) -> tuple[np.array, np.array]:
         """ Creates the interacting and incident histograms.
 
         Args:
@@ -726,20 +772,22 @@ class EnergySlice:
         Returns:
             tuple[np.array, np.array]: n_interact and n_incident histograms
         """
-        true_init_slice = energy_slices(ff_energy[~outside_tpc]).num + 1 # equivilant to ceil
-        true_int_slice = energy_slices(int_energy[~outside_tpc]).num
+        true_init_slice = energy_slices(ff_energy).num + 1 # equivilant to ceil
+        true_int_slice = energy_slices(int_energy).num
 
         true_init_slice = EnergySlice.TrunacteSlices(true_init_slice, energy_slices)
         true_int_slice = EnergySlice.TrunacteSlices(true_int_slice, energy_slices)
 
-        # removes instances where the particle incident energy and interacting energy are in the same slice (Yinrui calls this an incomplete slice)
-        # i.e. this happens if the particle interacting in its first slice, must be an artifact of the energy slicing but not sure why.
+        # just in case we encounter an instance where E_int > E_ini (unphysical)
         bad_slices = true_int_slice < true_init_slice
-        true_init_slice = ak.where(bad_slices, -1, true_init_slice)
+        true_init_slice = ak.where(bad_slices < 0, -1, true_init_slice)
         true_int_slice = ak.where(bad_slices, -1, true_int_slice)
 
         n_incident = np.zeros(energy_slices.max_num + 1)
         n_interact = np.zeros(energy_slices.max_num + 1)
+
+        true_int_slice_in_tpc = true_int_slice[~outside_tpc]
+        true_init_slice_in_tpc = true_init_slice[~outside_tpc]
 
         #! slowest but most explict version
         # n_incident = np.zeros(max_slice + 1)
@@ -753,16 +801,12 @@ class EnergySlice:
         #     n_incident[true_init_slice_in_tpc[p] : true_int_slice_in_tpc[p] + 1] += 1
         # print(n_incident)
 
-        n_interact = np.histogram(np.array(true_int_slice[channel[~outside_tpc]]), range(-1, energy_slices.max_num + 1))[0]
+        #! fastest, vectorised version of the first but c++ loops are faster. 
+        n_incident = np.array([ak.sum(ak.where((true_init_slice_in_tpc <= i) & (true_int_slice_in_tpc > i), 1, 0)) for i in range(energy_slices.max_num + 1)])
+    
+        n_interact = np.histogram(np.array(true_int_slice_in_tpc[channel[~outside_tpc]]), range(-1, energy_slices.max_num + 1))[0]
         n_interact = np.roll(n_interact, -1) # shift the underflow bin to the location of the overflow bin in n_incident i.e. merge them.
-
-        if interact_only:
-            return n_interact
-        else:
-            #! fastest, vectorised version of the first but c++ loops are faster. 
-            n_incident = np.array([ak.sum(ak.where((true_init_slice <= i) & (true_int_slice > i), 1, 0)) for i in range(energy_slices.max_num + 1)])
-
-            return n_interact, n_incident + n_interact
+        return n_interact, n_incident + n_interact
 
     @staticmethod
     def Slice_dEdX(energy_slices : Slices, particle : Particle) -> np.array:
@@ -1071,7 +1115,7 @@ class RegionFit:
     @staticmethod
     def CreateFitInputToy(toy : Toy):
         inclusive_events = (toy.df.inclusive_process != "decay").values
-        regions = {k : v[inclusive_events] for k, v in toy.reco_regions.items()}
+        regions = {k : v[inclusive_events].values for k, v in toy.reco_regions.items()}
         return RegionFit.FitInput(regions, toy.outside_tpc_smeared[inclusive_events].values, toy.df.KE_int_smeared[inclusive_events].values, toy.df.KE_init_smeared[inclusive_events].values, toy.df.mean_track_score[inclusive_events].values)
 
     @staticmethod

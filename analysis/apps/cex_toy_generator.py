@@ -35,6 +35,7 @@ def vprint(*args, **kwags):
     if verbose is True:
         print(*args, **kwags)
 
+
 def ReadHDF5File(file : str):
     """ Reads a HDF5 file and unpacks the contents into pandas dataframes.
 
@@ -76,8 +77,9 @@ def ResolveConfig(config : dict) -> argparse.Namespace:
         elif k == "beam_selection_efficiencies":
             #* that complex unpacking with pytables
             args.beam_selection_efficiencies = ReadHDF5File(v)
-        elif k == "mean_track_score_kde":
-            args.mean_track_score_kde = LoadSelectionFile(v)
+        elif k in ["mean_track_score_kde"]:#, "modified_PDFs"]:
+            setattr(args, k, LoadSelectionFile(v))
+            # args.mean_track_score_kde = LoadSelectionFile(v)
         else:
             setattr(args, k, v)
     return args
@@ -121,7 +123,7 @@ def P_int(sigma : np.array, l : float) -> np.array:
     return 1 - np.exp(-1E-27 * sigma * 6.02214076e23 * BetheBloch.rho * l / BetheBloch.A)
 
 
-def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split(os.pathsep)[0] + "/data/g4_xs.root", scale_factors : dict = None, blur_strengths : dict = None) -> dict:
+def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split(os.pathsep)[0] + "/data/g4_xs.root", scale_factors : dict = None, modified_PDFs : dict[np.array] = None) -> dict:
     """ Creates a PDF of the inclusive cross section and a stacked PDF of the exclusive process,
         such that rejection sampling can be used to allocate an exclusive process for a given inclusive process.
 
@@ -133,14 +135,19 @@ def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split
     """
     xs_sim = GeantCrossSections(file = path)
 
-    if blur_strengths:        
-        for b in blur_strengths:
-            if blur_strengths[b] == 0 : continue
-            setattr(xs_sim, b, gaussian_filter1d(getattr(xs_sim, b), blur_strengths[b]))
-        if scale_factors is None:
-            scale_factors = {b : 1 for b in blur_strengths}
-
     exclusive_processes = [k for k in vars(xs_sim) if k not in ["KE", "file", "total_inelastic"]]
+
+    if modified_PDFs is not None:
+        if "KE" not in modified_PDFs:
+            raise Exception("KE array is required")
+        for k, v in modified_PDFs.items():
+            if k == "KE": continue
+            interpolated = interp1d(modified_PDFs["KE"], v, fill_value = "extrapolate")
+            setattr(xs_sim, k, interpolated(xs_sim.KE))
+        
+        xs_sim.total_inelastic = np.zeros(len(xs_sim.KE))
+        for p in exclusive_processes:
+            xs_sim.total_inelastic = xs_sim.total_inelastic + getattr(xs_sim, p)
 
     if scale_factors is not None:
         sum_xs = np.zeros(len(xs_sim.KE))
@@ -436,14 +443,14 @@ def main(args : argparse.Namespace):
 
     particle = Particle.from_pdgid(211)
 
-    pdfs = GenerateStackedPDFs(args.step, scale_factors = args.pdf_scale_factors, blur_strengths = args.blur_strengths)
+    pdfs = GenerateStackedPDFs(args.step, scale_factors = args.pdf_scale_factors, modified_PDFs = args.modified_PDFs)
 
     KE_init = GenerateIntialKEs(args.events, particle, args.p_init, args.beam_width, args.beam_profile, rng)
 
-    if args.events < 1E3:
+    if args.events < 1E5:
         nodes = 1
     else:
-        nodes = ceil(args.events / 1E3)
+        nodes = ceil(args.events / 1E5)
 
     if nodes == 1:
         df = Simulate(seed, KE_init, args.step, pdfs) # don't need to do multiprocessing

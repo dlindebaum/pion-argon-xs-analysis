@@ -47,12 +47,12 @@ class FitFunction(ABC):
     @staticmethod
     @abstractmethod
     def bounds(x, y):
-        pass
+        return (-np.inf, np.inf)
 
     @staticmethod
     @abstractmethod
-    def p0():
-        pass
+    def p0(x, y):
+        return None
 
     @staticmethod
     @abstractmethod
@@ -321,13 +321,15 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
     """
 
     y_obs = np.array(y_obs, dtype = float) # ensure the input is an array of numpy floats
-    y_err = np.array(y_err, dtype = float)
 
     mask = ~np.isnan(y_obs) # remove nans
 
     x = np.array(x[mask], dtype = float)
     y_obs = y_obs[mask]
-    y_err = y_err[mask]
+
+    if y_err is not None:
+        y_err = np.array(y_err, dtype = float)
+        y_err = y_err[mask]
 
     popt, pcov = curve_fit(func.func, x, y_obs, sigma = y_err, maxfev = maxfev, p0 = func.p0(x, y_obs), bounds = func.bounds(x, y_obs), method = method, absolute_sigma = True)
     perr = np.sqrt(np.diag(pcov))
@@ -349,7 +351,17 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         #* main plotting
         x_interp = np.linspace(min(x), max(x), 1000)
         Plots.Plot(x_interp, func.func(x_interp, *popt), newFigure = False, x_scale = "linear", xlabel = xlabel, ylabel = ylabel, color = "#1f77b4", zorder = 11, label = "fit", title = title)
-        plt.fill_between(x_interp, func.func(x_interp, *(popt + perr)), func.func(x_interp, *(popt - perr)), color = "#7f7f7f", alpha = 0.5, zorder = 10, label = "$1\sigma$ error region")
+        
+        p_min = popt - perr
+        p_max = popt + perr
+
+        # in_range = (p_min > func.bounds(x, y_obs)[0]) & (p_min < func.bounds(x, y_obs)[1])
+        # p_min = np.where(in_range, func.bounds(x, y_obs)[0], p_min)
+
+        # in_range = (p_max > func.bounds(x, y_obs)[0]) & (p_max < func.bounds(x, y_obs)[1])
+        # p_min = np.where(in_range, func.bounds(x, y_obs)[1], p_max)
+
+        # plt.fill_between(x_interp, func.func(x_interp, *p_max), func.func(x_interp, *p_min), color = "#7f7f7f", alpha = 0.5, zorder = 10, label = "$1\sigma$ error region")
 
         if plot_style == "hist":
             marker = ""
