@@ -431,12 +431,12 @@ class OptimizeAllCuts(CutOptimization):
 
             best_cut = self.NMinus1Study(final_cuts, nm1, stepSize, criteria, args)
 
-            final_cuts[nm1] = best_cut # this is the new best cut for this variable
+            final_cuts[nm1].value = best_cut # this is the new best cut for this variable
             nm1 = (nm1 + 1)%len(final_cuts)
             print(f"next look at : {final_cuts[nm1]}")
 
         print(f"final cuts are:")
-        print(tabulate([self.quantities.selectionVariables] + [final_cuts.value], tablefmt="fancy_grid"))
+        print(tabulate([self.quantities.selectionVariables] + [c.value for c in final_cuts], tablefmt="fancy_grid"))
         #* cut one final time to look at the results
         final_metrics = list(self.EvaluateCuts(final_cuts))
 
