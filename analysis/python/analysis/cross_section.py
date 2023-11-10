@@ -25,6 +25,9 @@ from particle import Particle
 from python.analysis import Master, BeamParticleSelection, PFOSelection, EventSelection, Fitting, Plots, vector, Tags
 from python.analysis.shower_merging import SetPlotStyle
 
+def nandiv(num, den):
+    return np.divide(num, np.where(den == 0, np.nan, den))
+
 
 def KE(p, m):
     return (p**2 + m**2)**0.5 - m
@@ -576,7 +579,7 @@ class GeantCrossSections:
     """
     labels = {"abs_KE;1" : "absorption", "inel_KE;1" : "quasielastic", "cex_KE;1" : "charge_exchange", "dcex_KE;1" : "double_charge_exchange", "prod_KE;1" : "pion_production", "total_inel_KE;1" : "total_inelastic"}
 
-    def __init__(self, file : str = "data/g4_xs.root", energy_range : list = None) -> None:
+    def __init__(self, file : str = "data/g4_xs.root", energy_range : list = None, n_cascades : int = None) -> None:
         self.file = uproot.open(file) # open root file
 
         self.KE = self.file["abs_KE;1"].all_members["fX"] # load kinetic energy from one channel (shared for all cross section channels)
@@ -592,14 +595,31 @@ class GeantCrossSections:
                     xs = g.all_members["fY"][mask]
                 else:
                     xs = g.all_members["fY"]
-                setattr(self, self.labels[k], xs[0:len(self.KE)]) # assign class variables for each cross section channel
+                s = "_frac" if "frac" in k else "" 
+                setattr(self, self.labels[k.replace("_frac", "")] + s, xs[0:len(self.KE)]) # assign class variables for each cross section channel
+
+        self.exclusive_processes = self.labels.values()
+        self.n_cascades = n_cascades
+        # for k in vars(self):
+        #     if k not in ["KE", "file", "total_inelastic"]:
+        #         if "frac" not in k:
+        #             self.exclusive_processes.append(k)
+
+        # self.exclusive_processes = [k for k in vars(self) if k not in ["KE", "file", "total_inelastic"]]
         pass
 
-    def __PlotAll(self):
+    def Stat_Error(self, xs : str):
+        if (self.n_cascades is None) or (not hasattr(self, xs + "_frac")):
+            return 0 * getattr(self, xs)
+        else:
+            return getattr(self, xs) * np.sqrt(getattr(self, xs + "_frac") / self.n_cascades)
+
+    def __PlotAll(self, title : str = None):
         """ Plot all cross section channels.
         """
         for k in self.labels.values():
-            Plots.Plot(self.KE, getattr(self, k), label = k.replace("_", " "), newFigure = False, xlabel = "KE (MeV)", ylabel = "$\sigma (mb)$")
+            Plots.Plot(self.KE, getattr(self, k), label = k.replace("_", " "), newFigure = False, xlabel = "KE (MeV)", ylabel = "$\sigma (mb)$", title = title)
+            Plots.plt.fill_between(self.KE, getattr(self, k) - self.Stat_Error(k), getattr(self, k) + self.Stat_Error(k), color = Plots.plt.gca()._get_lines.get_next_color())
 
     def Plot(self, xs : str, color : str = None, label : str = None, title : str = None):
         """ Plot cross sections. To be used in conjunction with other plots for comparisons.
@@ -611,14 +631,15 @@ class GeantCrossSections:
             title (str, optional): title of plot, set to the channel name if label is provided. Defaults to None.
         """
         if xs == "all":
-            self.__PlotAll()
+            self.__PlotAll(title = title)
         else:
             if label is None:
                 label = xs.replace("_", " ")
             else:
                 if title is None:
                     title = xs.replace("_", " ")
-            Plots.Plot(self.KE, getattr(self, xs), label = label, title = title, newFigure = False, xlabel = "KE (MeV)", ylabel = "$\sigma (mb)$", color = color)
+            Plots.Plot(self.KE, getattr(self, xs), label = label, title = title, newFigure = False, xlabel = "$KE_{int} (MeV)$", ylabel = "$\sigma (mb)$", color = color)
+            Plots.plt.fill_between(self.KE, getattr(self, xs) - self.Stat_Error(xs), getattr(self, xs) + self.Stat_Error(xs), color = Plots.plt.gca()._get_lines.get_next_color())
 
 
 class ThinSlice:
@@ -636,7 +657,7 @@ class ThinSlice:
         Returns:
             tuple[ak.Array, ak.Array]: n_interact and n_incident histograms
         """
-        end_slice_pos = slices.pos_to_num(endPos) # using trajectory points gives wierd results, compare the two to see what is different.
+        end_slice_pos = slices.pos_to_num(endPos)
         slice_nums = slices.num
 
         n_interact = np.histogram(end_slice_pos[channel], slice_nums)[0]
@@ -674,7 +695,7 @@ class ThinSlice:
         return mean_energy, error_mean_energy
 
     @staticmethod 
-    def CrossSection(n_incident : np.array, n_interact : np.array, slice_width : float) -> tuple[np.array, np.array]:
+    def TotalCrossSection(n_incident : np.array, n_interact : np.array, slice_width : float) -> tuple[np.array, np.array]:
         """ Returns cross section in mb.
 
         Args:
@@ -696,6 +717,27 @@ class ThinSlice:
         factor = 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * slice_width)
 
         return factor * xs, abs(factor * xs_e)
+
+
+    def CrossSection(n_int_exclusive : np.array, n_int_inclusive : np.array, n_inc_inclusive : np.array, slice_width : float):
+        NA = 6.02214076e23
+        factor = 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * slice_width)
+
+        n_interact_ratio = nandiv(n_int_exclusive, n_int_inclusive)
+        n_survived_inclusive = n_inc_inclusive - n_int_inclusive
+
+        var_inc_inclusive = n_inc_inclusive # poisson variance
+        var_int_inclusive = n_int_inclusive * (1 - nandiv(n_int_inclusive, n_inc_inclusive)) # binomial uncertainty
+        var_int_exclusive = n_int_exclusive * (1 - nandiv(n_int_exclusive, n_inc_inclusive)) # binomial uncertainty
+
+        xs = factor * n_interact_ratio * np.log(nandiv(n_inc_inclusive, n_inc_inclusive - n_int_inclusive))
+
+        diff_n_int_exclusive = nandiv(xs, n_int_exclusive)
+        diff_n_inc_inclusive = factor * n_interact_ratio * (nandiv(1, n_inc_inclusive) - nandiv(1, n_survived_inclusive))
+        diff_n_int_inclusive = factor * n_interact_ratio * nandiv(1, n_survived_inclusive) - nandiv(xs, n_int_inclusive)
+
+        xs_err = ((diff_n_int_exclusive**2 * var_int_exclusive) + (diff_n_inc_inclusive**2 * var_inc_inclusive) + (diff_n_int_inclusive**2 * var_int_inclusive))**0.5
+        return xs, xs_err
 
 
 class EnergySlice:
@@ -722,7 +764,6 @@ class EnergySlice:
     @staticmethod
     def NIncident(n_initial, n_end):
         n_survived_all = np.cumsum(n_initial - n_end)
-        # n_survived_all[:-1] = n_survived_all[:-1] + (n_init_all[-1] - n_int_all[-1])
         n_incident = n_survived_all + n_end
         return n_incident
 
@@ -743,14 +784,31 @@ class EnergySlice:
 
     @staticmethod
     def CountingExperiment(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices, interact_only : bool = False):
+        """ Creates the interacting and incident histograms.
+
+        Args:
+            int_energy (ak.Array): interacting enrgy
+            ff_energy (ak.Array): front facing energy
+            outside_tpc (ak.Array): mask which selects particles decaying outside the tpc
+            channel (ak.Array): mask which selects particles which interact in the channel you are interested in
+            energy_slices (Slices): energy slices
+
+        Returns:
+            tuple[np.array, np.array]: n_interact and n_incident histograms
+        """
         init_slice, int_slice = EnergySlice.SliceNumbers(int_energy, ff_energy, outside_tpc, energy_slices)
 
-        slice_bins = range(-1, energy_slices.max_num + 1)
+        # slice_bins = range(-1, energy_slices.max_num + 1)
+        slice_bins = np.arange(-1 - 0.5, energy_slices.max_num + 1.5)
 
-        n_interact_exclusive = np.roll(np.histogram(np.array(int_slice[channel[~outside_tpc]]), slice_bins)[0], -1)
+
+        # n_interact_exclusive = np.roll(np.histogram(np.array(int_slice[channel[~outside_tpc]]), slice_bins)[0], -1)
+        n_interact_exclusive = np.histogram(np.array(int_slice[channel[~outside_tpc]]), slice_bins)[0]
         if interact_only == False:
-            n_initial = np.roll(np.histogram(np.array(init_slice), slice_bins)[0], -1)
-            n_interact_inelastic = np.roll(np.histogram(np.array(int_slice), slice_bins)[0], -1)
+            # n_initial = np.roll(np.histogram(np.array(init_slice), slice_bins)[0], -1)
+            n_initial = np.histogram(np.array(init_slice), slice_bins)[0]
+            # n_interact_inelastic = np.roll(np.histogram(np.array(int_slice), slice_bins)[0], -1)
+            n_interact_inelastic = np.histogram(np.array(int_slice), slice_bins)[0]
 
             n_incident = EnergySlice.NIncident(n_initial, n_interact_inelastic)
 
@@ -822,7 +880,7 @@ class EnergySlice:
         return BetheBloch.meandEdX(energy_slices.pos - energy_slices.width/2, particle)
 
     @staticmethod
-    def CrossSection(n_interact : np.array, n_incident : np.array, dEdX : np.array, dE : float) -> tuple[np.array, np.array]:
+    def TotalCrossSection(n_interact : np.array, n_incident : np.array, dEdX : np.array, dE : float) -> tuple[np.array, np.array]:
         """ Compute cross section using ThinSlice.CrossSection, by passing an effective spatial slice width.
 
         Args:
@@ -834,30 +892,41 @@ class EnergySlice:
         Returns:
             tuple[np.array, np.array]: Cross section and statistical uncertainty.
         """
-        return ThinSlice.CrossSection(n_incident, n_interact, dE/dEdX)
+        return ThinSlice.TotalCrossSection(n_incident, n_interact, dE/dEdX)
 
     @staticmethod
-    def ModifiedCrossSection(n_int_exclusive : np.array, n_int_inclusive : np.array, n_inc_inclusive : np.array, dEdX : float, dE : float) -> tuple[np.array, np.array]:
+    def CrossSection(n_int_ex : np.array, n_int : np.array, n_inc : np.array, dEdX : float, dE : float, n_int_ex_err : np.array = None, n_int_err : np.array = None, n_inc_err : np.array = None) -> tuple[np.array, np.array]:
         def nandiv(num, den):
             return np.divide(num, np.where(den == 0, np.nan, den))
 
         NA = 6.02214076e23
         factor = np.array(dEdX) * 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * dE)
 
-        n_interact_ratio = nandiv(n_int_exclusive, n_int_inclusive)
-        n_survived_inclusive = n_inc_inclusive - n_int_inclusive
+        n_interact_ratio = nandiv(n_int_ex, n_int)
+        n_survived = n_inc - n_int
 
-        var_inc_inclusive = n_inc_inclusive # poisson variance
-        var_int_inclusive = n_int_inclusive * (1 - nandiv(n_int_inclusive, n_inc_inclusive)) # binomial uncertainty
-        var_int_exclusive = n_int_exclusive * (1 - nandiv(n_int_exclusive, n_inc_inclusive)) # binomial uncertainty
+        if n_inc_err is not None:
+            var_inc_inclusive = n_inc_err**2
+        else:
+            var_inc_inclusive = n_inc # poisson variance
+    
+        if n_int_err is not None:
+            var_int = n_int_err**2
+        else:
+            var_int = n_int * (1 - nandiv(n_int, n_inc)) # binomial uncertainty
+    
+        if n_int_ex_err is not None:
+            var_int_ex = n_int_ex_err**2
+        else:
+            var_int_ex = n_int_ex * (1 - nandiv(n_int_ex, n_inc)) # binomial uncertainty
 
-        xs = factor * n_interact_ratio * np.log(nandiv(n_inc_inclusive, n_inc_inclusive - n_int_inclusive))
+        xs = factor * n_interact_ratio * np.log(nandiv(n_inc, n_inc - n_int))
 
-        diff_n_int_exclusive = nandiv(xs, n_int_exclusive)
-        diff_n_inc_inclusive = factor * n_interact_ratio * (nandiv(1, n_inc_inclusive) - nandiv(1, n_survived_inclusive))
-        diff_n_int_inclusive = factor * n_interact_ratio * nandiv(1, n_survived_inclusive) - nandiv(xs, n_int_inclusive)
+        diff_n_int_ex = nandiv(xs, n_int_ex)
+        diff_n_inc = factor * n_interact_ratio * (nandiv(1, n_inc) - nandiv(1, n_survived))
+        diff_n_int = factor * n_interact_ratio * nandiv(1, n_survived) - nandiv(xs, n_int)
 
-        xs_err = ((diff_n_int_exclusive**2 * var_int_exclusive) + (diff_n_inc_inclusive**2 * var_inc_inclusive) + (diff_n_int_inclusive**2 * var_int_inclusive))**0.5
+        xs_err = ((diff_n_int_ex**2 * var_int_ex) + (diff_n_inc**2 * var_inc_inclusive) + (diff_n_int**2 * var_int))**0.5
         return xs, xs_err
 
 
@@ -965,25 +1034,62 @@ class Toy:
     def NInteract(self, energy_slice : Slices, process : np.array, mask : np.array = None):
         if mask is None: mask = np.ones(len(self.df), dtype = bool)
         n_interact = EnergySlice.CountingExperiment(self.df.KE_int_smeared[mask].values, self.df.KE_init_smeared[mask].values, self.outside_tpc_smeared[mask].values, process[mask].values, energy_slice, interact_only = True)
-        return n_interact[:-1]
+        return n_interact
+
+
+@dataclass
+class AnalysisInput:
+    # masks
+    regions : dict[np.array]
+    inclusive_process : dict[np.array]
+    exclusive_process : dict[np.array]
+    outside_tpc_reco : np.array
+    outside_tpc_true : np.array
+    # observables
+    KE_int_reco : np.array
+    KE_init_reco : np.array
+    mean_track_score : np.array
+    KE_int_true : np.array
+    KE_init_true : np.array
+
+    def NInteract(self, energy_slice : Slices, process: np.array, reco : bool = True):
+        if reco is True:
+            KE_int = self.KE_int_reco
+            KE_init = self.KE_init_reco
+            outside_tpc = self.outside_tpc_reco
+        else:
+            KE_int = self.KE_int_true
+            KE_init = self.KE_init_true
+            outside_tpc = self.outside_tpc_true
+        n_interact = EnergySlice.CountingExperiment(KE_int, KE_init, outside_tpc, process, energy_slice, interact_only = True)
+        return n_interact
+
+    @staticmethod
+    def CreateAnalysisInputToy(toy : Toy):
+        inclusive_events = (toy.df.inclusive_process != "decay").values
+        regions = {k : v.values for k, v in toy.reco_regions.items()}
+        process = {k : v.values for k, v in toy.truth_regions.items()}
+
+        return AnalysisInput(
+            regions,
+            inclusive_events,
+            process,
+            toy.outside_tpc_smeared.values,
+            toy.outside_tpc.values,
+            toy.df.KE_int_smeared.values,
+            toy.df.KE_init_smeared.values,
+            toy.df.mean_track_score.values,
+            toy.df.KE_int.values,
+            toy.df.KE_init.values
+            )
+
+    @staticmethod
+    def CreateAnalysisInputNtuple():
+        # TODO
+        return
+
 
 class RegionFit:
-
-    @dataclass
-    class FitInput:
-        # masks
-        regions : dict[np.array]
-        outside_tpc : np.array
-
-        # observables
-        KE_int : np.array
-        KE_init : np.array
-        mean_track_score : np.array
-
-        def NInteract(self, energy_slice : Slices, process: np.array):
-            n_interact = EnergySlice.CountingExperiment(self.KE_int, self.KE_init, self.outside_tpc, process, energy_slice, interact_only = True)
-            return n_interact[:-1]
-
 
     @staticmethod    
     def Model(n_channels : int, KE_int_templates : np.array, mean_track_score_templates : np.array = None, mc_stat_unc : bool = False):
@@ -1025,7 +1131,7 @@ class RegionFit:
         print(f"   auxdata: {model.config.auxdata}")
 
     @staticmethod
-    def GenerateObservations(fit_input : FitInput, energy_slices : Slices, mean_track_score_bins : np.array, model : pyhf.Model, verbose : bool = True) -> np.array:
+    def GenerateObservations(fit_input : AnalysisInput, energy_slices : Slices, mean_track_score_bins : np.array, model : pyhf.Model, verbose : bool = True) -> np.array:
         data = RegionFit.CreateObservedInputData(fit_input, energy_slices, mean_track_score_bins)
         if verbose is True: print(f"{model.config.suggested_init()=}")
         observations = np.concatenate(data + [model.config.auxdata])
@@ -1113,21 +1219,10 @@ class RegionFit:
 
 
     @staticmethod
-    def CreateFitInputToy(toy : Toy):
-        inclusive_events = (toy.df.inclusive_process != "decay").values
-        regions = {k : v[inclusive_events].values for k, v in toy.reco_regions.items()}
-        return RegionFit.FitInput(regions, toy.outside_tpc_smeared[inclusive_events].values, toy.df.KE_int_smeared[inclusive_events].values, toy.df.KE_init_smeared[inclusive_events].values, toy.df.mean_track_score[inclusive_events].values)
-
-    @staticmethod
-    def CreateFitInputNtuple():
-        # TODO
-        return
-
-    @staticmethod
-    def CreateObservedInputData(fit_input : FitInput, slices : Slices, mean_track_score_bins : np.array = None) -> np.array:
+    def CreateObservedInputData(fit_input : AnalysisInput, slices : Slices, mean_track_score_bins : np.array = None) -> np.array:
         observed_binned = []
         for v in fit_input.regions.values():
-            observed_binned.append(fit_input.NInteract(slices, v))        
+            observed_binned.append(fit_input.NInteract(slices, v, True))        
         if mean_track_score_bins is not None:
-            observed_binned.append(np.histogram(fit_input.mean_track_score, mean_track_score_bins)[0])
+            observed_binned.append(np.histogram(fit_input.mean_track_score[fit_input.inclusive_process], mean_track_score_bins)[0])
         return observed_binned
