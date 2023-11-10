@@ -944,7 +944,7 @@ def FigureDimensions(x : int, orientation : str = "horizontal") -> tuple[int]:
     return dim
 
 
-def MultiPlot(n : int, sharex : bool = False, sharey : bool = False):
+def MultiPlot(n : int, xlim : tuple = None, ylim : tuple = None):
     """ Generator for subplots.
 
     Args:
@@ -954,13 +954,15 @@ def MultiPlot(n : int, sharex : bool = False, sharey : bool = False):
         Iterator[int]: ith plot
     """
     dim = FigureDimensions(n)
-    plt.subplots(figsize = [6.4 * dim[1], 4.8 * dim[0]], sharex = sharex, sharey = sharey)
+    plt.subplots(figsize = [6.4 * dim[1], 4.8 * dim[0]])
     for i in range(n):
         plt.subplot(dim[0], dim[1], i + 1)
+        if xlim: plt.xlim(xlim)
+        if ylim: plt.ylim(ylim)
         yield i
 
 
-def IterMultiPlot(x, sharex : bool = False, sharey : bool = False):
+def IterMultiPlot(x, xlim : tuple = None, ylim : tuple = None):
     """ Generator for subplots but also iterates with the data to plot to reduce boilerplate.
 
     Args:
@@ -974,7 +976,7 @@ def IterMultiPlot(x, sharex : bool = False, sharey : bool = False):
     """
     if len(x) > 100:
         raise Exception("Too many plots specified, did you pass the correct shape data?")
-    for i, j in zip(MultiPlot(len(x), sharex, sharey), x):
+    for i, j in zip(MultiPlot(len(x), xlim, ylim), x):
         yield i, j
 
 
