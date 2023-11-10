@@ -217,9 +217,9 @@ def AnalyseMultipleFiles():
         events.ApplyBeamFilter()
 
         if ak.count(nPFP) == 0:
-            nPFP = ak.count(events.recoParticles.nHits_collection, -1)
+            nPFP = ak.count(events.recoParticles.n_hits_collection, -1)
         else:
-            nPFP = ak.concatenate([nPFP, ak.count(events.recoParticles.nHits_collection, -1)])
+            nPFP = ak.concatenate([nPFP, ak.count(events.recoParticles.n_hits_collection, -1)])
 
         # apply additional selection for beam MC events
         print(f"beamMC : {events.trueParticles.pi0_MC}")

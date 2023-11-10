@@ -560,8 +560,8 @@ def paired_beam_impact(shower_pairs, type="reco"):
     shared_vertex = shower_pairs.SharedVertex(
         data.momentum[shower_pairs.leading],
         data.momentum[shower_pairs.subleading],
-        data.startPos[shower_pairs.leading],
-        data.startPos[shower_pairs.subleading])
+        data.shower_start_pos[shower_pairs.leading],
+        data.shower_start_pos[shower_pairs.subleading])
     # Impact parameter between the PFOs and corresponding beam vertex
     return PFOSelection.get_impact_parameter(
         dir, shared_vertex, beam_vertex)

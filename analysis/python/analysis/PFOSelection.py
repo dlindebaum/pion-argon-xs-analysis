@@ -45,10 +45,10 @@ def ValidRecoEnergyCut(events : Master.Data) -> ak.Array:
 def ValidRecoPositionCut(events : Master.Data) -> ak.Array:
     return np.logical_and(
         np.logical_and(
-            events.recoParticles.startPos.x != -999,
-            events.recoParticles.startPos.y != -999
+            events.recoParticles.shower_start_pos.x != -999,
+            events.recoParticles.shower_start_pos.y != -999
         ),
-        events.recoParticles.startPos.z != 999
+        events.recoParticles.shower_start_pos.z != 999
     )
 
 
@@ -80,7 +80,7 @@ def EMScoreCut(events : Master.Data, cut = 0.5, return_property : bool = False) 
 
 
 def NHitsCut(events : Master.Data, cut = 80, return_property : bool = False) -> ak.Array:
-    return CreateMask(cut, ">", events.recoParticles.nHits, return_property)
+    return CreateMask(cut, ">", events.recoParticles.n_hits, return_property)
 
 
 def BeamParticleDistanceCut(events : Master.Data, cut = [3, 90], return_property : bool = False) -> ak.Array:
@@ -237,7 +237,7 @@ def find_beam_impact_parameters(events : Master.Data):
     impacts : ak.Array
         Impact parameters between the PFOs and beam vertex.
     """
-    starts = events.recoParticles.startPos
+    starts = events.recoParticles.shower_start_pos
     beam_vertex = events.recoParticles.beam_endPos
     directions = events.recoParticles.direction
     return get_impact_parameter(
@@ -260,7 +260,7 @@ def find_beam_separations(events):
     separations : ak.Array
         Separations between the PFOs starts and beam vertex.
     """
-    starts = events.recoParticles.startPos
+    starts = events.recoParticles.shower_start_pos
     beam_vertex = events.recoParticles.beam_endPos # Note: this is uncorrected for space charge effects beacuase no PFO position were corrected in the reconstruction.
     return vector.dist(starts, beam_vertex)
 

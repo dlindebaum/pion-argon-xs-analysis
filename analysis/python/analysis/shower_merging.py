@@ -60,7 +60,7 @@ class ShowerMergeQuantities:
         if events:
             #* collect positions and directions of PFOs
             self.to_merge_dir = events.recoParticles.direction[to_merge]
-            self.to_merge_pos = events.recoParticles.startPos[to_merge]
+            self.to_merge_pos = events.recoParticles.shower_start_pos[to_merge]
             # check null positions/directions, throw warning if this is the case
             null = np.logical_or(self.to_merge_dir.x != -999, self.to_merge_pos.x != -999)
             if not (ak.all(null == True) and not ak.any(null == False)):
@@ -76,7 +76,7 @@ class ShowerMergeQuantities:
             start_showers (ak.Array): initial showers to merge to
         """
         # collect relavent parameters
-        start_shower_pos = events.recoParticles.startPos[np.logical_or(*start_showers)]
+        start_shower_pos = events.recoParticles.shower_start_pos[np.logical_or(*start_showers)]
         start_shower_dir = events.recoParticles.direction[np.logical_or(*start_showers)]
 
         # calculate
@@ -279,14 +279,14 @@ def SplitSample(events : Master.Data, method="spatial") -> tuple:
     pi0 = ak.flatten(events.trueParticles.number[events.trueParticles.PrimaryPi0Mask]) # get pi0 id
     pi0_daughters = events.trueParticlesBT.mother == pi0 # get taggged daughters by matching pi0 pdg id to mother id
 
-    null_position = events.recoParticles.startPos.x == -999 # boolean mask of PFP's with undefined position
+    null_position = events.recoParticles.shower_start_pos.x == -999 # boolean mask of PFP's with undefined position
     null_momentum = events.recoParticles.momentum.x == -999 # boolean mask of PFP's with undefined momentum
     null = np.logical_or(null_position, null_momentum)
     
     if method == "angular":
         separation = vector.angle(events.recoParticles.direction, events.trueParticlesBT.direction) # calculate angular closeness
     else:
-        separation = vector.dist(events.recoParticles.startPos, events.trueParticlesBT.startPos) # calculate spatial closeness
+        separation = vector.dist(events.recoParticles.shower_start_pos, events.truePartshower_start_posstartPos) # calculate spatial closeness
     separation = ak.where(null, 9999999, separation) # if direction is undefined, separation is massive (so is never picked as a starting shower)
     ind = ak.local_index(separation, -1) # create index array of separations to use later
 
@@ -406,8 +406,8 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.
         events.recoParticles._RecoParticleData__momentum =  ReplaceShowerPairValue(start_showers, events.recoParticles.momentum , corrected_data["momentum"])
         events.recoParticles._RecoParticleData__energy =    ReplaceShowerPairValue(start_showers, events.recoParticles.energy   , corrected_data["energy"])
         events.recoParticles._RecoParticleData__direction = ReplaceShowerPairValue(start_showers, events.recoParticles.direction, corrected_data["direction"])
-        events.recoParticles._RecoParticleData__nHits = ReplaceShowerPairValue(start_showers, events.recoParticles.nHits, corrected_data["nHits"])
-        events.recoParticles._RecoParticleData__nHits_collection = ReplaceShowerPairValue(start_showers, events.recoParticles.nHits_collection, corrected_data["nHits"])
+        events.recoParticles._RecoParticleData__nHits = ReplaceShowerPairValue(start_showers, events.recoParticles.n_hits, corrected_data["n_hits"])
+        events.recoParticles._RecoParticleData__nHits_collection = ReplaceShowerPairValue(start_showers, events.recoParticles.n_hits_collection, corrected_data["n_hits"])
 
         events.trueParticlesBT._TrueParticleDataBT__sharedHits = ReplaceShowerPairValue(start_showers, events.trueParticlesBT.sharedHits, corrected_data["shared_hits"])
         events.trueParticlesBT._TrueParticleDataBT__hitsInRecoCluster = ReplaceShowerPairValue(start_showers, events.trueParticlesBT.hitsInRecoCluster, corrected_data["reco_cluster_hits"])
@@ -487,8 +487,8 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.
     #* get momenta of PFOs to merge
     data_to_merge = {
         "momentum" : events.recoParticles.momentum,
-        "nHits" : events.recoParticles.nHits,
-        "nHits_collection" : events.recoParticles.nHits_collection,
+        "n_hits" : events.recoParticles.n_hits,
+        "n_hits_collection" : events.recoParticles.n_hits_collection,
         "shared_hits" : events.trueParticlesBT.sharedHits,
         "shared_hits_collection" : events.trueParticlesBT.sharedHits_collection,
         "reco_cluster_hits" : events.trueParticlesBT.hitsInRecoCluster,
@@ -530,8 +530,8 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.
     corrected_data = {}
     
     original_hit_data = {
-        "nHits" : events.recoParticles.nHits,
-        "nHits_collection" : events.recoParticles.nHits_collection,
+        "n_hits" : events.recoParticles.n_hits,
+        "n_hits_collection" : events.recoParticles.n_hits_collection,
         "shared_hits" : events.trueParticlesBT.sharedHits,
         "shared_hits_collection" : events.trueParticlesBT.sharedHits_collection,
         "reco_cluster_hits" : events.trueParticlesBT.hitsInRecoCluster,
@@ -562,8 +562,8 @@ def ShowerMerging(events : Master.Data, start_showers : ak.Array, to_merge : ak.
         if k in ["momentum", "energy"]: continue
         corrected_data[k] = ak.concatenate([original_hit_data[k][i] + v[i] for i in range(2)], -1)
 
-    true_hits = ak.concatenate([events.trueParticlesBT.nHits[start_showers[i]] for i in range(2)], -1)
-    true_hits_collection = ak.concatenate([events.trueParticlesBT.nHits_collection[start_showers[i]] for i in range(2)], -1)
+    true_hits = ak.concatenate([events.trueParticlesBT.n_hits[start_showers[i]] for i in range(2)], -1)
+    true_hits_collection = ak.concatenate([events.trueParticlesBT.n_hits_collection[start_showers[i]] for i in range(2)], -1)
 
     corrected_data["purity"] = corrected_data["shared_hits"] / corrected_data["reco_cluster_hits"]
     corrected_data["completeness"] = corrected_data["shared_hits"] / true_hits
@@ -666,7 +666,7 @@ def ValidPFOSelection(events : Master.Data):
         n.append([mask_name, data_type, count, Percentage(n[-1][2], count), 100 - Percentage(n[1][2], count)])    
 
     # selections 
-    mask = events.recoParticles.startPos.x != -999
+    mask = events.recoParticles.shower_start_pos.x != -999
     ApplySelection(mask, "valid start position", "reco")
 
     mask = events.recoParticles.momentum.x != -999
@@ -691,10 +691,10 @@ def StartShowerByDistance(events : Master.Data) -> ak.Array:
     Returns:
         ak.Array: indices of reco particles with the smallest spatial closeness
     """
-    null_position = events.recoParticles.startPos.x == -999 # boolean mask of PFP's with undefined position
+    null_position = events.recoParticles.shower_start_pos.x == -999 # boolean mask of PFP's with undefined position
     null_momentum = events.recoParticles.momentum.x == -999 # boolean mask of PFP's with undefined momentum
     null = np.logical_or(null_position, null_momentum)
-    distance_error = vector.dist(events.recoParticles.startPos, events.trueParticlesBT.startPos) # calculate angular closeness
+    distance_error = vector.dist(events.recoParticles.shower_start_pos, events.truePartshower_start_posstartPos) # calculate angular closeness
     distance_error = ak.where(null, 999999, distance_error) # if direction is undefined, angler error is massive (so not the best match)
     ind = ak.local_index(distance_error, -1) # create index array of angles to use later
 

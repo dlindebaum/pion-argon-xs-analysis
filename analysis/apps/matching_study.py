@@ -63,8 +63,8 @@ def GetMCMatchingFilters(events : Master.Data, cut : float = 0.25) -> tuple:
 
     # get smallest spatial separation wrt to each true photon
     photon_pos = events.trueParticles.endPos[events.trueParticles.truePhotonMask]
-    dist_error_0 = Separation(events.recoParticles.startPos, photon_pos[:, 0], null_shower_dir, "Spatial")
-    dist_error_1 = Separation(events.recoParticles.startPos, photon_pos[:, 1], null_shower_dir, "Spatial")
+    dist_error_0 = Separation(events.recoParticles.shower_start_pos, photon_pos[:, 0], null_shower_dir, "Spatial")
+    dist_error_1 = Separation(events.recoParticles.shower_start_pos, photon_pos[:, 1], null_shower_dir, "Spatial")
     m_0 = ak.unflatten(ak.min(dist_error_0, -1), 1)
     m_1 = ak.unflatten(ak.min(dist_error_1, -1), 1)
     dists = ak.concatenate([m_0, m_1], -1)
@@ -128,8 +128,8 @@ def SpatialStudy(events : Master.Data):
     filtered = events.Filter([valid], [valid])
     null_shower_dir = filtered.recoParticles.direction.x == -999
     photon_pos = filtered.trueParticles.endPos[filtered.trueParticles.truePhotonMask]
-    dist_error_0 = Separation(filtered.recoParticles.startPos, photon_pos[:, 0], null_shower_dir, "Spatial")
-    dist_error_1 = Separation(filtered.recoParticles.startPos, photon_pos[:, 1], null_shower_dir, "Spatial")
+    dist_error_0 = Separation(filtered.recoParticles.shower_start_pos, photon_pos[:, 0], null_shower_dir, "Spatial")
+    dist_error_1 = Separation(filtered.recoParticles.shower_start_pos, photon_pos[:, 1], null_shower_dir, "Spatial")
     m_0 = ak.unflatten(ak.argmin(dist_error_0, -1), 1)
     m_1 = ak.unflatten(ak.argmin(dist_error_1, -1), 1)
     closest = ak.concatenate([m_0, m_1], -1)

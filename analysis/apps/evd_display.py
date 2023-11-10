@@ -51,7 +51,7 @@ def main():
         print(f"plotting : {n}")
         
         # data for table
-        nPFP = ak.count(events.recoParticles.nHits_collection[n])
+        nPFP = ak.count(events.recoParticles.n_hits_collection[n])
         nTrueParticle = ak.count(events.trueParticles.number[n])
         nTrack = ak.count(events.recoParticles.pandoraID[n][events.recoParticles.pandoraID[n] == 13])
         nShower = ak.count(events.recoParticles.pandoraID[n][events.recoParticles.pandoraID[n] == 11])
@@ -66,7 +66,7 @@ def main():
         # loop through each PFP, plot hit spacepoints (collection) in each orthographic view
         # resembles the orthographic event displays made in LArSoft
         for i in range(nPFP):
-            startPos = events.recoParticles.startPos[n][i]
+            startPos = events.recoParticles.shower_start_pos[n][i]
             if startPos.x == -999: continue # ensure the PFP has a valid start point to plot
 
             # don't plot spacepoints which have invalid positions
@@ -75,19 +75,19 @@ def main():
             
             # xz display
             xz.scatter(points.z, points.x, marker_size, color=f"C{i}")
-            plotPos = (events.recoParticles.startPos.z[n][i], events.recoParticles.startPos.x[n][i])
+            plotPos = (events.recoParticles.shower_start_pos.z[n][i], events.recoParticles.shower_start_pos.x[n][i])
             xz.scatter(plotPos[0], plotPos[1], marker_size*10, marker="x", color=f"C{i}")
             xz.annotate(i, (plotPos[0]-2, plotPos[1]+1))
 
             # yz display
             yz.scatter(points.z, points.y, marker_size, color=f"C{i}")
-            plotPos = (events.recoParticles.startPos.z[n][i], events.recoParticles.startPos.y[n][i])
+            plotPos = (events.recoParticles.shower_start_pos.z[n][i], events.recoParticles.shower_start_pos.y[n][i])
             yz.scatter(plotPos[0], plotPos[1], marker_size*10, marker="x", color=f"C{i}")
             yz.annotate(i, (plotPos[0]-2, plotPos[1]+1))
 
         # plot true particles
         for i in range(nTrueParticle):
-            startPos = events.trueParticles.startPos[n][i]
+            startPos = events.trueParticles.shower_start_pos[n][i]
             endPos = events.trueParticles.endPos[n][i]
             xz.plot((startPos.z, endPos.z), (startPos.x, endPos.x), marker="o")
             xz.annotate(events.trueParticles.pdg[n][i], (endPos.z-2, endPos.x+1), color="red")

@@ -58,7 +58,7 @@ def run(i, file, n_events, start, selected_events, args):
         for t in ["reco", "true"]:
             output[f"shower_pairs_{t}_{p}"] = ak.flatten(getattr(shower_pairs, f"{t}_{p}")[pairs])
 
-    params = ["direction", "startPos", "showerLength", "nHits", "nHits_collection", "energy"]
+    params = ["direction", "shower_start_pos", "showerLength", "n_hits", "n_hits_collection", "energy"]
     for p in params:
         for k, particleData in {"reco" : events.recoParticles, "true" : events.trueParticlesBT}.items():
             if hasattr(particleData, p):

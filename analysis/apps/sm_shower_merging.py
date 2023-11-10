@@ -22,7 +22,7 @@ def RecoShowerPairsDataFrame(events : Master.Data, start_showers : ak.Array, to_
     quantities = shower_merging.ShowerMergeQuantities(copy, to_merge, cuts)
     quantities.bestCut = cut_type
     quantities.to_merge_dir = copy.recoParticles.direction
-    quantities.to_merge_pos = copy.recoParticles.startPos
+    quantities.to_merge_pos = copy.recoParticles.shower_start_pos
     pair_mask, event_performance_table, pfo_performance_table = shower_merging.ShowerMerging(copy, start_showers, to_merge, quantities, -1, merge_method = 0, cheat = cheat) #? merge_method configurable?
     pairs = Master.ShowerPairs(copy, shower_pair_mask = np.logical_or(*pair_mask))
     return pairs.CalculateAll(), event_performance_table, pfo_performance_table

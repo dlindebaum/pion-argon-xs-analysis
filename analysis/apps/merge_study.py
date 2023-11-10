@@ -52,8 +52,8 @@ def AnalyzeReco(events : Master.Data, matched : ak.Array, unmatched : ak.Array):
     valid = np.logical_not(null_dir)
 
     #* calculate separation of matched to unmatched
-    separation_0 = Separation(unmatched_reco.startPos, matched_reco.startPos[:, 0], null_dir, "Spatial")[valid]
-    separation_1 = Separation(unmatched_reco.startPos, matched_reco.startPos[:, 1], null_dir, "Spatial")[valid]
+    separation_0 = Separation(unmatched_reco.shower_start_pos, matched_reco.shower_start_pos[:, 0], null_dir, "Spatial")[valid]
+    separation_1 = Separation(unmatched_reco.shower_start_pos, matched_reco.shower_start_pos[:, 1], null_dir, "Spatial")[valid]
     separation = ak.concatenate([separation_0, separation_1], -1)
     minMask_dist = ak.min(separation, -1) == separation # get closest matched shower to matched to study various combinations
 
@@ -220,8 +220,8 @@ def mergeShower(events : Master.Data, matched : ak.Array, unmatched : ak.Array, 
 
     if mergeMethod == 2:
         #* distance from each matched to unmatched
-        separation_0 = Separation(unmatched_reco.startPos, events_matched.recoParticles.startPos[:, 0], null_dir, "Spatial")
-        separation_1 = Separation(unmatched_reco.startPos, events_matched.recoParticles.startPos[:, 1], null_dir, "Spatial")
+        separation_0 = Separation(unmatched_reco.shower_start_pos, events_matched.recoParticles.shower_start_pos[:, 0], null_dir, "Spatial")
+        separation_1 = Separation(unmatched_reco.shower_start_pos, events_matched.recoParticles.shower_start_pos[:, 1], null_dir, "Spatial")
         separation_0 = ak.unflatten(separation_0, 1, -1)
         separation_1 = ak.unflatten(separation_1, 1, -1)
         separation = ak.concatenate([separation_0, separation_1], -1)

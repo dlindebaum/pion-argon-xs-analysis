@@ -143,7 +143,7 @@ def filter_beam_slice(events: Master.Data):
     # TODO vectorise
     slice_mask = [[]] * ak.num(events.recoParticles.beam_number, axis=0)
     for i in range(ak.num(slice_mask, axis=0)):
-        slices = events.recoParticles.sliceID[i]
+        slices = events.recoParticles.slice_id[i]
         beam_slice = slices[
             events.recoParticles.number[i]
             == events.recoParticles.beam_number[i]]
@@ -794,8 +794,8 @@ def candidate_photon_pfo_selection(
     if not np.isclose(n_hits_cut, 0):
         ts = time.time()
         apply_function(
-            f"nHits > {n_hits_cut} (reco)", cut_record,
-            apply_filter, events, events.recoParticles.nHits > n_hits_cut,
+            f"n_hits > {n_hits_cut} (reco)", cut_record,
+            apply_filter, events, events.recoParticles.n_hits > n_hits_cut,
             ts=ts)
     if not np.isclose(cnn_cut, 0):
         ts = time.time()
