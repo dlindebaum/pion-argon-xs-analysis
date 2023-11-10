@@ -632,7 +632,113 @@ def MakePFOSelectionPlotsConsdensed(output_mc : dict, output_mc_loose : dict, ou
     return
 
 
-def MakePi0SelectionPlots(output_mc : dict, output_data : dict, outDir : str, norm : float, nbins : int):
+def MakePiPlusSelectionPlots(output_mc : dict, output_data : dict, outDir : str, norm : float):
+    """ Pi plus selection plots.
+
+    Args:
+        output_mc (dict): mc to plot
+        output_data (dict): data to plot
+        outDir (str): output directory
+        norm (float): plot normalisation
+    """
+
+    norm = False if output_data is None else norm
+    with Plots.PlotBook(outDir + "piplus.pdf") as pdf:
+        if "track_score_all" in output_mc:
+            if output_data:
+                Plots.PlotTagged(output_mc["track_score_all"]["value"], output_mc["track_score_all"]["tags"], data2 = output_data["track_score_all"]["value"], y_scale = "log", x_label = "track score", norm = norm)
+            else:
+                Plots.PlotTagged(output_mc["track_score_all"]["value"], output_mc["track_score_all"]["tags"], y_scale = "log", x_label = "track score", norm = norm)
+            pdf.Save()
+
+        if output_data:
+            Plots.PlotTagged(output_mc["TrackScoreCut"]["value"], output_mc["TrackScoreCut"]["tags"], data2 = output_data["TrackScoreCut"]["value"], x_range = [0, 1], y_scale = "linear", bins = args.nbins, ncols = 3, x_label = "track score", norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["TrackScoreCut"]["value"], output_mc["TrackScoreCut"]["tags"], x_range = [0, 1], y_scale = "linear", bins = args.nbins, ncols = 3, x_label = "track score", norm = norm)
+        
+        Plots.DrawCutPosition(output_mc["TrackScoreCut"]["cuts"], face = "right")
+        pdf.Save()
+
+        if output_data:
+            Plots.PlotTagged(output_mc["NHitsCut"]["value"], output_mc["NHitsCut"]["tags"], data2 = output_data["NHitsCut"]["value"], bins = args.nbins, ncols = 2, x_range = [0, 500], x_label = "n_hits", norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["NHitsCut"]["value"], output_mc["NHitsCut"]["tags"], bins = args.nbins, ncols = 2, x_range = [0, 500], x_label = "n_hits", norm = norm)
+        Plots.DrawCutPosition(output_mc["NHitsCut"]["cuts"], arrow_length = 100, color = "black")
+        pdf.Save()
+
+        Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc["NHitsCut"]["value"]), ak.ravel(output_mc["NHitsCut_completeness"]["value"]), ylabel = "completeness", xlabel = "n_hits", x_range = [0, 500], bins = 50, norm = "column", c_scale = "linear")
+        Plots.DrawCutPosition(output_mc["NHitsCut"]["cuts"], arrow_length = 100, arrow_loc = 0.1, color = "C6")
+        pdf.Save()
+
+        if output_data:
+            Plots.PlotTagged(output_mc["PiPlusSelection"]["value"], output_mc["PiPlusSelection"]["tags"], data2 = output_data["PiPlusSelection"]["value"], ncols = 1, x_range = [0, 5], x_label = "median $dEdX$ (MeV/cm)", bins = args.nbins, norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["PiPlusSelection"]["value"], output_mc["PiPlusSelection"]["tags"], ncols = 2, x_range = [0, 5], x_label = "median $dEdX$", bins = args.nbins, norm = norm)
+        Plots.DrawCutPosition(min(output_mc["PiPlusSelection"]["cuts"]), arrow_length = 0.5, face = "right")
+        Plots.DrawCutPosition(max(output_mc["PiPlusSelection"]["cuts"]), arrow_length = 0.5, face = "left")
+        pdf.Save()
+
+        Plots.PlotTags(output_mc["final_tags"]["tags"], xlabel = "true particle ID")
+        pdf.Save()
+    return
+
+
+def MakePhotonCandidateSelectionPlots(output_mc : dict, output_data : dict, outDir : str, norm : float):
+    """ Photon candidate plots.
+
+    Args:
+        output_mc (dict): mc to plot
+        output_data (dict): data to plot
+        outDir (str): output directory
+        norm (float): plot normalisation
+    """
+    
+    norm = False if output_data is None else norm
+    with Plots.PlotBook(outDir + "photon.pdf") as pdf:    
+        if output_data:
+            Plots.PlotTagged(output_mc["EMScoreCut"]["value"], output_mc["EMScoreCut"]["tags"], data2 = output_data["EMScoreCut"]["value"], bins = args.nbins, x_range = [0, 1], ncols = 3, x_label = "em score", norm = norm)
+        else:
+            Plots.PlotTagged(output_mc["EMScoreCut"]["value"], output_mc["EMScoreCut"]["tags"], bins = args.nbins, x_range = [0, 1], ncols = 3, x_label = "em score", norm = norm)
+
+        Plots.DrawCutPosition(output_mc["EMScoreCut"]["cuts"], arrow_loc = 0.7)
+        pdf.Save()
+
+        if output_data:
+            Plots.PlotTagged(output_mc["NHitsCut"]["value"], output_mc["NHitsCut"]["tags"], data2 = output_data["NHitsCut"]["value"], bins = args.nbins, x_label = "number of hits", x_range = [0, 1000], norm = norm, truncate = True)
+        else:
+            Plots.PlotTagged(output_mc["NHitsCut"]["value"], output_mc["NHitsCut"]["tags"], bins = args.nbins, x_label = "number of hits", x_range = [0, 1000], norm = norm, truncate = True)
+        Plots.DrawCutPosition(output_mc["NHitsCut"]["cuts"], arrow_length = 100)
+        pdf.Save()
+
+        Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc["NHitsCut"]["value"]), ak.ravel(output_mc["NHitsCut_completeness"]["value"]), bins = 50, y_range = [0, 1],x_range = [0, 800], ylabel = "completeness", xlabel = "number of hits", norm = "column")
+        Plots.DrawCutPosition(80, flip = False, arrow_length = 100, color = "C6")
+        pdf.Save()
+
+        if output_data:
+            Plots.PlotTagged(output_mc["BeamParticleDistanceCut"]["value"], output_mc["BeamParticleDistanceCut"]["tags"], data2 = output_data["BeamParticleDistanceCut"]["value"], bins = 31, x_range = [0, 93], x_label = "distance from PFO start to beam end position (cm)", norm = norm, truncate = True, ncols = 2)
+        else:
+            Plots.PlotTagged(output_mc["BeamParticleDistanceCut"]["value"], output_mc["BeamParticleDistanceCut"]["tags"], bins = 31, x_range = [0, 93], x_label = "distance from PFO start to beam end position (cm)", norm = norm, truncate = True, ncols = 2)
+        Plots.DrawCutPosition(min(output_mc["BeamParticleDistanceCut"]["cuts"]), arrow_length = 30, arrow_loc = 0.6)
+        Plots.DrawCutPosition(max(output_mc["BeamParticleDistanceCut"]["cuts"]), face = "left", arrow_length = 30, arrow_loc = 0.6)
+        pdf.Save()
+
+        if output_data:
+            Plots.PlotTagged(output_mc["BeamParticleIPCut"]["value"], output_mc["BeamParticleIPCut"]["tags"], data2 = output_data["BeamParticleIPCut"]["value"], bins = args.nbins, x_range = [0, 50], x_label = "impact parameter wrt beam (cm)", norm = norm, truncate = True)
+        else:
+            Plots.PlotTagged(output_mc["BeamParticleIPCut"]["value"], output_mc["BeamParticleIPCut"]["tags"], bins = args.nbins, x_range = [0, 50], x_label = "impact parameter wrt beam (cm)", norm = norm, truncate = True)
+        Plots.DrawCutPosition(output_mc["BeamParticleIPCut"]["cuts"], arrow_length = 20, face = "left")
+        pdf.Save()
+
+        Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc["BeamParticleIPCut"]["value"]), ak.ravel(output_mc["BeamParticleIPCut_completeness"]["value"]), x_range = [0, 40], y_range = [0, 1], bins = 20, norm = "column", c_scale = "linear", ylabel = "completeness", xlabel = "impact parameter wrt beam (cm)")
+        Plots.DrawCutPosition(20, arrow_length = 20, face = "left", color = "red")
+        pdf.Save()
+
+        Plots.PlotTags(output_mc["final_tags"]["tags"], xlabel = "true particle ID")
+        pdf.Save()
+    return
+
+
+def MakePi0SelectionPlots(output_mc : dict, output_data : dict, outDir : str, norm : float):
     """ Pi0 selection plots.
 
     Args:

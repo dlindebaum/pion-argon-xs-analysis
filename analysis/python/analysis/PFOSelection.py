@@ -79,8 +79,8 @@ def EMScoreCut(events : Master.Data, cut = 0.5, return_property : bool = False) 
     return CreateMask(cut, "<", events.recoParticles.track_score, return_property)
 
 
-def NHitsCut(events : Master.Data, cut = 80, op = ">", return_property : bool = False) -> ak.Array:
-    return CreateMask(cut, op, events.recoParticles.n_hits, return_property)
+def NHitsCut(events : Master.Data, cut = 80, return_property : bool = False) -> ak.Array:
+    return CreateMask(cut, ">", events.recoParticles.n_hits, return_property)
 
 
 def BeamParticleDistanceCut(events : Master.Data, cut = [3, 90], op = [">", "<"], return_property : bool = False) -> ak.Array:

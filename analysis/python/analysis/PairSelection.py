@@ -558,8 +558,8 @@ def paired_beam_impact(shower_pairs, type="reco"):
         else:
             dir = shower_pairs.true_direction
     shared_vertex = shower_pairs.SharedVertex(
-        data.shower_momentum[shower_pairs.leading],
-        data.shower_momentum[shower_pairs.subleading],
+        data.momentum[shower_pairs.leading],
+        data.momentum[shower_pairs.subleading],
         data.shower_start_pos[shower_pairs.leading],
         data.shower_start_pos[shower_pairs.subleading])
     # Impact parameter between the PFOs and corresponding beam vertex

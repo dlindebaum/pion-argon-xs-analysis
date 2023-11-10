@@ -709,9 +709,9 @@ class Data:
         merged_data["truePFPMask"] = merged_data["truePFPMask"][merged_data["truePFPMask"] != -999]
 
         # ? should we implement corrections for other values like start position or n_hits?
-        self.recoParticles._RecoParticleData__shower_momentum = merged_data["p"]
-        self.recoParticles._RecoParticleData__shower_energy = merged_data["e"]
-        self.recoParticles._RecoParticleData__shower_direction = merged_data["dir"]
+        self.recoParticles._RecoParticleData__momentum = merged_data["p"]
+        self.recoParticles._RecoParticleData__energy = merged_data["e"]
+        self.recoParticles._RecoParticleData__direction = merged_data["dir"]
         self.recoParticles._RecoParticleData__n_hits = merged_data["n_hits"]
 
         self.trueParticlesBT._TrueParticleDataBT__n_hits = merged_data["true_hits"]
@@ -1109,7 +1109,7 @@ class TrueParticleData(ParticleData):
         return self.__direction
 
     @property
-    def start_pos(self) -> ak.Record:
+    def shower_start_pos(self) -> ak.Record:
         if self.events.nTuple_type == Ntuple_Type.PDSP:
             self.PDSPDataVector("shower_start_pos", ["true_beam_startX", "true_beam_startY", "true_beam_startZ"], ["true_beam_daughter_startX", "true_beam_daughter_startY", "true_beam_daughter_startZ"], ["true_beam_Pi0_decay_startX", "true_beam_Pi0_decay_startY", "true_beam_Pi0_decay_startZ"])
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
@@ -1311,9 +1311,9 @@ class RecoParticleData(ParticleData):
         n_hits_collection (ak.Array): number of collection plane hits
         energy (ak.Array):
         momentum (ak.Record):
-        shower_direction (ak.Record):
+        direction (ak.Record):
         shower_start_pos (ak.Record):
-        shower_length (ak.Array): length of shower (if applicable)
+        showerLength (ak.Array): length of shower (if applicable)
         showerConeAngle (ak.Array): width of shower (if applicable)
         em_score (ak.Array): shower like score
         track_score (ak.Array): track like score
@@ -1498,27 +1498,27 @@ class RecoParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__n_hits_collection")
 
     @property
-    def trackStartPos(self) -> ak.Record:
+    def track_start_pos(self) -> ak.Record:
         nTuples = [
             "reco_daughter_allTrack_startX",
             "reco_daughter_allTrack_startY",
             "reco_daughter_allTrack_startZ"
         ]
-        self.LoadData("trackStartPos", nTuples, is_vector = True)
-        return getattr(self, f"_{type(self).__name__}__trackStartPos")
+        self.LoadData("track_start_pos", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__track_start_pos")
 
     @property
-    def showerStartPos(self) -> ak.Record:
+    def shower_start_pos(self) -> ak.Record:
         nTuples = [
             "reco_daughter_allShower_startX",
             "reco_daughter_allShower_startY",
             "reco_daughter_allShower_startZ"
         ]
-        self.LoadData("showerStartPos", nTuples, is_vector = True)
-        return getattr(self, f"_{type(self).__name__}__showerStartPos")
+        self.LoadData("shower_start_pos", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__shower_start_pos")
     
     @property
-    def startPos(self) -> ak.Record:
+    def shower_start_pos(self) -> ak.Record:
         # For backwards compoatibility
         return self.showerStartPos
 
@@ -1540,7 +1540,7 @@ class RecoParticleData(ParticleData):
             "reco_daughter_allShower_dirZ"
         ]
         self.LoadData("showerDirection", nTuples, is_vector = True)
-        return getattr(self, f"_{type(self).__name__}__showerDirection") #! see startPos
+        return getattr(self, f"_{type(self).__name__}__showerDirection")
 
     @property
     def direction(self) -> ak.Record:
@@ -2593,8 +2593,8 @@ class ShowerPairs:
     @property
     def reco_closest_approach(self):
         return ShowerPairs.ClosestApproach(
-            self.events.recoParticles.shower_direction[self.leading],
-            self.events.recoParticles.shower_direction[self.subleading],
+            self.events.recoParticles.direction[self.leading],
+            self.events.recoParticles.direction[self.subleading],
             self.events.recoParticles.shower_start_pos[self.leading],
             self.events.recoParticles.shower_start_pos[self.subleading])
 
@@ -2813,7 +2813,7 @@ def NPFPMask(events: Data, nObjects: int = None) -> ak.Array:
     Returns:
         ak.Array: mask of events to filter
     """
-    null_dir = events.recoParticles.shower_direction.x != -999
+    null_dir = events.recoParticles.direction.x != -999
     null_pos = events.recoParticles.shower_start_pos.x != -999
     nObj = np.logical_and(null_dir, null_pos)
     # get number of showers which have a valid direction

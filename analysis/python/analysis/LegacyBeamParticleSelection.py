@@ -83,7 +83,7 @@ def BothPhotonsBacktracked(events : Master.Data) -> ak.Array:
         else:
             f_combined = f[i]
 
-    not_null = np.logical_not(np.logical_or(events.recoParticles.shower_start_pos.x == -999, events.recoParticles.shower_momentum.x == -999))
+    not_null = np.logical_not(np.logical_or(events.recoParticles.shower_start_pos.x == -999, events.recoParticles.momentum.x == -999))
     f = f_combined & not_null
 
     f = f & (events.trueParticlesBT.number != -999)

@@ -87,7 +87,7 @@ def main():
 
         # plot true particles
         for i in range(nTrueParticle):
-            startPos = events.trueParticles.start_pos[n][i]
+            startPos = events.trueParticles.shower_start_pos[n][i]
             endPos = events.trueParticles.endPos[n][i]
             xz.plot((startPos.z, endPos.z), (startPos.x, endPos.x), marker="o")
             xz.annotate(events.trueParticles.pdg[n][i], (endPos.z-2, endPos.x+1), color="red")
