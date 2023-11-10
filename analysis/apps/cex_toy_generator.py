@@ -135,8 +135,6 @@ def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split
     """
     xs_sim = GeantCrossSections(file = path)
 
-    exclusive_processes = [k for k in vars(xs_sim) if k not in ["KE", "file", "total_inelastic"]]
-
     if modified_PDFs is not None:
         if "KE" not in modified_PDFs:
             raise Exception("KE array is required")
@@ -146,7 +144,7 @@ def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split
             setattr(xs_sim, k, interpolated(xs_sim.KE))
         
         xs_sim.total_inelastic = np.zeros(len(xs_sim.KE))
-        for p in exclusive_processes:
+        for p in xs_sim.exclusive_processes:
             xs_sim.total_inelastic = xs_sim.total_inelastic + getattr(xs_sim, p)
 
     if scale_factors is not None:
@@ -160,14 +158,14 @@ def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split
     if scale_factors is not None:
         factors = {k : v/ratio for k, v in scale_factors.items()}
     else:
-        factors = {k : 1 for k in exclusive_processes}
+        factors = {k : 1 for k in xs_sim.exclusive_processes}
 
     pdfs = {}
     pdfs["total_inelastic"] = interp1d(xs_sim.KE, P_int(xs_sim.total_inelastic, l), fill_value = "extrapolate") # total inelastic pdf
 
     # sort the exclusice channels based on area under curve
     area = {}
-    for v in exclusive_processes:
+    for v in xs_sim.exclusive_processes:
         area[v] = np.trapz(P_int(factors[v] * getattr(xs_sim, v), l))
 
     # stack the pdfs in ascending order
@@ -421,7 +419,7 @@ def MeanTrackScore(exclusive_process : pd.Series, kdes : dict, seed : int) -> np
         else:
             sample_from = i
         scores = np.where(exclusive_process == i, GenerateMeanTrackScores(kdes[sample_from], len(exclusive_process), (seed + c) % 2**32 - 1), scores)
-    return pd.DataFrame({"mean_track_score" : scores}).reset_index(drop = True)
+    return pd.DataFrame({"mean_track_score" : scores.astype(float)}).reset_index(drop = True)
 
 
 @timer
@@ -468,7 +466,7 @@ def main(args : argparse.Namespace):
             pools.restart()
             sim_args = (seed + completed_proc + np.linspace(0, cpus - 1, cpus, dtype = int), KE_init_batches, [args.step]*cpus, [pdfs]*cpus)
             df.extend(pools.imap(Simulate, *sim_args))
-            pools.close()
+            pools.terminate()
             completed_proc += cpus
         
         vprint("Done! Creating dataframe...")
