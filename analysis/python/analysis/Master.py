@@ -1341,40 +1341,90 @@ class RecoParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__nHits_collection")
 
     @property
-    def startPos(self) -> ak.Record:
+    def trackStartPos(self) -> ak.Record:
+        nTuples = [
+            "reco_daughter_allTrack_startX",
+            "reco_daughter_allTrack_startY",
+            "reco_daughter_allTrack_startZ"
+        ]
+        self.LoadData("trackStartPos", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__trackStartPos")
+
+    @property
+    def showerStartPos(self) -> ak.Record:
         nTuples = [
             "reco_daughter_allShower_startX",
             "reco_daughter_allShower_startY",
             "reco_daughter_allShower_startZ"
         ]
-        self.LoadData("startPos", nTuples, is_vector = True)
-        return getattr(self, f"_{type(self).__name__}__startPos") #! this should be called allShower_startPos and a separate variable allTrack_startPos should be made.
+        self.LoadData("showerStartPos", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__showerStartPos")
+    
+    @property
+    def startPos(self) -> ak.Record:
+        # For backwards compoatibility
+        return self.showerStartPos
 
     @property
-    def direction(self) -> ak.Record:
+    def trackStartDir(self) -> ak.Record:
+        nTuples = [
+            "reco_daughter_allTrack_startDirX",
+            "reco_daughter_allTrack_startDirY",
+            "reco_daughter_allTrack_startDirZ"
+        ]
+        self.LoadData("trackStartDir", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__trackStartDir")
+
+    @property
+    def showerDirection(self) -> ak.Record:
         nTuples = [
             "reco_daughter_allShower_dirX",
             "reco_daughter_allShower_dirY",
             "reco_daughter_allShower_dirZ"
         ]
-        self.LoadData("direction", nTuples, is_vector = True)
-        return getattr(self, f"_{type(self).__name__}__direction") #! see startPos
+        self.LoadData("showerDirection", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__showerDirection") #! see startPos
+
+    @property
+    def direction(self) -> ak.Record:
+        # For backwards compoatibility
+        return self.showerDirection
+
+    @property
+    def trackEndPos(self) -> ak.Record:
+        nTuples = [
+            "reco_daughter_allTrack_endX",
+            "reco_daughter_allTrack_endY",
+            "reco_daughter_allTrack_endZ"
+        ]
+        self.LoadData("trackEndPos", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__trackEndPos")
+
+    @property
+    def showerEnergy(self) -> ak.Array:
+        self.LoadData("showerEnergy", "reco_daughter_allShower_energy")
+        return getattr(self, f"_{type(self).__name__}__showerEnergy") #! should be renamed shower energy, as track objects don't have an energy, but have a dEdX
 
     @property
     def energy(self) -> ak.Array:
-        self.LoadData("energy", "reco_daughter_allShower_energy")
-        return getattr(self, f"_{type(self).__name__}__energy") #! should be renamed shower energy, as track objects don't have an energy, but have a dEdX
+        # For backwards compoatibility
+        return self.showerEnergy
 
     @property
-    def momentum(self) -> ak.Record:
-        if not hasattr(self, f"_{type(self).__name__}__momentum"):
-            mom = vector.prod(self.energy, self.direction)
+    def showerMomentum(self) -> ak.Record:
+        if not hasattr(self, f"_{type(self).__name__}__showerMomentum"):
+            mom = vector.prod(self.showerEnergy, self.showerDirection)
             mom = ak.where(self.direction.x == -999,
                            {"x": -999, "y": -999, "z": -999}, mom)
             mom = ak.where(self.energy < 0, {
                            "x": -999, "y": -999, "z": -999}, mom)
-            self.__momentum = mom
-        return self.__momentum #! should be renamed shower momentum
+            self.__showerMomentum = mom
+        return self.__showerMomentum #! should be renamed shower momentum
+
+    @property
+    def momentum(self) -> ak.Array:
+        # For backwards compoatibility
+        return self.showerMomentum
 
     @property
     def showerLength(self) -> ak.Array:
@@ -1435,6 +1485,66 @@ class RecoParticleData(ParticleData):
     def track_dEdX(self) -> ak.Array:
         self.LoadData("track_dEdX", "reco_daughter_allTrack_calibrated_dEdX_SCE")
         return getattr(self, f"_{type(self).__name__}__track_dEdX")
+
+    @property
+    def track_dQdX(self) -> ak.Array:
+        self.LoadData("track_dQdX", "reco_daughter_allTrack_calibrated_dQdX_SCE")
+        return getattr(self, f"_{type(self).__name__}__track_dQdX")
+    
+    @property
+    def residual_range(self) -> ak.Array:
+        self.LoadData("residual_range", "reco_daughter_allTrack_resRange_SCE")
+        return getattr(self, f"_{type(self).__name__}__residual_range")
+    
+    @property
+    def track_chi2_proton(self) -> ak.Array:
+        self.LoadData("track_chi2_proton", "reco_daughter_allTrack_Chi2_proton")
+        return getattr(self, f"_{type(self).__name__}__track_chi2_proton")
+    
+    @property
+    def track_chi2_proton_ndof(self) -> ak.Array:
+        self.LoadData("track_chi2_proton_ndof", "reco_daughter_allTrack_Chi2_ndof")
+        return getattr(self, f"_{type(self).__name__}__track_chi2_proton_ndof")
+
+    @property
+    def track_chi2_pion(self) -> ak.Array:
+        self.LoadData("track_chi2_pion", "reco_daughter_allTrack_Chi2_pion")
+        return getattr(self, f"_{type(self).__name__}__track_chi2_pion")
+    
+    @property
+    def track_chi2_pion_ndof(self) -> ak.Array:
+        self.LoadData("track_chi2_pion_ndof", "reco_daughter_allTrack_Chi2_ndof_pion")
+        return getattr(self, f"_{type(self).__name__}__track_chi2_pion_ndof")
+    
+    @property
+    def track_chi2_muon(self) -> ak.Array:
+        self.LoadData("track_chi2_muon", "reco_daughter_allTrack_Chi2_muon")
+        return getattr(self, f"_{type(self).__name__}__track_chi2_muon")
+    
+    @property
+    def track_chi2_muon_ndof(self) -> ak.Array:
+        self.LoadData("track_chi2_muon_ndof", "reco_daughter_allTrack_Chi2_ndof_muon")
+        return getattr(self, f"_{type(self).__name__}__track_chi2_muon_ndof")
+
+    @property
+    def track_len(self) -> ak.Array:
+        self.LoadData("track_len", "reco_daughter_allTrack_len")
+        return getattr(self, f"_{type(self).__name__}__track_len")
+    
+    @property
+    def track_len_alt(self) -> ak.Array:
+        self.LoadData("track_len_alt", "reco_daughter_allTrack_alt_len")
+        return getattr(self, f"_{type(self).__name__}__track_len_alt")
+    
+    @property
+    def track_vertex_michel(self) -> ak.Array:
+        self.LoadData("track_vertex_michel", "reco_daughter_allTrack_vertex_michel_score")
+        return getattr(self, f"_{type(self).__name__}__track_vertex_michel")
+    
+    @property
+    def track_vertex_nhits(self) -> ak.Array:
+        self.LoadData("track_vertex_nhits", "reco_daughter_allTrack_vertex_nHits")
+        return getattr(self, f"_{type(self).__name__}__track_vertex_nhits")
 
     @property
     def beam_pandora_tag(self) -> ak.Array:
