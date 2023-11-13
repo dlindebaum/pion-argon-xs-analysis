@@ -263,5 +263,5 @@ def CreateDefaultSelection(events: Data,
     ]
     if scraper is True:
         selection.append(BeamScraperCut)
-        arguments.append({"KE_range" : scraper_KE_range, "fits" : scraper_fits, "pdg_hyp" : pdg_hyp, "cut" : scraper_cut})
+        arguments.append({"KE_range" : scraper_KE_range, "fits" : scraper_fits, "cut" : scraper_cut})
     return CombineSelections(events, selection, 0, arguments, verbose, return_table)
