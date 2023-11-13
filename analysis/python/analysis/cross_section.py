@@ -598,7 +598,8 @@ class GeantCrossSections:
                 s = "_frac" if "frac" in k else "" 
                 setattr(self, self.labels[k.replace("_frac", "")] + s, xs[0:len(self.KE)]) # assign class variables for each cross section channel
 
-        self.exclusive_processes = self.labels.values()
+        self.exclusive_processes = list(self.labels.values())
+        self.exclusive_processes.remove("total_inelastic")
         self.n_cascades = n_cascades
         # for k in vars(self):
         #     if k not in ["KE", "file", "total_inelastic"]:
