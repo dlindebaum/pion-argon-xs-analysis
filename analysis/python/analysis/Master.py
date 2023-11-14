@@ -1386,11 +1386,6 @@ class RecoParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__shower_direction")
 
     @property
-    def direction(self) -> ak.Record:
-        # For backwards compoatibility
-        return self.shower_direction
-
-    @property
     def track_end_pos(self) -> ak.Record:
         nTuples = [
             "reco_daughter_allTrack_endX",
@@ -1406,11 +1401,6 @@ class RecoParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__shower_energy") #! should be renamed shower energy, as track objects don't have an energy, but have a dEdX
 
     @property
-    def energy(self) -> ak.Array:
-        # For backwards compoatibility
-        return self.shower_energy
-
-    @property
     def shower_momentum(self) -> ak.Record:
         if not hasattr(self, f"_{type(self).__name__}__shower_momentum"):
             mom = vector.prod(self.shower_energy, self.shower_direction)
@@ -1420,11 +1410,6 @@ class RecoParticleData(ParticleData):
                            "x": -999, "y": -999, "z": -999}, mom)
             self.__shower_momentum = mom
         return self.__shower_momentum #! should be renamed shower momentum
-
-    @property
-    def momentum(self) -> ak.Array:
-        # For backwards compoatibility
-        return self.shower_momentum
 
     @property
     def shower_length(self) -> ak.Array:
