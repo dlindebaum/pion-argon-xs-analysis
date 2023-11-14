@@ -94,8 +94,8 @@ def BeamParticleIPCut(events : Master.Data, cut = 20, op = "<", return_property 
     return CreateMask(cut, op, ip, return_property)
 
 
-def TrackScoreCut(events : Master.Data, cut = 0.5, op = ">", return_property : bool = False):
-    return CreateMask(cut, op, events.recoParticles.track_score, return_property)
+def TrackScoreCut(events : Master.Data, cut = 0.5, return_property : bool = False):
+    return CreateMask(cut, ">", events.recoParticles.track_score, return_property)
 
 
 def BeamDaughterCut(events : Master.Data):

@@ -709,9 +709,9 @@ class Data:
         merged_data["truePFPMask"] = merged_data["truePFPMask"][merged_data["truePFPMask"] != -999]
 
         # ? should we implement corrections for other values like start position or n_hits?
-        self.recoParticles._RecoParticleData__momentum = merged_data["p"]
-        self.recoParticles._RecoParticleData__energy = merged_data["e"]
-        self.recoParticles._RecoParticleData__direction = merged_data["dir"]
+        self.recoParticles._RecoParticleData__shower_momentum = merged_data["p"]
+        self.recoParticles._RecoParticleData__shower_energy = merged_data["e"]
+        self.recoParticles._RecoParticleData__shower_direction = merged_data["dir"]
         self.recoParticles._RecoParticleData__n_hits = merged_data["n_hits"]
 
         self.trueParticlesBT._TrueParticleDataBT__n_hits = merged_data["true_hits"]
@@ -1311,7 +1311,7 @@ class RecoParticleData(ParticleData):
         n_hits_collection (ak.Array): number of collection plane hits
         energy (ak.Array):
         momentum (ak.Record):
-        direction (ak.Record):
+        shower_direction (ak.Record):
         shower_start_pos (ak.Record):
         shower_length (ak.Array): length of shower (if applicable)
         showerConeAngle (ak.Array): width of shower (if applicable)
@@ -1516,11 +1516,6 @@ class RecoParticleData(ParticleData):
         ]
         self.LoadData("shower_start_pos", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__shower_start_pos")
-    
-    @property
-    def shower_start_pos(self) -> ak.Record:
-        # For backwards compoatibility
-        return self.showerStartPos
 
     @property
     def track_start_dir(self) -> ak.Record:
@@ -1561,7 +1556,7 @@ class RecoParticleData(ParticleData):
     def shower_momentum(self) -> ak.Record:
         if not hasattr(self, f"_{type(self).__name__}__shower_momentum"):
             mom = vector.prod(self.shower_energy, self.shower_direction)
-            mom = ak.where(self.direction.x == -999,
+            mom = ak.where(self.shower_direction.x == -999,
                            {"x": -999, "y": -999, "z": -999}, mom)
             mom = ak.where(self.shower_energy < 0, {
                            "x": -999, "y": -999, "z": -999}, mom)
@@ -1856,6 +1851,7 @@ class TrueParticleDataBT(ParticleData):
         trueBeamVertex_collection (ak.Record): end poisition of backtracked true beam particle
         purity_collection (ak.Array): fraction of shared hits in reconstructed object
         completeness_collection (ak.Array): fraction of shared hits in the backtrackted true particle
+        space_points (ak.Record): hit space points
         channel (ak.Array): hit channel
         peak_time (ak.Array): hit peak time
         integral (ak.Array): hit integral
@@ -2577,8 +2573,8 @@ class ShowerPairs:
     @property
     def reco_closest_approach(self):
         return ShowerPairs.ClosestApproach(
-            self.events.recoParticles.direction[self.leading],
-            self.events.recoParticles.direction[self.subleading],
+            self.events.recoParticles.shower_direction[self.leading],
+            self.events.recoParticles.shower_direction[self.subleading],
             self.events.recoParticles.shower_start_pos[self.leading],
             self.events.recoParticles.shower_start_pos[self.subleading])
 
@@ -2797,7 +2793,7 @@ def NPFPMask(events: Data, nObjects: int = None) -> ak.Array:
     Returns:
         ak.Array: mask of events to filter
     """
-    null_dir = events.recoParticles.direction.x != -999
+    null_dir = events.recoParticles.shower_direction.x != -999
     null_pos = events.recoParticles.shower_start_pos.x != -999
     nObj = np.logical_and(null_dir, null_pos)
     # get number of showers which have a valid direction
