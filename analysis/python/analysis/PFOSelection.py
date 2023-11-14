@@ -39,31 +39,31 @@ def Median(x : ak.Array):
 
 
 def ValidRecoEnergyCut(events : Master.Data) -> ak.Array:
-    return events.recoParticles.energy != -999
+    return events.recoParticles.shower_energy != -999
 
 
 def ValidRecoPositionCut(events : Master.Data) -> ak.Array:
     return np.logical_and(
         np.logical_and(
-            events.recoParticles.startPos.x != -999,
-            events.recoParticles.startPos.y != -999
+            events.recoParticles.shower_start_pos.x != -999,
+            events.recoParticles.shower_start_pos.y != -999
         ),
-        events.recoParticles.startPos.z != 999
+        events.recoParticles.shower_start_pos.z != 999
     )
 
 
 def ValidRecoMomentumCut(events : Master.Data) -> ak.Array:
     return np.logical_and(
         np.logical_and(
-            events.recoParticles.momentum.x != -999,
-            events.recoParticles.momentum.y != -999
+            events.recoParticles.shower_momentum.x != -999,
+            events.recoParticles.shower_momentum.y != -999
         ),
-        events.recoParticles.momentum.z != -999
+        events.recoParticles.shower_momentum.z != -999
     )
 
 
 def ValidCNNScoreCut(events : Master.Data, return_property : bool = False) -> ak.Array:
-    return CreateMask(-999, "!=", events.recoParticles.cnnScore, return_property)
+    return CreateMask(-999, "!=", events.recoParticles.cnn_score, return_property)
 
 
 def GoodShowerSelection(events : Master.Data, return_table = False):
@@ -76,11 +76,11 @@ def GoodShowerSelection(events : Master.Data, return_table = False):
 
 
 def EMScoreCut(events : Master.Data, cut = 0.5, return_property : bool = False) -> ak.Array:
-    return CreateMask(cut, ">", events.recoParticles.emScore, return_property)
+    return CreateMask(cut, ">", events.recoParticles.em_score, return_property)
 
 
 def NHitsCut(events : Master.Data, cut = 80, return_property : bool = False) -> ak.Array:
-    return CreateMask(cut, ">", events.recoParticles.nHits, return_property)
+    return CreateMask(cut, ">", events.recoParticles.n_hits, return_property)
 
 
 def BeamParticleDistanceCut(events : Master.Data, cut = [3, 90], return_property : bool = False) -> ak.Array:
@@ -95,7 +95,7 @@ def BeamParticleIPCut(events : Master.Data, cut = 20., return_property : bool = 
 
 
 def TrackScoreCut(events : Master.Data, cut = 0.5, return_property : bool = False):
-    return CreateMask(cut, ">", events.recoParticles.trackScore, return_property)
+    return CreateMask(cut, ">", events.recoParticles.track_score, return_property)
 
 
 def BeamDaughterCut(events : Master.Data):
@@ -237,9 +237,9 @@ def find_beam_impact_parameters(events : Master.Data):
     impacts : ak.Array
         Impact parameters between the PFOs and beam vertex.
     """
-    starts = events.recoParticles.startPos
+    starts = events.recoParticles.shower_start_pos
     beam_vertex = events.recoParticles.beam_endPos
-    directions = events.recoParticles.direction
+    directions = events.recoParticles.shower_direction
     return get_impact_parameter(
         directions, starts, beam_vertex)
 
@@ -260,7 +260,7 @@ def find_beam_separations(events):
     separations : ak.Array
         Separations between the PFOs starts and beam vertex.
     """
-    starts = events.recoParticles.startPos
+    starts = events.recoParticles.shower_start_pos
     beam_vertex = events.recoParticles.beam_endPos # Note: this is uncorrected for space charge effects beacuase no PFO position were corrected in the reconstruction.
     return vector.dist(starts, beam_vertex)
 

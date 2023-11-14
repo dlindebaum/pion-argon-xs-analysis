@@ -194,7 +194,7 @@ def ReformatRowLabels(row_labels : np.array) -> list[str]:
         "em_score" : "em score",
         "beam_separation" : "beam separation",
         "impact_parameter" : "impact parameter",
-        "nHits" : "nHits",
+        "n_hits" : "n_hits",
         "mass" : "invariant mass",
         "angle" : "opening angle",
         "beam_scraper" : "beam scraper"

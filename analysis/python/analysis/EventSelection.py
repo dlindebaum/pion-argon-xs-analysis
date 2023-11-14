@@ -143,7 +143,7 @@ def filter_beam_slice(events: Master.Data):
     # TODO vectorise
     slice_mask = [[]] * ak.num(events.recoParticles.beam_number, axis=0)
     for i in range(ak.num(slice_mask, axis=0)):
-        slices = events.recoParticles.sliceID[i]
+        slices = events.recoParticles.slice_id[i]
         beam_slice = slices[
             events.recoParticles.number[i]
             == events.recoParticles.beam_number[i]]
@@ -542,7 +542,7 @@ def count_charged_pi_candidates(
         if energy_cut is not None:
             reco_pi_mask = np.logical_and(
                 reco_pi_mask,
-                events.recoParticles.energy > energy_cut)
+                events.recoParticles.shower_energy > energy_cut)
     return ak.sum(reco_pi_mask, axis=-1)
 
 
@@ -794,14 +794,14 @@ def candidate_photon_pfo_selection(
     if not np.isclose(n_hits_cut, 0):
         ts = time.time()
         apply_function(
-            f"nHits > {n_hits_cut} (reco)", cut_record,
-            apply_filter, events, events.recoParticles.nHits > n_hits_cut,
+            f"n_hits > {n_hits_cut} (reco)", cut_record,
+            apply_filter, events, events.recoParticles.n_hits > n_hits_cut,
             ts=ts)
     if not np.isclose(cnn_cut, 0):
         ts = time.time()
         apply_function(
             f"EMScore > {cnn_cut} (reco)", cut_record,
-            apply_filter, events, events.recoParticles.emScore > cnn_cut,
+            apply_filter, events, events.recoParticles.em_score > cnn_cut,
             ts=ts)
     return events
 
