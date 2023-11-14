@@ -34,7 +34,7 @@ def main():
 
     # get nTuples not automatically retrieved (set as class variables so filtering is possible)
     events.recoParticles.pandoraID = events.io.LoadData("pandoraTag")
-    events.recoParticles.spacePoints = ak.zip({"x" : events.io.LoadData("reco_daughter_allShower_spacePointX"), 
+    events.recoParticles.space_points = ak.zip({"x" : events.io.LoadData("reco_daughter_allShower_spacePointX"), 
                                             "y" : events.io.LoadData("reco_daughter_allShower_spacePointY"),
                                             "z" : events.io.LoadData("reco_daughter_allShower_spacePointZ")})
 
@@ -70,7 +70,7 @@ def main():
             if startPos.x == -999: continue # ensure the PFP has a valid start point to plot
 
             # don't plot spacepoints which have invalid positions
-            points = events.recoParticles.spacePoints[n][i]
+            points = events.recoParticles.space_points[n][i]
             points = points[points.x != -999]
             
             # xz display

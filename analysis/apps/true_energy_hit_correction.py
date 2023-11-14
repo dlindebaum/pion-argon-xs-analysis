@@ -12,8 +12,8 @@ from python.analysis import Master, shower_merging
 def GetSharedHitsMask(particleData : Master.ParticleData, e, a, b):
     #! returns the mask for particle b only
     total_mask = None
-    for c1, t1 in zip(particleData.channel[e][a], particleData.peakTime[e][a]):
-        mask = (c1 == particleData.channel[e][b]) & (t1 == particleData.peakTime[e][b])
+    for c1, t1 in zip(particleData.channel[e][a], particleData.peak_time[e][a]):
+        mask = (c1 == particleData.channel[e][b]) & (t1 == particleData.peak_time[e][b])
         if total_mask is None:
             total_mask = mask
         else:

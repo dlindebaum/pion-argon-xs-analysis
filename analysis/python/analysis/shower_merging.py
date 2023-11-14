@@ -672,7 +672,7 @@ def ValidPFOSelection(events : Master.Data):
     mask = events.recoParticles.momentum.x != -999
     ApplySelection(mask, "valid momentum", "reco")
 
-    mask = events.recoParticles.cnnScore != -999
+    mask = events.recoParticles.cnn_score != -999
     ApplySelection(mask, "valid CNN score", "reco")
 
     print(tabulate(n, tablefmt="latex"))

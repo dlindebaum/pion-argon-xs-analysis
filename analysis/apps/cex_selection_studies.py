@@ -95,7 +95,7 @@ def AnalysePiPlusSelection(events : Master.Data, functions : dict, args : dict) 
         #* beam particle daughter selection 
         mask = PFOSelection.BeamDaughterCut(events)
         cut_table.add_mask(mask, "track_score_all")
-        output["track_score_all"] = MakeOutput(events.recoParticles.trackScore, Tags.GenerateTrueParticleTagsPiPlus(events)) # keep a record of the track score to show the cosmic muon background
+        output["track_score_all"] = MakeOutput(events.recoParticles.track_score, Tags.GenerateTrueParticleTagsPiPlus(events)) # keep a record of the track score to show the cosmic muon background
         events.Filter([mask])
 
     for a in args:

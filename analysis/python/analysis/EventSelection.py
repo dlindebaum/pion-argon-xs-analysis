@@ -801,7 +801,7 @@ def candidate_photon_pfo_selection(
         ts = time.time()
         apply_function(
             f"EMScore > {cnn_cut} (reco)", cut_record,
-            apply_filter, events, events.recoParticles.emScore > cnn_cut,
+            apply_filter, events, events.recoParticles.em_score > cnn_cut,
             ts=ts)
     return events
 
