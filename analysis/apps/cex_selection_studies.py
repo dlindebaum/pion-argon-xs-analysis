@@ -287,6 +287,14 @@ def AnalysePiPlusSelection(events : Master.Data, data : bool, functions : dict, 
     output = {}
     cut_table = Master.CutTable.CutHandler(events, tags = Tags.GenerateTrueParticleTagsPiPlus(events))
 
+    # this selection only needs to be done for shower merging ntuple because the PDSPAnalyser ntuples only store daughter PFOs, not the beam as well.
+    if events.nTuple_type == Master.Ntuple_Type.SHOWER_MERGING:
+        #* beam particle daughter selection 
+        mask = PFOSelection.BeamDaughterCut(events)
+        cut_table.add_mask(mask, "track_score_all")
+        output["track_score_all"] = MakeOutput(events.recoParticles.track_score, Tags.GenerateTrueParticleTagsPiPlus(events)) # keep a record of the track score to show the cosmic muon background
+        events.Filter([mask])
+
     for a in args:
         if a == "NHitsCut":
             output[a + "_completeness"] = MakeOutput(events.trueParticlesBT.completeness, [])

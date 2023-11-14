@@ -1313,7 +1313,7 @@ class RecoParticleData(ParticleData):
         momentum (ak.Record):
         direction (ak.Record):
         shower_start_pos (ak.Record):
-        showerLength (ak.Array): length of shower (if applicable)
+        shower_length (ak.Array): length of shower (if applicable)
         showerConeAngle (ak.Array): width of shower (if applicable)
         em_score (ak.Array): shower like score
         track_score (ak.Array): track like score
@@ -1523,65 +1523,65 @@ class RecoParticleData(ParticleData):
         return self.showerStartPos
 
     @property
-    def trackStartDir(self) -> ak.Record:
+    def track_start_dir(self) -> ak.Record:
         nTuples = [
             "reco_daughter_allTrack_startDirX",
             "reco_daughter_allTrack_startDirY",
             "reco_daughter_allTrack_startDirZ"
         ]
-        self.LoadData("trackStartDir", nTuples, is_vector = True)
-        return getattr(self, f"_{type(self).__name__}__trackStartDir")
+        self.LoadData("track_start_dir", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__track_start_dir")
 
     @property
-    def showerDirection(self) -> ak.Record:
+    def shower_direction(self) -> ak.Record:
         nTuples = [
             "reco_daughter_allShower_dirX",
             "reco_daughter_allShower_dirY",
             "reco_daughter_allShower_dirZ"
         ]
-        self.LoadData("showerDirection", nTuples, is_vector = True)
-        return getattr(self, f"_{type(self).__name__}__showerDirection")
+        self.LoadData("shower_direction", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__shower_direction")
 
     @property
     def direction(self) -> ak.Record:
         # For backwards compoatibility
-        return self.showerDirection
+        return self.shower_direction
 
     @property
-    def trackEndPos(self) -> ak.Record:
+    def track_end_pos(self) -> ak.Record:
         nTuples = [
             "reco_daughter_allTrack_endX",
             "reco_daughter_allTrack_endY",
             "reco_daughter_allTrack_endZ"
         ]
-        self.LoadData("trackEndPos", nTuples, is_vector = True)
-        return getattr(self, f"_{type(self).__name__}__trackEndPos")
+        self.LoadData("track_end_pos", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__track_end_pos")
 
     @property
-    def showerEnergy(self) -> ak.Array:
-        self.LoadData("showerEnergy", "reco_daughter_allShower_energy")
-        return getattr(self, f"_{type(self).__name__}__showerEnergy") #! should be renamed shower energy, as track objects don't have an energy, but have a dEdX
+    def shower_energy(self) -> ak.Array:
+        self.LoadData("shower_energy", "reco_daughter_allShower_energy")
+        return getattr(self, f"_{type(self).__name__}__shower_energy") #! should be renamed shower energy, as track objects don't have an energy, but have a dEdX
 
     @property
     def energy(self) -> ak.Array:
         # For backwards compoatibility
-        return self.showerEnergy
+        return self.shower_energy
 
     @property
-    def showerMomentum(self) -> ak.Record:
-        if not hasattr(self, f"_{type(self).__name__}__showerMomentum"):
-            mom = vector.prod(self.showerEnergy, self.showerDirection)
+    def shower_momentum(self) -> ak.Record:
+        if not hasattr(self, f"_{type(self).__name__}__shower_momentum"):
+            mom = vector.prod(self.shower_energy, self.shower_direction)
             mom = ak.where(self.direction.x == -999,
                            {"x": -999, "y": -999, "z": -999}, mom)
             mom = ak.where(self.shower_energy < 0, {
                            "x": -999, "y": -999, "z": -999}, mom)
-            self.__showerMomentum = mom
-        return self.__showerMomentum #! should be renamed shower momentum
+            self.__shower_momentum = mom
+        return self.__shower_momentum #! should be renamed shower momentum
 
     @property
     def momentum(self) -> ak.Array:
         # For backwards compoatibility
-        return self.showerMomentum
+        return self.shower_momentum
 
     @property
     def shower_length(self) -> ak.Array:
@@ -1871,7 +1871,6 @@ class TrueParticleDataBT(ParticleData):
         trueBeamVertex_collection (ak.Record): end poisition of backtracked true beam particle
         purity_collection (ak.Array): fraction of shared hits in reconstructed object
         completeness_collection (ak.Array): fraction of shared hits in the backtrackted true particle
-        space_points (ak.Record): hit space points
         channel (ak.Array): hit channel
         peak_time (ak.Array): hit peak time
         integral (ak.Array): hit integral

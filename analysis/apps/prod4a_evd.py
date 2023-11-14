@@ -89,7 +89,7 @@ def RenderEventDisplay(n):
 
     #* now Plot start showers:
     start_showers_merged = np.logical_or(*start_showers)
-    points = events.recoParticles.spacePoints[start_showers_merged][n]
+    points = events.recoParticles.space_points[start_showers_merged][n]
     startPoints = events.recoParticles.shower_start_pos[start_showers_merged][n]
     directions = events.recoParticles.direction[start_showers_merged][n]
     pdgs = events.trueParticlesBT.pdg[start_showers_merged][n]
