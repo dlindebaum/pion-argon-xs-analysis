@@ -54,17 +54,17 @@ def GetMCMatchingFilters(events : Master.Data, cut : float = 0.25) -> tuple:
         ak.Array: minimum distance between showers and each true photon
         float: percentage of PFOs matched to same true photon
     """
-    null_shower_dir = events.recoParticles.direction.x == -999 # keep track of showers which don't have a valid direction vector
+    null_shower_dir = events.recoParticles.shower_direction.x == -999 # keep track of showers which don't have a valid direction vector
     # angle of all reco showers wrt to each true photon per event i.e. error
     photon_dir = vector.normalize(events.trueParticles.momentum)[events.trueParticles.truePhotonMask]
-    angle_error_0 = Separation(events.recoParticles.direction, photon_dir[:, 0], null_shower_dir, "Angular")
-    angle_error_1 = Separation(events.recoParticles.direction, photon_dir[:, 1], null_shower_dir, "Angular")
+    angle_error_0 = Separation(events.recoParticles.shower_direction, photon_dir[:, 0], null_shower_dir, "Angular")
+    angle_error_1 = Separation(events.recoParticles.shower_direction, photon_dir[:, 1], null_shower_dir, "Angular")
     ind = ak.sort(ak.argsort(angle_error_0, -1), -1) # create array of indices to keep track of showers
 
     # get smallest spatial separation wrt to each true photon
     photon_pos = events.trueParticles.endPos[events.trueParticles.truePhotonMask]
-    dist_error_0 = Separation(events.recoParticles.startPos, photon_pos[:, 0], null_shower_dir, "Spatial")
-    dist_error_1 = Separation(events.recoParticles.startPos, photon_pos[:, 1], null_shower_dir, "Spatial")
+    dist_error_0 = Separation(events.recoParticles.shower_start_pos, photon_pos[:, 0], null_shower_dir, "Spatial")
+    dist_error_1 = Separation(events.recoParticles.shower_start_pos, photon_pos[:, 1], null_shower_dir, "Spatial")
     m_0 = ak.unflatten(ak.min(dist_error_0, -1), 1)
     m_1 = ak.unflatten(ak.min(dist_error_1, -1), 1)
     dists = ak.concatenate([m_0, m_1], -1)
@@ -103,8 +103,8 @@ def GetMCMatchingFilters(events : Master.Data, cut : float = 0.25) -> tuple:
     unmatched_mask = np.logical_not(np.logical_or(t_0, t_1))
 
     # get events where both reco MC angles are less than 0.25 radians
-    angles_0 = vector.angle(events.recoParticles.direction[matched_mask][:, 0], photon_dir[:, 0])
-    angles_1 = vector.angle(events.recoParticles.direction[matched_mask][:, 1], photon_dir[:, 1])
+    angles_0 = vector.angle(events.recoParticles.shower_direction[matched_mask][:, 0], photon_dir[:, 0])
+    angles_1 = vector.angle(events.recoParticles.shower_direction[matched_mask][:, 1], photon_dir[:, 1])
     selection = np.logical_and(angles_0 < cut, angles_1 < cut)
 
     # check how many showers had the same reco match to both true particles
@@ -126,10 +126,10 @@ def SpatialStudy(events : Master.Data):
     valid = Master.Pi0MCMask(events, None)
 
     filtered = events.Filter([valid], [valid])
-    null_shower_dir = filtered.recoParticles.direction.x == -999
+    null_shower_dir = filtered.recoParticles.shower_direction.x == -999
     photon_pos = filtered.trueParticles.endPos[filtered.trueParticles.truePhotonMask]
-    dist_error_0 = Separation(filtered.recoParticles.startPos, photon_pos[:, 0], null_shower_dir, "Spatial")
-    dist_error_1 = Separation(filtered.recoParticles.startPos, photon_pos[:, 1], null_shower_dir, "Spatial")
+    dist_error_0 = Separation(filtered.recoParticles.shower_start_pos, photon_pos[:, 0], null_shower_dir, "Spatial")
+    dist_error_1 = Separation(filtered.recoParticles.shower_start_pos, photon_pos[:, 1], null_shower_dir, "Spatial")
     m_0 = ak.unflatten(ak.argmin(dist_error_0, -1), 1)
     m_1 = ak.unflatten(ak.argmin(dist_error_1, -1), 1)
     closest = ak.concatenate([m_0, m_1], -1)
@@ -164,7 +164,7 @@ def CreateFilteredEvents(events : Master.Data, nDaughters : int = None, cut : fl
 
     filtered = events.Filter([valid], [valid])
 
-    print(f"Number of events: {ak.num(filtered.recoParticles.direction, 0)}")
+    print(f"Number of events: {ak.num(filtered.recoParticles.shower_direction, 0)}")
     showers, _, selection_mask, _, _, _ = GetMCMatchingFilters(filtered, cut)
     if invert is True:
         selection_mask = np.logical_not(selection_mask)
@@ -193,7 +193,7 @@ def AnalyseMatching(events : Master.Data, nDaughters : int = None, cut : int = 0
 
     filtered = events.Filter([valid], [valid])
 
-    print(f"Number of events: {ak.num(filtered.recoParticles.direction, 0)}")
+    print(f"Number of events: {ak.num(filtered.recoParticles.shower_direction, 0)}")
     matched, _, selection, angles, dists, percentage = GetMCMatchingFilters(filtered, cut)
 
     reco_filters = [matched, selection]
@@ -201,7 +201,7 @@ def AnalyseMatching(events : Master.Data, nDaughters : int = None, cut : int = 0
     filtered.Filter(reco_filters, true_filters, returnCopy=False)
 
     reco_mc_dist = ak.ravel(vector.dist(filtered.recoParticles.startPos, filtered.trueParticles.endPos[filtered.trueParticles.truePhotonMask]))
-    reco_mc_angle = ak.ravel(vector.angle(filtered.recoParticles.direction, filtered.trueParticles.direction[filtered.trueParticles.truePhotonMask]))
+    reco_mc_angle = ak.ravel(vector.angle(filtered.recoParticles.shower_direction, filtered.trueParticles.direction[filtered.trueParticles.truePhotonMask]))
     
     return dists, angles, reco_mc_dist, reco_mc_angle, percentage
 

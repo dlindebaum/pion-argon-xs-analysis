@@ -48,18 +48,18 @@ def AnalyzeReco(events : Master.Data, matched : ak.Array, unmatched : ak.Array):
     """
     matched_reco = events.Filter([matched], returnCopy=True).recoParticles # filter reco for matched/unmatched only
     unmatched_reco = events.Filter([unmatched], returnCopy=True).recoParticles
-    null_dir = unmatched_reco.direction.x == -999 # should only be needed for unmatched sample
+    null_dir = unmatched_reco.shower_direction.x == -999 # should only be needed for unmatched sample
     valid = np.logical_not(null_dir)
 
     #* calculate separation of matched to unmatched
-    separation_0 = Separation(unmatched_reco.startPos, matched_reco.startPos[:, 0], null_dir, "Spatial")[valid]
-    separation_1 = Separation(unmatched_reco.startPos, matched_reco.startPos[:, 1], null_dir, "Spatial")[valid]
+    separation_0 = Separation(unmatched_reco.shower_start_pos, matched_reco.shower_start_pos[:, 0], null_dir, "Spatial")[valid]
+    separation_1 = Separation(unmatched_reco.shower_start_pos, matched_reco.shower_start_pos[:, 1], null_dir, "Spatial")[valid]
     separation = ak.concatenate([separation_0, separation_1], -1)
     minMask_dist = ak.min(separation, -1) == separation # get closest matched shower to matched to study various combinations
 
     #* same as above but for angular distance
-    angle_0 = Separation(unmatched_reco.direction, matched_reco.direction[:, 0], null_dir, "Angular")[valid]
-    angle_1 = Separation(unmatched_reco.direction, matched_reco.direction[:, 1], null_dir, "Angular")[valid]
+    angle_0 = Separation(unmatched_reco.shower_direction, matched_reco.shower_direction[:, 0], null_dir, "Angular")[valid]
+    angle_1 = Separation(unmatched_reco.shower_direction, matched_reco.shower_direction[:, 1], null_dir, "Angular")[valid]
     angle = ak.concatenate([angle_0, angle_1], -1)
     minMask_angle = ak.min(angle, -1) == angle
 
@@ -216,20 +216,20 @@ def mergeShower(events : Master.Data, matched : ak.Array, unmatched : ak.Array, 
     """
     events_matched = events.Filter([matched], returnCopy=True)
     unmatched_reco = events.Filter([unmatched], returnCopy=True).recoParticles # filter reco for matched/unmatched only
-    null_dir = unmatched_reco.direction.x == -999 # should only be needed for unmatched sample
+    null_dir = unmatched_reco.shower_direction.x == -999 # should only be needed for unmatched sample
 
     if mergeMethod == 2:
         #* distance from each matched to unmatched
-        separation_0 = Separation(unmatched_reco.startPos, events_matched.recoParticles.startPos[:, 0], null_dir, "Spatial")
-        separation_1 = Separation(unmatched_reco.startPos, events_matched.recoParticles.startPos[:, 1], null_dir, "Spatial")
+        separation_0 = Separation(unmatched_reco.shower_start_pos, events_matched.recoParticles.shower_start_pos[:, 0], null_dir, "Spatial")
+        separation_1 = Separation(unmatched_reco.shower_start_pos, events_matched.recoParticles.shower_start_pos[:, 1], null_dir, "Spatial")
         separation_0 = ak.unflatten(separation_0, 1, -1)
         separation_1 = ak.unflatten(separation_1, 1, -1)
         separation = ak.concatenate([separation_0, separation_1], -1)
         mergeMask = ak.min(separation, -1) == separation # get boolean mask to which matched shower to merge to
 
     if mergeMethod == 1:        
-        angle_0 = Separation(unmatched_reco.direction, events_matched.recoParticles.direction[:, 0], null_dir, "Angular")
-        angle_1 = Separation(unmatched_reco.direction, events_matched.recoParticles.direction[:, 1], null_dir, "Angular")
+        angle_0 = Separation(unmatched_reco.shower_direction, events_matched.recoParticles.shower_direction[:, 0], null_dir, "Angular")
+        angle_1 = Separation(unmatched_reco.shower_direction, events_matched.recoParticles.shower_direction[:, 1], null_dir, "Angular")
         angle_0 = ak.unflatten(angle_0, 1, -1)
         angle_1 = ak.unflatten(angle_1, 1, -1)
         angle = ak.concatenate([angle_0, angle_1], -1)
@@ -237,21 +237,21 @@ def mergeShower(events : Master.Data, matched : ak.Array, unmatched : ak.Array, 
 
     #* create Array which contains the amount of energy to merge to the showers
     #* will be zero for the shower we don't want to merge to
-    momentumToMerge = MergeQuantity(events_matched.recoParticles.momentum, unmatched_reco.momentum, mergeMask, "Vector3")
-    new_momentum = vector.add(events_matched.recoParticles.momentum, momentumToMerge)
-    events_matched.recoParticles._RecoParticleData__momentum = new_momentum
+    momentumToMerge = MergeQuantity(events_matched.recoParticles.shower_momentum, unmatched_reco.shower_momentum, mergeMask, "Vector3")
+    new_momentum = vector.add(events_matched.recoParticles.shower_momentum, momentumToMerge)
+    events_matched.recoParticles._RecoParticleData__shower_momentum = new_momentum
 
-    new_direction = vector.normalize(events_matched.recoParticles.momentum)
-    new_direction = ak.where(events_matched.recoParticles.momentum.x != -999, new_direction, {"x": -999, "y": -999, "z": -999})
-    events_matched.recoParticles._RecoParticleData__direction = new_direction
+    new_direction = vector.normalize(events_matched.recoParticles.shower_momentum)
+    new_direction = ak.where(events_matched.recoParticles.shower_momentum.x != -999, new_direction, {"x": -999, "y": -999, "z": -999})
+    events_matched.recoParticles._RecoParticleData__shower_direction = new_direction
 
     if energyScalarSum is True:
-        energyToMerge = MergeQuantity(events_matched.recoParticles.energy, unmatched_reco.energy, mergeMask, "Scalar")
-        events_matched.recoParticles._RecoParticleData__energy = events_matched.recoParticles.energy + energyToMerge # merge energies
-        events_matched.recoParticles._RecoParticleData__momentum = vector.prod(events_matched.recoParticles.energy, events_matched.recoParticles.direction)
+        energyToMerge = MergeQuantity(events_matched.recoParticles.shower_energy, unmatched_reco.shower_energy, mergeMask, "Scalar")
+        events_matched.recoParticles._RecoParticleData__shower_energy = events_matched.recoParticles.shower_energy + energyToMerge # merge energies
+        events_matched.recoParticles._RecoParticleData__shower_momentum = vector.prod(events_matched.recoParticles.shower_energy, events_matched.recoParticles.shower_direction)
     else:
-        new_energy = vector.magnitude(events_matched.recoParticles.momentum)
-        events_matched.recoParticles._RecoParticleData__energy = ak.where(events_matched.recoParticles.momentum.x != -999, new_energy, -999)
+        new_energy = vector.magnitude(events_matched.recoParticles.shower_momentum)
+        events_matched.recoParticles._RecoParticleData__shower_energy = ak.where(events_matched.recoParticles.shower_momentum.x != -999, new_energy, -999)
 
     return events_matched
 
@@ -269,7 +269,7 @@ def CreateFilteredEvents(events : Master.Data, nDaughters : int = None):
     """
     valid = Master.Pi0MCMask(events, nDaughters)
     filtered = events.Filter([valid], [valid], returnCopy=True)
-    print(f"Number of showers events: {ak.num(filtered.recoParticles.direction, 0)}")
+    print(f"Number of showers events: {ak.num(filtered.recoParticles.shower_direction, 0)}")
 
     filtered.MCMatching()
     return filtered
@@ -350,7 +350,7 @@ def main():
             cm.append(Master.ShowerMergePerformance(sample, target_PFPs))
             merged_cheat, null = sample.MergePFPCheat()
             merged_bt = sample.MergeShowerBT(target_PFPs)
-            energy_differences.append(ak.ravel(merged_bt.recoParticles.energy - merged_cheat.recoParticles.energy) / 1000)
+            energy_differences.append(ak.ravel(merged_bt.recoParticles.shower_energy - merged_cheat.recoParticles.shower_energy) / 1000)
         
         if save is True: os.makedirs(outDir, exist_ok=True)
         if len(n_obj) > 1:

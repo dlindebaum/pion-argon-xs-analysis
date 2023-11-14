@@ -235,12 +235,12 @@ class Data:
             ak.Array: mask which selects events that pass the selection
         """
         # angle of all reco showers wrt to each true photon per event i.e. error
-        null_shower_dir = self.recoParticles.direction.x == -999
+        null_shower_dir = self.recoParticles.shower_direction.x == -999
         photon_dir = vector.normalize(self.trueParticles.momentum)[
             self.trueParticles.truePhotonMask]
-        angle_0 = vector.angle(self.recoParticles.direction, photon_dir[:, 0])
+        angle_0 = vector.angle(self.recoParticles.shower_direction, photon_dir[:, 0])
         angle_0 = ak.where(null_shower_dir == True, 1E8, angle_0)
-        angle_1 = vector.angle(self.recoParticles.direction, photon_dir[:, 1])
+        angle_1 = vector.angle(self.recoParticles.shower_direction, photon_dir[:, 1])
         angle_1 = ak.where(null_shower_dir == True, 1E8, angle_1)
         # create array of indices to keep track of shower index
         ind = ak.sort(ak.argsort(angle_0, -1), -1)
@@ -292,9 +292,9 @@ class Data:
 
         # get events where both reco MC angles are less than the threshold value
         angle_0 = vector.angle(
-            self.recoParticles.direction[matched_mask][:, 0], photon_dir[:, 0])
+            self.recoParticles.shower_direction[matched_mask][:, 0], photon_dir[:, 0])
         angle_1 = vector.angle(
-            self.recoParticles.direction[matched_mask][:, 1], photon_dir[:, 1])
+            self.recoParticles.shower_direction[matched_mask][:, 1], photon_dir[:, 1])
         selection = np.logical_and(angle_0 < cut, angle_1 < cut)
 
         # either apply the filters or return them
@@ -321,16 +321,16 @@ class Data:
             ak.Array: indices of reco particles with the smallest angular closeness
             ak.Array: boolean mask of events which pass the angle cut
         """
-        null_direction = self.recoParticles.direction.x == - \
+        null_direction = self.recoParticles.shower_direction.x == - \
             999  # boolean mask of PFP's with undefined direction
-        null_momentum = self.recoParticles.momentum.x == - \
+        null_momentum = self.recoParticles.shower_momentum.x == - \
             999  # boolean mask of PFP's with undefined momentum
-        null_position = self.recoParticles.startPos.x == -999
+        null_position = self.recoParticles.shower_start_pos.x == -999
         null = np.logical_or(null_direction, null_momentum)
         null = np.logical_or(null, null_position)
         # calculate angular closeness
         angle_error = vector.angle(
-            self.recoParticles.direction, self.trueParticlesBT.direction)
+            self.recoParticles.shower_direction, self.trueParticlesBT.direction)
         # if direction is undefined, angler error is massive (so not the best match)
         angle_error = ak.where(null, 999, angle_error)
         # create index array of angles to use later
@@ -477,7 +477,7 @@ class Data:
             "p": None,
             "e": None,
             "dir": None,
-            "nHits": None,
+            "n_hits": None,
             "true_hits": None,
             "shared_hits": None,
             "reco_cluster_hits": None,
@@ -498,7 +498,7 @@ class Data:
             data["truePFPMask"] = ak.local_index(pfos, -1)
             data["truePFPMask"] = ak.min(data["truePFPMask"][pfos], -1)
 
-            p = self.recoParticles.momentum[pfos]
+            p = self.recoParticles.shower_momentum[pfos]
             # dont merge PFP's with null data
             p = ak.where(p.x == -999, {"x": 0, "y": 0, "z": 0}, p)
             if merge_method == 0:
@@ -508,19 +508,19 @@ class Data:
                 data["dir"] = vector.normalize(data["p"])
             if merge_method == 1:
                 # sum energy, sum momenta, use norm as direction and summed energy * direction as summed momenta
-                e = self.recoParticles.energy[pfos]
+                e = self.recoParticles.shower_energy[pfos]
                 e = ak.where(e < 0, 0, e)
                 data["e"] = ak.sum(e, -1)
                 data["dir"] = vector.normalize(ak.sum(p, -1))
                 data["p"] = vector.prod(data["e"], data["dir"])
 
-            data["nHits"] = SumHits(self.recoParticles.nHits_collection[pfos])
+            data["n_hits"] = SumHits(self.recoParticles.n_hits_collection[pfos])
 
             # recompute the purity/completeness of the PFO
             # true hits for all PFOs are the same
-            data["true_hits"] = self.trueParticlesBT.nHits[pfos][:, 0]
-            if self.trueParticlesBT.nHits_collection is not None:
-                data["true_collection_hits"] = self.trueParticlesBT.nHits_collection[pfos][:, 0]
+            data["true_hits"] = self.trueParticlesBT.n_hits[pfos][:, 0]
+            if self.trueParticlesBT.n_hits_collection is not None:
+                data["true_collection_hits"] = self.trueParticlesBT.n_hits_collection[pfos][:, 0]
 
             data["shared_hits"] = SumHits(
                 self.trueParticlesBT.sharedHits[pfos])
@@ -553,20 +553,20 @@ class Data:
             merged_data["truePFPMask"], -999)
         merged_data["truePFPMask"] = merged_data["truePFPMask"][merged_data["truePFPMask"] != -999]
 
-        # ? should we implement corrections for other values like start position or nHits?
-        self.recoParticles._RecoParticleData__momentum = merged_data["p"]
-        self.recoParticles._RecoParticleData__energy = merged_data["e"]
-        self.recoParticles._RecoParticleData__direction = merged_data["dir"]
-        self.recoParticles._RecoParticleData__nHits = merged_data["nHits"]
+        # ? should we implement corrections for other values like start position or n_hits?
+        self.recoParticles._RecoParticleData__shower_momentum = merged_data["p"]
+        self.recoParticles._RecoParticleData__shower_energy = merged_data["e"]
+        self.recoParticles._RecoParticleData__shower_direction = merged_data["dir"]
+        self.recoParticles._RecoParticleData__n_hits = merged_data["n_hits"]
 
-        self.trueParticlesBT._TrueParticleDataBT__nHits = merged_data["true_hits"]
+        self.trueParticlesBT._TrueParticleDataBT__n_hits = merged_data["true_hits"]
         self.trueParticlesBT._TrueParticleDataBT__sharedHits = merged_data["shared_hits"]
         self.trueParticlesBT._TrueParticleDataBT__hitsInRecoCluster = merged_data[
             "reco_cluster_hits"]
         self.trueParticlesBT._TrueParticleDataBT__purity = merged_data["purity"]
         self.trueParticlesBT._TrueParticleDataBT__completeness = merged_data["completeness"]
 
-        self.trueParticlesBT._TrueParticleDataBT__nHits_collection = merged_data[
+        self.trueParticlesBT._TrueParticleDataBT__n_hits_collection = merged_data[
             "true_collection_hits"]
         self.trueParticlesBT._TrueParticleDataBT__sharedHits_collection = merged_data[
             "shared_collection_hits"]
@@ -581,7 +581,7 @@ class Data:
         self.Filter([merged_data["truePFPMask"]])
 
         # exlucde events where all PFP's merged had no valid momentmum vector
-        null = np.logical_not(ak.any(self.recoParticles.energy == 0, -1))
+        null = np.logical_not(ak.any(self.recoParticles.shower_energy == 0, -1))
         print(
             f"Events where one merged PFP had undefined momentum: {ak.count(null[np.logical_not(null)])}")
 
@@ -604,12 +604,12 @@ class Data:
         unmatched_reco = self.Filter(
             [unmatched], returnCopy=True).recoParticles
         # should only be needed for unmatched sample
-        null_dir = unmatched_reco.direction.x == -999
+        null_dir = unmatched_reco.shower_direction.x == -999
 
         angle_0 = ak.where(null_dir == True, 1E8, vector.angle(
-            unmatched_reco.direction, events_matched.recoParticles.direction[:, 0]))
+            unmatched_reco.shower_direction, events_matched.recoParticles.shower_direction[:, 0]))
         angle_1 = ak.where(null_dir == True, 1E8, vector.angle(
-            unmatched_reco.direction, events_matched.recoParticles.direction[:, 1]))
+            unmatched_reco.shower_direction, events_matched.recoParticles.shower_direction[:, 1]))
         angle_0 = ak.unflatten(angle_0, 1, -1)
         angle_1 = ak.unflatten(angle_1, 1, -1)
         angle = ak.concatenate([angle_0, angle_1], -1)
@@ -618,25 +618,25 @@ class Data:
         # * create Array which contains the amount of energy to merge to the showers
         # * will be zero for the shower we don't want to merge to
         null = {"x": 0, "y": 0, "z": 0}
-        toMerge = ak.where(mergeMask, unmatched_reco.momentum, null)
+        toMerge = ak.where(mergeMask, unmatched_reco.shower_momentum, null)
         toMerge = ak.where(toMerge.x != -999, toMerge, null)
         merge_0 = ak.unflatten(ak.sum(toMerge[:, :, 0], -1), 1, -1)
         merge_1 = ak.unflatten(ak.sum(toMerge[:, :, 1], -1), 1, -1)
         momentumToMerge = ak.concatenate([merge_0, merge_1], -1)
         momentumToMerge = ak.where(
-            events_matched.recoParticles.momentum.x != -999, momentumToMerge, null)
+            events_matched.recoParticles.shower_momentum.x != -999, momentumToMerge, null)
         new_momentum = vector.add(
-            events_matched.recoParticles.momentum, momentumToMerge)
-        events_matched.recoParticles._RecoParticleData__momentum = new_momentum
+            events_matched.recoParticles.shower_momentum, momentumToMerge)
+        events_matched.recoParticles._RecoParticleData__shower_momentum = new_momentum
 
-        new_direction = vector.normalize(events_matched.recoParticles.momentum)
-        new_direction = ak.where(events_matched.recoParticles.momentum.x != -
+        new_direction = vector.normalize(events_matched.recoParticles.shower_momentum)
+        new_direction = ak.where(events_matched.recoParticles.shower_momentum.x != -
                                  999, new_direction, {"x": -999, "y": -999, "z": -999})
-        events_matched.recoParticles._RecoParticleData__direction = new_direction
+        events_matched.recoParticles._RecoParticleData__shower_direction = new_direction
 
-        new_energy = vector.magnitude(events_matched.recoParticles.momentum)
-        events_matched.recoParticles._RecoParticleData__energy = ak.where(
-            events_matched.recoParticles.momentum.x != -999, new_energy, -999)
+        new_energy = vector.magnitude(events_matched.recoParticles.shower_momentum)
+        events_matched.recoParticles._RecoParticleData__shower_energy = ak.where(
+            events_matched.recoParticles.shower_momentum.x != -999, new_energy, -999)
 
         return events_matched
 
@@ -649,19 +649,19 @@ class Data:
         Returns:
             Data: events with merged showers
         """
-        if bool(ak.all(ak.num(self.recoParticles.energy[self.recoParticles.energy != -999]) == 2)) is True:
+        if bool(ak.all(ak.num(self.recoParticles.shower_energy[self.recoParticles.shower_energy != -999]) == 2)) is True:
             counts = 0
         else:
             counts = 1
         # * get boolean mask of PFP's to merge
-        index = ak.local_index(self.recoParticles.energy)
+        index = ak.local_index(self.recoParticles.shower_energy)
         to_merge = [ak.where(index == best_match[:, i], False, True)
                     for i in range(2)]
         to_merge = np.logical_and(*to_merge)
 
         # * calculate angle between each best matched shower and the showers to merge
-        best_match_dir = self.recoParticles.direction[best_match]
-        to_merge_dir = self.recoParticles.direction[to_merge]
+        best_match_dir = self.recoParticles.shower_direction[best_match]
+        to_merge_dir = self.recoParticles.shower_direction[to_merge]
         not_null = to_merge_dir.x != -999
         to_merge_dir = to_merge_dir[not_null]
 
@@ -672,7 +672,7 @@ class Data:
         minMask_angle = ak.min(angles, -1) == angles
 
         # * merge momenta
-        momentumToMerge = self.recoParticles.momentum[to_merge]
+        momentumToMerge = self.recoParticles.shower_momentum[to_merge]
         momentumToMerge = momentumToMerge[not_null]
         valid_mom = momentumToMerge.x != -999  # we don't want to merge invalid PFP's
         momentumToMerge = momentumToMerge[valid_mom]
@@ -681,7 +681,7 @@ class Data:
 
         momentumToMerge = [
             ak.sum(momentumToMerge[minMask_angle[i]], -1) for i in range(2)]
-        leading_momentum = self.recoParticles.momentum[best_match]
+        leading_momentum = self.recoParticles.shower_momentum[best_match]
 
         # add the merged momenta to their respective leading showers
         mergedMomentum = [ak.unflatten(vector.add(
@@ -697,9 +697,9 @@ class Data:
         merged_energy = ak.concatenate(merged_energy, -1)
 
         merged_events = self.Filter(returnCopy=True)
-        merged_events.recoParticles._RecoParticleData__momentum = mergedMomentum
-        merged_events.recoParticles._RecoParticleData__direction = merged_direction
-        merged_events.recoParticles._RecoParticleData__energy = merged_energy
+        merged_events.recoParticles._RecoParticleData__shower_momentum = mergedMomentum
+        merged_events.recoParticles._RecoParticleData__shower_direction = merged_direction
+        merged_events.recoParticles._RecoParticleData__shower_energy = merged_energy
 
         merged_events.trueParticlesBT.Filter([best_match], returnCopy=False)
         return merged_events
@@ -823,7 +823,7 @@ class TrueParticleData(ParticleData):
         energy (ak.Array):
         momentum (ak.Record):
         direction (ak.Record):
-        startPos (ak.Record):
+        shower_start_pos (ak.Record):
         endPos (ak.Record):
         pi0_MC (bool): check if we are looking at pure pi0 MC or beam MC
         PrimaryPi0Mask (ak.Array): Pi0 produced from beam or generated by particle gun
@@ -957,12 +957,12 @@ class TrueParticleData(ParticleData):
         return self.__direction
 
     @property
-    def startPos(self) -> ak.Record:
+    def shower_start_pos(self) -> ak.Record:
         if self.events.nTuple_type == Ntuple_Type.PDSP:
-            self.PDSPDataVector("startPos", ["true_beam_startX", "true_beam_startY", "true_beam_startZ"], ["true_beam_daughter_startX", "true_beam_daughter_startY", "true_beam_daughter_startZ"], ["true_beam_Pi0_decay_startX", "true_beam_Pi0_decay_startY", "true_beam_Pi0_decay_startZ"])
+            self.PDSPDataVector("shower_start_pos", ["true_beam_startX", "true_beam_startY", "true_beam_startZ"], ["true_beam_daughter_startX", "true_beam_daughter_startY", "true_beam_daughter_startZ"], ["true_beam_Pi0_decay_startX", "true_beam_Pi0_decay_startY", "true_beam_Pi0_decay_startZ"])
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
-            self.LoadData("startPos", ["g4_startX", "g4_startY", "g4_startZ"], is_vector = True)
-        return getattr(self, f"_{type(self).__name__}__startPos")
+            self.LoadData("shower_start_pos", ["g4_startX", "g4_startY", "g4_startZ"], is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__shower_start_pos")
 
     @property
     def endPos(self) -> ak.Record:
@@ -1143,7 +1143,7 @@ class RecoParticleData(ParticleData):
 
     Property Methods:
         beam_number (ak.Array): beam PFO number
-        sliceID (ak.Array): slice the PFO corresponds to
+        slice_id (ak.Array): slice the PFO corresponds to
         beam_sliceID (ak.Array): slice the beam PFO corresponds to
         beam_cosmicScore (ak.Array): whether the reconstruction chain used was for a neutrino vertex (beam) or cosmics
         beam_endPos (ak.Record): end point of the beam particle
@@ -1152,23 +1152,23 @@ class RecoParticleData(ParticleData):
         beam_michelScore (ak.Array): beam particle michel score
         beam_nHits (ak.Array): beam particle number of hits
         beam_dEdx (ak.Array): beam particle dEdx
-        pandoraTag (ak.Array): label given to particles by pandora; track, shower or -999
+        pandora_tag (ak.Array): label given to particles by pandora; track, shower or -999
         number (ak.Array): PFO number
         mother (ak.Array): number of mother PFO
-        nHits (ak.Array): number of hits
-        nHits_collection (ak.Array): number of collection plane hits
+        n_hits (ak.Array): number of hits
+        n_hits_collection (ak.Array): number of collection plane hits
         energy (ak.Array):
         momentum (ak.Record):
-        direction (ak.Record):
-        startPos (ak.Record):
-        showerLength (ak.Array): length of shower (if applicable)
+        shower_direction (ak.Record):
+        shower_start_pos (ak.Record):
+        shower_length (ak.Array): length of shower (if applicable)
         showerConeAngle (ak.Array): width of shower (if applicable)
-        emScore (ak.Array): shower like score
-        trackScore (ak.Array): track like score
-        cnnScore (ak.Array): emScore/(emScore + trackScore)
-        spacePoints (ak.Record): hit space points
+        em_score (ak.Array): shower like score
+        track_score (ak.Array): track like score
+        cnn_score (ak.Array): em_score/(em_score + track_score)
+        space_points (ak.Record): hit space points
         channel (ak.Array): hit channel
-        peakTime (ak.Array): hit peak time
+        peak_time (ak.Array): hit peak time
         integral (ak.Array): hit integral
         hit_energy (ak.Array): hit energy
         track_dEdX (ak.Array): dEdX (if PFO is interpreted as track like)
@@ -1311,14 +1311,14 @@ class RecoParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__beam_inst_PDG_candidates")
 
     @property
-    def pandoraTag(self) -> ak.Array:
-        self.LoadData("pandoraTag", "pandoraTag") # This information is not stored for daughter PFOs in PDSPAnalyser
-        return getattr(self, f"_{type(self).__name__}__pandoraTag")
+    def pandora_tag(self) -> ak.Array:
+        self.LoadData("pandora_tag", "pandoraTag") # This information is not stored for daughter PFOs in PDSPAnalyser
+        return getattr(self, f"_{type(self).__name__}__pandora_tag")
 
     @property
-    def sliceID(self) -> ak.Array:
-        self.LoadData("sliceID", "reco_daughter_allShower_sliceID") # dont store this in PDSPAnalyser
-        return getattr(self, f"_{type(self).__name__}__sliceID")
+    def slice_id(self) -> ak.Array:
+        self.LoadData("slice_id", "reco_daughter_allShower_sliceID") # dont store this in PDSPAnalyser
+        return getattr(self, f"_{type(self).__name__}__slice_id")
 
     @property
     def number(self) -> ak.Array:
@@ -1331,85 +1331,115 @@ class RecoParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__mother")
 
     @property
-    def nHits(self) -> ak.Array:
-        self.LoadData("nHits", "reco_daughter_PFP_nHits")
-        return getattr(self, f"_{type(self).__name__}__nHits")
+    def n_hits(self) -> ak.Array:
+        self.LoadData("n_hits", "reco_daughter_PFP_nHits")
+        return getattr(self, f"_{type(self).__name__}__n_hits")
 
     @property
-    def nHits_collection(self) -> ak.Array:
-        self.LoadData("nHits_collection", "reco_daughter_PFP_nHits_collection")
-        return getattr(self, f"_{type(self).__name__}__nHits_collection")
+    def n_hits_collection(self) -> ak.Array:
+        self.LoadData("n_hits_collection", "reco_daughter_PFP_nHits_collection")
+        return getattr(self, f"_{type(self).__name__}__n_hits_collection")
 
     @property
-    def startPos(self) -> ak.Record:
+    def track_start_pos(self) -> ak.Record:
+        nTuples = [
+            "reco_daughter_allTrack_startX",
+            "reco_daughter_allTrack_startY",
+            "reco_daughter_allTrack_startZ"
+        ]
+        self.LoadData("track_start_pos", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__track_start_pos")
+
+    @property
+    def shower_start_pos(self) -> ak.Record:
         nTuples = [
             "reco_daughter_allShower_startX",
             "reco_daughter_allShower_startY",
             "reco_daughter_allShower_startZ"
         ]
-        self.LoadData("startPos", nTuples, is_vector = True)
-        return getattr(self, f"_{type(self).__name__}__startPos") #! this should be called allShower_startPos and a separate variable allTrack_startPos should be made.
+        self.LoadData("shower_start_pos", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__shower_start_pos")
 
     @property
-    def direction(self) -> ak.Record:
+    def track_start_dir(self) -> ak.Record:
+        nTuples = [
+            "reco_daughter_allTrack_startDirX",
+            "reco_daughter_allTrack_startDirY",
+            "reco_daughter_allTrack_startDirZ"
+        ]
+        self.LoadData("track_start_dir", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__track_start_dir")
+
+    @property
+    def shower_direction(self) -> ak.Record:
         nTuples = [
             "reco_daughter_allShower_dirX",
             "reco_daughter_allShower_dirY",
             "reco_daughter_allShower_dirZ"
         ]
-        self.LoadData("direction", nTuples, is_vector = True)
-        return getattr(self, f"_{type(self).__name__}__direction") #! see startPos
+        self.LoadData("shower_direction", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__shower_direction")
 
     @property
-    def energy(self) -> ak.Array:
-        self.LoadData("energy", "reco_daughter_allShower_energy")
-        return getattr(self, f"_{type(self).__name__}__energy") #! should be renamed shower energy, as track objects don't have an energy, but have a dEdX
+    def track_end_pos(self) -> ak.Record:
+        nTuples = [
+            "reco_daughter_allTrack_endX",
+            "reco_daughter_allTrack_endY",
+            "reco_daughter_allTrack_endZ"
+        ]
+        self.LoadData("track_end_pos", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__track_end_pos")
 
     @property
-    def momentum(self) -> ak.Record:
-        if not hasattr(self, f"_{type(self).__name__}__momentum"):
-            mom = vector.prod(self.energy, self.direction)
-            mom = ak.where(self.direction.x == -999,
+    def shower_energy(self) -> ak.Array:
+        self.LoadData("shower_energy", "reco_daughter_allShower_energy")
+        return getattr(self, f"_{type(self).__name__}__shower_energy") #! should be renamed shower energy, as track objects don't have an energy, but have a dEdX
+
+    @property
+    def shower_momentum(self) -> ak.Record:
+        if not hasattr(self, f"_{type(self).__name__}__shower_momentum"):
+            mom = vector.prod(self.shower_energy, self.shower_direction)
+            mom = ak.where(self.shower_direction.x == -999,
                            {"x": -999, "y": -999, "z": -999}, mom)
-            mom = ak.where(self.energy < 0, {
+            mom = ak.where(self.shower_energy < 0, {
                            "x": -999, "y": -999, "z": -999}, mom)
-            self.__momentum = mom
-        return self.__momentum #! should be renamed shower momentum
+            self.__shower_momentum = mom
+        return self.__shower_momentum #! should be renamed shower momentum
 
     @property
-    def showerLength(self) -> ak.Array:
-        self.LoadData("showerLength", ["reco_daughter_allShower_length", "reco_daughter_allShower_len"])
-        return getattr(self, f"_{type(self).__name__}__showerLength")
+    def shower_length(self) -> ak.Array:
+        self.LoadData("shower_length", ["reco_daughter_allShower_length", "reco_daughter_allShower_len"])
+        return getattr(self, f"_{type(self).__name__}__shower_length")
 
     @property
-    def showerConeAngle(self) -> ak.Array:
-        self.LoadData("coneAngle", "reco_daughter_allShower_coneAngle")
-        return getattr(self, f"_{type(self).__name__}__coneAngle") # PDSPAnalyser does not store this value
+    def shower_cone_angle(self) -> ak.Array:
+        self.LoadData("shower_cone_angle", "reco_daughter_allShower_coneAngle")
+        return getattr(self, f"_{type(self).__name__}__shower_cone_angle") # PDSPAnalyser does not store this value
 
     @property
-    def trackScore(self) -> ak.Array:
-        self.LoadData("trackScore", "reco_daughter_PFP_trackScore_collection")
-        return getattr(self, f"_{type(self).__name__}__trackScore")
+    def track_score(self) -> ak.Array:
+        self.LoadData("track_score", "reco_daughter_PFP_trackScore_collection")
+        return getattr(self, f"_{type(self).__name__}__track_score")
 
     @property
-    def emScore(self) -> ak.Array:
-        self.LoadData("emScore", "reco_daughter_PFP_emScore_collection")
-        return getattr(self, f"_{type(self).__name__}__emScore")
+    def em_score(self) -> ak.Array:
+        self.LoadData("em_score", "reco_daughter_PFP_emScore_collection")
+        return getattr(self, f"_{type(self).__name__}__em_score")
 
     @property
-    def cnnScore(self) -> ak.Array:
-        self.LoadData("cnnScore", "CNNScore_collection")
-        return getattr(self, f"_{type(self).__name__}__cnnScore") # specific to the shower merging, but can be recalculated
+    def cnn_score(self) -> ak.Array:
+        self.LoadData("cnn_score", "CNNScore_collection")
+        return getattr(self, f"_{type(self).__name__}__cnn_score") # specific to the shower merging, but can be recalculated
 
     @property
-    def spacePoints(self) -> ak.Record:
+    def space_points(self) -> ak.Record:
         nTuples = [
             "reco_daughter_allShower_spacePointX",
             "reco_daughter_allShower_spacePointY",
             "reco_daughter_allShower_spacePointZ"
         ]
-        self.LoadData("spacePoints", nTuples, is_vector = True)
-        return getattr(self, f"_{type(self).__name__}__spacePoints") # not in PDSPAnalyser
+        self.LoadData("space_points", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__space_points") # not in PDSPAnalyser
 
     @property
     def channel(self) -> ak.Array:
@@ -1417,9 +1447,9 @@ class RecoParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__channel")
 
     @property
-    def peakTime(self) -> ak.Array:
-        self.LoadData("peakTime", "reco_daughter_allShower_hit_peakTime") # not in PDSPAnalyser
-        return getattr(self, f"_{type(self).__name__}__peakTime")
+    def peak_time(self) -> ak.Array:
+        self.LoadData("peak_time", "reco_daughter_allShower_hit_peakTime") # not in PDSPAnalyser
+        return getattr(self, f"_{type(self).__name__}__peak_time")
 
     @property
     def integral(self) -> ak.Array:
@@ -1437,9 +1467,69 @@ class RecoParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__track_dEdX")
 
     @property
+    def track_dQdX(self) -> ak.Array:
+        self.LoadData("track_dQdX", "reco_daughter_allTrack_calibrated_dQdX_SCE")
+        return getattr(self, f"_{type(self).__name__}__track_dQdX")
+    
+    @property
+    def residual_range(self) -> ak.Array:
+        self.LoadData("residual_range", "reco_daughter_allTrack_resRange_SCE")
+        return getattr(self, f"_{type(self).__name__}__residual_range")
+    
+    @property
+    def track_chi2_proton(self) -> ak.Array:
+        self.LoadData("track_chi2_proton", "reco_daughter_allTrack_Chi2_proton")
+        return getattr(self, f"_{type(self).__name__}__track_chi2_proton")
+    
+    @property
+    def track_chi2_proton_ndof(self) -> ak.Array:
+        self.LoadData("track_chi2_proton_ndof", "reco_daughter_allTrack_Chi2_ndof")
+        return getattr(self, f"_{type(self).__name__}__track_chi2_proton_ndof")
+
+    @property
+    def track_chi2_pion(self) -> ak.Array:
+        self.LoadData("track_chi2_pion", "reco_daughter_allTrack_Chi2_pion")
+        return getattr(self, f"_{type(self).__name__}__track_chi2_pion")
+    
+    @property
+    def track_chi2_pion_ndof(self) -> ak.Array:
+        self.LoadData("track_chi2_pion_ndof", "reco_daughter_allTrack_Chi2_ndof_pion")
+        return getattr(self, f"_{type(self).__name__}__track_chi2_pion_ndof")
+    
+    @property
+    def track_chi2_muon(self) -> ak.Array:
+        self.LoadData("track_chi2_muon", "reco_daughter_allTrack_Chi2_muon")
+        return getattr(self, f"_{type(self).__name__}__track_chi2_muon")
+    
+    @property
+    def track_chi2_muon_ndof(self) -> ak.Array:
+        self.LoadData("track_chi2_muon_ndof", "reco_daughter_allTrack_Chi2_ndof_muon")
+        return getattr(self, f"_{type(self).__name__}__track_chi2_muon_ndof")
+
+    @property
+    def track_len(self) -> ak.Array:
+        self.LoadData("track_len", "reco_daughter_allTrack_len")
+        return getattr(self, f"_{type(self).__name__}__track_len")
+    
+    @property
+    def track_len_alt(self) -> ak.Array:
+        self.LoadData("track_len_alt", "reco_daughter_allTrack_alt_len")
+        return getattr(self, f"_{type(self).__name__}__track_len_alt")
+    
+    @property
+    def track_vertex_michel(self) -> ak.Array:
+        self.LoadData("track_vertex_michel", "reco_daughter_allTrack_vertex_michel_score")
+        return getattr(self, f"_{type(self).__name__}__track_vertex_michel")
+    
+    @property
+    def track_vertex_nhits(self) -> ak.Array:
+        self.LoadData("track_vertex_nhits", "reco_daughter_allTrack_vertex_nHits")
+        return getattr(self, f"_{type(self).__name__}__track_vertex_nhits")
+
+    @property
     def beam_pandora_tag(self) -> ak.Array:
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
-            tag = self.events.recoParticles.pandoraTag[self.events.recoParticles.beam_number == self.events.recoParticles.number]
+            tag = self.events.recoParticles.pandora_tag[self.events.recoParticles.beam_number == self.events.recoParticles.number]
             tag = ak.flatten(ak.fill_none(ak.pad_none(tag, 1), -999))
             setattr(self, f"_{type(self).__name__}__beam_pandora_tag", tag)
         if self.events.nTuple_type == Ntuple_Type.PDSP:
@@ -1475,12 +1565,12 @@ class RecoParticleData(ParticleData):
             sortEnergy = ak.argsort(self.events.trueParticlesBT.energy)
         else:
             sortEnergy = self.events.SortedTrueEnergyMask
-        sortedPairs = ak.unflatten(self.energy[sortEnergy], 1, 0)
+        sortedPairs = ak.unflatten(self.shower_energy[sortEnergy], 1, 0)
         leading = sortedPairs[:, :, 1:]
         secondary = sortedPairs[:, :, :-1]
 
         # * opening angle
-        direction_pair = ak.unflatten(self.direction[sortEnergy], 1, 0)
+        direction_pair = ak.unflatten(self.shower_direction[sortEnergy], 1, 0)
         direction_pair_mag = vector.magnitude(direction_pair)
         angle = np.arccos(vector.dot(direction_pair[:, :, 1:], direction_pair[:, :, :-1]) / (
             direction_pair_mag[:, :, 1:] * direction_pair_mag[:, :, :-1]))
@@ -1489,7 +1579,7 @@ class RecoParticleData(ParticleData):
         inv_mass = (2 * leading * secondary * (1 - np.cos(angle)))**0.5
 
         # * pi0 momentum
-        pi0_momentum = vector.magnitude(ak.sum(self.momentum, axis=-1))
+        pi0_momentum = vector.magnitude(ak.sum(self.shower_momentum, axis=-1))
 
         # mask shower pairs with invalid direction vectors
         null_dir = np.logical_or(
@@ -1567,7 +1657,7 @@ class RecoParticleData(ParticleData):
             list: shower pairs (maximum of one per event), note lists are easier to iterate through than np or ak arrays, hence the conversion
         """
         showers = ak.argsort(
-            hits, ascending=False)  # shower number sorted by nHits
+            hits, ascending=False)  # shower number sorted by n_hits
         mask = ak.count(showers, 1) > 1
         # only keep two largest showers
         showers = ak.pad_none(showers, 2, clip=True)
@@ -1586,27 +1676,27 @@ class TrueParticleDataBT(ParticleData):
         mother (ak.Array): backtracked particle number of mother
         pdg (ak.Array): pdg code of backtracked particle
         motherPdg (ak.Array): pdg code of mother of backtracked particle
-        startPos (ak.Record):
+        shower_start_pos (ak.Record):
         endPos (ak.Record):
         momentum (ak.Record):
         energy (ak.Array):
         energyByHits (ak.Array): energy of the true particle, calculated from the true hits
         direction (ak.Record):
         hitsInRecoCluster (ak.Array): total hits in a reco cluster
-        nHits (ak.Array): true particle hits
+        n_hits (ak.Array): true particle hits
         sharedHits (ak.Array): hits shared by both reco and backtracked true particle
         trueBeamVertex (ak.Record): end poisition of backtracked true beam particle
         purity (ak.Array): fraction of shared hits in reconstructed object
         completeness (ak.Array): fraction of shared hits in the backtrackted true particle
         hitsInRecoCluster_collection (ak.Array): total hits in a reco cluster
-        nHits_collection (ak.Array): true particle hits
+        n_hits_collection (ak.Array): true particle hits
         sharedHits_collection (ak.Array): hits shared by both reco and backtracked true particle
         trueBeamVertex_collection (ak.Record): end poisition of backtracked true beam particle
         purity_collection (ak.Array): fraction of shared hits in reconstructed object
         completeness_collection (ak.Array): fraction of shared hits in the backtrackted true particle
-        spacePoints (ak.Record): hit space points
+        space_points (ak.Record): hit space points
         channel (ak.Array): hit channel
-        peakTime (ak.Array): hit peak time
+        peak_time (ak.Array): hit peak time
         integral (ak.Array): hit integral
         hit_energy (ak.Array): hit energy
 
@@ -1642,14 +1732,14 @@ class TrueParticleDataBT(ParticleData):
         return getattr(self, f"_{type(self).__name__}__motherPdg")
 
     @property
-    def startPos(self) -> ak.Record:
+    def shower_start_pos(self) -> ak.Record:
         nTuples = [
             "reco_daughter_PFP_true_byHits_startX",
             "reco_daughter_PFP_true_byHits_startY",
             "reco_daughter_PFP_true_byHits_startZ"
         ]
-        self.LoadData("startPos", nTuples, is_vector = True)
-        return getattr(self, f"_{type(self).__name__}__startPos")
+        self.LoadData("shower_start_pos", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__shower_start_pos")
 
     @property
     def endPos(self) -> ak.Record:
@@ -1722,9 +1812,9 @@ class TrueParticleDataBT(ParticleData):
         return getattr(self, f"_{type(self).__name__}__hitsInRecoCluster") # PDSPAnalyser does not store this
 
     @property
-    def nHits(self) -> ak.Array:
-        self.LoadData("nHits", "reco_daughter_PFP_true_byHits_nHits")
-        return getattr(self, f"_{type(self).__name__}__nHits") # PDSPAnalyser does not store this
+    def n_hits(self) -> ak.Array:
+        self.LoadData("n_hits", "reco_daughter_PFP_true_byHits_nHits")
+        return getattr(self, f"_{type(self).__name__}__n_hits") # PDSPAnalyser does not store this
 
     @property
     def sharedHits(self) -> ak.Array:
@@ -1737,9 +1827,9 @@ class TrueParticleDataBT(ParticleData):
         return getattr(self, f"_{type(self).__name__}__hitsInRecoCluster_collection") # for shower merging only
 
     @property
-    def nHits_collection(self) -> ak.Array:
-        self.LoadData("nHits_collection", "reco_daughter_PFP_true_byHits_nHits_collection")
-        return getattr(self, f"_{type(self).__name__}__nHits_collection") # for shower merging only
+    def n_hits_collection(self) -> ak.Array:
+        self.LoadData("n_hits_collection", "reco_daughter_PFP_true_byHits_nHits_collection")
+        return getattr(self, f"_{type(self).__name__}__n_hits_collection") # for shower merging only
 
     @property
     def sharedHits_collection(self) -> ak.Array:
@@ -1773,8 +1863,8 @@ class TrueParticleDataBT(ParticleData):
     def completeness(self) -> ak.Array:
         if not hasattr(self, f"_{type(self).__name__}__completeness"):
             if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
-                if type(self.sharedHits)  == ak.highlevel.Array and type(self.nHits) == ak.highlevel.Array:
-                    v = self.sharedHits / self.nHits
+                if type(self.sharedHits)  == ak.highlevel.Array and type(self.n_hits) == ak.highlevel.Array:
+                    v = self.sharedHits / self.n_hits
                 else:
                     v = None
                 setattr(self, f"_{type(self).__name__}__completeness", v)
@@ -1795,22 +1885,22 @@ class TrueParticleDataBT(ParticleData):
     @property
     def completeness_collection(self) -> ak.Array:
         if not hasattr(self, f"_{type(self).__name__}__completeness_collection"):
-            if type(self.sharedHits_collection) == ak.highlevel.Array and type(self.nHits_collection) == ak.highlevel.Array:
-                v = self.sharedHits_collection / self.nHits_collection
+            if type(self.sharedHits_collection) == ak.highlevel.Array and type(self.n_hits_collection) == ak.highlevel.Array:
+                v = self.sharedHits_collection / self.n_hits_collection
             else:
                 v = None
             setattr(self, f"_{type(self).__name__}__completeness_collection", v)
         return getattr(self, f"_{type(self).__name__}__completeness_collection") # for shower merging only
 
     @property
-    def spacePoint(self) -> type:
+    def space_points(self) -> type:
         nTuples = [
             "reco_daughter_PFP_true_byHits_spacePointX",
             "reco_daughter_PFP_true_byHits_spacePointY",
             "reco_daughter_PFP_true_byHits_spacePointZ"
         ]
-        self.LoadData("spacePoint", nTuples, is_vector = True)
-        return getattr(self, f"_{type(self).__name__}__spacePoint") # for shower merging only
+        self.LoadData("space_points", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__space_points") # for shower merging only
 
     @property
     def channel(self) -> ak.Array:
@@ -1818,9 +1908,9 @@ class TrueParticleDataBT(ParticleData):
         return getattr(self, f"_{type(self).__name__}__channel") # for shower merging only
 
     @property
-    def peakTime(self) -> ak.Array:
-        self.LoadData("peakTime", "reco_daughter_PFP_true_byHits_hit_peakTime")
-        return getattr(self, f"_{type(self).__name__}__peakTime") # for shower merging only
+    def peak_time(self) -> ak.Array:
+        self.LoadData("peak_time", "reco_daughter_PFP_true_byHits_hit_peakTime")
+        return getattr(self, f"_{type(self).__name__}__peak_time") # for shower merging only
 
     @property
     def integral(self) -> ak.Array:
@@ -2055,13 +2145,13 @@ class ShowerPairs:
             backtracked (bool, optional): sort by backtreacked energy, otherwise reco energy. Defaults to True.
         """        
         if backtracked:
-            pd = self.events.trueParticlesBT
+            pd_e = self.events.trueParticlesBT.energy
         else:
-            pd = self.events.recoParticles
+            pd_e = self.events.recoParticles.shower_energy
 
         mask_0_leading = (
-            pd.energy[self.pairs['0']]
-            >= pd.energy[self.pairs['1']])
+            pd_e[self.pairs['0']]
+            >= pd_e[self.pairs['1']])
         mask_1_leading = np.logical_not(mask_0_leading)
         self.leading = (self.pairs['0'] * mask_0_leading
                         + self.pairs['1'] * mask_1_leading)
@@ -2234,27 +2324,27 @@ class ShowerPairs:
     ##############################################################################################
     @property
     def reco_lead_energy(self):
-        return self.events.recoParticles.energy[self.leading]
+        return self.events.recoParticles.shower_energy[self.leading]
 
     @property
     def reco_sub_energy(self):
-        return self.events.recoParticles.energy[self.subleading]
+        return self.events.recoParticles.shower_energy[self.subleading]
 
     @property
     def reco_lead_nHits(self):
-        return self.events.recoParticles.nHits[self.leading]
+        return self.events.recoParticles.n_hits[self.leading]
 
     @property
     def reco_sub_nHits(self):
-        return self.events.recoParticles.nHits[self.subleading]
+        return self.events.recoParticles.n_hits[self.subleading]
 
     @property
     def reco_lead_nHits_collection(self):
-        return self.events.recoParticles.nHits[self.leading]
+        return self.events.recoParticles.n_hits[self.leading]
 
     @property
     def reco_sub_nHits_collection(self):
-        return self.events.recoParticles.nHits[self.subleading]
+        return self.events.recoParticles.n_hits[self.subleading]
 
     @property
     def reco_lead_purity(self):
@@ -2291,33 +2381,33 @@ class ShowerPairs:
     @property
     def reco_angle(self):
         return ShowerPairs.OpeningAngle(
-            self.events.recoParticles.direction[self.leading],
-            self.events.recoParticles.direction[self.subleading])
+            self.events.recoParticles.shower_direction[self.leading],
+            self.events.recoParticles.shower_direction[self.subleading])
 
     @property
     def reco_mass(self):
         return ShowerPairs.Mass(
-            self.events.recoParticles.energy[self.leading],
-            self.events.recoParticles.energy[self.subleading],
+            self.events.recoParticles.shower_energy[self.leading],
+            self.events.recoParticles.shower_energy[self.subleading],
             self.reco_angle)
 
     @property
     def reco_energy(self):
         return ShowerPairs.Energy(
-            self.events.recoParticles.energy[self.leading],
-            self.events.recoParticles.energy[self.subleading])
+            self.events.recoParticles.shower_energy[self.leading],
+            self.events.recoParticles.shower_energy[self.subleading])
 
     @property
     def reco_pi0_mom(self):
         return ShowerPairs.Pi0Mom(
-            self.events.recoParticles.momentum[self.leading],
-            self.events.recoParticles.momentum[self.leading])
+            self.events.recoParticles.shower_momentum[self.leading],
+            self.events.recoParticles.shower_momentum[self.leading])
 
     @property
     def reco_pi0_mom_mag(self):
         return vector.magnitude(ShowerPairs.Pi0Mom(
-            self.events.recoParticles.momentum[self.leading],
-            self.events.recoParticles.momentum[self.leading]))
+            self.events.recoParticles.shower_momentum[self.leading],
+            self.events.recoParticles.shower_momentum[self.leading]))
 
     @property
     def reco_direction(self):
@@ -2326,21 +2416,21 @@ class ShowerPairs:
     @property
     def reco_closest_approach(self):
         return ShowerPairs.ClosestApproach(
-            self.events.recoParticles.direction[self.leading],
-            self.events.recoParticles.direction[self.subleading],
-            self.events.recoParticles.startPos[self.leading],
-            self.events.recoParticles.startPos[self.subleading])
+            self.events.recoParticles.shower_direction[self.leading],
+            self.events.recoParticles.shower_direction[self.subleading],
+            self.events.recoParticles.shower_start_pos[self.leading],
+            self.events.recoParticles.shower_start_pos[self.subleading])
 
     @property
     def reco_separation(self):
         return vector.dist(
-            self.events.recoParticles.startPos[self.leading],
-            self.events.recoParticles.startPos[self.subleading])
+            self.events.recoParticles.shower_start_pos[self.leading],
+            self.events.recoParticles.shower_start_pos[self.subleading])
 
     @property
     def reco_beam_slice(self):
-        first_slice = self.events.recoParticles.sliceID[self.leading]
-        second_slice = self.events.recoParticles.sliceID[self.subleading]
+        first_slice = self.events.recoParticles.slice_id[self.leading]
+        second_slice = self.events.recoParticles.slice_id[self.subleading]
         return (first_slice == second_slice) * (first_slice + 1) - 1
 
     ##############################################################################################
@@ -2393,14 +2483,14 @@ class ShowerPairs:
         return ShowerPairs.ClosestApproach(
             self.events.trueParticlesBT.direction[self.leading],
             self.events.trueParticlesBT.direction[self.subleading],
-            self.events.trueParticlesBT.startPos[self.leading],
-            self.events.trueParticlesBT.startPos[self.subleading])
+            self.events.trueParticlesBT.shower_start_pos[self.leading],
+            self.events.trueParticlesBT.shower_start_pos[self.subleading])
 
     @property
     def true_separation(self):
         return vector.dist(
-            self.events.trueParticlesBT.startPos[self.leading],
-            self.events.trueParticlesBT.startPos[self.subleading])
+            self.events.trueParticlesBT.shower_start_pos[self.leading],
+            self.events.trueParticlesBT.shower_start_pos[self.subleading])
 
     ##############################################################################################
     @property
@@ -2546,8 +2636,8 @@ def NPFPMask(events: Data, nObjects: int = None) -> ak.Array:
     Returns:
         ak.Array: mask of events to filter
     """
-    null_dir = events.recoParticles.direction.x != -999
-    null_pos = events.recoParticles.startPos.x != -999
+    null_dir = events.recoParticles.shower_direction.x != -999
+    null_pos = events.recoParticles.shower_start_pos.x != -999
     nObj = np.logical_and(null_dir, null_pos)
     # get number of showers which have a valid direction
     nObj = ak.num(nObj[nObj])
@@ -2663,18 +2753,18 @@ def ShowerMergePerformance(events: Data, best_match: ak.Array) -> float:
         events (Data): events to study
         best_match (ak.Array): target PFP's to merge to.
     """
-    if bool(ak.all(ak.num(events.recoParticles.energy[events.recoParticles.energy != -999]) == 2)) is True:
+    if bool(ak.all(ak.num(events.recoParticles.shower_energy[events.recoParticles.shower_energy != -999]) == 2)) is True:
         counts = 0
     else:
         counts = 1
-    index = ak.local_index(events.recoParticles.energy)
+    index = ak.local_index(events.recoParticles.shower_energy)
     to_merge = [ak.where(index == best_match[:, i], False, True)
                 for i in range(2)]
     to_merge = np.logical_and(*to_merge)
 
     # * calculate angle between each best matched shower and the showers to merge
-    best_match_dir = events.recoParticles.direction[best_match]
-    to_merge_dir = events.recoParticles.direction[to_merge]
+    best_match_dir = events.recoParticles.shower_direction[best_match]
+    to_merge_dir = events.recoParticles.shower_direction[to_merge]
     not_null = to_merge_dir.x != -999
     to_merge_dir = to_merge_dir[not_null]
 

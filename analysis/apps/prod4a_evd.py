@@ -89,17 +89,17 @@ def RenderEventDisplay(n):
 
     #* now Plot start showers:
     start_showers_merged = np.logical_or(*start_showers)
-    points = events.recoParticles.spacePoints[start_showers_merged][n]
-    startPoints = events.recoParticles.startPos[start_showers_merged][n]
-    directions = events.recoParticles.direction[start_showers_merged][n]
+    points = events.recoParticles.space_points[start_showers_merged][n]
+    startPoints = events.recoParticles.shower_start_pos[start_showers_merged][n]
+    directions = events.recoParticles.shower_direction[start_showers_merged][n]
     pdgs = events.trueParticlesBT.pdg[start_showers_merged][n]
     display.PFO(points[0], marker = "x", colour = "green", startPoint = startPoints[0], direction = directions[0])#, pdg=pdgs[0])
     display.PFO(points[1], marker = "x", colour = "blue", startPoint = startPoints[1], direction = directions[1])#, pdg=pdgs[1])
 
 
-    points = events.recoParticles.spacePoints[to_merge][n]
+    points = events.recoParticles.space_points[to_merge][n]
     startPoints = events.recoParticles.startPos[to_merge][n]
-    directions = events.recoParticles.direction[to_merge][n]
+    directions = events.recoParticles.shower_direction[to_merge][n]
     pdgs = events.trueParticlesBT.pdg[to_merge][n]
     beam_mask = np.logical_not(events.recoParticles.number == events.recoParticles.beam_number)[to_merge]
     #* Plot background PFOs
@@ -113,7 +113,7 @@ def RenderEventDisplay(n):
 
     #* Plot BeamParticle:
     beam_mask = events.recoParticles.number == events.recoParticles.beam_number
-    points = events.recoParticles.spacePoints[beam_mask][n]
+    points = events.recoParticles.space_points[beam_mask][n]
     pdg = events.trueParticlesBT.pdg[beam_mask][n]
     display.PFO(points, marker="o", colour="black", startPoint = events.recoParticles.beam_endPos[n], pdg=None)
 
@@ -167,7 +167,7 @@ def main():
     events = Master.Data("work/ROOTFiles/Prod4a_6MeV_BeamSim_00_evd.root")
 
     #* create hit space point arrays
-    events.recoParticles.spacePoints = ak.zip({"x" : events.io.LoadData("reco_daughter_allShower_spacePointX"), 
+    events.recoParticles.space_points = ak.zip({"x" : events.io.LoadData("reco_daughter_allShower_spacePointX"), 
                                             "y" : events.io.LoadData("reco_daughter_allShower_spacePointY"),
                                             "z" : events.io.LoadData("reco_daughter_allShower_spacePointZ")})
     EventSelection(events)
@@ -184,9 +184,9 @@ def main():
     
     ##################################################################################################
 
-    nEvents = ak.num(events.recoParticles.spacePoints.x, 0)
+    nEvents = ak.num(events.recoParticles.space_points.x, 0)
     eventNum = 69 # 11 and 13 identical??
-    nPFO = ak.num(events.recoParticles.spacePoints.x)
+    nPFO = ak.num(events.recoParticles.space_points.x)
     showSignal = True
     showBackground = True
 
