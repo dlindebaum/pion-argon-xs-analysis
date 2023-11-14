@@ -542,7 +542,7 @@ def count_charged_pi_candidates(
         if energy_cut is not None:
             reco_pi_mask = np.logical_and(
                 reco_pi_mask,
-                events.recoParticles.energy > energy_cut)
+                events.recoParticles.shower_energy > energy_cut)
     return ak.sum(reco_pi_mask, axis=-1)
 
 

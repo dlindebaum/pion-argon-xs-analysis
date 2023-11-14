@@ -39,7 +39,7 @@ def Median(x : ak.Array):
 
 
 def ValidRecoEnergyCut(events : Master.Data) -> ak.Array:
-    return events.recoParticles.energy != -999
+    return events.recoParticles.shower_energy != -999
 
 
 def ValidRecoPositionCut(events : Master.Data) -> ak.Array:
@@ -55,10 +55,10 @@ def ValidRecoPositionCut(events : Master.Data) -> ak.Array:
 def ValidRecoMomentumCut(events : Master.Data) -> ak.Array:
     return np.logical_and(
         np.logical_and(
-            events.recoParticles.momentum.x != -999,
-            events.recoParticles.momentum.y != -999
+            events.recoParticles.shower_momentum.x != -999,
+            events.recoParticles.shower_momentum.y != -999
         ),
-        events.recoParticles.momentum.z != -999
+        events.recoParticles.shower_momentum.z != -999
     )
 
 
@@ -95,7 +95,7 @@ def BeamParticleIPCut(events : Master.Data, cut = 20., return_property : bool = 
 
 
 def TrackScoreCut(events : Master.Data, cut = 0.5, return_property : bool = False):
-    return CreateMask(cut, ">", events.recoParticles.trackScore, return_property)
+    return CreateMask(cut, ">", events.recoParticles.track_score, return_property)
 
 
 def BeamDaughterCut(events : Master.Data):
@@ -239,7 +239,7 @@ def find_beam_impact_parameters(events : Master.Data):
     """
     starts = events.recoParticles.shower_start_pos
     beam_vertex = events.recoParticles.beam_endPos
-    directions = events.recoParticles.direction
+    directions = events.recoParticles.shower_direction
     return get_impact_parameter(
         directions, starts, beam_vertex)
 

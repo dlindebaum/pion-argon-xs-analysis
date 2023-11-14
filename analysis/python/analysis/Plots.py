@@ -2008,8 +2008,8 @@ def make_truth_comparison_plots(
     # true_energies_mom = vector.magnitude(events.trueParticlesBT.momentum)[valid_events]
     true_dirs = events.trueParticlesBT.direction[valid_events]
 
-    reco_energies = events.recoParticles.energy[valid_events]
-    reco_dirs = events.recoParticles.direction[valid_events]
+    reco_energies = events.recoParticles.shower_energy[valid_events]
+    reco_dirs = events.recoParticles.shower_direction[valid_events]
 
     # Warning - not sure this has been tested without photon_indicies as a dictionary...
     if not isinstance(photon_indicies, dict):

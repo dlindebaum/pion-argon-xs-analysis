@@ -235,12 +235,12 @@ class Data:
             ak.Array: mask which selects events that pass the selection
         """
         # angle of all reco showers wrt to each true photon per event i.e. error
-        null_shower_dir = self.recoParticles.direction.x == -999
+        null_shower_dir = self.recoParticles.shower_direction.x == -999
         photon_dir = vector.normalize(self.trueParticles.momentum)[
             self.trueParticles.truePhotonMask]
-        angle_0 = vector.angle(self.recoParticles.direction, photon_dir[:, 0])
+        angle_0 = vector.angle(self.recoParticles.shower_direction, photon_dir[:, 0])
         angle_0 = ak.where(null_shower_dir == True, 1E8, angle_0)
-        angle_1 = vector.angle(self.recoParticles.direction, photon_dir[:, 1])
+        angle_1 = vector.angle(self.recoParticles.shower_direction, photon_dir[:, 1])
         angle_1 = ak.where(null_shower_dir == True, 1E8, angle_1)
         # create array of indices to keep track of shower index
         ind = ak.sort(ak.argsort(angle_0, -1), -1)
@@ -292,9 +292,9 @@ class Data:
 
         # get events where both reco MC angles are less than the threshold value
         angle_0 = vector.angle(
-            self.recoParticles.direction[matched_mask][:, 0], photon_dir[:, 0])
+            self.recoParticles.shower_direction[matched_mask][:, 0], photon_dir[:, 0])
         angle_1 = vector.angle(
-            self.recoParticles.direction[matched_mask][:, 1], photon_dir[:, 1])
+            self.recoParticles.shower_direction[matched_mask][:, 1], photon_dir[:, 1])
         selection = np.logical_and(angle_0 < cut, angle_1 < cut)
 
         # either apply the filters or return them
@@ -321,16 +321,16 @@ class Data:
             ak.Array: indices of reco particles with the smallest angular closeness
             ak.Array: boolean mask of events which pass the angle cut
         """
-        null_direction = self.recoParticles.direction.x == - \
+        null_direction = self.recoParticles.shower_direction.x == - \
             999  # boolean mask of PFP's with undefined direction
-        null_momentum = self.recoParticles.momentum.x == - \
+        null_momentum = self.recoParticles.shower_momentum.x == - \
             999  # boolean mask of PFP's with undefined momentum
         null_position = self.recoParticles.shower_start_pos.x == -999
         null = np.logical_or(null_direction, null_momentum)
         null = np.logical_or(null, null_position)
         # calculate angular closeness
         angle_error = vector.angle(
-            self.recoParticles.direction, self.trueParticlesBT.direction)
+            self.recoParticles.shower_direction, self.trueParticlesBT.direction)
         # if direction is undefined, angler error is massive (so not the best match)
         angle_error = ak.where(null, 999, angle_error)
         # create index array of angles to use later
@@ -498,7 +498,7 @@ class Data:
             data["truePFPMask"] = ak.local_index(pfos, -1)
             data["truePFPMask"] = ak.min(data["truePFPMask"][pfos], -1)
 
-            p = self.recoParticles.momentum[pfos]
+            p = self.recoParticles.shower_momentum[pfos]
             # dont merge PFP's with null data
             p = ak.where(p.x == -999, {"x": 0, "y": 0, "z": 0}, p)
             if merge_method == 0:
@@ -508,7 +508,7 @@ class Data:
                 data["dir"] = vector.normalize(data["p"])
             if merge_method == 1:
                 # sum energy, sum momenta, use norm as direction and summed energy * direction as summed momenta
-                e = self.recoParticles.energy[pfos]
+                e = self.recoParticles.shower_energy[pfos]
                 e = ak.where(e < 0, 0, e)
                 data["e"] = ak.sum(e, -1)
                 data["dir"] = vector.normalize(ak.sum(p, -1))
@@ -554,19 +554,19 @@ class Data:
         merged_data["truePFPMask"] = merged_data["truePFPMask"][merged_data["truePFPMask"] != -999]
 
         # ? should we implement corrections for other values like start position or n_hits?
-        self.recoParticles._RecoParticleData__momentum = merged_data["p"]
-        self.recoParticles._RecoParticleData__energy = merged_data["e"]
-        self.recoParticles._RecoParticleData__direction = merged_data["dir"]
+        self.recoParticles._RecoParticleData__shower_momentum = merged_data["p"]
+        self.recoParticles._RecoParticleData__shower_energy = merged_data["e"]
+        self.recoParticles._RecoParticleData__shower_direction = merged_data["dir"]
         self.recoParticles._RecoParticleData__n_hits = merged_data["n_hits"]
 
-        self.trueParticlesBT._TrueParticleDataBT__nHits = merged_data["true_hits"]
+        self.trueParticlesBT._TrueParticleDataBT__n_hits = merged_data["true_hits"]
         self.trueParticlesBT._TrueParticleDataBT__sharedHits = merged_data["shared_hits"]
         self.trueParticlesBT._TrueParticleDataBT__hitsInRecoCluster = merged_data[
             "reco_cluster_hits"]
         self.trueParticlesBT._TrueParticleDataBT__purity = merged_data["purity"]
         self.trueParticlesBT._TrueParticleDataBT__completeness = merged_data["completeness"]
 
-        self.trueParticlesBT._TrueParticleDataBT__nHits_collection = merged_data[
+        self.trueParticlesBT._TrueParticleDataBT__n_hits_collection = merged_data[
             "true_collection_hits"]
         self.trueParticlesBT._TrueParticleDataBT__sharedHits_collection = merged_data[
             "shared_collection_hits"]
@@ -581,7 +581,7 @@ class Data:
         self.Filter([merged_data["truePFPMask"]])
 
         # exlucde events where all PFP's merged had no valid momentmum vector
-        null = np.logical_not(ak.any(self.recoParticles.energy == 0, -1))
+        null = np.logical_not(ak.any(self.recoParticles.shower_energy == 0, -1))
         print(
             f"Events where one merged PFP had undefined momentum: {ak.count(null[np.logical_not(null)])}")
 
@@ -604,12 +604,12 @@ class Data:
         unmatched_reco = self.Filter(
             [unmatched], returnCopy=True).recoParticles
         # should only be needed for unmatched sample
-        null_dir = unmatched_reco.direction.x == -999
+        null_dir = unmatched_reco.shower_direction.x == -999
 
         angle_0 = ak.where(null_dir == True, 1E8, vector.angle(
-            unmatched_reco.direction, events_matched.recoParticles.direction[:, 0]))
+            unmatched_reco.shower_direction, events_matched.recoParticles.shower_direction[:, 0]))
         angle_1 = ak.where(null_dir == True, 1E8, vector.angle(
-            unmatched_reco.direction, events_matched.recoParticles.direction[:, 1]))
+            unmatched_reco.shower_direction, events_matched.recoParticles.shower_direction[:, 1]))
         angle_0 = ak.unflatten(angle_0, 1, -1)
         angle_1 = ak.unflatten(angle_1, 1, -1)
         angle = ak.concatenate([angle_0, angle_1], -1)
@@ -618,25 +618,25 @@ class Data:
         # * create Array which contains the amount of energy to merge to the showers
         # * will be zero for the shower we don't want to merge to
         null = {"x": 0, "y": 0, "z": 0}
-        toMerge = ak.where(mergeMask, unmatched_reco.momentum, null)
+        toMerge = ak.where(mergeMask, unmatched_reco.shower_momentum, null)
         toMerge = ak.where(toMerge.x != -999, toMerge, null)
         merge_0 = ak.unflatten(ak.sum(toMerge[:, :, 0], -1), 1, -1)
         merge_1 = ak.unflatten(ak.sum(toMerge[:, :, 1], -1), 1, -1)
         momentumToMerge = ak.concatenate([merge_0, merge_1], -1)
         momentumToMerge = ak.where(
-            events_matched.recoParticles.momentum.x != -999, momentumToMerge, null)
+            events_matched.recoParticles.shower_momentum.x != -999, momentumToMerge, null)
         new_momentum = vector.add(
-            events_matched.recoParticles.momentum, momentumToMerge)
-        events_matched.recoParticles._RecoParticleData__momentum = new_momentum
+            events_matched.recoParticles.shower_momentum, momentumToMerge)
+        events_matched.recoParticles._RecoParticleData__shower_momentum = new_momentum
 
-        new_direction = vector.normalize(events_matched.recoParticles.momentum)
-        new_direction = ak.where(events_matched.recoParticles.momentum.x != -
+        new_direction = vector.normalize(events_matched.recoParticles.shower_momentum)
+        new_direction = ak.where(events_matched.recoParticles.shower_momentum.x != -
                                  999, new_direction, {"x": -999, "y": -999, "z": -999})
-        events_matched.recoParticles._RecoParticleData__direction = new_direction
+        events_matched.recoParticles._RecoParticleData__shower_direction = new_direction
 
-        new_energy = vector.magnitude(events_matched.recoParticles.momentum)
-        events_matched.recoParticles._RecoParticleData__energy = ak.where(
-            events_matched.recoParticles.momentum.x != -999, new_energy, -999)
+        new_energy = vector.magnitude(events_matched.recoParticles.shower_momentum)
+        events_matched.recoParticles._RecoParticleData__shower_energy = ak.where(
+            events_matched.recoParticles.shower_momentum.x != -999, new_energy, -999)
 
         return events_matched
 
@@ -649,19 +649,19 @@ class Data:
         Returns:
             Data: events with merged showers
         """
-        if bool(ak.all(ak.num(self.recoParticles.energy[self.recoParticles.energy != -999]) == 2)) is True:
+        if bool(ak.all(ak.num(self.recoParticles.shower_energy[self.recoParticles.shower_energy != -999]) == 2)) is True:
             counts = 0
         else:
             counts = 1
         # * get boolean mask of PFP's to merge
-        index = ak.local_index(self.recoParticles.energy)
+        index = ak.local_index(self.recoParticles.shower_energy)
         to_merge = [ak.where(index == best_match[:, i], False, True)
                     for i in range(2)]
         to_merge = np.logical_and(*to_merge)
 
         # * calculate angle between each best matched shower and the showers to merge
-        best_match_dir = self.recoParticles.direction[best_match]
-        to_merge_dir = self.recoParticles.direction[to_merge]
+        best_match_dir = self.recoParticles.shower_direction[best_match]
+        to_merge_dir = self.recoParticles.shower_direction[to_merge]
         not_null = to_merge_dir.x != -999
         to_merge_dir = to_merge_dir[not_null]
 
@@ -672,7 +672,7 @@ class Data:
         minMask_angle = ak.min(angles, -1) == angles
 
         # * merge momenta
-        momentumToMerge = self.recoParticles.momentum[to_merge]
+        momentumToMerge = self.recoParticles.shower_momentum[to_merge]
         momentumToMerge = momentumToMerge[not_null]
         valid_mom = momentumToMerge.x != -999  # we don't want to merge invalid PFP's
         momentumToMerge = momentumToMerge[valid_mom]
@@ -681,7 +681,7 @@ class Data:
 
         momentumToMerge = [
             ak.sum(momentumToMerge[minMask_angle[i]], -1) for i in range(2)]
-        leading_momentum = self.recoParticles.momentum[best_match]
+        leading_momentum = self.recoParticles.shower_momentum[best_match]
 
         # add the merged momenta to their respective leading showers
         mergedMomentum = [ak.unflatten(vector.add(
@@ -697,9 +697,9 @@ class Data:
         merged_energy = ak.concatenate(merged_energy, -1)
 
         merged_events = self.Filter(returnCopy=True)
-        merged_events.recoParticles._RecoParticleData__momentum = mergedMomentum
-        merged_events.recoParticles._RecoParticleData__direction = merged_direction
-        merged_events.recoParticles._RecoParticleData__energy = merged_energy
+        merged_events.recoParticles._RecoParticleData__shower_momentum = mergedMomentum
+        merged_events.recoParticles._RecoParticleData__shower_direction = merged_direction
+        merged_events.recoParticles._RecoParticleData__shower_energy = merged_energy
 
         merged_events.trueParticlesBT.Filter([best_match], returnCopy=False)
         return merged_events
@@ -1159,7 +1159,7 @@ class RecoParticleData(ParticleData):
         n_hits_collection (ak.Array): number of collection plane hits
         energy (ak.Array):
         momentum (ak.Record):
-        direction (ak.Record):
+        shower_direction (ak.Record):
         shower_start_pos (ak.Record):
         shower_length (ak.Array): length of shower (if applicable)
         showerConeAngle (ak.Array): width of shower (if applicable)
@@ -1359,11 +1359,6 @@ class RecoParticleData(ParticleData):
         ]
         self.LoadData("shower_start_pos", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__shower_start_pos")
-    
-    @property
-    def shower_start_pos(self) -> ak.Record:
-        # For backwards compoatibility
-        return self.showerStartPos
 
     @property
     def track_start_dir(self) -> ak.Record:
@@ -1404,9 +1399,9 @@ class RecoParticleData(ParticleData):
     def shower_momentum(self) -> ak.Record:
         if not hasattr(self, f"_{type(self).__name__}__shower_momentum"):
             mom = vector.prod(self.shower_energy, self.shower_direction)
-            mom = ak.where(self.direction.x == -999,
+            mom = ak.where(self.shower_direction.x == -999,
                            {"x": -999, "y": -999, "z": -999}, mom)
-            mom = ak.where(self.energy < 0, {
+            mom = ak.where(self.shower_energy < 0, {
                            "x": -999, "y": -999, "z": -999}, mom)
             self.__shower_momentum = mom
         return self.__shower_momentum #! should be renamed shower momentum
@@ -1570,12 +1565,12 @@ class RecoParticleData(ParticleData):
             sortEnergy = ak.argsort(self.events.trueParticlesBT.energy)
         else:
             sortEnergy = self.events.SortedTrueEnergyMask
-        sortedPairs = ak.unflatten(self.energy[sortEnergy], 1, 0)
+        sortedPairs = ak.unflatten(self.shower_energy[sortEnergy], 1, 0)
         leading = sortedPairs[:, :, 1:]
         secondary = sortedPairs[:, :, :-1]
 
         # * opening angle
-        direction_pair = ak.unflatten(self.direction[sortEnergy], 1, 0)
+        direction_pair = ak.unflatten(self.shower_direction[sortEnergy], 1, 0)
         direction_pair_mag = vector.magnitude(direction_pair)
         angle = np.arccos(vector.dot(direction_pair[:, :, 1:], direction_pair[:, :, :-1]) / (
             direction_pair_mag[:, :, 1:] * direction_pair_mag[:, :, :-1]))
@@ -1584,7 +1579,7 @@ class RecoParticleData(ParticleData):
         inv_mass = (2 * leading * secondary * (1 - np.cos(angle)))**0.5
 
         # * pi0 momentum
-        pi0_momentum = vector.magnitude(ak.sum(self.momentum, axis=-1))
+        pi0_momentum = vector.magnitude(ak.sum(self.shower_momentum, axis=-1))
 
         # mask shower pairs with invalid direction vectors
         null_dir = np.logical_or(
@@ -1699,6 +1694,7 @@ class TrueParticleDataBT(ParticleData):
         trueBeamVertex_collection (ak.Record): end poisition of backtracked true beam particle
         purity_collection (ak.Array): fraction of shared hits in reconstructed object
         completeness_collection (ak.Array): fraction of shared hits in the backtrackted true particle
+        space_points (ak.Record): hit space points
         channel (ak.Array): hit channel
         peak_time (ak.Array): hit peak time
         integral (ak.Array): hit integral
@@ -1897,14 +1893,14 @@ class TrueParticleDataBT(ParticleData):
         return getattr(self, f"_{type(self).__name__}__completeness_collection") # for shower merging only
 
     @property
-    def spacePoint(self) -> type:
+    def space_points(self) -> type:
         nTuples = [
             "reco_daughter_PFP_true_byHits_spacePointX",
             "reco_daughter_PFP_true_byHits_spacePointY",
             "reco_daughter_PFP_true_byHits_spacePointZ"
         ]
-        self.LoadData("spacePoint", nTuples, is_vector = True)
-        return getattr(self, f"_{type(self).__name__}__spacePoint") # for shower merging only
+        self.LoadData("space_points", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__space_points") # for shower merging only
 
     @property
     def channel(self) -> ak.Array:
@@ -2149,13 +2145,13 @@ class ShowerPairs:
             backtracked (bool, optional): sort by backtreacked energy, otherwise reco energy. Defaults to True.
         """        
         if backtracked:
-            pd = self.events.trueParticlesBT
+            pd_e = self.events.trueParticlesBT.energy
         else:
-            pd = self.events.recoParticles
+            pd_e = self.events.recoParticles.shower_energy
 
         mask_0_leading = (
-            pd.energy[self.pairs['0']]
-            >= pd.energy[self.pairs['1']])
+            pd_e[self.pairs['0']]
+            >= pd_e[self.pairs['1']])
         mask_1_leading = np.logical_not(mask_0_leading)
         self.leading = (self.pairs['0'] * mask_0_leading
                         + self.pairs['1'] * mask_1_leading)
@@ -2328,11 +2324,11 @@ class ShowerPairs:
     ##############################################################################################
     @property
     def reco_lead_energy(self):
-        return self.events.recoParticles.energy[self.leading]
+        return self.events.recoParticles.shower_energy[self.leading]
 
     @property
     def reco_sub_energy(self):
-        return self.events.recoParticles.energy[self.subleading]
+        return self.events.recoParticles.shower_energy[self.subleading]
 
     @property
     def reco_lead_nHits(self):
@@ -2385,33 +2381,33 @@ class ShowerPairs:
     @property
     def reco_angle(self):
         return ShowerPairs.OpeningAngle(
-            self.events.recoParticles.direction[self.leading],
-            self.events.recoParticles.direction[self.subleading])
+            self.events.recoParticles.shower_direction[self.leading],
+            self.events.recoParticles.shower_direction[self.subleading])
 
     @property
     def reco_mass(self):
         return ShowerPairs.Mass(
-            self.events.recoParticles.energy[self.leading],
-            self.events.recoParticles.energy[self.subleading],
+            self.events.recoParticles.shower_energy[self.leading],
+            self.events.recoParticles.shower_energy[self.subleading],
             self.reco_angle)
 
     @property
     def reco_energy(self):
         return ShowerPairs.Energy(
-            self.events.recoParticles.energy[self.leading],
-            self.events.recoParticles.energy[self.subleading])
+            self.events.recoParticles.shower_energy[self.leading],
+            self.events.recoParticles.shower_energy[self.subleading])
 
     @property
     def reco_pi0_mom(self):
         return ShowerPairs.Pi0Mom(
-            self.events.recoParticles.momentum[self.leading],
-            self.events.recoParticles.momentum[self.leading])
+            self.events.recoParticles.shower_momentum[self.leading],
+            self.events.recoParticles.shower_momentum[self.leading])
 
     @property
     def reco_pi0_mom_mag(self):
         return vector.magnitude(ShowerPairs.Pi0Mom(
-            self.events.recoParticles.momentum[self.leading],
-            self.events.recoParticles.momentum[self.leading]))
+            self.events.recoParticles.shower_momentum[self.leading],
+            self.events.recoParticles.shower_momentum[self.leading]))
 
     @property
     def reco_direction(self):
@@ -2420,8 +2416,8 @@ class ShowerPairs:
     @property
     def reco_closest_approach(self):
         return ShowerPairs.ClosestApproach(
-            self.events.recoParticles.direction[self.leading],
-            self.events.recoParticles.direction[self.subleading],
+            self.events.recoParticles.shower_direction[self.leading],
+            self.events.recoParticles.shower_direction[self.subleading],
             self.events.recoParticles.shower_start_pos[self.leading],
             self.events.recoParticles.shower_start_pos[self.subleading])
 
@@ -2640,7 +2636,7 @@ def NPFPMask(events: Data, nObjects: int = None) -> ak.Array:
     Returns:
         ak.Array: mask of events to filter
     """
-    null_dir = events.recoParticles.direction.x != -999
+    null_dir = events.recoParticles.shower_direction.x != -999
     null_pos = events.recoParticles.shower_start_pos.x != -999
     nObj = np.logical_and(null_dir, null_pos)
     # get number of showers which have a valid direction
@@ -2757,18 +2753,18 @@ def ShowerMergePerformance(events: Data, best_match: ak.Array) -> float:
         events (Data): events to study
         best_match (ak.Array): target PFP's to merge to.
     """
-    if bool(ak.all(ak.num(events.recoParticles.energy[events.recoParticles.energy != -999]) == 2)) is True:
+    if bool(ak.all(ak.num(events.recoParticles.shower_energy[events.recoParticles.shower_energy != -999]) == 2)) is True:
         counts = 0
     else:
         counts = 1
-    index = ak.local_index(events.recoParticles.energy)
+    index = ak.local_index(events.recoParticles.shower_energy)
     to_merge = [ak.where(index == best_match[:, i], False, True)
                 for i in range(2)]
     to_merge = np.logical_and(*to_merge)
 
     # * calculate angle between each best matched shower and the showers to merge
-    best_match_dir = events.recoParticles.direction[best_match]
-    to_merge_dir = events.recoParticles.direction[to_merge]
+    best_match_dir = events.recoParticles.shower_direction[best_match]
+    to_merge_dir = events.recoParticles.shower_direction[to_merge]
     not_null = to_merge_dir.x != -999
     to_merge_dir = to_merge_dir[not_null]
 

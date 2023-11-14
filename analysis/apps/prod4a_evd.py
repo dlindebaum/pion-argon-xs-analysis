@@ -91,7 +91,7 @@ def RenderEventDisplay(n):
     start_showers_merged = np.logical_or(*start_showers)
     points = events.recoParticles.space_points[start_showers_merged][n]
     startPoints = events.recoParticles.shower_start_pos[start_showers_merged][n]
-    directions = events.recoParticles.direction[start_showers_merged][n]
+    directions = events.recoParticles.shower_direction[start_showers_merged][n]
     pdgs = events.trueParticlesBT.pdg[start_showers_merged][n]
     display.PFO(points[0], marker = "x", colour = "green", startPoint = startPoints[0], direction = directions[0])#, pdg=pdgs[0])
     display.PFO(points[1], marker = "x", colour = "blue", startPoint = startPoints[1], direction = directions[1])#, pdg=pdgs[1])
@@ -99,7 +99,7 @@ def RenderEventDisplay(n):
 
     points = events.recoParticles.space_points[to_merge][n]
     startPoints = events.recoParticles.startPos[to_merge][n]
-    directions = events.recoParticles.direction[to_merge][n]
+    directions = events.recoParticles.shower_direction[to_merge][n]
     pdgs = events.trueParticlesBT.pdg[to_merge][n]
     beam_mask = np.logical_not(events.recoParticles.number == events.recoParticles.beam_number)[to_merge]
     #* Plot background PFOs

@@ -211,9 +211,9 @@ or list, optional
     # TODO Swap to lambda functions for we don't fetch these unless we
     # actually need them
     reco_props = {
-        "mom": events.recoParticles.momentum,
-        "dir": events.recoParticles.direction,
-        "energy": events.recoParticles.energy,
+        "mom": events.recoParticles.shower_momentum,
+        "dir": events.recoParticles.shower_direction,
+        "energy": events.recoParticles.shower_energy,
         "purity": events.trueParticlesBT.purity,
         "completeness": events.trueParticlesBT.completeness
     }
@@ -221,7 +221,7 @@ or list, optional
     # (events.trueParticles.number ?)
     true_props = {
         "mom": events.trueParticles.momentum,
-        "dir": events.trueParticles.direction,
+        "dir": events.trueParticles.shower_direction,
         "energy": ak.zeros_like(events.trueParticles.number),
         "purity": ak.zeros_like(events.trueParticles.number),
         "completeness": ak.zeros_like(events.trueParticles.number)
@@ -270,7 +270,7 @@ or list, optional
         if valid_mom_cut:
             # Maybe want to look at what happens when we use
             # purity/completeness with no good data cut?
-            reco_momenta = events.recoParticles.momentum[i]
+            reco_momenta = events.recoParticles.shower_momentum[i]
             good_data = np.logical_and(
                 np.logical_and(
                     reco_momenta.x != -999., reco_momenta.y != -999.),
@@ -558,8 +558,8 @@ def paired_beam_impact(shower_pairs, type="reco"):
         else:
             dir = shower_pairs.true_direction
     shared_vertex = shower_pairs.SharedVertex(
-        data.momentum[shower_pairs.leading],
-        data.momentum[shower_pairs.subleading],
+        data.shower_momentum[shower_pairs.leading],
+        data.shower_momentum[shower_pairs.subleading],
         data.shower_start_pos[shower_pairs.leading],
         data.shower_start_pos[shower_pairs.subleading])
     # Impact parameter between the PFOs and corresponding beam vertex
