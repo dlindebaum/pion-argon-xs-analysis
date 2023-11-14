@@ -21,7 +21,7 @@ import tables
 from pathos.pools import ProcessPool
 from rich import print
 from scipy.interpolate import interp1d
-from scipy.ndimage import gaussian_filter1d
+from scipy.stats import gaussian_kde
 
 from python.analysis.Master import timer
 from python.analysis import Fitting
@@ -376,7 +376,7 @@ def GenerateRecoRegions(exclusive_process : pd.Series, fractions : pd.DataFrame,
     return regions_df
 
 
-def GenerateMeanTrackScores(kde : "stats.gaussian_kde", n : int, seed : int = None) -> np.array:
+def GenerateMeanTrackScores(kde : gaussian_kde, n : int, seed : int = None) -> np.array:
     """ Generates Mean track scores from the stats.gaussian_kde object.
         if mean track scores exceed the range 0, 1, the scores are resampled.
 

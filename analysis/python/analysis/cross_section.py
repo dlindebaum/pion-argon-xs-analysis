@@ -8,6 +8,7 @@ Description: Library for code used in the cross section analysis. Refer to the R
 import argparse
 import copy
 import json
+import os
 
 from collections import namedtuple
 from dataclasses import dataclass
@@ -20,7 +21,9 @@ import pandas as pd
 import pyhf
 import uproot
 
+from cabinetry.fit.results_containers import FitResults
 from particle import Particle
+from pyunfold import iterative_unfold, Logger
 
 from python.analysis import Master, BeamParticleSelection, PFOSelection, EventSelection, Fitting, Plots, vector, Tags
 from python.analysis.shower_merging import SetPlotStyle
@@ -239,8 +242,8 @@ class ApplicationArguments:
         return
 
     @staticmethod
-    def Config(parser : argparse.ArgumentParser):
-        parser.add_argument("-c", "--config", dest = "config", type = str, default = None, help = "Analysis configuration file, if supplied will override command line arguments.")
+    def Config(parser : argparse.ArgumentParser, required : bool = False):
+        parser.add_argument("-c", "--config", dest = "config", type = str, default = None, required = required, help = "Analysis configuration file, if supplied will override command line arguments.")
 
     @staticmethod
     def ResolveArgs(args : argparse.Namespace) -> argparse.Namespace:
@@ -330,6 +333,8 @@ class ApplicationArguments:
                 args.ntuple_type = value["type"]
             elif head == "BEAM_PARTICLE_SELECTION":
                 args.beam_selection = ApplicationArguments.__CreateSelection(value, BeamParticleSelection)
+            elif head == "HAS_FINAL_STATE_PFO_SELECTION":
+                args.has_final_state_pfo_selection = value["enable"]
             elif head == "VALID_PFO_SELECTION":
                 args.valid_pfo_selection = value["enable"]
             elif head == "FINAL_STATE_PIPLUS_SELECTION":
@@ -579,7 +584,7 @@ class GeantCrossSections:
     """
     labels = {"abs_KE;1" : "absorption", "inel_KE;1" : "quasielastic", "cex_KE;1" : "charge_exchange", "dcex_KE;1" : "double_charge_exchange", "prod_KE;1" : "pion_production", "total_inel_KE;1" : "total_inelastic"}
 
-    def __init__(self, file : str = "data/g4_xs.root", energy_range : list = None, n_cascades : int = None) -> None:
+    def __init__(self, file : str = os.environ["PYTHONPATH"] + "/data/g4_xs.root", energy_range : list = None, n_cascades : int = None) -> None:
         self.file = uproot.open(file) # open root file
 
         self.KE = self.file["abs_KE;1"].all_members["fX"] # load kinetic energy from one channel (shared for all cross section channels)
@@ -932,7 +937,7 @@ class EnergySlice:
 
 
 class Toy:
-    def __init__(self, file : str = None, df : str = None, smearing : bool = False) -> None:
+    def __init__(self, file : str = None, df : str = None, smearing : bool = True) -> None:
         if file is not None:
             self.df = pd.read_hdf(file)
         elif df is not None:
@@ -1085,15 +1090,47 @@ class AnalysisInput:
             )
 
     @staticmethod
-    def CreateAnalysisInputNtuple():
-        # TODO
-        return
+    def CreateAnalysisInputNtuple(events : Master.Data, upstream_energy_loss_params : dict, reco_regions : dict[np.array], true_regions : dict[np.array] = None):
+        #! KE_int lookup table formula (interp1d) for track length
+        reco_KE_inst = KE(events.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass)
+
+        reco_upstream_loss = UpstreamEnergyLoss(reco_KE_inst, upstream_energy_loss_params)
+        reco_KE_ff = reco_KE_inst - reco_upstream_loss
+        reco_KE_int = reco_KE_ff - RecoDepositedEnergy(events, reco_KE_ff, "bb")
+        # reco_track_length = mc.recoParticles.beam_track_length
+        outside_tpc_reco = (events.recoParticles.beam_endPos_SCE.z < 0) | (events.recoParticles.beam_endPos_SCE.z > 700)
+
+        if true_regions is not None:
+            true_KE_ff = events.trueParticles.beam_KE_front_face
+            true_KE_int = events.trueParticles.beam_traj_KE[:, -2]
+            # true_track_length = mc.trueParticles.beam_track_length
+            outside_tpc_true = (events.trueParticles.beam_traj_pos.z[:, -1] < 0) | (events.trueParticles.beam_traj_pos.z[:, -1] > 700)
+        else:
+            true_KE_int = None
+            true_KE_ff = None
+            outside_tpc_true = None
+
+        mean_track_score = ak.fill_none(ak.mean(events.recoParticles.trackScore, axis = -1), -0.05) # fill null values in case empty events are supplied
+
+        inelastic = np.ones(len(events.eventNum), dtype = bool)
+        return AnalysisInput(
+            reco_regions,
+            inelastic,
+            true_regions,
+            outside_tpc_reco,
+            outside_tpc_true,
+            reco_KE_int,
+            reco_KE_ff,
+            mean_track_score,
+            true_KE_int,
+            true_KE_ff
+            )
 
 
 class RegionFit:
 
     @staticmethod    
-    def Model(n_channels : int, KE_int_templates : np.array, mean_track_score_templates : np.array = None, mc_stat_unc : bool = False):
+    def Model(n_channels : int, KE_int_templates : np.array, mean_track_score_templates : np.array = None, mc_stat_unc : bool = False) -> pyhf.Model:
         def channel(channel_name : str, samples : np.array, mc_stat_unc : bool):
             ch = {
                 "name": channel_name,
@@ -1140,7 +1177,7 @@ class RegionFit:
         return observations
 
     @staticmethod
-    def Fit(observations, model : pyhf.Model, verbose : bool = True):
+    def Fit(observations, model : pyhf.Model, verbose : bool = True) -> FitResults:
         pyhf.set_backend(backend = "numpy", custom_optimizer = "minuit")
         result = cabinetry.fit.fit(model, observations, custom_fit = False, tolerance = 0.01)
         if verbose is True: print(f"{model.config.poi_index=}")
@@ -1148,7 +1185,7 @@ class RegionFit:
         return result
 
     @staticmethod
-    def GetPredictedCorrelationMatrix(model : pyhf.Model, mu : np.array):
+    def GetPredictedCorrelationMatrix(model : pyhf.Model, mu : np.array) -> np.array:
         counts_matrix = []
         for channel in model.spec["channels"]:
             counts = []
@@ -1218,7 +1255,6 @@ class RegionFit:
         else:
             return model
 
-
     @staticmethod
     def CreateObservedInputData(fit_input : AnalysisInput, slices : Slices, mean_track_score_bins : np.array = None) -> np.array:
         observed_binned = []
@@ -1227,3 +1263,176 @@ class RegionFit:
         if mean_track_score_bins is not None:
             observed_binned.append(np.histogram(fit_input.mean_track_score[fit_input.inclusive_process], mean_track_score_bins)[0])
         return observed_binned
+
+    @staticmethod
+    def SliceModelPrediction(prediction : cabinetry.model_utils.ModelPrediction, slice : slice, label : str) -> cabinetry.model_utils.ModelPrediction:
+        return cabinetry.model_utils.ModelPrediction(prediction.model, np.array(prediction.model_yields[slice]), np.array(prediction.total_stdev_model_bins[slice]), np.array(prediction.total_stdev_model_channels[slice]), label)
+
+    @staticmethod
+    def PlotPrefitPostFit(prefit, prefit_err, postfit, postfit_err, energy_bins):
+        with Plots.RatioPlot(energy_bins[::-1], postfit, prefit, postfit_err, prefit_err, "$KE_{int}$ (MeV)", "fit/ actual") as ratio_plot:
+            Plots.Plot(ratio_plot.x, ratio_plot.y2, yerr = ratio_plot.y2_err, color = "C0", label = "actual", style = "step", newFigure = False)
+            Plots.Plot(ratio_plot.x, ratio_plot.y1, yerr = ratio_plot.y1_err, color = "C6", label = "fit", style = "step", ylabel = "Counts", newFigure = False)
+
+
+class Unfold:
+
+    @staticmethod #? place in AnalysisInput?
+    def CreateHistograms(analysis_input : AnalysisInput, energy_slice : Slices, exclusive_process : str, smeared : bool, efficiency : bool) -> dict[np.array]:
+        KE_int = analysis_input.KE_int_true if smeared is False else analysis_input.KE_int_reco
+        KE_init = analysis_input.KE_init_true if smeared is False else analysis_input.KE_init_reco
+
+        outside_tpc = analysis_input.outside_tpc_reco | analysis_input.outside_tpc_true
+
+        channel_mask = analysis_input.exclusive_process[exclusive_process]
+
+        #! keep just in case
+        # if efficiency is True:
+        #     KE_int = KE_int[toy.df.beam_selection_mask]
+        #     KE_init = KE_init[toy.df.beam_selection_mask]
+        #     outside_tpc = outside_tpc[toy.df.beam_selection_mask]
+        #     channel_mask = channel_mask[toy.df.beam_selection_mask]
+
+        n_initial, n_interact_inelastic, n_interact_exclusive, n_incident = EnergySlice.CountingExperiment(KE_int, KE_init, outside_tpc, channel_mask, energy_slice)
+        
+        output = {"init" : n_initial, "int" : n_interact_inelastic, "int_ex" : n_interact_exclusive, "inc" : n_incident}
+        return output
+
+    @staticmethod
+    def CorrelationMarix(observed, true, bins, remove_overflow : bool = True) -> np.array:
+        response_hist = np.histogram2d(np.array(observed), np.array(true), bins = bins)[0]
+        if remove_overflow is True:
+            response_hist = response_hist[:-1, :-1]
+        return response_hist
+
+    @staticmethod
+    def ResponseMatrix(observed, true, bins, efficiencies : np.array = None, remove_overflow : bool = True) -> tuple[np.array, np.array]:
+        if efficiencies is None:
+            efficiencies = np.ones(len(bins) - 1 - int(remove_overflow))
+
+        response_hist = Unfold.CorrelationMarix(observed, true, bins, remove_overflow)
+        response_hist_err = np.sqrt(response_hist)
+
+        column_sums = response_hist.sum(axis=0)
+        normalization_factor = efficiencies / column_sums
+        response = response_hist * normalization_factor
+        response_err = response_hist_err * normalization_factor
+        
+        response = np.nan_to_num(response)
+        response_err = np.nan_to_num(response_err)
+
+        return response, response_err
+
+    @staticmethod
+    def PlotMatrix(matrix, title : str = None, c_label : str = None):
+        #* cause = true, effect = reco
+        Plots.plt.figure()
+        Plots.plt.imshow(matrix, origin = "lower", cmap = "plasma")
+        Plots.plt.xlabel("true")
+        Plots.plt.ylabel("reco")
+        Plots.plt.grid(False)
+        Plots.plt.colorbar(label = c_label)
+        Plots.plt.tight_layout()
+        Plots.plt.title(title)
+        return
+
+    @staticmethod
+    def CalculateResponseMatrices(toy_template : Toy, process : str, energy_slice : Slices, book : Plots.PlotBook = None) -> dict[np.array]:
+        slice_bins = np.arange(-1 - 0.5, energy_slice.max_num + 1.5)
+
+        outside_tpc_mask = toy_template.outside_tpc.values | toy_template.outside_tpc_smeared.values
+
+        true_slices = EnergySlice.SliceNumbers(toy_template.df.KE_int.values, toy_template.df.KE_init.values, outside_tpc_mask, energy_slice)
+        reco_slices = EnergySlice.SliceNumbers(toy_template.df.KE_int_smeared.values, toy_template.df.KE_init_smeared.values, outside_tpc_mask, energy_slice)
+
+        if process == "single_pion_production":
+            channel = toy_template.df["double_charge_exchange"].values | toy_template.df["quasielastic"].values
+        else:
+            channel = toy_template.df[process].values
+        channel = channel[~outside_tpc_mask]
+
+        slice_pairs = {"init" : [reco_slices[0], true_slices[0]], "int" : [reco_slices[1], true_slices[1]], "int_ex" : [reco_slices[1][channel], true_slices[1][channel]]}
+
+        corr = {}
+        resp = {}
+
+        labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$"}
+
+
+        for k, v in slice_pairs.items():
+            corr[k] = Unfold.CorrelationMarix(*v, bins = slice_bins, remove_overflow = False)
+            resp[k] = Unfold.ResponseMatrix(*v, bins = slice_bins, remove_overflow = False)
+            Unfold.PlotMatrix(corr[k], title = f"Response Marix: {labels[k]}", c_label = "Counts")
+            if book is not None: book.Save()
+            Unfold.PlotMatrix(resp[k][0], title = f"Normalised Response Matrix: {labels[k]}", c_label = "$P(E_{i}|C_{j})$")
+            if book is not None: book.Save()
+        return resp
+
+    @staticmethod
+    def CreateObservedInput(data : AnalysisInput, process : str, energy_slice : Slices, postfit_pred : cabinetry.model_utils.ModelPrediction = None, book : Plots.PlotBook = None) -> tuple[np.array]:
+        histograms_true_obs = Unfold.CreateHistograms(data, energy_slice, process, False, False)
+        histograms_reco_obs = Unfold.CreateHistograms(data, energy_slice, process, True, False)
+        histograms_reco_obs_err = {k : np.sqrt(v) for k, v in histograms_reco_obs.items()}
+        
+        if postfit_pred is not None:
+            print("using KE_int,ex from region fit")
+            print(f"signal: {process}")
+            n = RegionFit.CreateObservedInputData(data, energy_slice, None)
+            N = sum(n)
+
+            KE_int_prediction = RegionFit.SliceModelPrediction(postfit_pred, slice(-1), "KE_int_postfit") # exclude the channel which is the mean track score
+
+            L = np.sum(KE_int_prediction.model_yields, 0)
+
+            L_err = KE_int_prediction.total_stdev_model_bins[:, :-1] # last entry in the array is the total error for the whole channel (but we want the total error in each process)
+            L_err = np.sqrt(np.sum(L_err **2, 0)) # quadrature sum across all bins
+
+            labels = list(data.exclusive_process.keys()) #! make property of AnalysisInput dataclass
+            L_var_bkg = sum(L_err[process != np.array(labels)]**2)
+            L_bkg = sum(L[process != np.array(labels)])
+
+
+            KE_int_fit = N - L_bkg
+            KE_int_fit_err = np.sqrt(N + L_var_bkg)
+
+
+            actual = {l : data.NInteract(energy_slice, data.exclusive_process[l]) for l in labels}
+            actual_sig = actual[process]
+            actual_bkg = sum(np.array(list(actual.values()))[process != np.array(labels)])
+
+            energy_bins = np.sort(np.insert(energy_slice.pos, 0, energy_slice.max_pos + energy_slice.width))
+            RegionFit.PlotPrefitPostFit(actual_sig, np.sqrt(actual_sig), KE_int_fit, KE_int_fit_err, energy_bins)
+            if book is not None: book.Save()
+            RegionFit.PlotPrefitPostFit(actual_bkg, np.sqrt(actual_bkg), L_bkg, np.sqrt(L_var_bkg), energy_bins)
+            if book is not None: book.Save()
+
+            histograms_reco_obs["int_ex"] = np.where(KE_int_fit < 0, 0, KE_int_fit)
+            histograms_reco_obs_err["int_ex"] = KE_int_fit_err
+
+        return histograms_true_obs, histograms_reco_obs, histograms_reco_obs_err
+
+    @staticmethod
+    def Unfold(observed : dict, observed_err : dict, response_matrices : dict, prior = None, ts_stop = 0.01, max_iter = 100, ts = "ks", regularizer = None, verbose : bool = False) -> dict:
+
+        efficiency = np.ones(len(observed["init"])) #! for the toy, assume perfect selection efficiency, so 1 +- 0
+        efficiency_err = np.zeros(len(observed["init"]))
+
+        cb = []
+        if verbose: cb.append(Logger())
+        if regularizer is not None:
+            cb = cb + [regularizer]
+
+        results = {}
+        for k, n, n_e, v in zip(response_matrices.keys(), observed.values(), observed_err.values(), response_matrices.values()):
+            results[k] = iterative_unfold(n, n_e, v[0], v[1], efficiency, efficiency_err, callbacks = cb, prior = prior, ts_stopping = ts_stop, max_iter = max_iter, ts = ts)
+        return results
+
+    @staticmethod
+    def PlotUnfoldingResults(obs, true, results, energy_bins, label : str, book : Plots.PlotBook = None):
+        Plots.Plot(energy_bins[::-1], obs, style = "step", label = "reco", xlabel = label, color = "C6")
+        Plots.Plot(energy_bins[::-1], true, style = "step", label = "true", xlabel = label, color = "C0", newFigure = False)
+        Plots.Plot(energy_bins[::-1], results["unfolded"], yerr = results["stat_err"], style = "step", label = f"unfolded, {results['num_iterations']} iterations", xlabel = label + " (MeV)", color = "C4", newFigure = False)
+        if book is not None: book.Save() 
+        Unfold.PlotMatrix(results["unfolding_matrix"], title = "Unfolded matrix: " + label, c_label = "$P(C_{j}|E_{i})$")
+        if book is not None: book.Save() 
+        return

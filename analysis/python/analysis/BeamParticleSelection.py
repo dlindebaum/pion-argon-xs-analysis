@@ -14,7 +14,7 @@ from particle import Particle
 
 from python.analysis import vector
 from python.analysis.Master import Data
-from python.analysis.PFOSelection import Median
+from python.analysis.PFOSelection import Median, GoodShowerSelection
 from python.analysis.SelectionTools import *
 
 
@@ -208,7 +208,7 @@ def BeamScraperCut(events : Data, KE_range : int, fits : dict, cut : float = 1.5
 
 
 def HasFinalStatePFOsCut(events: Data, return_property : bool = False) -> ak.Array:
-    """ Selects events which have final state PFOs.
+    """ Selects events which have final state PFOs that are well reconstructed.
 
     Args:
         events (Data): events to look at
@@ -217,7 +217,8 @@ def HasFinalStatePFOsCut(events: Data, return_property : bool = False) -> ak.Arr
     Returns:
         ak.Array: _description_
     """
-    nPFO = ak.num(events.recoParticles.number)
+    pfo_mask = GoodShowerSelection(events) # create this mask internally so that the PFO and event selections remain separate
+    nPFO = ak.num(events.recoParticles.number[pfo_mask])
     return CreateMask(0, ">", nPFO, return_property)
 
 

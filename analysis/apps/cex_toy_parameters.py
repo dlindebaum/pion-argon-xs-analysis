@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 import scipy.stats as stats
 
+from apps import cex_analyse
 from python.analysis import cross_section, Master, Plots, Tags
 
 from rich import print
@@ -104,53 +105,6 @@ def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_q
             "range" : residual_range
             }
     return params_formatted
-
-
-def GetPFOMasks(masks : dict) -> ak.Array:
-    mask = None
-    for m in masks:
-        if mask is None:
-            mask = masks[m]
-        else:
-            mask = mask & masks[m]
-    return mask
-
-
-def GetCounts(masks : dict) -> ak.Array:
-    """ Compute counts for pfo selection masks. 
-
-    Args:
-        masks (dict): selection masks
-
-    Returns:
-        ak.Array: number of selected PFOs in each event
-    """
-    return ak.sum(GetPFOMasks(masks), -1)
-
-
-def GetRegions(mc : Master.Data, args : argparse.Namespace) -> tuple[dict, dict]:
-    """ Get reco and true regions for mc.
-
-    Args:
-        mc (Master.Data): mc events
-        args (argparse.Namespace): application arguements
-
-    Returns:
-        tuple[dict, dict]: regions
-    """
-    n_pi = GetCounts(args.selection_masks["mc"]["pi"])
-    n_pi0 = GetCounts(args.selection_masks["mc"]["pi0"])
-
-    n_pi_true = mc.trueParticles.nPiMinus + mc.trueParticles.nPiPlus
-    n_pi0_true = mc.trueParticles.nPi0
-
-    for m in args.selection_masks["mc"]["beam"].values():
-        n_pi_true = n_pi_true[m]
-        n_pi0_true = n_pi0_true[m]
-
-    reco_regions = cross_section.EventSelection.create_regions_new(n_pi0, n_pi)
-    true_regions = cross_section.EventSelection.create_regions_new(n_pi0_true, n_pi_true)
-    return true_regions, reco_regions
 
 
 def PlotCorrelationMatrix(counts : np.array = None, true_labels = None, reco_labels = None, title : str = None, newFigure : bool = True):
@@ -332,7 +286,7 @@ def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace):
         mc (Master.Data): mc events.
         args (argparse.Namespace): application arguments.
     """
-    true_regions, reco_regions = GetRegions(mc, args)
+    reco_regions, true_regions = cex_analyse.RegionSelection(mc, args, True)
 
     os.makedirs(args.out + "reco_regions/", exist_ok = True)
     pdf = Plots.PlotBook(args.out + "reco_regions/reco_regions_study")
@@ -356,7 +310,7 @@ def MeanTrackScoreKDE(mc : Master.Data, args : argparse.Namespace):
         mc_copy.Filter([m], [m])
     mc_copy.Filter([args.selection_masks["mc"]['null_pfo']['ValidPFOSelection']])
 
-    has_pfo = cross_section.BeamParticleSelection.HasFinalStatePFOsCut(mc_copy)
+    has_pfo = cross_section.BeamParticleSelection.HasFinalStatePFOsCut(mc_copy) #! add as preselection
     mc_copy.Filter([has_pfo], [has_pfo])
 
     mean_track_score = ak.fill_none(ak.mean(mc_copy.recoParticles.trackScore, axis = -1), -0.05)

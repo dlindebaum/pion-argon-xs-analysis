@@ -14,6 +14,27 @@ import pandas as pd
 
 from python.analysis.Master import Data
 
+def CombineMasks(masks : dict) -> ak.Array:
+    mask = None
+    for m in masks:
+        if mask is None:
+            mask = masks[m]
+        else:
+            mask = mask & masks[m]
+    return mask
+
+
+def GetPFOCounts(masks : dict) -> ak.Array:
+    """ Compute counts for objects which pass the masks. 
+
+    Args:
+        masks (dict): selection masks
+
+    Returns:
+        ak.Array: number of selected PFOs in each event
+    """
+    return ak.sum(CombineMasks(masks), -1)
+
 
 def CountMask(m: ak.Array) -> tuple:
     """ Counts the total number of entries in a boolean mask,

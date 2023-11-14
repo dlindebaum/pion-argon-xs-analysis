@@ -669,10 +669,10 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Applies beam particle selection, PFO selection, produces tables and basic plots.", formatter_class = argparse.RawDescriptionHelpFormatter)
 
+    cross_section.ApplicationArguments.Config(parser, required = True)
     cross_section.ApplicationArguments.Processing(parser)
     cross_section.ApplicationArguments.Output(parser)
     cross_section.ApplicationArguments.Plots(parser)
-    cross_section.ApplicationArguments.Config(parser)
 
     parser.add_argument("--mc", dest = "mc_only", action = "store_true", help = "Only analyse at MC file.")
 
