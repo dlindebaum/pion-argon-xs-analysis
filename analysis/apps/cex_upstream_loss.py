@@ -14,6 +14,7 @@ import awkward as ak
 import numpy as np
 import pandas as pd
 
+from apps.cex_analyse import BeamPionSelection
 from python.analysis import cross_section, Master, Plots
 from rich import print
 
@@ -79,10 +80,8 @@ def CentralValueEstimation(bins : np.array, KE_reco_inst : np.array, KE_true_ff 
 def main(args : argparse.Namespace):
     cross_section.SetPlotStyle(False, 100)
     mc = Master.Data(args.mc_file, -1, 0, args.ntuple_type)
-    for s in args.beam_selection["selections"]:
-        mask = args.beam_selection["selections"][s](mc, **args.beam_selection["mc_arguments"][s])
-        mc.Filter([mask], [mask])
-        print(mc.cutTable.get_table())
+
+    mc = BeamPionSelection(mc, args, True)
 
     bins = ak.Array(args.upstream_loss_bins)
     x = (bins[1:] + bins[:-1]) / 2
@@ -97,14 +96,15 @@ def main(args : argparse.Namespace):
         params = cross_section.Fitting.Fit(x, cv[0], cv[1], cross_section.Fitting.poly2d, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$(MeV)", ylabel = "$\mu(KE^{reco}_{inst} - KE^{true}_{ff})$(MeV)")
         pdf.savefig()
 
-        reco_KE_ff =  reco_KE_inst - cross_section.UpstreamEnergyLoss(reco_KE_inst, params[0])
+        params_dict = {
+            "value" : {f"p{i}" : params[0][i] for i in range(len(params[0]))},
+            "error" : {f"p{i}" : params[1][i] for i in range(len(params[1]))}
+        }
+
+        reco_KE_ff =  reco_KE_inst - cross_section.UpstreamEnergyLoss(reco_KE_inst, params_dict["value"])
         Plots.PlotHistComparison([reco_KE_ff, mc.trueParticles.beam_KE_front_face], labels = ["$KE^{reco}_{ff}$", "$KE^{true}_{ff}$"], x_range = [bins[0], bins[-1]], xlabel = "Kinetic energy (MeV)")
         pdf.savefig()
 
-    params_dict = {
-        "value" : {f"p{i}" : params[0][i] for i in range(len(params[0]))},
-        "error" : {f"p{i}" : params[1][i] for i in range(len(params[1]))}
-    }
     print(f"fitted parameters : {params_dict}")
     with open(args.out + "fit_parameters.json", "w") as f:
         json.dump(params_dict, f)

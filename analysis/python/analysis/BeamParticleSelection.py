@@ -10,7 +10,6 @@ TODO Cleanup beam quality cut code
 """
 import awkward as ak
 import numpy as np
-from particle import Particle
 
 from python.analysis import vector
 from python.analysis.Master import Data

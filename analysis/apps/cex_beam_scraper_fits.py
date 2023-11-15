@@ -143,7 +143,7 @@ def BeamScraperPlots(mc: Master.Data, beam_inst_KE_bins : list, beam_inst_KE : a
 
     output = {}
 
-    for i in Plots.MultiPlot(len(beam_inst_KE_bins)-1, sharex = True, sharey = True):
+    for i in Plots.MultiPlot(len(beam_inst_KE_bins)-1):
         if i == len(beam_inst_KE_bins): continue
         bin_edges = (beam_inst_KE_bins[i], beam_inst_KE_bins[i+1])
         bin_label = "$KE^{reco}_{inst}$:" + f"[{beam_inst_KE_bins[i]},{beam_inst_KE_bins[i+1]}] (MeV)"

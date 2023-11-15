@@ -313,7 +313,7 @@ def MeanTrackScoreKDE(mc : Master.Data, args : argparse.Namespace):
     has_pfo = cross_section.BeamParticleSelection.HasFinalStatePFOsCut(mc_copy) #! add as preselection
     mc_copy.Filter([has_pfo], [has_pfo])
 
-    mean_track_score = ak.fill_none(ak.mean(mc_copy.recoParticles.trackScore, axis = -1), -0.05)
+    mean_track_score = ak.fill_none(ak.mean(mc_copy.recoParticles.track_score, axis = -1), -0.05)
 
     true_processes = cross_section.EventSelection.create_regions_new(mc_copy.trueParticles.nPi0, mc_copy.trueParticles.nPiPlus + mc_copy.trueParticles.nPiMinus)
 
