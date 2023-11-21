@@ -361,7 +361,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         # in_range = (p_max > func.bounds(x, y_obs)[0]) & (p_max < func.bounds(x, y_obs)[1])
         # p_min = np.where(in_range, func.bounds(x, y_obs)[1], p_max)
 
-        # plt.fill_between(x_interp, func.func(x_interp, *p_max), func.func(x_interp, *p_min), color = "#7f7f7f", alpha = 0.5, zorder = 10, label = "$1\sigma$ error region")
+        plt.fill_between(x_interp, func.func(x_interp, *p_max), func.func(x_interp, *p_min), color = "#7f7f7f", alpha = 0.5, zorder = 10, label = "$1\sigma$ error region")
 
         if plot_style == "hist":
             marker = ""

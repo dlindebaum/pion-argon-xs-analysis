@@ -12,6 +12,7 @@ import warnings
 import awkward as ak
 import matplotlib
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.ticker import AutoMinorLocator, MultipleLocator
@@ -991,9 +992,12 @@ def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label:
         plt.bar(x, y, width, xerr = xerr, yerr = yerr, linestyle = linestyle, label = label, color = color, alpha = alpha, capsize = capsize, zorder = zorder)
     elif style == "step":
         if (xerr is not None): warnings.warn("x error bars are not supported with style 'step'")
-        plt.step(x, y, where = "mid", linestyle = linestyle, label = label, color = color, alpha = alpha, zorder = zorder)
+        p1 = plt.step(x, y, where = "mid", linestyle = linestyle, color = color, alpha = alpha, zorder = zorder, label = label)
         if yerr is not None:
             plt.fill_between(x, y + yerr, y - yerr, step = "mid", alpha = 0.25, color = color)
+            p2 = mpatches.Patch(color=color, alpha=0.25, linewidth=0)
+        # handles = ((p1[0],p2),)
+        # labels  = (label,)
 
     elif style == "scatter":
         plt.errorbar(x, y, yerr, xerr, marker = marker, linestyle = linestyle, label = label, color = color, markersize = markersize, alpha = alpha, capsize = capsize, zorder = zorder)
@@ -1007,6 +1011,9 @@ def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label:
     plt.xscale(x_scale)
     plt.yscale(y_scale)
     if label != "":
+        # if style == "step":
+        #     plt.legend(handles = handles, labels = labels)
+        # else:
         plt.legend()
     if annotation is not None:
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
@@ -1036,7 +1043,7 @@ def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None
         # data = np.clip(data, min(range), max(range))
         data = ClipJagged(data, min(range), max(range))
 
-    height, edges, _ = plt.hist(data, bins, label = label, alpha = alpha, density = density, histtype = histtype, stacked = stacked, color = color, range = range, weights = weights)
+    height, edges, _ = plt.hist(data, bins, label = label, alpha = alpha, density = density, histtype = histtype, stacked = stacked, color = color, range = range if range and len(range) == 2 else None, weights = weights)
     binWidth = round((edges[-1] - edges[0]) / len(edges), sf)
     # TODO: make ylabel a parameter
     if density == False:
@@ -1060,7 +1067,10 @@ def PlotHist2DMarginal(data_x, data_y, bins: int = 100, x_range: list = None, y_
     plt.subplot(2, 2, 2).set_visible(False) # top right
 
     plt.subplot(2, 2, 3) # bottom left (main plot)
-    h, (x_e, y_e) = PlotHist2D(data_x, data_y, bins, x_range, y_range, z_range, xlabel, ylabel, title, label, x_scale, y_scale, False, annotation, cmap, norm, False)
+
+    not_nan = (~np.isnan(data_x)) & (~np.isnan(data_y))
+
+    h, (x_e, y_e) = PlotHist2D(data_x[not_nan], data_y[not_nan], bins, x_range, y_range, z_range, xlabel, ylabel, title, label, x_scale, y_scale, False, annotation, cmap, norm, False)
 
     plt.subplot(2, 2, 1) # top right (x projection)
     plt.hist(x_e[:-1], bins = x_e, weights = np.sum(h, 1), density = True)
@@ -1128,14 +1138,14 @@ def PlotHistComparison(datas, x_range: list = [], bins: int = 100, xlabel: str =
     for i in range(len(labels)):
         data = datas[i]
         if x_range and len(x_range) == 2:
-            data = data[data > x_range[0]]
-            data = data[data < x_range[1]]
+            data = data[data > min(x_range)]
+            data = data[data < max(x_range)]
         if i == 0:
             _, edges = PlotHist(
-                data, bins, xlabel, title, labels[i], alpha, histtype, sf, density, color = colours[i], newFigure=False)
+                data, bins, xlabel, title, labels[i], alpha, histtype, sf, density, color = colours[i], range = x_range, newFigure=False)
         else:
             PlotHist(data, edges, xlabel, title,
-                     labels[i], alpha, histtype, sf, density, color = colours[i], newFigure=False)
+                     labels[i], alpha, histtype, sf, density, color = colours[i], range = x_range, newFigure=False)
     plt.xscale(x_scale)
     plt.yscale(y_scale)
     plt.tight_layout()
