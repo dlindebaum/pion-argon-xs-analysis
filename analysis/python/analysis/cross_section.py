@@ -24,6 +24,7 @@ import uproot
 from cabinetry.fit.results_containers import FitResults
 from particle import Particle
 from pyunfold import iterative_unfold, Logger
+from scipy.interpolate import interp1d
 
 from python.analysis import Master, BeamParticleSelection, PFOSelection, EventSelection, Fitting, Plots, vector, Tags
 from python.analysis.shower_merging import SetPlotStyle
@@ -34,6 +35,36 @@ def nandiv(num, den):
 
 def KE(p, m):
     return (p**2 + m**2)**0.5 - m
+
+
+def weighted_chi_sqr(observed, expected, uncertainties):
+    u = np.array(uncertainties)
+    u[u == 0] = np.nan
+    return np.nansum((observed - expected)**2 / u**2) / len(observed)
+
+
+def PlotXSComparison(xs : dict[np.array], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", newFigure : bool = True):
+    xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos, energy_slice.max_pos + energy_slice.width])
+
+    sim_curve_interp = GetInterpolatedCurve(xs_sim, process)
+    x = energy_slice.pos - energy_slice.width/2
+
+    if newFigure is True: Plots.plt.figure()
+    chi_sqrs = {}
+    for k, v in xs.items():
+        w_chi_sqr = weighted_chi_sqr(v[0], sim_curve_interp(x), v[1])
+        chi_sqrs[k] = w_chi_sqr
+        Plots.Plot(energy_slice.pos - energy_slice.width/2, v[0], yerr = v[1], label = k + ", $\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}", color = colors[k], linestyle = "", marker = "x", newFigure = False)
+    
+    if process == "single_pion_production":
+        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = "simulation", title = "single pion production", newFigure = False, xlabel = "$KE_{int} (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)
+    else:
+        xs_sim.Plot(process, label = "simulation", color = xs_sim_color)
+
+    Plots.plt.ylim(0)
+    if max(Plots.plt.gca().get_ylim()) > np.nanmax(sim_curve_interp(xs_sim.KE).astype(float)) * 2:
+        Plots.plt.ylim(0, max(sim_curve_interp(xs_sim.KE)) * 2)
+    return chi_sqrs
 
 
 def LoadSelectionFile(file : str):
@@ -48,35 +79,6 @@ def LoadSelectionFile(file : str):
     with open(file, "rb") as f:
         obj = dill.load(f)
     return obj
-
-#! currently not used, wait until the new cut handling is done.
-def GenerateSelectionAndMasks(events : Master.Data, fits : dict) -> dict:
-    beam_selection_mask = BeamParticleSelection.CreateDefaultSelection(events, False, fits, False, False)
-    events.Filter([beam_selection_mask], [beam_selection_mask])
-
-    good_PFO_selection_mask = PFOSelection.GoodShowerSelection(events, False)
-    events.Filter([good_PFO_selection_mask])
-
-    pi_plus_selection_mask = PFOSelection.DaughterPiPlusSelection(events)
-    photon_selection_mask = PFOSelection.InitialPi0PhotonSelection(events)
-
-    pi0_selection_mask = EventSelection.Pi0Selection(events, photon_selection_mask)
-
-    truth_regions = EventSelection.create_regions(events.trueParticles.nPi0, events.trueParticles.nPiPlus)
-
-    reco_pi0_counts = EventSelection.count_pi0_candidates(events, exactly_two_photons = True)
-    reco_pi_plus_counts_mom_cut = EventSelection.count_charged_pi_candidates(events,energy_cut = None)
-    reco_regions = EventSelection.create_regions(reco_pi0_counts, reco_pi_plus_counts_mom_cut)
-    masks  = {
-        "beam_selection"      : beam_selection_mask,
-        "valid_pfo_selection" : good_PFO_selection_mask,
-        "pi_plus_selection"   : pi_plus_selection_mask,
-        "photon_selection"    : photon_selection_mask,
-        "pi0_selection"       : pi0_selection_mask,
-        "truth_regions"       : truth_regions,
-        "reco_regions"        : reco_regions
-    }
-    return masks
 
 
 def SaveSelection(file : str, masks : dict):
@@ -184,7 +186,7 @@ class BetheBloch:
             if dEdX < 0: dEdX = 0
         return dEdX
 
-
+    @staticmethod
     def InteractingKE(KE_init : ak.Array, track_length : ak.Array, particle : Particle, n : int):
         KE_int = KE_init
         for i in range(n):
@@ -606,12 +608,6 @@ class GeantCrossSections:
         self.exclusive_processes = list(self.labels.values())
         self.exclusive_processes.remove("total_inelastic")
         self.n_cascades = n_cascades
-        # for k in vars(self):
-        #     if k not in ["KE", "file", "total_inelastic"]:
-        #         if "frac" not in k:
-        #             self.exclusive_processes.append(k)
-
-        # self.exclusive_processes = [k for k in vars(self) if k not in ["KE", "file", "total_inelastic"]]
         pass
 
     def Stat_Error(self, xs : str):
@@ -646,6 +642,14 @@ class GeantCrossSections:
                     title = xs.replace("_", " ")
             Plots.Plot(self.KE, getattr(self, xs), label = label, title = title, newFigure = False, xlabel = "$KE_{int} (MeV)$", ylabel = "$\sigma (mb)$", color = color)
             Plots.plt.fill_between(self.KE, getattr(self, xs) - self.Stat_Error(xs), getattr(self, xs) + self.Stat_Error(xs), color = Plots.plt.gca()._get_lines.get_next_color())
+
+
+def GetInterpolatedCurve(xs_sim : GeantCrossSections, process : str):
+    if process == "single_pion_production":
+        sigma = xs_sim.quasielastic + xs_sim.double_charge_exchange
+    else:
+        sigma = getattr(xs_sim, process)
+    return interp1d(xs_sim.KE, sigma, fill_value = "extrapolate")
 
 
 class ThinSlice:
@@ -696,7 +700,6 @@ class ThinSlice:
 
         std_energy = np.divide(sum_energy_sqr, counts) - mean_energy**2
         error_mean_energy = np.sqrt(np.divide(std_energy, counts))
-        # error_mean_energy = np.divide((sum_energy_sqr)**0.5, counts)
 
         return mean_energy, error_mean_energy
 
@@ -775,21 +778,21 @@ class EnergySlice:
 
     @staticmethod
     def SliceNumbers(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, energy_slices : Slices):
-        init_slice = energy_slices(ff_energy[~outside_tpc]).num + 1 # equivilant to ceil
-        int_slice = energy_slices(int_energy[~outside_tpc]).num
+        init_slice = energy_slices(ff_energy).num + 1 # equivilant to ceil
+        int_slice = energy_slices(int_energy).num
 
         init_slice = EnergySlice.TrunacteSlices(init_slice, energy_slices)
         int_slice = EnergySlice.TrunacteSlices(int_slice, energy_slices)
 
         # removes instances where the particle incident energy and interacting energy are in the same slice (Yinrui calls this an incomplete slice)
         # i.e. this happens if the particle interacting in its first slice, must be an artifact of the energy slicing but not sure why.
-        bad_slices = int_slice < init_slice
+        bad_slices = (int_slice < init_slice) | outside_tpc
         init_slice = ak.where(bad_slices, -1, init_slice)
         int_slice = ak.where(bad_slices, -1, int_slice)
         return init_slice, int_slice
 
     @staticmethod
-    def CountingExperiment(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices, interact_only : bool = False):
+    def CountingExperiment(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices, interact_only : bool = False, weights : np.array = None):
         """ Creates the interacting and incident histograms.
 
         Args:
@@ -804,17 +807,14 @@ class EnergySlice:
         """
         init_slice, int_slice = EnergySlice.SliceNumbers(int_energy, ff_energy, outside_tpc, energy_slices)
 
-        # slice_bins = range(-1, energy_slices.max_num + 1)
         slice_bins = np.arange(-1 - 0.5, energy_slices.max_num + 1.5)
 
+        exclusive_weights = weights[channel] if weights is not None else None
 
-        # n_interact_exclusive = np.roll(np.histogram(np.array(int_slice[channel[~outside_tpc]]), slice_bins)[0], -1)
-        n_interact_exclusive = np.histogram(np.array(int_slice[channel[~outside_tpc]]), slice_bins)[0]
+        n_interact_exclusive = np.histogram(np.array(int_slice[channel]), slice_bins, weights = exclusive_weights)[0]
         if interact_only == False:
-            # n_initial = np.roll(np.histogram(np.array(init_slice), slice_bins)[0], -1)
-            n_initial = np.histogram(np.array(init_slice), slice_bins)[0]
-            # n_interact_inelastic = np.roll(np.histogram(np.array(int_slice), slice_bins)[0], -1)
-            n_interact_inelastic = np.histogram(np.array(int_slice), slice_bins)[0]
+            n_initial = np.histogram(np.array(init_slice), slice_bins, weights = weights)[0]
+            n_interact_inelastic = np.histogram(np.array(int_slice), slice_bins, weights = weights)[0]
 
             n_incident = EnergySlice.NIncident(n_initial, n_interact_inelastic)
 
@@ -945,8 +945,6 @@ class Toy:
         else:
             return
     
-        if smearing:
-            self.df = pd.concat([self.df, self.RecoQuantities(self.df)], axis = 1)
         self.exclusive_processes = np.unique(self.df.exclusive_process)
         self.exclusive_processes = self.exclusive_processes[self.exclusive_processes != ""]
 
@@ -968,7 +966,7 @@ class Toy:
         return regions
 
     @staticmethod
-    def ComputeCounts(true_regions : dict, reco_regions : dict) -> np.array:
+    def ComputeCounts(true_regions : dict, reco_regions : dict, selection_efficincy : np.array = None) -> np.array:
         """ Computes the counts of each combination of reco and true regions.
 
         Args:
@@ -983,7 +981,9 @@ class Toy:
         for t in true_regions:
             true_counts = []
             for r in reco_regions:
-                true_counts.append(ak.sum(true_regions[t] & reco_regions[r])) # true counts for each reco region
+                mask = true_regions[t] & reco_regions[r]
+                if selection_efficincy is not None: mask = mask & selection_efficincy
+                true_counts.append(ak.sum(mask)) # true counts for each reco region
             counts.append(true_counts)
         return counts
 
@@ -1037,9 +1037,10 @@ class Toy:
         return
 
 
-    def NInteract(self, energy_slice : Slices, process : np.array, mask : np.array = None):
+    def NInteract(self, energy_slice : Slices, process : np.array, mask : np.array = None, weights : np.array = None):
         if mask is None: mask = np.ones(len(self.df), dtype = bool)
-        n_interact = EnergySlice.CountingExperiment(self.df.KE_int_smeared[mask].values, self.df.KE_init_smeared[mask].values, self.outside_tpc_smeared[mask].values, process[mask].values, energy_slice, interact_only = True)
+        w = weights if weights is None else weights[mask]
+        n_interact = EnergySlice.CountingExperiment(self.df.KE_int_smeared[mask].values, self.df.KE_init_smeared[mask].values, self.outside_tpc_smeared[mask].values, process[mask].values, energy_slice, interact_only = True, weights = w)
         return n_interact
 
 
@@ -1052,13 +1053,29 @@ class AnalysisInput:
     outside_tpc_reco : np.array
     outside_tpc_true : np.array
     # observables
+    track_length_reco : np.array
     KE_int_reco : np.array
     KE_init_reco : np.array
     mean_track_score : np.array
+    track_length_true : np.array
     KE_int_true : np.array
     KE_init_true : np.array
 
-    def NInteract(self, energy_slice : Slices, process: np.array, reco : bool = True):
+
+    def ToFile(self, file : str):
+        SaveSelection(file, self)
+        return
+
+    @staticmethod
+    def FromFile(file): #* seems a bit extra but why not
+        obj = LoadSelectionFile(file)
+        if type(obj) == AnalysisInput:
+            return obj
+        else:
+            raise Exception("not an analysis input file")
+
+    def NInteract(self, energy_slice : Slices, process: np.array, mask : np.array = None, reco : bool = True, weights : np.array = None):
+        if mask is None: mask = np.ones(len(self.KE_int_reco), dtype = bool)
         if reco is True:
             KE_int = self.KE_int_reco
             KE_init = self.KE_init_reco
@@ -1067,12 +1084,13 @@ class AnalysisInput:
             KE_int = self.KE_int_true
             KE_init = self.KE_init_true
             outside_tpc = self.outside_tpc_true
-        n_interact = EnergySlice.CountingExperiment(KE_int, KE_init, outside_tpc, process, energy_slice, interact_only = True)
+        n_interact = EnergySlice.CountingExperiment(KE_int[mask], KE_init[mask], outside_tpc[mask], process[mask], energy_slice, interact_only = True, weights = weights[mask] if weights is not None else weights)
         return n_interact
 
     @staticmethod
     def CreateAnalysisInputToy(toy : Toy):
         inclusive_events = (toy.df.inclusive_process != "decay").values
+
         regions = {k : v.values for k, v in toy.reco_regions.items()}
         process = {k : v.values for k, v in toy.truth_regions.items()}
 
@@ -1082,9 +1100,11 @@ class AnalysisInput:
             process,
             toy.outside_tpc_smeared.values,
             toy.outside_tpc.values,
+            toy.df.z_int_smeared.values,
             toy.df.KE_int_smeared.values,
             toy.df.KE_init_smeared.values,
             toy.df.mean_track_score.values,
+            toy.df.z_int.values,
             toy.df.KE_int.values,
             toy.df.KE_init.values
             )
@@ -1097,20 +1117,20 @@ class AnalysisInput:
         reco_upstream_loss = UpstreamEnergyLoss(reco_KE_inst, upstream_energy_loss_params)
         reco_KE_ff = reco_KE_inst - reco_upstream_loss
         reco_KE_int = reco_KE_ff - RecoDepositedEnergy(events, reco_KE_ff, "bb")
-        # reco_track_length = mc.recoParticles.beam_track_length
+        reco_track_length = events.recoParticles.beam_track_length
         outside_tpc_reco = (events.recoParticles.beam_endPos_SCE.z < 0) | (events.recoParticles.beam_endPos_SCE.z > 700)
 
         if true_regions is not None:
             true_KE_ff = events.trueParticles.beam_KE_front_face
             true_KE_int = events.trueParticles.beam_traj_KE[:, -2]
-            # true_track_length = mc.trueParticles.beam_track_length
+            true_track_length = events.trueParticles.beam_track_length
             outside_tpc_true = (events.trueParticles.beam_traj_pos.z[:, -1] < 0) | (events.trueParticles.beam_traj_pos.z[:, -1] > 700)
         else:
             true_KE_int = None
             true_KE_ff = None
             outside_tpc_true = None
 
-        mean_track_score = ak.fill_none(ak.mean(events.recoParticles.trackScore, axis = -1), -0.05) # fill null values in case empty events are supplied
+        mean_track_score = ak.fill_none(ak.mean(events.recoParticles.track_score, axis = -1), -0.05) # fill null values in case empty events are supplied
 
         inelastic = np.ones(len(events.eventNum), dtype = bool)
         return AnalysisInput(
@@ -1119,13 +1139,56 @@ class AnalysisInput:
             true_regions,
             outside_tpc_reco,
             outside_tpc_true,
+            reco_track_length,
             reco_KE_int,
             reco_KE_ff,
             mean_track_score,
+            true_track_length,
             true_KE_int,
             true_KE_ff
             )
 
+    def CreateTrainTestSamples(self, seed : int, train_fraction : float = None):
+        rng = np.random.default_rng(seed)
+        sample = rng.permutation(len(self.KE_init_reco))
+
+        if train_fraction is None:
+            fraction = len(sample) // 2
+        else:
+            fraction = round(train_fraction * len(sample))
+
+        train_indices = sample[:fraction]
+        test_indices = sample[fraction:]
+
+        train = {}
+        test = {}
+        for attr in vars(self):
+            value = getattr(self, attr)
+            if hasattr(value, "__iter__"):
+                if type(value) is dict:
+                    tmp_dict_train = {}
+                    tmp_dict_test = {}
+                    for k, v in value.items():
+                        tmp_dict_train[k] = v[train_indices]
+                        tmp_dict_test[k] = v[test_indices]
+                    train[attr] = tmp_dict_train
+                    test[attr] = tmp_dict_test
+                else:
+                    train[attr] = value[train_indices]
+                    test[attr] = value[test_indices]
+
+        return {"train" : AnalysisInput(**train), "test" : AnalysisInput(**test)}
+
+
+    @staticmethod
+    def CrossSectionEnergySlice(N_inc : np.array, N_int : np.array, N_int_ex : np.array, energy_slices : Slices, N_inc_err : np.array = None, N_int_err : np.array = None, N_int_ex_err : np.array = None):
+        slice_dEdX = EnergySlice.Slice_dEdX(energy_slices, Particle.from_pdgid(211))
+        return EnergySlice.CrossSection(N_int_ex[1:], N_int[1:], N_inc[1:], slice_dEdX, energy_slices.width, N_int_ex_err[1:], N_int_ex[1:], N_inc_err[1:])
+
+    @staticmethod
+    def CrossSectionSpatialSlice(N_init, N_int, N_int_ex, spatial_slices):
+        
+        return
 
 class RegionFit:
 
@@ -1177,9 +1240,10 @@ class RegionFit:
         return observations
 
     @staticmethod
-    def Fit(observations, model : pyhf.Model, verbose : bool = True) -> FitResults:
+    def Fit(observations, model : pyhf.Model, init_params : list[float] = None, verbose : bool = True) -> FitResults:
         pyhf.set_backend(backend = "numpy", custom_optimizer = "minuit")
-        result = cabinetry.fit.fit(model, observations, custom_fit = False, tolerance = 0.01)
+        if verbose is True: print(f"{init_params=}")
+        result = cabinetry.fit.fit(model, observations, init_pars = init_params, custom_fit = True, tolerance = 0.001)
         if verbose is True: print(f"{model.config.poi_index=}")
         if verbose is True: print(f"{result=}")
         return result
@@ -1196,59 +1260,29 @@ class RegionFit:
         counts_matrix = np.array(counts_matrix, dtype = int)
         return counts_matrix
 
-
     @staticmethod
-    def CreateKEIntTemplates(toy : Toy, slices : Slices) -> np.array:
-        """ Create template histograms for the interacting kinetic energy histogram i.e. N_interact.
-
-        Args:
-            toy (Toy): toy model
-            slices (Slices): energy slices
-
-        Returns:
-            np.array: template histograms (number of templates = number of reco regions * number of true process)
-        """
+    def CreateKEIntTemplates(analysis_input : AnalysisInput, energy_slices : Slices, weights : np.array = None) -> list[np.array]:
         model_input_data = []
-
-        for c in toy.reco_region_labels:
+        for c in analysis_input.regions:
             tmp = []
-            for s in toy.truth_region_labels:
-                tmp.append(toy.NInteract(slices, toy.truth_regions[s], toy.reco_regions[c]))
+            for s in analysis_input.exclusive_process:
+                tmp.append(analysis_input.NInteract(energy_slices, analysis_input.exclusive_process[s], analysis_input.regions[c], True, weights) + 1)
             model_input_data.append(tmp)
         return model_input_data
 
     @staticmethod
-    def CreateMeanTrackScoreTemplates(toy : Toy, bins : np.array) -> np.array:
-        """ Create template histograms for the mean track score.
-
-        Args:
-            toy (Toy): toy model
-            bins (np.array): bins edges for mean track score
-
-        Returns:
-            np.array: template histogram, 1 for each true process.
-        """
+    def CreateMeanTrackScoreTemplates(analysis_input : AnalysisInput, bins : np.array, weights : np.array = None) -> np.array:
         templates = []
-        for t in toy.truth_regions:
-            templates.append(np.histogram(toy.df.mean_track_score[toy.truth_regions[t]], bins)[0])
+        for t in analysis_input.exclusive_process:
+            mask = analysis_input.exclusive_process[t]
+            templates.append(np.histogram(analysis_input.mean_track_score[mask], bins, weights = weights[mask] if weights is not None else weights)[0])
         return np.array(templates)
 
     @staticmethod
-    def CreateModel(toy_template : Toy, energy_slice : Slices, mean_track_score_bins : np.array, return_templates : bool = False) -> pyhf.Model:
-        """ Creates the model required to make the region fit. Optionally returns the templates as separate arrays
-
-        Args:
-            toy_template (cross_section.Toy): toy model used to create the templates
-            energy_slice (cross_section.Slices): energy slices
-            mean_track_score_bins (np.array): mean track score bin edges
-            return_templates (bool, optional): return template histograms. Defaults to False.
-
-        Returns:
-            cross_section.pyhf.Model: model for region fit
-        """
-        templates_energy = RegionFit.CreateKEIntTemplates(toy_template, energy_slice)
-        templates_mean_track_score = RegionFit.CreateMeanTrackScoreTemplates(toy_template, mean_track_score_bins)
-        model = RegionFit.Model(len(toy_template.reco_region_labels), templates_energy, templates_mean_track_score, mc_stat_unc = True)
+    def CreateModel(template : AnalysisInput, energy_slice : Slices, mean_track_score_bins : np.array, return_templates : bool = False, weights : np.array = None) -> pyhf.Model:
+        templates_energy = RegionFit.CreateKEIntTemplates(template, energy_slice, weights)
+        templates_mean_track_score = RegionFit.CreateMeanTrackScoreTemplates(template, mean_track_score_bins, weights)
+        model = RegionFit.Model(len(template.regions), templates_energy, templates_mean_track_score, mc_stat_unc = True)
         RegionFit.PrintModelSpecs(model)
         if return_templates is True:
             return model, templates_energy, templates_mean_track_score
@@ -1259,7 +1293,7 @@ class RegionFit:
     def CreateObservedInputData(fit_input : AnalysisInput, slices : Slices, mean_track_score_bins : np.array = None) -> np.array:
         observed_binned = []
         for v in fit_input.regions.values():
-            observed_binned.append(fit_input.NInteract(slices, v, True))        
+            observed_binned.append(fit_input.NInteract(slices, v & fit_input.inclusive_process, reco = True))
         if mean_track_score_bins is not None:
             observed_binned.append(np.histogram(fit_input.mean_track_score[fit_input.inclusive_process], mean_track_score_bins)[0])
         return observed_binned

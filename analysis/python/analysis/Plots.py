@@ -1589,10 +1589,9 @@ class RatioPlot():
         if (self.y2_err is None) and (self.y1_err is None):
             ratio_err = None
         else:
-            ratio_err = ratio * np.sqrt((self.y1_err/self.y1)**2 + (self.y2_err/self.y2)**2)
+            ratio_err = abs(ratio * np.sqrt((self.y1_err/self.y1)**2 + (self.y2_err/self.y2)**2))
 
-
-        Plot(self.x, ratio, yerr = abs(ratio_err), xlabel = self.xlabel, ylabel = self.ylabel, marker = "o", color = "black", linestyle = "", newFigure = False)
+        Plot(self.x, ratio, yerr = ratio_err, xlabel = self.xlabel, ylabel = self.ylabel, marker = "o", color = "black", linestyle = "", newFigure = False)
         ticks = [0, 0.5, 1, 1.5, 2] # hardcode the yaxis to have 5 ticks
         plt.yticks(ticks, np.char.mod("%.2f", ticks))
         plt.ylim(0, 2)

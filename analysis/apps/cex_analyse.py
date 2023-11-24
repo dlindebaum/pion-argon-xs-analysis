@@ -36,7 +36,7 @@ def BeamPionSelection(events : cross_section.Master.Data, args : cross_section.a
     events_copy.Filter([args.selection_masks["mc"]['null_pfo']['ValidPFOSelection']]) # apply PFO preselection here
     return events_copy
 
-
+@cross_section.Master.timer
 def RegionSelection(events : cross_section.Master.Data, args : cross_section.argparse.Namespace, is_mc : bool) -> dict[np.array]:
     """ Get reco and true regions (if possible) for ntuple.
 
@@ -50,31 +50,61 @@ def RegionSelection(events : cross_section.Master.Data, args : cross_section.arg
     """
     events_copy = events.Filter(returnCopy = True)
 
-    n_pi =  SelectionTools.GetPFOCounts(args.selection_masks["mc"]["pi"])
-    n_pi0 = SelectionTools.GetPFOCounts(args.selection_masks["mc"]["pi0"])
+    if is_mc:
+        key = "mc"
+    else:
+        key = "data"
+
+    n_pi =  SelectionTools.GetPFOCounts(args.selection_masks[key]["pi"])
+    n_pi0 = SelectionTools.GetPFOCounts(args.selection_masks[key]["pi0"])
     reco_regions = cross_section.EventSelection.create_regions_new(n_pi0, n_pi)
 
     if is_mc:
         n_pi_true = events_copy.trueParticles.nPiMinus + events_copy.trueParticles.nPiPlus
         n_pi0_true = events_copy.trueParticles.nPi0
 
+        is_pip = events_copy.trueParticles.pdg[:, 0] == 211
+
         for m in args.selection_masks["mc"]["beam"].values():
             n_pi_true = n_pi_true[m]
             n_pi0_true = n_pi0_true[m]
+            is_pip = is_pip[m]
         true_regions = cross_section.EventSelection.create_regions_new(n_pi0_true, n_pi_true)
+        for k in true_regions:
+            true_regions[k] = true_regions[k] & (is_pip)
+        for k in reco_regions:
+            reco_regions[k] = reco_regions[k] & (is_pip)
         return reco_regions, true_regions
     else:
         return reco_regions
 
 
-def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_section.Slices, toy_template : cross_section.Toy) -> cross_section.cabinetry.model_utils.ModelPrediction:
-    mean_track_score_bins = np.linspace(0, 1, 21, True)
+def CreateInitParams(model : cross_section.pyhf.Model, analysis_input : cross_section.AnalysisInput, energy_slices : cross_section.Slices, mean_track_score_bins : np.array):
+    prefit_pred = cross_section.cabinetry.model_utils.prediction(model)
+    template_KE = [np.sum(prefit_pred.model_yields[i], 0) for i in range(len(prefit_pred.model_yields))][:-1]
+    input_data = cross_section.RegionFit.CreateObservedInputData(analysis_input, energy_slices, mean_track_score_bins)
 
-    model, _, _ = cross_section.RegionFit.CreateModel(toy_template, energy_slice, mean_track_score_bins, True)
+    init = model.config.suggested_init()
+    mu_init = [np.sum(input_data[i]) / np.sum(template_KE[i]) for i in range(len(template_KE))]
+    poi = [i for i in model.config.parameters if "mu_" in i]
+    poi_ind =  [model.config.par_slice(i).start for i in poi]
+    for i, v in zip(poi_ind, mu_init):
+        init[i] = v
+    return init
+
+
+def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_section.Slices, mean_track_score_bins : np.array, template_input : cross_section.AnalysisInput, suggest_init : bool = False, template_weights : np.array = None) -> cross_section.cabinetry.model_utils.ModelPrediction:
+
+    model = cross_section.RegionFit.CreateModel(template_input, energy_slice, mean_track_score_bins, False, template_weights)
 
     observed = cross_section.RegionFit.GenerateObservations(fit_input, energy_slice, mean_track_score_bins, model)
-    result = cross_section.RegionFit.Fit(observed, model, False)
 
+    if suggest_init is True:
+        init_params = CreateInitParams(model, fit_input, energy_slice, mean_track_score_bins)
+    else:
+        init_params = None
+
+    result = cross_section.RegionFit.Fit(observed, model, init_params, verbose = True)
     return cross_section.cabinetry.model_utils.prediction(model, fit_results = result)
 
 
@@ -127,47 +157,9 @@ def Unfolding(hist_reco : dict[np.array], hist_reco_err : dict[np.array], energy
     return cross_section.Unfold.Unfold(hist_reco, hist_reco_err, response_matrices, ts_stop = 1E-2, ts = "bf", max_iter = 100)
 
 
-def GetInterpolatedCurve(xs_sim : cross_section.GeantCrossSections, process : str):
-    if process == "single_pion_production":
-        sigma = xs_sim.quasielastic + xs_sim.double_charge_exchange
-    else:
-        sigma = getattr(xs_sim, process)
-    return interp1d(xs_sim.KE, sigma, fill_value = "extrapolate")
-
-
-def weighted_chi_sqr(observed, expected, uncertainties):
-    u = np.array(uncertainties)
-    u[u == 0] = np.nan
-    return np.nansum((observed - expected)**2 / u**2) / len(observed)
-
-
-def PlotXSComparison(xs : dict[np.array], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", newFigure : bool = True):
-    xs_sim = cross_section.GeantCrossSections(energy_range = [energy_slice.min_pos, energy_slice.max_pos + energy_slice.width])
-
-    sim_curve_interp = GetInterpolatedCurve(xs_sim, process)
-    x = energy_slice.pos - energy_slice.width/2
-
-    if newFigure is True: Plots.plt.figure()
-    chi_sqrs = {}
-    for k, v in xs.items():
-        w_chi_sqr = weighted_chi_sqr(v[0], sim_curve_interp(x), v[1])
-        chi_sqrs[k] = w_chi_sqr
-        Plots.Plot(energy_slice.pos - energy_slice.width/2, v[0], yerr = v[1], label = k + ", $\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}", color = colors[k], linestyle = "", marker = "x", newFigure = False)
-    
-    if process == "single_pion_production":
-        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = "simulation", title = "single pion production", newFigure = False, xlabel = "$KE_{int} (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)
-    else:
-        xs_sim.Plot(process, label = "simulation", color = xs_sim_color)
-
-    Plots.plt.ylim(0)
-    if max(Plots.plt.gca().get_ylim()) > np.nanmax(sim_curve_interp(xs_sim.KE).astype(float)) * 2:
-        Plots.plt.ylim(0, max(sim_curve_interp(xs_sim.KE)) * 2)
-    return chi_sqrs
-
-
-def CreateAnalysisInput(sample : cross_section.Toy | cross_section.Master.Data, args : cross_section.argparse.Namespace, is_mc : bool) -> cross_section.AnalysisInput:
+def CreateAnalysisInput(sample : cross_section.Toy | cross_section.Master.Data, args : cross_section.argparse.Namespace, is_mc : bool, beam_selection : bool = False) -> cross_section.AnalysisInput:
     if type(sample) == cross_section.Toy:
-        ai = cross_section.AnalysisInput.CreateAnalysisInputToy(sample)
+        ai = cross_section.AnalysisInput.CreateAnalysisInputToy(sample, beam_selection)
     elif type(sample) == cross_section.Master.Data:
         sample_selected = BeamPionSelection(sample, args, is_mc)
         if is_mc:
@@ -179,7 +171,6 @@ def CreateAnalysisInput(sample : cross_section.Toy | cross_section.Master.Data, 
     else:
         raise Exception(f"object type {type(sample)} not a valid sample")
     return ai
-
 
 def main(args):
     cross_section.SetPlotStyle(extend_colors = True)
@@ -202,6 +193,7 @@ def main(args):
         raise Exception("--toy, --mc and or --data must be specified")
 
     energy_slices = cross_section.Slices(50, 0, 1050, True) #TODO make configurable
+    mean_track_score_bins = np.linspace(0, 1, 21, True) #TODO make configurable
     energy_bins = np.sort(np.insert(energy_slices.pos, 0, energy_slices.max_pos + energy_slices.width)) # for plotting
     xs = {}
     for k, v in samples.items():
@@ -212,9 +204,10 @@ def main(args):
 
         is_mc = False if k == "Data" else True
         analysis_input = CreateAnalysisInput(v, args, is_mc) # is mc not required for toy
+        template_input = cross_section.AnalysisInput.CreateAnalysisInputToy(args.toy_template) #! need to consolidate option for different template types
 
         with Plots.PlotBook(outdir + "plots.pdf") as book:
-            region_fit_result = RegionFit(analysis_input, energy_slices, args.toy_template)
+            region_fit_result = RegionFit(analysis_input, energy_slices, mean_track_score_bins, template_input)
             
             histograms_true_obs, histograms_reco_obs, histograms_reco_obs_err = BackgroundSubtraction(analysis_input, args.signal_process, energy_slices, region_fit_result, book) #? make separate background subtraction function?
             
@@ -237,7 +230,7 @@ def main(args):
             xs[k] = cross_section.EnergySlice.CrossSection(unfolding_result["int_ex"]["unfolded"][1:], unfolding_result["int"]["unfolded"][1:], n_incident_unfolded[1:], slice_dEdX, energy_slices.width, unfolding_result["int_ex"]["stat_err"][1:], unfolding_result["int"]["stat_err"][1:], n_incident_unfolded_err[1:])
 
     with Plots.PlotBook(args.out + "results.pdf") as book:
-        PlotXSComparison(xs, energy_slices, args.signal_process, {list(xs.keys())[0] : "C6"})
+        cross_section.PlotXSComparison(xs, energy_slices, args.signal_process, {list(xs.keys())[0] : "C6"})
         book.Save()
     return
 
