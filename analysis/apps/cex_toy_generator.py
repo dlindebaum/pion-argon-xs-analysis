@@ -77,9 +77,14 @@ def ResolveConfig(config : dict) -> argparse.Namespace:
         elif k == "beam_selection_efficiencies":
             #* that complex unpacking with pytables
             args.beam_selection_efficiencies = ReadHDF5File(v)
-        elif k in ["mean_track_score_kde"]:#, "modified_PDFs"]:
+        elif k == "mean_track_score_kde":
             setattr(args, k, LoadSelectionFile(v))
-            # args.mean_track_score_kde = LoadSelectionFile(v)
+        elif k == "beam_profile":
+            if v not in ["gaussian", "uniform"]:
+                args.beam_profile = LoadConfiguration(v)
+                args.beam_profile["function"] = getattr(Fitting, args.beam_profile["function"])
+            else:
+                setattr(args, k, v)
         else:
             setattr(args, k, v)
     return args
@@ -176,7 +181,7 @@ def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split
     return pdfs
 
 
-def GenerateIntialKEs(n : int, particle : Particle, cv : float, width : float, profile : str, rng : np.random.Generator = None) -> np.array:
+def GenerateIntialKEs(n : int, particle : Particle, cv : float, width : float, profile : str | dict, rng : np.random.Generator = None) -> np.array:
     """ Create a distribution of initial kinetic energy based on a profile i.e. pdf.
         Currently supported profiles are "uniform" and "gaussian".
 
@@ -192,16 +197,19 @@ def GenerateIntialKEs(n : int, particle : Particle, cv : float, width : float, p
     """
     if rng is None:
         rng = np.random.default_rng()
-    central_KE = (cv**2 + particle.mass**2)**0.5 - particle.mass
-    if profile == "gaussian":
-        return rng.normal(central_KE, width, n)
-    elif profile == "uniform":
-        return rng.uniform(central_KE - width/2, central_KE + width/2, n)
+    if type(profile) == str:
+        central_KE = (cv**2 + particle.mass**2)**0.5 - particle.mass
+        if profile == "gaussian":
+            return rng.normal(central_KE, width, n)
+        elif profile == "uniform":
+            return rng.uniform(central_KE - width/2, central_KE + width/2, n)
+        else:
+            raise ValueError(f"{profile} not a valid beam profile")
     else:
-        raise ValueError(f"{profile} not a valid beam profile")
+        return Fitting.RejectionSampling(n, profile["min"], profile["max"], profile["function"], profile["parameters"], rng = rng)
 
 @timer
-def Simulate(seed : int, KE_init : np.array, stepsize : float, pdfs : dict) -> tuple:
+def Simulate(seed : int, KE_init : np.array, step_size : float, pdfs : dict, smearing_params : dict) -> tuple:
     """ Generates interacting kinetic energies and position based on the initial kinetic energy with the bethe bloch formula,
         the total inelastic pdf is used to decide when a particle interacts (using rejection sampling) and then each particle which
         interacts is assosiated a particular exclusive interaction process, using rejection sampling. Particles which reach zero KE are considered
@@ -218,7 +226,7 @@ def Simulate(seed : int, KE_init : np.array, stepsize : float, pdfs : dict) -> t
     """
     rng = np.random.default_rng(seed)
 
-    interpolated_energy_loss = ComputeEnergyLoss(2*max(KE_init), stepsize/2) # precompute the energy loss and create a function to interpolate between them
+    interpolated_energy_loss = ComputeEnergyLoss(2*max(KE_init), step_size/2) # precompute the energy loss and create a function to interpolate between them
 
     survived = ~np.zeros(len(KE_init), dtype = bool) # keep track of which particles survived
     i = np.zeros(len(KE_init), dtype = int) # slab number i.e. position each particle interacted at
@@ -241,19 +249,21 @@ def Simulate(seed : int, KE_init : np.array, stepsize : float, pdfs : dict) -> t
         survived = survived & (survived != (KE_int < 1)) # particle is pretty much stationary so decays
 
         i = i + survived # distance travelled in step numbers
-        KE_int = KE_int - survived * stepsize * interpolated_energy_loss(KE_int) # update KE if it survived
-
-    z_int = i * stepsize # convert interaction index to interacting position
+        KE_int = KE_int - survived * step_size * interpolated_energy_loss(KE_int) # update KE if it survived
+    z_int = i * step_size # convert interaction index to interacting position
 
     KE_int[KE_int < 0] = 0
 
-    return pd.DataFrame({
+    df = pd.DataFrame({
         "KE_init" : KE_init,
         "KE_int" : KE_int,
         "z_int" : z_int,
         "inclusive_process" : inclusive_process,
         "exclusive_process" : exclusive_process
     })
+    
+    smeared = ApplySmearing(df, Smearing(len(KE_init), smearing_params, rng), step_size)
+    return pd.concat([df, smeared], axis = 1)
 
 
 def CountProcesses(proc : np.array):
@@ -282,7 +292,7 @@ def CreateMasks(toy : pd.DataFrame) -> dict:
         masks[c] = toy.inclusive_process == c
     return masks
 
-@timer
+
 def Smearing(n : int, resolutions : dict, rng : np.random.Generator) -> pd.DataFrame:
     """ Produces a dataframe of smearings for each kinematic output of the toy.
         Emulates detector effects.
@@ -300,6 +310,28 @@ def Smearing(n : int, resolutions : dict, rng : np.random.Generator) -> pd.DataF
         "z_int_smearing" : Fitting.RejectionSampling(n, min(resolutions["z_int"]["range"]), max(resolutions["z_int"]["range"]), resolutions["z_int"]["function"], resolutions["z_int"]["values"], rng = rng),
     })
 
+
+def ApplySmearing(df : pd.DataFrame, smearings : pd.DataFrame, step_size : float) -> pd.DataFrame:
+    KE_init_smeared = df.KE_init + smearings.KE_init_smearing
+    z_int_smeared = df.z_int + smearings.z_int_smearing
+    KE_to_dEdX = ComputeEnergyLoss(max(KE_init_smeared), step_size)
+
+    dist_travelled = np.zeros(len(KE_init_smeared))
+
+    KE_int_smeared = df.KE_init + smearings.KE_init_smearing
+    while any(dist_travelled < z_int_smeared):
+        dEdX = KE_to_dEdX(KE_int_smeared)
+        KE_int_smeared = KE_int_smeared - (dist_travelled < z_int_smeared) * step_size * dEdX
+        dist_travelled = dist_travelled + (dist_travelled < z_int_smeared) * step_size
+
+    KE_int_smeared = np.where(df.inclusive_process != "total_inelastic", 0, KE_int_smeared)
+    KE_int_smeared = np.where(np.isnan(KE_int_smeared) | (KE_int_smeared < 0), 0, KE_int_smeared)
+    return pd.DataFrame({
+        "KE_int_smeared" : KE_int_smeared,
+        "KE_init_smeared" : KE_init_smeared,
+        "z_int_smeared" : z_int_smeared
+    })
+
 @timer
 def BeamSelectionEfficiency(toy : pd.DataFrame, key : str, beam_selection_params : dict, rng : np.random.Generator):
     """ Produces a mask of events which would have passed the beam selection,
@@ -313,7 +345,8 @@ def BeamSelectionEfficiency(toy : pd.DataFrame, key : str, beam_selection_params
     Returns:
         np.array: mask of events which pass the selection.
     """
-    probability_index = np.digitize(toy[key].values, beam_selection_params["bins"][key])
+    bin_width = (beam_selection_params["bins"][key][1:].values - beam_selection_params["bins"][key][:-1].values)[0]
+    probability_index = np.digitize(toy[key].values, beam_selection_params["bins"][key] + 2 * bin_width)
     probability_index = np.clip(probability_index, 0, len(beam_selection_params["efficiency"][key]) - 1)
     probability = beam_selection_params["efficiency"][key][probability_index]
 
@@ -445,26 +478,29 @@ def main(args : argparse.Namespace):
 
     KE_init = GenerateIntialKEs(args.events, particle, args.p_init, args.beam_width, args.beam_profile, rng)
 
+    # # max_cpus = os.cpu_count()-1
+    # max_cpus = 6
+
     if args.events < 1E5:
         nodes = 1
     else:
         nodes = ceil(args.events / 1E5)
 
     if nodes == 1:
-        df = Simulate(seed, KE_init, args.step, pdfs) # don't need to do multiprocessing
+        df = Simulate(seed, KE_init, args.step, pdfs, args.smearing_params) # don't need to do multiprocessing
     else:
         KE_init_split = np.array_split(KE_init, nodes)
-        batches = ceil(nodes / (os.cpu_count()-1))
+        batches = ceil(nodes / args.max_cpus)
 
         df = []
         completed_proc = 0
         for i in range(batches):
-            KE_init_batches = KE_init_split[(os.cpu_count()-1) * i:(os.cpu_count()-1) * (i+1)]
+            KE_init_batches = KE_init_split[args.max_cpus * i:args.max_cpus * (i+1)]
             cpus = len(KE_init_batches)
             print(f"starting batch : {i}, cpus : {cpus}")
             pools = ProcessPool(nodes = cpus)
             pools.restart()
-            sim_args = (seed + completed_proc + np.linspace(0, cpus - 1, cpus, dtype = int), KE_init_batches, [args.step]*cpus, [pdfs]*cpus)
+            sim_args = (seed + completed_proc + np.linspace(0, cpus - 1, cpus, dtype = int), KE_init_batches, [args.step]*cpus, [pdfs]*cpus, [args.smearing_params]*cpus)
             df.extend(pools.imap(Simulate, *sim_args))
             pools.terminate()
             completed_proc += cpus
@@ -479,12 +515,12 @@ def main(args : argparse.Namespace):
     CountProcesses(df.inclusive_process)
     CountProcesses(df.exclusive_process)
 
-    smearings = Smearing(args.events, args.smearing_params, rng)
+    # smeared = ApplySmearing(df, Smearing(args.events, args.smearing_params, rng), args.step)
     beam_selection_mask = BeamSelectionEfficiency(df, "z_int", args.beam_selection_efficiencies, rng)
     region_masks = GenerateRecoRegions(df.exclusive_process, args.reco_region_fractions, rng)
     scores = MeanTrackScore(df.exclusive_process, args.mean_track_score_kde, seed)
 
-    df = pd.concat([df, smearings, beam_selection_mask, region_masks, scores], axis = 1)
+    df = pd.concat([df, beam_selection_mask, region_masks, scores], axis = 1)
 
     # allow the app to be run in other scripts or notebooks.
     if __name__ == "__main__":
@@ -503,6 +539,7 @@ def main(args : argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Generates toy events for inelastic pion interactions.")
     parser.add_argument("-c", "--config", type = str, default = None, help = "Config json file.")
+    parser.add_argument("--max_cpus", dest = "max_cpus", type = int, default = os.cpu_count() -1 , help = "maximum number of cpus to use.")
     ApplicationArguments.Output(parser)
 
     args = parser.parse_args()

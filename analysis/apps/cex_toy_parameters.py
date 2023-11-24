@@ -16,6 +16,8 @@ import numpy as np
 import pandas as pd
 import scipy.stats as stats
 
+from alive_progress import alive_bar
+
 from apps import cex_analyse
 from python.analysis import cross_section, Master, Plots, Tags
 
@@ -32,7 +34,7 @@ def SaveCorrectionParams(params : any, file : str):
     with open(file, "w") as f:
         json.dump(params, f)
 
-
+@Master.timer
 def ComputeQuantities(mc : Master.Data, args : argparse.Namespace) -> dict[dict, dict]:
     """ Compute Quantities used for the cross section measurement.
 
@@ -43,15 +45,17 @@ def ComputeQuantities(mc : Master.Data, args : argparse.Namespace) -> dict[dict,
     Returns:
         dict[dict, dict]: dictionary of quantities, one for reco and truth.
     """
-    reco_upstream_loss = cross_section.UpstreamEnergyLoss(cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass), args.upstream_loss_correction_params["value"])
-    
-    reco_KE_ff = cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass) - reco_upstream_loss
-    reco_KE_int = reco_KE_ff - cross_section.RecoDepositedEnergy(mc, reco_KE_ff, "bb")
-    reco_track_length = mc.recoParticles.beam_track_length
+    with alive_bar(title = "computng reco quantities") as bar:
+        reco_upstream_loss = cross_section.UpstreamEnergyLoss(cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass), args.upstream_loss_correction_params["value"])
+        
+        reco_KE_ff = cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass) - reco_upstream_loss
+        reco_KE_int = reco_KE_ff - cross_section.RecoDepositedEnergy(mc, reco_KE_ff, "bb")
+        reco_track_length = mc.recoParticles.beam_track_length
 
-    true_KE_ff = mc.trueParticles.beam_KE_front_face
-    true_KE_int = mc.trueParticles.beam_traj_KE[:, -2]
-    true_track_length = mc.trueParticles.beam_track_length
+    with alive_bar(title = "computng true quantities") as bar:
+        true_KE_ff = mc.trueParticles.beam_KE_front_face
+        true_KE_int = mc.trueParticles.beam_traj_KE[:, -2]
+        true_track_length = mc.trueParticles.beam_track_length
 
     return {
         "reco" : {"KE_init" : reco_KE_ff, "KE_int" : reco_KE_int, "z_int" : reco_track_length},
@@ -94,6 +98,7 @@ def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_q
         Plots.plt.figure()
         params[f.__name__], errors[f.__name__] = cross_section.Fitting.Fit(centers, counts, np.sqrt(counts), f, plot = True, xlabel = label, ylabel = "counts")
         plot_book.Save()
+        Plots.plt.close()
     params_formatted = {p : {"function" : p, "values" : {f"p{i}" : params[p][i] for i in range(len(params[p]))}} for p in params}
 
     params_formatted = {}
@@ -183,7 +188,7 @@ def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : 
     SaveCorrectionParams(KE_int_params["double_crystal_ball"], args.out + "smearing/KE_int_resolution.json")
     return
 
-
+@Master.timer
 def GetTotalPionInelMasks(mc : Master.Data) -> ak.Array:
     """ Returns the mask which selects true inelastic pi+.
 
@@ -326,6 +331,30 @@ def MeanTrackScoreKDE(mc : Master.Data, args : argparse.Namespace):
     cross_section.SaveSelection(args.out + "meanTrackScoreKDE/kdes.dill", kdes)
     return
 
+
+def FitBeamProfile(KE_init, func : cross_section.Fitting.FitFunction, KE_range : list, bins : int, book : Plots.PlotBook = None):
+    x = np.linspace(min(KE_range), max(KE_range), bins)
+    y = np.histogram(KE_init, bins = x)[0]
+
+    if book is not None: Plots.plt.figure()
+    params = cross_section.Fitting.Fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = (book is not None))[0]
+    if book is not None: book = book.Save()
+    return {
+        "function" : func.__name__,
+        "parameters" : {f"p{i}" : params[i] for i in range(len(params))},
+        "min" : min(KE_range),
+        "max" : max(KE_range)
+        }
+
+@Master.timer
+def BeamProfileStudy(quantities : dict, args : argparse.Namespace, true_beam_mask : ak.Array, func : cross_section.Fitting.FitFunction, KE_range : list):
+    out = args.out + "beam_profile/"
+    os.makedirs(out, exist_ok = True)
+    with Plots.PlotBook(out + "beam_profile.pdf") as book:
+        beam_profile = FitBeamProfile(quantities["true"]["KE_init"][true_beam_mask], func, KE_range, 50, book)
+        SaveCorrectionParams(beam_profile, out + "beam_profile.json")
+    return
+
 @Master.timer
 def main(args : argparse.Namespace):
     cross_section.SetPlotStyle(True, 100)
@@ -342,11 +371,20 @@ def main(args : argparse.Namespace):
         "z_int" : "$l^{reco}$ (cm)"
     }
 
-    mc = Master.Data(args.mc_file, -1, nTuple_type = args.ntuple_type)
+    with alive_bar(title = "load mc") as bar:
+        mc = Master.Data(args.mc_file, -1, nTuple_type = args.ntuple_type)
 
-    pion_inel_mask = GetTotalPionInelMasks(mc)
+    with alive_bar(title = "create mask") as bar:
+        true_pion_mask = mc.trueParticles.pdg[:, 0] == 211
+
+    with alive_bar(title = "pion inel mask") as bar:
+        pion_inel_mask = GetTotalPionInelMasks(mc)
+    
     cross_section_quantities = ComputeQuantities(mc, args)
-    Smearing(cross_section_quantities, mc.trueParticles.pdg[:, 0] == 211, args, ranges, labels)
+
+    BeamProfileStudy(cross_section_quantities, args, true_pion_mask, cross_section.Fitting.crystal_ball, [550, 1100]) #TODO make function and range configurable
+
+    Smearing(cross_section_quantities, true_pion_mask, args, ranges, labels)
 
     BeamSelectionEfficiency(cross_section_quantities["true"], pion_inel_mask, args, ranges, labels, bins)
 
