@@ -76,7 +76,7 @@ def GoodShowerSelection(events : Master.Data, return_table = False):
 
 
 def EMScoreCut(events : Master.Data, cut = 0.5, return_property : bool = False) -> ak.Array:
-    return CreateMask(cut, ">", events.recoParticles.em_score, return_property)
+    return CreateMask(cut, "<", events.recoParticles.track_score, return_property)
 
 
 def NHitsCut(events : Master.Data, cut = 80, return_property : bool = False) -> ak.Array:

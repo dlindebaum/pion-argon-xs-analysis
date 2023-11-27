@@ -335,7 +335,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
     perr = np.sqrt(np.diag(pcov))
 
     y_pred = func.func(x, *popt) # y values predicted from the fit
-    chisqr = np.nansum(((y_obs - y_pred))**2/y_pred)
+    chisqr = abs(np.nansum(((y_obs - y_pred))**2/y_pred)) # abs in case predictions are negative
     ndf = len(y_obs) - len(popt)
     p_value = 1 - chi2.cdf(chisqr, ndf)
 
@@ -343,10 +343,6 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         # y_pred_min = func.func(x, *(popt - perr)) # y values predicted from the lower limit of the fit
         # y_pred_max = func.func(x, *(popt + perr)) # y values predicted from the upper limit of the fit
         # y_pred_err = (abs(y_pred - y_pred_min) + abs(y_pred - y_pred_max)) / 2 # error in the predicted fit value, taken to be the average deviation from the lower and upper limits
-
-        chisqr = np.nansum(((y_obs - y_pred))**2/y_pred)
-        ndf = len(y_obs) - len(popt)
-        p_value = 1 - chi2.cdf(chisqr, ndf)
 
         #* main plotting
         x_interp = np.linspace(min(x), max(x), 1000)

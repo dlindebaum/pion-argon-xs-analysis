@@ -22,7 +22,7 @@ cv_method = {
     "None" : None,
     "gaussian" : cross_section.Fitting.gaussian,
     "double_gaussian" : cross_section.Fitting.double_gaussian,
-    "studen_t" : cross_section.Fitting.student_t,
+    "student_t" : cross_section.Fitting.student_t,
     "crystal_ball" : cross_section.Fitting.crystal_ball,
 }
 

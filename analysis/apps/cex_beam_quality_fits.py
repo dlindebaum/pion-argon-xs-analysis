@@ -120,7 +120,7 @@ def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data
 def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str, tag : str):
     events = Master.Data(file, nTuple_type = ntuple_type)
 
-
+    #? should this be made configurable i.e. pass config and apply all selections before the beam quality cuts if it is in the list?
     mask = BeamParticleSelection.PiBeamSelection(events, data)
     events.Filter([mask], [mask])
 
@@ -129,6 +129,10 @@ def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str, ta
 
     mask = BeamParticleSelection.CaloSizeCut(events)
     events.Filter([mask], [mask])
+
+    mask = BeamParticleSelection.HasFinalStatePFOsCut(events)
+    events.Filter([mask], [mask])
+
     #* fit gaussians to the start positions
     mu, sigma, mu_err, sigma_err = Fit_Vector(events.recoParticles.beam_startPos_SCE, 100)
 

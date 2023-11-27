@@ -48,8 +48,6 @@ def RegionSelection(events : cross_section.Master.Data, args : cross_section.arg
     Returns:
         tuple[dict, dict]: regions
     """
-    events_copy = events.Filter(returnCopy = True)
-
     if is_mc:
         key = "mc"
     else:
@@ -60,6 +58,8 @@ def RegionSelection(events : cross_section.Master.Data, args : cross_section.arg
     reco_regions = cross_section.EventSelection.create_regions_new(n_pi0, n_pi)
 
     if is_mc:
+        events_copy = events.Filter(returnCopy = True)
+        
         n_pi_true = events_copy.trueParticles.nPiMinus + events_copy.trueParticles.nPiPlus
         n_pi0_true = events_copy.trueParticles.nPi0
 

@@ -183,7 +183,7 @@ def main(args : argparse.Namespace):
 
     mc = Master.Data(args.mc_file[0], nTuple_type = args.ntuple_type)
     bq_fit = cross_section.LoadConfiguration(args.mc_beam_quality_fit)
-    mask = cross_section.BeamParticleSelection.CreateDefaultSelection(mc, False, bq_fit, return_table = False)
+    mask = cross_section.BeamParticleSelection.CreateDefaultSelection(mc, False, bq_fit, return_table = False)#? make configurable?
     mc.Filter([mask], [mask]) # apply default beam selection
 
     beam_inst_KE = cross_section.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation

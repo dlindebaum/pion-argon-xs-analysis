@@ -245,6 +245,7 @@ def CreateDefaultSelection(events: Data,
     """
     selection = [
         PiBeamSelection,  # * pi+ beam selection
+        HasFinalStatePFOsCut,
         PandoraTagCut,
         CaloSizeCut,
         MichelScoreCut,
@@ -254,6 +255,7 @@ def CreateDefaultSelection(events: Data,
     ]
     arguments = [
         {"use_beam_inst" : use_beam_inst},
+        {},
         {},
         {},
         {},

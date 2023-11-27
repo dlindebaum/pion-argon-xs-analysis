@@ -112,7 +112,7 @@ def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_q
     return params_formatted
 
 
-def PlotCorrelationMatrix(counts : np.array = None, true_labels = None, reco_labels = None, title : str = None, newFigure : bool = True):
+def PlotCorrelationMatrix(counts : np.array = None, true_labels = None, reco_labels = None, title : str = None, newFigure : bool = True, cmap : str = "cool"):
     """ Plots Correlation matrix of two sets of regions.
 
     Args:
@@ -124,7 +124,7 @@ def PlotCorrelationMatrix(counts : np.array = None, true_labels = None, reco_lab
 
     # fractions, counts = ComputeFractions(true_regions, reco_regions, return_counts = True)
     if newFigure: Plots.plt.figure()
-    Plots.plt.imshow(counts/np.max(counts, axis = 0), cmap = "cool", origin = "lower")
+    Plots.plt.imshow(counts/np.max(counts, axis = 0), cmap = cmap, origin = "lower")
     Plots.plt.colorbar(label = "counts (column normalised)")
 
     true_counts = np.sum(counts, axis = 1)
@@ -360,9 +360,9 @@ def main(args : argparse.Namespace):
     cross_section.SetPlotStyle(True, 100)
 
     ranges = {
-        "KE_init" : [0, 1250],
-        "KE_int" : [0, 1250],
-        "z_int" : [0, 500]
+        "KE_init" : args.KE_init_range,
+        "KE_int" : args.KE_int_range,
+        "z_int" : args.track_length_range
     }
     bins = {r : np.linspace(min(ranges[r]), max(ranges[r]), 50) for r in ranges}
     labels = {
@@ -382,7 +382,7 @@ def main(args : argparse.Namespace):
     
     cross_section_quantities = ComputeQuantities(mc, args)
 
-    BeamProfileStudy(cross_section_quantities, args, true_pion_mask, cross_section.Fitting.crystal_ball, [550, 1100]) #TODO make function and range configurable
+    BeamProfileStudy(cross_section_quantities, args, true_pion_mask, args.beam_profile, args.KE_init_range) #TODO make function and range configurable
 
     Smearing(cross_section_quantities, true_pion_mask, args, ranges, labels)
 
@@ -398,8 +398,19 @@ if __name__ == "__main__":
 
     cross_section.ApplicationArguments.Output(parser)
     cross_section.ApplicationArguments.Config(parser)
+
+    parser.add_argument("--beam_profile", dest = "beam_profile", type = str, default = "crystal_ball", help = "Fit function to model beam profile, see Fitting.py for potential functions.")
+    parser.add_argument("--KE_init_range", dest = "KE_init_range", type = float, nargs = 2, help = "KE init range", required = True)
+    parser.add_argument("--KE_int_range", dest = "KE_int_range", type = float, nargs = 2, help = "KE int range", required = True)
+    parser.add_argument("--track_length_range", dest = "track_length_range", type = float, nargs = 2, help = "track length range", required = True)
+
     args = parser.parse_args()
     args = cross_section.ApplicationArguments.ResolveArgs(args)
+
+    args.beam_profile = getattr(cross_section.Fitting, args.beam_profile)
+
+    for a in ["KE_init_range", "KE_int_range", "track_length_range"]:
+        setattr(args, a, sorted(getattr(args, a)))
 
     args.out += "toy_parameters/"
 
