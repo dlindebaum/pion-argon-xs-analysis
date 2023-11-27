@@ -90,31 +90,6 @@ def ResolveConfig(config : dict) -> argparse.Namespace:
     return args
 
 
-def ComputeEnergyLoss(inital_KE : float, stepsize : float) -> interp1d:
-    """ Calculate the mean dEdX profile for a given initial kinetic energy and position step size.
-        Then produce a function to map kinetic energy to dEdX given the outputs, and allow for interpolation.
-
-    Args:
-        inital_KE (float): Initial kinetic energy
-        stepsize (float): position step size (cm)
-
-    Returns:
-        interp1d: interpolated map of KE and dEdX
-    """
-    e = inital_KE
-    KE = []
-    dEdX = []
-    counter = 0
-    while e >= 0:
-        KE.append(e)
-        dEdX.append(BetheBloch.meandEdX(e, Particle.from_pdgid(211)))
-        e = e - stepsize * dEdX[-1]
-        counter += 1
-    KE.append(0)
-    dEdX.append(np.inf)
-    return interp1d(KE, dEdX, fill_value = 0, bounds_error = False) # if outside the interpolation range, return 0
-
-
 def P_int(sigma : np.array, l : float) -> np.array:
     """ Formula to calcualte the interaction probability for the thin slab approximation. 
 
@@ -226,7 +201,7 @@ def Simulate(seed : int, KE_init : np.array, step_size : float, pdfs : dict, sme
     """
     rng = np.random.default_rng(seed)
 
-    interpolated_energy_loss = ComputeEnergyLoss(2*max(KE_init), step_size/2) # precompute the energy loss and create a function to interpolate between them
+    interpolated_energy_loss = BetheBloch.InterpolatedEdX(2*max(KE_init), step_size/2) # precompute the energy loss and create a function to interpolate between them
 
     survived = ~np.zeros(len(KE_init), dtype = bool) # keep track of which particles survived
     i = np.zeros(len(KE_init), dtype = int) # slab number i.e. position each particle interacted at
@@ -314,7 +289,7 @@ def Smearing(n : int, resolutions : dict, rng : np.random.Generator) -> pd.DataF
 def ApplySmearing(df : pd.DataFrame, smearings : pd.DataFrame, step_size : float) -> pd.DataFrame:
     KE_init_smeared = df.KE_init + smearings.KE_init_smearing
     z_int_smeared = df.z_int + smearings.z_int_smearing
-    KE_to_dEdX = ComputeEnergyLoss(max(KE_init_smeared), step_size)
+    KE_to_dEdX = BetheBloch.InterpolatedEdX(max(KE_init_smeared), step_size)
 
     dist_travelled = np.zeros(len(KE_init_smeared))
 

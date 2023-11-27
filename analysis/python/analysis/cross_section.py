@@ -187,12 +187,53 @@ class BetheBloch:
         return dEdX
 
     @staticmethod
-    def InteractingKE(KE_init : ak.Array, track_length : ak.Array, particle : Particle, n : int):
+    @Master.timer
+    def InteractingKE(KE_init : ak.Array, track_length : ak.Array, n : int):
+        interpolated_energy_loss = BetheBloch.InterpolatedEdX(2*max(KE_init), 1) # precompute the energy loss and create a function to interpolate between them
+        steps = track_length/n
+
         KE_int = KE_init
+        print(f"{track_length/n=}")
         for i in range(n):
-            KE_int = KE_int - BetheBloch.meandEdX(KE_int, particle)*track_length/n
+            # KE_int = KE_int - BetheBloch.meandEdX(KE_int, particle)*steps
+            KE_int = KE_int - interpolated_energy_loss(KE_int)*steps
         KE_int = ak.where(KE_int < 0, 0, KE_int)
         return KE_int
+
+    @staticmethod
+    def InterpolatedEdX(inital_KE : float, stepsize : float) -> interp1d:
+        """ Calculate the mean dEdX profile for a given initial kinetic energy and position step size.
+            Then produce a function to map kinetic energy to dEdX given the outputs, and allow for interpolation.
+
+        Args:
+            inital_KE (float): Initial kinetic energy
+            stepsize (float): position step size (cm)
+
+        Returns:
+            interp1d: interpolated map of KE and dEdX
+        """
+        e = inital_KE
+        KE = []
+        dEdX = []
+        counter = 0
+        while e >= 0:
+            KE.append(e)
+            dEdX.append(BetheBloch.meandEdX(e, Particle.from_pdgid(211)))
+            e = e - stepsize * dEdX[-1]
+            counter += 1
+        KE.append(0)
+        dEdX.append(np.inf)
+        return interp1d(KE, dEdX, fill_value = 0, bounds_error = False) # if outside the interpolation range, return 0
+
+    @staticmethod
+    def RangeFromKE(KE_init : np.array, precision : float = 1):
+        interpolated_energy_loss = BetheBloch.InterpolatedEdX(2*max(KE_init), precision/2) # precompute the energy loss and create a function to interpolate between them
+        KE = np.array(KE_init)
+        n = np.zeros(len(KE_init))
+        while any(KE > 0):
+            KE = KE - precision * interpolated_energy_loss(KE)
+            n = n + (KE > 0)
+        return n * precision
 
 
 class ApplicationArguments:
@@ -431,7 +472,7 @@ def UpstreamEnergyLoss(KE_inst : ak.Array, params : np.array, function : Fitting
     """
     return function.func(KE_inst, **params)
 
-
+@Master.timer
 def RecoDepositedEnergy(events : Master.Data, ff_KE : ak.Array, method : str) -> ak.Array:
     """ Calcuales the energy deposited by the beam particle in the TPC, either using calorimetric information or the bethe bloch formula (spatial information).
 
@@ -448,7 +489,7 @@ def RecoDepositedEnergy(events : Master.Data, ff_KE : ak.Array, method : str) ->
     if method == "calo":
         dE = ak.sum(events.recoParticles.beam_dEdX[:, :-1] * reco_pitch, -1)
     elif method == "bb":
-        KE_int_bb = BetheBloch.InteractingKE(ff_KE, ak.sum(reco_pitch, -1), Particle.from_pdgid(211), 50)
+        KE_int_bb = BetheBloch.InteractingKE(ff_KE, ak.sum(reco_pitch, -1), 50)
         dE = ff_KE - KE_int_bb
     else:
         raise Exception(f"{method} not a valid method, pick 'calo' or 'bb'")

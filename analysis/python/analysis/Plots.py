@@ -1194,6 +1194,10 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     """
     plt.subplots(2, 1, figsize = (6.4, 4.8 * 1.2), gridspec_kw={"height_ratios" : [5, 1]} , sharex = True) # set to that the ratio plot is 1/5th the default plot height
 
+    is_tagged = hasattr(mc_labels, "__iter__") & (type(mc_labels) != str) 
+
+    print(f"{is_tagged=}")
+
     if norm == False:
         scale = 1
     elif norm is True:
@@ -1205,32 +1209,48 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
 
     if truncate == True:
         data = np.clip(data, min(x_range), max(x_range))
-        mc = [np.clip(m, min(x_range), max(x_range)) for m in mc]
+        if is_tagged:
+            mc = [np.clip(m, min(x_range), max(x_range)) for m in mc]
+        else:
+            mc = np.clip(mc, min(x_range), max(x_range))
 
     plt.subplot(211) # MC histogram
     if x_range is None: x_range = [ak.min([mc, data]), ak.max([mc, data])]
-    h_mc = []
-    sum_mc = []
-    for m in mc:
-        sum_mc.append(int(ak.count(m) * scale))
-        h, edges = np.histogram(np.array(m), bins, range = x_range)
-        h_mc.append(h * scale)
-    
+
+    if is_tagged:
+        h_mc = []
+        sum_mc = []
+        for m in mc:
+            sum_mc.append(int(ak.count(m) * scale))
+            h, edges = np.histogram(np.array(m), bins, range = x_range)
+            h_mc.append(h * scale)
+    else:
+        sum_mc = int(ak.count(mc) * scale)
+        h_mc, edges = np.histogram(np.array(mc), bins, range = x_range)
+        h_mc = h_mc * scale
+
     # sum_mc = np.sum(h_mc, 1, dtype = int) # number of each species in MC
     ind = np.argsort(sum_mc)[::-1]
     if stacked == "ascending":
         ind = ind[::-1]
     centres = (edges[:-1] + edges[1:]) / 2
 
-    for i in range(len(mc_labels)):
-        mc_labels[i] = mc_labels[i] + f" ({sum_mc[i]})"
-
-    if stacked:
-        plt.hist([edges[:-1]]*len(h_mc), edges, weights = np.array(h_mc)[ind].T, range = x_range, stacked = True, label = np.array(mc_labels)[ind], color = np.array(colour)[ind], alpha = alpha)
+    if is_tagged:
+        for i in range(len(mc_labels)):
+            mc_labels[i] = mc_labels[i] + f" ({sum_mc[i]})"
     else:
-        for m in ind:
-            plt.hist(edges[:-1], edges, weights = h_mc[m], range = x_range, stacked = False, label = mc_labels[m], color = colour[m], alpha = alpha)
-    plt.errorbar(centres, np.sum(h_mc, 0), np.sum(h_mc, 0)**0.5, c = "black", label = "MC total" + f" ({int(ak.count(mc) * scale)})", marker = "x", capsize = 3, linestyle = "")
+        mc_labels = mc_labels + f" ({sum_mc})"
+
+    if is_tagged:
+        if stacked:
+            plt.hist([edges[:-1]]*len(h_mc), edges, weights = np.array(h_mc)[ind].T, range = x_range, stacked = True, label = np.array(mc_labels)[ind], color = np.array(colour)[ind], alpha = alpha)
+        else:
+            for m in ind:
+                plt.hist(edges[:-1], edges, weights = h_mc[m], range = x_range, stacked = False, label = mc_labels[m], color = colour[m], alpha = alpha)
+        plt.errorbar(centres, np.sum(h_mc, 0), np.sum(h_mc, 0)**0.5, c = "black", label = "MC total" + f" ({int(ak.count(mc) * scale)})", marker = "x", capsize = 3, linestyle = "")
+    else:
+        plt.hist(edges[:-1], edges, weights = h_mc, range = x_range, stacked = False, label = mc_labels, color = colour, alpha = alpha)
+
     plt.yscale(yscale)
     plt.title(title)
 
@@ -1254,7 +1274,8 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     plt.tick_params("x", labelbottom = False) # hide x axes tick labels
 
     # if stacked is True:
-    h_mc = np.sum(h_mc, axis = 0)
+    if is_tagged:
+        h_mc = np.sum(h_mc, axis = 0)
     mc_error = np.sqrt(h_mc)
 
     plt.subplot(212) # ratio plot
