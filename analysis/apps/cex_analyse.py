@@ -21,11 +21,12 @@ def BeamPionSelection(events : cross_section.Master.Data, args : cross_section.a
     events_copy = events.Filter(returnCopy = True)
     if is_mc:
         selection_args = "mc_arguments"
+        sample = "mc"
     else:
         selection_args = "data_arguments"
-
+        sample = "data"
     if "selection_masks" in args:
-        for m in args.selection_masks["mc"]["beam"].values():
+        for m in args.selection_masks[sample]["beam"].values():
             events_copy.Filter([m], [m])
     else:
         for s in args.beam_selection["selections"]:
@@ -33,7 +34,7 @@ def BeamPionSelection(events : cross_section.Master.Data, args : cross_section.a
             events_copy.Filter([mask], [mask])
             print(events_copy.cutTable.get_table())
 
-    events_copy.Filter([args.selection_masks["mc"]['null_pfo']['ValidPFOSelection']]) # apply PFO preselection here
+    events_copy.Filter([args.selection_masks[sample]['null_pfo']['ValidPFOSelection']]) # apply PFO preselection here
     return events_copy
 
 @cross_section.Master.timer
