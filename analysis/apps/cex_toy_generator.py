@@ -18,6 +18,7 @@ import numpy as np
 import pandas as pd
 import tables
 
+from alive_progress import alive_it
 from pathos.pools import ProcessPool
 from rich import print
 from scipy.interpolate import interp1d
@@ -186,7 +187,7 @@ def GenerateIntialKEs(n : int, particle : Particle, cv : float, width : float, p
     else:
         return Fitting.RejectionSampling(n, profile["min"], profile["max"], profile["function"], profile["parameters"], rng = rng)
 
-@timer
+
 def Simulate(seed : int, KE_init : np.array, step_size : float, pdfs : dict, smearing_params : dict) -> tuple:
     """ Generates interacting kinetic energies and position based on the initial kinetic energy with the bethe bloch formula,
         the total inelastic pdf is used to decide when a particle interacts (using rejection sampling) and then each particle which
@@ -240,7 +241,7 @@ def Simulate(seed : int, KE_init : np.array, step_size : float, pdfs : dict, sme
         "exclusive_process" : exclusive_process
     })
     
-    smeared = ApplySmearing(df, Smearing(len(KE_init), smearing_params, rng), step_size)
+    smeared = ApplySmearing(df, Smearing(len(KE_init), smearing_params, rng))
     return pd.concat([df, smeared], axis = 1)
 
 
@@ -289,21 +290,24 @@ def Smearing(n : int, resolutions : dict, rng : np.random.Generator) -> pd.DataF
     })
 
 
-def ApplySmearing(df : pd.DataFrame, smearings : pd.DataFrame, step_size : float) -> pd.DataFrame:
+def ApplySmearing(df : pd.DataFrame, smearings : pd.DataFrame) -> pd.DataFrame:
     KE_init_smeared = df.KE_init + smearings.KE_init_smearing
     z_int_smeared = df.z_int + smearings.z_int_smearing
-    KE_to_dEdX = BetheBloch.InterpolatedEdX(max(KE_init_smeared), step_size)
+    KE_int_smeared = df.KE_int + smearings.KE_int_smearing
+    #! while this seems like the natural choice for smearing KE_int, the resolution using this method
+    #! is smaller than the resolution observed in MC, so use original approach for now
+    #? make this an option?
 
-    dist_travelled = np.zeros(len(KE_init_smeared))
+    # KE_to_dEdX = BetheBloch.InterpolatedEdX(max(KE_init_smeared), step_size)
+    # dist_travelled = np.zeros(len(KE_init_smeared))
+    # KE_int_smeared = df.KE_init + smearings.KE_init_smearing
+    # while any(dist_travelled < z_int_smeared):
+    #     dEdX = KE_to_dEdX(KE_int_smeared)
+    #     KE_int_smeared = KE_int_smeared - (dist_travelled < z_int_smeared) * step_size * dEdX
+    #     dist_travelled = dist_travelled + (dist_travelled < z_int_smeared) * step_size
 
-    KE_int_smeared = df.KE_init + smearings.KE_init_smearing
-    while any(dist_travelled < z_int_smeared):
-        dEdX = KE_to_dEdX(KE_int_smeared)
-        KE_int_smeared = KE_int_smeared - (dist_travelled < z_int_smeared) * step_size * dEdX
-        dist_travelled = dist_travelled + (dist_travelled < z_int_smeared) * step_size
-
-    KE_int_smeared = np.where(df.inclusive_process != "total_inelastic", 0, KE_int_smeared)
-    KE_int_smeared = np.where(np.isnan(KE_int_smeared) | (KE_int_smeared < 0), 0, KE_int_smeared)
+    # KE_int_smeared = np.where(df.inclusive_process != "total_inelastic", 0, KE_int_smeared)
+    # KE_int_smeared = np.where(np.isnan(KE_int_smeared) | (KE_int_smeared < 0), 0, KE_int_smeared)
     return pd.DataFrame({
         "KE_int_smeared" : KE_int_smeared,
         "KE_init_smeared" : KE_init_smeared,
@@ -472,10 +476,10 @@ def main(args : argparse.Namespace):
 
         df = []
         completed_proc = 0
-        for i in range(batches):
+        for i in alive_it(range(batches), title = "Simulating"):
             KE_init_batches = KE_init_split[args.max_cpus * i:args.max_cpus * (i+1)]
             cpus = len(KE_init_batches)
-            print(f"starting batch : {i}, cpus : {cpus}")
+            vprint(f"starting batch : {i}, cpus : {cpus}")
             pools = ProcessPool(nodes = cpus)
             pools.restart()
             sim_args = (seed + completed_proc + np.linspace(0, cpus - 1, cpus, dtype = int), KE_init_batches, [args.step]*cpus, [pdfs]*cpus, [args.smearing_params]*cpus)
