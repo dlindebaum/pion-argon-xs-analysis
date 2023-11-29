@@ -153,9 +153,8 @@ def PlotCorrelationMatrix(counts : np.array = None, true_labels = None, reco_lab
     Plots.plt.tight_layout()
 
 
-
 @Master.timer
-def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : argparse.Namespace, ranges : dict, labels : dict):
+def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : argparse.Namespace, labels : dict):
     """ Smearing study, fits functions to residuals of cross section quantities and saves the fit parameters of the best fit to file.
         (Best is double crystal ball).
 
@@ -163,7 +162,6 @@ def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : 
         cross_section_quantities (dict): cross section quantities
         true_pion_mask (ak.Array): true inelastic pion mask
         args (argparse.Namespace): application arguments
-        ranges (dict): plot ranges
         labels (dict): plot x labels
     """
     selected_quantities = {}
@@ -174,18 +172,16 @@ def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : 
     
     trial_functions = [cross_section.Fitting.gaussian, cross_section.Fitting.student_t, cross_section.Fitting.crystal_ball, cross_section.Fitting.double_crystal_ball]
 
-    pdf = Plots.PlotBook(args.out + "smearing/smearing_study")
-    track_length_params =  ResolutionStudy(pdf, selected_quantities["reco"]["z_int"], selected_quantities["true"]["z_int"], selected_quantities["reco"]["z_int"] != 0, labels["z_int"], ranges["z_int"], [-25, 25], trial_functions)
-    print(track_length_params)
-    KE_ff_params = ResolutionStudy(pdf, selected_quantities["reco"]["KE_init"], selected_quantities["true"]["KE_init"], selected_quantities["reco"]["KE_init"] != 0, labels["KE_init"], ranges["KE_init"], [-250, 250], trial_functions)
-    print(KE_ff_params)
-    KE_int_params = ResolutionStudy(pdf, selected_quantities["reco"]["KE_int"], selected_quantities["true"]["KE_int"], selected_quantities["reco"]["KE_int"] != 0, labels["KE_int"], ranges["KE_int"], [-250, 250], trial_functions)
-    print(KE_int_params)
-    pdf.close()
+    params = {}
+    with Plots.PlotBook(args.out + "smearing/smearing_study") as pdf:
+        for k in labels:
+            params[k] = ResolutionStudy(pdf, selected_quantities["reco"][k], selected_quantities["true"][k], selected_quantities["reco"][k] != 0, labels[k], args.toy_parameters["plot_ranges"][k], args.toy_parameters["smearing_residual_ranges"][k], trial_functions)
 
-    SaveCorrectionParams(track_length_params["double_crystal_ball"], args.out + "smearing/track_length_resolution.json")
-    SaveCorrectionParams(KE_ff_params["double_crystal_ball"], args.out + "smearing/KE_ff_resolution.json")
-    SaveCorrectionParams(KE_int_params["double_crystal_ball"], args.out + "smearing/KE_int_resolution.json")
+    for q in labels:
+        out = args.out + f"smearing/{q}/"
+        os.makedirs(out, exist_ok = True)
+        for k in params[q]:
+            SaveCorrectionParams(params[q][k], out + f"{k}.json")
     return
 
 @Master.timer
@@ -359,12 +355,7 @@ def BeamProfileStudy(quantities : dict, args : argparse.Namespace, true_beam_mas
 def main(args : argparse.Namespace):
     cross_section.SetPlotStyle(True, 100)
 
-    ranges = {
-        "KE_init" : args.KE_init_range,
-        "KE_int" : args.KE_int_range,
-        "z_int" : args.track_length_range
-    }
-    bins = {r : np.linspace(min(ranges[r]), max(ranges[r]), 50) for r in ranges}
+    bins = {r : np.linspace(min(args.toy_parameters["plot_ranges"][r]), max(args.toy_parameters["plot_ranges"][r]), 50) for r in args.toy_parameters["plot_ranges"]}
     labels = {
         "KE_init" : "$KE^{reco}_{ff}$ (MeV)",
         "KE_int" : "$KE^{reco}_{int}$ (MeV)",
@@ -382,11 +373,11 @@ def main(args : argparse.Namespace):
     
     cross_section_quantities = ComputeQuantities(mc, args)
 
-    BeamProfileStudy(cross_section_quantities, args, true_pion_mask, args.beam_profile, args.KE_init_range) #TODO make function and range configurable
+    BeamProfileStudy(cross_section_quantities, args, true_pion_mask, args.toy_parameters["beam_profile"], args.toy_parameters["plot_ranges"]["KE_init"]) #TODO make function and range configurable
 
-    Smearing(cross_section_quantities, true_pion_mask, args, ranges, labels)
+    Smearing(cross_section_quantities, true_pion_mask, args, labels)
 
-    BeamSelectionEfficiency(cross_section_quantities["true"], pion_inel_mask, args, ranges, labels, bins)
+    BeamSelectionEfficiency(cross_section_quantities["true"], pion_inel_mask, args, args.toy_parameters["plot_ranges"], labels, bins)
 
     RecoRegionSelection(mc, args)
 
@@ -399,19 +390,8 @@ if __name__ == "__main__":
     cross_section.ApplicationArguments.Output(parser)
     cross_section.ApplicationArguments.Config(parser)
 
-    parser.add_argument("--beam_profile", dest = "beam_profile", type = str, default = "crystal_ball", help = "Fit function to model beam profile, see Fitting.py for potential functions.")
-    parser.add_argument("--KE_init_range", dest = "KE_init_range", type = float, nargs = 2, help = "KE init range", required = True)
-    parser.add_argument("--KE_int_range", dest = "KE_int_range", type = float, nargs = 2, help = "KE int range", required = True)
-    parser.add_argument("--track_length_range", dest = "track_length_range", type = float, nargs = 2, help = "track length range", required = True)
-
     args = parser.parse_args()
     args = cross_section.ApplicationArguments.ResolveArgs(args)
-
-    args.beam_profile = getattr(cross_section.Fitting, args.beam_profile)
-
-    for a in ["KE_init_range", "KE_int_range", "track_length_range"]:
-        setattr(args, a, sorted(getattr(args, a)))
-
     args.out += "toy_parameters/"
 
     print(vars(args))

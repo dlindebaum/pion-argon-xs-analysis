@@ -11,7 +11,6 @@ import os
 import numpy as np
 
 from rich import print
-from scipy.interpolate import interp1d
 
 from apps import cex_toy_generator
 from python.analysis import cross_section, SelectionTools, Plots
@@ -94,9 +93,12 @@ def CreateInitParams(model : cross_section.pyhf.Model, analysis_input : cross_se
     return init
 
 
-def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_section.Slices, mean_track_score_bins : np.array, template_input : cross_section.AnalysisInput, suggest_init : bool = False, template_weights : np.array = None) -> cross_section.cabinetry.model_utils.ModelPrediction:
+def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_section.Slices, mean_track_score_bins : np.array, template_input : cross_section.AnalysisInput | cross_section.pyhf.Model, suggest_init : bool = False, template_weights : np.array = None) -> cross_section.cabinetry.model_utils.ModelPrediction:
 
-    model = cross_section.RegionFit.CreateModel(template_input, energy_slice, mean_track_score_bins, False, template_weights)
+    if type(template_input) == cross_section.AnalysisInput:
+        model = cross_section.RegionFit.CreateModel(template_input, energy_slice, mean_track_score_bins, False, template_weights)
+    else:
+        model = template_input
 
     observed = cross_section.RegionFit.GenerateObservations(fit_input, energy_slice, mean_track_score_bins, model)
 
@@ -158,9 +160,9 @@ def Unfolding(hist_reco : dict[np.array], hist_reco_err : dict[np.array], energy
     return cross_section.Unfold.Unfold(hist_reco, hist_reco_err, response_matrices, ts_stop = 1E-2, ts = "bf", max_iter = 100)
 
 
-def CreateAnalysisInput(sample : cross_section.Toy | cross_section.Master.Data, args : cross_section.argparse.Namespace, is_mc : bool, beam_selection : bool = False) -> cross_section.AnalysisInput:
+def CreateAnalysisInput(sample : cross_section.Toy | cross_section.Master.Data, args : cross_section.argparse.Namespace, is_mc : bool) -> cross_section.AnalysisInput:
     if type(sample) == cross_section.Toy:
-        ai = cross_section.AnalysisInput.CreateAnalysisInputToy(sample, beam_selection)
+        ai = cross_section.AnalysisInput.CreateAnalysisInputToy(sample)
     elif type(sample) == cross_section.Master.Data:
         sample_selected = BeamPionSelection(sample, args, is_mc)
         if is_mc:
