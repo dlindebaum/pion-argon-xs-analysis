@@ -998,7 +998,6 @@ def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label:
             p2 = mpatches.Patch(color=color, alpha=0.25, linewidth=0)
         # handles = ((p1[0],p2),)
         # labels  = (label,)
-
     elif style == "scatter":
         plt.errorbar(x, y, yerr, xerr, marker = marker, linestyle = linestyle, label = label, color = color, markersize = markersize, alpha = alpha, capsize = capsize, zorder = zorder)
     else:

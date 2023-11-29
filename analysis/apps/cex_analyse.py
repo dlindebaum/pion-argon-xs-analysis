@@ -107,7 +107,7 @@ def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_sect
     else:
         init_params = None
 
-    result = cross_section.RegionFit.Fit(observed, model, init_params, verbose = True)
+    result = cross_section.RegionFit.Fit(observed, model, init_params, verbose = False)
     return cross_section.cabinetry.model_utils.prediction(model, fit_results = result)
 
 
@@ -174,6 +174,7 @@ def CreateAnalysisInput(sample : cross_section.Toy | cross_section.Master.Data, 
     else:
         raise Exception(f"object type {type(sample)} not a valid sample")
     return ai
+
 
 def main(args):
     cross_section.SetPlotStyle(extend_colors = True)

@@ -688,7 +688,7 @@ class GeantCrossSections:
                 if title is None:
                     title = xs.replace("_", " ")
             Plots.Plot(self.KE, getattr(self, xs), label = label, title = title, newFigure = False, xlabel = "$KE_{int} (MeV)$", ylabel = "$\sigma (mb)$", color = color)
-            Plots.plt.fill_between(self.KE, getattr(self, xs) - self.Stat_Error(xs), getattr(self, xs) + self.Stat_Error(xs), color = Plots.plt.gca()._get_lines.get_next_color())
+            # Plots.plt.fill_between(self.KE, getattr(self, xs) - self.Stat_Error(xs), getattr(self, xs) + self.Stat_Error(xs), color = Plots.plt.gca()._get_lines.get_next_color())
 
 
 def GetInterpolatedCurve(xs_sim : GeantCrossSections, process : str):
@@ -980,7 +980,7 @@ class EnergySlice:
         diff_n_int = factor * n_interact_ratio * nandiv(1, n_survived) - nandiv(xs, n_int)
 
         xs_err = ((diff_n_int_ex**2 * var_int_ex) + (diff_n_inc**2 * var_inc_inclusive) + (diff_n_int**2 * var_int))**0.5
-        return xs, xs_err
+        return np.array(xs, dtype = float), np.array(xs_err, dtype = float)
 
 
 class Toy:
@@ -1291,7 +1291,16 @@ class RegionFit:
         pyhf.set_backend(backend = "numpy", custom_optimizer = "minuit")
         if verbose is True: print(f"{init_params=}")
         result = cabinetry.fit.fit(model, observations, init_pars = init_params, custom_fit = True, tolerance = 0.001)
-        if verbose is True: print(f"{model.config.poi_index=}")
+        
+        poi_ind = [model.config.par_slice(i).start for i in model.config.par_names if "mu" in i]
+        print(f"{poi_ind=}")
+        parameter = [i for i in model.config.par_names if "mu" in i]
+        bestfit = result.bestfit[poi_ind]
+        uncertainty = result.uncertainty[poi_ind]
+
+        print(f"{parameter=}")
+        print(f"{bestfit=}")
+        print(f"{uncertainty=}")
         if verbose is True: print(f"{result=}")
         return result
 
@@ -1326,10 +1335,10 @@ class RegionFit:
         return np.array(templates)
 
     @staticmethod
-    def CreateModel(template : AnalysisInput, energy_slice : Slices, mean_track_score_bins : np.array, return_templates : bool = False, weights : np.array = None) -> pyhf.Model:
+    def CreateModel(template : AnalysisInput, energy_slice : Slices, mean_track_score_bins : np.array, return_templates : bool = False, weights : np.array = None, mc_stat_unc : bool = True) -> pyhf.Model:
         templates_energy = RegionFit.CreateKEIntTemplates(template, energy_slice, weights)
         templates_mean_track_score = RegionFit.CreateMeanTrackScoreTemplates(template, mean_track_score_bins, weights)
-        model = RegionFit.Model(len(template.regions), templates_energy, templates_mean_track_score, mc_stat_unc = True)
+        model = RegionFit.Model(len(template.regions), templates_energy, templates_mean_track_score, mc_stat_unc = mc_stat_unc)
         RegionFit.PrintModelSpecs(model)
         if return_templates is True:
             return model, templates_energy, templates_mean_track_score
@@ -1443,10 +1452,12 @@ class Unfold:
         for k, v in slice_pairs.items():
             corr[k] = Unfold.CorrelationMarix(*v, bins = slice_bins, remove_overflow = False)
             resp[k] = Unfold.ResponseMatrix(*v, bins = slice_bins, remove_overflow = False)
-            Unfold.PlotMatrix(corr[k], title = f"Response Marix: {labels[k]}", c_label = "Counts")
-            if book is not None: book.Save()
-            Unfold.PlotMatrix(resp[k][0], title = f"Normalised Response Matrix: {labels[k]}", c_label = "$P(E_{i}|C_{j})$")
-            if book is not None: book.Save()
+            if book is not None:
+                Unfold.PlotMatrix(corr[k], title = f"Response Marix: {labels[k]}", c_label = "Counts")
+                book.Save()
+            if book is not None:
+                Unfold.PlotMatrix(resp[k][0], title = f"Normalised Response Matrix: {labels[k]}", c_label = "$P(E_{i}|C_{j})$")
+                book.Save()
         return resp
 
     @staticmethod
