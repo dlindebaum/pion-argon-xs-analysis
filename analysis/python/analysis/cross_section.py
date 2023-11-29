@@ -54,7 +54,7 @@ def PlotXSComparison(xs : dict[np.array], energy_slice, process : str = None, co
     for k, v in xs.items():
         w_chi_sqr = weighted_chi_sqr(v[0], sim_curve_interp(x), v[1])
         chi_sqrs[k] = w_chi_sqr
-        Plots.Plot(energy_slice.pos - energy_slice.width/2, v[0], yerr = v[1], label = k + ", $\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}", color = colors[k], linestyle = "", marker = "x", newFigure = False)
+        Plots.Plot(x, v[0], yerr = v[1], label = k + ", $\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}", color = colors[k], linestyle = "", marker = "x", newFigure = False)
     
     if process == "single_pion_production":
         Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = "simulation", title = "single pion production", newFigure = False, xlabel = "$KE_{int} (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)
@@ -215,12 +215,11 @@ class BetheBloch:
         e = inital_KE
         KE = []
         dEdX = []
-        counter = 0
         while e >= 0:
             KE.append(e)
             dEdX.append(BetheBloch.meandEdX(e, Particle.from_pdgid(211)))
             e = e - stepsize * dEdX[-1]
-            counter += 1
+            if dEdX[-1] <= 0: break # sometines bethebloch produces an unphysical value when KE is too small, so stop
         KE.append(0)
         dEdX.append(np.inf)
         return interp1d(KE, dEdX, fill_value = 0, bounds_error = False) # if outside the interpolation range, return 0
@@ -401,6 +400,13 @@ class ApplicationArguments:
                 args.selection_masks = {}
                 for k, v in value.items():
                     args.selection_masks[k] = {i : LoadSelectionFile(j) for i, j in v.items()}
+            elif head == "TOY_PARAMETERS":
+                args.toy_parameters = {}
+                for k, v in value.items():
+                    if k == "beam_profile": 
+                        args.toy_parameters[k] = getattr(Fitting, v)
+                    else:
+                        args.toy_parameters[k] = v
             else:
                 setattr(args, head, value) # allow for generic configurations in the json file
         ApplicationArguments.DataMCSelectionArgs(args)
@@ -978,7 +984,7 @@ class EnergySlice:
 
 
 class Toy:
-    def __init__(self, file : str = None, df : str = None, smearing : bool = True) -> None:
+    def __init__(self, file : str = None, df : str = None) -> None:
         if file is not None:
             self.df = pd.read_hdf(file)
         elif df is not None:

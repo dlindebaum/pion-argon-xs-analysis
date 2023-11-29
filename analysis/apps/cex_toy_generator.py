@@ -87,6 +87,9 @@ def ResolveConfig(config : dict) -> argparse.Namespace:
                 setattr(args, k, v)
         else:
             setattr(args, k, v)
+    args.events = int(args.events)
+    if not hasattr(args, "max_cpus"):
+        args.max_cpus = os.cpu_count() - 1
     return args
 
 
@@ -456,10 +459,10 @@ def main(args : argparse.Namespace):
     # # max_cpus = os.cpu_count()-1
     # max_cpus = 6
 
-    if args.events < 1E5:
+    if args.events < 1E4:
         nodes = 1
     else:
-        nodes = ceil(args.events / 1E5)
+        nodes = ceil(args.events / 1E4)
 
     if nodes == 1:
         df = Simulate(seed, KE_init, args.step, pdfs, args.smearing_params) # don't need to do multiprocessing
@@ -514,13 +517,11 @@ def main(args : argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Generates toy events for inelastic pion interactions.")
     parser.add_argument("-c", "--config", type = str, default = None, help = "Config json file.")
-    parser.add_argument("--max_cpus", dest = "max_cpus", type = int, default = os.cpu_count() -1 , help = "maximum number of cpus to use.")
     ApplicationArguments.Output(parser)
 
     args = parser.parse_args()
     config = LoadConfiguration(args.config)
     args = argparse.Namespace(**vars(args), **vars(ResolveConfig(config)))
-    args.events = int(args.events)
     if args.out is None:
         args.out = "toy_mc"
     args.out = args.out.split(".")[0]
