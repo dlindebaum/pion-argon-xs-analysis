@@ -33,7 +33,8 @@ def BeamPionSelection(events : cross_section.Master.Data, args : cross_section.a
             events_copy.Filter([mask], [mask])
             print(events_copy.cutTable.get_table())
 
-    events_copy.Filter([args.selection_masks[sample]['null_pfo']['ValidPFOSelection']]) # apply PFO preselection here
+    if hasattr(args, "valid_pfo_selection"):
+        events_copy.Filter([args.selection_masks[sample]['null_pfo']['ValidPFOSelection']]) # apply PFO preselection here
     return events_copy
 
 @cross_section.Master.timer
