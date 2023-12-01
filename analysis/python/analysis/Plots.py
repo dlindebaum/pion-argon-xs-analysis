@@ -888,6 +888,10 @@ class PlotBook:
             warnings.warn("pdf has not been opened.")
         return
 
+    @classmethod
+    @property
+    def null(cls):
+        return cls(name = "", open = False)
 
 def Save(name: str = "plot", directory: str = "", dpi = 300):
     """ Saves the last created plot to file. Run after one the functions below.

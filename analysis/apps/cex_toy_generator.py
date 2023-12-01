@@ -205,7 +205,7 @@ def Simulate(seed : int, KE_init : np.array, step_size : float, pdfs : dict, sme
     """
     rng = np.random.default_rng(seed)
 
-    interpolated_energy_loss = BetheBloch.InterpolatedEdX(2*max(KE_init), step_size/2) # precompute the energy loss and create a function to interpolate between them
+    interpolated_energy_loss = BetheBloch.interp_KE_to_mean_dEdX(2*max(KE_init), step_size/2) # precompute the energy loss and create a function to interpolate between them
 
     survived = ~np.zeros(len(KE_init), dtype = bool) # keep track of which particles survived
     i = np.zeros(len(KE_init), dtype = int) # slab number i.e. position each particle interacted at

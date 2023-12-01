@@ -187,21 +187,7 @@ class BetheBloch:
         return dEdX
 
     @staticmethod
-    @Master.timer
-    def InteractingKE(KE_init : ak.Array, track_length : ak.Array, n : int):
-        interpolated_energy_loss = BetheBloch.InterpolatedEdX(2*max(KE_init), 1) # precompute the energy loss and create a function to interpolate between them
-        steps = track_length/n
-
-        KE_int = KE_init
-        print(f"{track_length/n=}")
-        for i in range(n):
-            # KE_int = KE_int - BetheBloch.meandEdX(KE_int, particle)*steps
-            KE_int = KE_int - interpolated_energy_loss(KE_int)*steps
-        KE_int = ak.where(KE_int < 0, 0, KE_int)
-        return KE_int
-
-    @staticmethod
-    def InterpolatedEdX(inital_KE : float, stepsize : float, particle : Particle = Particle.from_pdgid(211)) -> interp1d:
+    def interp_KE_to_mean_dEdX(inital_KE : float, stepsize : float, particle : Particle = Particle.from_pdgid(211)) -> interp1d:
         """ Calculate the mean dEdX profile for a given initial kinetic energy and position step size.
             Then produce a function to map kinetic energy to dEdX given the outputs, and allow for interpolation.
 
@@ -225,8 +211,35 @@ class BetheBloch:
         return interp1d(KE, dEdX, fill_value = 0, bounds_error = False) # if outside the interpolation range, return 0
 
     @staticmethod
+    def interp_range_to_KE(KE_init : float, precision = 0.05) -> interp1d:
+        KE = [KE_init]
+        track_length = [0]
+        count = 0
+        while KE[-1] > 0:
+            KE.append(KE[-1] - precision * BetheBloch.meandEdX(KE[-1], Particle.from_pdgid(-13)))
+            count += 1
+            track_length.append(count * precision)
+        track_length = np.array(track_length)
+
+        return interp1d(max(track_length) - track_length, KE, kind = "cubic", fill_value = 0, bounds_error = False)
+
+
+    @staticmethod
+    @Master.timer
+    def InteractingKE(KE_init : ak.Array, track_length : ak.Array, n : int):
+        interpolated_energy_loss = BetheBloch.interp_KE_to_mean_dEdX(2*max(KE_init), 1) # precompute the energy loss and create a function to interpolate between them
+        steps = track_length/n
+
+        KE_int = KE_init
+        print(f"{track_length/n=}")
+        for i in range(n):
+            KE_int = KE_int - interpolated_energy_loss(KE_int)*steps
+        KE_int = ak.where(KE_int < 0, 0, KE_int)
+        return KE_int
+
+    @staticmethod
     def RangeFromKE(KE_init : np.array, particle : Particle, precision : float = 1):
-        interpolated_energy_loss = BetheBloch.InterpolatedEdX(2*max(KE_init), precision/2, particle) # precompute the energy loss and create a function to interpolate between them
+        interpolated_energy_loss = BetheBloch.interp_KE_to_mean_dEdX(2*max(KE_init), precision/2, particle) # precompute the energy loss and create a function to interpolate between them
         KE = np.array(KE_init)
         n = np.zeros(len(KE_init))
         while any(KE > 0):
@@ -1463,7 +1476,7 @@ class Unfold:
         return resp
 
     @staticmethod
-    def CreateObservedInput(data : AnalysisInput, process : str, energy_slice : Slices, postfit_pred : cabinetry.model_utils.ModelPrediction = None, book : Plots.PlotBook = None) -> tuple[np.array]:
+    def CreateObservedInput(data : AnalysisInput, process : str, energy_slice : Slices, postfit_pred : cabinetry.model_utils.ModelPrediction = None, book : Plots.PlotBook = Plots.PlotBook.null) -> tuple[np.array]:
         histograms_true_obs = Unfold.CreateHistograms(data, energy_slice, process, False, False)
         histograms_reco_obs = Unfold.CreateHistograms(data, energy_slice, process, True, False)
         histograms_reco_obs_err = {k : np.sqrt(v) for k, v in histograms_reco_obs.items()}
@@ -1496,9 +1509,9 @@ class Unfold:
 
             energy_bins = np.sort(np.insert(energy_slice.pos, 0, energy_slice.max_pos + energy_slice.width))
             RegionFit.PlotPrefitPostFit(actual_sig, np.sqrt(actual_sig), KE_int_fit, KE_int_fit_err, energy_bins)
-            if book is not None: book.Save()
+            book.Save()
             RegionFit.PlotPrefitPostFit(actual_bkg, np.sqrt(actual_bkg), L_bkg, np.sqrt(L_var_bkg), energy_bins)
-            if book is not None: book.Save()
+            book.Save()
 
             histograms_reco_obs["int_ex"] = np.where(KE_int_fit < 0, 0, KE_int_fit)
             histograms_reco_obs_err["int_ex"] = KE_int_fit_err
@@ -1522,11 +1535,11 @@ class Unfold:
         return results
 
     @staticmethod
-    def PlotUnfoldingResults(obs, true, results, energy_bins, label : str, book : Plots.PlotBook = None):
+    def PlotUnfoldingResults(obs, true, results, energy_bins, label : str, book : Plots.PlotBook = Plots.PlotBook.null):
         Plots.Plot(energy_bins[::-1], obs, style = "step", label = "reco", xlabel = label, color = "C6")
         Plots.Plot(energy_bins[::-1], true, style = "step", label = "true", xlabel = label, color = "C0", newFigure = False)
         Plots.Plot(energy_bins[::-1], results["unfolded"], yerr = results["stat_err"], style = "step", label = f"unfolded, {results['num_iterations']} iterations", xlabel = label + " (MeV)", color = "C4", newFigure = False)
-        if book is not None: book.Save() 
+        book.Save() 
         Unfold.PlotMatrix(results["unfolding_matrix"], title = "Unfolded matrix: " + label, c_label = "$P(C_{j}|E_{i})$")
-        if book is not None: book.Save() 
+        book.Save() 
         return

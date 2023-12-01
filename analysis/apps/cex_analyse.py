@@ -111,7 +111,7 @@ def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_sect
     return cross_section.cabinetry.model_utils.prediction(model, fit_results = result)
 
 
-def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, energy_slice : cross_section.Slices, postfit_pred : cross_section.cabinetry.model_utils.ModelPrediction = None, book : Plots.PlotBook = None) -> tuple[np.array]:
+def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, energy_slice : cross_section.Slices, postfit_pred : cross_section.cabinetry.model_utils.ModelPrediction = None, book : Plots.PlotBook = Plots.PlotBook.null) -> tuple[np.array]:
     histograms_true_obs = cross_section.Unfold.CreateHistograms(data, energy_slice, process, False, False)
     histograms_reco_obs = cross_section.Unfold.CreateHistograms(data, energy_slice, process, True, False)
     histograms_reco_obs_err = {k : np.sqrt(v) for k, v in histograms_reco_obs.items()}
@@ -144,9 +144,9 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
 
         energy_bins = np.sort(np.insert(energy_slice.pos, 0, energy_slice.max_pos + energy_slice.width))
         cross_section.RegionFit.PlotPrefitPostFit(actual_sig, np.sqrt(actual_sig), KE_int_fit, KE_int_fit_err, energy_bins)
-        if book is not None: book.Save()
+        book.Save()
         cross_section.RegionFit.PlotPrefitPostFit(actual_bkg, np.sqrt(actual_bkg), L_bkg, np.sqrt(L_var_bkg), energy_bins)
-        if book is not None: book.Save()
+        book.Save()
 
         histograms_reco_obs["int_ex"] = np.where(KE_int_fit < 0, 0, KE_int_fit)
         histograms_reco_obs_err["int_ex"] = KE_int_fit_err

@@ -328,13 +328,13 @@ def MeanTrackScoreKDE(mc : Master.Data, args : argparse.Namespace):
     return
 
 
-def FitBeamProfile(KE_init, func : cross_section.Fitting.FitFunction, KE_range : list, bins : int, book : Plots.PlotBook = None):
+def FitBeamProfile(KE_init, func : cross_section.Fitting.FitFunction, KE_range : list, bins : int, book : Plots.PlotBook = Plots.PlotBook.null):
     x = np.linspace(min(KE_range), max(KE_range), bins)
     y = np.histogram(KE_init, bins = x)[0]
 
-    if book is not None: Plots.plt.figure()
-    params = cross_section.Fitting.Fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = (book is not None))[0]
-    if book is not None: book = book.Save()
+    Plots.plt.figure()
+    params = cross_section.Fitting.Fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = (book.open is False))[0]
+    book = book.Save()
     return {
         "function" : func.__name__,
         "parameters" : {f"p{i}" : params[i] for i in range(len(params))},
