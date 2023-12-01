@@ -201,7 +201,7 @@ class BetheBloch:
         return KE_int
 
     @staticmethod
-    def InterpolatedEdX(inital_KE : float, stepsize : float) -> interp1d:
+    def InterpolatedEdX(inital_KE : float, stepsize : float, particle : Particle = Particle.from_pdgid(211)) -> interp1d:
         """ Calculate the mean dEdX profile for a given initial kinetic energy and position step size.
             Then produce a function to map kinetic energy to dEdX given the outputs, and allow for interpolation.
 
@@ -217,7 +217,7 @@ class BetheBloch:
         dEdX = []
         while e >= 0:
             KE.append(e)
-            dEdX.append(BetheBloch.meandEdX(e, Particle.from_pdgid(211)))
+            dEdX.append(BetheBloch.meandEdX(e, particle))
             e = e - stepsize * dEdX[-1]
             if dEdX[-1] <= 0: break # sometines bethebloch produces an unphysical value when KE is too small, so stop
         KE.append(0)
@@ -225,8 +225,8 @@ class BetheBloch:
         return interp1d(KE, dEdX, fill_value = 0, bounds_error = False) # if outside the interpolation range, return 0
 
     @staticmethod
-    def RangeFromKE(KE_init : np.array, precision : float = 1):
-        interpolated_energy_loss = BetheBloch.InterpolatedEdX(2*max(KE_init), precision/2) # precompute the energy loss and create a function to interpolate between them
+    def RangeFromKE(KE_init : np.array, particle : Particle, precision : float = 1):
+        interpolated_energy_loss = BetheBloch.InterpolatedEdX(2*max(KE_init), precision/2, particle) # precompute the energy loss and create a function to interpolate between them
         KE = np.array(KE_init)
         n = np.zeros(len(KE_init))
         while any(KE > 0):
@@ -410,8 +410,10 @@ class ApplicationArguments:
             else:
                 setattr(args, head, value) # allow for generic configurations in the json file
         ApplicationArguments.DataMCSelectionArgs(args)
-        ApplicationArguments.AddEnergyCorrection(args)
-        args.beam_selection["data_arguments"]["PiBeamSelection"]["use_beam_inst"] = True # make sure to set the correct settings for data.
+        if hasattr(args, "pi0_selection"):
+            ApplicationArguments.AddEnergyCorrection(args)
+        if hasattr(args, "beam_selection"):
+            args.beam_selection["data_arguments"]["PiBeamSelection"]["use_beam_inst"] = True # make sure to set the correct settings for data.
         return args
 
 

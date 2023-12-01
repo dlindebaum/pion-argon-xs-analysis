@@ -123,7 +123,18 @@ def CombineSelections(events : Data, selection: list, levels: int, args: list = 
         return mask
 
 
-def CreateMask(values, operations, property, return_property : bool):
+def CreateMask(values, operations, property, return_property : bool) -> ak.Array:
+    """ Create a boolean mask of a property.
+
+    Args:
+        values: a single value or multiple values in a list
+        operations: a string representing the boolean operation or a list of strings, see cuts_to_func for more.
+        property: array to create mask with
+        return_property: returns property along with the mask
+
+    Returns:
+        ak.Array: mask and optionally the property
+    """
     mask = cuts_to_func(values, operations)(property)
     if return_property is True:
         return mask, property

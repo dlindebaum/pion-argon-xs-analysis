@@ -1184,7 +1184,7 @@ def PlotHist2DComparison(x : list, y : list, x_range : list, y_range : list, xla
     fig.colorbar(im, cax = cbar_ax)
 
 
-def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : list = None, stacked = False, data_label : str = "Data", mc_labels = "MC", xlabel : str = None, title : str = None, yscale : str = "linear", legend_loc : str = "best", ncols : int = 2, norm : bool = False, sf : int = 2, colour : str = None, alpha : float = None, truncate : bool = False):
+def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : list = None, stacked = False, data_label : str = "Data", mc_labels = "MC", xlabel : str = None, title : str = None, yscale : str = "linear", legend_loc : str = "best", ncols : int = 2, norm : bool = False, sf : int = 2, colour : str = None, alpha : float = None, truncate : bool = False, mc_weights : np.array = None):
     """ Make Data MC histograms as seen in most typical particle physics analyses (but looks better).
 
     Args:
@@ -1194,9 +1194,6 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     plt.subplots(2, 1, figsize = (6.4, 4.8 * 1.2), gridspec_kw={"height_ratios" : [5, 1]} , sharex = True) # set to that the ratio plot is 1/5th the default plot height
 
     is_tagged = hasattr(mc_labels, "__iter__") & (type(mc_labels) != str) 
-
-    print(f"{is_tagged=}")
-
     if norm == False:
         scale = 1
     elif norm is True:
@@ -1219,9 +1216,9 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     if is_tagged:
         h_mc = []
         sum_mc = []
-        for m in mc:
+        for i, m in enumerate(mc):
             sum_mc.append(int(ak.count(m) * scale))
-            h, edges = np.histogram(np.array(m), bins, range = x_range)
+            h, edges = np.histogram(np.array(m), bins, range = x_range, weights = mc_weights[i] if mc_weights else None)
             h_mc.append(h * scale)
     else:
         sum_mc = int(ak.count(mc) * scale)
@@ -1353,6 +1350,15 @@ def PlotHist2DImshowMarginal(data_x, data_y, bins: int = 100, x_range: list = No
     return
 
 
+def DrawMultiCutPosition(value : float | list[float], arrow_loc : float = 0.8, arrow_length : float = 0.2, face : str | list[str] = "right", flip : bool = False, color = "black", annotate : bool = False):
+    if type(value) == list and type(face) == list:
+        for i in range(2):
+            DrawCutPosition(value[i], arrow_loc, arrow_length, face[i], flip, color, annotate)
+    else:
+        DrawCutPosition(value, arrow_loc, arrow_length, face, flip, color, annotate)
+    return
+
+
 def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float = 0.2, face : str = "right", flip : bool = False, color = "black", annotate : bool = False):
     """ Illustrates a cut on a plot. Direction of the arrow indidcates which portion of the plot passes the cut.
 
@@ -1360,14 +1366,14 @@ def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float
         value (float): value of the cut
         arrow_loc (float, optional): where along the line to place the arrow. Defaults to 0.8.
         arrow_length (float, optional): length of the arrow, must be in units of the cut. Defaults to 0.2.
-        face (str, optional): which way the arrow faces. Defaults to "right".
+        face (str, optional): which way the arrow faces, options are ["left", "right", "<"(left), ">"(right)] . Defaults to "right".
         flip (bool, optional): flip the arrow to the y axis. Defaults to False.
         color (str, optional): colour of the line and arrow. Defaults to "black".
     """
 
-    if face == "right":
+    if face in ["right", ">"]:
         face_factor = 1
-    elif face == "left":
+    elif face in ["left", "<"]:
         face_factor = -1
     else:
         raise Exception("face must be left or right")
@@ -1389,7 +1395,7 @@ def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float
     plt.annotate("", xy = xy1, xytext = xy0, arrowprops=dict(facecolor = color, edgecolor = color, arrowstyle = "->"), xycoords= transform)
 
 
-def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False, title : str = "", newFigure : bool = True, stacked : bool = True, alpha : float = None, truncate : bool = False, histtype : str = "stepfilled", reverse_sort : bool = False):
+def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False, title : str = "", newFigure : bool = True, stacked : bool = True, alpha : float = None, truncate : bool = False, histtype : str = "stepfilled", reverse_sort : bool = False, data_weights : np.array = None):
     """ Makes a stacked histogram and splits the sample based on tags.
 
     Args:
@@ -1409,6 +1415,13 @@ def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = N
     if reverse_sort:
         sorted_index = sorted_index[::-1]
     split_data = [split_data[i] for i in sorted_index]
+
+    if data_weights is not None:
+        split_weights = [ak.ravel(data_weights[tags[t].mask]) for t in tags]
+        split_weights = [np.array(split_weights[i]) for i in sorted_index]
+    else:
+        split_weights = None
+
     sorted_tags = Tags.Tags()
     for i in sorted_index:
         sorted_tags[tags.number[i].name] = tags.number[i]
@@ -1420,10 +1433,10 @@ def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = N
             colours[i] = "C" + str(i)
 
     if data2 is None:
-        PlotHist(split_data, stacked = stacked, label = sorted_tags.name.values, bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, newFigure = newFigure, alpha = alpha, truncate = truncate, histtype = histtype)
+        PlotHist(split_data, stacked = stacked, label = sorted_tags.name.values, bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, newFigure = newFigure, alpha = alpha, truncate = truncate, histtype = histtype, weights = split_weights)
         plt.legend(loc = loc, ncols = ncols, labelspacing = 0.25,  columnspacing = 0.25)
     else:
-        PlotHistDataMC(ak.ravel(data2), split_data, bins, x_range, stacked, "Data", sorted_tags.name.values, x_label, title, y_scale, loc, ncols, norm, colour = colours, alpha = alpha, truncate = truncate)
+        PlotHistDataMC(ak.ravel(data2), split_data, bins, x_range, stacked, "Data", sorted_tags.name.values, x_label, title, y_scale, loc, ncols, norm, colour = colours, alpha = alpha, truncate = truncate, mc_weights = split_weights)
 
 
 def UniqueData(data):
