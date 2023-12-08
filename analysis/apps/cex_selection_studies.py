@@ -51,8 +51,10 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, func
 
     output["no_selection"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, None, EventSelection.GenerateTrueFinalStateTags(events))
 
+    masks = {k : functions[k](events, **v) for k, v in args.items()}
+
     #* pi+ beam selection
-    mask = BeamParticleSelection.PiBeamSelection(events, beam_instrumentation)
+    mask = BeamParticleSelection.PiBeamSelection(events, **args["PiBeamSelection"])
     cut_table.add_mask(mask, "PiBeamSelection")
     counts = Tags.GenerateTrueBeamParticleTags(events)
     for i in counts:
@@ -76,8 +78,8 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, func
     output["final_tags"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, None, EventSelection.GenerateTrueFinalStateTags(events))
 
     df = cut_table.get_table(init_data_name = "no selection", pfos = False, percent_remain = False, relative_percent = False, ave_per_event = False)
-    print(df)
-    return output, df, cut_table.get_masks_dict()
+    # return output, df, cut_table.get_masks_dict()
+    return output, df, masks
 
 
 def AnalysePiPlusSelection(events : Master.Data, data : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
@@ -378,7 +380,7 @@ def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, n
             if output_data:
                 Plots.PlotTagged(output_mc["BeamScraperCut"]["value"], output_mc["BeamScraperCut"]["tags"], data2 = output_data["BeamScraperCut"]["value"], bins = args.nbins, y_scale = "log", x_range = [0, 5], x_label = "$r_{inst}$ (cm)", norm = norm)
             else:
-                Plots.PlotTagged(output_mc["BeamScraperCut"]["value"], output_mc["BeamScraperCut"]["tags"], bins = args.nbins, y_scale = "log", x_range = [0, 10], x_label = "$r_{inst}$ (cm)", norm = norm)
+                Plots.PlotTagged(output_mc["BeamScraperCut"]["value"], output_mc["BeamScraperCut"]["tags"], bins = args.nbins, y_scale = "log", x_range = [0, 10], x_label = "$r_{inst}$", norm = norm)
             Plots.DrawMultiCutPosition(output_mc["BeamScraperCut"]["cuts"], face = output_mc["BeamScraperCut"]["op"], arrow_length = 2)
             pdf.Save()
 
