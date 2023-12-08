@@ -1201,7 +1201,10 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     if norm == False:
         scale = 1
     elif norm is True:
-        scale = ak.count(data) / ak.count(mc) # scale MC to data if requested (number of MC entries == number of data entries).
+        if mc_weights is None:
+            scale = ak.count(data) / ak.count(mc) # scale MC to data if requested (number of MC entries == number of data entries).
+        else:
+            scale = ak.count(data) / ak.sum(mc_weights)
     elif norm > 0:
         scale = norm
     else:
@@ -1226,7 +1229,7 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
             h_mc.append(h * scale)
     else:
         sum_mc = int(ak.count(mc) * scale)
-        h_mc, edges = np.histogram(np.array(mc), bins, range = x_range)
+        h_mc, edges = np.histogram(np.array(mc), bins, range = x_range, weights = mc_weights)
         h_mc = h_mc * scale
 
     # sum_mc = np.sum(h_mc, 1, dtype = int) # number of each species in MC

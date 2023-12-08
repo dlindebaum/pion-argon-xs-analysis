@@ -76,7 +76,6 @@ def Pi0MassSelection(events : Master.Data, photon_mask : ak.Array = None, photon
 
     mass = shower_pairs.Mass(le, se, shower_pairs.reco_angle)
     mass = ak.fill_none(ak.pad_none(mass, 1, -1), -999, -1)
-    print(cut)
     return SelectionTools.CreateMask(cut, [">", "<"], mass, return_property)
 
 
