@@ -25,8 +25,14 @@ def BeamPionSelection(events : cross_section.Master.Data, args : cross_section.a
         selection_args = "data_arguments"
         sample = "data"
     if "selection_masks" in args:
+        mask = None
         for m in args.selection_masks[sample]["beam"].values():
-            events_copy.Filter([m], [m])
+            # events_copy.Filter([m], [m])
+            if mask is None:
+                mask = m
+            else:
+                mask = mask & m
+        events_copy.Filter([mask], [mask])
     else:
         for s in args.beam_selection["selections"]:
             mask = args.beam_selection["selections"][s](events_copy, **args.beam_selection[selection_args][s])
@@ -34,7 +40,8 @@ def BeamPionSelection(events : cross_section.Master.Data, args : cross_section.a
             print(events_copy.cutTable.get_table())
 
     if hasattr(args, "valid_pfo_selection"):
-        events_copy.Filter([args.selection_masks[sample]['null_pfo']['ValidPFOSelection']]) # apply PFO preselection here
+        if args.valid_pfo_selection is True:
+            events_copy.Filter([args.selection_masks[sample]['null_pfo']['ValidPFOSelection']]) # apply PFO preselection here
     return events_copy
 
 @cross_section.Master.timer
@@ -66,10 +73,15 @@ def RegionSelection(events : cross_section.Master.Data, args : cross_section.arg
 
         is_pip = events_copy.trueParticles.pdg[:, 0] == 211
 
+        mask = None
         for m in args.selection_masks["mc"]["beam"].values():
-            n_pi_true = n_pi_true[m]
-            n_pi0_true = n_pi0_true[m]
-            is_pip = is_pip[m]
+            if mask is None:
+                mask = m
+            else:
+                mask = mask & m
+        n_pi_true = n_pi_true[mask]
+        n_pi0_true = n_pi0_true[mask]
+        is_pip = is_pip[mask]
         true_regions = cross_section.EventSelection.create_regions_new(n_pi0_true, n_pi_true)
         for k in true_regions:
             true_regions[k] = true_regions[k] & (is_pip)
@@ -94,10 +106,10 @@ def CreateInitParams(model : cross_section.pyhf.Model, analysis_input : cross_se
     return init
 
 
-def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_section.Slices, mean_track_score_bins : np.array, template_input : cross_section.AnalysisInput | cross_section.pyhf.Model, suggest_init : bool = False, template_weights : np.array = None) -> cross_section.cabinetry.model_utils.ModelPrediction:
+def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_section.Slices, mean_track_score_bins : np.array, template_input : cross_section.AnalysisInput | cross_section.pyhf.Model, suggest_init : bool = False, template_weights : np.array = None, return_fit_results : bool = False) -> cross_section.cabinetry.model_utils.ModelPrediction:
 
     if type(template_input) == cross_section.AnalysisInput:
-        model = cross_section.RegionFit.CreateModel(template_input, energy_slice, mean_track_score_bins, False, template_weights)
+        model = cross_section.RegionFit.CreateModel(template_input, energy_slice, mean_track_score_bins, False, template_weights, True)
     else:
         model = template_input
 
@@ -109,11 +121,17 @@ def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_sect
         init_params = None
 
     result = cross_section.RegionFit.Fit(observed, model, init_params, verbose = False)
-    return cross_section.cabinetry.model_utils.prediction(model, fit_results = result)
+    if return_fit_results is True:
+        return cross_section.cabinetry.model_utils.prediction(model, fit_results = result), result
+    else:
+        return cross_section.cabinetry.model_utils.prediction(model, fit_results = result)
 
 
 def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, energy_slice : cross_section.Slices, postfit_pred : cross_section.cabinetry.model_utils.ModelPrediction = None, book : Plots.PlotBook = Plots.PlotBook.null) -> tuple[np.array]:
-    histograms_true_obs = cross_section.Unfold.CreateHistograms(data, energy_slice, process, False, False)
+    if data.KE_init_true is not None:
+        histograms_true_obs = cross_section.Unfold.CreateHistograms(data, energy_slice, process, False, False)
+    else:
+        histograms_true_obs = None
     histograms_reco_obs = cross_section.Unfold.CreateHistograms(data, energy_slice, process, True, False)
     histograms_reco_obs_err = {k : np.sqrt(v) for k, v in histograms_reco_obs.items()}
     
@@ -123,14 +141,20 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
         n = cross_section.RegionFit.CreateObservedInputData(data, energy_slice, None)
         N = sum(n)
 
-        KE_int_prediction = cross_section.RegionFit.SliceModelPrediction(postfit_pred, slice(-1), "KE_int_postfit") # exclude the channel which is the mean track score
+
+        if any([c["name"] == "mean_track_score" for c in postfit_pred.model.spec["channels"]]):
+            KE_int_prediction = cross_section.RegionFit.SliceModelPrediction(postfit_pred, slice(-1), "KE_int_postfit") # exclude the channel which is the mean track score
+        else:
+            KE_int_prediction = cross_section.RegionFit.SliceModelPrediction(postfit_pred, slice(0, len(postfit_pred.model_yields)), "KE_int_postfit")
+
+        print(f"{len(KE_int_prediction.model_yields)=}")
 
         L = np.sum(KE_int_prediction.model_yields, 0)
 
         L_err = KE_int_prediction.total_stdev_model_bins[:, :-1] # last entry in the array is the total error for the whole channel (but we want the total error in each process)
         L_err = np.sqrt(np.sum(L_err **2, 0)) # quadrature sum across all bins
 
-        labels = list(data.exclusive_process.keys()) #! make property of AnalysisInput dataclass
+        labels = list(data.regions.keys()) #! make property of AnalysisInput dataclass
         L_var_bkg = sum(L_err[process != np.array(labels)]**2)
         L_bkg = sum(L[process != np.array(labels)])
 
@@ -139,15 +163,17 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
         KE_int_fit_err = np.sqrt(N + L_var_bkg)
 
 
-        actual = {l : data.NInteract(energy_slice, data.exclusive_process[l]) for l in labels}
-        actual_sig = actual[process]
-        actual_bkg = sum(np.array(list(actual.values()))[process != np.array(labels)])
+        if data.exclusive_process is not None:
+            actual = {l : data.NInteract(energy_slice, data.exclusive_process[l], weights = data.weights) for l in labels}
+            actual_sig = actual[process]
+            actual_bkg = sum(np.array(list(actual.values()))[process != np.array(labels)])
 
-        energy_bins = np.sort(np.insert(energy_slice.pos, 0, energy_slice.max_pos + energy_slice.width))
-        cross_section.RegionFit.PlotPrefitPostFit(actual_sig, np.sqrt(actual_sig), KE_int_fit, KE_int_fit_err, energy_bins)
-        book.Save()
-        cross_section.RegionFit.PlotPrefitPostFit(actual_bkg, np.sqrt(actual_bkg), L_bkg, np.sqrt(L_var_bkg), energy_bins)
-        book.Save()
+            energy_bins = np.sort(np.insert(energy_slice.pos, 0, energy_slice.max_pos + energy_slice.width))
+
+            cross_section.RegionFit.PlotPrefitPostFit(actual_sig, np.sqrt(actual_sig), KE_int_fit, KE_int_fit_err, energy_bins)
+            book.Save()
+            cross_section.RegionFit.PlotPrefitPostFit(actual_bkg, np.sqrt(actual_bkg), L_bkg, np.sqrt(L_var_bkg), energy_bins)
+            book.Save()
 
         histograms_reco_obs["int_ex"] = np.where(KE_int_fit < 0, 0, KE_int_fit)
         histograms_reco_obs_err["int_ex"] = KE_int_fit_err
@@ -168,10 +194,12 @@ def CreateAnalysisInput(sample : cross_section.Toy | cross_section.Master.Data, 
         sample_selected = BeamPionSelection(sample, args, is_mc)
         if is_mc:
             reco_regions, true_regions = RegionSelection(sample, args, True)
+            reweight_params = args.beam_reweight_params
         else:
             reco_regions = RegionSelection(sample, args, False)
             true_regions = None
-        ai = cross_section.AnalysisInput.CreateAnalysisInputNtuple(sample_selected, args.upstream_loss_correction_params["value"], reco_regions, true_regions)
+            reweight_params = None
+        ai = cross_section.AnalysisInput.CreateAnalysisInputNtuple(sample_selected, args.beam_momentum, args.upstream_loss_correction_params["value"], reco_regions, true_regions, reweight_params)
     else:
         raise Exception(f"object type {type(sample)} not a valid sample")
     return ai
@@ -213,10 +241,10 @@ def main(args):
 
         with Plots.PlotBook(outdir + "plots.pdf") as book:
             region_fit_result = RegionFit(analysis_input, energy_slices, mean_track_score_bins, template_input)
-            
+
             histograms_true_obs, histograms_reco_obs, histograms_reco_obs_err = BackgroundSubtraction(analysis_input, args.signal_process, energy_slices, region_fit_result, book) #? make separate background subtraction function?
-            
-            unfolding_result = Unfolding(histograms_reco_obs, histograms_reco_obs_err, energy_slices, args.toy_template, region_fit_result, args.signal_process, book)
+
+            unfolding_result = Unfolding(histograms_reco_obs, histograms_reco_obs_err, energy_slices, template_input, region_fit_result, args.signal_process, book)
 
             labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$"}
             for i in unfolding_result:
