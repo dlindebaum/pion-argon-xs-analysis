@@ -65,7 +65,7 @@ def PlotXSComparison(xs : dict[np.array], energy_slice, process : str = None, co
     for k, v in xs.items():
         w_chi_sqr = weighted_chi_sqr(v[0], sim_curve_interp(x), v[1])
         chi_sqrs[k] = w_chi_sqr
-        Plots.Plot(x, v[0], yerr = v[1], label = k + ", $\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}", color = colors[k], linestyle = "", marker = "x", newFigure = False)
+        Plots.Plot(x, v[0], xerr = energy_slice.width / 2, yerr = v[1], label = k + ", $\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}", color = colors[k], linestyle = "", marker = "x", newFigure = False)
     
     if process == "single_pion_production":
         Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = "simulation", title = "single pion production", newFigure = False, xlabel = "$KE_{int} (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)
@@ -1438,7 +1438,7 @@ class Unfold:
         #     outside_tpc = outside_tpc[toy.df.beam_selection_mask]
         #     channel_mask = channel_mask[toy.df.beam_selection_mask]
 
-        n_initial, n_interact_inelastic, n_interact_exclusive, n_incident = EnergySlice.CountingExperiment(KE_int, KE_init, outside_tpc, channel_mask, energy_slice)
+        n_initial, n_interact_inelastic, n_interact_exclusive, n_incident = EnergySlice.CountingExperiment(KE_int, KE_init, outside_tpc, channel_mask, energy_slice, weights = analysis_input.weights)
         
         output = {"init" : n_initial, "int" : n_interact_inelastic, "int_ex" : n_interact_exclusive, "inc" : n_incident}
         return output
@@ -1447,7 +1447,7 @@ class Unfold:
     def CorrelationMarix(observed, true, bins, remove_overflow : bool = True) -> np.array:
         response_hist = np.histogram2d(np.array(observed), np.array(true), bins = bins)[0]
         if remove_overflow is True:
-            response_hist = response_hist[:-1, :-1]
+            response_hist = response_hist[1:, 1:]
         return response_hist
 
     @staticmethod
@@ -1459,7 +1459,10 @@ class Unfold:
         response_hist_err = np.sqrt(response_hist)
 
         column_sums = response_hist.sum(axis=0)
-        normalization_factor = efficiencies / column_sums
+        if remove_overflow is True:
+            normalization_factor = efficiencies[1:] / column_sums
+        else:
+            normalization_factor = efficiencies / column_sums
         response = response_hist * normalization_factor
         response_err = response_hist_err * normalization_factor
         
@@ -1485,7 +1488,7 @@ class Unfold:
     def CalculateResponseMatrices(template : AnalysisInput, process : str, energy_slice : Slices, book : Plots.PlotBook = None, efficiencies : dict[np.array] = None) -> dict[np.array]:
         slice_bins = np.arange(-1 - 0.5, energy_slice.max_num + 1.5)
 
-        outside_tpc_mask = template.outside_tpc_reco | template.outside_tpc_true | ~template.inclusive_process
+        outside_tpc_mask = template.outside_tpc_reco | template.outside_tpc_true
 
         true_slices = EnergySlice.SliceNumbers(template.KE_int_true, template.KE_init_true, outside_tpc_mask, energy_slice)
         reco_slices = EnergySlice.SliceNumbers(template.KE_int_reco, template.KE_init_reco, outside_tpc_mask, energy_slice)
@@ -1557,14 +1560,17 @@ class Unfold:
     @staticmethod
     def Unfold(observed : dict, observed_err : dict, response_matrices : dict, prior = None, ts_stop = 0.01, max_iter = 100, ts = "ks", regularizer = None, verbose : bool = False, efficiencies : dict[np.array] = None) -> dict:
 
-
-        cb = []
-        if verbose: cb.append(Logger())
-        if regularizer is not None:
-            cb = cb + [regularizer]
+        def make_cb(key):
+            cb = []
+            if verbose: cb.append(Logger())
+            if regularizer is not None:
+                cb = cb + [regularizer[key]]
+            return cb
 
         results = {}
         for k, n, n_e, v in zip(response_matrices.keys(), observed.values(), observed_err.values(), response_matrices.values()):
+
+            cb = make_cb(k)
 
             if efficiencies is not None:
                 efficiency = efficiencies[k]
@@ -1572,7 +1578,12 @@ class Unfold:
                 efficiency = np.ones_like(n) #! for the toy, assume perfect selection efficiency, so 1 +- 0
             efficiency_err = np.zeros_like(n)
 
-            results[k] = iterative_unfold(n, n_e, v[0], v[1], efficiency, efficiency_err, callbacks = cb, prior = prior, ts_stopping = ts_stop, max_iter = max_iter, ts = ts)
+            if prior is None:
+                p = n/sum(n)
+            else:
+                p = prior[k] / sum(prior[k])
+
+            results[k] = iterative_unfold(n, n_e, v[0], v[1], efficiency, efficiency_err, callbacks = cb, prior = p, ts_stopping = ts_stop, max_iter = max_iter, ts = ts)
         return results
 
     @staticmethod

@@ -1598,7 +1598,7 @@ def PlotTags(tags : Tags.Tags, xlabel : str = "name"):
 
 
 class RatioPlot():
-    def __init__(self, x = None, y1 = None, y2 = None, y1_err = None, y2_err = None, xlabel = "x", ylabel = "y1/y2") -> None:
+    def __init__(self, x = None, y1 = None, y2 = None, y1_err = None, y2_err = None, xlabel = "x", ylabel = "y2/y1") -> None:
         self.x = x
         self.y1 = y1
         self.y1_err = y1_err
