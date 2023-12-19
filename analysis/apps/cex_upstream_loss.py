@@ -7,7 +7,6 @@ Author: Shyam Bhuller
 Description: Computes the upstream energy loss for beam particles after beam particle selection, then writes the fitted parameters to file.
 """
 import argparse
-import json
 import os
 
 import awkward as ak
@@ -106,9 +105,7 @@ def main(args : argparse.Namespace):
         pdf.savefig()
 
     print(f"fitted parameters : {params_dict}")
-    with open(args.out + "fit_parameters.json", "w") as f:
-        json.dump(params_dict, f)
-
+    cross_section.SaveConfiguration(args.out + "fit_parameters.json", params_dict)
     return
 
 if __name__ == "__main__":

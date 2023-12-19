@@ -19,7 +19,7 @@ from python.analysis import cross_section, Plots, vector, Processing
 
 from apps.cex_analyse import BeamPionSelection
 
-def RecoFractionalRange(events : cross_section.Master.Data, particle : cross_section.Particle, args):
+def RecoFractionalRange(events : cross_section.Data, particle : cross_section.Particle, args):
     reco_KE_inst = cross_section.KE(events.recoParticles.beam_inst_P, particle.mass)
     reco_upstream_loss = cross_section.UpstreamEnergyLoss(reco_KE_inst, args.upstream_loss_correction_params["value"])
     reco_KE_ff = reco_KE_inst - reco_upstream_loss
@@ -75,7 +75,7 @@ def KEs(samples, upstream_energy_loss_params, smearing : np.array = None):
     return KE_samples
 
 
-def MakePlots(pion_sample : dict[cross_section.Master.Data], reco_KEs : dict[dict[np.array]], tags : cross_section.Tags, args : cross_section.argparse.Namespace, weights : np.array = None, smearing : np.array = None, book : Plots.PlotBook = Plots.PlotBook.null, bins : int = 50):
+def MakePlots(pion_sample : dict[cross_section.Data], reco_KEs : dict[dict[np.array]], tags : cross_section.Tags, args : cross_section.argparse.Namespace, weights : np.array = None, smearing : np.array = None, book : Plots.PlotBook = Plots.PlotBook.null, bins : int = 50):
     if smearing is None:
         smearing = np.zeros(len(pion_sample["mc"].eventNum))
     Plots.PlotTagged(pion_sample["mc"].recoParticles.beam_inst_P + smearing, tags(pion_sample["mc"]), data2 = pion_sample["data"].recoParticles.beam_inst_P, bins = bins, x_range = [0.75 * args.beam_momentum, 1.25 * args.beam_momentum], norm = args.norm, loc = "upper left", x_label = "$P_{inst}^{reco}$(MeV)", data_weights = weights)
@@ -90,7 +90,7 @@ def MakePlots(pion_sample : dict[cross_section.Master.Data], reco_KEs : dict[dic
 
 
 def run(i, file, n_events, start, selected_events, args) -> dict:
-    events = cross_section.Master.Data(file, nEvents = n_events, start = start, nTuple_type = args.ntuple_type) # load data
+    events = cross_section.Data(file, nEvents = n_events, start = start, nTuple_type = args.ntuple_type) # load data
     events = BeamPionSelection(events, args, not args.data)
     muon = cross_section.Particle.from_pdgid(-13)
 
@@ -275,9 +275,7 @@ def main(args : cross_section.argparse.Namespace):
         }
 
     for k, v in fit_values.items():
-        with open(args.out + k + ".json", "w") as f:
-            cross_section.json.dump(v, f, indent = 2)
-
+        cross_section.SaveConfiguration(args.out + k + ".json", v)
 
     # smearing_stopping_muon = np.random.normal(smearing_params["mu"]["value"], smearing_params["sigma"]["value"], len(output_mc["p_inst_true"]))
     # smearing_stopping_muon_rw = np.random.normal(smearing_params_rw["mu"]["value"], smearing_params_rw["sigma"]["value"], len(output_mc["p_inst_true"]))

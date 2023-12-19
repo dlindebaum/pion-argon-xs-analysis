@@ -267,6 +267,26 @@ class double_crystal_ball(FitFunction):
         return p2
 
 
+class line(FitFunction):
+    n_params = 2
+
+    def __new__(cls, x, p0, p1) -> np.array:
+        return cls.func(x, p0, p1)
+
+    def func(x, p0, p1):
+        return p0 * x + p1
+
+
+class asym(FitFunction):
+    n_params = 3
+
+    def __new__(cls, x, p0, p1, p2) -> np.array:
+        return cls.func(x, p0, p1, p2)
+
+    def func(x, p0, p1, p2):
+        return 1/(p0*(x**p2) + p1)
+
+
 def RejectionSampling(num : int, low : float, high : float, func : FitFunction, params : dict, scale_param : str = "p0", rng : np.random.default_rng = None) -> np.array:
     """ Performs Rejection sampling for a given function which describes a pdf.
 

@@ -667,7 +667,7 @@ def SaveMasks(output : dict, out : str):
     os.makedirs(out, exist_ok = True)
     for head in output:
         if "masks" not in output[head]: continue 
-        cross_section.SaveSelection(out + f"{head}_selection_masks.dill", output[head]["masks"])
+        cross_section.SaveObject(out + f"{head}_selection_masks.dill", output[head]["masks"])
 
 @Master.timer
 def main(args):

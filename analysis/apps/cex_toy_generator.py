@@ -16,7 +16,6 @@ from math import ceil
 
 import numpy as np
 import pandas as pd
-import tables
 
 from alive_progress import alive_it
 from pathos.pools import ProcessPool
@@ -24,9 +23,9 @@ from rich import print
 from scipy.interpolate import interp1d
 from scipy.stats import gaussian_kde
 
-from python.analysis.Master import timer
+from python.analysis.Master import timer, LoadConfiguration, ReadHDF5, LoadObject
 from python.analysis import Fitting
-from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle, LoadConfiguration, LoadSelectionFile
+from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # supress annoying pandas warnings
 
@@ -35,26 +34,6 @@ global verbose
 def vprint(*args, **kwags):
     if verbose is True:
         print(*args, **kwags)
-
-
-def ReadHDF5File(file : str):
-    """ Reads a HDF5 file and unpacks the contents into pandas dataframes.
-
-    Args:
-        file (str): file path.
-
-    Returns:
-        pd.DataFrame : if hdf5 file only has 1 key
-        dict : if hdf5 file contains more than 1 key
-    """
-    keys = []
-    with tables.open_file(file, driver = "H5FD_CORE") as hdf5file:
-        for c in hdf5file.root: 
-            keys.append(c._v_pathname[1:])
-    if len(keys) == 1:
-        return pd.read_hdf(file)
-    else:
-        return {k : pd.read_hdf(file, k) for k in keys}
 
 
 def ResolveConfig(config : dict) -> argparse.Namespace:
@@ -74,12 +53,12 @@ def ResolveConfig(config : dict) -> argparse.Namespace:
                 args.smearing_params[i] = LoadConfiguration(v[i])
                 args.smearing_params[i]["function"] = getattr(Fitting, args.smearing_params[i]["function"])
         elif k == "reco_region_fractions":
-            args.reco_region_fractions = ReadHDF5File(v)
+            args.reco_region_fractions = ReadHDF5(v)
         elif k == "beam_selection_efficiencies":
             #* that complex unpacking with pytables
-            args.beam_selection_efficiencies = ReadHDF5File(v)
+            args.beam_selection_efficiencies = ReadHDF5(v)
         elif k == "mean_track_score_kde":
-            setattr(args, k, LoadSelectionFile(v))
+            setattr(args, k, LoadObject(v))
         elif k == "beam_profile":
             if v not in ["gaussian", "uniform"]:
                 args.beam_profile = LoadConfiguration(v)

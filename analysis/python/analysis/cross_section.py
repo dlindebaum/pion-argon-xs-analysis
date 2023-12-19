@@ -7,7 +7,6 @@ Description: Library for code used in the cross section analysis. Refer to the R
 """
 import argparse
 import copy
-import json
 import os
 
 from collections import namedtuple
@@ -15,7 +14,6 @@ from dataclasses import dataclass
 
 import awkward as ak
 import cabinetry
-import dill
 import numpy as np
 import pandas as pd
 import pyhf
@@ -26,8 +24,13 @@ from particle import Particle
 from pyunfold import iterative_unfold, Logger
 from scipy.interpolate import interp1d
 
-from python.analysis import Master, BeamParticleSelection, PFOSelection, EventSelection, Fitting, Plots, vector, Tags
+from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, Fitting, Plots, vector, Tags
+from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer
 from python.analysis.shower_merging import SetPlotStyle
+
+def bin_centers(bins : np.array) -> np.array:
+    return (bins[1:] + bins[:-1]) / 2
+
 
 def nandiv(num, den):
     return np.divide(num, np.where(den == 0, np.nan, den))
@@ -48,7 +51,7 @@ def Weights(p_inst_true, mu, sigma, mu_0, sigma_0):
     return np.where(weights > 3, 3, weights)
 
 
-def RatioWeights(mc : Master.Data, func : str, params : list, truncate : int = 10):
+def RatioWeights(mc : Data, func : str, params : list, truncate : int = 10):
     weights = 1/getattr(Fitting, func)(mc.recoParticles.beam_inst_P, *params)
     weights = np.where(weights > truncate, truncate, weights)
     return weights
@@ -76,31 +79,6 @@ def PlotXSComparison(xs : dict[np.array], energy_slice, process : str = None, co
     if max(Plots.plt.gca().get_ylim()) > np.nanmax(sim_curve_interp(xs_sim.KE).astype(float)) * 2:
         Plots.plt.ylim(0, max(sim_curve_interp(xs_sim.KE)) * 2)
     return chi_sqrs
-
-
-def LoadSelectionFile(file : str):
-    """ Opens and serialises object saved as a dill file. May be remaned to a more general method if dill files are used more commonly.
-
-    Args:
-        file (str): dill file
-
-    Returns:
-        any: loaded object
-    """
-    with open(file, "rb") as f:
-        obj = dill.load(f)
-    return obj
-
-
-def SaveSelection(file : str, masks : dict):
-    """ Saves Masks from selection to file. If not specified it will be left as None.
-
-    Args:
-        file (str): _description_
-        beam_selection_mask (dict): dictionary of masks
-    """
-    with open(file, "wb") as f:
-        dill.dump(masks, f)
 
 
 class EnergyCorrection:
@@ -262,13 +240,13 @@ class ApplicationArguments:
     def Ntuples(parser : argparse.ArgumentParser, data : bool = False):
         parser.add_argument("-m", "--mc-file", dest = "mc_file", nargs = "+", help = "MC NTuple file to study.", required = False)
         if data: parser.add_argument("-d", "--data-file", dest = "data_file", nargs = "+", help = "Data Ntuple to study", required = False)
-        parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Master.Ntuple_Type, help = f"type of ntuple I am looking at {[m.value for m in Master.Ntuple_Type]}.", required = False)
+        parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Ntuple_Type, help = f"type of ntuple I am looking at {[m.value for m in Ntuple_Type]}.", required = False)
         return
 
     @staticmethod
     def SingleNtuple(parser : argparse.ArgumentParser, define_sample : bool = True):
         parser.add_argument(dest = "file", help = "NTuple file to study.")
-        parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Master.Ntuple_Type, help = f"type of ntuple I am looking at {[m.value for m in Master.Ntuple_Type]}.", required = False)
+        parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Ntuple_Type, help = f"type of ntuple I am looking at {[m.value for m in Ntuple_Type]}.", required = False)
         if define_sample : parser.add_argument("-S", "--sample-type", dest = "sample_type", type = str, choices = ["mc", "data"], help = f"type of sample I am looking at.", required = False)
         return
 
@@ -423,7 +401,7 @@ class ApplicationArguments:
             elif head == "SELECTION_MASKS":
                 args.selection_masks = {}
                 for k, v in value.items():
-                    args.selection_masks[k] = {i : LoadSelectionFile(j) for i, j in v.items()}
+                    args.selection_masks[k] = {i : LoadObject(j) for i, j in v.items()}
             elif head == "TOY_PARAMETERS":
                 args.toy_parameters = {}
                 for k, v in value.items():
@@ -477,20 +455,6 @@ class ApplicationArguments:
         return args
 
 
-def LoadConfiguration(file : str) -> dict:
-    """ Loads a json file.
-
-    Args:
-        file (str): file path
-
-    Returns:
-        dict: unpacked json 
-    """
-    with open(file, "rb") as f:
-        config = json.load(f)
-    return config
-
-
 def UpstreamEnergyLoss(KE_inst : ak.Array, params : np.array, function : Fitting.FitFunction = Fitting.poly2d) -> ak.Array:
     """ compute the upstream loss based on a repsonse function and it's fit parameters.
 
@@ -504,12 +468,12 @@ def UpstreamEnergyLoss(KE_inst : ak.Array, params : np.array, function : Fitting
     """
     return function.func(KE_inst, **params)
 
-@Master.timer
-def RecoDepositedEnergy(events : Master.Data, ff_KE : ak.Array, method : str) -> ak.Array:
+@timer
+def RecoDepositedEnergy(events : Data, ff_KE : ak.Array, method : str) -> ak.Array:
     """ Calcuales the energy deposited by the beam particle in the TPC, either using calorimetric information or the bethe bloch formula (spatial information).
 
     Args:
-        events (Master.Data): events to look at
+        events (Data): events to look at
         ff_KE (ak.Array): front facing kinetic energy
         method (str): method to calcualte the deposited energy, either "calo" or "bb"
 
@@ -1012,7 +976,7 @@ class EnergySlice:
 class Toy:
     def __init__(self, file : str = None, df : str = None) -> None:
         if file is not None:
-            self.df = pd.read_hdf(file)
+            self.df = ReadHDF5(file)
         elif df is not None:
             self.df = df
         else:
@@ -1110,7 +1074,7 @@ class Toy:
         return
 
 
-    def NInteract(self, energy_slice : Slices, process : np.array, mask : np.array = None, weights : np.array = None):
+    def NInteract(self, energy_slice : Slices, process : np.array, mask : np.array = None, weights : np.array = None) -> np.array:
         if mask is None: mask = np.ones(len(self.df), dtype = bool)
         w = weights if weights is None else weights[mask]
         n_interact = EnergySlice.CountingExperiment(self.df.KE_int_smeared[mask].values, self.df.KE_init_smeared[mask].values, self.outside_tpc_smeared[mask].values, process[mask].values, energy_slice, interact_only = True, weights = w)
@@ -1137,12 +1101,12 @@ class AnalysisInput:
     weights : np.array
 
     def ToFile(self, file : str):
-        SaveSelection(file, self)
+        SaveObject(file, self)
         return
 
     @staticmethod
     def FromFile(file): #* seems a bit extra but why not
-        obj = LoadSelectionFile(file)
+        obj = LoadObject(file)
         if type(obj) == AnalysisInput:
             return obj
         else:
@@ -1185,7 +1149,7 @@ class AnalysisInput:
             )
 
     @staticmethod
-    def CreateAnalysisInputNtuple(events : Master.Data, beam_momentum : float, upstream_energy_loss_params : dict, reco_regions : dict[np.array], true_regions : dict[np.array] = None, mc_reweight_params : dict = None):
+    def CreateAnalysisInputNtuple(events : Data, beam_momentum : float, upstream_energy_loss_params : dict, reco_regions : dict[np.array], true_regions : dict[np.array] = None, mc_reweight_params : dict = None):
         if mc_reweight_params is not None:
             # weights = Weights(vector.magnitude(events.trueParticles.momentum[:, 0]) / beam_momentum, mc_reweight_params["p_fit"]["values"]["p0"], mc_reweight_params["p_fit"]["values"]["p1"], mc_reweight_params["p_0"]["values"]["p0"], mc_reweight_params["p_0"]["values"]["p1"])
             weights = RatioWeights(events, "gaussian", [mc_reweight_params[k]["value"] for k in mc_reweight_params], 3)
@@ -1327,20 +1291,20 @@ class RegionFit:
         return observations
 
     @staticmethod
-    def Fit(observations, model : pyhf.Model, init_params : list[float] = None, verbose : bool = True) -> FitResults:
+    def Fit(observations, model : pyhf.Model, init_params : list[float] = None, par_bounds : list[tuple] = None, verbose : bool = True) -> FitResults:
         pyhf.set_backend(backend = "numpy", custom_optimizer = "minuit")
         if verbose is True: print(f"{init_params=}")
-        result = cabinetry.fit.fit(model, observations, init_pars = init_params, custom_fit = True, tolerance = 0.001)
-        
+        result = cabinetry.fit.fit(model, observations, init_pars = init_params, custom_fit = True, tolerance = 0.001, par_bounds = par_bounds)
+
         poi_ind = [model.config.par_slice(i).start for i in model.config.par_names if "mu" in i]
-        print(f"{poi_ind=}")
+        if verbose is True: print(f"{poi_ind=}")
         parameter = [i for i in model.config.par_names if "mu" in i]
         bestfit = result.bestfit[poi_ind]
         uncertainty = result.uncertainty[poi_ind]
 
-        print(f"{parameter=}")
-        print(f"{bestfit=}")
-        print(f"{uncertainty=}")
+        if verbose is True: print(f"{parameter=}")
+        if verbose is True: print(f"{bestfit=}")
+        if verbose is True: print(f"{uncertainty=}")
         if verbose is True: print(f"{result=}")
         return result
 

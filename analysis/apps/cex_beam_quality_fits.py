@@ -7,7 +7,6 @@ Author: Shyam Bhuller
 Description: Computes fits for the beam quality selection and stores them in a json file to be used with the full selection.
 """
 import argparse
-import json
 import os
 
 import awkward as ak
@@ -36,10 +35,9 @@ def Fit_Vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
     for i in ["x", "y", "z"]:
         data = v[i]
         y, bins_edges = np.histogram(np.array(data[~np.isnan(data)]), bins = bins, range = sorted([np.nanpercentile(data, 10), np.nanpercentile(data, 90)])) # fit only to  data within the 10th and 90th percentile of data to exclude large tails in the distriubtion.
-        bin_centers = (bins_edges[1:] + bins_edges[:-1]) / 2
         yerr = np.sqrt(y) # Poisson error
 
-        popt, perr = Fitting.Fit(bin_centers, y, yerr, Fitting.gaussian)
+        popt, perr = Fitting.Fit(cross_section.bin_centers(bins_edges), y, yerr, Fitting.gaussian)
 
         mu[i] = popt[1]
         sigma[i] = abs(popt[2])
@@ -167,8 +165,7 @@ def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str, ta
     #* write to json file
     os.makedirs(args.out, exist_ok = True)
     name = out + tag + "_beam_quality_fit_values.json"
-    with open(name, "w") as f:
-        json.dump(fit_values, f, indent = 2)
+    Master.SaveConfiguration(name, fit_values)
     print(f"fit values written to {name}")
 
     return events, fit_values

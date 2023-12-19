@@ -16,7 +16,7 @@ from apps import cex_toy_generator
 from python.analysis import cross_section, SelectionTools, Plots
 
 
-def BeamPionSelection(events : cross_section.Master.Data, args : cross_section.argparse.Namespace, is_mc : bool) -> cross_section.Master.Data:
+def BeamPionSelection(events : cross_section.Data, args : cross_section.argparse.Namespace, is_mc : bool) -> cross_section.Data:
     events_copy = events.Filter(returnCopy = True)
     if is_mc:
         selection_args = "mc_arguments"
@@ -44,8 +44,8 @@ def BeamPionSelection(events : cross_section.Master.Data, args : cross_section.a
             events_copy.Filter([args.selection_masks[sample]['null_pfo']['ValidPFOSelection']]) # apply PFO preselection here
     return events_copy
 
-@cross_section.Master.timer
-def RegionSelection(events : cross_section.Master.Data, args : cross_section.argparse.Namespace, is_mc : bool) -> dict[np.array]:
+@cross_section.timer
+def RegionSelection(events : cross_section.Data, args : cross_section.argparse.Namespace, is_mc : bool) -> dict[np.array]:
     """ Get reco and true regions (if possible) for ntuple.
 
     Args:
@@ -187,10 +187,10 @@ def Unfolding(hist_reco : dict[np.array], hist_reco_err : dict[np.array], energy
     return cross_section.Unfold.Unfold(hist_reco, hist_reco_err, response_matrices, ts_stop = 1E-2, ts = "bf", max_iter = 100)
 
 
-def CreateAnalysisInput(sample : cross_section.Toy | cross_section.Master.Data, args : cross_section.argparse.Namespace, is_mc : bool) -> cross_section.AnalysisInput:
+def CreateAnalysisInput(sample : cross_section.Toy | cross_section.Data, args : cross_section.argparse.Namespace, is_mc : bool) -> cross_section.AnalysisInput:
     if type(sample) == cross_section.Toy:
         ai = cross_section.AnalysisInput.CreateAnalysisInputToy(sample)
-    elif type(sample) == cross_section.Master.Data:
+    elif type(sample) == cross_section.Data:
         sample_selected = BeamPionSelection(sample, args, is_mc)
         if is_mc:
             reco_regions, true_regions = RegionSelection(sample, args, True)
@@ -218,10 +218,10 @@ def main(args):
             raise Exception("toy file format not recognised")
     elif args.mc:
         print(f"analyse MC: {args.mc_file}")
-        samples["MC"] = cross_section.Master.Data(args.mc_file, nTuple_type = args.ntuple_type)
+        samples["MC"] = cross_section.Data(args.mc_file, nTuple_type = args.ntuple_type)
     elif args.data:
         print(f"analyse Data: {args.data_file}")
-        # samples["Data"] = cross_section.Master.Data(args.data_file, nTuple_type = args.ntuple_type) #! not yet
+        # samples["Data"] = cross_section.Data(args.data_file, nTuple_type = args.ntuple_type) #! not yet
     else:
         raise Exception("--toy, --mc and or --data must be specified")
 

@@ -163,11 +163,7 @@ def main(args):
     cheat_event_table.to_latex(args.out + "event_cheat_performance_table.tex")
     cheat_pfo_table.to_latex(args.out + "pfo_cheat_performance_table.tex")
 
-    file = pd.HDFStore(args.out + "shower_pairs.hdf5")
-    for k, v in data.items():
-        v.to_hdf(file, k + "/")
-    file.close()
-
+    Master.DictToHDF5(data, args.out + "shower_pairs.hdf5")
     return
 
 

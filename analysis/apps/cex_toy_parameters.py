@@ -8,7 +8,6 @@ Description: Analyses MC ntuples in order to determine parameters used to emulat
 """
 
 import argparse
-import json
 import os
 
 import awkward as ak
@@ -23,16 +22,6 @@ from python.analysis import cross_section, Master, Plots, Tags
 
 from rich import print
 
-
-def SaveCorrectionParams(params : any, file : str):
-    """ Saves an objects to a json file. params should be an object serialisable by json (no numpy arrays etc.).
-
-    Args:
-        params (any): correction parameters.
-        file (str): file path.
-    """
-    with open(file, "w") as f:
-        json.dump(params, f)
 
 @Master.timer
 def ComputeQuantities(mc : Master.Data, args : argparse.Namespace) -> dict[dict, dict]:
@@ -181,7 +170,7 @@ def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : 
         out = args.out + f"smearing/{q}/"
         os.makedirs(out, exist_ok = True)
         for k in params[q]:
-            SaveCorrectionParams(params[q][k], out + f"{k}.json")
+            Master.SaveConfiguration(params[q][k], out + f"{k}.json")
     return
 
 @Master.timer
@@ -273,9 +262,7 @@ def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, args :
         "error" : pd.DataFrame({i : e[i][1] for i in e})
     }
 
-    with pd.HDFStore(args.out + "pi_beam_efficiency/beam_selection_efficiencies_true.hdf5") as hdf:
-        for i in selection_efficiency_info:
-            hdf.put(i, selection_efficiency_info[i])
+    Master.DictToHDF5(selection_efficiency_info, args.out + "pi_beam_efficiency/beam_selection_efficiencies_true.hdf5")
     return
 
 @Master.timer
@@ -324,7 +311,7 @@ def MeanTrackScoreKDE(mc : Master.Data, args : argparse.Namespace):
         kdes[k].set_bandwidth(0.2)
 
     os.makedirs(args.out + "meanTrackScoreKDE/", exist_ok = True)
-    cross_section.SaveSelection(args.out + "meanTrackScoreKDE/kdes.dill", kdes)
+    cross_section.SaveObject(args.out + "meanTrackScoreKDE/kdes.dill", kdes)
     return
 
 
@@ -348,7 +335,7 @@ def BeamProfileStudy(quantities : dict, args : argparse.Namespace, true_beam_mas
     os.makedirs(out, exist_ok = True)
     with Plots.PlotBook(out + "beam_profile.pdf") as book:
         beam_profile = FitBeamProfile(quantities["true"]["KE_init"][true_beam_mask], func, KE_range, 50, book)
-        SaveCorrectionParams(beam_profile, out + "beam_profile.json")
+        Master.SaveConfiguration(beam_profile, out + "beam_profile.json")
     return
 
 @Master.timer
