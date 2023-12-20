@@ -228,12 +228,23 @@ def AnalyseRegions(events : Master.Data, photon_mask : ak.Array, is_data : bool,
     return truth_regions, reco_regions
 
 
-def CreatePFOMasks(mc : Master.Data, selections : dict, args_type : str, extra_args : dict = None):
+def CreatePFOMasks(sample : Master.Data, selections : dict, args_type : str, extra_args : dict = None) -> dict[np.array]:
+    """ Create PFO masks to save to file.
+
+    Args:
+        mc (Master.Data): sample.
+        selections (dict): PFO selections.
+        args_type (str): use Data or MC arguments.
+        extra_args (dict, optional): any additional arguments to add. Defaults to None.
+
+    Returns:
+        masks: dictionary of masks.
+    """
     masks = {}
     for n, c, v in zip(selections["selections"].keys(), selections["selections"].values(), selections[args_type].values()):
         if extra_args is not None:
             v = {**v, **extra_args}
-        masks[n] = c(mc, **v)
+        masks[n] = c(sample, **v)
     return masks
 
 # @Processing.log_process
@@ -399,7 +410,6 @@ def MakePiPlusSelectionPlots(output_mc : dict, output_data : dict, outDir : str,
         outDir (str): output directory
         norm (float): plot normalisation
     """
-
     norm = False if output_data is None else norm
     with Plots.PlotBook(outDir + "piplus.pdf") as pdf:
         if "track_score_all" in output_mc:
@@ -454,7 +464,6 @@ def MakePhotonCandidateSelectionPlots(output_mc : dict, output_data : dict, outD
         outDir (str): output directory
         norm (float): plot normalisation
     """
-    
     norm = False if output_data is None else norm
     with Plots.PlotBook(outDir + "photon.pdf") as pdf:    
         if "EMScoreCut" in output_mc:
@@ -664,6 +673,12 @@ def MakeTables(output : dict, out : str, sample : str):
 
 
 def SaveMasks(output : dict, out : str):
+    """ Save selection masks to dill file
+
+    Args:
+        output (dict): masks
+        out (str): output file directory
+    """
     os.makedirs(out, exist_ok = True)
     for head in output:
         if "masks" not in output[head]: continue 

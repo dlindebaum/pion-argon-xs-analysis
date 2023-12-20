@@ -17,6 +17,16 @@ from python.analysis import cross_section, SelectionTools, Plots
 
 
 def BeamPionSelection(events : cross_section.Data, args : cross_section.argparse.Namespace, is_mc : bool) -> cross_section.Data:
+    """ Apply beam pion selection to ntuples.
+
+    Args:
+        events (cross_section.Data): analysis ntuple
+        args (cross_section.argparse.Namespace): analysis configuration
+        is_mc (bool): is the ntuple mc or data?
+
+    Returns:
+        cross_section.Data: selected events.
+    """
     events_copy = events.Filter(returnCopy = True)
     if is_mc:
         selection_args = "mc_arguments"
@@ -27,7 +37,6 @@ def BeamPionSelection(events : cross_section.Data, args : cross_section.argparse
     if "selection_masks" in args:
         mask = None
         for m in args.selection_masks[sample]["beam"].values():
-            # events_copy.Filter([m], [m])
             if mask is None:
                 mask = m
             else:
@@ -92,7 +101,18 @@ def RegionSelection(events : cross_section.Data, args : cross_section.argparse.N
         return reco_regions
 
 
-def CreateInitParams(model : cross_section.pyhf.Model, analysis_input : cross_section.AnalysisInput, energy_slices : cross_section.Slices, mean_track_score_bins : np.array):
+def CreateInitParams(model : cross_section.pyhf.Model, analysis_input : cross_section.AnalysisInput, energy_slices : cross_section.Slices, mean_track_score_bins : np.array) -> np.array[float]:
+    """ Create initial parameters for the region fit, using the proportion of reco regions and template to get a rough estimate of the process rates.
+
+    Args:
+        model (cross_section.pyhf.Model): fit model
+        analysis_input (cross_section.AnalysisInput): analysis input
+        energy_slices (cross_section.Slices): energy slices
+        mean_track_score_bins (np.array): mean track score bins
+
+    Returns:
+        np.array[float]: initial parameter values
+    """
     prefit_pred = cross_section.cabinetry.model_utils.prediction(model)
     template_KE = [np.sum(prefit_pred.model_yields[i], 0) for i in range(len(prefit_pred.model_yields))][:-1]
     input_data = cross_section.RegionFit.CreateObservedInputData(analysis_input, energy_slices, mean_track_score_bins)
@@ -106,8 +126,21 @@ def CreateInitParams(model : cross_section.pyhf.Model, analysis_input : cross_se
     return init
 
 
-def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_section.Slices, mean_track_score_bins : np.array, template_input : cross_section.AnalysisInput | cross_section.pyhf.Model, suggest_init : bool = False, template_weights : np.array = None, return_fit_results : bool = False) -> cross_section.cabinetry.model_utils.ModelPrediction:
+def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_section.Slices, mean_track_score_bins : np.array, template_input : cross_section.AnalysisInput | cross_section.pyhf.Model, suggest_init : bool = False, template_weights : np.array = None, return_fit_results : bool = False) -> cross_section.cabinetry.model_utils.ModelPrediction | cross_section.FitResults:
+    """ Fit model to analysis input to predict the normalaisations of each process.
 
+    Args:
+        fit_input (cross_section.AnalysisInput): observed data
+        energy_slice (cross_section.Slices): energy slices
+        mean_track_score_bins (np.array): mean track score bins
+        template_input (cross_section.AnalysisInput | cross_section.pyhf.Model): template sample or existing model
+        suggest_init (bool, optional): estimate normalisations ans use these as the initial values for the fit. Defaults to False.
+        template_weights (np.array, optional): weights for the mean track score. Defaults to None.
+        return_fit_results (bool, optional): return the raw fit results as  well as the prediction. Defaults to False.
+
+    Returns:
+        cross_section.cabinetry.model_utils.ModelPrediction | cross_section.FitResults: model prediction and or the raw fit result.
+    """
     if type(template_input) == cross_section.AnalysisInput:
         model = cross_section.RegionFit.CreateModel(template_input, energy_slice, mean_track_score_bins, False, template_weights, True)
     else:
@@ -128,6 +161,18 @@ def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_sect
 
 
 def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, energy_slice : cross_section.Slices, postfit_pred : cross_section.cabinetry.model_utils.ModelPrediction = None, book : Plots.PlotBook = Plots.PlotBook.null) -> tuple[np.array]:
+    """ Background subtraction using the fit if a fit result is specified.
+
+    Args:
+        data (cross_section.AnalysisInput): observed data
+        process (str): signal process
+        energy_slice (cross_section.Slices): energy slices
+        postfit_pred (cross_section.cabinetry.model_utils.ModelPrediction, optional): fit predictions. Defaults to None.
+        book (Plots.PlotBook, optional): plot book. Defaults to Plots.PlotBook.null.
+
+    Returns:
+        tuple[np.array]: true histograms (if data is mc), reco histograms postfit, error in reco hitograms postfit
+    """
     if data.KE_init_true is not None:
         histograms_true_obs = data.CreateHistograms(energy_slice, process, False, False)
     else:
@@ -182,12 +227,35 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
 
 
 
-def Unfolding(hist_reco : dict[np.array], hist_reco_err : dict[np.array], energy_slices : cross_section.Slices, toy_template : cross_section.Toy, fit_results : cross_section.cabinetry.model_utils.ModelPrediction, signal_process : str, book : Plots.PlotBook = None):
-    response_matrices = cross_section.Unfold.CalculateResponseMatrices(toy_template, signal_process, energy_slices, book)
+def Unfolding(hist_reco : dict[np.array], hist_reco_err : dict[np.array], energy_slices : cross_section.Slices, template : cross_section.Toy, signal_process : str, book : Plots.PlotBook = None) -> dict[dict]:
+    """ Unfold post fit reco histograms
+
+    Args:
+        hist_reco (dict[np.array]): reco hitograms
+        hist_reco_err (dict[np.array]): error in reco histograms
+        energy_slices (cross_section.Slices): energy slices
+        template (cross_section.Toy): template to create response matrices
+        signal_process (str): signal process
+        book (Plots.PlotBook, optional): plot book. Defaults to None.
+
+    Returns:
+        dict[dict]: unolfing results
+    """
+    response_matrices = cross_section.Unfold.CalculateResponseMatrices(template, signal_process, energy_slices, book)
     return cross_section.Unfold.Unfold(hist_reco, hist_reco_err, response_matrices, ts_stop = 1E-2, ts = "bf", max_iter = 100)
 
 
 def CreateAnalysisInput(sample : cross_section.Toy | cross_section.Data, args : cross_section.argparse.Namespace, is_mc : bool) -> cross_section.AnalysisInput:
+    """ Create analysis input from either toy or ntuple sample
+
+    Args:
+        sample (cross_section.Toy | cross_section.Data): sample
+        args (cross_section.argparse.Namespace): analysis configurations
+        is_mc (bool): is the sample mc?
+
+    Returns:
+        cross_section.AnalysisInput: analysis input.
+    """
     if type(sample) == cross_section.Toy:
         ai = cross_section.AnalysisInput.CreateAnalysisInputToy(sample)
     elif type(sample) == cross_section.Data:
@@ -244,7 +312,7 @@ def main(args):
 
             histograms_true_obs, histograms_reco_obs, histograms_reco_obs_err = BackgroundSubtraction(analysis_input, args.signal_process, energy_slices, region_fit_result, book) #? make separate background subtraction function?
 
-            unfolding_result = Unfolding(histograms_reco_obs, histograms_reco_obs_err, energy_slices, template_input, region_fit_result, args.signal_process, book)
+            unfolding_result = Unfolding(histograms_reco_obs, histograms_reco_obs_err, energy_slices, template_input, args.signal_process, book)
 
             labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$"}
             for i in unfolding_result:

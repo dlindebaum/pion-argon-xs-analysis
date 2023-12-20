@@ -270,6 +270,15 @@ def Smearing(n : int, resolutions : dict, rng : np.random.Generator) -> pd.DataF
 
 
 def ApplySmearing(df : pd.DataFrame, smearings : pd.DataFrame) -> pd.DataFrame:
+    """ Add detector smearing to true obserables.
+
+    Args:
+        df (pd.DataFrame): simulated data
+        smearings (pd.DataFrame): generated smearings
+
+    Returns:
+        pd.DataFrame: smeared observables i.e. reco.
+    """
     KE_init_smeared = df.KE_init + smearings.KE_init_smearing
     z_int_smeared = df.z_int + smearings.z_int_smearing
     KE_int_smeared = df.KE_int + smearings.KE_int_smearing

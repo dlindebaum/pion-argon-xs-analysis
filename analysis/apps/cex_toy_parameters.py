@@ -291,6 +291,12 @@ def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace):
 
 @Master.timer
 def MeanTrackScoreKDE(mc : Master.Data, args : argparse.Namespace):
+    """ Derives mean track score kernels from mc.
+
+    Args:
+        mc (Master.Data): mc sample
+        args (argparse.Namespace): application arguments.
+    """
     mc_copy = mc.Filter(returnCopy = True)
 
     for s, m in args.selection_masks["mc"]["beam"].items():
@@ -315,7 +321,19 @@ def MeanTrackScoreKDE(mc : Master.Data, args : argparse.Namespace):
     return
 
 
-def FitBeamProfile(KE_init, func : cross_section.Fitting.FitFunction, KE_range : list, bins : int, book : Plots.PlotBook = Plots.PlotBook.null):
+def FitBeamProfile(KE_init : np.array, func : cross_section.Fitting.FitFunction, KE_range : list, bins : int, book : Plots.PlotBook = Plots.PlotBook.null) -> dict:
+    """ Fit the MC beam profile for use increating KE init.
+
+    Args:
+        KE_init (np.array): initial kinetic energy.
+        func (cross_section.Fitting.FitFunction): fit function
+        KE_range (list): kinetic energy range
+        bins (int): bin numbers
+        book (Plots.PlotBook, optional): plot book. Defaults to Plots.PlotBook.null.
+
+    Returns:
+        dict: _description_
+    """
     x = np.linspace(min(KE_range), max(KE_range), bins)
     y = np.histogram(KE_init, bins = x)[0]
 
@@ -331,6 +349,15 @@ def FitBeamProfile(KE_init, func : cross_section.Fitting.FitFunction, KE_range :
 
 @Master.timer
 def BeamProfileStudy(quantities : dict, args : argparse.Namespace, true_beam_mask : ak.Array, func : cross_section.Fitting.FitFunction, KE_range : list):
+    """ Try to fit various fit functions to the MC beam profile.
+
+    Args:
+        quantities (dict): analysis quanitites.
+        args (argparse.Namespace): application arguments.
+        true_beam_mask (ak.Array): mask which selects true beam pions.
+        func (cross_section.Fitting.FitFunction): fit function to try.
+        KE_range (list): kinetic energy range.
+    """
     out = args.out + "beam_profile/"
     os.makedirs(out, exist_ok = True)
     with Plots.PlotBook(out + "beam_profile.pdf") as book:
