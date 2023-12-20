@@ -129,10 +129,10 @@ def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_sect
 
 def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, energy_slice : cross_section.Slices, postfit_pred : cross_section.cabinetry.model_utils.ModelPrediction = None, book : Plots.PlotBook = Plots.PlotBook.null) -> tuple[np.array]:
     if data.KE_init_true is not None:
-        histograms_true_obs = cross_section.Unfold.CreateHistograms(data, energy_slice, process, False, False)
+        histograms_true_obs = data.CreateHistograms(energy_slice, process, False, False)
     else:
         histograms_true_obs = None
-    histograms_reco_obs = cross_section.Unfold.CreateHistograms(data, energy_slice, process, True, False)
+    histograms_reco_obs = data.CreateHistograms(energy_slice, process, True, False)
     histograms_reco_obs_err = {k : np.sqrt(v) for k, v in histograms_reco_obs.items()}
     
     if postfit_pred is not None:
@@ -199,7 +199,7 @@ def CreateAnalysisInput(sample : cross_section.Toy | cross_section.Data, args : 
             reco_regions = RegionSelection(sample, args, False)
             true_regions = None
             reweight_params = None
-        ai = cross_section.AnalysisInput.CreateAnalysisInputNtuple(sample_selected, args.beam_momentum, args.upstream_loss_correction_params["value"], reco_regions, true_regions, reweight_params)
+        ai = cross_section.AnalysisInput.CreateAnalysisInputNtuple(sample_selected, args.upstream_loss_correction_params["value"], reco_regions, true_regions, reweight_params)
     else:
         raise Exception(f"object type {type(sample)} not a valid sample")
     return ai

@@ -439,9 +439,6 @@ def main(args : argparse.Namespace):
 
     KE_init = GenerateIntialKEs(args.events, particle, args.p_init, args.beam_width, args.beam_profile, rng)
 
-    # # max_cpus = os.cpu_count()-1
-    # max_cpus = 6
-
     if args.events < 1E4:
         nodes = 1
     else:
@@ -476,7 +473,6 @@ def main(args : argparse.Namespace):
     CountProcesses(df.inclusive_process)
     CountProcesses(df.exclusive_process)
 
-    # smeared = ApplySmearing(df, Smearing(args.events, args.smearing_params, rng), args.step)
     beam_selection_mask = BeamSelectionEfficiency(df, "z_int", args.beam_selection_efficiencies, rng)
     region_masks = GenerateRecoRegions(df.exclusive_process, args.reco_region_fractions, rng)
     scores = MeanTrackScore(df.exclusive_process, args.mean_track_score_kde, seed)
