@@ -375,9 +375,9 @@ def count_all_pi0s(events, beam_daughters=True):
         beam_daughter_filter = events.trueParticles.mother == 1
     else:
         beam_daughter_filter = True
-    beam_cadidate_pi0s = events.trueParticles.number[np.logical_and(
+    beam_cadidate_pi0s = ak.values_astype(np.logical_and(
         beam_daughter_filter,
-        events.trueParticles.pdg == 111)]
+        events.trueParticles.pdg == 111), int)
     return ak.sum(beam_cadidate_pi0s, axis=-1)
 
 
