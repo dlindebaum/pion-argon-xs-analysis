@@ -4,7 +4,7 @@ Created on: 13/11/2023 21:54
 
 Author: Shyam Bhuller
 
-Description: Runs main CEX analysis (post event selection)
+Description: Runs cross section measurement
 """
 import os
 
@@ -101,7 +101,7 @@ def RegionSelection(events : cross_section.Data, args : cross_section.argparse.N
         return reco_regions
 
 
-def CreateInitParams(model : cross_section.pyhf.Model, analysis_input : cross_section.AnalysisInput, energy_slices : cross_section.Slices, mean_track_score_bins : np.array) -> np.array[float]:
+def CreateInitParams(model : cross_section.pyhf.Model, analysis_input : cross_section.AnalysisInput, energy_slices : cross_section.Slices, mean_track_score_bins : np.array) -> np.array:
     """ Create initial parameters for the region fit, using the proportion of reco regions and template to get a rough estimate of the process rates.
 
     Args:
@@ -192,8 +192,6 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
         else:
             KE_int_prediction = cross_section.RegionFit.SliceModelPrediction(postfit_pred, slice(0, len(postfit_pred.model_yields)), "KE_int_postfit")
 
-        print(f"{len(KE_int_prediction.model_yields)=}")
-
         L = np.sum(KE_int_prediction.model_yields, 0)
 
         L_err = KE_int_prediction.total_stdev_model_bins[:, :-1] # last entry in the array is the total error for the whole channel (but we want the total error in each process)
@@ -226,8 +224,7 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
     return histograms_true_obs, histograms_reco_obs, histograms_reco_obs_err
 
 
-
-def Unfolding(hist_reco : dict[np.array], hist_reco_err : dict[np.array], energy_slices : cross_section.Slices, template : cross_section.Toy, signal_process : str, book : Plots.PlotBook = None) -> dict[dict]:
+def Unfolding(hist_reco : dict[np.array], hist_reco_err : dict[np.array], energy_slices : cross_section.Slices, template : cross_section.AnalysisInput, signal_process : str, book : Plots.PlotBook = None, unfolding_args : dict = None) -> dict[dict]:
     """ Unfold post fit reco histograms
 
     Args:
@@ -241,8 +238,34 @@ def Unfolding(hist_reco : dict[np.array], hist_reco_err : dict[np.array], energy
     Returns:
         dict[dict]: unolfing results
     """
-    response_matrices = cross_section.Unfold.CalculateResponseMatrices(template, signal_process, energy_slices, book)
-    return cross_section.Unfold.Unfold(hist_reco, hist_reco_err, response_matrices, ts_stop = 1E-2, ts = "bf", max_iter = 100)
+
+    if "efficiencies" in unfolding_args:
+        eff = unfolding_args["efficiencies"]
+    else:
+        eff = None
+
+    response_matrices = cross_section.Unfold.CalculateResponseMatrices(template, signal_process, energy_slices, book, efficiencies = eff)
+
+    result = cross_section.Unfold.Unfold(hist_reco, hist_reco_err, response_matrices, **unfolding_args)
+    n_incident_unfolded = cross_section.EnergySlice.NIncident(result["init"]["unfolded"], result["int"]["unfolded"])
+    n_incident_unfolded_err = np.sqrt(result["int"]["stat_err"]**2 + np.cumsum(result["init"]["stat_err"]**2 + result["int"]["stat_err"]**2))
+
+    result["inc"] = {"unfolded" : n_incident_unfolded, "stat_err" : n_incident_unfolded_err}
+
+    return result
+
+
+def XSUnfold(unfolded_result, energy_slices, energy_bins):
+    return cross_section.EnergySlice.CrossSection(
+        unfolded_result["int_ex"]["unfolded"][1:],
+        unfolded_result["int"]["unfolded"][1:],
+        unfolded_result["inc"]["unfolded"][1:],
+        cross_section.BetheBloch.meandEdX(energy_bins[1:], cross_section.Particle.from_pdgid(211)),
+        energy_slices.width,
+        unfolded_result["int_ex"]["stat_err"][1:],
+        unfolded_result["int"]["stat_err"][1:],
+        unfolded_result["inc"]["stat_err"][1:]
+    )
 
 
 def CreateAnalysisInput(sample : cross_section.Toy | cross_section.Data, args : cross_section.argparse.Namespace, is_mc : bool) -> cross_section.AnalysisInput:
@@ -312,23 +335,20 @@ def main(args):
 
             histograms_true_obs, histograms_reco_obs, histograms_reco_obs_err = BackgroundSubtraction(analysis_input, args.signal_process, energy_slices, region_fit_result, book) #? make separate background subtraction function?
 
-            unfolding_result = Unfolding(histograms_reco_obs, histograms_reco_obs_err, energy_slices, template_input, args.signal_process, book)
+            unfolding_args = {"efficiencies" : None, "priors" : histograms_true_obs, "regularizers" : None, "ts_stop" : 0.01, "max_iter" : 3, "ts" : "ks"} # for toy only, make configurable
+
+            unfolding_result = Unfolding(histograms_reco_obs, histograms_reco_obs_err, energy_slices, template_input, args.signal_process, book, unfolding_args = unfolding_args)
 
             labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$"}
             for i in unfolding_result:
+                if i == "inc": continue
                 cross_section.Unfold.PlotUnfoldingResults(histograms_reco_obs[i], histograms_true_obs[i], unfolding_result[i], energy_bins, labels[i], book)
-
-            #* integrate into unfolding results
-            n_incident_unfolded = cross_section.EnergySlice.NIncident(unfolding_result["init"]["unfolded"], unfolding_result["int"]["unfolded"])
-            n_incident_unfolded_err = np.sqrt(unfolding_result["int"]["stat_err"]**2 + np.cumsum(unfolding_result["init"]["stat_err"]**2 + unfolding_result["int"]["stat_err"]**2))
-
             Plots.Plot(energy_bins[::-1], histograms_reco_obs["inc"], style = "step", label = "reco", color = "C6")
             Plots.Plot(energy_bins[::-1], histograms_true_obs["inc"], style = "step", label = "true", color = "C0", newFigure = False)
-            Plots.Plot(energy_bins[::-1], n_incident_unfolded, yerr = n_incident_unfolded_err, style = "step", label = "unfolded", xlabel = "$N_{inc}$ (MeV)", color = "C4", newFigure = False)
+            Plots.Plot(energy_bins[::-1], unfolding_result["inc"]["unfolded"], yerr = unfolding_result["inc"]["stat_err"], style = "step", label = "unfolded", xlabel = "$N_{inc}$ (MeV)", color = "C4", newFigure = False)
             book.Save()
 
-            slice_dEdX = cross_section.EnergySlice.Slice_dEdX(energy_slices, cross_section.Particle.from_pdgid(211))
-            xs[k] = cross_section.EnergySlice.CrossSection(unfolding_result["int_ex"]["unfolded"][1:], unfolding_result["int"]["unfolded"][1:], n_incident_unfolded[1:], slice_dEdX, energy_slices.width, unfolding_result["int_ex"]["stat_err"][1:], unfolding_result["int"]["stat_err"][1:], n_incident_unfolded_err[1:])
+            xs[k] = XSUnfold(unfolding_result, energy_slices, energy_bins)
 
     with Plots.PlotBook(args.out + "results.pdf") as book:
         cross_section.PlotXSComparison(xs, energy_slices, args.signal_process, {list(xs.keys())[0] : "C6"})

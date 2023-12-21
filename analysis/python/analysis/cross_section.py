@@ -73,6 +73,7 @@ def PlotXSComparison(xs : dict[np.array], energy_slice, process : str = None, co
     Plots.plt.ylim(0)
     if max(Plots.plt.gca().get_ylim()) > np.nanmax(sim_curve_interp(xs_sim.KE).astype(float)) * 2:
         Plots.plt.ylim(0, max(sim_curve_interp(xs_sim.KE)) * 2)
+    Plots.plt.xlim(energy_slice.min_pos, energy_slice.max_pos)
     return chi_sqrs
 
 
@@ -909,7 +910,7 @@ class EnergySlice:
         return init_slice, int_slice
 
     @staticmethod
-    def CountingExperiment(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak.Array, process : ak.Array, energy_slices : Slices, interact_only : bool = False, weights : np.array = None) -> np.array | tuple[np.array]:
+    def CountingExperiment(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak.Array, process : ak.Array, energy_slices : Slices, interact_only : bool = False, weights : np.array = None) -> tuple[np.array]:
         """ Creates the interacting and incident histograms.
 
         Args:
@@ -1707,18 +1708,18 @@ class Unfold:
         return resp
 
     @staticmethod
-    def Unfold(observed : dict[np.array], observed_err : dict[np.array], response_matrices : dict[np.array], prior : dict[np.array] = None, ts_stop = 0.01, max_iter = 100, ts = "ks", regularizer : dict[UnivariateSpline] = None, verbose : bool = False, efficiencies : dict[np.array] = None) -> dict[dict]:
+    def Unfold(observed : dict[np.array], observed_err : dict[np.array], response_matrices : dict[np.array], priors : dict[np.array] = None, ts_stop = 0.01, max_iter = 100, ts = "ks", regularizers : dict[UnivariateSpline] = None, verbose : bool = False, efficiencies : dict[np.array] = None) -> dict[dict]:
         """ Run iterative bayesian unfolding for each histogram.
 
         Args:
             observed (dict[np.array]): observed data
             observed_err (dict[np.array]): observed data error
             response_matrices (dict[np.array]): repsonse matrices
-            prior (dict[np.array], optional): pior distributions. Defaults to None.
+            priors (dict[np.array], optional): pior distributions. Defaults to None.
             ts_stop (float, optional): tolerance of test statistic. Defaults to 0.01.
             max_iter (int, optional): maximum number of iterations. Defaults to 100.
             ts (str, optional): test statistic type. Defaults to "ks".
-            regularizer (dict[UnivariateSpline], optional): splines to regularise the priors. Defaults to None.
+            regularizers (dict[UnivariateSpline], optional): splines to regularise the priors. Defaults to None.
             verbose (bool, optional): verbose printout. Defaults to False.
             efficiencies (dict[np.array], optional): selection efficiencies. Defaults to None.
 
@@ -1728,8 +1729,8 @@ class Unfold:
         def make_cb(key):
             cb = []
             if verbose: cb.append(Logger())
-            if regularizer is not None:
-                cb = cb + [regularizer[key]]
+            if regularizers is not None:
+                cb = cb + [regularizers[key]]
             return cb
 
         results = {}
@@ -1743,10 +1744,10 @@ class Unfold:
                 efficiency = np.ones_like(n) #! for the toy, assume perfect selection efficiency, so 1 +- 0
             efficiency_err = np.zeros_like(n)
 
-            if prior is None:
+            if priors is None:
                 p = n/sum(n)
             else:
-                p = prior[k] / sum(prior[k])
+                p = priors[k] / sum(priors[k])
 
             results[k] = iterative_unfold(n, n_e, v[0], v[1], efficiency, efficiency_err, callbacks = cb, prior = p, ts_stopping = ts_stop, max_iter = max_iter, ts = ts)
         return results
