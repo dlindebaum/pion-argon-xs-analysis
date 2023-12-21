@@ -16,7 +16,16 @@ from rich import print
 from python.analysis import Master, Processing, cross_section, EventSelection, Tags
 
 
-def CreatePFOMasks(masks : dict):
+#! replace with selection tools equivalent
+def CreatePFOMasks(masks : dict[ak.Array]) -> ak.Array:
+    """ combine a dicitonary of masks into a single mask.
+
+    Args:
+        masks (dict[ak.Array]): masks.
+
+    Returns:
+        ak.Array: combined mask.
+    """
     mask = None
     for m in masks:
         if mask is None:

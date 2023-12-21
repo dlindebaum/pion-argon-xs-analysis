@@ -17,47 +17,77 @@
         "correction" : "response",
         "correction_params" : "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03/shower_energy_correction/gaussian.json"
     },
+    "UPSTREAM_ENERGY_LOSS":{
+        "bins" : [1500, 1600, 1700, 1800, 1900, 2000, 2100, 2200],
+        "correction_params" : "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03/upstream_loss/fit_parameters.json"
+    },
+    "SELECTION_MASKS":{
+        "data":{
+            "beam" :     "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03/masks_data/beam_selection_masks.dill",
+            "null_pfo" : "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03/masks_data/null_pfo_selection_masks.dill",
+            "photon" :   "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03/masks_data/photon_selection_masks.dill",
+            "pi0" :      "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03/masks_data/pi0_selection_masks.dill",
+            "pi" :       "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03/masks_data/pip_selection_masks.dill"
+        },
+        "mc":{
+            "beam" :     "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03/masks_mc/beam_selection_masks.dill",
+            "null_pfo" : "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03/masks_mc/null_pfo_selection_masks.dill",
+            "photon" :   "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03/masks_mc/photon_selection_masks.dill",
+            "pi0" :      "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03/masks_mc/pi0_selection_masks.dill",
+            "pi" :       "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03/masks_mc/pip_selection_masks.dill"
+        }
+    },
     "BEAM_PARTICLE_SELECTION":{
         "PiBeamSelection":{
             "enable" : true,
             "use_beam_inst" : false
         },
+        "PandoraTagCut":{
+            "enable" : true,
+            "cut" : 13,
+            "op" : "=="
+        },
         "CaloSizeCut":{
             "enable" : true
         },
-        "PandoraTagCut":{
-            "enable" : true,
-            "cut" : 13
+        "HasFinalStatePFOsCut":{
+            "enable" : true
         },
         "DxyCut":{
             "enable" : true,
-            "cut" : 3
+            "cut" : 3,
+            "op" : "<"
         },
         "DzCut":{
             "enable" : true,
-            "cut" : [-3, 3]
+            "cut" : [-3, 3],
+            "op" : [">", "<"]
         },
         "CosThetaCut":{
             "enable" : true,
-            "cut" : 0.95
+            "cut" : 0.95,
+            "op" : ">"
         },
         "APA3Cut":{
             "enable" : true,
-            "cut" : 220
+            "cut" : 220,
+            "op" : "<"
         },
         "MichelScoreCut":{
             "enable" : true,
-            "cut" : 0.55
+            "cut" : 0.55,
+            "op" : "<"
         },
         "MedianDEdXCut":{
             "enable" : true,
-            "cut" : 2.4
+            "cut" : 2.4,
+            "op" : "<"
         },
         "BeamScraperCut":{
             "enable" : true,
-            "pdg_hyp" : 211,
             "KE_range" : 1,
-            "cut" : 1.5
+            "cut" : 1.5,
+            "op" : "<"
         }
     },
     "VALID_PFO_SELECTION":{
@@ -108,5 +138,11 @@
             "enable" : true,
             "cut" : [10, 80]
         }
-    }
+    },
+    "beam_momentum" : 2000,
+    "P_inst_range" : [1000, 2500],
+    "KE_inst_range" : [1500, 2500],
+    "KE_init_range" : [1500, 2500],
+    "KE_int_range" : [1000, 2200]
+
 }

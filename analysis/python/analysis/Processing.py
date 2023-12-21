@@ -103,7 +103,7 @@ def GenerateFunctionArguments(files : list, nBatches : int, nEvents : int, args 
     start = []
     for f in files: # calcualte event numbers and stride for each file
         b = CalculateBatches(f, nBatches, nEvents)
-        start.append(list(np.cumsum(b) - b[0]))
+        start.append([0] + list(np.cumsum(b[:-1])))
         batches.append(b)
 
     inputs = [[], [], [], []]

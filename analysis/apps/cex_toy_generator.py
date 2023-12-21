@@ -8,6 +8,7 @@ Description: Generates toy events for inelastic pion interactions.
 """
 import argparse
 import os
+import time
 import warnings
 
 from collections import Counter
@@ -15,15 +16,16 @@ from math import ceil
 
 import numpy as np
 import pandas as pd
-import tables
 
+from alive_progress import alive_it
 from pathos.pools import ProcessPool
 from rich import print
 from scipy.interpolate import interp1d
+from scipy.stats import gaussian_kde
 
-from python.analysis.Master import timer
+from python.analysis.Master import timer, LoadConfiguration, ReadHDF5, LoadObject
 from python.analysis import Fitting
-from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle, LoadConfiguration
+from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # supress annoying pandas warnings
 
@@ -32,25 +34,6 @@ global verbose
 def vprint(*args, **kwags):
     if verbose is True:
         print(*args, **kwags)
-
-def ReadHDF5File(file : str):
-    """ Reads a HDF5 file and unpacks the contents into pandas dataframes.
-
-    Args:
-        file (str): file path.
-
-    Returns:
-        pd.DataFrame : if hdf5 file only has 1 key
-        dict : if hdf5 file contains more than 1 key
-    """
-    keys = []
-    with tables.open_file(file, driver = "H5FD_CORE") as hdf5file:
-        for c in hdf5file.root: 
-            keys.append(c._v_pathname[1:])
-    if len(keys) == 1:
-        return pd.read_hdf(file)
-    else:
-        return {k : pd.read_hdf(file, k) for k in keys}
 
 
 def ResolveConfig(config : dict) -> argparse.Namespace:
@@ -70,38 +53,24 @@ def ResolveConfig(config : dict) -> argparse.Namespace:
                 args.smearing_params[i] = LoadConfiguration(v[i])
                 args.smearing_params[i]["function"] = getattr(Fitting, args.smearing_params[i]["function"])
         elif k == "reco_region_fractions":
-            args.reco_region_fractions = ReadHDF5File(v)
+            args.reco_region_fractions = ReadHDF5(v)
         elif k == "beam_selection_efficiencies":
             #* that complex unpacking with pytables
-            args.beam_selection_efficiencies = ReadHDF5File(v)
+            args.beam_selection_efficiencies = ReadHDF5(v)
+        elif k == "mean_track_score_kde":
+            setattr(args, k, LoadObject(v))
+        elif k == "beam_profile":
+            if v not in ["gaussian", "uniform"]:
+                args.beam_profile = LoadConfiguration(v)
+                args.beam_profile["function"] = getattr(Fitting, args.beam_profile["function"])
+            else:
+                setattr(args, k, v)
         else:
             setattr(args, k, v)
+    args.events = int(args.events)
+    if not hasattr(args, "max_cpus"):
+        args.max_cpus = os.cpu_count() - 1
     return args
-
-
-def ComputeEnergyLoss(inital_KE : float, stepsize : float) -> interp1d:
-    """ Calculate the mean dEdX profile for a given initial kinetic energy and position step size.
-        Then produce a function to map kinetic energy to dEdX given the outputs, and allow for interpolation.
-
-    Args:
-        inital_KE (float): Initial kinetic energy
-        stepsize (float): position step size (cm)
-
-    Returns:
-        interp1d: interpolated map of KE and dEdX
-    """
-    e = inital_KE
-    KE = []
-    dEdX = []
-    counter = 0
-    while e >= 0:
-        KE.append(e)
-        dEdX.append(BetheBloch.meandEdX(e, Particle.from_pdgid(211)))
-        e = e - stepsize * dEdX[-1]
-        counter += 1
-    KE.append(0)
-    dEdX.append(np.inf)
-    return interp1d(KE, dEdX, fill_value = 0, bounds_error = False) # if outside the interpolation range, return 0
 
 
 def P_int(sigma : np.array, l : float) -> np.array:
@@ -117,7 +86,7 @@ def P_int(sigma : np.array, l : float) -> np.array:
     return 1 - np.exp(-1E-27 * sigma * 6.02214076e23 * BetheBloch.rho * l / BetheBloch.A)
 
 
-def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split(os.pathsep)[0] + "/data/g4_xs.root", scale_factors : dict = None) -> dict:
+def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split(os.pathsep)[0] + "/data/g4_xs.root", scale_factors : dict = None, modified_PDFs : dict[np.array] = None) -> dict:
     """ Creates a PDF of the inclusive cross section and a stacked PDF of the exclusive process,
         such that rejection sampling can be used to allocate an exclusive process for a given inclusive process.
 
@@ -129,7 +98,17 @@ def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split
     """
     xs_sim = GeantCrossSections(file = path)
 
-    exclusive_processes = [k for k in vars(xs_sim) if k not in ["KE", "file", "total_inelastic"]]
+    if modified_PDFs is not None:
+        if "KE" not in modified_PDFs:
+            raise Exception("KE array is required")
+        for k, v in modified_PDFs.items():
+            if k == "KE": continue
+            interpolated = interp1d(modified_PDFs["KE"], v, fill_value = "extrapolate")
+            setattr(xs_sim, k, interpolated(xs_sim.KE))
+        
+        xs_sim.total_inelastic = np.zeros(len(xs_sim.KE))
+        for p in xs_sim.exclusive_processes:
+            xs_sim.total_inelastic = xs_sim.total_inelastic + getattr(xs_sim, p)
 
     if scale_factors is not None:
         sum_xs = np.zeros(len(xs_sim.KE))
@@ -142,14 +121,14 @@ def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split
     if scale_factors is not None:
         factors = {k : v/ratio for k, v in scale_factors.items()}
     else:
-        factors = {k : 1 for k in exclusive_processes}
+        factors = {k : 1 for k in xs_sim.exclusive_processes}
 
     pdfs = {}
     pdfs["total_inelastic"] = interp1d(xs_sim.KE, P_int(xs_sim.total_inelastic, l), fill_value = "extrapolate") # total inelastic pdf
 
     # sort the exclusice channels based on area under curve
     area = {}
-    for v in exclusive_processes:
+    for v in xs_sim.exclusive_processes:
         area[v] = np.trapz(P_int(factors[v] * getattr(xs_sim, v), l))
 
     # stack the pdfs in ascending order
@@ -160,7 +139,7 @@ def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split
     return pdfs
 
 
-def GenerateIntialKEs(n : int, particle : Particle, cv : float, width : float, profile : str) -> np.array:
+def GenerateIntialKEs(n : int, particle : Particle, cv : float, width : float, profile : str | dict, rng : np.random.Generator = None) -> np.array:
     """ Create a distribution of initial kinetic energy based on a profile i.e. pdf.
         Currently supported profiles are "uniform" and "gaussian".
 
@@ -174,16 +153,21 @@ def GenerateIntialKEs(n : int, particle : Particle, cv : float, width : float, p
     Returns:
         np.array: initial kinetic energies.
     """
-    central_KE = (cv**2 + particle.mass**2)**0.5 - particle.mass
-    if profile == "gaussian":
-        return np.random.normal(central_KE, width, n)
-    elif profile == "uniform":
-        return np.random.uniform(central_KE - width/2, central_KE + width/2, n)
+    if rng is None:
+        rng = np.random.default_rng()
+    if type(profile) == str:
+        central_KE = (cv**2 + particle.mass**2)**0.5 - particle.mass
+        if profile == "gaussian":
+            return rng.normal(central_KE, width, n)
+        elif profile == "uniform":
+            return rng.uniform(central_KE - width/2, central_KE + width/2, n)
+        else:
+            raise ValueError(f"{profile} not a valid beam profile")
     else:
-        raise ValueError(f"{profile} not a valid beam profile")
+        return Fitting.RejectionSampling(n, profile["min"], profile["max"], profile["function"], profile["parameters"], rng = rng)
 
-@timer
-def Simulate(KE_init : np.array, stepsize : float, pdfs : dict) -> tuple:
+
+def Simulate(seed : int, KE_init : np.array, step_size : float, pdfs : dict, smearing_params : dict) -> tuple:
     """ Generates interacting kinetic energies and position based on the initial kinetic energy with the bethe bloch formula,
         the total inelastic pdf is used to decide when a particle interacts (using rejection sampling) and then each particle which
         interacts is assosiated a particular exclusive interaction process, using rejection sampling. Particles which reach zero KE are considered
@@ -198,7 +182,9 @@ def Simulate(KE_init : np.array, stepsize : float, pdfs : dict) -> tuple:
     Returns:
         tuple: interacting kinetic energy, interacting position, whether it interacted or decay, exclusive process
     """
-    interpolated_energy_loss = ComputeEnergyLoss(2*max(KE_init), stepsize/2) # precompute the energy loss and create a function to interpolate between them
+    rng = np.random.default_rng(seed)
+
+    interpolated_energy_loss = BetheBloch.interp_KE_to_mean_dEdX(2*max(KE_init), step_size/2) # precompute the energy loss and create a function to interpolate between them
 
     survived = ~np.zeros(len(KE_init), dtype = bool) # keep track of which particles survived
     i = np.zeros(len(KE_init), dtype = int) # slab number i.e. position each particle interacted at
@@ -208,9 +194,8 @@ def Simulate(KE_init : np.array, stepsize : float, pdfs : dict) -> tuple:
     inclusive_process = np.repeat(["decay"], len(KE_init)).astype(object) 
     exclusive_process = np.repeat([""], len(KE_init)).astype(object)
 
-
     while any(survived):
-        U = np.random.uniform(0, 1, len(KE_int)) # sample from a uniform distribution
+        U = rng.uniform(0, 1, len(KE_int)) # sample from a uniform distribution
         inelastic = U < pdfs["total_inelastic"](KE_int) # did the partcile interact?
         inclusive_process[inelastic] = "total_inelastic" # add label to all particles which did interact
         for pdf in reversed(pdfs): # do this in reverse order, such that the least probable exlcusive process is checked last
@@ -222,19 +207,21 @@ def Simulate(KE_init : np.array, stepsize : float, pdfs : dict) -> tuple:
         survived = survived & (survived != (KE_int < 1)) # particle is pretty much stationary so decays
 
         i = i + survived # distance travelled in step numbers
-        KE_int = KE_int - survived * stepsize * interpolated_energy_loss(KE_int) # update KE if it survived
-
-    z_int = i * stepsize # convert interaction index to interacting position
+        KE_int = KE_int - survived * step_size * interpolated_energy_loss(KE_int) # update KE if it survived
+    z_int = i * step_size # convert interaction index to interacting position
 
     KE_int[KE_int < 0] = 0
 
-    return pd.DataFrame({
+    df = pd.DataFrame({
         "KE_init" : KE_init,
         "KE_int" : KE_int,
         "z_int" : z_int,
         "inclusive_process" : inclusive_process,
         "exclusive_process" : exclusive_process
     })
+    
+    smeared = ApplySmearing(df, Smearing(len(KE_init), smearing_params, rng))
+    return pd.concat([df, smeared], axis = 1)
 
 
 def CountProcesses(proc : np.array):
@@ -263,8 +250,8 @@ def CreateMasks(toy : pd.DataFrame) -> dict:
         masks[c] = toy.inclusive_process == c
     return masks
 
-@timer
-def Smearing(n : int, resolutions : dict) -> pd.DataFrame:
+
+def Smearing(n : int, resolutions : dict, rng : np.random.Generator) -> pd.DataFrame:
     """ Produces a dataframe of smearings for each kinematic output of the toy.
         Emulates detector effects.
 
@@ -276,13 +263,47 @@ def Smearing(n : int, resolutions : dict) -> pd.DataFrame:
         pd.DataFrame: smearing terms
     """
     return pd.DataFrame({
-        "KE_int_smearing" : Fitting.RejectionSampling(n, min(resolutions["KE_int"]["range"]), max(resolutions["KE_int"]["range"]), resolutions["KE_int"]["function"], resolutions["KE_int"]["values"]),
-        "KE_init_smearing" : Fitting.RejectionSampling(n, min(resolutions["KE_init"]["range"]), max(resolutions["KE_init"]["range"]), resolutions["KE_init"]["function"], resolutions["KE_init"]["values"]),
-        "z_int_smearing" : Fitting.RejectionSampling(n, min(resolutions["z_int"]["range"]), max(resolutions["z_int"]["range"]), resolutions["z_int"]["function"], resolutions["z_int"]["values"]),
+        "KE_int_smearing" : Fitting.RejectionSampling(n, min(resolutions["KE_int"]["range"]), max(resolutions["KE_int"]["range"]), resolutions["KE_int"]["function"], resolutions["KE_int"]["values"], rng = rng),
+        "KE_init_smearing" : Fitting.RejectionSampling(n, min(resolutions["KE_init"]["range"]), max(resolutions["KE_init"]["range"]), resolutions["KE_init"]["function"], resolutions["KE_init"]["values"], rng = rng),
+        "z_int_smearing" : Fitting.RejectionSampling(n, min(resolutions["z_int"]["range"]), max(resolutions["z_int"]["range"]), resolutions["z_int"]["function"], resolutions["z_int"]["values"], rng = rng),
+    })
+
+
+def ApplySmearing(df : pd.DataFrame, smearings : pd.DataFrame) -> pd.DataFrame:
+    """ Add detector smearing to true obserables.
+
+    Args:
+        df (pd.DataFrame): simulated data
+        smearings (pd.DataFrame): generated smearings
+
+    Returns:
+        pd.DataFrame: smeared observables i.e. reco.
+    """
+    KE_init_smeared = df.KE_init + smearings.KE_init_smearing
+    z_int_smeared = df.z_int + smearings.z_int_smearing
+    KE_int_smeared = df.KE_int + smearings.KE_int_smearing
+    #! while this seems like the natural choice for smearing KE_int, the resolution using this method
+    #! is smaller than the resolution observed in MC, so use original approach for now
+    #? make this an option?
+
+    # KE_to_dEdX = BetheBloch.InterpolatedEdX(max(KE_init_smeared), step_size)
+    # dist_travelled = np.zeros(len(KE_init_smeared))
+    # KE_int_smeared = df.KE_init + smearings.KE_init_smearing
+    # while any(dist_travelled < z_int_smeared):
+    #     dEdX = KE_to_dEdX(KE_int_smeared)
+    #     KE_int_smeared = KE_int_smeared - (dist_travelled < z_int_smeared) * step_size * dEdX
+    #     dist_travelled = dist_travelled + (dist_travelled < z_int_smeared) * step_size
+
+    # KE_int_smeared = np.where(df.inclusive_process != "total_inelastic", 0, KE_int_smeared)
+    # KE_int_smeared = np.where(np.isnan(KE_int_smeared) | (KE_int_smeared < 0), 0, KE_int_smeared)
+    return pd.DataFrame({
+        "KE_int_smeared" : KE_int_smeared,
+        "KE_init_smeared" : KE_init_smeared,
+        "z_int_smeared" : z_int_smeared
     })
 
 @timer
-def BeamSelectionEfficiency(toy : pd.DataFrame, key : str, beam_selection_params : dict):
+def BeamSelectionEfficiency(toy : pd.DataFrame, key : str, beam_selection_params : dict, rng : np.random.Generator):
     """ Produces a mask of events which would have passed the beam selection,
         based on the selection efficiency of a particular observable.
 
@@ -294,15 +315,16 @@ def BeamSelectionEfficiency(toy : pd.DataFrame, key : str, beam_selection_params
     Returns:
         np.array: mask of events which pass the selection.
     """
-    probability_index = np.digitize(toy[key].values, beam_selection_params["bins"][key])
+    bin_width = (beam_selection_params["bins"][key][1:].values - beam_selection_params["bins"][key][:-1].values)[0]
+    probability_index = np.digitize(toy[key].values, beam_selection_params["bins"][key] + 2 * bin_width)
     probability_index = np.clip(probability_index, 0, len(beam_selection_params["efficiency"][key]) - 1)
     probability = beam_selection_params["efficiency"][key][probability_index]
 
-    U = np.random.uniform(0, 1, len(toy))
+    U = rng.uniform(0, 1, len(toy))
     return pd.DataFrame({"beam_selection_mask" : U < probability}).reset_index(drop = True)
 
 @timer
-def GenerateRecoRegions(exclusive_process : pd.Series, fractions : pd.DataFrame) -> pd.DataFrame:
+def GenerateRecoRegions(exclusive_process : pd.Series, fractions : pd.DataFrame, rng : np.random.Generator) -> pd.DataFrame:
     """ Returns a Dataframe of masks which represent the reco and true regions of each event.
         Truth regions are remade because they differ slighly from the exclusive process.
 
@@ -325,7 +347,7 @@ def GenerateRecoRegions(exclusive_process : pd.Series, fractions : pd.DataFrame)
             # this is single pion production
         else:
             sample_from = i
-        toy_reco_regions = np.where(exclusive_process == i, np.random.choice(keys, len(exclusive_process), p = fractions[sample_from]), toy_reco_regions)
+        toy_reco_regions = np.where(exclusive_process == i, rng.choice(keys, len(exclusive_process), p = fractions[sample_from]), toy_reco_regions)
 
     toy_reco_region_masks = {}
     for c in keys:
@@ -356,6 +378,53 @@ def GenerateRecoRegions(exclusive_process : pd.Series, fractions : pd.DataFrame)
 
     return regions_df
 
+
+def GenerateMeanTrackScores(kde : gaussian_kde, n : int, seed : int = None) -> np.array:
+    """ Generates Mean track scores from the stats.gaussian_kde object.
+        if mean track scores exceed the range 0, 1, the scores are resampled.
+
+    Args:
+        kde (stats.gaussian_kde): Kernel density estimate
+        n (int): sample size to generate
+
+    Returns:
+        np.array: sampled mean track scores
+    """
+    values = kde.resample(n, seed)[0] # generate the first set of samples
+    mask = (values > 1) | (values < 0) # mask for scores which exceed the range
+    counter = 1
+    while any(mask): # loop while there are still scores outside the range
+        values = values[~mask] # remove the scores outside the range
+        values = np.concatenate([values, kde.resample(sum(mask), seed + counter)[0]]) # generate a new set of values to replace the removed scores
+        mask = (values > 1) | (values < 0) # check again
+        counter += 1
+    return values
+
+@timer
+def MeanTrackScore(exclusive_process : pd.Series, kdes : dict, seed : int) -> np.array:
+    """ Create the Mean track score distributions for each toy event.
+
+    Args:
+        exclusive_process (pd.Series): exclusive process masks
+        kdes (dict): dictionary of kernel density estimates
+
+    Returns:
+        np.array: mean track scores
+    """
+    scores = np.array([None]*len(exclusive_process))
+    exclusive_processes = np.unique(exclusive_process.values)
+
+    for c, i in enumerate(exclusive_processes):
+        if i == "": continue
+        if i in ["quasielastic", "double_charge_exchange"]:
+            sample_from = "single_pion_production"
+            # this is single pion production
+        else:
+            sample_from = i
+        scores = np.where(exclusive_process == i, GenerateMeanTrackScores(kdes[sample_from], len(exclusive_process), (seed + c) % 2**32 - 1), scores)
+    return pd.DataFrame({"mean_track_score" : scores.astype(float)}).reset_index(drop = True)
+
+
 @timer
 def main(args : argparse.Namespace):
     global verbose
@@ -367,33 +436,41 @@ def main(args : argparse.Namespace):
     if not verbose:
         warnings.filterwarnings("ignore") # bad but removes clutter in the terminal output
 
+    if (not hasattr(args, "seed")) or (args.seed is None):
+        seed = time.time_ns() # allow random generation to be fixed
+    else:
+        seed = args.seed
+    rng = np.random.default_rng(seed) # pass this to every function which requires random number generation
+
     particle = Particle.from_pdgid(211)
 
-    pdfs = GenerateStackedPDFs(args.step, scale_factors = args.pdf_scale_factors)
+    pdfs = GenerateStackedPDFs(args.step, scale_factors = args.pdf_scale_factors, modified_PDFs = args.modified_PDFs)
 
-    KE_init = GenerateIntialKEs(args.events, particle, args.p_init, args.beam_width, args.beam_profile)
+    KE_init = GenerateIntialKEs(args.events, particle, args.p_init, args.beam_width, args.beam_profile, rng)
 
-    if args.events < 1E5:
+    if args.events < 1E4:
         nodes = 1
     else:
-        nodes = ceil(args.events / 1E5)
+        nodes = ceil(args.events / 1E4)
 
     if nodes == 1:
-        df = Simulate(KE_init, args.step, pdfs) # don't need to do multiprocessing
+        df = Simulate(seed, KE_init, args.step, pdfs, args.smearing_params) # don't need to do multiprocessing
     else:
         KE_init_split = np.array_split(KE_init, nodes)
-        batches = ceil(nodes / (os.cpu_count()-1))
+        batches = ceil(nodes / args.max_cpus)
 
         df = []
-        for i in range(batches):
-            KE_init_batches = KE_init_split[(os.cpu_count()-1) * i:(os.cpu_count()-1) * (i+1)]
+        completed_proc = 0
+        for i in alive_it(range(batches), title = "Simulating"):
+            KE_init_batches = KE_init_split[args.max_cpus * i:args.max_cpus * (i+1)]
             cpus = len(KE_init_batches)
             vprint(f"starting batch : {i}, cpus : {cpus}")
             pools = ProcessPool(nodes = cpus)
             pools.restart()
-            sim_args = (KE_init_batches, [args.step]*cpus, [pdfs]*cpus)
+            sim_args = (seed + completed_proc + np.linspace(0, cpus - 1, cpus, dtype = int), KE_init_batches, [args.step]*cpus, [pdfs]*cpus, [args.smearing_params]*cpus)
             df.extend(pools.imap(Simulate, *sim_args))
-            pools.close()
+            pools.terminate()
+            completed_proc += cpus
         
         vprint("Done! Creating dataframe...")
         df = pd.concat(df, ignore_index = True)
@@ -405,16 +482,22 @@ def main(args : argparse.Namespace):
     CountProcesses(df.inclusive_process)
     CountProcesses(df.exclusive_process)
 
-    smearings = Smearing(args.events, args.smearing_params)
-    beam_selection_mask = BeamSelectionEfficiency(df, "z_int", args.beam_selection_efficiencies)
-    region_masks = GenerateRecoRegions(df.exclusive_process, args.reco_region_fractions)
+    beam_selection_mask = BeamSelectionEfficiency(df, "z_int", args.beam_selection_efficiencies, rng)
+    region_masks = GenerateRecoRegions(df.exclusive_process, args.reco_region_fractions, rng)
+    scores = MeanTrackScore(df.exclusive_process, args.mean_track_score_kde, seed)
 
-    df = pd.concat([df, smearings, beam_selection_mask, region_masks], axis = 1)
+    df = pd.concat([df, beam_selection_mask, region_masks, scores], axis = 1)
 
     # allow the app to be run in other scripts or notebooks.
     if __name__ == "__main__":
         vprint(df)
-        df.to_hdf(args.out + ".hdf5", key = "df")
+
+        if hasattr(args, "df_format"):
+            fmt = args.df_format
+        else:
+            fmt = "f" # fixed format, fastest read/writes
+
+        df.to_hdf(args.out + ".hdf5", key = "df", format = fmt)
     else:
         return df
 
@@ -427,7 +510,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = LoadConfiguration(args.config)
     args = argparse.Namespace(**vars(args), **vars(ResolveConfig(config)))
-    args.events = int(args.events)
     if args.out is None:
         args.out = "toy_mc"
     args.out = args.out.split(".")[0]

@@ -7,7 +7,6 @@ Author: Shyam Bhuller
 Description: Produces plots and fits for the beam scraper study, producing thresholds which dictate what events are beam scrapers.
 """
 import argparse
-import json
 import os
 
 import awkward as ak
@@ -93,13 +92,12 @@ def GetScraperFits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : 
         data = delta_KE_upstream[e]
 
         y, bin_edges = np.histogram(np.array(data[~np.isnan(data)]), bins = fit_bins, range = sorted([np.nanpercentile(data, 10), np.nanpercentile(data, 90)]))
-        bin_centers = (bin_edges[1:] + bin_edges[:-1]) / 2
         yerr = np.sqrt(y) # Poisson error
 
         print(f"{(max(y), np.nanmedian(data), np.nanstd(data))=}")
 
         next(plot)
-        popt, perr, metrics = Fitting.Fit(bin_centers, y, yerr, Fitting.gaussian, method = "dogbox", return_chi_sqr = True)#, plot = True, plot_style = "scatter", xlabel = "$KE^{reco}_{inst} - KE^{true}_{ff}$ (MeV)", title = bin_label, plot_range = residual_range)
+        popt, perr, metrics = Fitting.Fit(cross_section.bin_centers(bin_edges), y, yerr, Fitting.gaussian, method = "dogbox", return_chi_sqr = True)#, plot = True, plot_style = "scatter", xlabel = "$KE^{reco}_{inst} - KE^{true}_{ff}$ (MeV)", title = bin_label, plot_range = residual_range)
         heights, _ = Plots.PlotHist(np.array(data[~np.isnan(data)]), newFigure = False, bins = fit_bins, range = residual_range, label = "observed")
         x_interp = np.linspace(min(np.array(data[~np.isnan(data)])), max(np.array(data[~np.isnan(data)])), 10 * fit_bins)
         y_interp = Fitting.gaussian.func(x_interp, max(heights), popt[1], popt[2])
@@ -143,7 +141,7 @@ def BeamScraperPlots(mc: Master.Data, beam_inst_KE_bins : list, beam_inst_KE : a
 
     output = {}
 
-    for i in Plots.MultiPlot(len(beam_inst_KE_bins)-1, sharex = True, sharey = True):
+    for i in Plots.MultiPlot(len(beam_inst_KE_bins)-1):
         if i == len(beam_inst_KE_bins): continue
         bin_edges = (beam_inst_KE_bins[i], beam_inst_KE_bins[i+1])
         bin_label = "$KE^{reco}_{inst}$:" + f"[{beam_inst_KE_bins[i]},{beam_inst_KE_bins[i+1]}] (MeV)"
@@ -183,7 +181,7 @@ def main(args : argparse.Namespace):
 
     mc = Master.Data(args.mc_file[0], nTuple_type = args.ntuple_type)
     bq_fit = cross_section.LoadConfiguration(args.mc_beam_quality_fit)
-    mask = cross_section.BeamParticleSelection.CreateDefaultSelection(mc, False, bq_fit, return_table = False)
+    mask = cross_section.BeamParticleSelection.CreateDefaultSelection(mc, False, bq_fit, return_table = False)#? make configurable?
     mc.Filter([mask], [mask]) # apply default beam selection
 
     beam_inst_KE = cross_section.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
@@ -218,8 +216,7 @@ def main(args : argparse.Namespace):
         json_dict[str(i)] = {**{"bins" : k}, **scraper_thresholds[k], **position_means[k]}
 
     name = args.out + "beam_scraper/" + "mc_beam_scraper_fit_values.json"
-    with open(name, "w") as f:
-        json.dump(json_dict, f, indent = 4)
+    cross_section.SaveConfiguration(name, json_dict)
     print(f"fit values written to {name}")
     return
 

@@ -47,12 +47,12 @@ class FitFunction(ABC):
     @staticmethod
     @abstractmethod
     def bounds(x, y):
-        pass
+        return (-np.inf, np.inf)
 
     @staticmethod
     @abstractmethod
-    def p0():
-        pass
+    def p0(x, y):
+        return None
 
     @staticmethod
     @abstractmethod
@@ -267,7 +267,27 @@ class double_crystal_ball(FitFunction):
         return p2
 
 
-def RejectionSampling(num : int, low : float, high : float, func : FitFunction, params : dict, scale_param : str = "p0") -> np.array:
+class line(FitFunction):
+    n_params = 2
+
+    def __new__(cls, x, p0, p1) -> np.array:
+        return cls.func(x, p0, p1)
+
+    def func(x, p0, p1):
+        return p0 * x + p1
+
+
+class asym(FitFunction):
+    n_params = 3
+
+    def __new__(cls, x, p0, p1, p2) -> np.array:
+        return cls.func(x, p0, p1, p2)
+
+    def func(x, p0, p1, p2):
+        return 1/(p0*(x**p2) + p1)
+
+
+def RejectionSampling(num : int, low : float, high : float, func : FitFunction, params : dict, scale_param : str = "p0", rng : np.random.default_rng = None) -> np.array:
     """ Performs Rejection sampling for a given function which describes a pdf.
 
     Args:
@@ -281,13 +301,17 @@ def RejectionSampling(num : int, low : float, high : float, func : FitFunction, 
     Returns:
         np.array: sampled values.
     """
+
+    if rng is None:
+        rng = np.random.default_rng()
+
     pdf_params = {i : params[i] for i in params}
     pdf_params[scale_param] = 1 # fix ampltiude parameter to 1
 
     x = np.array([])
     while len(x) < num:
-        u = np.random.uniform(low, high, num) # generate a random range of values
-        v = np.random.uniform(0, 1, num) # generate a random probability
+        u = rng.uniform(low, high, num) # generate a random range of values
+        v = rng.uniform(0, 1, num) # generate a random probability
         keep = v <= func(u, **pdf_params) # reject if v > probability of observing u
         x = np.concatenate([x, u[keep]]) # concatenate x
     return x[:num] #? is there a way to generate only the desired number rather than truncating x?
@@ -317,19 +341,21 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
     """
 
     y_obs = np.array(y_obs, dtype = float) # ensure the input is an array of numpy floats
-    y_err = np.array(y_err, dtype = float)
 
     mask = ~np.isnan(y_obs) # remove nans
 
     x = np.array(x[mask], dtype = float)
     y_obs = y_obs[mask]
-    y_err = y_err[mask]
+
+    if y_err is not None:
+        y_err = np.array(y_err, dtype = float)
+        y_err = y_err[mask]
 
     popt, pcov = curve_fit(func.func, x, y_obs, sigma = y_err, maxfev = maxfev, p0 = func.p0(x, y_obs), bounds = func.bounds(x, y_obs), method = method, absolute_sigma = True)
     perr = np.sqrt(np.diag(pcov))
 
     y_pred = func.func(x, *popt) # y values predicted from the fit
-    chisqr = np.nansum(((y_obs - y_pred))**2/y_pred)
+    chisqr = abs(np.nansum(((y_obs - y_pred))**2/y_pred)) # abs in case predictions are negative
     ndf = len(y_obs) - len(popt)
     p_value = 1 - chi2.cdf(chisqr, ndf)
 
@@ -338,14 +364,20 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         # y_pred_max = func.func(x, *(popt + perr)) # y values predicted from the upper limit of the fit
         # y_pred_err = (abs(y_pred - y_pred_min) + abs(y_pred - y_pred_max)) / 2 # error in the predicted fit value, taken to be the average deviation from the lower and upper limits
 
-        chisqr = np.nansum(((y_obs - y_pred))**2/y_pred)
-        ndf = len(y_obs) - len(popt)
-        p_value = 1 - chi2.cdf(chisqr, ndf)
-
         #* main plotting
         x_interp = np.linspace(min(x), max(x), 1000)
         Plots.Plot(x_interp, func.func(x_interp, *popt), newFigure = False, x_scale = "linear", xlabel = xlabel, ylabel = ylabel, color = "#1f77b4", zorder = 11, label = "fit", title = title)
-        plt.fill_between(x_interp, func.func(x_interp, *(popt + perr)), func.func(x_interp, *(popt - perr)), color = "#7f7f7f", alpha = 0.5, zorder = 10, label = "$1\sigma$ error region")
+        
+        p_min = popt - perr
+        p_max = popt + perr
+
+        # in_range = (p_min > func.bounds(x, y_obs)[0]) & (p_min < func.bounds(x, y_obs)[1])
+        # p_min = np.where(in_range, func.bounds(x, y_obs)[0], p_min)
+
+        # in_range = (p_max > func.bounds(x, y_obs)[0]) & (p_max < func.bounds(x, y_obs)[1])
+        # p_min = np.where(in_range, func.bounds(x, y_obs)[1], p_max)
+
+        plt.fill_between(x_interp, func.func(x_interp, *p_max), func.func(x_interp, *p_min), color = "#7f7f7f", alpha = 0.5, zorder = 10, label = "$1\sigma$ error region")
 
         if plot_style == "hist":
             marker = ""

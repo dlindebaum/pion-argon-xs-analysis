@@ -291,3 +291,22 @@ def ExclusiveProcessTags(true_masks):
     for i, t in enumerate(true_masks):
         tags[t] = Tag(t, name_simple[t], colours[t], true_masks[t], i)
     return tags
+
+
+def StoppingMuonTag(events : "Data"):
+    masks = ParticleMasks(events.trueParticlesBT.beam_pdg, [-13])
+    masks["other"] = OtherMask(masks)
+
+    decay = events.trueParticlesBT.beam_endProcess == "Decay"
+
+    new_mask = {"$\\mu^{+}$:inel" : masks["$\\mu^{+}$"] & ~decay, "$\\mu^{+}$:decay" : masks["$\\mu^{+}$"] & decay}
+
+    masks.pop("$\\mu^{+}$")
+
+    new_mask.update(masks)
+    masks = new_mask
+
+    tags = Tags()
+    for i, m in enumerate(masks):
+        tags[m] = Tag(m, m, "C" + str(i), masks[m], i)
+    return tags

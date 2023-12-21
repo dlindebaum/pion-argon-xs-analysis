@@ -8,14 +8,19 @@ Description: Module containing core components of analysis code.
 import itertools
 import time
 import warnings
+
 from abc import ABC, abstractmethod
 from enum import Enum
 
 import awkward as ak
+import dill
+import json
 import numpy as np
 import pandas as pd
-from particle import Particle
+import tables
 import uproot
+
+from particle import Particle
 from rich import print
 
 # custom modules
@@ -38,6 +43,89 @@ def timer(func):
         print(f'{func.__name__!r} executed in {(time.time()-s):.4f}s')
         return out
     return wrapper_function
+
+
+def LoadObject(file : str):
+    """ Opens and serialises object saved as a dill file. May be remaned to a more general method if dill files are used more commonly.
+
+    Args:
+        file (str): dill file
+
+    Returns:
+        any: loaded object
+    """
+    with open(file, "rb") as f:
+        obj = dill.load(f)
+    return obj
+
+
+def SaveObject(file : str, masks : dict):
+    """ Saves Masks from selection to file. If not specified it will be left as None.
+
+    Args:
+        file (str): _description_
+        beam_selection_mask (dict): dictionary of masks
+    """
+    with open(file, "wb") as f:
+        dill.dump(masks, f)
+
+
+def LoadConfiguration(file : str) -> dict:
+    """ Loads a json file.
+
+    Args:
+        file (str): file path
+
+    Returns:
+        dict: unpacked json 
+    """
+    with open(file, "rb") as f:
+        config = json.load(f)
+    return config
+
+
+def SaveConfiguration(params : any, file : str):
+    """ Saves an objects to a json file. params should be an object serialisable by json (no numpy arrays etc.).
+
+    Args:
+        params (any): correction parameters.
+        file (str): file path.
+    """
+    with open(file, "w") as f:
+        json.dump(params, f, indent = 2)
+
+
+def DictToHDF5(dictionary : dict, file : str):
+    """ Write dictionary to a HDF5 file.
+
+    Args:
+        dictionary (dict): dictionary to save
+        file (str): file
+    """
+    with pd.HDFStore(file) as hdf:
+        for k, v in dictionary.items():
+            hdf.put(k, v)
+    return
+
+
+def ReadHDF5(file : str):
+    """ Reads a HDF5 file and unpacks the contents into pandas dataframes.
+
+    Args:
+        file (str): file path.
+
+    Returns:
+        pd.DataFrame : if hdf5 file only has 1 key
+        dict : if hdf5 file contains more than 1 key
+    """
+    keys = []
+    with tables.open_file(file, driver = "H5FD_CORE") as hdf5file:
+        for c in hdf5file.root: 
+            keys.append(c._v_pathname[1:])
+    if len(keys) == 1:
+        return pd.read_hdf(file)
+    else:
+        return {k : pd.read_hdf(file, k) for k in keys}
 
 
 def __GenericFilter__(data, filters: list):
@@ -710,7 +798,7 @@ class Data:
         print(f"event indices saved to : {output_path}")
 
     def Load_Selected_Events(self, indices_file : str):
-        selection = pd.read_hdf(indices_file).values.flatten()
+        selection = ReadHDF5(indices_file).values.flatten()
 
         mask = []
         for i in self.event_index:
