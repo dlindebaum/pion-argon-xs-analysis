@@ -262,9 +262,9 @@ def XSUnfold(unfolded_result, energy_slices, energy_bins):
         unfolded_result["inc"]["unfolded"][1:],
         cross_section.BetheBloch.meandEdX(energy_bins[1:], cross_section.Particle.from_pdgid(211)),
         energy_slices.width,
-        unfolded_result["int_ex"]["stat_err"][1:],
-        unfolded_result["int"]["stat_err"][1:],
-        unfolded_result["inc"]["stat_err"][1:]
+        np.sqrt(unfolded_result["int_ex"]["stat_err"][1:]**2 + unfolded_result["int_ex"]["stat_err"][1:]**2),
+        np.sqrt(unfolded_result["int"]["stat_err"][1:]**2 + unfolded_result["int"]["stat_err"][1:]**2),
+        np.sqrt(unfolded_result["inc"]["stat_err"][1:]**2 + unfolded_result["inc"]["stat_err"][1:]**2)
     )
 
 

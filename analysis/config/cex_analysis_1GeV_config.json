@@ -154,7 +154,7 @@
             "z_int" : [0, 500]
         }
     },
-    "toy_template" : "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/toys/xs_toy_cb_template.hdf5",
+    "toy_template" : "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/toys/xs_toy_1GeV_cb_template.hdf5",
     "signal_process" : "charge_exchange",
     "beam_momentum" : 1000,
     "P_inst_range" : [0, 1500],

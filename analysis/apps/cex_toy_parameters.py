@@ -18,7 +18,7 @@ import scipy.stats as stats
 from alive_progress import alive_bar
 
 from apps import cex_analyse
-from python.analysis import cross_section, Master, Plots, Tags
+from python.analysis import cross_section, Master, Plots, Tags, SelectionTools
 
 from rich import print
 
@@ -237,11 +237,11 @@ def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, args :
     selected_pion_inel_mask = ak.Array(pion_inel_mask)
     selected_quantities = {i : ak.Array(quantities[i]) for i in quantities}
 
-    for s in selection:
-        mask = selection[s]
-        selected_pion_inel_mask = selected_pion_inel_mask[mask]
-        for q in selected_quantities:
-            selected_quantities[q]= selected_quantities[q][mask]
+    mask = SelectionTools.CombineMasks(selection)
+
+    selected_pion_inel_mask = selected_pion_inel_mask[mask]
+    for q in selected_quantities:
+        selected_quantities[q] = selected_quantities[q][mask]
 
     selected_counts_true = GetTotalPionCounts(selected_pion_inel_mask, selected_quantities, bins, ranges)
 
@@ -299,9 +299,8 @@ def MeanTrackScoreKDE(mc : Master.Data, args : argparse.Namespace):
     """
     mc_copy = mc.Filter(returnCopy = True)
 
-    for s, m in args.selection_masks["mc"]["beam"].items():
-        print(s)
-        mc_copy.Filter([m], [m])
+    mask = SelectionTools.CombineMasks(args.selection_masks["mc"]["beam"])
+    mc_copy.Filter([mask], [mask])
     mc_copy.Filter([args.selection_masks["mc"]['null_pfo']['ValidPFOSelection']])
 
     has_pfo = cross_section.BeamParticleSelection.HasFinalStatePFOsCut(mc_copy) #! add as preselection
