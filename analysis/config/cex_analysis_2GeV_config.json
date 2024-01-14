@@ -96,47 +96,57 @@
     "FINAL_STATE_PIPLUS_SELECTION":{
         "TrackScoreCut":{
             "enable" : true,
-            "cut" : 0.5
+            "cut" : 0.5,
+            "op" : ">"
         },
         "NHitsCut":{
             "enable" : true,
-            "cut" : 20
+            "cut" : 20,
+            "op" : ">"
         },
         "PiPlusSelection":{
             "enable" : true,
-            "cut" : [0.5, 2.8]
+            "cut" : [0.5, 2.8],
+            "op" : [">", "<"]
         }
     },
     "FINAL_STATE_PHOTON_SELECTION":{    
-        "EMScoreCut":{
+        "TrackScoreCut":{
             "enable" : true,
-            "cut" : 0.5
+            "cut" : 0.5,
+            "op" : "<"
         },
-        "NHitsCut":{        
+        "NHitsCut":{
             "enable" : true,
-            "cut" : 80
+            "cut" : 80,
+            "op" : ">"
         },
         "BeamParticleDistanceCut":{
             "enable" : true,
-            "cut" : [3, 90]
+            "cut" : [3, 90],
+            "op" : [">", "<"]
         },
         "BeamParticleIPCut":{
             "enable" : true,
-            "cut" : 20
+            "cut" : 20,
+            "op" : "<"
         }
     },
     "FINAL_STATE_PI0_SELECTION":{
         "NPhotonCandidateSelection":{
             "enable" : true,
-            "cut" : 2
+            "cut" : 2,
+            "op" : "=="
         },
         "Pi0MassSelection":{
             "enable" : true,
-            "cut" : [50, 250]
+            "cut" : [50, 250],
+            "op" : [">", "<"]
         },
         "Pi0OpeningAngleSelection":{
             "enable" : true,
-            "cut" : [10, 80]
+            "cut" : [10, 80],
+            "op" : [">", "<"]
         }
     },
     "beam_momentum" : 2000,

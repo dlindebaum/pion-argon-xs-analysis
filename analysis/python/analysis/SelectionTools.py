@@ -14,13 +14,18 @@ import pandas as pd
 
 from python.analysis.Master import Data
 
-def CombineMasks(masks : dict) -> ak.Array:
+def CombineMasks(masks : dict, operator : str = "and") -> ak.Array:
     mask = None
     for m in masks:
         if mask is None:
             mask = masks[m]
         else:
-            mask = mask & masks[m]
+            if operator == "and":
+                mask = mask & masks[m]
+            elif operator == "or":
+                mask = mask | masks[m]
+            else:
+                raise Exception(f"{operator} must be either 'and' or 'or'")
     return mask
 
 

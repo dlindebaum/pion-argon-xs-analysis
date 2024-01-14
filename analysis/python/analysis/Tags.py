@@ -310,3 +310,10 @@ def StoppingMuonTag(events : "Data"):
     for i, m in enumerate(masks):
         tags[m] = Tag(m, m, "C" + str(i), masks[m], i)
     return tags
+
+
+def BeamScraperTag(scraper_ids : ak.Array):
+    tags = Tags()
+    tags["scraper"] = Tag("scraper", "scraper", "C6", scraper_ids, 0)
+    tags["non scraper"] = Tag("non scraper", "non scraper", "C0", ~scraper_ids, 1)
+    return tags

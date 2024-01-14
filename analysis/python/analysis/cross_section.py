@@ -24,7 +24,7 @@ from particle import Particle
 from pyunfold import iterative_unfold, Logger
 from scipy.interpolate import interp1d, UnivariateSpline
 
-from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, Fitting, Plots, vector, Tags
+from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags
 from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer
 from python.analysis.shower_merging import SetPlotStyle
 
@@ -44,6 +44,22 @@ def weighted_chi_sqr(observed, expected, uncertainties):
     u = np.array(uncertainties)
     u[u == 0] = np.nan
     return np.nansum((observed - expected)**2 / u**2) / len(observed)
+
+
+def IsScraper(mc : Data, beam_scraper_args : dict) -> ak.Array:
+    beam_inst_KE = KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
+    true_ffKE = mc.trueParticles.beam_KE_front_face
+
+    delta_KE_upstream = beam_inst_KE - true_ffKE
+
+    scraper_ids = {}
+    for k, v in beam_scraper_args.items():
+        scraper_ids[k] = (beam_inst_KE > min(v["bins"])) & (beam_inst_KE < max(v["bins"]))
+        threshold = v["mu_e_res"] + 3 * abs(v["sigma_e_res"])
+        
+        scraper_ids[k] = scraper_ids[k] & (delta_KE_upstream > threshold)
+    scraper_ids = SelectionTools.CombineMasks(scraper_ids, operator = "or")
+    return scraper_ids
 
 
 def RatioWeights(mc : Data, func : str, params : list, truncate : int = 10):
@@ -1739,10 +1755,11 @@ class Unfold:
             cb = make_cb(k)
 
             if efficiencies is not None:
-                efficiency = efficiencies[k]
+                efficiency = efficiencies[k][0]
+                efficiency_err = efficiencies[k][1]
             else:
                 efficiency = np.ones_like(n) #! for the toy, assume perfect selection efficiency, so 1 +- 0
-            efficiency_err = np.zeros_like(n)
+                efficiency_err = np.zeros_like(n) #? not exactly zero, make this very small so the systematic uncertainty from the response matrix can still be calculated?
 
             if priors is None:
                 p = n/sum(n)
