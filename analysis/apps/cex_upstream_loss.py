@@ -77,7 +77,7 @@ def CentralValueEstimation(bins : np.array, KE_reco_inst : np.array, KE_true_ff 
 
 
 def main(args : argparse.Namespace):
-    cross_section.SetPlotStyle(False, 100)
+    cross_section.SetPlotStyle(False)
     mc = Master.Data(args.mc_file, -1, 0, args.ntuple_type)
 
     mc = BeamPionSelection(mc, args, True)
@@ -105,7 +105,7 @@ def main(args : argparse.Namespace):
         pdf.savefig()
 
     print(f"fitted parameters : {params_dict}")
-    cross_section.SaveConfiguration(args.out + "fit_parameters.json", params_dict)
+    cross_section.SaveConfiguration(params_dict, args.out + "fit_parameters.json")
     return
 
 if __name__ == "__main__":

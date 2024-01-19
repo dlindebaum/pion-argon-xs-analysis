@@ -275,7 +275,7 @@ def main(args : cross_section.argparse.Namespace):
         }
 
     for k, v in fit_values.items():
-        cross_section.SaveConfiguration(args.out + k + ".json", v)
+        cross_section.SaveConfiguration(v, args.out + k + ".json")
 
     # smearing_stopping_muon = np.random.normal(smearing_params["mu"]["value"], smearing_params["sigma"]["value"], len(output_mc["p_inst_true"]))
     # smearing_stopping_muon_rw = np.random.normal(smearing_params_rw["mu"]["value"], smearing_params_rw["sigma"]["value"], len(output_mc["p_inst_true"]))

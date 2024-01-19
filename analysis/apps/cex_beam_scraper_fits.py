@@ -216,7 +216,7 @@ def main(args : argparse.Namespace):
         json_dict[str(i)] = {**{"bins" : k}, **scraper_thresholds[k], **position_means[k]}
 
     name = args.out + "beam_scraper/" + "mc_beam_scraper_fit_values.json"
-    cross_section.SaveConfiguration(name, json_dict)
+    cross_section.SaveConfiguration(json_dict, name)
     print(f"fit values written to {name}")
     return
 

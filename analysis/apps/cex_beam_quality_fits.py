@@ -165,7 +165,7 @@ def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str, ta
     #* write to json file
     os.makedirs(args.out, exist_ok = True)
     name = out + tag + "_beam_quality_fit_values.json"
-    Master.SaveConfiguration(name, fit_values)
+    Master.SaveConfiguration(fit_values, name)
     print(f"fit values written to {name}")
 
     return events, fit_values

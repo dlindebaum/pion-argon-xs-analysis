@@ -8,12 +8,15 @@ Description: Applies beam particle selection, photon shower candidate selection 
 """
 import argparse
 import os
+import warnings
 
 import awkward as ak
 import pandas as pd
 from rich import print
 
 from python.analysis import Master, Processing, cross_section, EventSelection, Tags
+
+warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # hide pesky pandas warnings (performance is actually ok)
 
 
 #! replace with selection tools equivalent
@@ -67,17 +70,26 @@ def run(i, file, n_events, start, selected_events, args):
         for t in ["reco", "true"]:
             output[f"shower_pairs_{t}_{p}"] = ak.flatten(getattr(shower_pairs, f"{t}_{p}")[pairs])
 
-    params = ["shower_direction", "shower_start_pos", "shower_length", "n_hits", "n_hits_collection", "shower_energy"]
-    for p in params:
-        for k, particleData in {"reco" : events.recoParticles, "true" : events.trueParticlesBT}.items():
+    # reco_params = ["shower_direction", "shower_start_pos", "shower_length", "n_hits", "n_hits_collection", "shower_energy"]
+
+    # true_params = ["direction", "shower_start_pos", "energy"]
+
+    params = {
+        "reco" : ["shower_direction", "shower_start_pos", "shower_length", "n_hits", "n_hits_collection", "shower_energy"],
+        "true" : ["direction", "shower_start_pos", "energy"]
+    }
+
+    for (k, param), particleData in zip(params.items(), {"reco" : events.recoParticles, "true" : events.trueParticlesBT}.values()):
+        for p in param:
             if hasattr(particleData, p):
                 v = getattr(particleData, p)
-                if v is None: continue
-                if hasattr(v, "x"):
-                    for i in ["x", "y", "z"]:
-                        output[f"{k}_{p}_{i}"] = ak.flatten(v[i])
-                else:
-                    output[f"{k}_{p}"] = ak.flatten(v)
+                # if v is None: continue
+                if v is not None:
+                    if hasattr(v, "x"):
+                        for i in ["x", "y", "z"]:
+                            output[f"{k}_{p}_{i}"] = ak.flatten(v[i])
+                    else:
+                        output[f"{k}_{p}"] = ak.flatten(v)
 
     output["true_mother"] = ak.flatten(events.trueParticlesBT.motherPdg)
     pfo_tags = Tags.GenerateTrueParticleTagsPi0Shower(events)
