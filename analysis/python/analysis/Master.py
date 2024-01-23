@@ -259,13 +259,16 @@ class Data:
         else:
             self.nTuple_type = nTuple_type
         if (self.filename != None):
-            if "_data_" in self.filename:
-                self.target_mom = 1
-            else:
-                if "GeV" in self.filename:
-                    self.target_mom = float(self.filename.split("GeV")[0][-1])
+            if target_momentum is None:
+                if ("_data_" in self.filename):
+                    self.target_mom = 1
                 else:
-                    self.target_mom = target_momentum
+                    if "GeV" in self.filename:
+                        self.target_mom = float(self.filename.split("GeV")[0][-1])
+                    else:
+                        self.target_mom = target_momentum
+            else:
+                self.target_mom = target_momentum
             self.nEvents = nEvents
             self.start = start
             self.io = IO(self.filename, self.nEvents, self.start)
@@ -1387,6 +1390,7 @@ class RecoParticleData(ParticleData):
     def beam_inst_P(self) -> type:
         self.LoadData("beam_inst_P", "beam_inst_P")
         return self.events.target_mom * 1000 * getattr(self, f"_{type(self).__name__}__beam_inst_P")
+        # return 1000 * getattr(self, f"_{type(self).__name__}__beam_inst_P")
 
     @property
     def beam_inst_pos(self) -> ak.Record:

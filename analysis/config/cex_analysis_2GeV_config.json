@@ -8,7 +8,9 @@
         "mc" : "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03/beam_quality/mc_beam_quality_fit_values.json",
         "data" : "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03/beam_quality/data_beam_quality_fit_values.json"
     },
-    "BEAM_SCAPER_FITS":{
+    "BEAM_SCRAPER_FITS":{
+        "energy_range" : null,
+        "energy_bins" : [1500, 1700, 1900, 2100, 2300],
         "mc" : "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03/beam_scraper/mc_beam_scraper_fit_values.json"
     },
     "norm" : 2.78,
