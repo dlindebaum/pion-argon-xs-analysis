@@ -27,24 +27,10 @@ from scipy.interpolate import interp1d, UnivariateSpline
 from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags
 from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer
 from python.analysis.shower_merging import SetPlotStyle
-
-def bin_centers(bins : np.array) -> np.array:
-    return (bins[1:] + bins[:-1]) / 2
-
-
-def nandiv(num, den):
-    return np.divide(num, np.where(den == 0, np.nan, den))
-
+from python.analysis.Utils import *
 
 def KE(p, m):
     return (p**2 + m**2)**0.5 - m
-
-
-def weighted_chi_sqr(observed, expected, uncertainties):
-    u = np.array(uncertainties)
-    u[u == 0] = np.nan
-    return np.nansum((observed - expected)**2 / u**2) / len(observed)
-
 
 def IsScraper(mc : Data, beam_scraper_args : dict) -> ak.Array:
     beam_inst_KE = KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
@@ -310,8 +296,8 @@ class ApplicationArguments:
         parser.add_argument("-t", "--threads", dest = "threads", type = int, default = 1, help = "Number of threads to use when processsing")
 
     @staticmethod
-    def Output(parser : argparse.ArgumentParser):
-        parser.add_argument("-o", "--out", dest = "out", type = str, default = None, help = "Directory to save plots")
+    def Output(parser : argparse.ArgumentParser, default : str = None):
+        parser.add_argument("-o", "--out", dest = "out", type = str, default = default, help = "Directory to save plots")
         return
 
     @staticmethod
@@ -433,16 +419,22 @@ class ApplicationArguments:
             elif head == "FINAL_STATE_PI0_SELECTION":
                 args.pi0_selection = ApplicationArguments.__CreateSelection(value, EventSelection)
             elif head == "BEAM_QUALITY_FITS":
-                args.mc_beam_quality_fit = LoadConfiguration(value["mc"])
-                args.data_beam_quality_fit = LoadConfiguration(value["data"])
-            elif head == "BEAM_SCAPER_FITS":
-                args.mc_beam_scraper_fit = LoadConfiguration(value["mc"])
+                args.mc_beam_quality_fit = LoadConfiguration(value["mc"]) # generally expected to have MC at a minimum
+                if "data" in value:
+                    args.data_beam_quality_fit = LoadConfiguration(value["data"])
+            elif head == "BEAM_SCRAPER_FITS":
+                args.beam_scraper_energy_range = value["energy_range"]
+                args.beam_scraper_energy_bins = value["energy_bins"]
+                if "mc" in value:
+                    args.mc_beam_scraper_fit = LoadConfiguration(value["mc"])
             elif head == "ENERGY_CORRECTION":
                 args.correction = value["correction"]
                 args.correction_params = value["correction_params"]
             elif head == "UPSTREAM_ENERGY_LOSS":
+                args.upstream_loss_cv_function = value["cv_function"]
                 args.upstream_loss_bins = value["bins"]
-                args.upstream_loss_correction_params = LoadConfiguration(value["correction_params"])
+                if "correction_params" in value:
+                    args.upstream_loss_correction_params = LoadConfiguration(value["correction_params"])
             elif head == "BEAM_REWEIGHT":
                 args.beam_reweight_params = LoadConfiguration(value["params"])
             elif head == "SELECTION_MASKS":
@@ -492,11 +484,14 @@ class ApplicationArguments:
 
         for i, s in args.beam_selection["selections"].items():
             if s in [BeamParticleSelection.BeamQualityCut, BeamParticleSelection.DxyCut, BeamParticleSelection.DzCut, BeamParticleSelection.CosThetaCut]:
-                args.beam_selection["mc_arguments"][i]["fits"] = args.mc_beam_quality_fit
-                args.beam_selection["data_arguments"][i]["fits"] = args.data_beam_quality_fit
+                if hasattr(args, "mc_beam_quality_fit"): 
+                    args.beam_selection["mc_arguments"][i]["fits"] = args.mc_beam_quality_fit
+                if hasattr(args, "data_beam_quality_fit"): 
+                    args.beam_selection["data_arguments"][i]["fits"] = args.data_beam_quality_fit
             elif s == BeamParticleSelection.BeamScraperCut:
-                args.beam_selection["mc_arguments"][i]["fits"] = args.mc_beam_scraper_fit
-                args.beam_selection["data_arguments"][i]["fits"] = args.mc_beam_scraper_fit
+                if hasattr(args, "mc_beam_scraper_fit"): 
+                    args.beam_selection["mc_arguments"][i]["fits"] = args.mc_beam_scraper_fit
+                    args.beam_selection["data_arguments"][i]["fits"] = args.mc_beam_scraper_fit
             else:
                 continue
         return args
@@ -714,8 +709,8 @@ class GeantCrossSections:
         """ Plot all cross section channels.
         """
         for k in self.labels.values():
-            Plots.Plot(self.KE, getattr(self, k), label = k.replace("_", " "), newFigure = False, xlabel = "KE (MeV)", ylabel = "$\sigma (mb)$", title = title)
-            Plots.plt.fill_between(self.KE, getattr(self, k) - self.Stat_Error(k), getattr(self, k) + self.Stat_Error(k), color = Plots.plt.gca()._get_lines.get_next_color())
+            Plots.Plot(self.KE, getattr(self, k), label = remove_(k), newFigure = False, xlabel = "KE (MeV)", ylabel = "$\sigma (mb)$", title = title)
+            # Plots.plt.fill_between(self.KE, getattr(self, k) - self.Stat_Error(k), getattr(self, k) + self.Stat_Error(k), color = Plots.plt.gca()._get_lines.get_next_color())
 
 
     def Plot(self, xs : str, color : str = None, label : str = None, title : str = None):
@@ -731,11 +726,11 @@ class GeantCrossSections:
             self.__PlotAll(title = title)
         else:
             if label is None:
-                label = xs.replace("_", " ")
+                label = remove_(xs)
             else:
                 if title is None:
-                    title = xs.replace("_", " ")
-            Plots.Plot(self.KE, getattr(self, xs), label = label, title = title, newFigure = False, xlabel = "$KE_{int} (MeV)$", ylabel = "$\sigma (mb)$", color = color)
+                    title = remove_(xs)
+            Plots.Plot(self.KE, getattr(self, xs), label = label, title = title, newFigure = False, xlabel = "$KE_{int}$ (MeV)", ylabel = "$\sigma (mb)$", color = color)
             # Plots.plt.fill_between(self.KE, getattr(self, xs) - self.Stat_Error(xs), getattr(self, xs) + self.Stat_Error(xs), color = Plots.plt.gca()._get_lines.get_next_color())
 
 
@@ -1248,7 +1243,7 @@ class AnalysisInput:
     KE_int_true : np.array
     KE_init_true : np.array
     # extras
-    weights : np.array
+    weights : np.array = None
 
     def ToFile(self, file : str):
         """ Save to dill file.
@@ -1494,7 +1489,8 @@ class RegionFit:
             }
             if mc_stat_unc == True:
                 for i in range(len(samples)):
-                    ch["samples"][i]["modifiers"].append({'name': f"{channel_name}_sample_{i}_pois_err", 'type': 'shapesys', 'data': np.sqrt(samples[i]).astype(int).tolist()})
+                    ch["samples"][i]["modifiers"].append({"name" : f"{channel_name}_stat_err", "type" : "staterror", "data" : (quadsum(np.sqrt(samples)/samples, 0)).tolist()})
+                #     ch["samples"][i]["modifiers"].append({'name': f"{channel_name}_sample_{i}_pois_err", 'type': 'shapesys', 'data': np.sqrt(samples[i]).astype(int).tolist()})
             return ch
 
         spec = {"channels" : [channel(f"channel_{n}", KE_int_templates[n], mc_stat_unc) for n in range(n_channels)]}
@@ -1554,12 +1550,13 @@ class RegionFit:
         return counts_matrix
 
     @staticmethod
-    def CreateKEIntTemplates(analysis_input : AnalysisInput, energy_slices : Slices) -> list[np.array]:
+    def CreateKEIntTemplates(analysis_input : AnalysisInput, energy_slices : Slices, pad : bool = False) -> list[np.array]:
         model_input_data = []
         for c in analysis_input.regions:
             tmp = []
             for s in analysis_input.exclusive_process:
-                tmp.append(analysis_input.NInteract(energy_slices, analysis_input.exclusive_process[s], analysis_input.regions[c], True, analysis_input.weights) + 1)
+                # tmp.append((analysis_input.NInteract(energy_slices, analysis_input.exclusive_process[s], analysis_input.regions[c], True, analysis_input.weights) + 1E-10 * int(pad))/len(analysis_input.KE_int_true))
+                tmp.append(analysis_input.NInteract(energy_slices, analysis_input.exclusive_process[s], analysis_input.regions[c], True, analysis_input.weights) + 1E-10 * int(pad))
             model_input_data.append(tmp)
         return model_input_data
 
@@ -1572,8 +1569,8 @@ class RegionFit:
         return np.array(templates)
 
     @staticmethod
-    def CreateModel(template : AnalysisInput, energy_slice : Slices, mean_track_score_bins : np.array, return_templates : bool = False, weights : np.array = None, mc_stat_unc : bool = True) -> pyhf.Model:
-        templates_energy = RegionFit.CreateKEIntTemplates(template, energy_slice)
+    def CreateModel(template : AnalysisInput, energy_slice : Slices, mean_track_score_bins : np.array, return_templates : bool = False, weights : np.array = None, mc_stat_unc : bool = True, pad : bool = True) -> pyhf.Model:
+        templates_energy = RegionFit.CreateKEIntTemplates(template, energy_slice, pad)
         if mean_track_score_bins is not None:
             templates_mean_track_score = RegionFit.CreateMeanTrackScoreTemplates(template, mean_track_score_bins, weights)
         else:
@@ -1607,6 +1604,27 @@ class RegionFit:
         with Plots.RatioPlot(energy_bins[::-1], postfit, prefit, postfit_err, prefit_err, "$KE_{int}$ (MeV)", "fit/ actual") as ratio_plot:
             Plots.Plot(ratio_plot.x, ratio_plot.y2, yerr = ratio_plot.y2_err, color = "C0", label = "actual", style = "step", newFigure = False)
             Plots.Plot(ratio_plot.x, ratio_plot.y1, yerr = ratio_plot.y1_err, color = "C6", label = "fit", style = "step", ylabel = "Counts", newFigure = False)
+
+    @staticmethod
+    def EstimateBackground(fit_results : FitResults, model : pyhf.Model, toy_template : Toy, signal_process : str):
+        postfit_pred = cabinetry.model_utils.prediction(model, fit_results = fit_results)
+
+        if any([c["name"] == "mean_track_score" for c in postfit_pred.model.spec["channels"]]):
+            KE_int_prediction = RegionFit.SliceModelPrediction(postfit_pred, slice(-1), "KE_int_postfit") # exclude the channel which is the mean track score
+        else:
+            KE_int_prediction = RegionFit.SliceModelPrediction(postfit_pred, slice(0, len(postfit_pred.model_yields)), "KE_int_postfit")
+
+        L = np.sum(KE_int_prediction.model_yields, 0)
+
+        L_err = KE_int_prediction.total_stdev_model_bins[:, :-1] # last entry in the array is the total error for the whole channel (but we want the total error in each process)
+        L_err = np.sqrt(np.sum(L_err **2, 0)) # quadrature sum across all bins
+
+        labels = list(toy_template.reco_region_labels) #! make property of AnalysisInput dataclass
+        L_var_bkg = sum(L_err[signal_process != np.array(labels)]**2)
+        L_bkg = sum(L[signal_process != np.array(labels)])
+
+        return L_bkg, L_var_bkg
+
 
 
 class Unfold:

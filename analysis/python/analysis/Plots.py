@@ -18,7 +18,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.ticker import AutoMinorLocator, MultipleLocator
 from scipy.stats import iqr
 
-from python.analysis import vector, Tags
+from python.analysis import vector, Tags, Utils
 from python.analysis.SelectionTools import np_to_ak_indicies
 
 
@@ -857,12 +857,14 @@ class PlotBook:
         self.name = name
         if ".pdf" not in self.name: self.name += ".pdf" 
         if open: self.open()
+        self.is_open = True
 
     def __enter__(self):
         return self
 
     def __exit__(self, type, value, traceback):
         self.close()
+        self.is_open = False
 
     def Save(self):
         if hasattr(self, "pdf"):
@@ -1127,7 +1129,7 @@ def PlotHist2D(data_x, data_y, bins: int = 100, x_range: list = None, y_range: l
     return height, [xedges, yedges]
 
 
-def PlotHistComparison(datas, x_range: list = [], bins: int = 100, xlabel: str = "", title: str = "", labels: list = [], alpha: int = 1, histtype: str = "step", x_scale: str = "linear", y_scale: str = "linear", sf: int = 2, density: bool = True, annotation: str = None, newFigure: bool = True, colours : list = None):
+def PlotHistComparison(datas, x_range: list = [], bins: int = 100, xlabel: str = "", title: str = "", labels: list = [], alpha: int = 1, histtype: str = "step", x_scale: str = "linear", y_scale: str = "linear", sf: int = 2, density: bool = True, annotation: str = None, newFigure: bool = True, colours : list = None, weights : list = None):
     """ Plots multiple histograms on one plot
 
     Args:
@@ -1138,17 +1140,20 @@ def PlotHistComparison(datas, x_range: list = [], bins: int = 100, xlabel: str =
         plt.figure()
     if colours is None:
         colours = [None]*len(labels)
+    if weights is None:
+        weights = [None]*len(labels)
     for i in range(len(labels)):
         data = datas[i]
+        weight = weights[i]
         if x_range and len(x_range) == 2:
-            data = data[data > min(x_range)]
-            data = data[data < max(x_range)]
+            mask = (data > min(x_range)) & (data < max(x_range))
+            data = data[mask]
+            if weight is not None: weight = weight[mask]
         if i == 0:
             _, edges = PlotHist(
-                data, bins, xlabel, title, labels[i], alpha, histtype, sf, density, color = colours[i], range = x_range, newFigure=False)
+                data, bins, xlabel, title, labels[i], alpha, histtype, sf, density, color = colours[i], range = x_range, newFigure=False, weights = weight)
         else:
-            PlotHist(data, edges, xlabel, title,
-                     labels[i], alpha, histtype, sf, density, color = colours[i], range = x_range, newFigure=False)
+            PlotHist(data, edges, xlabel, title, labels[i], alpha, histtype, sf, density, color = colours[i], range = x_range, newFigure=False, weights = weight)
     plt.xscale(x_scale)
     plt.yscale(y_scale)
     plt.tight_layout()
@@ -1282,8 +1287,8 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     mc_error = np.sqrt(h_mc)
 
     plt.subplot(212) # ratio plot
-    ratio = h_data / h_mc # data / MC
-    ratio_err = ratio * np.sqrt((data_err/h_data)**2 + (mc_error/h_mc)**2)
+    ratio = Utils.nandiv(h_data, h_mc) # data / MC
+    ratio_err = ratio * np.sqrt(Utils.nandiv(data_err, h_data)**2 + Utils.nandiv(mc_error, h_mc)**2)
     ratio[ratio == np.inf] = -1 # if the ratio is undefined, set it to -1
     plt.errorbar(centres, ratio, ratio_err, c = "black", marker = "o", capsize = 3, linestyle = "")
     plt.ylabel("Data/MC")
@@ -1624,12 +1629,12 @@ class RatioPlot():
         if (self.y1_err is None) and (self.y2_err is not None):
             self.y1_err = np.zeros(len(self.y1))
 
-        ratio = self.y1 / self.y2
+        ratio = Utils.nandiv(self.y1, self.y2)
         
         if (self.y2_err is None) and (self.y1_err is None):
             ratio_err = None
         else:
-            ratio_err = abs(ratio * np.sqrt((self.y1_err/self.y1)**2 + (self.y2_err/self.y2)**2))
+            ratio_err = abs(ratio * np.sqrt(Utils.nandiv(self.y1_err, self.y1)**2 + Utils.nandiv(self.y2_err, self.y2)**2))
 
         Plot(self.x, ratio, yerr = ratio_err, xlabel = self.xlabel, ylabel = self.ylabel, marker = "o", color = "black", linestyle = "", newFigure = False)
         ticks = [0, 0.5, 1, 1.5, 2] # hardcode the yaxis to have 5 ticks
