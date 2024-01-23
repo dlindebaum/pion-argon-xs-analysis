@@ -34,13 +34,9 @@ def BeamPionSelection(events : cross_section.Data, args : cross_section.argparse
     else:
         selection_args = "data_arguments"
         sample = "data"
+
     if "selection_masks" in args:
-        mask = None
-        for m in args.selection_masks[sample]["beam"].values():
-            if mask is None:
-                mask = m
-            else:
-                mask = mask & m
+        mask = SelectionTools.CombineMasks(args.selection_masks[sample]["beam"])
         events_copy.Filter([mask], [mask])
     else:
         for s in args.beam_selection["selections"]:
@@ -142,7 +138,7 @@ def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_sect
         cross_section.cabinetry.model_utils.ModelPrediction | cross_section.FitResults: model prediction and or the raw fit result.
     """
     if type(template_input) == cross_section.AnalysisInput:
-        model = cross_section.RegionFit.CreateModel(template_input, energy_slice, mean_track_score_bins, False, template_weights, True)
+        model = cross_section.RegionFit.CreateModel(template_input, energy_slice, mean_track_score_bins, False, template_weights, False, True)
     else:
         model = template_input
 
@@ -153,7 +149,7 @@ def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_sect
     else:
         init_params = None
 
-    result = cross_section.RegionFit.Fit(observed, model, init_params, verbose = False)
+    result = cross_section.RegionFit.Fit(observed, model, init_params, [[0, np.inf]]*model.config.npars, verbose = False)
     if return_fit_results is True:
         return cross_section.cabinetry.model_utils.prediction(model, fit_results = result), result
     else:

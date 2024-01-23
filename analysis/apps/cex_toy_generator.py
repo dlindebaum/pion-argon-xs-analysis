@@ -425,6 +425,9 @@ def MeanTrackScore(exclusive_process : pd.Series, kdes : dict, seed : int) -> np
     return pd.DataFrame({"mean_track_score" : scores.astype(float)}).reset_index(drop = True)
 
 
+def run(config : dict):
+    return main(ResolveConfig(config))
+
 @timer
 def main(args : argparse.Namespace):
     global verbose

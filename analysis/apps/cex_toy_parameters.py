@@ -73,9 +73,9 @@ def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_q
         residual = residual[mask]
     Plots.PlotHistComparison([reco_quantity, true_quantity], labels = ["reco", "true"], xlabel = label, x_range = plot_range)
     plot_book.Save()
-    Plots.PlotHist(residual, xlabel = "residual " + label, range = residual_range)
+    Plots.PlotHist(residual, xlabel = label, range = residual_range)
     plot_book.Save()
-    Plots.PlotHist(residual, xlabel = "residual " + label, range = residual_range, y_scale = "log")
+    Plots.PlotHist(residual, xlabel = label, range = residual_range, y_scale = "log")
     plot_book.Save()
 
     counts, edges = np.histogram(np.array(residual), 100, range = residual_range)
@@ -85,7 +85,7 @@ def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_q
     errors = {}
     for f in fit_functions:
         Plots.plt.figure()
-        params[f.__name__], errors[f.__name__] = cross_section.Fitting.Fit(centers, counts, np.sqrt(counts), f, plot = True, xlabel = label, ylabel = "counts")
+        params[f.__name__], errors[f.__name__] = cross_section.Fitting.Fit(centers, counts, np.sqrt(counts), f, plot = True, xlabel = label, ylabel = "counts", plot_style = "hist")
         plot_book.Save()
         Plots.plt.close()
     params_formatted = {p : {"function" : p, "values" : {f"p{i}" : params[p][i] for i in range(len(params[p]))}} for p in params}
@@ -337,8 +337,9 @@ def FitBeamProfile(KE_init : np.array, func : cross_section.Fitting.FitFunction,
     y = np.histogram(KE_init, bins = x)[0]
 
     Plots.plt.figure()
-    params = cross_section.Fitting.Fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = (book.open is False))[0]
-    book = book.Save()
+    print(f"{book.open=}")
+    params = cross_section.Fitting.Fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = book.is_open, plot_style = "hist", xlabel = "$KE^{true}_{ff}$ (MeV)")[0]
+    book.Save()
     return {
         "function" : func.__name__,
         "parameters" : {f"p{i}" : params[i] for i in range(len(params))},
@@ -366,17 +367,17 @@ def BeamProfileStudy(quantities : dict, args : argparse.Namespace, true_beam_mas
 
 @Master.timer
 def main(args : argparse.Namespace):
-    cross_section.SetPlotStyle(True, 100)
+    cross_section.SetPlotStyle(True)
 
     bins = {r : np.linspace(min(args.toy_parameters["plot_ranges"][r]), max(args.toy_parameters["plot_ranges"][r]), 50) for r in args.toy_parameters["plot_ranges"]}
     labels = {
-        "KE_init" : "$KE^{reco}_{ff}$ (MeV)",
-        "KE_int" : "$KE^{reco}_{int}$ (MeV)",
-        "z_int" : "$l^{reco}$ (cm)"
+        "KE_init" : "$KE^{res, MC}_{ff}$ (MeV)",
+        "KE_int" : "$KE^{res, MC}_{int}$ (MeV)",
+        "z_int" : "$l^{res, MC}$ (cm)"
     }
 
     with alive_bar(title = "load mc") as bar:
-        mc = Master.Data(args.mc_file, -1, nTuple_type = args.ntuple_type)
+        mc = Master.Data(args.mc_file, -1, nTuple_type = args.ntuple_type, target_momentum = args.pmom)
 
     with alive_bar(title = "create mask") as bar:
         true_pion_mask = mc.trueParticles.pdg[:, 0] == 211
@@ -385,8 +386,9 @@ def main(args : argparse.Namespace):
         pion_inel_mask = GetTotalPionInelMasks(mc)
     
     cross_section_quantities = ComputeQuantities(mc, args)
+    print(cross_section_quantities)
 
-    BeamProfileStudy(cross_section_quantities, args, true_pion_mask, args.toy_parameters["beam_profile"], args.toy_parameters["plot_ranges"]["KE_init"]) #TODO make function and range configurable
+    BeamProfileStudy(cross_section_quantities, args, true_pion_mask, args.toy_parameters["beam_profile"], args.toy_parameters["plot_ranges"]["KE_init"])
 
     Smearing(cross_section_quantities, true_pion_mask, args, labels)
 
