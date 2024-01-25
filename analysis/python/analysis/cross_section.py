@@ -454,6 +454,8 @@ class ApplicationArguments:
                     args.fit[k] = v
             elif head == "ESLICE":
                 args.energy_slices = Slices(value["width"], value["min"], value["max"], reversed = True)
+            elif head == "ANALYSIS_INPUTS":
+                args.analysis_input = {k : v for k, v in value.items()}
             else:
                 setattr(args, head, value) # allow for generic configurations in the json file
         ApplicationArguments.DataMCSelectionArgs(args)
@@ -643,6 +645,14 @@ class Slices:
             np.array: slice positions
         """
         return np.array([ s.pos for s in self])
+
+    @property
+    def pos_overflow(self):
+        return np.insert(self.pos, 0, self.max_pos + self.width)
+
+    @property
+    def pos_bins(self):
+        return np.sort(self.pos_overflow)
 
 
     def pos_to_num(self, pos):

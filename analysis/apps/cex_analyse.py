@@ -10,91 +10,11 @@ import os
 
 import numpy as np
 
+from matplotlib.cm import get_cmap
 from rich import print
 
-from apps import cex_toy_generator
-from python.analysis import cross_section, SelectionTools, Plots
-
-
-def BeamPionSelection(events : cross_section.Data, args : cross_section.argparse.Namespace, is_mc : bool) -> cross_section.Data:
-    """ Apply beam pion selection to ntuples.
-
-    Args:
-        events (cross_section.Data): analysis ntuple
-        args (cross_section.argparse.Namespace): analysis configuration
-        is_mc (bool): is the ntuple mc or data?
-
-    Returns:
-        cross_section.Data: selected events.
-    """
-    events_copy = events.Filter(returnCopy = True)
-    if is_mc:
-        selection_args = "mc_arguments"
-        sample = "mc"
-    else:
-        selection_args = "data_arguments"
-        sample = "data"
-
-    if "selection_masks" in args:
-        mask = SelectionTools.CombineMasks(args.selection_masks[sample]["beam"])
-        events_copy.Filter([mask], [mask])
-    else:
-        for s in args.beam_selection["selections"]:
-            mask = args.beam_selection["selections"][s](events_copy, **args.beam_selection[selection_args][s])
-            events_copy.Filter([mask], [mask])
-            print(events_copy.cutTable.get_table())
-
-    if hasattr(args, "valid_pfo_selection"):
-        if args.valid_pfo_selection is True:
-            events_copy.Filter([args.selection_masks[sample]['null_pfo']['ValidPFOSelection']]) # apply PFO preselection here
-    return events_copy
-
-@cross_section.timer
-def RegionSelection(events : cross_section.Data, args : cross_section.argparse.Namespace, is_mc : bool) -> dict[np.array]:
-    """ Get reco and true regions (if possible) for ntuple.
-
-    Args:
-        events (Master.Data): events after beam pion selection
-        args (argparse.Namespace): application arguements
-        is_mc (bool): if ntuple is MC or Data.
-
-    Returns:
-        tuple[dict, dict]: regions
-    """
-    if is_mc:
-        key = "mc"
-    else:
-        key = "data"
-
-    n_pi =  SelectionTools.GetPFOCounts(args.selection_masks[key]["pi"])
-    n_pi0 = SelectionTools.GetPFOCounts(args.selection_masks[key]["pi0"])
-    reco_regions = cross_section.EventSelection.create_regions_new(n_pi0, n_pi)
-
-    if is_mc:
-        events_copy = events.Filter(returnCopy = True)
-        
-        n_pi_true = events_copy.trueParticles.nPiMinus + events_copy.trueParticles.nPiPlus
-        n_pi0_true = events_copy.trueParticles.nPi0
-
-        is_pip = events_copy.trueParticles.pdg[:, 0] == 211
-
-        mask = None
-        for m in args.selection_masks["mc"]["beam"].values():
-            if mask is None:
-                mask = m
-            else:
-                mask = mask & m
-        n_pi_true = n_pi_true[mask]
-        n_pi0_true = n_pi0_true[mask]
-        is_pip = is_pip[mask]
-        true_regions = cross_section.EventSelection.create_regions_new(n_pi0_true, n_pi_true)
-        for k in true_regions:
-            true_regions[k] = true_regions[k] & (is_pip)
-        for k in reco_regions:
-            reco_regions[k] = reco_regions[k] & (is_pip)
-        return reco_regions, true_regions
-    else:
-        return reco_regions
+from apps import cex_toy_generator, cex_analysis_input, cex_toy_parameters
+from python.analysis import cross_section, Plots
 
 
 def CreateInitParams(model : cross_section.pyhf.Model, analysis_input : cross_section.AnalysisInput, energy_slices : cross_section.Slices, mean_track_score_bins : np.array) -> np.array:
@@ -177,7 +97,6 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
     histograms_reco_obs_err = {k : np.sqrt(v) for k, v in histograms_reco_obs.items()}
     
     if postfit_pred is not None:
-        print("using KE_int,ex from region fit")
         print(f"signal: {process}")
         n = cross_section.RegionFit.CreateObservedInputData(data, energy_slice, None)
         N = sum(n)
@@ -220,105 +139,159 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
     return histograms_true_obs, histograms_reco_obs, histograms_reco_obs_err
 
 
-def Unfolding(hist_reco : dict[np.array], hist_reco_err : dict[np.array], energy_slices : cross_section.Slices, template : cross_section.AnalysisInput, signal_process : str, book : Plots.PlotBook = None, unfolding_args : dict = None) -> dict[dict]:
-    """ Unfold post fit reco histograms
+def PlotDataBkgSub(data : cross_section.AnalysisInput, mc : cross_section.AnalysisInput, fit_results : cross_section.FitResults, signal_process : str, energy_slices : cross_section.Slices, scale : float, sample_name : str, data_label = "data", mc_label = "mc", book : Plots.PlotBook = Plots.PlotBook.null):
+    labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$", "inc" : "$N_{inc}$"}
+    _, histograms_data, histograms_data_err = BackgroundSubtraction(data, signal_process, energy_slices, fit_results)
 
-    Args:
-        hist_reco (dict[np.array]): reco hitograms
-        hist_reco_err (dict[np.array]): error in reco histograms
-        energy_slices (cross_section.Slices): energy slices
-        template (cross_section.Toy): template to create response matrices
-        signal_process (str): signal process
-        book (Plots.PlotBook, optional): plot book. Defaults to None.
+    histograms_mc_reco = mc.CreateHistograms(energy_slices, signal_process, True, False)
 
-    Returns:
-        dict[dict]: unolfing results
-    """
+    for _, i in Plots.IterMultiPlot(histograms_data):
+        Plots.Plot(energy_slices.pos_overflow, scale * histograms_mc_reco[i], yerr = np.sqrt(scale * histograms_mc_reco[i]), xlabel = labels[i] + " (MeV)", newFigure = False, style = "step", label = mc_label, color = "C6")
+        Plots.Plot(energy_slices.pos_overflow, histograms_data[i], yerr = histograms_data_err[i], newFigure = False, style = "step", label = data_label, color = "k")
+        Plots.plt.legend(loc = "upper left")
+    Plots.plt.suptitle(sample_name)
+    Plots.plt.tight_layout()
+    book.Save()
+
+    Plots.Plot(energy_slices.pos_overflow, scale * histograms_mc_reco["int_ex"], yerr = np.sqrt(scale * histograms_mc_reco["int_ex"]), xlabel = labels["int_ex"] + " (MeV)", style = "step", label = mc_label, color = "C6", title = sample_name)
+    Plots.Plot(energy_slices.pos_overflow, histograms_data["int_ex"], yerr = histograms_data_err["int_ex"], newFigure = False, style = "step", label = f"{data_label}, background subtracted", color = "k")
+    Plots.plt.legend(loc = "upper left")
+    book.Save()
+
+    return
+
+
+def SelectionEfficiency(true_hists_selected, true_hists):
+    return {k : cex_toy_parameters.Efficiency(true_hists_selected[k], true_hists[k]) for k in true_hists}
+
+
+def ApplyEfficiency(energy_bins, efficiencies, unfolding_result, true, norm : float = 1, book : Plots.PlotBook = Plots.PlotBook.null):
+    hist_unfolded_efficiency_corrected = {}
+
+    multiplot = Plots.MultiPlot(4)
+    for k in unfolding_result:
+        unfolded_eff = np.where(efficiencies[k][0] == 0, norm * true[k], unfolding_result[k]["unfolded"] / efficiencies[k][0])
+        unfolded_eff_err = np.where(efficiencies[k][0] == 0, np.sqrt(norm * true[k]), unfolded_eff * np.sqrt((unfolding_result[k]["stat_err"] / unfolding_result[k]["unfolded"])**2 + (efficiencies[k][1]/efficiencies[k][0])**2))
+        unfolded_eff_err = np.nan_to_num(unfolded_eff_err)
+
+        hist_unfolded_efficiency_corrected[k] = {"unfolded" : unfolded_eff, "stat_err" : unfolded_eff_err}
+        next(multiplot)
+        Plots.Plot(energy_bins[::-1], unfolded_eff, yerr = unfolded_eff_err, style = "step", color = "C4", label = "unfolded, efficiency corrected", newFigure = False, xlabel = f"$N_{{{k}}}$", ylabel  ="Counts")
+        Plots.Plot(energy_bins[::-1], norm * true[k], style = "step", color = "C0", label = "true", newFigure = False)
+    book.Save()
+    return hist_unfolded_efficiency_corrected
+
+
+def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.AnalysisInput, unfolding_args : dict, signal_process, norm, energy_slices, mc_cheat : cross_section.AnalysisInput = None, method : int = 1, book : Plots.PlotBook = Plots.PlotBook.null):
+
+    true_hists_selected = mc.CreateHistograms(energy_slices, signal_process, False, ~mc.inclusive_process)
+
+    if mc_cheat is not None:
+        true_hists = mc_cheat.CreateHistograms(energy_slices, signal_process, False, ~mc_cheat.inclusive_process)
+        efficiencies = SelectionEfficiency(true_hists_selected, true_hists)
+
+        for _, (k, v) in Plots.IterMultiPlot(efficiencies.items()):
+            Plots.Plot(energy_slices.pos_overflow, v[0], yerr = v[1], ylabel = "efficiency", xlabel = f"$N_{{{k}}}$", marker = "x", newFigure = False)
+            Plots.plt.ylim(0, 1)
+        book.Save()
+    else:
+        efficiencies = None
+
 
     if unfolding_args is None:
         print("using default options for unfolding")
-        unfolding_args = {"efficiencies" : None, "priors" : None, "regularizers" : None, "ts_stop" : 0.01, "max_iter" : 100, "ts" : "ks"}
+        unfolding_args = {"ts_stop" : 0.01, "max_iter" : 100, "ts" : "ks"}
 
-    if "efficiencies" in unfolding_args:
-        eff = unfolding_args["efficiencies"]
-    else:
-        eff = None
+    if method == 1:
+        resp = cross_section.Unfold.CalculateResponseMatrices(mc, signal_process, energy_slices, book, None)
+        priors = {k : v for k, v in true_hists_selected.items()}
+    if method == 2:
+        resp = cross_section.Unfold.CalculateResponseMatrices(mc_cheat, signal_process, energy_slices, book, {k : v[0] for k, v in efficiencies.items()})
+        priors = {k : v for k, v in true_hists.items()}
 
-    response_matrices = cross_section.Unfold.CalculateResponseMatrices(template, signal_process, energy_slices, book, efficiencies = eff)
 
-    result = cross_section.Unfold.Unfold(hist_reco, hist_reco_err, response_matrices, **unfolding_args)
+    unfolding_args["priors"] = priors
+    unfolding_args["response_matrices"] = resp
+
+    result = cross_section.Unfold.Unfold(reco_hists, reco_hists_err, verbose = True, **unfolding_args)
+
     n_incident_unfolded = cross_section.EnergySlice.NIncident(result["init"]["unfolded"], result["int"]["unfolded"])
     n_incident_unfolded_err = np.sqrt(result["int"]["stat_err"]**2 + np.cumsum(result["init"]["stat_err"]**2 + result["int"]["stat_err"]**2))
 
     result["inc"] = {"unfolded" : n_incident_unfolded, "stat_err" : n_incident_unfolded_err}
 
-    return result
+    for k in result:
+        if k == "inc" : continue
+        cross_section.Unfold.PlotUnfoldingResults(reco_hists[k], norm * true_hists_selected[k], result[k], energy_slices.pos_bins, f"$N_{{{k}}}$", book)
+
+    Plots.Plot(energy_slices.pos_bins[::-1], reco_hists["inc"], style = "step", label = "reco", color = "C6")
+    Plots.Plot(energy_slices.pos_bins[::-1], norm * true_hists_selected["inc"], style = "step", label = "true", color = "C0", newFigure = False)
+    Plots.Plot(energy_slices.pos_bins[::-1], result["inc"]["unfolded"], yerr = result["inc"]["stat_err"], style = "step", label = "unfolded", xlabel = "$N_{inc}$ (MeV)", color = "C4", newFigure = False)
+    book.Save()
+
+    if (method == 1) and (efficiencies is not None):
+        return ApplyEfficiency(energy_slices.pos_bins, efficiencies, result, true_hists, norm, book)
+    else:
+        return result
 
 
-def XSUnfold(unfolded_result, energy_slices, energy_bins):
+def XSUnfold(unfolded_result, energy_slices):
     return cross_section.EnergySlice.CrossSection(
         unfolded_result["int_ex"]["unfolded"][1:],
         unfolded_result["int"]["unfolded"][1:],
         unfolded_result["inc"]["unfolded"][1:],
-        cross_section.BetheBloch.meandEdX(energy_bins[1:], cross_section.Particle.from_pdgid(211)),
+        cross_section.BetheBloch.meandEdX(energy_slices.pos_bins[1:], cross_section.Particle.from_pdgid(211)),
         energy_slices.width,
-        np.sqrt(unfolded_result["int_ex"]["stat_err"][1:]**2 + unfolded_result["int_ex"]["stat_err"][1:]**2),
-        np.sqrt(unfolded_result["int"]["stat_err"][1:]**2 + unfolded_result["int"]["stat_err"][1:]**2),
-        np.sqrt(unfolded_result["inc"]["stat_err"][1:]**2 + unfolded_result["inc"]["stat_err"][1:]**2)
+        unfolded_result["int_ex"]["stat_err"][1:],
+        unfolded_result["int"]["stat_err"][1:],
+        unfolded_result["inc"]["stat_err"][1:]
     )
 
-
-def CreateAnalysisInput(sample : cross_section.Toy | cross_section.Data, args : cross_section.argparse.Namespace, is_mc : bool) -> cross_section.AnalysisInput:
-    """ Create analysis input from either toy or ntuple sample
-
-    Args:
-        sample (cross_section.Toy | cross_section.Data): sample
-        args (cross_section.argparse.Namespace): analysis configurations
-        is_mc (bool): is the sample mc?
-
-    Returns:
-        cross_section.AnalysisInput: analysis input.
-    """
-    if type(sample) == cross_section.Toy:
-        ai = cross_section.AnalysisInput.CreateAnalysisInputToy(sample)
-    elif type(sample) == cross_section.Data:
-        sample_selected = BeamPionSelection(sample, args, is_mc)
-        if is_mc:
-            reco_regions, true_regions = RegionSelection(sample, args, True)
-            reweight_params = args.beam_reweight_params
-        else:
-            reco_regions = RegionSelection(sample, args, False)
-            true_regions = None
-            reweight_params = None
-        ai = cross_section.AnalysisInput.CreateAnalysisInputNtuple(sample_selected, args.upstream_loss_correction_params["value"], reco_regions, true_regions, reweight_params)
+def LoadToy(file):
+    if file.split(".")[-1] == "hdf5":
+        toy = cross_section.Toy(file = file)
+    elif file.split(".")[-1] == "json":
+        toy = cross_section.Toy(df = cex_toy_generator.run(cross_section.LoadConfiguration(file)))
     else:
-        raise Exception(f"object type {type(sample)} not a valid sample")
-    return ai
+        raise Exception("toy file format not recognised")
+    return cross_section.AnalysisInput.CreateAnalysisInputToy(toy)
 
 
 def main(args):
-    cross_section.SetPlotStyle(extend_colors = True)
-    samples = {}
-    if args.toy:
-        print(f"analyse toy: {args.toy}")
-        if args.toy.split(".")[-1] == "hdf5":
-            samples["Toy"] = cross_section.Toy(file = args.toy)
-        elif args.toy.split(".")[-1] == "json":
-            samples["Toy"] = cross_section.Toy(df = cex_toy_generator.main(cex_toy_generator.ResolveConfig(cross_section.LoadConfiguration(args.toy))))
-        else:
-            raise Exception("toy file format not recognised")
-    elif args.mc:
-        print(f"analyse MC: {args.mc_file}")
-        samples["MC"] = cross_section.Data(args.mc_file, nTuple_type = args.ntuple_type)
-    elif args.data:
-        print(f"analyse Data: {args.data_file}")
-        # samples["Data"] = cross_section.Data(args.data_file, nTuple_type = args.ntuple_type) #! not yet
-    else:
-        raise Exception("--toy, --mc and or --data must be specified")
+    l_2 = [
+    get_cmap("tab20c").colors[0],
+    get_cmap("tab20c").colors[8],
+    get_cmap("tab20b").colors[13],
+    get_cmap("tab20b").colors[0],
+    get_cmap("tab20b").colors[17],
+    get_cmap("tab20b").colors[4],
+    get_cmap("tab20c").colors[12],
+    get_cmap("tab20c").colors[16],
+    ]
+    cross_section.SetPlotStyle(custom_colors = l_2, extend_colors = True)
+    args.out = args.out + "measurement/"
 
-    energy_slices = cross_section.Slices(50, 0, 1050, True) #TODO make configurable
-    mean_track_score_bins = np.linspace(0, 1, 21, True) #TODO make configurable
-    energy_bins = np.sort(np.insert(energy_slices.pos, 0, energy_slices.max_pos + energy_slices.width)) # for plotting
+    samples = {}
+    templates = {}
+    if args.toy_template:
+        print("loading toy template")
+        templates["toy"] = LoadToy(args.toy_template)
+        print("loading toy data")
+        samples["toy"] = LoadToy(args.toy_data)
+    if args.pdsp:
+        print("loading Data and MC")
+        if args.analysis_input:
+            templates["pdsp"] = cross_section.AnalysisInput.FromFile(args.analysis_input["mc"])
+            samples["pdsp"] = cross_section.AnalysisInput.FromFile(args.analysis_input["data"])
+            templates["mc_cheated"] = cross_section.AnalysisInput.FromFile(args.analysis_input["mc_cheated"])
+        else:
+            templates["pdsp"] = cex_analysis_input.CreateAnalysisInput(cross_section.Data(args.mc_file, nTuple_type = args.ntuple_type, target_momentum = args.pmom), args, True)
+            templates["mc_cheated"] = cex_analysis_input.CreateAnalysisInputMCTrueBeam(cross_section.Data(args.mc_file, nTuple_type = args.ntuple_type, target_momentum = args.pmom), args)
+            samples["pdsp"] = cex_analysis_input.CreateAnalysisInput(cross_section.Data(args.data_file, nTuple_type = args.ntuple_type), args, False)
+
+
+    # mean_track_score_bins = np.linspace(0, 1, 21, True) #TODO make configurable
+    mean_track_score_bins = None
     xs = {}
     for k, v in samples.items():
         print(f"analysing {k}")
@@ -326,33 +299,62 @@ def main(args):
         outdir = args.out + f"{k}/"
         os.makedirs(outdir, exist_ok = True)
 
-        is_mc = False if k == "Data" else True
-        analysis_input = CreateAnalysisInput(v, args, is_mc) # is mc not required for toy
-        template_input = cross_section.AnalysisInput.CreateAnalysisInputToy(args.toy_template) #! need to consolidate option for different template types
+        if k == "toy":
+            scale = len(samples[k].KE_init_reco) / len(templates[k].KE_init_reco)
+        else:
+            scale = args.norm
 
-        with Plots.PlotBook(outdir + "plots.pdf") as book:
-            region_fit_result = RegionFit(analysis_input, energy_slices, mean_track_score_bins, template_input)
+        if k == "toy":
+            unfolding_args = None
+        else:
+            unfolding_args = {"ts_stop" : 0.0001, "max_iter" : 10, "ts" : "ks"}
 
-            histograms_true_obs, histograms_reco_obs, histograms_reco_obs_err = BackgroundSubtraction(analysis_input, args.signal_process, energy_slices, region_fit_result, book) #? make separate background subtraction function?
+        mc_cheat = None if k == "toy" else templates["mc_cheated"]
 
-            unfolding_args = {"efficiencies" : None, "priors" : histograms_true_obs, "regularizers" : None, "ts_stop" : 0.01, "max_iter" : 3, "ts" : "ks"} # for toy only, make configurable
+        #* should some pre-requisit plots be made?
 
-            unfolding_result = Unfolding(histograms_reco_obs, histograms_reco_obs_err, energy_slices, template_input, args.signal_process, book, unfolding_args = unfolding_args)
+        region_fit_result = RegionFit(v, args.energy_slices, None, templates[k])
 
-            labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$"}
-            for i in unfolding_result:
-                if i == "inc": continue
-                cross_section.Unfold.PlotUnfoldingResults(histograms_reco_obs[i], histograms_true_obs[i], unfolding_result[i], energy_bins, labels[i], book)
-            Plots.Plot(energy_bins[::-1], histograms_reco_obs["inc"], style = "step", label = "reco", color = "C6")
-            Plots.Plot(energy_bins[::-1], histograms_true_obs["inc"], style = "step", label = "true", color = "C0", newFigure = False)
-            Plots.Plot(energy_bins[::-1], unfolding_result["inc"]["unfolded"], yerr = unfolding_result["inc"]["stat_err"], style = "step", label = "unfolded", xlabel = "$N_{inc}$ (MeV)", color = "C4", newFigure = False)
-            book.Save()
 
-            xs[k] = XSUnfold(unfolding_result, energy_slices, energy_bins)
+        if args.all is True:
+            process = {i : None for i in templates[k].exclusive_process}
+        else:
+            process = {args.signal_process : None}
 
+        for p in process:
+            with Plots.PlotBook(outdir + f"plots_{p}.pdf") as book:
+                if k == "pdsp":
+                    true_hists = mc_cheat.CreateHistograms(args.energy_slices, p, False, ~mc_cheat.inclusive_process)
+                else:
+                    true_hists = templates[k].CreateHistograms(args.energy_slices, p, False, ~templates[k].inclusive_process)
+
+                xs_true = cross_section.EnergySlice.CrossSection(true_hists["int_ex"][1:], true_hists["int"][1:], true_hists["inc"][1:], cross_section.BetheBloch.meandEdX(args.energy_slices.pos_bins[1:], cross_section.Particle.from_pdgid(211)), args.energy_slices.width)
+
+                _, histograms_reco_obs, histograms_reco_obs_err = BackgroundSubtraction(v, p, args.energy_slices, region_fit_result, book) #? make separate background subtraction function?
+                
+                if k == "toy":
+                    data_label = "toy data"
+                    mc_label = "toy template"
+                elif k == "pdsp":
+                    data_label = "Data"
+                    mc_label = "MC cheated (scaled to Data)"
+
+                PlotDataBkgSub(samples[k], templates[k], region_fit_result, p, args.energy_slices, scale, None, data_label, mc_label, book)
+
+                unfolding_result = Unfolding(histograms_reco_obs, histograms_reco_obs_err, templates[k], unfolding_args, p, scale, args.energy_slices, mc_cheat, 1, book)
+
+                process[p] = XSUnfold(unfolding_result, args.energy_slices)
+
+                cross_section.PlotXSComparison({"reco" : process[p], "truth" : xs_true}, args.energy_slices, p, {"reco" : "C0", "truth" : "C1"})
+                book.Save()
+            Plots.plt.close("all")
+        xs[k] = process
     with Plots.PlotBook(args.out + "results.pdf") as book:
-        cross_section.PlotXSComparison(xs, energy_slices, args.signal_process, {list(xs.keys())[0] : "C6"})
-        book.Save()
+        colours = {k : f"C{i}" for i, k in enumerate(xs.keys())}
+        for p in list(xs.values())[0]:
+            data = {k : xs[k][p] for k in xs.keys()}
+            cross_section.PlotXSComparison(data, args.energy_slices, p, colours)
+            book.Save()
     return
 
 
@@ -362,13 +364,17 @@ if __name__ == "__main__":
     cross_section.ApplicationArguments.Config(parser, required = True)
     cross_section.ApplicationArguments.Output(parser)
 
-    parser.add_argument("--toy", dest = "toy", type = str, help = "use toy, proivde a hdf5 toy file or toy config")
-    parser.add_argument("--mc", dest = "mc", action = "store_true", help = "use mc")
-    parser.add_argument("--data", dest = "data", action = "store_true", help = "use data")
+    parser.add_argument("--toy_data", dest = "toy_data", type = str, help = "toy data, proivde a hdf5 toy file or toy config")
+    parser.add_argument("--toy_template", dest = "toy_template", type = str, help = "toy template, proivde a hdf5 toy file or toy config")
+    parser.add_argument("--pdsp", dest = "pdsp", action = "store_true", help = "run the analysis with the PDSP samples")
+    parser.add_argument("--all", dest = "all", action = "store_true", help = "measure all exclusive cross sections.")
 
     args = cross_section.ApplicationArguments.ResolveArgs(parser.parse_args())
-    print("parsed config, loading toy template")
-    args.toy_template = cross_section.Toy(file = args.toy_template)
-    args.out = args.out + "analysis/"
+
+    if args.toy_data and (not args.toy_template):
+        raise Exception("if toy data is provided toy template must also be provided")
+    if (not args.toy_data) and args.toy_template:
+        raise Exception("if toy template is provided toy data must also be provided")
+
     print(vars(args))
     main(args)

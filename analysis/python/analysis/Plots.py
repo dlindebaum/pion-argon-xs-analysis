@@ -1255,7 +1255,7 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
         else:
             for m in ind:
                 plt.hist(edges[:-1], edges, weights = h_mc[m], range = x_range, stacked = False, label = mc_labels[m], color = colour[m], alpha = alpha)
-        plt.errorbar(centres, np.sum(h_mc, 0), np.sum(h_mc, 0)**0.5, c = "black", label = "MC total" + f" ({int(ak.count(mc) * scale)})", marker = "x", capsize = 3, linestyle = "")
+        plt.errorbar(centres, np.sum(h_mc, 0), abs(np.sum(h_mc, 0))**0.5, c = "black", label = "MC total" + f" ({int(ak.count(mc) * scale)})", marker = "x", capsize = 3, linestyle = "")
     else:
         plt.hist(edges[:-1], edges, weights = h_mc, range = x_range, stacked = False, label = mc_labels, color = colour, alpha = alpha)
 
@@ -1284,11 +1284,11 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     # if stacked is True:
     if is_tagged:
         h_mc = np.sum(h_mc, axis = 0)
-    mc_error = np.sqrt(h_mc)
+    mc_error = np.sqrt(abs(h_mc)) # weights can cause the counts to be negative
 
     plt.subplot(212) # ratio plot
     ratio = Utils.nandiv(h_data, h_mc) # data / MC
-    ratio_err = ratio * np.sqrt(Utils.nandiv(data_err, h_data)**2 + Utils.nandiv(mc_error, h_mc)**2)
+    ratio_err = abs(ratio * np.sqrt(Utils.nandiv(data_err, h_data)**2 + Utils.nandiv(mc_error, h_mc)**2))
     ratio[ratio == np.inf] = -1 # if the ratio is undefined, set it to -1
     plt.errorbar(centres, ratio, ratio_err, c = "black", marker = "o", capsize = 3, linestyle = "")
     plt.ylabel("Data/MC")

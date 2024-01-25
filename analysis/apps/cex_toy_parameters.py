@@ -17,8 +17,9 @@ import scipy.stats as stats
 
 from alive_progress import alive_bar
 
-from apps import cex_analyse
 from python.analysis import cross_section, Master, Plots, Tags, SelectionTools
+
+from apps.cex_analysis_input import RegionSelection
 
 from rich import print
 
@@ -274,7 +275,7 @@ def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace):
         mc (Master.Data): mc events.
         args (argparse.Namespace): application arguments.
     """
-    reco_regions, true_regions = cex_analyse.RegionSelection(mc, args, True)
+    reco_regions, true_regions = RegionSelection(mc, args, True)
 
     os.makedirs(args.out + "reco_regions/", exist_ok = True)
     pdf = Plots.PlotBook(args.out + "reco_regions/reco_regions_study")

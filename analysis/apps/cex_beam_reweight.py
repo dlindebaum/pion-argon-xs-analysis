@@ -43,7 +43,7 @@ def ReWeight(sample : dict[cross_section.Data], p_nominal : float, bins : int = 
 
 
 def RatioWeights(mc : cross_section.Data, func : str, params : list, truncate : int = 10):
-    weights = 1/getattr(cross_section.Fitting, func)(mc.recoParticles.beam_inst_P, *params)
+    weights = 1/getattr(cross_section.Fitting, func)(np.array(mc.recoParticles.beam_inst_P), *params)
     weights = np.where(weights > truncate, truncate, weights)
     return weights
 
@@ -88,7 +88,7 @@ def main(args : cross_section.argparse.Namespace):
     os.makedirs(args.out, exist_ok = True)
     os.makedirs(args.out + "plots/", exist_ok = True)
 
-    events = {"mc" : cross_section.Data(args.mc_file, nTuple_type = args.ntuple_type), "data" : cross_section.Data(args.data_file, nTuple_type = args.ntuple_type)}
+    events = {"mc" : cross_section.Data(args.mc_file, nTuple_type = args.ntuple_type, target_momentum = args.pmom), "data" : cross_section.Data(args.data_file, nTuple_type = args.ntuple_type)}
 
     analysis_sample = {}
     for s in events:
@@ -108,6 +108,7 @@ def main(args : cross_section.argparse.Namespace):
             ReWeightResults(analysis_sample, args, 50, results, r, book = book)
             reweight_params = {f"p{i}" : {"value" : results[r][0][i], "error" : results[r][1][i]} for i in range(getattr(cross_section.Fitting, r).n_params)}
             cross_section.SaveConfiguration(reweight_params, args.out + r + ".json")
+        Plots.plt.close("all")
     return
 
 if __name__ == "__main__":

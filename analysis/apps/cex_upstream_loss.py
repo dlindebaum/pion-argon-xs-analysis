@@ -13,7 +13,7 @@ import awkward as ak
 import numpy as np
 import pandas as pd
 
-from apps.cex_analyse import BeamPionSelection
+from apps.cex_analysis_input import BeamPionSelection
 from python.analysis import cross_section, Master, Plots
 from rich import print
 
