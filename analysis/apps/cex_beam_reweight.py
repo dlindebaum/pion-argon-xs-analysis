@@ -37,7 +37,7 @@ def ReWeight(sample : dict[cross_section.Data], p_nominal : float, bins : int = 
     results = {}
     for f in [cross_section.Fitting.gaussian, cross_section.Fitting.student_t, cross_section.Fitting.poly2d, cross_section.Fitting.crystal_ball, cross_section.Fitting.double_crystal_ball, cross_section.Fitting.double_gaussian]:
         Plots.plt.figure()
-        results[f.__name__] = cross_section.Fitting.Fit(ratio_plot.x[ratio > 0], ratio[ratio > 0], ratio_err[ratio > 0], f, plot = True, xlabel = "$P_{inst}^{reco}$(MeV)")
+        results[f.__name__] = cross_section.Fitting.Fit(ratio_plot.x[ratio > 0], ratio[ratio > 0], ratio_err[ratio > 0], f, plot = True, xlabel = "$P_{inst}^{reco}$(MeV)", ylabel = "$r$")
         book.Save()
     return results
 

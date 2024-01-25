@@ -185,7 +185,7 @@ class crystal_ball(FitFunction):
 
         N = 1 / (C + D) # should be 1 / sigma * (C + D), but I dont want to normalise the function
 
-        y = np.where(t > -p3, np.exp(-t**2 / 2), A * (B - t)**-p4)
+        y = np.where(t > -p3, np.exp(-t**2 / 2), A * Utils.fpower(B - t, -p4))
         return p0 * N * y
 
     @staticmethod
@@ -242,8 +242,8 @@ class double_crystal_ball(FitFunction):
         z = (x - p1) / p2
         A, B = double_crystal_ball.ExponentNormalisation(p3, p4)
         C, D = double_crystal_ball.ExponentNormalisation(p5, p6)
-        E1 = A * (B-z)**(-p4)
-        E2 = C * (D+z)**(-p6)
+        E1 = A * Utils.fpower(B - z, -p4)
+        E2 = C * Utils.fpower(D + z, -p6)
         y = np.exp(-0.5*(z**2))
         y = np.where(z < -p3, E1, y)
         y = np.where(z > p5, E2, y)

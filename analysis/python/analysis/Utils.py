@@ -11,6 +11,11 @@ def bin_centers(bins : np.ndarray) -> np.ndarray:
     return (bins[1:] + bins[:-1]) / 2
 
 
+def fpower(num : np.ndarray, exp, real : bool = True):
+    y = num.astype("complex")**exp
+    if real: y = y.real
+    return y
+
 def nandiv(num, den) -> np.ndarray:
     return np.divide(num, np.where(den == 0, np.nan, den))
 

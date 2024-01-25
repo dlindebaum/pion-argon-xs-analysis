@@ -74,7 +74,7 @@ def CreateConfigNormalisation(scales : dict, data_config : dict) -> dict:
     return cfg
 
 
-def ModifiedConfigTest(config : dict, energy_slice : cross_section.Slices, model : cross_section.pyhf.Model, toy_template : cross_section.Toy, mean_track_score_bins : np.array = None) -> tuple[dict]:
+def ModifiedConfigTest(config : dict, energy_slice : cross_section.Slices, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, mean_track_score_bins : np.array = None) -> tuple[dict]:
     toy_alt_pdf = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.main(cex_toy_generator.ResolveConfig(config))))
     
     obs = cross_section.RegionFit.GenerateObservations(toy_alt_pdf, energy_slice, mean_track_score_bins, model, False)
@@ -85,12 +85,12 @@ def ModifiedConfigTest(config : dict, energy_slice : cross_section.Slices, model
     for v in toy_alt_pdf.exclusive_process:
         true_process_counts[v] = toy_alt_pdf.NInteract(energy_slice, toy_alt_pdf.exclusive_process[v])
 
-    expected_mus = [sum(toy_alt_pdf.exclusive_process[r]) / sum(toy_template.truth_regions[r]) for r in toy_alt_pdf.exclusive_process]
+    expected_mus = [sum(toy_alt_pdf.exclusive_process[r]) / sum(toy_template.exclusive_process[r]) for r in toy_alt_pdf.exclusive_process]
 
     return fit_result, true_process_counts, expected_mus
 
 
-def NormalisationTest(directory : str, data_config : dict, model : cross_section.pyhf.Model, toy_template : cross_section.Toy, energy_slice : cross_section.Slices, mean_track_score_bins : np.ndarray):
+def NormalisationTest(directory : str, data_config : dict, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, energy_slice : cross_section.Slices, mean_track_score_bins : np.ndarray):
     folder = {
         'absorption': "abs",
         'quasielastic': "quasi",
@@ -177,7 +177,7 @@ def CreateShapeParams(xs_sim, process : str, high, low, plot : bool = False):
     return shape_params
 
 
-def CreateShapeParamsSpline(xs_sim, process, indices, shape_factors, plot):
+def CreateShapeParamsSpline(xs_sim, process, indices, shape_factors, plot : bool):
     xs = getattr(xs_sim, process)
     Plots.Plot(xs_sim.KE, xs, color = "k", xlabel = "KE (MeV)", ylabel = "$\sigma$(mb)")
     Plots.plt.fill_between(xs_sim.KE, 0.8 * xs, 1.2 * xs, alpha = 0.5, color = "k", label = "Geant 4 $\pm$ 20%")
@@ -186,14 +186,16 @@ def CreateShapeParamsSpline(xs_sim, process, indices, shape_factors, plot):
     x_sample = x[indices[process]]
     y_sample = xs[indices[process]]
 
+    step = (shape_factors[process][1] - shape_factors[process][0]) / 4
+    splines = []
+    for i in range(5):
+        spline = CubicSpline(x_sample, (shape_factors[process][0] + (i * step))* y_sample)
+        splines.append(spline)
+
     if plot is True:
         c = Plots.plt.cm.autumn_r(np.linspace(0, 1, 5))
-        step = (shape_factors[process][1] - shape_factors[process][0]) / 4
-        splines = []
         for i in range(5):
-            spline = CubicSpline(x_sample, (shape_factors[process][0] + (i * step))* y_sample)
-            splines.append(spline)
-            Plots.Plot(xs_sim.KE, spline(xs_sim.KE), linestyle = (0, (5, 6)), color = c[i], label = i, newFigure = False)
+            Plots.Plot(xs_sim.KE, splines[i](xs_sim.KE), linestyle = (0, (5, 6)), color = c[i], label = i, newFigure = False)
     return splines
 
 
@@ -251,7 +253,7 @@ def ShapeTest(directory, data_config, method, shape_param_factors, spline_shape_
         if method == "function":
             shape_params = CreateShapeParams(xs_sim, target, shape_param_factors[target][0], shape_param_factors[target][1])
         elif method == "spline":
-            shape_params = CreateShapeParamsSpline(xs_sim, target, spline_point_index, spline_shape_param_factors)
+            shape_params = CreateShapeParamsSpline(xs_sim, target, spline_point_index, spline_shape_param_factors, False)
         else:
             raise Exception(f"{method} not a valid type")
 
@@ -331,12 +333,12 @@ def PlotHistShapeTest(target, data_config : dict, shape_params : dict, type : st
     return
 
 
-def PlotCrossCheckResults(xlabel, model : cross_section.pyhf.Model, toy_template : cross_section.Toy, results, true_counts, energy_overflow : np.ndarray, pdf : Plots.PlotBook = Plots.PlotBook.null):
+def PlotCrossCheckResults(xlabel, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, results, true_counts, energy_overflow : np.ndarray, pdf : Plots.PlotBook = Plots.PlotBook.null):
     true_counts_all = {}
     for t in true_counts:
         true_counts_all[t] = {k : np.sum(v) for k, v in true_counts[t].items()}
 
-    scale_factors = {k : sum(true_counts_all[k].values()) / sum(toy_template.df.total_inelastic) for k in true_counts_all}
+    scale_factors = {k : sum(true_counts_all[k].values()) / sum(toy_template.inclusive_process) for k in true_counts_all}
     x = list(range(len(results)))
 
     mu = []
@@ -694,17 +696,15 @@ def Summary(directory : str, test : str, signal_process : str, model : cross_sec
 @cross_section.timer
 def main(args : cross_section.argparse.Namespace):
     cross_section.SetPlotStyle(extend_colors = True)
-    args.template = cross_section.Toy(file = args.template)
+    args.template = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(file = args.template))
 
-    energy_slices = cross_section.Slices(args.slice_width, min(args.energy_range), max(args.energy_range), True)
-
-    energy_overflow = np.insert(energy_slices.pos, 0, energy_slices.max_pos + energy_slices.width) # xlabels for KE, which has an overflow bin (max energy + energy bin width) 
+    energy_overflow = np.insert(args.energy_slices.pos, 0, args.energy_slices.max_pos + args.energy_slices.width) # xlabels for KE, which has an overflow bin (max energy + energy bin width) 
     energy_bins = np.sort(energy_overflow)
 
     mean_track_score_bins = np.linspace(0, 1, 21, True)
 
-    models = {"normal" : cross_section.RegionFit.CreateModel(cross_section.AnalysisInput.CreateAnalysisInputToy(args.template), energy_slices, None, False, None, False)}
-    models["track_score"], templates_energy, tempalates_mean_track_score = cross_section.RegionFit.CreateModel(cross_section.AnalysisInput.CreateAnalysisInputToy(args.template), energy_slices, mean_track_score_bins, True, None, False, False)
+    models = {"normal" : cross_section.RegionFit.CreateModel(args.template, args.energy_slices, None, False, None, False)}
+    models["track_score"], templates_energy, tempalates_mean_track_score = cross_section.RegionFit.CreateModel(args.template, args.energy_slices, mean_track_score_bins, True, None, False, False)
 
     os.makedirs(args.out, exist_ok = True)
 
@@ -712,28 +712,30 @@ def main(args : cross_section.argparse.Namespace):
         print("Running tests")
 
         for m in models:
-            os.makedirs(args.out + f"normalisation_test_{m}/", exist_ok = True)
-            NormalisationTest(
-                args.out + f"normalisation_test_{m}/",
-                args.toy_data_config, models[m],
-                args.template,
-                energy_slices,
-                mean_track_score_bins if m == "track_score" else None)
+            if args.skip != "normalisation":
+                os.makedirs(args.out + f"normalisation_test_{m}/", exist_ok = True)
+                NormalisationTest(
+                    args.out + f"normalisation_test_{m}/",
+                    args.toy_data_config, models[m],
+                    args.template,
+                    args.energy_slices,
+                    mean_track_score_bins if m == "track_score" else None)
 
-            xs_sim = cross_section.GeantCrossSections(energy_range = [0, max(args.energy_range)])
+            if args.skip != "shape":
+                xs_sim = cross_section.GeantCrossSections(energy_range = [0, max(args.energy_slices.pos) + args.energy_slices.width])
 
-            os.makedirs(args.out + f"shape_test_{m}/", exist_ok = True)
-            ShapeTest(
-                args.out + f"shape_test_{m}/",
-                args.toy_data_config,
-                args.shape_gen,
-                shape_param_factors,
-                spline_shape_param_factors, 
-                xs_sim,
-                models[m],
-                args.template,
-                mean_track_score_bins if m == "track_score" else None,
-                energy_slices)
+                os.makedirs(args.out + f"shape_test_{m}/", exist_ok = True)
+                ShapeTest(
+                    args.out + f"shape_test_{m}/",
+                    args.toy_data_config,
+                    args.shape_gen,
+                    shape_param_factors,
+                    spline_shape_param_factors, 
+                    xs_sim,
+                    models[m],
+                    args.template,
+                    mean_track_score_bins if m == "track_score" else None,
+                    args.energy_slices)
 
 
     if args.workdir:
@@ -741,6 +743,7 @@ def main(args : cross_section.argparse.Namespace):
 
         test = ["shape", "normalisation"] # use when shape test is done 
         for t in test:
+            if t == args.skip: continue
             for m in models:
                 directory = args.workdir + f"{t}_test_{m}/"
                 results_files = [i for i in cross_section.os.listdir(directory) if "dill" in i]
@@ -765,22 +768,24 @@ def main(args : cross_section.argparse.Namespace):
 
 if __name__ == "__main__":
     parser = cross_section.argparse.ArgumentParser("app which performs cross checks for the region fit using toys.")
+    
+    cross_section.ApplicationArguments.Config(parser, True)
 
     parser.add_argument("--template", "-t", dest = "template", type = str, help = "toy template hdf5 file", required = True)
 
-    parser.add_argument("--toy_data_config", "-c", dest = "toy_data_config", type = str, help = "json config for toy data", required = False)
+    parser.add_argument("--toy_data_config", "-d", dest = "toy_data_config", type = str, help = "json config for toy data", required = False)
 
     parser.add_argument("--shape_gen", "-g", dest = "shape_gen", type = str, choices = ["spline", "function"], help = "method used to generate different cross section shapes for shape test", required = True)
 
     parser.add_argument("--workdir", "-w", dest = "workdir", type = str, help = "work directory which contains output from this application, use this to remake plots without running all the tests again", required = False)
     parser.add_argument("--signal_process", dest = "signal_process", type = str, help = "signal process for background subtraction")
 
-    parser.add_argument("--energy_range", "-e", dest = "energy_range", type = int, nargs = 2, help = "enegy range for slices", required = True)
-    parser.add_argument("--slice_width", "-W", dest = "slice_width", type = float, help = "energy slice width (MeV)", required = True)
-
     parser.add_argument("--step", "-s", dest = "step", type = float, help = "step size for toy, if provided will override toy data config.")
     parser.add_argument("--events", "-n", dest = "events", type = float, help = "events for toy, if provided will override toy data config.")
     parser.add_argument("--seed", dest = "seed", type = int, help = "seed for toy, if provided will override toy data config.")
+
+    parser.add_argument("--skip", dest = "skip", type = str, choices = ["normalisation", "shape"], default = None, help = "test to skip")
+
     cross_section.ApplicationArguments.Output(parser, "region_fit_studies")
 
     args = cross_section.ApplicationArguments.ResolveArgs(parser.parse_args())
@@ -788,7 +793,6 @@ if __name__ == "__main__":
     if (not args.toy_data_config) and (not args.workdir):
         raise Exception("--toy_data_config or --workdirs or both must be supplied")
 
-    args.energy_range = sorted(args.energy_range)
     if args.events: args.events = int(args.events)
 
     if args.toy_data_config:

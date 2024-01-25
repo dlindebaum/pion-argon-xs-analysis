@@ -24,7 +24,7 @@ from scipy.interpolate import interp1d
 from scipy.stats import gaussian_kde
 
 from python.analysis.Master import timer, LoadConfiguration, ReadHDF5, LoadObject
-from python.analysis import Fitting
+from python.analysis import Fitting, Utils
 from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # supress annoying pandas warnings
@@ -114,7 +114,7 @@ def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split
         sum_xs = np.zeros(len(xs_sim.KE))
         for k, v in scale_factors.items():
             sum_xs = sum_xs + v * getattr(xs_sim, k)
-        ratio = sum_xs / xs_sim.total_inelastic # the amount per data point to scale each exclusive process by, such that the total inelastic cross section remains unchanged
+        ratio = Utils.nandiv(sum_xs, xs_sim.total_inelastic) # the amount per data point to scale each exclusive process by, such that the total inelastic cross section remains unchanged
     else:
         ratio = 1
 

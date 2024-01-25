@@ -448,6 +448,12 @@ class ApplicationArguments:
                         args.toy_parameters[k] = getattr(Fitting, v)
                     else:
                         args.toy_parameters[k] = v
+            elif head == "FIT":
+                args.fit = {}
+                for k, v in value.items():
+                    args.fit[k] = v
+            elif head == "ESLICE":
+                args.energy_slices = Slices(value["width"], value["min"], value["max"], reversed = True)
             else:
                 setattr(args, head, value) # allow for generic configurations in the json file
         ApplicationArguments.DataMCSelectionArgs(args)
@@ -1606,7 +1612,7 @@ class RegionFit:
             Plots.Plot(ratio_plot.x, ratio_plot.y1, yerr = ratio_plot.y1_err, color = "C6", label = "fit", style = "step", ylabel = "Counts", newFigure = False)
 
     @staticmethod
-    def EstimateBackground(fit_results : FitResults, model : pyhf.Model, toy_template : Toy, signal_process : str):
+    def EstimateBackground(fit_results : FitResults, model : pyhf.Model, template : AnalysisInput, signal_process : str):
         postfit_pred = cabinetry.model_utils.prediction(model, fit_results = fit_results)
 
         if any([c["name"] == "mean_track_score" for c in postfit_pred.model.spec["channels"]]):
@@ -1619,12 +1625,11 @@ class RegionFit:
         L_err = KE_int_prediction.total_stdev_model_bins[:, :-1] # last entry in the array is the total error for the whole channel (but we want the total error in each process)
         L_err = np.sqrt(np.sum(L_err **2, 0)) # quadrature sum across all bins
 
-        labels = list(toy_template.reco_region_labels) #! make property of AnalysisInput dataclass
+        labels = list(template.regions.keys()) #! make property of AnalysisInput dataclass
         L_var_bkg = sum(L_err[signal_process != np.array(labels)]**2)
         L_bkg = sum(L[signal_process != np.array(labels)])
 
         return L_bkg, L_var_bkg
-
 
 
 class Unfold:

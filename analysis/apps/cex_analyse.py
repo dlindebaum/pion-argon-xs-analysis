@@ -235,6 +235,10 @@ def Unfolding(hist_reco : dict[np.array], hist_reco_err : dict[np.array], energy
         dict[dict]: unolfing results
     """
 
+    if unfolding_args is None:
+        print("using default options for unfolding")
+        unfolding_args = {"efficiencies" : None, "priors" : None, "regularizers" : None, "ts_stop" : 0.01, "max_iter" : 100, "ts" : "ks"}
+
     if "efficiencies" in unfolding_args:
         eff = unfolding_args["efficiencies"]
     else:
