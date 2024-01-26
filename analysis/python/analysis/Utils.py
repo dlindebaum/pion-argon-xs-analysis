@@ -19,6 +19,8 @@ def fpower(num : np.ndarray, exp, real : bool = True):
 def nandiv(num, den) -> np.ndarray:
     return np.divide(num, np.where(den == 0, np.nan, den))
 
+def nanlog(x) -> np.ndarray:
+    return np.log(np.where(x < 0, np.nan, x))
 
 def weighted_chi_sqr(observed, expected, uncertainties) -> np.ndarray:
     u = np.array(uncertainties)

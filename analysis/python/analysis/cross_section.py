@@ -456,6 +456,8 @@ class ApplicationArguments:
                 args.energy_slices = Slices(value["width"], value["min"], value["max"], reversed = True)
             elif head == "ANALYSIS_INPUTS":
                 args.analysis_input = {k : v for k, v in value.items()}
+            elif head == "UNFOLDING":
+                args.unfolding = {k : v for k, v in value.items()}
             else:
                 setattr(args, head, value) # allow for generic configurations in the json file
         ApplicationArguments.DataMCSelectionArgs(args)
@@ -1085,7 +1087,8 @@ class EnergySlice:
         else:
             var_int_ex = n_int_ex * (1 - nandiv(n_int_ex, n_inc)) # binomial uncertainty
 
-        xs = factor * n_interact_ratio * np.log(nandiv(n_inc, n_inc - n_int))
+
+        xs = factor * n_interact_ratio * nanlog(nandiv(n_inc, n_inc - n_int))
 
         diff_n_int_ex = nandiv(xs, n_int_ex)
         diff_n_inc = factor * n_interact_ratio * (nandiv(1, n_inc) - nandiv(1, n_survived))
@@ -1683,9 +1686,9 @@ class Unfold:
 
         column_sums = response_hist.sum(axis=0)
         if remove_overflow is True:
-            normalization_factor = efficiencies[1:] / column_sums
+            normalization_factor = nandiv(efficiencies[1:], column_sums)
         else:
-            normalization_factor = efficiencies / column_sums
+            normalization_factor = nandiv(efficiencies, column_sums)
         response = response_hist * normalization_factor
         response_err = response_hist_err * normalization_factor
         

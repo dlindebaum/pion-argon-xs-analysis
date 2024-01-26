@@ -170,8 +170,8 @@ def ApplyEfficiency(energy_bins, efficiencies, unfolding_result, true, norm : fl
 
     multiplot = Plots.MultiPlot(4)
     for k in unfolding_result:
-        unfolded_eff = np.where(efficiencies[k][0] == 0, norm * true[k], unfolding_result[k]["unfolded"] / efficiencies[k][0])
-        unfolded_eff_err = np.where(efficiencies[k][0] == 0, np.sqrt(norm * true[k]), unfolded_eff * np.sqrt((unfolding_result[k]["stat_err"] / unfolding_result[k]["unfolded"])**2 + (efficiencies[k][1]/efficiencies[k][0])**2))
+        unfolded_eff = np.where(efficiencies[k][0] == 0, norm * true[k], cross_section.nandiv(unfolding_result[k]["unfolded"], efficiencies[k][0]))
+        unfolded_eff_err = np.where(efficiencies[k][0] == 0, np.sqrt(norm * true[k]), unfolded_eff * np.sqrt(cross_section.nandiv(unfolding_result[k]["stat_err"], unfolding_result[k]["unfolded"])**2 + cross_section.nandiv(efficiencies[k][1], efficiencies[k][0])**2))
         unfolded_eff_err = np.nan_to_num(unfolded_eff_err)
 
         hist_unfolded_efficiency_corrected[k] = {"unfolded" : unfolded_eff, "stat_err" : unfolded_eff_err}
@@ -182,7 +182,7 @@ def ApplyEfficiency(energy_bins, efficiencies, unfolding_result, true, norm : fl
     return hist_unfolded_efficiency_corrected
 
 
-def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.AnalysisInput, unfolding_args : dict, signal_process, norm, energy_slices, mc_cheat : cross_section.AnalysisInput = None, method : int = 1, book : Plots.PlotBook = Plots.PlotBook.null):
+def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.AnalysisInput, unfolding_args : dict, signal_process, norm, energy_slices, mc_cheat : cross_section.AnalysisInput = None, book : Plots.PlotBook = Plots.PlotBook.null):
 
     true_hists_selected = mc.CreateHistograms(energy_slices, signal_process, False, ~mc.inclusive_process)
 
@@ -200,12 +200,12 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
 
     if unfolding_args is None:
         print("using default options for unfolding")
-        unfolding_args = {"ts_stop" : 0.01, "max_iter" : 100, "ts" : "ks"}
+        unfolding_args = {"ts_stop" : 0.01, "max_iter" : 100, "ts" : "ks", "method" : 1}
 
-    if method == 1:
+    if unfolding_args["method"] == 1:
         resp = cross_section.Unfold.CalculateResponseMatrices(mc, signal_process, energy_slices, book, None)
         priors = {k : v for k, v in true_hists_selected.items()}
-    if method == 2:
+    if unfolding_args["method"] == 2:
         resp = cross_section.Unfold.CalculateResponseMatrices(mc_cheat, signal_process, energy_slices, book, {k : v[0] for k, v in efficiencies.items()})
         priors = {k : v for k, v in true_hists.items()}
 
@@ -213,7 +213,7 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
     unfolding_args["priors"] = priors
     unfolding_args["response_matrices"] = resp
 
-    result = cross_section.Unfold.Unfold(reco_hists, reco_hists_err, verbose = True, **unfolding_args)
+    result = cross_section.Unfold.Unfold(reco_hists, reco_hists_err, verbose = True, **{k : v for k, v in unfolding_args.items() if k != "method"})
 
     n_incident_unfolded = cross_section.EnergySlice.NIncident(result["init"]["unfolded"], result["int"]["unfolded"])
     n_incident_unfolded_err = np.sqrt(result["int"]["stat_err"]**2 + np.cumsum(result["init"]["stat_err"]**2 + result["int"]["stat_err"]**2))
@@ -229,7 +229,7 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
     Plots.Plot(energy_slices.pos_bins[::-1], result["inc"]["unfolded"], yerr = result["inc"]["stat_err"], style = "step", label = "unfolded", xlabel = "$N_{inc}$ (MeV)", color = "C4", newFigure = False)
     book.Save()
 
-    if (method == 1) and (efficiencies is not None):
+    if (unfolding_args["method"] == 1) and (efficiencies is not None):
         return ApplyEfficiency(energy_slices.pos_bins, efficiencies, result, true_hists, norm, book)
     else:
         return result
@@ -305,9 +305,9 @@ def main(args):
             scale = args.norm
 
         if k == "toy":
-            unfolding_args = None
+            unfolding_args = None # for the toy use default unfolding as this will be more optimal
         else:
-            unfolding_args = {"ts_stop" : 0.0001, "max_iter" : 10, "ts" : "ks"}
+            unfolding_args = args.unfolding
 
         mc_cheat = None if k == "toy" else templates["mc_cheated"]
 
@@ -341,7 +341,7 @@ def main(args):
 
                 PlotDataBkgSub(samples[k], templates[k], region_fit_result, p, args.energy_slices, scale, None, data_label, mc_label, book)
 
-                unfolding_result = Unfolding(histograms_reco_obs, histograms_reco_obs_err, templates[k], unfolding_args, p, scale, args.energy_slices, mc_cheat, 1, book)
+                unfolding_result = Unfolding(histograms_reco_obs, histograms_reco_obs_err, templates[k], unfolding_args, p, scale, args.energy_slices, mc_cheat, book)
 
                 process[p] = XSUnfold(unfolding_result, args.energy_slices)
 
