@@ -54,8 +54,11 @@ def RatioWeights(mc : Data, func : str, params : list, truncate : int = 10):
     return weights
 
 
-def PlotXSComparison(xs : dict[np.array], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", newFigure : bool = True):
+def PlotXSComparison(xs : dict[np.array], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, newFigure : bool = True):
     xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos, energy_slice.max_pos + energy_slice.width])
+
+    if colors is None:
+        colors = {k : f"C{i}" for i, k in enumerate(xs)}
 
     sim_curve_interp = xs_sim.GetInterpolatedCurve(process)
     x = energy_slice.pos - energy_slice.width/2
@@ -68,9 +71,9 @@ def PlotXSComparison(xs : dict[np.array], energy_slice, process : str = None, co
         Plots.Plot(x, v[0], xerr = energy_slice.width / 2, yerr = v[1], label = k + ", $\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}", color = colors[k], linestyle = "", marker = "x", newFigure = False)
     
     if process == "single_pion_production":
-        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = "simulation", title = "single pion production", newFigure = False, xlabel = "$KE_{int} (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)
+        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = "simulation", title = "single pion production" if title is not None else title, newFigure = False, xlabel = "$KE_{int} (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)
     else:
-        xs_sim.Plot(process, label = "simulation", color = xs_sim_color)
+        xs_sim.Plot(process, label = "simulation", color = xs_sim_color, title = title)
 
     Plots.plt.ylim(0)
     if max(Plots.plt.gca().get_ylim()) > np.nanmax(sim_curve_interp(xs_sim.KE).astype(float)) * 2:
@@ -806,11 +809,13 @@ class ThinSlice:
         """
         beam_traj_slice = slices.pos_to_num(endPos)
         slice_nums = slices.num
-
+        
         counts = np.histogram(ak.ravel(beam_traj_slice), slice_nums)[0] # histogram of positions will give the counts
 
-        sum_energy = np.histogram(ak.ravel(beam_traj_slice), slice_nums, weights = ak.ravel(energy))[0] # total energy in each bin if you weight by energy
-        sum_energy_sqr = np.histogram(ak.ravel(beam_traj_slice), slice_nums, weights = ak.ravel(energy)**2)[0] # same as above
+        weights = ak.ravel(np.nan_to_num(energy, 0))
+
+        sum_energy = np.histogram(ak.ravel(beam_traj_slice), slice_nums, weights = weights)[0] # total energy in each bin if you weight by energy
+        sum_energy_sqr = np.histogram(ak.ravel(beam_traj_slice), slice_nums, weights = weights**2)[0] # same as above
 
         mean_energy = sum_energy / counts
 
@@ -1264,6 +1269,12 @@ class AnalysisInput:
     # extras
     weights : np.array = None
 
+    def __len__(self):
+        for o in ["outside_tpc_reco", "outside_tpc_true", "track_length_reco", "KE_int_reco", "KE_init_reco", "mean_track_score", "track_length_true", "KE_int_true", "KE_init_true", "weights"]:
+            if getattr(self, o) is not None:
+                return len(getattr(self, o))
+        return
+
     def ToFile(self, file : str):
         """ Save to dill file.
 
@@ -1619,9 +1630,9 @@ class RegionFit:
         return cabinetry.model_utils.ModelPrediction(prediction.model, np.array(prediction.model_yields[slice]), np.array(prediction.total_stdev_model_bins[slice]), np.array(prediction.total_stdev_model_channels[slice]), label)
 
     @staticmethod
-    def PlotPrefitPostFit(prefit, prefit_err, postfit, postfit_err, energy_bins):
-        with Plots.RatioPlot(energy_bins[::-1], postfit, prefit, postfit_err, prefit_err, "$KE_{int}$ (MeV)", "fit/ actual") as ratio_plot:
-            Plots.Plot(ratio_plot.x, ratio_plot.y2, yerr = ratio_plot.y2_err, color = "C0", label = "actual", style = "step", newFigure = False)
+    def PlotPrefitPostFit(prefit, prefit_err, postfit, postfit_err, energy_bins, xlabel = "$KE_{int}$ (MeV)"):
+        with Plots.RatioPlot(energy_bins[::-1], postfit, prefit, postfit_err, prefit_err, xlabel, "fit/ true") as ratio_plot:
+            Plots.Plot(ratio_plot.x, ratio_plot.y2, yerr = ratio_plot.y2_err, color = "C0", label = "true", style = "step", newFigure = False)
             Plots.Plot(ratio_plot.x, ratio_plot.y1, yerr = ratio_plot.y1_err, color = "C6", label = "fit", style = "step", ylabel = "Counts", newFigure = False)
 
     @staticmethod

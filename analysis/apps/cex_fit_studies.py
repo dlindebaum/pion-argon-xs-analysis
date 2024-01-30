@@ -17,6 +17,7 @@ from scipy.stats import norm, lognorm
 
 
 from python.analysis import cross_section, Plots
+from python.analysis.Master import DictToHDF5, ReadHDF5
 from apps import cex_toy_generator
 
 region_colours = {
@@ -75,7 +76,7 @@ def CreateConfigNormalisation(scales : dict, data_config : dict) -> dict:
 
 
 def ModifiedConfigTest(config : dict, energy_slice : cross_section.Slices, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, mean_track_score_bins : np.array = None) -> tuple[dict]:
-    toy_alt_pdf = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.main(cex_toy_generator.ResolveConfig(config))))
+    toy_alt_pdf = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.run(config)))
     
     obs = cross_section.RegionFit.GenerateObservations(toy_alt_pdf, energy_slice, mean_track_score_bins, model, False)
     # fit_result = cross_section.RegionFit.Fit(obs, model, None, par_bounds = [(0, np.inf)]*model.config.npars)
@@ -290,9 +291,9 @@ def PlotHistShapeTest(target, data_config : dict, shape_params : dict, type : st
     else:
         raise Exception("not a valid type")
     toys = {
-    "nominal" : cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.main(cex_toy_generator.ResolveConfig(data_config)))),
-    "high" : cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.main(cex_toy_generator.ResolveConfig(config_high)))),
-    "low" : cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.main(cex_toy_generator.ResolveConfig(config_low))))
+    "nominal" : cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.run(data_config))),
+    "high" : cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.run(config_high))),
+    "low" : cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.run(config_low)))
     }
 
     def ratio_err(a, b):
@@ -331,6 +332,36 @@ def PlotHistShapeTest(target, data_config : dict, shape_params : dict, type : st
 
     RatioPlot(n_interact_region)
     return
+
+
+def PullStudy(template : cross_section.AnalysisInput, model : cross_section.pyhf.Model, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, data_config : dict, n : int) -> dict:
+    out = {"expected" : None, "scale" : pd.Series(len(template) / data_config["events"]), "bestfit" : None, "uncertainty" : None}
+
+    cfg = {k : v for k, v in data_config.items()}
+    cfg["seed"] = None # ensure we generate random toys
+
+    template_fractions = {s : (sum(template.exclusive_process[s]) / len(template)) for s in template.exclusive_process}
+
+    expected = []
+    bestfit = []
+    uncertainty = []
+
+    for i in range(n):
+        toy_alt_pdf = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.run(cfg)))
+
+        expected.append({s : (sum(toy_alt_pdf.exclusive_process[s]) / len(toy_alt_pdf.exclusive_process[s])) / template_fractions[s] for s in toy_alt_pdf.exclusive_process})
+
+        # init_params = list(np.random.uniform(0, 101, 4))
+
+        result = cross_section.RegionFit.Fit(cross_section.RegionFit.GenerateObservations(toy_alt_pdf, energy_slices, mean_track_score_bins, model), model, None, [(0, np.inf)]*4, False)
+
+        bestfit.append({list(toy_alt_pdf.exclusive_process.keys())[j] : result.bestfit[j] for j in range(len(template.exclusive_process))})
+        uncertainty.append({list(toy_alt_pdf.exclusive_process.keys())[j] : result.uncertainty[j] for j in range(len(template.exclusive_process))})
+
+    out["expected"] = pd.DataFrame(expected)
+    out["bestfit"] = pd.DataFrame(bestfit)
+    out["uncertainty"] = pd.DataFrame(uncertainty)
+    return out
 
 
 def PlotCrossCheckResults(xlabel, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, results, true_counts, energy_overflow : np.ndarray, pdf : Plots.PlotBook = Plots.PlotBook.null):
@@ -667,7 +698,7 @@ def Summary(directory : str, test : str, signal_process : str, model : cross_sec
         for j, t in enumerate(n_fe_max):
             y = n_fe_max[t][0]
             err = n_fe_max[t][1]
-            Plots.Plot(energy_overflow, y[i], yerr = err[i], color = f"C{2*j}", label = cross_section.remove_(t), ylabel = "fractional error in fitted counts", xlabel = xlabel, title = f"process : {cross_section.remove_(p)}", newFigure = False)
+            Plots.Plot(energy_overflow, y[i], yerr = err[i], color = f"C{j}", label = cross_section.remove_(t), ylabel = "fractional error in fitted counts", xlabel = xlabel, title = f"process : {cross_section.remove_(p)}", newFigure = False)
             Plots.plt.legend(title = f"{test}s test")
     book.Save()
 
@@ -683,23 +714,49 @@ def Summary(directory : str, test : str, signal_process : str, model : cross_sec
 
     Plots.plt.figure()
     for i, r in enumerate(s_fe_max):
-        Plots.Plot(energy_overflow, s_fe_max[r][0], yerr = s_fe_max[r][1], color = f"C{2*i}", label = cross_section.remove_(r), xlabel = xlabel, ylabel = "fractional error", title = "background subtracted counts", newFigure = False)
+        Plots.Plot(energy_overflow, s_fe_max[r][0], yerr = s_fe_max[r][1], color = f"C{i}", label = cross_section.remove_(r), xlabel = xlabel, ylabel = "fractional error", title = "background subtracted counts", newFigure = False)
         Plots.plt.legend(title = f"{test} test")
     book.Save()
     Plots.plt.figure()
     for i, r in enumerate(b_fe_max):
-        Plots.Plot(energy_overflow, b_fe_max[r][0], yerr = b_fe_max[r][1], color = f"C{2*i}", label = cross_section.remove_(r), xlabel = xlabel, ylabel = "fractional error", title = "background counts", newFigure = False)
+        Plots.Plot(energy_overflow, b_fe_max[r][0], yerr = b_fe_max[r][1], color = f"C{i}", label = cross_section.remove_(r), xlabel = xlabel, ylabel = "fractional error", title = "background counts", newFigure = False)
         Plots.plt.legend(title = f"{test} test")
     book.Save()
     return
 
+
+def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, template : cross_section.AnalysisInput, book : Plots.PlotBook = Plots.PlotBook.null):
+    tags = cross_section.Tags.ExclusiveProcessTags(template.exclusive_process)
+    for j, c in Plots.IterMultiPlot(templates_energy):
+        for i, s in enumerate(c):
+            Plots.Plot(energy_slices.pos_overflow, s/np.sum(templates_energy), color = tags.number[i].colour, label = f"$\lambda_{{{j}{i}}}$", xlabel = f"$\lambda_{{{j}s}}$ (MeV)", ylabel = "normalised counts", style = "step", newFigure = False)
+    book.Save()
+
+    if tempalates_mean_track_score is not None:
+        Plots.plt.figure()
+        for i, s in enumerate(tempalates_mean_track_score):
+            Plots.Plot(cross_section.bin_centers(mean_track_score_bins), s/np.sum(tempalates_mean_track_score), color = tags.number[i].colour, label = f"$\lambda_{{t{i}}}$", xlabel = f"$\lambda_{{ts}}$", ylabel = "normalised counts", style = "step", newFigure = False)
+        Plots.plt.legend(loc = "upper left")
+        book.Save()
+        book.close()
+    return
+
+def PlotTotalChannel(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, book : Plots.PlotBook = Plots.PlotBook.null):
+    for j, c in Plots.IterMultiPlot(templates_energy):
+        Plots.Plot(energy_slices.pos_overflow, sum(c), xlabel = f"$n_{{{j}}}$ (MeV)", ylabel = "counts", style = "bar", newFigure = False)
+    book.Save()
+
+    if tempalates_mean_track_score is not None:
+        Plots.Plot(cross_section.bin_centers(mean_track_score_bins), sum(tempalates_mean_track_score), xlabel = f"$n_{{ts}}$", ylabel = "counts", style = "bar")
+        book.Save()
+    book.close()
+    return
+
+
 @cross_section.timer
 def main(args : cross_section.argparse.Namespace):
-    cross_section.SetPlotStyle(extend_colors = True)
+    cross_section.SetPlotStyle(extend_colors = True, dark = True)
     args.template = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(file = args.template))
-
-    energy_overflow = np.insert(args.energy_slices.pos, 0, args.energy_slices.max_pos + args.energy_slices.width) # xlabels for KE, which has an overflow bin (max energy + energy bin width) 
-    energy_bins = np.sort(energy_overflow)
 
     mean_track_score_bins = np.linspace(0, 1, 21, True)
 
@@ -712,7 +769,7 @@ def main(args : cross_section.argparse.Namespace):
         print("Running tests")
 
         for m in models:
-            if args.skip != "normalisation":
+            if "normalisation" not in args.skip:
                 os.makedirs(args.out + f"normalisation_test_{m}/", exist_ok = True)
                 NormalisationTest(
                     args.out + f"normalisation_test_{m}/",
@@ -721,7 +778,7 @@ def main(args : cross_section.argparse.Namespace):
                     args.energy_slices,
                     mean_track_score_bins if m == "track_score" else None)
 
-            if args.skip != "shape":
+            if "shape" not in args.skip:
                 xs_sim = cross_section.GeantCrossSections(energy_range = [0, max(args.energy_slices.pos) + args.energy_slices.width])
 
                 os.makedirs(args.out + f"shape_test_{m}/", exist_ok = True)
@@ -736,32 +793,60 @@ def main(args : cross_section.argparse.Namespace):
                     args.template,
                     mean_track_score_bins if m == "track_score" else None,
                     args.energy_slices)
+            if "pulls" not in args.skip:
+                pull_results = PullStudy(args.template, models[m], args.energy_slices, mean_track_score_bins if m == "track_score" else None, args.toy_data_config, 100)
+                os.makedirs(args.out + f"pull_test_{m}/", exist_ok = True)
+                DictToHDF5(pull_results, args.out + f"pull_test_{m}/" + "pull_results.hdf5")
 
 
     if args.workdir:
         print("Making test results")
 
-        test = ["shape", "normalisation"] # use when shape test is done 
+        with Plots.PlotBook(args.out + "templates") as book:
+            PlotTemplates(templates_energy, tempalates_mean_track_score, args.energy_slices, mean_track_score_bins, args.template, book)
+
+        with Plots.PlotBook(args.out + "observation_exmaple") as book:
+            PlotTotalChannel(templates_energy, tempalates_mean_track_score, args.energy_slices, mean_track_score_bins, book)
+
+        label_map = {"absorption" : "abs", "charge_exchange" : "cex", "single_pion_production" : "spip", "pion_production" : "pip"}
+
+        test = ["shape", "normalisation", "pulls"] 
         for t in test:
-            if t == args.skip: continue
+            if t in args.skip: continue
             for m in models:
-                directory = args.workdir + f"{t}_test_{m}/"
-                results_files = [i for i in cross_section.os.listdir(directory) if "dill" in i]
+                if t == "pulls":
+                    with Plots.PlotBook(args.workdir + f"pull_test_{m}/pulls.pdf", True) as book:
+                        pull_results = ReadHDF5(args.workdir + f"pull_test_{m}/" + "pull_results.hdf5")
 
-                for f in results_files:
-                    fit_result = cross_section.LoadObject(directory+f)
-                    target = [target_map[k] for k in target_map if k in f][0]
-                    with Plots.PlotBook(directory+f.split(".")[0]+".pdf", True) as pdf:
-                        PlotCrossCheckResults(f"{target} {t}", models[m], args.template, fit_result["results"], fit_result["true_counts"], energy_overflow, pdf)
+                        pulls = (pull_results["bestfit"] - (pull_results["expected"] / pull_results["scale"][0])) / pull_results["uncertainty"]
+
+                        xlabel = "$\\theta$"
+
+                        for _, k in Plots.IterMultiPlot(pulls.columns):
+                            mean = np.mean(pulls[k])
+                            std = np.std(pulls[k])
+                            sem = std / np.sqrt(len(pulls[k]))
+                            Plots.PlotHist(pulls[k], bins = 10, title = f"$\mu_{{{label_map[k]}}}$ | mean : {mean:.3g} $\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = xlabel, newFigure = False)
+                        book.Save()
+
+                else:
+                    directory = args.workdir + f"{t}_test_{m}/"
+                    results_files = [i for i in cross_section.os.listdir(directory) if "dill" in i]
+
+                    for f in results_files:
+                        fit_result = cross_section.LoadObject(directory+f)
+                        target = [target_map[k] for k in target_map if k in f][0]
+                        with Plots.PlotBook(directory+f.split(".")[0]+".pdf", True) as pdf:
+                            PlotCrossCheckResults(f"{target} {t}", models[m], args.template, fit_result["results"], fit_result["true_counts"], args.energy_slices.pos_overflow, pdf)
+                        Plots.plt.close("all")
+                
+                    with Plots.PlotBook(f"{directory}background_sub_fractional_err.pdf", True) as book:
+                        BSPerformanceCheck(directory, args.signal_process, models[m], args.template, args.energy_slices.pos_overflow, [-0.04, 0.04], book)
                     Plots.plt.close("all")
-            
-                with Plots.PlotBook(f"{directory}background_sub_fractional_err.pdf", True) as book:
-                    BSPerformanceCheck(directory, args.signal_process, models[m], args.template, energy_overflow, [-0.04, 0.04], book)
-                Plots.plt.close("all")
 
-                with Plots.PlotBook(f"{directory}summary_plots.pdf", True) as book:
-                    Summary(directory, t, args.signal_process, models[m], energy_overflow, args.template, book)
-                Plots.plt.close("all")
+                    with Plots.PlotBook(f"{directory}summary_plots.pdf", True) as book:
+                        Summary(directory, t, args.signal_process, models[m], args.energy_slices.pos_overflow, args.template, book)
+                    Plots.plt.close("all")
 
     return
 
@@ -784,7 +869,7 @@ if __name__ == "__main__":
     parser.add_argument("--events", "-n", dest = "events", type = float, help = "events for toy, if provided will override toy data config.")
     parser.add_argument("--seed", dest = "seed", type = int, help = "seed for toy, if provided will override toy data config.")
 
-    parser.add_argument("--skip", dest = "skip", type = str, choices = ["normalisation", "shape"], default = None, help = "test to skip")
+    parser.add_argument("--skip", dest = "skip", type = str, choices = ["normalisation", "shape", "pulls"], nargs = "+", default = [], help = "test to skip")
 
     cross_section.ApplicationArguments.Output(parser, "region_fit_studies")
 
