@@ -14,13 +14,14 @@ from apps import (
     cex_photon_selection, #! notebook stuff should be moved to the application!
     cex_selection_studies, 
     cex_beam_reweight, 
-    cex_upstream_loss, 
+    cex_upstream_loss,
     cex_toy_parameters,
-    cex_analysis_input
+    cex_analysis_input,
+    cex_analyse
     )
 
 from python.analysis.cross_section import ApplicationArguments, argparse, os
-from python.analysis.Master import SaveConfiguration, LoadConfiguration
+from python.analysis.Master import SaveConfiguration, LoadConfiguration, IO
 
 def template_config():
     template = {
@@ -52,6 +53,23 @@ def template_config():
                 "z_int" : None
             }
         },
+        "FIT":{
+            "mc_stat_unc" : True,
+            "mean_track_score" : None
+        },
+        "ESLICE":{
+            "width" : None,
+            "min" : None,
+            "max" : None
+        },
+        "UNFOLDING":{
+            "method" : 1,
+            "ts_stop" : 0.0001,
+            "max_iter" : 6,
+            "ts" : "ks",
+            "covariance" : "poisson"
+        },
+        "signal_process" : "charge_exchange",
         "BEAM_PARTICLE_SELECTION":{
             "PiBeamSelection":{
                 "enable" : True,
@@ -184,6 +202,14 @@ def update_args():
     return ApplicationArguments.ResolveArgs(original_args)
 
 
+def file_len(file : str):
+    return len(IO(file).Get(["EventID", "event"]))
+
+
+def check_run(args : argparse.Namespace, step : str):
+    return ((step in args.run) or (args.force is True)) and (step not in args.skip)
+
+
 def main(args):
     if args.create_config:
         SaveConfiguration(template_config(), args.create_config)
@@ -193,8 +219,13 @@ def main(args):
         os.makedirs(args.out, exist_ok = True)
         print("run analysis, checking what steps have already been run")
 
+        # keep these to figure out if batch processing is required
+        n_data = file_len(args.data_file)
+        n_mc = file_len(args.mc_file)
+
         #* beam quality
-        if (not hasattr(args, "mc_beam_quality_fit")) or ((args.data_file is not None) and (not hasattr(args, "data_beam_quality_fit"))):
+        can_run_bq = (not hasattr(args, "mc_beam_quality_fit")) or ((args.data_file is not None) and (not hasattr(args, "data_beam_quality_fit")))
+        if can_run_bq or check_run(args, "beam_quality"):
             print("run beam quality fit")
             cex_beam_quality_fits.main(args)
             output_path = args.out + "beam_quality/"
@@ -212,7 +243,8 @@ def main(args):
             args = update_args() # reload config to continue
         
         #* beam scraper
-        if not hasattr(args, "mc_beam_scraper_fit"):
+        can_run_bs = not hasattr(args, "mc_beam_scraper_fit")
+        if can_run_bs or check_run(args, "beam_scraper"):
             print("run beam scraper fit")
             cex_beam_scraper_fits.main(args)
             output_path = args.out + "beam_scraper/"
@@ -231,18 +263,28 @@ def main(args):
             args = update_args() # reload config to continue
 
         #* photon energy correction
-        if args.shower_energy_correction is True:
+        can_run_pec = args.shower_energy_correction is True
+        if can_run_pec or check_run(args, "photon_correction"):
             if (args.correction is None) and (args.correction_params is None):
-                cex_photon_selection.main(args) #? how to handle multiprocessing?
+                args.events = None
+                args.batches = None
+                args.threads = 1
+                cex_photon_selection.main(args)
         
         #* selection studies
-        if not hasattr(args, "selection_masks"):
+        can_run_ss = not hasattr(args, "selection_masks")
+        if can_run_ss or check_run(args, "selection"):
             args.mc_only = args.data_file is None
             args.nbins = 50
-            # pass multiprocessing args (using defaults)
-            args.events = None
-            args.batches = None
-            args.threads = 1
+            # pass multiprocessing args
+            if (n_data >= 1E6) or (n_mc >= 1E6):
+                args.events = None
+                args.batches = int(2 * max(n_data, n_mc) // 1E6)
+                args.threads = 1
+            else:
+                args.events = None
+                args.batches = None
+                args.threads = 1
             cex_selection_studies.main(args)
 
             output_path = args.out
@@ -267,11 +309,27 @@ def main(args):
             args = update_args() # reload config to continue
 
         #* beam reweight
-        if args.data_file is None: # data is required for this app
+        can_run_rw = hasattr(args, "beam_reweight_params") and (args.data_file is None)
+        if can_run_rw or check_run(args, "reweight"):
             print("beam reweight")
+            cex_beam_reweight.main(args)
+            output_path = args.out + "beam_reweight/"
+            print("outputs: " + output_path)
+            target_files = {
+            "params" : "gaussian.json", # default choice, rework reweight to include a choice in the config
+            }
+            new_config_entry = {}
+            files = os.listdir(output_path)
+            for k, v in target_files.items():
+                if v in files:
+                    new_config_entry[k] = os.path.abspath(output_path + v)
+            update_config(args.config, {"BEAM_REWEIGHT" : new_config_entry})
+            args = update_args() # reload config to continue
+            
 
         #* upstream correction
-        if not hasattr(args, "upstream_loss_correction_params"):
+        can_run_uc = not hasattr(args, "upstream_loss_correction_params")
+        if can_run_uc or check_run(args, "upstream_correction"):
             print("upstream correction")
             args.no_reweight = not hasattr(args, "beam_reweight_params")
             cex_upstream_loss.main(args)
@@ -290,15 +348,59 @@ def main(args):
             new_config_entry["bins"] = args.upstream_loss_bins
             update_config(args.config, {"UPSTREAM_ENERGY_LOSS" : new_config_entry})
             args = update_args() # reload config to continue
+
+        #* toy parameters
+        can_run_tp = hasattr(args, "toy_parameters") and ("toy_parameters" not in os.listdir(args.out))
+        if can_run_tp or check_run(args, "toy_parameters"):
+            print("toy parameters")
+            cex_toy_parameters.main(args)
+            # special case where the main config is not updated, rather the results from this would be used in the toy configurations
+            #! make function to create the a toy configuration
+
+        #* analysis input
+        can_run_ai = not hasattr(args, "analysis_input")
+        if can_run_ai or check_run(args, "analysis_input"):
+            print("analysis inputs")
+            cex_analysis_input.main(args)
+
+            output_path = args.out + "analysis_input/"
+            print("outputs: " + output_path)
+            target_files = {
+            "mc_cheated" : "analysis_input_mc_cheated.dill",
+            "mc" : "analysis_input_mc_selected.dill",
+            "data" : "analysis_input_data_selected.dill"
+            }
+            new_config_entry = {}
+            files = os.listdir(output_path)
+            for k, v in target_files.items():
+                if v in files:
+                    new_config_entry[k] = os.path.abspath(output_path + v)
+            update_config(args.config, {"ANALYSIS_INPUTS" : new_config_entry})
+            args = update_args() # reload config to continue
+
+        # if all other prerequisites were met, this should run
+        if check_run(args, "analyse"):
+            print("analyse")
+            args.toy_template = None
+            args.all = False
+            args.pdsp = True # run with PDSP samples (no toys yet)
+            cex_analyse.main(args)
+
     return
 
 if __name__ == "__main__":
+
+    analysis_options = ["beam_quality", "beam_scraper", "selection", "photon_correction", "reweight", "upstream_correction", "toy_parameters", "analysis_input", "analyse"]
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-C", "--create_config", type = str, help = "Create a template configuration with the default selection")
     parser.add_argument("--shower_energy_correction", action = "store_true", help = "whether to run the shower energy correction")
     ApplicationArguments.Config(parser)
     ApplicationArguments.Output(parser, "analysis/")
+    parser.add_argument("--skip", type = str, nargs = "+", default = [], choices = analysis_options)
+    parser.add_argument("--run", type = str, nargs = "+", default = [], choices = analysis_options)
+    parser.add_argument("--force", action = "store_true")
+
     original_args = parser.parse_args()
     
     if (original_args.create_config is None) and (original_args.config is None):

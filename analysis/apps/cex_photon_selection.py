@@ -14,7 +14,7 @@ import awkward as ak
 import pandas as pd
 from rich import print
 
-from python.analysis import Master, Processing, cross_section, EventSelection, Tags
+from python.analysis import Master, Processing, cross_section, EventSelection, Tags, SelectionTools
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # hide pesky pandas warnings (performance is actually ok)
 
@@ -44,8 +44,9 @@ def run(i, file, n_events, start, selected_events, args):
     events = Master.Data(file, n_events, start, args["ntuple_type"])
 
     if "selection_masks" in args:
-        for m in args["selection_masks"]["mc"]["beam"].values():
-            events.Filter([m], [m])
+        mask = SelectionTools.CombineMasks(args["selection_masks"]["mc"]["beam"])
+        events.Filter([mask], [mask])
+
         events.Filter([args["selection_masks"]["mc"]["null_pfo"]["ValidPFOSelection"]])
         photon_mask = CreatePFOMasks(args["selection_masks"]["mc"]["photon"])
         events.Filter([photon_mask])

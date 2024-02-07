@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # Imports
 from python.analysis import Master, PFOSelection, BeamParticleSelection, SelectionTools, Tags
 import time

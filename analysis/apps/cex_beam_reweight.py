@@ -73,6 +73,7 @@ def SmearingFactors(sample, weights : np.array = None):
 @cross_section.timer
 def main(args : cross_section.argparse.Namespace):
     cross_section.SetPlotStyle(extend_colors = True, dpi = 100)
+    out = args.out + "beam_reweight/"
 
     invert = "HasFinalStatePFOsCut"
     sideband_selection = {}
@@ -85,8 +86,8 @@ def main(args : cross_section.argparse.Namespace):
                 masks[m] = sample["beam"][m]
         sideband_selection[k] = SelectionTools.CombineMasks(masks, "and")
     print({k : sum(v) for k, v in sideband_selection.items()})
-    os.makedirs(args.out, exist_ok = True)
-    os.makedirs(args.out + "plots/", exist_ok = True)
+    os.makedirs(out, exist_ok = True)
+    os.makedirs(out + "plots/", exist_ok = True)
 
     events = {"mc" : cross_section.Data(args.mc_file, nTuple_type = args.ntuple_type, target_momentum = args.pmom), "data" : cross_section.Data(args.data_file, nTuple_type = args.ntuple_type)}
 
@@ -99,15 +100,15 @@ def main(args : cross_section.argparse.Namespace):
     for s in events:
         sideband_sample[s] = events[s].Filter([sideband_selection[s]], [sideband_selection[s]], returnCopy = True)
 
-    with Plots.PlotBook(args.out + "plots/" + "reweight_fits.pdf", True) as book:
+    with Plots.PlotBook(out + "plots/" + "reweight_fits.pdf", True) as book:
         results = ReWeight(sideband_sample, args.beam_momentum, 20, np.array([0.75, 1.25]), book = book)
 
     for r in results:
-        with Plots.PlotBook(args.out + "plots/" + f"reweight_results_{r}.pdf", True) as book:
+        with Plots.PlotBook(out + "plots/" + f"reweight_results_{r}.pdf", True) as book:
             ReWeightResults(sideband_sample, args, 25, results, r, book = book)
             ReWeightResults(analysis_sample, args, 50, results, r, book = book)
             reweight_params = {f"p{i}" : {"value" : results[r][0][i], "error" : results[r][1][i]} for i in range(getattr(cross_section.Fitting, r).n_params)}
-            cross_section.SaveConfiguration(reweight_params, args.out + r + ".json")
+            cross_section.SaveConfiguration(reweight_params, out + r + ".json")
         Plots.plt.close("all")
     return
 
@@ -117,6 +118,5 @@ if __name__ == "__main__":
     cross_section.ApplicationArguments.Output(args)
 
     args = cross_section.ApplicationArguments.ResolveArgs(args.parse_args())
-    args.out = args.out + "beam_reweight/"
     print(vars(args))
     main(args)

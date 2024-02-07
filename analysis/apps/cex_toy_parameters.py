@@ -144,7 +144,7 @@ def PlotCorrelationMatrix(counts : np.array = None, true_labels = None, reco_lab
 
 
 @Master.timer
-def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : argparse.Namespace, labels : dict):
+def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : argparse.Namespace, labels : dict, out : str):
     """ Smearing study, fits functions to residuals of cross section quantities and saves the fit parameters of the best fit to file.
         (Best is double crystal ball).
 
@@ -158,20 +158,20 @@ def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : 
     for k, v in cross_section_quantities.items():
         selected_quantities[k] = {i : j[true_pion_mask] for i, j in v.items()}
 
-    os.makedirs(args.out + "smearing/", exist_ok = True)
+    os.makedirs(out + "smearing/", exist_ok = True)
     
     trial_functions = [cross_section.Fitting.gaussian, cross_section.Fitting.student_t, cross_section.Fitting.crystal_ball, cross_section.Fitting.double_crystal_ball]
 
     params = {}
-    with Plots.PlotBook(args.out + "smearing/smearing_study") as pdf:
+    with Plots.PlotBook(out + "smearing/smearing_study") as pdf:
         for k in labels:
             params[k] = ResolutionStudy(pdf, selected_quantities["reco"][k], selected_quantities["true"][k], selected_quantities["reco"][k] != 0, labels[k], args.toy_parameters["plot_ranges"][k], args.toy_parameters["smearing_residual_ranges"][k], trial_functions)
 
     for q in labels:
-        out = args.out + f"smearing/{q}/"
-        os.makedirs(out, exist_ok = True)
+        sout = out + f"smearing/{q}/"
+        os.makedirs(sout, exist_ok = True)
         for k in params[q]:
-            Master.SaveConfiguration(params[q][k], out + f"{k}.json")
+            Master.SaveConfiguration(params[q][k], sout + f"{k}.json")
     return
 
 @Master.timer
@@ -220,7 +220,7 @@ def Efficiency(selected_count : np.array, total_count : np.array) -> tuple[np.ar
     return p, error
 
 @Master.timer
-def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, args : argparse.Namespace, ranges : dict, labels : dict, bins : dict):
+def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, args : argparse.Namespace, ranges : dict, labels : dict, bins : dict, out : str):
     """ Study which looks at the beam selection efficiency as a function of each cross section quantity, then saves the per bin efficiencies to file to use for the toy simulation.
 
     Args:
@@ -246,8 +246,8 @@ def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, args :
 
     selected_counts_true = GetTotalPionCounts(selected_pion_inel_mask, selected_quantities, bins, ranges)
 
-    os.makedirs(args.out + "pi_beam_efficiency/", exist_ok = True)
-    pdf = Plots.PlotBook(args.out + "pi_beam_efficiency/efficiency_study")
+    os.makedirs(out + "pi_beam_efficiency/", exist_ok = True)
+    pdf = Plots.PlotBook(out + "pi_beam_efficiency/efficiency_study")
 
     x = {i : (bins[i][1:] + bins[i][:-1])/2 for i in initial_counts_true}
     e = {i : Efficiency(selected_counts_true[i], initial_counts_true[i]) for i in initial_counts_true}
@@ -263,11 +263,11 @@ def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, args :
         "error" : pd.DataFrame({i : e[i][1] for i in e})
     }
 
-    Master.DictToHDF5(selection_efficiency_info, args.out + "pi_beam_efficiency/beam_selection_efficiencies_true.hdf5")
+    Master.DictToHDF5(selection_efficiency_info, out + "pi_beam_efficiency/beam_selection_efficiencies_true.hdf5")
     return
 
 @Master.timer
-def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace):
+def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace, out : str):
     """ Study which computes a correlation matrix ofthe event faction for reco regions and true regions.
         Saved to file to be used in toy simulation.
 
@@ -277,8 +277,8 @@ def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace):
     """
     reco_regions, true_regions = RegionSelection(mc, args, True)
 
-    os.makedirs(args.out + "reco_regions/", exist_ok = True)
-    pdf = Plots.PlotBook(args.out + "reco_regions/reco_regions_study")
+    os.makedirs(out + "reco_regions/", exist_ok = True)
+    pdf = Plots.PlotBook(out + "reco_regions/reco_regions_study")
     counts = cross_section.Toy.ComputeCounts(true_regions, reco_regions)
     PlotCorrelationMatrix(counts, list(true_regions.keys()), list(reco_regions.keys()))
     pdf.Save()
@@ -287,11 +287,11 @@ def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace):
 
     fractions_df = counts / np.sum(counts, axis = 1)[:, np.newaxis]
     fractions_df = pd.DataFrame(np.array(fractions_df).T, columns = true_regions, index = reco_regions)# columns are the true regions, so index over those to get the fractions
-    fractions_df.to_hdf(args.out + "reco_regions/reco_region_fractions.hdf5", "df")
+    fractions_df.to_hdf(out + "reco_regions/reco_region_fractions.hdf5", "df")
     return
 
 @Master.timer
-def MeanTrackScoreKDE(mc : Master.Data, args : argparse.Namespace):
+def MeanTrackScoreKDE(mc : Master.Data, args : argparse.Namespace, out : str):
     """ Derives mean track score kernels from mc.
 
     Args:
@@ -317,8 +317,8 @@ def MeanTrackScoreKDE(mc : Master.Data, args : argparse.Namespace):
         kdes[k] = stats.gaussian_kde(mean_track_score[v])
         kdes[k].set_bandwidth(0.2)
 
-    os.makedirs(args.out + "meanTrackScoreKDE/", exist_ok = True)
-    with Plots.PlotBook(args.out + "meanTrackScoreKDE/plots.pdf", True) as book:
+    os.makedirs(out + "meanTrackScoreKDE/", exist_ok = True)
+    with Plots.PlotBook(out + "meanTrackScoreKDE/plots.pdf", True) as book:
         Plots.PlotTagged(mean_track_score, tags, 21, [0, 1], x_label = "mean track score", stacked = False, histtype = "step", norm = True)
         book.Save()
 
@@ -329,7 +329,7 @@ def MeanTrackScoreKDE(mc : Master.Data, args : argparse.Namespace):
             Plots.Plot(x, kdes[tag].evaluate(x), color = tags[tag].colour, label = cross_section.remove_(tag) + " KDE", newFigure = False)
         book.Save()
 
-    cross_section.SaveObject(args.out + "meanTrackScoreKDE/kdes.dill", kdes)
+    cross_section.SaveObject(out + "meanTrackScoreKDE/kdes.dill", kdes)
     return
 
 
@@ -361,7 +361,7 @@ def FitBeamProfile(KE_init : np.array, func : cross_section.Fitting.FitFunction,
         }
 
 @Master.timer
-def BeamProfileStudy(quantities : dict, args : argparse.Namespace, true_beam_mask : ak.Array, func : cross_section.Fitting.FitFunction, KE_range : list):
+def BeamProfileStudy(quantities : dict, args : argparse.Namespace, true_beam_mask : ak.Array, func : cross_section.Fitting.FitFunction, KE_range : list, out : str):
     """ Try to fit various fit functions to the MC beam profile.
 
     Args:
@@ -371,16 +371,17 @@ def BeamProfileStudy(quantities : dict, args : argparse.Namespace, true_beam_mas
         func (cross_section.Fitting.FitFunction): fit function to try.
         KE_range (list): kinetic energy range.
     """
-    out = args.out + "beam_profile/"
-    os.makedirs(out, exist_ok = True)
-    with Plots.PlotBook(out + "beam_profile.pdf") as book:
+    os.makedirs(out + "beam_profile/", exist_ok = True)
+    with Plots.PlotBook(out + "beam_profile/beam_profile.pdf") as book:
         beam_profile = FitBeamProfile(quantities["true"]["KE_init"][true_beam_mask], func, KE_range, 50, book)
-        Master.SaveConfiguration(beam_profile, out + "beam_profile.json")
+        Master.SaveConfiguration(beam_profile, out + "beam_profile/beam_profile.json")
     return
 
 @Master.timer
 def main(args : argparse.Namespace):
     cross_section.SetPlotStyle(True)
+    out = args.out + "toy_parameters/"
+
 
     bins = {r : np.linspace(min(args.toy_parameters["plot_ranges"][r]), max(args.toy_parameters["plot_ranges"][r]), 50) for r in args.toy_parameters["plot_ranges"]}
     labels = {
@@ -401,15 +402,15 @@ def main(args : argparse.Namespace):
     cross_section_quantities = ComputeQuantities(mc, args)
     print(cross_section_quantities)
 
-    BeamProfileStudy(cross_section_quantities, args, true_pion_mask, args.toy_parameters["beam_profile"], args.toy_parameters["plot_ranges"]["KE_init"])
+    BeamProfileStudy(cross_section_quantities, args, true_pion_mask, args.toy_parameters["beam_profile"], args.toy_parameters["plot_ranges"]["KE_init"], out)
 
-    Smearing(cross_section_quantities, true_pion_mask, args, labels)
+    Smearing(cross_section_quantities, true_pion_mask, args, labels, out)
 
-    BeamSelectionEfficiency(cross_section_quantities["true"], pion_inel_mask, args, args.toy_parameters["plot_ranges"], labels, bins)
+    BeamSelectionEfficiency(cross_section_quantities["true"], pion_inel_mask, args, args.toy_parameters["plot_ranges"], labels, bins, out)
 
-    RecoRegionSelection(mc, args)
+    RecoRegionSelection(mc, args, out)
 
-    MeanTrackScoreKDE(mc, args)
+    MeanTrackScoreKDE(mc, args, out)
     return
 
 if __name__ == "__main__":
@@ -420,7 +421,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     args = cross_section.ApplicationArguments.ResolveArgs(args)
-    args.out += "toy_parameters/"
 
     print(vars(args))
     main(args)
