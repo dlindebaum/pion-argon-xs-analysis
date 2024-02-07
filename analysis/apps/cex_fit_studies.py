@@ -8,12 +8,14 @@ Description: app which performs cross checks for the region fit using toys.
 """
 import os
 
+import itertools
 import numpy as np
 import pandas as pd
 
 from rich import print
 from scipy.interpolate import CubicSpline
 from scipy.stats import norm, lognorm
+from scipy.ndimage import gaussian_filter1d
 
 
 from python.analysis import cross_section, Plots
@@ -35,6 +37,17 @@ target_map = {
     "_dcex" : 'double_charge_exchange',
     "_pip" : 'pion_production'
 }
+
+folder = {
+    'absorption': "abs",
+    'quasielastic': "quasi",
+    'charge_exchange': "cex",
+    'double_charge_exchange': "dcex",
+    'pion_production': "pip"
+}
+
+process_map = {0 : "abs", 1 : "cex", 2 : "spip", 3 : "pip"}
+
 
 #? make these json configs?
 spline_point_index = {
@@ -79,7 +92,6 @@ def ModifiedConfigTest(config : dict, energy_slice : cross_section.Slices, model
     toy_alt_pdf = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.run(config)))
     
     obs = cross_section.RegionFit.GenerateObservations(toy_alt_pdf, energy_slice, mean_track_score_bins, model, False)
-    # fit_result = cross_section.RegionFit.Fit(obs, model, None, par_bounds = [(0, np.inf)]*model.config.npars)
     fit_result = cross_section.RegionFit.Fit(obs, model, None, verbose = False)
 
     true_process_counts = {}
@@ -92,14 +104,6 @@ def ModifiedConfigTest(config : dict, energy_slice : cross_section.Slices, model
 
 
 def NormalisationTest(directory : str, data_config : dict, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, energy_slice : cross_section.Slices, mean_track_score_bins : np.ndarray):
-    folder = {
-        'absorption': "abs",
-        'quasielastic': "quasi",
-        'charge_exchange': "cex",
-        'double_charge_exchange': "dcex",
-        'pion_production': "pip"
-    }
-
     for target in folder:
         print(target)
 
@@ -200,15 +204,17 @@ def CreateShapeParamsSpline(xs_sim, process, indices, shape_factors, plot : bool
     return splines
 
 
-def CountsFractionalError(results, true_counts, model):
+def CountsFractionalError(results, true_counts, model, bias = None):
     fe_err = []
     fe = []
+
+    mean_track_score = any([c["name"] == "mean_track_score" for c in model.spec["channels"]])
 
     for s in results:
         true_counts_arr = np.array(list(true_counts[s].values()))
         post_fit_pred = cross_section.cabinetry.model_utils.prediction(model, fit_results = results[s], label = "post-fit")
 
-        if any([c["name"] == "mean_track_score" for c in post_fit_pred.model.spec["channels"]]):
+        if mean_track_score:
             KE_int_prediction = cross_section.RegionFit.SliceModelPrediction(post_fit_pred, slice(-1), "KE_int_postfit") # exclude the channel which is the mean track score
         else:
             KE_int_prediction = cross_section.RegionFit.SliceModelPrediction(post_fit_pred, slice(0, len(post_fit_pred.model_yields)), "KE_int_postfit")
@@ -217,7 +223,14 @@ def CountsFractionalError(results, true_counts, model):
         fe_err.append(cross_section.nandiv(true_counts_pred_res_err, true_counts_arr))
 
         pred_counts = np.sum(np.array(KE_int_prediction.model_yields), 0)
-        fe.append(np.array([cross_section.nandiv(pred_counts[i] - v, v) for i, v in enumerate(true_counts_arr)]))
+
+
+        if bias is not None:
+            bias_counts = [bias[i] * v for i, v in enumerate(true_counts_arr)]
+        else:
+            bias_counts = np.zeros_like(true_counts_arr)
+
+        fe.append(np.array([cross_section.nandiv(pred_counts[i] - bias_counts[i] - v, v) for i, v in enumerate(true_counts_arr)]))
     fe_err = np.swapaxes(np.array(fe_err), 0, 1)
     fe = np.swapaxes(np.array(fe), 0, 1)
     return fe, fe_err
@@ -236,21 +249,55 @@ def CreateModPDFDict(KE : np.array, name : str, xs : np.array) -> dict[np.array]
     }
 
 
+def SmoothStep(x : np.ndarray, high : float, low : float, split : float, smooth_amount : float):
+    step = np.where(x >= split, high, low)
+    if smooth_amount == 0:
+        return step
+    else:
+        return gaussian_filter1d(step, smooth_amount)
+
+
+def ShapeTestNew(directory : str, data_config : dict, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, mean_track_score_bins : np.array, xs_sim : cross_section.GeantCrossSections, energy_slices : cross_section.Slices):
+    n = [0.8, 1, 1.2]
+    alpha = [500, 1000]
+    x0 = [500, 1000, 1500]
+    perms = []
+    for perm in itertools.product(n, n, alpha, x0):
+        if perm[0] == perm[1]:
+            continue
+        else:
+            perms.append(perm)
+
+
+    perms.append("null")
+
+    print(f"number of tests per process : {len(perms)=}")
+
+    for target in folder:
+        print(target)
+
+        results = {}
+        true_counts = {}
+        expected_mus = {}
+        for e, i in enumerate(perms):
+            print(f"process: {target} | iteration : {e} | params : {i}")
+            if i == "null":
+                config = data_config
+            else:
+                xs = getattr(xs_sim, target) * SmoothStep(xs_sim.KE, i[0], i[1], i[3], i[2])
+                config = CreateConfigShapeTest(data_config, CreateModPDFDict(xs_sim.KE, target, xs))
+            results[i], true_counts[i], expected_mus[i] = ModifiedConfigTest(config, energy_slices, model, toy_template, mean_track_score_bins)
+        cross_section.SaveObject(f"{directory}fit_results_{folder[target]}.dill", {"results" : results, "true_counts" : true_counts, "expected_mus" : expected_mus})
+    return
+
+
 def ShapeTest(directory, data_config, method, shape_param_factors, spline_shape_param_factors, xs_sim, model, toy_template, mean_track_score_bins, energy_slices):
-    folder = {
-        'absorption': "abs",
-        'quasielastic': "quasi",
-        'charge_exchange': "cex",
-        'double_charge_exchange': "dcex",
-        'pion_production': "pip"
-    }
     for target in folder:
         print(target)
         results = {}
         true_counts = {}
         expected_mus = {}
 
-        # with Plots.PlotBook(f"{directory}fit_results_{folder[target]}.pdf", False) as pdf:
         if method == "function":
             shape_params = CreateShapeParams(xs_sim, target, shape_param_factors[target][0], shape_param_factors[target][1])
         elif method == "spline":
@@ -258,8 +305,6 @@ def ShapeTest(directory, data_config, method, shape_param_factors, spline_shape_
         else:
             raise Exception(f"{method} not a valid type")
 
-        # pdf.Save()
-        # PlotHistShapeTest(target, data_config, shape_params, method, pdf)
         for i, p in enumerate(shape_params):
             print(f"shape: {i}")
             if i == 2:
@@ -271,14 +316,40 @@ def ShapeTest(directory, data_config, method, shape_param_factors, spline_shape_
             else:
                 raise Exception(f"{method} not a valid type")
             results[i], true_counts[i], expected_mus[i] = ModifiedConfigTest(config, energy_slices, model, toy_template, mean_track_score_bins)
-            # print(config)
-            # clear_output()
-            # print(target)
 
         cross_section.SaveObject(f"{directory}fit_results_{folder[target]}.dill", {"results" : results, "true_counts" : true_counts, "expected_mus" : expected_mus}) # keep results for future reference
-        # PlotCrossCheckResults(f"{target} shape", model, toy_template, results, true_counts, energy_overflow, pdf)
         Plots.plt.close("all")
     return
+
+
+def PullStudy(template : cross_section.AnalysisInput, model : cross_section.pyhf.Model, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, data_config : dict, n : int) -> dict:
+    out = {"expected" : None, "scale" : pd.Series(len(template) / data_config["events"]), "bestfit" : None, "uncertainty" : None}
+
+    cfg = {k : v for k, v in data_config.items()}
+    cfg["seed"] = None # ensure we generate random toys
+
+    template_fractions = {s : (sum(template.exclusive_process[s]) / len(template)) for s in template.exclusive_process}
+
+    expected = []
+    bestfit = []
+    uncertainty = []
+
+    for i in range(n):
+        toy_alt_pdf = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.run(cfg)))
+
+        expected.append({s : (sum(toy_alt_pdf.exclusive_process[s]) / len(toy_alt_pdf.exclusive_process[s])) / template_fractions[s] for s in toy_alt_pdf.exclusive_process})
+
+        # init_params = list(np.random.uniform(0, 101, 4))
+
+        result = cross_section.RegionFit.Fit(cross_section.RegionFit.GenerateObservations(toy_alt_pdf, energy_slices, mean_track_score_bins, model), model, None, [(0, np.inf)]*4, False)
+
+        bestfit.append({list(toy_alt_pdf.exclusive_process.keys())[j] : result.bestfit[j] for j in range(len(template.exclusive_process))})
+        uncertainty.append({list(toy_alt_pdf.exclusive_process.keys())[j] : result.uncertainty[j] for j in range(len(template.exclusive_process))})
+
+    out["expected"] = pd.DataFrame(expected)
+    out["bestfit"] = pd.DataFrame(bestfit)
+    out["uncertainty"] = pd.DataFrame(uncertainty)
+    return out
 
 
 def PlotHistShapeTest(target, data_config : dict, shape_params : dict, type : str, xs_sim : cross_section.GeantCrossSections, energy_overflow, energy_slice, book : Plots.PlotBook = Plots.PlotBook.null):
@@ -334,42 +405,50 @@ def PlotHistShapeTest(target, data_config : dict, shape_params : dict, type : st
     return
 
 
-def PullStudy(template : cross_section.AnalysisInput, model : cross_section.pyhf.Model, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, data_config : dict, n : int) -> dict:
-    out = {"expected" : None, "scale" : pd.Series(len(template) / data_config["events"]), "bestfit" : None, "uncertainty" : None}
+def PlotShapeExamples(energy_slices : cross_section.Slices, book : Plots.PlotBook = Plots.PlotBook.null):
+    norms = [0.8, 1.2]
+    split = 1000
+    smooth_amount = 500
+    xs_sim = cross_section.GeantCrossSections(energy_range = [0, energy_slices.max_pos + energy_slices.width])
 
-    cfg = {k : v for k, v in data_config.items()}
-    cfg["seed"] = None # ensure we generate random toys
+    def plot_curves(curves : dict, geant : bool, label : str, ylabel : str):
+        Plots.plt.figure()
+        for k, v in curves.items():
+            Plots.Plot(xs_sim.KE, v, "KE (MeV)", ylabel = ylabel, label = f"{label} : {k}", newFigure = False)
+        if geant:
+            xs_sim.Plot(proc, label = "Geant 4", color = "k")
+            Plots.plt.fill_between(xs_sim.KE, norms[0] * y, norms[1] * y, color = "k", alpha = 0.5)
+        return
 
-    template_fractions = {s : (sum(template.exclusive_process[s]) / len(template)) for s in template.exclusive_process}
+    plot_curves({i : SmoothStep(xs_sim.KE, norms[1], norms[0], split, i) for i in [0, 100, 250, 500, 1000]}, False, "smooth step", "normalisation function")
+    book.Save()
 
-    expected = []
-    bestfit = []
-    uncertainty = []
+    for proc in list(folder.keys()):
+        y = getattr(xs_sim, proc)
 
-    for i in range(n):
-        toy_alt_pdf = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.run(cfg)))
+        plot_curves({i : y * SmoothStep(xs_sim.KE, norms[1], norms[0], split, i) for i in [0, 100, 250, 500, 1000]}, True, "smooth step", "")
+        book.Save()
 
-        expected.append({s : (sum(toy_alt_pdf.exclusive_process[s]) / len(toy_alt_pdf.exclusive_process[s])) / template_fractions[s] for s in toy_alt_pdf.exclusive_process})
+        plot_curves({i : y * SmoothStep(xs_sim.KE, norms[1], norms[0], i, smooth_amount) for i in [100, 500, 1000, 1500, 1900]}, True, "split", "")
+        book.Save()
 
-        # init_params = list(np.random.uniform(0, 101, 4))
-
-        result = cross_section.RegionFit.Fit(cross_section.RegionFit.GenerateObservations(toy_alt_pdf, energy_slices, mean_track_score_bins, model), model, None, [(0, np.inf)]*4, False)
-
-        bestfit.append({list(toy_alt_pdf.exclusive_process.keys())[j] : result.bestfit[j] for j in range(len(template.exclusive_process))})
-        uncertainty.append({list(toy_alt_pdf.exclusive_process.keys())[j] : result.uncertainty[j] for j in range(len(template.exclusive_process))})
-
-    out["expected"] = pd.DataFrame(expected)
-    out["bestfit"] = pd.DataFrame(bestfit)
-    out["uncertainty"] = pd.DataFrame(uncertainty)
-    return out
+        Plots.plt.figure()
+        for i, j in itertools.combinations([0.8, 1, 1.2], 2):
+            smooth_factors = SmoothStep(xs_sim.KE, j, i, split, smooth_amount)
+            Plots.Plot(xs_sim.KE, y*smooth_factors, label = f"$n_{{-}} = {i}, n_{{+}} = {j},$", newFigure = False)
+            Plots.Plot(xs_sim.KE, y*(smooth_factors[::-1]), label = f"$n_{{-}} = {j}, n_{{+}} = {i},$", newFigure = False)
+        xs_sim.Plot(proc, label = "nominal", color = "k")
+        Plots.plt.fill_between(xs_sim.KE, norms[0] * y, norms[1] * y, color = "k", alpha = 0.5)
+        book.Save()
+    return
 
 
-def PlotCrossCheckResults(xlabel, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, results, true_counts, energy_overflow : np.ndarray, pdf : Plots.PlotBook = Plots.PlotBook.null):
+def PlotCrossCheckResults(xlabel, model : cross_section.pyhf.Model, template_counts : int, results, true_counts, energy_overflow : np.ndarray, pdf : Plots.PlotBook = Plots.PlotBook.null, pulls = None):
     true_counts_all = {}
     for t in true_counts:
         true_counts_all[t] = {k : np.sum(v) for k, v in true_counts[t].items()}
 
-    scale_factors = {k : sum(true_counts_all[k].values()) / sum(toy_template.inclusive_process) for k in true_counts_all}
+    scale_factors = {k : sum(true_counts_all[k].values()) / template_counts for k in true_counts_all}
     x = list(range(len(results)))
 
     mu = []
@@ -381,6 +460,11 @@ def PlotCrossCheckResults(xlabel, model : cross_section.pyhf.Model, toy_template
     mu_err = np.array(mu_err)
 
     process_map = {0 : "abs", 1 : "cex", 2 : "spip", 3 : "pip"}
+
+    if pulls:
+        bias = np.mean((pulls["bestfit"] * pulls["scale"][0]) - pulls["expected"], 0)
+    else:
+        bias = None
 
     # Plot the fit value for each scale factor 
     Plots.plt.figure()
@@ -397,7 +481,7 @@ def PlotCrossCheckResults(xlabel, model : cross_section.pyhf.Model, toy_template
     pdf.Save()
 
     true_counts_all = pd.DataFrame(true_counts_all)
-    fe, fe_err = CountsFractionalError(results, true_counts, model)
+    fe, fe_err = CountsFractionalError(results, true_counts, model, bias)
     tc_arr = np.swapaxes(np.array([np.array(list(v.values())) for v in true_counts.values()]), 0, 1)
     fractional_error = np.nansum(fe * tc_arr, 2) / np.sum(tc_arr, 2)
     fractional_error_unc = cross_section.nanquadsum(fe_err * tc_arr, 2) / np.sum(tc_arr, 2)
@@ -465,6 +549,141 @@ def PlotCrossCheckResults(xlabel, model : cross_section.pyhf.Model, toy_template
         Plots.plt.title(f"$N_{{{process_map[i]}}}$")
         Plots.plt.legend(title = xlabel)
     pdf.Save()
+    return
+
+
+def ProcessResults(template_counts : int, results, true_counts, model):
+    true_counts_all = {}
+    for t in true_counts:
+        true_counts_all[t] = {k : np.sum(v) for k, v in true_counts[t].items()}
+
+    scale_factors = {k : sum(true_counts_all[k].values()) / template_counts for k in true_counts_all}
+
+    mu = {}
+    mu_err = {}
+    for k in results:
+        mu[k] = (results[k].bestfit[0:4] / scale_factors[k])
+        mu_err[k] = (results[k].uncertainty[0:4] / scale_factors[k])
+    mu = mu
+    mu_err = mu_err
+
+    true_counts_all = pd.DataFrame(true_counts_all)
+    fe, fe_err = CountsFractionalError(results, true_counts, model)
+    tc_arr = np.swapaxes(np.array([np.array(list(v.values())) for v in true_counts.values()]), 0, 1)
+    fractional_error = np.nansum(fe * tc_arr, 2) / np.sum(tc_arr, 2)
+    fractional_error_unc = cross_section.nanquadsum(fe_err * tc_arr, 2) / np.sum(tc_arr, 2)
+
+    data = pd.concat([
+        pd.DataFrame(scale_factors, index = ['scale_factors']),
+        pd.DataFrame(mu, index = [f"mu_{i}" for i in range(4)]),
+        pd.DataFrame(mu_err, index = [f"mu_err_{i}" for i in range(4)]),
+        pd.DataFrame(fractional_error, index = [f"fractional_error_{i}" for i in range(4)], columns = list(scale_factors.keys()))
+        ])
+    return data.T
+
+
+def ProcessResultsEnergy(results, true_counts, model):
+    true_counts_all = {}
+    for t in true_counts:
+        true_counts_all[t] = {k : np.sum(v) for k, v in true_counts[t].items()}
+
+    true_counts_all = pd.DataFrame(true_counts_all)
+    fe, fe_err = CountsFractionalError(results, true_counts, model)
+    return list(true_counts.keys()), fe, fe_err
+
+
+def PlotDataShapeTestEnergy(data : tuple, energy_overflow : np.ndarray, book : Plots.PlotBook.null):
+
+    def remove_zero(a):
+        return a[a != 0]
+
+    for d in range(data[1].shape[0]):
+        y = data[1][d] # second index is process
+        y_err = data[2][d]
+        x = data[0]
+        for i, j in enumerate(x):
+            if j == "null":
+                x[i] = (1, 1, 0, 0)
+
+        x = np.array(x)
+        unique_values = [np.unique(x[:, i]) for i in range(x.shape[1])]
+        Plots.plt.subplots(len(remove_zero(unique_values[2])), len(remove_zero(unique_values[3])), figsize = [4.8 * len(remove_zero(unique_values[3])), 4.8 * len(remove_zero(unique_values[2]))], sharex = True, sharey = True)
+        for p, ((ia, a), (ib, b)) in enumerate(itertools.product(enumerate(remove_zero(unique_values[2])), enumerate(remove_zero(unique_values[3])))):
+            Plots.plt.subplot(len(remove_zero(unique_values[2])), len(remove_zero(unique_values[3])), p+1)
+            
+            for i, j in enumerate(x):
+                if (j[2] == a) and (j[3] == b):
+                    Plots.Plot(energy_overflow, y[i], yerr = y_err[i], label = f"{x[i][0]}, {x[i][1]}", newFigure = False)
+            Plots.plt.fill_between(energy_overflow, 0, linestyle = "--", color = "k")
+
+            if ia == len(remove_zero(unique_values[2])) - 1:
+                Plots.plt.xlabel("$N_{int}$(MeV)" + f"\n\n $x0$ : {b}")
+            if ib == 0:
+                Plots.plt.ylabel(f"$\\alpha$ : {a}\n\n" + "fractional error")
+        Plots.plt.suptitle(f"$N_{{{process_map[d]}}}$", size = 20)
+        Plots.plt.tight_layout()
+        book.Save()
+    return
+
+
+def PlotDataShapeTest(data, key, label, vmin = None, vmax = None):
+    def remove_zero(a):
+        return a[a != 0]
+
+    y = data[key]
+    if vmin is None: vmin = min(y)
+    if vmax is None: vmax = max(y)
+    x = list(data.index)
+    for i, j in enumerate(x):
+        if j == "null":
+            x[i] = (1, 1, 0, 0)
+
+    x = np.array(x)
+    unique_values = [np.unique(x[:, i]) for i in range(x.shape[1])]
+    grid = np.meshgrid(unique_values[0], unique_values[1]) #* 0 = high, 1 = low
+
+    fig, axes = Plots.plt.subplots(len(remove_zero(unique_values[2])), len(remove_zero(unique_values[3])), figsize = [4.8 * len(remove_zero(unique_values[3])), 4.8 * len(remove_zero(unique_values[2]))], sharex = True, sharey = True)
+
+    for p, ((ia, a), (ib, b)) in enumerate(itertools.product(enumerate(remove_zero(unique_values[2])), enumerate(remove_zero(unique_values[3])))):
+        Plots.plt.subplot(len(remove_zero(unique_values[2])), len(remove_zero(unique_values[3])), p+1)
+        im = np.zeros(grid[0].shape)
+        for i, j in zip(x, y):
+            if i[2] not in [0, a] : continue
+            if i[3] not in [0, b] : continue
+            loc = np.argwhere((grid[0] == i[0]) & (grid[1] == i[1]))[0]
+            im[loc[0], loc[1]] = j
+
+        im = Plots.plt.imshow(np.where(im == 0, np.nan, im), cmap = "plasma", vmin = vmin, vmax = vmax)
+
+        Plots.plt.grid(False)
+        if ia == len(remove_zero(unique_values[2])) - 1:
+            Plots.plt.xlabel("$n_{-}$" + f"\n\n $x0$ : {b}")
+        if ib == 0:
+            Plots.plt.ylabel(f"$\\alpha$ : {a}\n\n" + "$n_{+}$")
+
+
+        Plots.plt.yticks(ticks = range(len(unique_values[0])), labels = unique_values[0])
+        Plots.plt.xticks(ticks = range(len(unique_values[1])), labels = unique_values[1])
+
+    Plots.plt.subplots_adjust(wspace = 0, hspace = 0)
+    cbar_ax = fig.add_axes([1, 0.15, 0.05, 0.7])
+    fig.suptitle(label, size = 20)
+    fig.colorbar(im, label = label, cax = cbar_ax)
+    fig.tight_layout()
+
+
+def PlotCrossCheckResultsShape(results : dict, template_counts : int, model : cross_section.pyhf.Model, energy_overflow : np.ndarray, book : Plots.PlotBook.null):
+
+    processed_data = ProcessResults(template_counts, results["results"], results["true_counts"], model)
+
+    processed_data_energy = ProcessResultsEnergy(results["results"], results["true_counts"], model)
+
+    for p in process_map:
+        PlotDataShapeTest(processed_data, f"mu_{p}", f"$\mu_{{{process_map[p]}}}$")
+        book.Save()
+
+    PlotDataShapeTestEnergy(processed_data_energy, energy_overflow, book)
+
     return
 
 
@@ -769,6 +988,9 @@ def main(args : cross_section.argparse.Namespace):
         print("Running tests")
 
         for m in models:
+
+            ts_bins = mean_track_score_bins if m == "track_score" else None
+
             if "normalisation" not in args.skip:
                 os.makedirs(args.out + f"normalisation_test_{m}/", exist_ok = True)
                 NormalisationTest(
@@ -776,23 +998,34 @@ def main(args : cross_section.argparse.Namespace):
                     args.toy_data_config, models[m],
                     args.template,
                     args.energy_slices,
-                    mean_track_score_bins if m == "track_score" else None)
+                    ts_bins)
 
             if "shape" not in args.skip:
                 xs_sim = cross_section.GeantCrossSections(energy_range = [0, max(args.energy_slices.pos) + args.energy_slices.width])
 
                 os.makedirs(args.out + f"shape_test_{m}/", exist_ok = True)
-                ShapeTest(
-                    args.out + f"shape_test_{m}/",
-                    args.toy_data_config,
-                    args.shape_gen,
-                    shape_param_factors,
-                    spline_shape_param_factors, 
-                    xs_sim,
-                    models[m],
-                    args.template,
-                    mean_track_score_bins if m == "track_score" else None,
-                    args.energy_slices)
+                if args.shape_gen == "step":
+                    ShapeTestNew(
+                        args.out + f"shape_test_{m}/",
+                        args.toy_data_config,
+                        models[m],
+                        args.template,
+                        ts_bins,
+                        xs_sim,
+                        args.energy_slices)
+                else:
+                    #! maybe keep in case step method doesn't work
+                    ShapeTest(
+                        args.out + f"shape_test_{m}/",
+                        args.toy_data_config,
+                        args.shape_gen,
+                        shape_param_factors,
+                        spline_shape_param_factors, 
+                        xs_sim,
+                        models[m],
+                        args.template,
+                        ts_bins,
+                        args.energy_slices)
             if "pulls" not in args.skip:
                 pull_results = PullStudy(args.template, models[m], args.energy_slices, mean_track_score_bins if m == "track_score" else None, args.toy_data_config, 100)
                 os.makedirs(args.out + f"pull_test_{m}/", exist_ok = True)
@@ -802,15 +1035,21 @@ def main(args : cross_section.argparse.Namespace):
     if args.workdir:
         print("Making test results")
 
-        with Plots.PlotBook(args.out + "templates") as book:
+        with Plots.PlotBook(args.workdir + "templates") as book:
             PlotTemplates(templates_energy, tempalates_mean_track_score, args.energy_slices, mean_track_score_bins, args.template, book)
 
-        with Plots.PlotBook(args.out + "observation_exmaple") as book:
+        with Plots.PlotBook(args.workdir + "observation_exmaple") as book:
             PlotTotalChannel(templates_energy, tempalates_mean_track_score, args.energy_slices, mean_track_score_bins, book)
+
+        with Plots.PlotBook(args.workdir + "xs_curves") as book:
+            PlotShapeExamples(args.energy_slices, book)
 
         label_map = {"absorption" : "abs", "charge_exchange" : "cex", "single_pion_production" : "spip", "pion_production" : "pip"}
 
         test = ["shape", "normalisation", "pulls"] 
+
+        template_counts = sum(args.template.inclusive_process)
+
         for t in test:
             if t in args.skip: continue
             for m in models:
@@ -837,7 +1076,10 @@ def main(args : cross_section.argparse.Namespace):
                         fit_result = cross_section.LoadObject(directory+f)
                         target = [target_map[k] for k in target_map if k in f][0]
                         with Plots.PlotBook(directory+f.split(".")[0]+".pdf", True) as pdf:
-                            PlotCrossCheckResults(f"{target} {t}", models[m], args.template, fit_result["results"], fit_result["true_counts"], args.energy_slices.pos_overflow, pdf)
+                            if (t == "shape") and (args.shape_gen == "step"):
+                                PlotCrossCheckResultsShape(fit_result, template_counts, models[m], args.energy_slices.pos_overflow, pdf)
+                            else:
+                                PlotCrossCheckResults(f"{target} {t}", models[m], template_counts, fit_result["results"], fit_result["true_counts"], args.energy_slices.pos_overflow, pdf)
                         Plots.plt.close("all")
                 
                     with Plots.PlotBook(f"{directory}background_sub_fractional_err.pdf", True) as book:
@@ -860,7 +1102,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--toy_data_config", "-d", dest = "toy_data_config", type = str, help = "json config for toy data", required = False)
 
-    parser.add_argument("--shape_gen", "-g", dest = "shape_gen", type = str, choices = ["spline", "function"], help = "method used to generate different cross section shapes for shape test", required = True)
+    parser.add_argument("--shape_gen", "-g", dest = "shape_gen", type = str, choices = ["spline", "function", "step"], help = "method used to generate different cross section shapes for shape test", required = True)
 
     parser.add_argument("--workdir", "-w", dest = "workdir", type = str, help = "work directory which contains output from this application, use this to remake plots without running all the tests again", required = False)
     parser.add_argument("--signal_process", dest = "signal_process", type = str, help = "signal process for background subtraction")
