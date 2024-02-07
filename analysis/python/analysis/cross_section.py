@@ -1519,7 +1519,7 @@ class RegionFit:
             }
             if mc_stat_unc == True:
                 for i in range(len(samples)):
-                    ch["samples"][i]["modifiers"].append({"name" : f"{channel_name}_stat_err", "type" : "staterror", "data" : (quadsum(np.sqrt(samples)/samples, 0)).tolist()})
+                    ch["samples"][i]["modifiers"].append({"name" : f"{channel_name}_stat_err", "type" : "staterror", "data" : (quadsum(np.sqrt(samples), 0)).astype(int).tolist()})
                 #     ch["samples"][i]["modifiers"].append({'name': f"{channel_name}_sample_{i}_pois_err", 'type': 'shapesys', 'data': np.sqrt(samples[i]).astype(int).tolist()})
             return ch
 
@@ -1553,7 +1553,7 @@ class RegionFit:
     def Fit(observations, model : pyhf.Model, init_params : list[float] = None, par_bounds : list[tuple] = None, verbose : bool = True) -> FitResults:
         pyhf.set_backend(backend = "numpy", custom_optimizer = "minuit")
         if verbose is True: print(f"{init_params=}")
-        result = cabinetry.fit.fit(model, observations, init_pars = init_params, custom_fit = True, tolerance = 0.001, par_bounds = par_bounds)
+        result = cabinetry.fit.fit(model, observations, init_pars = init_params, custom_fit = True, tolerance = 1E-3, par_bounds = par_bounds)
 
         poi_ind = [model.config.par_slice(i).start for i in model.config.par_names if "mu" in i]
         if verbose is True: print(f"{poi_ind=}")
@@ -1771,7 +1771,7 @@ class Unfold:
         return resp
 
     @staticmethod
-    def Unfold(observed : dict[np.array], observed_err : dict[np.array], response_matrices : dict[np.array], priors : dict[np.array] = None, ts_stop = 0.01, max_iter = 100, ts = "ks", regularizers : dict[UnivariateSpline] = None, verbose : bool = False, efficiencies : dict[np.array] = None) -> dict[dict]:
+    def Unfold(observed : dict[np.array], observed_err : dict[np.array], response_matrices : dict[np.array], priors : dict[np.array] = None, ts_stop = 0.01, max_iter = 100, ts = "ks", regularizers : dict[UnivariateSpline] = None, verbose : bool = False, efficiencies : dict[np.array] = None, covariance : str = "multinomial") -> dict[dict]:
         """ Run iterative bayesian unfolding for each histogram.
 
         Args:
@@ -1805,15 +1805,15 @@ class Unfold:
                 efficiency = efficiencies[k][0]
                 efficiency_err = efficiencies[k][1]
             else:
-                efficiency = np.ones_like(n) #! for the toy, assume perfect selection efficiency, so 1 +- 0
-                efficiency_err = np.zeros_like(n) #? not exactly zero, make this very small so the systematic uncertainty from the response matrix can still be calculated?
+                efficiency = np.ones_like(n, dtype = float) #! for the toy, assume perfect selection efficiency, so 1 +- 0
+                efficiency_err = np.zeros_like(n, dtype = float) #? not exactly zero, make this very small so the systematic uncertainty from the response matrix can still be calculated?
 
             if priors is None:
                 p = n/sum(n)
             else:
                 p = priors[k] / sum(priors[k])
 
-            results[k] = iterative_unfold(n, n_e, v[0], v[1], efficiency, efficiency_err, callbacks = cb, prior = p, ts_stopping = ts_stop, max_iter = max_iter, ts = ts)
+            results[k] = iterative_unfold(n, n_e, v[0], v[1], efficiency, efficiency_err, callbacks = cb, prior = p, ts_stopping = ts_stop, max_iter = max_iter, ts = ts, cov_type = covariance)
         return results
 
     @staticmethod

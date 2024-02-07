@@ -310,6 +310,7 @@ def MeanTrackScoreKDE(mc : Master.Data, args : argparse.Namespace):
     mean_track_score = ak.fill_none(ak.mean(mc_copy.recoParticles.track_score, axis = -1), -0.05)
 
     true_processes = cross_section.EventSelection.create_regions_new(mc_copy.trueParticles.nPi0, mc_copy.trueParticles.nPiPlus + mc_copy.trueParticles.nPiMinus)
+    tags = Tags.ExclusiveProcessTags(true_processes)
 
     kdes = {}
     for k, v in true_processes.items():
@@ -317,6 +318,17 @@ def MeanTrackScoreKDE(mc : Master.Data, args : argparse.Namespace):
         kdes[k].set_bandwidth(0.2)
 
     os.makedirs(args.out + "meanTrackScoreKDE/", exist_ok = True)
+    with Plots.PlotBook(args.out + "meanTrackScoreKDE/plots.pdf", True) as book:
+        Plots.PlotTagged(mean_track_score, tags, 21, [0, 1], x_label = "mean track score", stacked = False, histtype = "step", norm = True)
+        book.Save()
+
+        x = np.linspace(0, 1, 1000)
+
+        Plots.PlotTagged(mean_track_score, tags, 21, [0, 1], x_label = "mean track score", stacked = False, histtype = "step", norm = True)
+        for tag in tags:
+            Plots.Plot(x, kdes[tag].evaluate(x), color = tags[tag].colour, label = cross_section.remove_(tag) + " KDE", newFigure = False)
+        book.Save()
+
     cross_section.SaveObject(args.out + "meanTrackScoreKDE/kdes.dill", kdes)
     return
 
@@ -339,7 +351,7 @@ def FitBeamProfile(KE_init : np.array, func : cross_section.Fitting.FitFunction,
 
     Plots.plt.figure()
     print(f"{book.open=}")
-    params = cross_section.Fitting.Fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = book.is_open, plot_style = "hist", xlabel = "$KE^{true}_{ff}$ (MeV)")[0]
+    params = cross_section.Fitting.Fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = book.is_open, plot_style = "hist", xlabel = "$KE^{true}_{init}$ (MeV)")[0]
     book.Save()
     return {
         "function" : func.__name__,
@@ -372,7 +384,7 @@ def main(args : argparse.Namespace):
 
     bins = {r : np.linspace(min(args.toy_parameters["plot_ranges"][r]), max(args.toy_parameters["plot_ranges"][r]), 50) for r in args.toy_parameters["plot_ranges"]}
     labels = {
-        "KE_init" : "$KE^{res, MC}_{ff}$ (MeV)",
+        "KE_init" : "$KE^{res, MC}_{init}$ (MeV)",
         "KE_int" : "$KE^{res, MC}_{int}$ (MeV)",
         "z_int" : "$l^{res, MC}$ (cm)"
     }

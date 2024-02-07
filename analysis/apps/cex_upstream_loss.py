@@ -96,7 +96,7 @@ def main(args : argparse.Namespace):
         pdf.savefig()
 
         Plots.plt.figure()
-        params = cross_section.Fitting.Fit(x, cv[0], cv[1], cross_section.Fitting.poly2d, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$(MeV)", ylabel = "$\mu(KE^{reco}_{inst} - KE^{true}_{ff})$(MeV)")
+        params = cross_section.Fitting.Fit(x, cv[0], cv[1], cross_section.Fitting.poly2d, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$(MeV)", ylabel = "$\mu(KE^{reco}_{inst} - KE^{true}_{init})$(MeV)")
         pdf.savefig()
 
         params_dict = {
@@ -106,7 +106,7 @@ def main(args : argparse.Namespace):
 
         reco_KE_ff =  reco_KE_inst - cross_section.UpstreamEnergyLoss(reco_KE_inst, params_dict["value"])
 
-        Plots.PlotHistComparison([reco_KE_ff, mc.trueParticles.beam_KE_front_face], labels = ["$KE^{reco}_{ff}$", "$KE^{true}_{ff}$"], x_range = [bins[0], bins[-1]], xlabel = "Kinetic energy (MeV)", weights = [mc_weights, mc_weights])
+        Plots.PlotHistComparison([reco_KE_ff, mc.trueParticles.beam_KE_front_face], labels = ["$KE^{reco}_{init}$", "$KE^{true}_{init}$"], x_range = [bins[0], bins[-1]], xlabel = "Kinetic energy (MeV)", weights = [mc_weights, mc_weights])
         pdf.savefig()
 
     print(f"fitted parameters : {params_dict}")

@@ -59,15 +59,15 @@ def LoadObject(file : str):
     return obj
 
 
-def SaveObject(file : str, masks : dict):
-    """ Saves Masks from selection to file. If not specified it will be left as None.
+def SaveObject(file : str, obj : dict):
+    """ Saves object to file.
 
     Args:
-        file (str): _description_
-        beam_selection_mask (dict): dictionary of masks
+        file (str): file name
+        obj (dict): object to save
     """
     with open(file, "wb") as f:
-        dill.dump(masks, f)
+        dill.dump(obj, f)
 
 
 def LoadConfiguration(file : str) -> dict:
