@@ -4,7 +4,7 @@ Created on: 13/11/2023 21:54
 
 Author: Shyam Bhuller
 
-Description: Runs cross section measurement
+Description: Runs cross section measurement.
 """
 import os
 
@@ -42,7 +42,7 @@ def CreateInitParams(model : cross_section.pyhf.Model, analysis_input : cross_se
     return init
 
 
-def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_section.Slices, mean_track_score_bins : np.array, template_input : cross_section.AnalysisInput | cross_section.pyhf.Model, suggest_init : bool = False, template_weights : np.array = None, return_fit_results : bool = False) -> cross_section.cabinetry.model_utils.ModelPrediction | cross_section.FitResults:
+def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_section.Slices, mean_track_score_bins : np.array, template_input : cross_section.AnalysisInput | cross_section.pyhf.Model, suggest_init : bool = False, template_weights : np.array = None, return_fit_results : bool = False, mc_stat_unc : bool = False) -> cross_section.cabinetry.model_utils.ModelPrediction | cross_section.FitResults:
     """ Fit model to analysis input to predict the normalaisations of each process.
 
     Args:
@@ -58,7 +58,7 @@ def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_sect
         cross_section.cabinetry.model_utils.ModelPrediction | cross_section.FitResults: model prediction and or the raw fit result.
     """
     if type(template_input) == cross_section.AnalysisInput:
-        model = cross_section.RegionFit.CreateModel(template_input, energy_slice, mean_track_score_bins, False, template_weights, False, True)
+        model = cross_section.RegionFit.CreateModel(template_input, energy_slice, mean_track_score_bins, False, template_weights, mc_stat_unc, True)
     else:
         model = template_input
 
@@ -70,6 +70,7 @@ def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_sect
         init_params = None
 
     result = cross_section.RegionFit.Fit(observed, model, init_params, [[0, np.inf]]*model.config.npars, verbose = False)
+    # result = cross_section.RegionFit.Fit(observed, model, init_params, verbose = False)
     if return_fit_results is True:
         return cross_section.cabinetry.model_utils.prediction(model, fit_results = result), result
     else:
@@ -165,24 +166,43 @@ def SelectionEfficiency(true_hists_selected, true_hists):
     return {k : cex_toy_parameters.Efficiency(true_hists_selected[k], true_hists[k]) for k in true_hists}
 
 
+def EfficiencyErrStat(eff, err, val, val_eff, norm, true):
+    eff_err = np.where(eff[0] == 0,
+        np.sqrt(norm * true),
+        val_eff * np.sqrt(cross_section.nandiv(err, val)**2) #+ cross_section.nandiv(eff[1], eff[0])**2
+        )
+    return np.nan_to_num(eff_err)
+
+
+def EfficiencyErrSys(eff, err, val, val_eff, norm, true):
+    eff_err = np.where(eff[0] == 0,
+        0,
+        val_eff * np.sqrt(cross_section.nandiv(err, val)**2) #+ cross_section.nandiv(eff[1], eff[0])**2
+        )
+    return np.nan_to_num(eff_err)
+
+
 def ApplyEfficiency(energy_bins, efficiencies, unfolding_result, true, norm : float = 1, book : Plots.PlotBook = Plots.PlotBook.null):
+    labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$", "inc" : "$N_{inc}$"}
     hist_unfolded_efficiency_corrected = {}
 
     for k in unfolding_result:
         unfolded_eff = np.where(efficiencies[k][0] == 0, norm * true[k], cross_section.nandiv(unfolding_result[k]["unfolded"], efficiencies[k][0]))
-        unfolded_eff_err = np.where(efficiencies[k][0] == 0, np.sqrt(norm * true[k]), unfolded_eff * np.sqrt(cross_section.nandiv(unfolding_result[k]["stat_err"], unfolding_result[k]["unfolded"])**2 + cross_section.nandiv(efficiencies[k][1], efficiencies[k][0])**2))
-        unfolded_eff_err = np.nan_to_num(unfolded_eff_err)
-        hist_unfolded_efficiency_corrected[k] = {"unfolded" : unfolded_eff, "stat_err" : unfolded_eff_err}
+
+        unfolded_eff_err_stat = EfficiencyErrStat(efficiencies[k], unfolding_result[k]["stat_err"], unfolding_result[k]["unfolded"], unfolded_eff, norm, true[k])
+        unfolded_eff_err_sys = EfficiencyErrSys(efficiencies[k], unfolding_result[k]["sys_err"], unfolding_result[k]["unfolded"], unfolded_eff, norm, true[k])
+        hist_unfolded_efficiency_corrected[k] = {"unfolded" : unfolded_eff, "stat_err" : unfolded_eff_err_stat, "sys_err" : unfolded_eff_err_sys}
 
     if book is not None:
-        for k in Plots.IterMultiPlot(unfolding_result):
-            Plots.Plot(energy_bins[::-1], hist_unfolded_efficiency_corrected[k]["unfolded"], yerr = hist_unfolded_efficiency_corrected[k]["stat_err"], style = "step", color = "C4", label = "unfolded, efficiency corrected", newFigure = False, xlabel = f"$N_{{{k}}}$", ylabel  ="Counts")
+        for _, k in Plots.IterMultiPlot(unfolding_result):
+            Plots.Plot(energy_bins[::-1], hist_unfolded_efficiency_corrected[k]["unfolded"], yerr = hist_unfolded_efficiency_corrected[k]["stat_err"], style = "step", color = "C4", label = "unfolded, efficiency corrected", newFigure = False, xlabel = labels[k], ylabel  ="Counts")
             Plots.Plot(energy_bins[::-1], norm * true[k], style = "step", color = "C0", label = "true", newFigure = False)
         book.Save()
     return hist_unfolded_efficiency_corrected
 
 
 def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.AnalysisInput, unfolding_args : dict, signal_process, norm, energy_slices, mc_cheat : cross_section.AnalysisInput = None, book : Plots.PlotBook = Plots.PlotBook.null):
+    labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$", "inc" : "$N_{inc}$"}
 
     true_hists_selected = mc.CreateHistograms(energy_slices, signal_process, False, ~mc.inclusive_process)
 
@@ -217,14 +237,15 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
     result = cross_section.Unfold.Unfold(reco_hists, reco_hists_err, verbose = True, **{k : v for k, v in unfolding_args.items() if k != "method"})
 
     n_incident_unfolded = cross_section.EnergySlice.NIncident(result["init"]["unfolded"], result["int"]["unfolded"])
-    n_incident_unfolded_err = np.sqrt(result["int"]["stat_err"]**2 + np.cumsum(result["init"]["stat_err"]**2 + result["int"]["stat_err"]**2))
+    n_incident_unfolded_stat_err = np.sqrt(result["int"]["stat_err"]**2 + np.cumsum(result["init"]["stat_err"]**2 + result["int"]["stat_err"]**2))
+    n_incident_unfolded_sys_err = np.sqrt(result["int"]["sys_err"]**2 + np.cumsum(result["init"]["sys_err"]**2 + result["int"]["sys_err"]**2))
 
-    result["inc"] = {"unfolded" : n_incident_unfolded, "stat_err" : n_incident_unfolded_err}
+    result["inc"] = {"unfolded" : n_incident_unfolded, "stat_err" : n_incident_unfolded_stat_err, "sys_err" : n_incident_unfolded_sys_err}
 
     if book is not None:
         for k in result:
             if k == "inc" : continue
-            cross_section.Unfold.PlotUnfoldingResults(reco_hists[k], norm * true_hists_selected[k], result[k], energy_slices.pos_bins, f"$N_{{{k}}}$", book)
+            cross_section.Unfold.PlotUnfoldingResults(reco_hists[k], norm * true_hists_selected[k], result[k], energy_slices.pos_bins, labels[k], book)
 
         Plots.Plot(energy_slices.pos_bins[::-1], reco_hists["inc"], style = "step", label = "reco", color = "C6")
         Plots.Plot(energy_slices.pos_bins[::-1], norm * true_hists_selected["inc"], style = "step", label = "true", color = "C0", newFigure = False)
@@ -237,16 +258,32 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
         return result
 
 
-def XSUnfold(unfolded_result, energy_slices):
+def XSUnfold(unfolded_result, energy_slices, sys : bool = False, stat = True):
+    total_err = {}
+
+    for r in unfolded_result:
+        errs = []
+        if sys is True:
+            errs.append(unfolded_result[r]["sys_err"][1:]) # MC stat error from template used in fit and unfolding
+        if stat is True:
+            errs.append(unfolded_result[r]["stat_err"][1:]) # statistical uncertainties from fit and unfolding
+
+        if len(errs) > 1:
+            total_err[r] = cross_section.quadsum(errs, 0)
+        elif len(errs) == 1:
+            total_err[r] = errs[0]
+        else:
+            total_err[r] = None # statistical uncertianties from histograms only
+
     return cross_section.EnergySlice.CrossSection(
         unfolded_result["int_ex"]["unfolded"][1:],
         unfolded_result["int"]["unfolded"][1:],
         unfolded_result["inc"]["unfolded"][1:],
         cross_section.BetheBloch.meandEdX(energy_slices.pos_bins[1:], cross_section.Particle.from_pdgid(211)),
         energy_slices.width,
-        unfolded_result["int_ex"]["stat_err"][1:],
-        unfolded_result["int"]["stat_err"][1:],
-        unfolded_result["inc"]["stat_err"][1:]
+        total_err["int_ex"],
+        total_err["int"],
+        total_err["inc"]
     )
 
 def LoadToy(file):
@@ -305,11 +342,11 @@ def main(args):
 
         #* should some pre-requisit plots be made?
 
-        region_fit_result, fit_values = RegionFit(v, args.energy_slices, None, templates[k], return_fit_results = True)
+        region_fit_result, fit_values = RegionFit(v, args.energy_slices, None, templates[k], return_fit_results = True, mc_stat_unc = args.fit["mc_stat_unc"])
 
-        scale = len(templates[k].KE_int_reco) / len(samples[k].KE_int_reco)
+        # scale = len(templates[k].KE_int_reco) / len(samples[k].KE_int_reco)
         indices = [f"$\mu_{{{i}}}$" for i in ["abs", "cex", "spip", "pip"]]
-        table = cross_section.pd.DataFrame({"fit value" : fit_values.bestfit[0:4] * scale, "uncertainty" : fit_values.uncertainty[0:4] * scale}, index = indices).T
+        table = cross_section.pd.DataFrame({"fit value" : fit_values.bestfit[0:4] / scale, "uncertainty" : fit_values.uncertainty[0:4] / scale}, index = indices).T
         table.style.to_latex(outdir + "fit_results.tex")
 
         if args.all is True:
