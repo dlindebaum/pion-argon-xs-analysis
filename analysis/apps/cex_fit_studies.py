@@ -35,14 +35,22 @@ target_map = {
     "_quasi" : 'quasielastic',
     "_cex" : 'charge_exchange',
     "_dcex" : 'double_charge_exchange',
-    "_pip" : 'pion_production'
+    "_pip" : 'pion_production',
+    "_spip" : "single_pion_production"
 }
+
+# folder = {
+#     'absorption': "abs",
+#     'quasielastic': "quasi",
+#     'charge_exchange': "cex",
+#     'double_charge_exchange': "dcex",
+#     'pion_production': "pip"
+# }
 
 folder = {
     'absorption': "abs",
-    'quasielastic': "quasi",
     'charge_exchange': "cex",
-    'double_charge_exchange': "dcex",
+    'single_pion_production': "spip",
     'pion_production': "pip"
 }
 
@@ -110,13 +118,19 @@ def NormalisationTest(directory : str, data_config : dict, model : cross_section
         results = {}
         true_counts = {}
         expected_mus = {}
-        scales = {k : 1 for k in folder}
-        for i in [0.5, 0.8, 0.9, 1, 1.1, 1.2, 1.5]:
+    
+        scales = {k : 1 for k in ['absorption', 'quasielastic', 'charge_exchange', 'double_charge_exchange', 'pion_production']}
+        for i in [0.8, 0.9, 1, 1.1, 1.2]:
             print(f"normalisation : {i}")
             if i == 1:
                 config = data_config
             else:
-                scales[target] = i
+                if target == "single_pion_production":
+                    # treat these as the same process
+                    scales["quasielastic"] = i
+                    scales["double_charge_exchange"] = i
+                else:
+                    scales[target] = i
                 config = CreateConfigNormalisation(scales, data_config)
             results[i], true_counts[i], expected_mus[i] = ModifiedConfigTest(config, energy_slice, model, toy_template, mean_track_score_bins)
 
@@ -284,8 +298,14 @@ def ShapeTestNew(directory : str, data_config : dict, model : cross_section.pyhf
             if i == "null":
                 config = data_config
             else:
-                xs = getattr(xs_sim, target) * SmoothStep(xs_sim.KE, i[0], i[1], i[3], i[2])
-                config = CreateConfigShapeTest(data_config, CreateModPDFDict(xs_sim.KE, target, xs))
+                if target == "single_pion_production":
+                    xs_quasi = getattr(xs_sim, "quasielastic") * SmoothStep(xs_sim.KE, i[0], i[1], i[3], i[2])
+                    xs_dcex = getattr(xs_sim, "double_charge_exchange") * SmoothStep(xs_sim.KE, i[0], i[1], i[3], i[2])
+                    mod_pdf = {**CreateModPDFDict(xs_sim.KE, "quasielastic", xs_quasi), **CreateModPDFDict(xs_sim.KE, "double_charge_exchange", xs_dcex)}
+                    config = CreateConfigShapeTest(data_config, mod_pdf)
+                else:
+                    xs = getattr(xs_sim, target) * SmoothStep(xs_sim.KE, i[0], i[1], i[3], i[2])
+                    config = CreateConfigShapeTest(data_config, CreateModPDFDict(xs_sim.KE, target, xs))
             results[i], true_counts[i], expected_mus[i] = ModifiedConfigTest(config, energy_slices, model, toy_template, mean_track_score_bins)
         cross_section.SaveObject(f"{directory}fit_results_{folder[target]}.dill", {"results" : results, "true_counts" : true_counts, "expected_mus" : expected_mus})
     return
@@ -416,20 +436,23 @@ def PlotShapeExamples(energy_slices : cross_section.Slices, book : Plots.PlotBoo
         for k, v in curves.items():
             Plots.Plot(xs_sim.KE, v, "KE (MeV)", ylabel = ylabel, label = f"{label} : {k}", newFigure = False)
         if geant:
-            xs_sim.Plot(proc, label = "Geant 4", color = "k")
+            xs_sim.Plot(proc, label = "Geant4", color = "k")
             Plots.plt.fill_between(xs_sim.KE, norms[0] * y, norms[1] * y, color = "k", alpha = 0.5)
         return
 
-    plot_curves({i : SmoothStep(xs_sim.KE, norms[1], norms[0], split, i) for i in [0, 100, 250, 500, 1000]}, False, "smooth step", "normalisation function")
+    plot_curves({i : SmoothStep(xs_sim.KE, norms[1], norms[0], split, i) for i in [0, 100, 250, 500, 1000]}, False, "$\\alpha$", "$\mathcal{N}(E)$")
     book.Save()
 
     for proc in list(folder.keys()):
-        y = getattr(xs_sim, proc)
+        if proc == "single_pion_production":
+            y = xs_sim.quasielastic + xs_sim.double_charge_exchange
+        else:
+            y = getattr(xs_sim, proc)
 
-        plot_curves({i : y * SmoothStep(xs_sim.KE, norms[1], norms[0], split, i) for i in [0, 100, 250, 500, 1000]}, True, "smooth step", "")
+        plot_curves({i : y * SmoothStep(xs_sim.KE, norms[1], norms[0], split, i) for i in [0, 100, 250, 500, 1000]}, True, "$\\alpha$", "")
         book.Save()
 
-        plot_curves({i : y * SmoothStep(xs_sim.KE, norms[1], norms[0], i, smooth_amount) for i in [100, 500, 1000, 1500, 1900]}, True, "split", "")
+        plot_curves({i : y * SmoothStep(xs_sim.KE, norms[1], norms[0], i, smooth_amount) for i in [100, 500, 1000, 1500, 1900]}, True, "$x_{0}$", "")
         book.Save()
 
         Plots.plt.figure()
@@ -442,7 +465,7 @@ def PlotShapeExamples(energy_slices : cross_section.Slices, book : Plots.PlotBoo
         book.Save()
     return
 
-
+@cross_section.timer
 def PlotCrossCheckResults(xlabel, model : cross_section.pyhf.Model, template_counts : int, results, true_counts, energy_overflow : np.ndarray, pdf : Plots.PlotBook = Plots.PlotBook.null, pulls = None):
     true_counts_all = {}
     for t in true_counts:
@@ -551,7 +574,7 @@ def PlotCrossCheckResults(xlabel, model : cross_section.pyhf.Model, template_cou
     pdf.Save()
     return
 
-
+@cross_section.timer
 def ProcessResults(template_counts : int, results, true_counts, model):
     true_counts_all = {}
     for t in true_counts:
@@ -581,7 +604,7 @@ def ProcessResults(template_counts : int, results, true_counts, model):
         ])
     return data.T
 
-
+@cross_section.timer
 def ProcessResultsEnergy(results, true_counts, model):
     true_counts_all = {}
     for t in true_counts:
@@ -591,7 +614,7 @@ def ProcessResultsEnergy(results, true_counts, model):
     fe, fe_err = CountsFractionalError(results, true_counts, model)
     return list(true_counts.keys()), fe, fe_err
 
-
+@cross_section.timer
 def PlotDataShapeTestEnergy(data : tuple, energy_overflow : np.ndarray, book : Plots.PlotBook.null):
 
     def remove_zero(a):
@@ -624,7 +647,6 @@ def PlotDataShapeTestEnergy(data : tuple, energy_overflow : np.ndarray, book : P
         Plots.plt.tight_layout()
         book.Save()
     return
-
 
 def PlotDataShapeTest(data, key, label, vmin = None, vmax = None):
     def remove_zero(a):
@@ -671,7 +693,7 @@ def PlotDataShapeTest(data, key, label, vmin = None, vmax = None):
     fig.colorbar(im, label = label, cax = cbar_ax)
     fig.tight_layout()
 
-
+@cross_section.timer
 def PlotCrossCheckResultsShape(results : dict, template_counts : int, model : cross_section.pyhf.Model, energy_overflow : np.ndarray, book : Plots.PlotBook.null):
 
     processed_data = ProcessResults(template_counts, results["results"], results["true_counts"], model)
@@ -845,7 +867,7 @@ def BackgroundSubtractionSummary(directory, model, signal_process, toy_template,
         b_fe_max[r] = (np.max(abs(b_fe), 0), np.where(np.argmax(abs(b_fe), 0) == 0, b_fe_err[0], b_fe_err[1]))
     return s_fe_max, b_fe_max, s_fe_total_max, b_fe_total_max
 
-
+@cross_section.timer
 def PredictedCountsSummary(directory : str, model : cross_section.pyhf.Model, test : str):
     results_files = [i for i in cross_section.os.listdir(directory) if "dill" in i]
     results = {[target_map[t] for t in target_map if t in f][0] : cross_section.LoadObject(directory + f) for f in results_files}
@@ -880,7 +902,6 @@ def PredictedCountsSummary(directory : str, model : cross_section.pyhf.Model, te
         )
     return n_fe_max, n_fe_total_max
 
-
 def CreateSummaryTables(total_summaries, row_names):
     table_fe = pd.DataFrame({k : v[0] for k, v in total_summaries.items()}, index = row_names)
     table_err = pd.DataFrame({k : v[1] for k, v in total_summaries.items()}, index = row_names)
@@ -902,8 +923,7 @@ def SaveSummaryTables(directory : str, tables : tuple[pd.DataFrame], name : str)
         t.style.to_latex(f"{directory}table_{name}_{n}.tex")
     return
 
-
-def Summary(directory : str, test : str, signal_process : str, model : cross_section.pyhf.Model, energy_overflow : np.ndarray, template : cross_section.Toy, book : Plots.PlotBook = Plots.PlotBook.null):
+def Summary(directory : str, test : str, signal_process : str, model : cross_section.pyhf.Model, energy_overflow : np.ndarray, template : cross_section.Toy, book : Plots.PlotBook = Plots.PlotBook.null, ymax = None):
     n_fe_max, n_fe_total_max = PredictedCountsSummary(directory, model, test)
 
     indices = ["absorption", "charge_exchange", "single_pion_production", "pion_production"]
@@ -913,12 +933,16 @@ def Summary(directory : str, test : str, signal_process : str, model : cross_sec
     SaveSummaryTables(directory, tables_n, "processes")
     print(tables_n[2])
 
+    if ymax is None:
+        ymax = np.max([n_fe_max[t][0] for t in n_fe_max])
+
     for i, p in Plots.IterMultiPlot(indices):
         for j, t in enumerate(n_fe_max):
             y = n_fe_max[t][0]
             err = n_fe_max[t][1]
             Plots.Plot(energy_overflow, y[i], yerr = err[i], color = f"C{j}", label = cross_section.remove_(t), ylabel = "fractional error in fitted counts", xlabel = xlabel, title = f"process : {cross_section.remove_(p)}", newFigure = False)
             Plots.plt.legend(title = f"{test}s test")
+            Plots.plt.ylim(0, 1.1 * ymax)
     book.Save()
 
     s_fe_max, b_fe_max, s_fe_total_max, b_fe_total_max = BackgroundSubtractionSummary(directory, model, signal_process, template, test)
@@ -941,20 +965,20 @@ def Summary(directory : str, test : str, signal_process : str, model : cross_sec
         Plots.Plot(energy_overflow, b_fe_max[r][0], yerr = b_fe_max[r][1], color = f"C{i}", label = cross_section.remove_(r), xlabel = xlabel, ylabel = "fractional error", title = "background counts", newFigure = False)
         Plots.plt.legend(title = f"{test} test")
     book.Save()
-    return
+    return ymax
 
 
 def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, template : cross_section.AnalysisInput, book : Plots.PlotBook = Plots.PlotBook.null):
     tags = cross_section.Tags.ExclusiveProcessTags(template.exclusive_process)
     for j, c in Plots.IterMultiPlot(templates_energy):
         for i, s in enumerate(c):
-            Plots.Plot(energy_slices.pos_overflow, s/np.sum(templates_energy), color = tags.number[i].colour, label = f"$\lambda_{{{j}{i}}}$", xlabel = f"$\lambda_{{{j}s}}$ (MeV)", ylabel = "normalised counts", style = "step", newFigure = False)
+            Plots.Plot(energy_slices.pos_overflow, s/np.sum(templates_energy), color = tags.number[i].colour, label = f"$\lambda_{{{process_map[j]},{process_map[i]}}}$", xlabel = f"$\lambda_{{{process_map[j]},s}}$ (MeV)", ylabel = "normalised counts", style = "step", newFigure = False)
     book.Save()
 
     if tempalates_mean_track_score is not None:
         Plots.plt.figure()
         for i, s in enumerate(tempalates_mean_track_score):
-            Plots.Plot(cross_section.bin_centers(mean_track_score_bins), s/np.sum(tempalates_mean_track_score), color = tags.number[i].colour, label = f"$\lambda_{{t{i}}}$", xlabel = f"$\lambda_{{ts}}$", ylabel = "normalised counts", style = "step", newFigure = False)
+            Plots.Plot(cross_section.bin_centers(mean_track_score_bins), s/np.sum(tempalates_mean_track_score), color = tags.number[i].colour, label = f"$\lambda_{{t,{process_map[i]}}}$", xlabel = f"$\lambda_{{t,s}}$", ylabel = "normalised counts", style = "step", newFigure = False)
         Plots.plt.legend(loc = "upper left")
         book.Save()
         book.close()
@@ -1050,6 +1074,8 @@ def main(args : cross_section.argparse.Namespace):
 
         template_counts = sum(args.template.inclusive_process)
 
+        ymax = {"shape" : 1.5, "normalisation" : 0.6}
+
         for t in test:
             if t in args.skip: continue
             for m in models:
@@ -1087,7 +1113,7 @@ def main(args : cross_section.argparse.Namespace):
                     Plots.plt.close("all")
 
                     with Plots.PlotBook(f"{directory}summary_plots.pdf", True) as book:
-                        Summary(directory, t, args.signal_process, models[m], args.energy_slices.pos_overflow, args.template, book)
+                        Summary(directory, t, args.signal_process, models[m], args.energy_slices.pos_overflow, args.template, book, ymax = ymax[t])
                     Plots.plt.close("all")
 
     return

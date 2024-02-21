@@ -27,6 +27,7 @@ def SetPlotStyle(extend_colors : bool = False, custom_colors : list = None, dpi 
     plt.rcParams.update({"axes.titlesize" : 12})
     plt.rcParams['figure.dpi'] = dpi
     plt.rcParams['legend.fontsize'] = "small"
+    plt.rc('text.latex', preamble=r"\\usepackage{amsmath}")
     if extend_colors:
         plt.rcParams.update({"axes.prop_cycle" : plt.cycler("color", get_cmap("tab20").colors)})
     if custom_colors:

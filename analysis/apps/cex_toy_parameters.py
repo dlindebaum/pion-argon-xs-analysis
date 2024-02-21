@@ -111,10 +111,9 @@ def PlotCorrelationMatrix(counts : np.array = None, true_labels = None, reco_lab
         title (str, optional): title. Defaults to None.
     """
     fractions = counts / np.sum(counts, axis = 1)[:, np.newaxis]
-
-    # fractions, counts = ComputeFractions(true_regions, reco_regions, return_counts = True)
     if newFigure: Plots.plt.figure()
-    Plots.plt.imshow(counts/np.max(counts, axis = 0), cmap = cmap, origin = "lower")
+    c_norm = counts/np.sum(counts, axis = 0)
+    Plots.plt.imshow(c_norm, cmap = cmap, origin = "lower")
     Plots.plt.colorbar(label = "counts (column normalised)")
 
     true_counts = np.sum(counts, axis = 1)

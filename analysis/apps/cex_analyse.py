@@ -245,11 +245,11 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
     if book is not None:
         for k in result:
             if k == "inc" : continue
-            cross_section.Unfold.PlotUnfoldingResults(reco_hists[k], norm * true_hists_selected[k], result[k], energy_slices.pos_bins, labels[k], book)
+            cross_section.Unfold.PlotUnfoldingResults(reco_hists[k], norm * true_hists_selected[k], result[k], energy_slices, labels[k], book)
 
-        Plots.Plot(energy_slices.pos_bins[::-1], reco_hists["inc"], style = "step", label = "reco", color = "C6")
-        Plots.Plot(energy_slices.pos_bins[::-1], norm * true_hists_selected["inc"], style = "step", label = "true", color = "C0", newFigure = False)
-        Plots.Plot(energy_slices.pos_bins[::-1], result["inc"]["unfolded"], yerr = result["inc"]["stat_err"], style = "step", label = "unfolded", xlabel = "$N_{inc}$ (MeV)", color = "C4", newFigure = False)
+        Plots.Plot(energy_slices.pos_bins[::-1], reco_hists["inc"], style = "step", label = "Data reco", color = "C6")
+        Plots.Plot(energy_slices.pos_bins[::-1], norm * true_hists_selected["inc"], style = "step", label = "MC true", color = "C0", newFigure = False)
+        Plots.Plot(energy_slices.pos_bins[::-1], result["inc"]["unfolded"], yerr = result["inc"]["stat_err"], style = "step", label = "Data unfolded", xlabel = "$N_{inc}$ (MeV)", color = "C4", newFigure = False)
         book.Save()
 
     if (unfolding_args["method"] == 1) and (efficiencies is not None):
@@ -318,6 +318,7 @@ def main(args):
             templates["mc_cheated"] = cex_analysis_input.CreateAnalysisInputMCTrueBeam(cross_section.Data(args.mc_file, nTuple_type = args.ntuple_type, target_momentum = args.pmom), args)
             samples["pdsp"] = cex_analysis_input.CreateAnalysisInput(cross_section.Data(args.data_file, nTuple_type = args.ntuple_type), args, False)
 
+    label_map = {"toy" : "toy", "pdsp" : "ProtoDUNE SP"}
 
     # mean_track_score_bins = np.linspace(0, 1, 21, True) #TODO make configurable
     mean_track_score_bins = None
@@ -346,6 +347,7 @@ def main(args):
 
         # scale = len(templates[k].KE_int_reco) / len(samples[k].KE_int_reco)
         indices = [f"$\mu_{{{i}}}$" for i in ["abs", "cex", "spip", "pip"]]
+        print(f"{fit_values.bestfit=}")
         table = cross_section.pd.DataFrame({"fit value" : fit_values.bestfit[0:4] / scale, "uncertainty" : fit_values.uncertainty[0:4] / scale}, index = indices).T
         table.style.to_latex(outdir + "fit_results.tex")
 
@@ -378,15 +380,15 @@ def main(args):
 
                 process[p] = XSUnfold(unfolding_result, args.energy_slices)
 
-                cross_section.PlotXSComparison({"reco" : process[p], "truth" : xs_true}, args.energy_slices, p, {"reco" : "C0", "truth" : "C1"})
+                cross_section.PlotXSComparison({f"{label_map[k]} Data reco" : process[p], f"{label_map[k]} MC truth" : xs_true}, args.energy_slices, p, {f"{label_map[k]} Data reco" : "C0", f"{label_map[k]} MC truth" : "C1"}, simulation_label = "Geant4 v10.6")
                 book.Save()
             Plots.plt.close("all")
         xs[k] = process
     with Plots.PlotBook(args.out + "results.pdf") as book:
-        colours = {k : f"C{i}" for i, k in enumerate(xs.keys())}
+        colours = {f"{label_map[k]} Data" : f"C{i}" for i, k in enumerate(xs.keys())}
         for p in list(xs.values())[0]:
-            data = {k : xs[k][p] for k in xs.keys()}
-            cross_section.PlotXSComparison(data, args.energy_slices, p, colours)
+            data = {f"{label_map[k]} Data" : xs[k][p] for k in xs.keys()}
+            cross_section.PlotXSComparison(data, args.energy_slices, p, colours, simulation_label = "Geant4 v10.6")
             book.Save()
     return
 

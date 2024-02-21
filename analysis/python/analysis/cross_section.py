@@ -54,7 +54,7 @@ def RatioWeights(mc : Data, func : str, params : list, truncate : int = 10):
     return weights
 
 
-def PlotXSComparison(xs : dict[np.array], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, newFigure : bool = True):
+def PlotXSComparison(xs : dict[np.array], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", newFigure : bool = True):
     xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos, energy_slice.max_pos + energy_slice.width])
 
     if colors is None:
@@ -71,9 +71,9 @@ def PlotXSComparison(xs : dict[np.array], energy_slice, process : str = None, co
         Plots.Plot(x, v[0], xerr = energy_slice.width / 2, yerr = v[1], label = k + ", $\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}", color = colors[k], linestyle = "", marker = "x", newFigure = False)
     
     if process == "single_pion_production":
-        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = "simulation", title = "single pion production" if title is not None else title, newFigure = False, xlabel = "$KE_{int} (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)
+        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = simulation_label, title = "single pion production" if title is not None else title, newFigure = False, xlabel = "$KE_{int} (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)
     else:
-        xs_sim.Plot(process, label = "simulation", color = xs_sim_color, title = title)
+        xs_sim.Plot(process, label = simulation_label, color = xs_sim_color, title = title)
 
     Plots.plt.ylim(0)
     if max(Plots.plt.gca().get_ylim()) > np.nanmax(sim_curve_interp(xs_sim.KE).astype(float)) * 2:
@@ -751,7 +751,11 @@ class GeantCrossSections:
             else:
                 if title is None:
                     title = remove_(xs)
-            Plots.Plot(self.KE, getattr(self, xs), label = label, title = title, newFigure = False, xlabel = "$KE_{int}$ (MeV)", ylabel = "$\sigma (mb)$", color = color)
+            if xs == "single_pion_production":
+                y = self.quasielastic + self.double_charge_exchange
+            else:
+                y = getattr(self, xs)
+            Plots.Plot(self.KE, y, label = label, title = title, newFigure = False, xlabel = "$KE_{int}$ (MeV)", ylabel = "$\sigma (mb)$", color = color)
             # Plots.plt.fill_between(self.KE, getattr(self, xs) - self.Stat_Error(xs), getattr(self, xs) + self.Stat_Error(xs), color = Plots.plt.gca()._get_lines.get_next_color())
 
 
@@ -1512,6 +1516,7 @@ class RegionFit:
                         "data" : s.tolist(),
                         "modifiers" : [
                             {'name': f"mu_{i}", 'type': 'normfactor', 'data': None},
+                            # {'name': "normsys", 'type': "normsys", 'data' : {'lo' : 0.8, 'hi' : 1.2}}
                             ]
                     }
                 for i, s in enumerate(samples)
@@ -1709,7 +1714,7 @@ class Unfold:
         return response, response_err
 
     @staticmethod #? move to Plots?
-    def PlotMatrix(matrix : np.array, title : str = None, c_label : str = None):
+    def PlotMatrix(matrix : np.array, energy_slices : Slices, title : str = None, c_label : str = None):
         """ Plot numpy matrix.
 
         Args:
@@ -1719,13 +1724,15 @@ class Unfold:
         """
         #* cause = true, effect = reco
         Plots.plt.figure()
-        Plots.plt.imshow(matrix, origin = "lower", cmap = "plasma")
-        Plots.plt.xlabel("true")
-        Plots.plt.ylabel("reco")
+        Plots.plt.imshow(np.flip(matrix), origin = "lower", cmap = "plasma")
+        Plots.plt.xlabel("true (MeV)")
+        Plots.plt.ylabel("reco (MeV)")
         Plots.plt.grid(False)
         Plots.plt.colorbar(label = c_label)
-        Plots.plt.tight_layout()
         Plots.plt.title(title)
+        Plots.plt.xticks(np.linspace(0, len(energy_slices.pos_overflow)-1, len(energy_slices.pos_overflow)), energy_slices.pos_overflow[::-1], rotation = 30)
+        Plots.plt.yticks(np.linspace(0, len(energy_slices.pos_overflow)-1, len(energy_slices.pos_overflow)), energy_slices.pos_overflow[::-1], rotation = 30)
+        Plots.plt.tight_layout(pad = 1)
         return
 
     @staticmethod
@@ -1763,10 +1770,10 @@ class Unfold:
             corr[k] = Unfold.CorrelationMarix(*v, bins = slice_bins, remove_overflow = False)
             resp[k] = Unfold.ResponseMatrix(*v, bins = slice_bins, efficiencies = None if efficiencies is None else efficiencies[k], remove_overflow = False)
             if book is not None:
-                Unfold.PlotMatrix(corr[k], title = f"Response Marix: {labels[k]}", c_label = "Counts")
+                Unfold.PlotMatrix(corr[k], energy_slice, title = f"Response Marix: {labels[k]}", c_label = "Counts")
                 book.Save()
             if book is not None:
-                Unfold.PlotMatrix(resp[k][0], title = f"Normalised Response Matrix: {labels[k]}", c_label = "$P(E_{i}|C_{j})$")
+                Unfold.PlotMatrix(resp[k][0], energy_slice, title = f"Normalised Response Matrix: {labels[k]}", c_label = "$P(E_{i}|C_{j})$")
                 book.Save()
         return resp
 
@@ -1817,7 +1824,7 @@ class Unfold:
         return results
 
     @staticmethod
-    def PlotUnfoldingResults(obs : np.array, true : np.array, results : dict, energy_bins : np.array, label : str, book : Plots.PlotBook = Plots.PlotBook.null):
+    def PlotUnfoldingResults(obs : np.array, true : np.array, results : dict, energy_slices : Slices, label : str, book : Plots.PlotBook = Plots.PlotBook.null):
         """ Plot unfolded histogram in comparison to observed and true.
 
         Args:
@@ -1828,10 +1835,10 @@ class Unfold:
             label (str): x label (units of MeV are automatically applied)
             book (Plots.PlotBook, optional): plot book. Defaults to Plots.PlotBook.null.
         """
-        Plots.Plot(energy_bins[::-1], obs, style = "step", label = "reco", xlabel = label, color = "C6")
-        Plots.Plot(energy_bins[::-1], true, style = "step", label = "true", xlabel = label, color = "C0", newFigure = False)
-        Plots.Plot(energy_bins[::-1], results["unfolded"], yerr = results["stat_err"], style = "step", label = f"unfolded, {results['num_iterations']} iterations", xlabel = label + " (MeV)", color = "C4", newFigure = False)
+        Plots.Plot(energy_slices.pos_bins[::-1], obs, style = "step", label = "Data reco", xlabel = label, color = "C6")
+        Plots.Plot(energy_slices.pos_bins[::-1], true, style = "step", label = "MC true", xlabel = label, color = "C0", newFigure = False)
+        Plots.Plot(energy_slices.pos_bins[::-1], results["unfolded"], yerr = results["stat_err"], style = "step", label = f"Data unfolded, {results['num_iterations']} iterations", xlabel = label + " (MeV)", color = "C4", newFigure = False)
         book.Save() 
-        Unfold.PlotMatrix(results["unfolding_matrix"], title = "Unfolded matrix: " + label, c_label = "$P(C_{j}|E_{i})$")
+        Unfold.PlotMatrix(results["unfolding_matrix"], energy_slices, title = "Unfolded matrix: " + label, c_label = "$P(C_{j}|E_{i})$")
         book.Save() 
         return
