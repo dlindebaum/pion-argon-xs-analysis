@@ -101,47 +101,6 @@ def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_q
             }
     return params_formatted
 
-
-def PlotCorrelationMatrix(counts : np.array = None, true_labels = None, reco_labels = None, title : str = None, newFigure : bool = True, cmap : str = "cool"):
-    """ Plots Correlation matrix of two sets of regions.
-
-    Args:
-        true_regions (dict): true regions
-        reco_regions (dict): reco regions
-        title (str, optional): title. Defaults to None.
-    """
-    fractions = counts / np.sum(counts, axis = 1)[:, np.newaxis]
-    if newFigure: Plots.plt.figure()
-    c_norm = counts/np.sum(counts, axis = 0)
-    Plots.plt.imshow(c_norm, cmap = cmap, origin = "lower")
-    Plots.plt.colorbar(label = "counts (column normalised)")
-
-    true_counts = np.sum(counts, axis = 1)
-    reco_counts = np.sum(counts, axis = 0)
-
-    true_counts = [f"{true_labels[t].replace('_', ' ')}\n({true_counts[t]})" for t in range(len(true_labels))]
-    reco_counts = [f"{reco_labels[r].replace('_', ' ')}\n({reco_counts[r]})" for r in range(len(reco_labels))]
-
-
-    Plots.plt.gca().set_xticks(np.arange(len(reco_counts)), labels=reco_counts)
-    Plots.plt.gca().set_yticks(np.arange(len(true_counts)), labels=true_counts)
-
-    Plots.plt.xlabel("reco region")
-    Plots.plt.ylabel("true process")
-    Plots.plt.xticks(rotation = 30)
-    Plots.plt.yticks(rotation = 30)
-
-    if title is not None:
-        Plots.plt.title(title + "| Key: (counts, fraction(%))")
-    else:
-        Plots.plt.title("Key: (counts, fraction(%))")
-
-    for (i, j), z in np.ndenumerate(counts):
-        Plots.plt.gca().text(j, i, f"{z},\n{fractions[i][j]*100:.2g}%", ha='center', va='center', fontsize = 8)
-    Plots.plt.grid(False)
-    Plots.plt.tight_layout()
-
-
 @Master.timer
 def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : argparse.Namespace, labels : dict, out : str):
     """ Smearing study, fits functions to residuals of cross section quantities and saves the fit parameters of the best fit to file.
@@ -279,7 +238,7 @@ def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace, out : str):
     os.makedirs(out + "reco_regions/", exist_ok = True)
     pdf = Plots.PlotBook(out + "reco_regions/reco_regions_study")
     counts = cross_section.Toy.ComputeCounts(true_regions, reco_regions)
-    PlotCorrelationMatrix(counts, list(true_regions.keys()), list(reco_regions.keys()))
+    Plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), x_label = "true process", y_label = "reco region")
     pdf.Save()
     pdf.close()
 

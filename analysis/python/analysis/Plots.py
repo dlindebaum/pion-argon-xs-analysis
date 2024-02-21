@@ -1362,6 +1362,56 @@ def PlotHist2DImshowMarginal(data_x, data_y, bins: int = 100, x_range: list = No
     return
 
 
+def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y_tick_labels : list[str] = None, title : str = None, newFigure : bool = True, cmap : str = "cool", x_label : str = None, y_label : str = None):
+    """ Plots confusion matrix
+
+    Args:
+        counts (np.ndarray, optional): confusion matrix of counts.
+        x_tick_labels (list[str], optional): labels for categories in the x axis. Defaults to None.
+        y_tick_labels (list[str], optional): labels for categories in the y axis. Defaults to None.
+        title (str, optional): plot title. Defaults to None.
+        newFigure (bool, optional): create plot in new figure. Defaults to True.
+        cmap (str, optional): colour map. Defaults to "cool".
+        x_label (str, optional): x label. Defaults to None.
+        y_label (str, optional): y label. Defaults to None.
+    """
+    fractions = counts / np.sum(counts, axis = 1)[:, np.newaxis]
+    if newFigure: plt.figure()
+    c_norm = counts/np.sum(counts, axis = 0)
+    plt.imshow(c_norm, cmap = cmap, origin = "lower")
+    plt.colorbar(label = "column normalised counts")
+
+    true_counts = np.sum(counts, axis = 1)
+    reco_counts = np.sum(counts, axis = 0)
+
+    if x_tick_labels is None:
+        x_tick_labels = [f"{i}" for i in range(np.array(counts).shape[0])]
+    if y_tick_labels is None:
+        y_tick_labels = [f"{i}" for i in range(np.array(counts).shape[1])]
+
+    true_counts = [f"{x_tick_labels[t].replace('_', ' ')}\n({true_counts[t]})" for t in range(len(x_tick_labels))]
+    reco_counts = [f"{y_tick_labels[r].replace('_', ' ')}\n({reco_counts[r]})" for r in range(len(y_tick_labels))]
+
+
+    plt.gca().set_xticks(np.arange(len(reco_counts)), labels=reco_counts)
+    plt.gca().set_yticks(np.arange(len(true_counts)), labels=true_counts)
+
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+    plt.xticks(rotation = 30)
+    plt.yticks(rotation = 30)
+
+    if title is not None:
+        plt.title(title + "| Key: (counts, fraction(%))")
+    else:
+        plt.title("Key: (counts, fraction(%))")
+
+    for (i, j), z in np.ndenumerate(counts):
+        plt.gca().text(j, i, f"{z},\n{fractions[i][j]*100:.2g}%", ha='center', va='center', fontsize = 8)
+    plt.grid(False)
+    plt.tight_layout()
+
+
 def DrawMultiCutPosition(value : float | list[float], arrow_loc : float = 0.8, arrow_length : float = 0.2, face : str | list[str] = "right", flip : bool = False, color = "black", annotate : bool = False):
     if type(value) == list and type(face) == list:
         for i in range(2):

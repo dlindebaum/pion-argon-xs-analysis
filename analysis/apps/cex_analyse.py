@@ -10,7 +10,6 @@ import os
 
 import numpy as np
 
-from matplotlib.cm import get_cmap
 from rich import print
 
 from apps import cex_toy_generator, cex_analysis_input, cex_toy_parameters
