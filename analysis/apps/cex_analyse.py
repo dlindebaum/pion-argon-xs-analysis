@@ -319,8 +319,10 @@ def main(args):
 
     label_map = {"toy" : "toy", "pdsp" : "ProtoDUNE SP"}
 
-    # mean_track_score_bins = np.linspace(0, 1, 21, True) #TODO make configurable
-    mean_track_score_bins = None
+    if args.fit["mean_track_score"] == True:
+        mean_track_score_bins = np.linspace(0, 1, 21, True) #TODO make configurable
+    else:
+        mean_track_score_bins = None
     xs = {}
     for k, v in samples.items():
         print(f"analysing {k}")
@@ -342,7 +344,7 @@ def main(args):
 
         #* should some pre-requisit plots be made?
 
-        region_fit_result, fit_values = RegionFit(v, args.energy_slices, None, templates[k], return_fit_results = True, mc_stat_unc = args.fit["mc_stat_unc"])
+        region_fit_result, fit_values = RegionFit(v, args.energy_slices, mean_track_score_bins, templates[k], return_fit_results = True, mc_stat_unc = args.fit["mc_stat_unc"])
 
         # scale = len(templates[k].KE_int_reco) / len(samples[k].KE_int_reco)
         indices = [f"$\mu_{{{i}}}$" for i in ["abs", "cex", "spip", "pip"]]

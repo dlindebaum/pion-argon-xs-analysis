@@ -36,6 +36,10 @@ def template_config():
             "energy_range" : None,
             "energy_bins" : None
         },
+        "ENERGY_CORRECTION":{
+            "energy_range" : None,
+            "correction" : "repsonse"
+        },
         "UPSTREAM_ENERGY_LOSS":{
             "cv_function" : "gaussian",
             "bins" : None,
@@ -263,14 +267,27 @@ def main(args):
             args = update_args() # reload config to continue
 
         #* photon energy correction
-        can_run_pec = args.shower_energy_correction is True
+        can_run_pec = hasattr(args, "shower_correction") and (args.shower_correction["correction_params"] is None)
         if can_run_pec or check_run(args, "photon_correction"):
-            if (args.correction is None) and (args.correction_params is None):
-                args.events = None
-                args.batches = None
-                args.threads = 1
-                cex_photon_selection.main(args)
-        
+            args.events = None
+            args.batches = None
+            args.threads = 1
+            cex_photon_selection.main(args)
+            output_path = args.out + "shower_energy_correction/"
+            print("outputs: " + output_path)
+            target_files = {
+            "correction_params" : "gaussian.json"
+            }
+            new_config_entry = {}
+            files = os.listdir(output_path)
+            for k, v in target_files.items():
+                if v in files:
+                    new_config_entry[k] = os.path.abspath(output_path + v)
+            new_config_entry["energy_range"] = args.shower_correction["energy_range"]
+            new_config_entry["correction"] = "response"
+            update_config(args.config, {"ENERGY_CORRECTION" : new_config_entry})
+            args = update_args() # reload config to continue
+
         #* selection studies
         can_run_ss = not hasattr(args, "selection_masks")
         if can_run_ss or check_run(args, "selection"):
@@ -394,7 +411,6 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-C", "--create_config", type = str, help = "Create a template configuration with the default selection")
-    parser.add_argument("--shower_energy_correction", action = "store_true", help = "whether to run the shower energy correction")
     ApplicationArguments.Config(parser)
     ApplicationArguments.Output(parser, "analysis/")
     parser.add_argument("--skip", type = str, nargs = "+", default = [], choices = analysis_options)

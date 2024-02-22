@@ -308,7 +308,7 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
             output["pi0"] = {"data" : output_pi0, "table" : table_pi0, "masks" : pi0_masks}
 
         print("regions")
-        truth_regions, reco_regions = AnalyseRegions(events, photon_selection_mask, args["data"], args["correction"], args["correction_params"])
+        truth_regions, reco_regions = AnalyseRegions(events, photon_selection_mask, args["data"], args["shower_correction"]["correction"], args["shower_correction"]["correction_params"])
 
         regions  = {
             "truth_regions"       : truth_regions,

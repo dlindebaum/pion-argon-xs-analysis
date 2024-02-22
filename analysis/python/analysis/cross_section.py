@@ -346,10 +346,6 @@ class ApplicationArguments:
                 if args.data_file is not None and args.data_beam_quality_fit is None:
                     raise Exception("beam quality fit values for data are required")
 
-            if hasattr(args, "correction") and args.correction:
-                args.correction_params = args.correction[1]
-                args.correction = EnergyCorrection.shower_energy_correction[args.correction[0]]
-
         if hasattr(args, "out"):
             if args.out is None:
                 filename = None
@@ -431,8 +427,9 @@ class ApplicationArguments:
                 if "mc" in value:
                     args.mc_beam_scraper_fit = LoadConfiguration(value["mc"])
             elif head == "ENERGY_CORRECTION":
-                args.correction = value["correction"]
-                args.correction_params = value["correction_params"]
+                args.shower_correction = {}
+                for k, v in value.items():
+                    args.shower_correction[k] = v
             elif head == "UPSTREAM_ENERGY_LOSS":
                 args.upstream_loss_cv_function = value["cv_function"]
                 args.upstream_loss_bins = value["bins"]
@@ -473,14 +470,14 @@ class ApplicationArguments:
 
     @staticmethod
     def AddEnergyCorrection(args):
-        if hasattr(args, "correction"):
-            method = EnergyCorrection.shower_energy_correction[args.correction]
-            params = LoadConfiguration(args.correction_params)
+        if hasattr(args, "shower_correction") and (args.shower_correction["correction_params"] != None):
+            method = EnergyCorrection.shower_energy_correction[args.shower_correction["correction"]]
+            params = LoadConfiguration(args.shower_correction["correction_params"])
         else:
             method = None
             params = None
-            args.correction = None
-            args.correction_params = None
+            args.shower_correction["correction"] = None
+            args.shower_correction["correction_params"] = None
         args.pi0_selection["mc_arguments"]["Pi0MassSelection"]["correction"] = method
         args.pi0_selection["mc_arguments"]["Pi0MassSelection"]["correction_params"] = params
         args.pi0_selection["data_arguments"]["Pi0MassSelection"]["correction"] = method
