@@ -725,7 +725,8 @@ def BSCounts(model : cross_section.pyhf.Model, toy_template, fit_results, signal
     s_c_err = []
 
     for r in fit_results["results"]:
-        bkg, bkg_var = cross_section.RegionFit.EstimateBackground(fit_results["results"][r], model, toy_template, signal_process)
+        postfit_pred = cross_section.cabinetry.model_utils.prediction(model, fit_results = fit_results["results"][r])
+        bkg, bkg_var = cross_section.RegionFit.EstimateBackgroundAllRegions(postfit_pred, toy_template, signal_process)
 
         b_c.append(bkg)
         b_c_err.append(np.sqrt(bkg_var))
@@ -923,6 +924,7 @@ def SaveSummaryTables(directory : str, tables : tuple[pd.DataFrame], name : str)
         t.style.to_latex(f"{directory}table_{name}_{n}.tex")
     return
 
+
 def Summary(directory : str, test : str, signal_process : str, model : cross_section.pyhf.Model, energy_overflow : np.ndarray, template : cross_section.Toy, book : Plots.PlotBook = Plots.PlotBook.null, ymax = None):
     n_fe_max, n_fe_total_max = PredictedCountsSummary(directory, model, test)
 
@@ -941,9 +943,18 @@ def Summary(directory : str, test : str, signal_process : str, model : cross_sec
             y = n_fe_max[t][0]
             err = n_fe_max[t][1]
             Plots.Plot(energy_overflow, y[i], yerr = err[i], color = f"C{j}", label = cross_section.remove_(t), ylabel = "fractional error in fitted counts", xlabel = xlabel, title = f"process : {cross_section.remove_(p)}", newFigure = False)
-            Plots.plt.legend(title = f"{test}s test")
-            Plots.plt.ylim(0, 1.1 * ymax)
+        Plots.plt.legend(title = f"{test} test")
+        Plots.plt.ylim(0, 1.1 * ymax)
     book.Save()
+
+    for i, t in Plots.IterMultiPlot(n_fe_max):
+        for j, p in enumerate(indices):
+            y = n_fe_max[t][0]
+            err = n_fe_max[t][1]
+            Plots.Plot(energy_overflow, y[j], yerr = err[j], xlabel = xlabel, ylabel = "$|f_{bs}|$", label = cross_section.remove_(p), title = f"{test} test : {cross_section.remove_(t)}", newFigure = False)
+        Plots.plt.legend(title = "process")
+    book.Save()
+
 
     s_fe_max, b_fe_max, s_fe_total_max, b_fe_total_max = BackgroundSubtractionSummary(directory, model, signal_process, template, test)
 
@@ -973,6 +984,8 @@ def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : n
     for j, c in Plots.IterMultiPlot(templates_energy):
         for i, s in enumerate(c):
             Plots.Plot(energy_slices.pos_overflow, s/np.sum(templates_energy), color = tags.number[i].colour, label = f"$\lambda_{{{process_map[j]},{process_map[i]}}}$", xlabel = f"$\lambda_{{{process_map[j]},s}}$ (MeV)", ylabel = "normalised counts", style = "step", newFigure = False)
+        Plots.plt.title(f"region : {process_map[j]}")
+        Plots.plt.legend(title = "process")
     book.Save()
 
     if tempalates_mean_track_score is not None:
@@ -983,6 +996,7 @@ def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : n
         book.Save()
         book.close()
     return
+
 
 def PlotTotalChannel(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, book : Plots.PlotBook = Plots.PlotBook.null):
     for j, c in Plots.IterMultiPlot(templates_energy):

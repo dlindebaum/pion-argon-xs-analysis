@@ -1345,6 +1345,11 @@ class RecoParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__beam_michelScore")
 
     @property
+    def beam_trackScore(self) -> ak.Array:
+        self.LoadData("beam_trackScore", "reco_beam_PFP_trackScore_collection")
+        return getattr(self, f"_{type(self).__name__}__beam_trackScore")
+
+    @property
     def beam_nHits(self) -> ak.Array:
         self.LoadData("beam_nHits", "reco_beam_vertex_nHits")
         return getattr(self, f"_{type(self).__name__}__beam_nHits")

@@ -453,7 +453,8 @@ class ApplicationArguments:
                 for k, v in value.items():
                     args.fit[k] = v
             elif head == "ESLICE":
-                args.energy_slices = Slices(value["width"], value["min"], value["max"], reversed = True)
+                if value["width"] is not None:
+                    args.energy_slices = Slices(value["width"], value["min"], value["max"], reversed = True)
             elif head == "ANALYSIS_INPUTS":
                 args.analysis_input = {k : v for k, v in value.items()}
             elif head == "UNFOLDING":
@@ -1521,8 +1522,9 @@ class RegionFit:
             }
             if mc_stat_unc == True:
                 for i in range(len(samples)):
-                    ch["samples"][i]["modifiers"].append({"name" : f"{channel_name}_stat_err", "type" : "staterror", "data" : (quadsum(np.sqrt(samples), 0)).astype(int).tolist()})
-                #     ch["samples"][i]["modifiers"].append({'name': f"{channel_name}_sample_{i}_pois_err", 'type': 'shapesys', 'data': np.sqrt(samples[i]).astype(int).tolist()})
+                    # ch["samples"][i]["modifiers"].append({"name" : f"{channel_name}_stat_err", "type" : "staterror", "data" : (quadsum(np.sqrt(samples), 0)).astype(int).tolist()})
+                    # ch["samples"][i]["modifiers"].append({"name" : f"{channel_name}_stat_err", "type" : "shapesys", "data" : (quadsum(np.sqrt(samples), 0)).astype(int).tolist()})
+                    ch["samples"][i]["modifiers"].append({'name': f"{channel_name}_sample_{i}_pois_err", 'type': 'shapesys', 'data': np.sqrt(samples[i]).astype(int).tolist()})
             return ch
 
         spec = {"channels" : [channel(f"channel_{n}", KE_int_templates[n], mc_stat_unc) for n in range(n_channels)]}
@@ -1544,8 +1546,8 @@ class RegionFit:
         print(f"   auxdata: {model.config.auxdata}")
 
     @staticmethod
-    def GenerateObservations(fit_input : AnalysisInput, energy_slices : Slices, mean_track_score_bins : np.array, model : pyhf.Model, verbose : bool = True) -> np.array:
-        data = RegionFit.CreateObservedInputData(fit_input, energy_slices, mean_track_score_bins)
+    def GenerateObservations(fit_input : AnalysisInput, energy_slices : Slices, mean_track_score_bins : np.array, model : pyhf.Model, verbose : bool = True, single_bin : bool = False) -> np.array:
+        data = RegionFit.CreateObservedInputData(fit_input, energy_slices, mean_track_score_bins, single_bin)
         if verbose is True: print(f"{model.config.suggested_init()=}")
         observations = np.concatenate(data + [model.config.auxdata])
         if verbose is True: print(f"{model.logpdf(pars=model.config.suggested_init(), data=observations)=}")
@@ -1582,13 +1584,16 @@ class RegionFit:
         return counts_matrix
 
     @staticmethod
-    def CreateKEIntTemplates(analysis_input : AnalysisInput, energy_slices : Slices, pad : bool = False) -> list[np.array]:
+    def CreateKEIntTemplates(analysis_input : AnalysisInput, energy_slices : Slices, single_bin : bool = False, pad : bool = False) -> list[np.array]:
         model_input_data = []
         for c in analysis_input.regions:
             tmp = []
             for s in analysis_input.exclusive_process:
-                # tmp.append((analysis_input.NInteract(energy_slices, analysis_input.exclusive_process[s], analysis_input.regions[c], True, analysis_input.weights) + 1E-10 * int(pad))/len(analysis_input.KE_int_true))
-                tmp.append(analysis_input.NInteract(energy_slices, analysis_input.exclusive_process[s], analysis_input.regions[c], True, analysis_input.weights) + 1E-10 * int(pad))
+                n_int = analysis_input.NInteract(energy_slices, analysis_input.exclusive_process[s], analysis_input.regions[c], True, analysis_input.weights) + 1E-10 * int(pad)
+                if single_bin:
+                    tmp.append(np.array([sum(n_int)]))
+                else:
+                    tmp.append(n_int)
             model_input_data.append(tmp)
         return model_input_data
 
@@ -1601,8 +1606,8 @@ class RegionFit:
         return np.array(templates)
 
     @staticmethod
-    def CreateModel(template : AnalysisInput, energy_slice : Slices, mean_track_score_bins : np.array, return_templates : bool = False, weights : np.array = None, mc_stat_unc : bool = True, pad : bool = True) -> pyhf.Model:
-        templates_energy = RegionFit.CreateKEIntTemplates(template, energy_slice, pad)
+    def CreateModel(template : AnalysisInput, energy_slice : Slices, mean_track_score_bins : np.array, return_templates : bool = False, weights : np.array = None, mc_stat_unc : bool = True, pad : bool = True, single_bin : bool = False) -> pyhf.Model:
+        templates_energy = RegionFit.CreateKEIntTemplates(template, energy_slice, single_bin, pad)
         if mean_track_score_bins is not None:
             templates_mean_track_score = RegionFit.CreateMeanTrackScoreTemplates(template, mean_track_score_bins, weights)
         else:
@@ -1615,14 +1620,18 @@ class RegionFit:
             return model
 
     @staticmethod
-    def CreateObservedInputData(fit_input : AnalysisInput, slices : Slices, mean_track_score_bins : np.array = None) -> np.array:
+    def CreateObservedInputData(fit_input : AnalysisInput, slices : Slices, mean_track_score_bins : np.array = None, single_bin : bool = False) -> np.array:
         observed_binned = []
         if fit_input.inclusive_process is None:
             mask = np.ones_like(fit_input.KE_int_reco, dtype = bool)
         else:
             mask = fit_input.inclusive_process
         for v in fit_input.regions.values():
-            observed_binned.append(fit_input.NInteract(slices, v & mask, reco = True))
+            n_int = fit_input.NInteract(slices, v & mask, reco = True)
+            if single_bin:
+                n_int = [sum(n_int)]
+                print(f"{n_int=}")
+            observed_binned.append(n_int)
         if mean_track_score_bins is not None:
             observed_binned.append(np.histogram(fit_input.mean_track_score[fit_input.inclusive_process], mean_track_score_bins)[0])
         return observed_binned
@@ -1638,24 +1647,49 @@ class RegionFit:
             Plots.Plot(ratio_plot.x, ratio_plot.y1, yerr = ratio_plot.y1_err, color = "C6", label = "fit", style = "step", ylabel = "Counts", newFigure = False)
 
     @staticmethod
-    def EstimateBackground(fit_results : FitResults, model : pyhf.Model, template : AnalysisInput, signal_process : str):
-        postfit_pred = cabinetry.model_utils.prediction(model, fit_results = fit_results)
-
+    def EstimateCounts(postfit_pred : cabinetry.model_utils.ModelPrediction) -> tuple[np.ndarray, np.ndarray]:
         if any([c["name"] == "mean_track_score" for c in postfit_pred.model.spec["channels"]]):
             KE_int_prediction = RegionFit.SliceModelPrediction(postfit_pred, slice(-1), "KE_int_postfit") # exclude the channel which is the mean track score
         else:
             KE_int_prediction = RegionFit.SliceModelPrediction(postfit_pred, slice(0, len(postfit_pred.model_yields)), "KE_int_postfit")
 
-        L = np.sum(KE_int_prediction.model_yields, 0)
+        L = KE_int_prediction.model_yields
 
         L_err = KE_int_prediction.total_stdev_model_bins[:, :-1] # last entry in the array is the total error for the whole channel (but we want the total error in each process)
-        L_err = np.sqrt(np.sum(L_err **2, 0)) # quadrature sum across all bins
+
+        return L, L_err
+
+    @staticmethod
+    def EstimateBackgroundAllRegions(postfit_pred : cabinetry.model_utils.ModelPrediction, template : AnalysisInput, signal_process : str) -> tuple[np.ndarray, np.ndarray]:
+        N, N_err = RegionFit.EstimateCounts(postfit_pred)
+        N = np.sum(N, 0)
+        N_err = quadsum(N_err, 0)
 
         labels = list(template.regions.keys()) #! make property of AnalysisInput dataclass
-        L_var_bkg = sum(L_err[signal_process != np.array(labels)]**2)
-        L_bkg = sum(L[signal_process != np.array(labels)])
+        N_bkg_err = N_err[signal_process != np.array(labels)]
+        N_bkg = N[signal_process != np.array(labels)]
 
-        return L_bkg, L_var_bkg
+        return N_bkg, N_bkg_err
+
+    @staticmethod
+    def EstimateBackgroundInRegions(postfit_pred : cabinetry.model_utils.ModelPrediction, data : AnalysisInput) -> tuple[dict, dict]:
+        N, N_err = RegionFit.EstimateCounts(postfit_pred)
+        processes = list(data.regions.keys())
+
+        bkg_in_region = {}
+        bkg_in_region_err = {}
+
+        for p in processes:
+            signal = p
+            signal_index = processes.index(signal)
+
+            signal_region = N[signal_index]
+            signal_region_err = N_err[signal_index]
+
+            bkg_in_region[signal] = np.array([signal_region[i] for i in range(len(signal_region)) if i != signal_index])
+            bkg_in_region_err[signal] = np.array([signal_region_err[i] for i in range(len(signal_region_err)) if i != signal_index])
+
+        return bkg_in_region, bkg_in_region_err
 
 
 class Unfold:
@@ -1733,7 +1767,7 @@ class Unfold:
         return
 
     @staticmethod
-    def CalculateResponseMatrices(template : AnalysisInput, process : str, energy_slice : Slices, book : Plots.PlotBook = None, efficiencies : dict[np.array] = None) -> dict[np.array]:
+    def CalculateResponseMatrices(template : AnalysisInput, process : str, energy_slice : Slices, regions : bool = False, book : Plots.PlotBook = None, efficiencies : dict[np.array] = None) -> dict[np.array]:
         """ Calculate response matrix of energy histograms from analysis input.
 
         Args:
@@ -1753,14 +1787,28 @@ class Unfold:
         true_slices = EnergySlice.SliceNumbers(template.KE_int_true, template.KE_init_true, outside_tpc_mask, energy_slice)
         reco_slices = EnergySlice.SliceNumbers(template.KE_int_reco, template.KE_init_reco, outside_tpc_mask, energy_slice)
 
-        channel = template.exclusive_process[process][~outside_tpc_mask]
+        if regions:
+            channel = {i : (template.exclusive_process[i] & template.regions[i])[~outside_tpc_mask] for i in template.regions}
+        else:
+            channel = template.exclusive_process[process][~outside_tpc_mask]
 
-        slice_pairs = {"init" : [reco_slices[0], true_slices[0]], "int" : [reco_slices[1], true_slices[1]], "int_ex" : [reco_slices[1][channel], true_slices[1][channel]]}
+        slice_pairs = {
+            "init" : [reco_slices[0], true_slices[0]],
+            "int" : [reco_slices[1], true_slices[1]]
+        }
+
+        if regions:
+            for i in channel:
+                slice_pairs[i] = [reco_slices[1][channel[i]], true_slices[1][channel[i]]]
+        else:
+            slice_pairs["int_ex"] = [reco_slices[1][channel], true_slices[1][channel]]
+
+        # slice_pairs = {"init" : [reco_slices[0], true_slices[0]], "int" : [reco_slices[1], true_slices[1]], "int_ex" : [reco_slices[1][channel], true_slices[1][channel]]}
 
         corr = {}
         resp = {}
 
-        labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$"}
+        labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$", "absorption": "$N_{int,abs}$", "charge_exchange" : "$N_{int,cex}$", "single_pion_production" : "$N_{int,spip}$", "pion_production" : "$N_{int,pip}$"}
 
 
         for k, v in slice_pairs.items():
