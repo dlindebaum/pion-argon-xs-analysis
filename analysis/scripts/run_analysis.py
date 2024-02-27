@@ -38,7 +38,8 @@ def template_config():
         },
         "ENERGY_CORRECTION":{
             "energy_range" : None,
-            "correction" : "repsonse"
+            "correction_params" : None,
+            "correction" : "response"
         },
         "UPSTREAM_ENERGY_LOSS":{
             "cv_function" : "gaussian",
@@ -59,7 +60,7 @@ def template_config():
         },
         "FIT":{
             "mc_stat_unc" : True,
-            "mean_track_score" : None
+            "mean_track_score" : False
         },
         "ESLICE":{
             "width" : None,
@@ -224,7 +225,11 @@ def main(args):
         print("run analysis, checking what steps have already been run")
 
         # keep these to figure out if batch processing is required
-        n_data = file_len(args.data_file)
+        if args.data_file is None:
+            print("no data file was specified, 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
+            n_data = 0
+        else:
+            n_data = file_len(args.data_file)
         n_mc = file_len(args.mc_file)
 
         #* beam quality
@@ -269,6 +274,7 @@ def main(args):
         #* photon energy correction
         can_run_pec = hasattr(args, "shower_correction") and (args.shower_correction["correction_params"] is None)
         if can_run_pec or check_run(args, "photon_correction"):
+            print("run shower correction")
             args.events = None
             args.batches = None
             args.threads = 1
@@ -367,7 +373,7 @@ def main(args):
             args = update_args() # reload config to continue
 
         #* toy parameters
-        can_run_tp = hasattr(args, "toy_parameters") and ("toy_parameters" not in os.listdir(args.out))
+        can_run_tp = hasattr(args, "toy_parameters") and hasattr(args, "beam_reweight_params") and ("toy_parameters" not in os.listdir(args.out))
         if can_run_tp or check_run(args, "toy_parameters"):
             print("toy parameters")
             cex_toy_parameters.main(args)
@@ -375,7 +381,7 @@ def main(args):
             #! make function to create the a toy configuration
 
         #* analysis input
-        can_run_ai = not hasattr(args, "analysis_input")
+        can_run_ai = (not hasattr(args, "analysis_input")) and (args.data_file is not None)
         if can_run_ai or check_run(args, "analysis_input"):
             print("analysis inputs")
             cex_analysis_input.main(args)

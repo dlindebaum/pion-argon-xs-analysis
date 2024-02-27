@@ -1,0 +1,230 @@
+{
+  "NTUPLE_FILE":{
+    "mc" : "MC ntuple file ENSURE ALL FILE PATHS ARE ABSOLUTE",
+    "data" : "Data ntuple file",
+    "type" : "type of ntuple files, this is either PDSPAnalyser or shower_merging"
+  },
+  "norm" : "normalisation to apply to MC when making Data/MC comparisons, usually defined as the ratio of pion-like triggers from the beam instrumentation",
+  "pmom" : "momentum byte of the beam i.e. central value of beam momentum in GeV, required if ntuple does not have the correct scale for the P_inst distribution",
+
+  "BEAM_SCRAPER_FITS": {
+    "energy_range": null,
+    "energy_bins": [
+      1500,
+      1700,
+      1900,
+      2100,
+      2300
+    ]
+  },
+  "ENERGY_CORRECTION": {
+    "energy_range": [
+      0,
+      1500
+    ],
+    "correction_params" : null,
+    "correction": "response"
+  },
+  "UPSTREAM_ENERGY_LOSS": {
+    "cv_function": "gaussian",
+    "bins": [
+      1500,
+      1600,
+      1700,
+      1800,
+      1900,
+      2000,
+      2100,
+      2200
+    ]
+  },
+  "TOY_PARAMETERS": {
+    "beam_profile": "crystal_ball",
+    "smearing_residual_ranges": {
+      "KE_init": [-250, 250],
+      "KE_int": [-250, 250],
+      "z_int": [-25, 25]
+    },
+    "plot_ranges": {
+      "KE_init": [1200, 2400],
+      "KE_int": [0, 2200],
+      "z_int": [0, 700]
+    }
+  },
+  "FIT": {
+    "mc_stat_unc": true,
+    "mean_track_score": false
+  },
+  "ESLICE": {
+    "width": null,
+    "min": null,
+    "max": null
+  },
+  "UNFOLDING": {
+    "method": 1,
+    "ts_stop": 0.0001,
+    "max_iter": 6,
+    "ts": "ks",
+    "covariance": "poisson"
+  },
+  "signal_process": "charge_exchange",
+  "BEAM_PARTICLE_SELECTION": {
+    "PiBeamSelection": {
+      "enable": true,
+      "use_beam_inst": false
+    },
+    "PandoraTagCut": {
+      "enable": true,
+      "cut": 13,
+      "op": "=="
+    },
+    "CaloSizeCut": {
+      "enable": true
+    },
+    "HasFinalStatePFOsCut": {
+      "enable": true
+    },
+    "DxyCut": {
+      "enable": true,
+      "cut": 3,
+      "op": "<"
+    },
+    "DzCut": {
+      "enable": true,
+      "cut": [
+        -3,
+        3
+      ],
+      "op": [
+        ">",
+        "<"
+      ]
+    },
+    "CosThetaCut": {
+      "enable": true,
+      "cut": 0.95,
+      "op": ">"
+    },
+    "APA3Cut": {
+      "enable": true,
+      "cut": 220,
+      "op": "<"
+    },
+    "MichelScoreCut": {
+      "enable": true,
+      "cut": 0.55,
+      "op": "<"
+    },
+    "MedianDEdXCut": {
+      "enable": true,
+      "cut": 2.4,
+      "op": "<"
+    },
+    "BeamScraperCut": {
+      "enable": true,
+      "KE_range": 1,
+      "cut": 1.5,
+      "op": "<"
+    }
+  },
+  "VALID_PFO_SELECTION": {
+    "enable": true
+  },
+  "FINAL_STATE_PIPLUS_SELECTION": {
+    "TrackScoreCut": {
+      "enable": true,
+      "cut": 0.5,
+      "op": ">"
+    },
+    "NHitsCut": {
+      "enable": true,
+      "cut": 20,
+      "op": ">"
+    },
+    "PiPlusSelection": {
+      "enable": true,
+      "cut": [
+        0.5,
+        2.8
+      ],
+      "op": [
+        ">",
+        "<"
+      ]
+    }
+  },
+  "FINAL_STATE_PHOTON_SELECTION": {
+    "TrackScoreCut": {
+      "enable": true,
+      "cut": 0.5,
+      "op": "<"
+    },
+    "NHitsCut": {
+      "enable": true,
+      "cut": 80,
+      "op": ">"
+    },
+    "BeamParticleDistanceCut": {
+      "enable": true,
+      "cut": [
+        3,
+        90
+      ],
+      "op": [
+        ">",
+        "<"
+      ]
+    },
+    "BeamParticleIPCut": {
+      "enable": true,
+      "cut": 20,
+      "op": "<"
+    }
+  },
+  "FINAL_STATE_PI0_SELECTION": {
+    "NPhotonCandidateSelection": {
+      "enable": true,
+      "cut": 2,
+      "op": "=="
+    },
+    "Pi0MassSelection": {
+      "enable": true,
+      "cut": [
+        50,
+        250
+      ],
+      "op": [
+        ">",
+        "<"
+      ]
+    },
+    "Pi0OpeningAngleSelection": {
+      "enable": true,
+      "cut": [
+        10,
+        80
+      ],
+      "op": [
+        ">",
+        "<"
+      ]
+    }
+  },
+  "beam_momentum": 2000,
+  "P_inst_range": [
+    1000,
+    2500
+  ],
+  "KE_inst_range": [
+    1500,
+    2500
+  ],
+  "KE_init_range": [
+    1500,
+    2500
+  ],
+  "KE_int_range": [
+    1000,
+    2200
+  ]
+}
