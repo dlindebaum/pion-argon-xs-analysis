@@ -75,27 +75,27 @@ def GoodShowerSelection(events : Master.Data, return_table = False):
     return CombineSelections(events, selections, 1, return_table = return_table)
 
 
-def EMScoreCut(events : Master.Data, cut = 0.5, return_property : bool = False) -> ak.Array:
+def EMScoreCut(events : Master.Data, cut = 0.5, return_property : bool = False) -> ak.Array: #TODO Remove
     return CreateMask(cut, "<", events.recoParticles.track_score, return_property)
 
 
-def NHitsCut(events : Master.Data, cut = 80, return_property : bool = False) -> ak.Array:
-    return CreateMask(cut, ">", events.recoParticles.n_hits, return_property)
+def NHitsCut(events : Master.Data, cut = 80, op = ">", return_property : bool = False) -> ak.Array:
+    return CreateMask(cut, op, events.recoParticles.n_hits, return_property)
 
 
-def BeamParticleDistanceCut(events : Master.Data, cut = [3, 90], return_property : bool = False) -> ak.Array:
+def BeamParticleDistanceCut(events : Master.Data, cut = [3, 90], op = [">", "<"], return_property : bool = False) -> ak.Array:
     # distance to beam end position in cm
     dist = find_beam_separations(events)
     return CreateMask(cut, [">", "<"], dist, return_property)
 
 
-def BeamParticleIPCut(events : Master.Data, cut = 20., return_property : bool = False) -> ak.Array:
+def BeamParticleIPCut(events : Master.Data, cut = 20, op = "<", return_property : bool = False) -> ak.Array:
     ip = find_beam_impact_parameters(events)
-    return CreateMask(cut, "<", ip, return_property)
+    return CreateMask(cut, op, ip, return_property)
 
 
-def TrackScoreCut(events : Master.Data, cut = 0.5, return_property : bool = False):
-    return CreateMask(cut, ">", events.recoParticles.track_score, return_property)
+def TrackScoreCut(events : Master.Data, cut = 0.5, op = ">", return_property : bool = False):
+    return CreateMask(cut, op, events.recoParticles.track_score, return_property)
 
 
 def BeamDaughterCut(events : Master.Data):
@@ -107,14 +107,14 @@ def VetoBeamParticle(events : Master.Data):
     return events.recoParticles.beam_number != events.recoParticles.number
 
 
-def PiPlusSelection(events : Master.Data, cut = [0.5, 2.8], return_property : bool = False):
+def PiPlusSelection(events : Master.Data, cut = [0.5, 2.8], op = [">", "<"], return_property : bool = False):
     median_dEdX = Median(events.recoParticles.track_dEdX)
-    return CreateMask(cut, [">", "<"], median_dEdX, return_property)
+    return CreateMask(cut, op, median_dEdX, return_property)
 
 
-def ProtonSelection(events : Master.Data, cut = 2.8, return_property : bool = False):
+def ProtonSelection(events : Master.Data, cut = 2.8, op = ">", return_property : bool = False):
     median_dEdX = Median(events.recoParticles.track_dEdX)
-    return CreateMask(cut, ">", median_dEdX, return_property)
+    return CreateMask(cut, op, median_dEdX, return_property)
 
 
 def InitialPi0PhotonSelection(

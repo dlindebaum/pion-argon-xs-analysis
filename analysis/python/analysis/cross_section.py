@@ -24,26 +24,28 @@ from particle import Particle
 from pyunfold import iterative_unfold, Logger
 from scipy.interpolate import interp1d, UnivariateSpline
 
-from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, Fitting, Plots, vector, Tags
+from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags
 from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer
 from python.analysis.shower_merging import SetPlotStyle
-
-def bin_centers(bins : np.array) -> np.array:
-    return (bins[1:] + bins[:-1]) / 2
-
-
-def nandiv(num, den):
-    return np.divide(num, np.where(den == 0, np.nan, den))
-
+from python.analysis.Utils import *
 
 def KE(p, m):
     return (p**2 + m**2)**0.5 - m
 
+def IsScraper(mc : Data, beam_scraper_args : dict) -> ak.Array:
+    beam_inst_KE = KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
+    true_ffKE = mc.trueParticles.beam_KE_front_face
 
-def weighted_chi_sqr(observed, expected, uncertainties):
-    u = np.array(uncertainties)
-    u[u == 0] = np.nan
-    return np.nansum((observed - expected)**2 / u**2) / len(observed)
+    delta_KE_upstream = beam_inst_KE - true_ffKE
+
+    scraper_ids = {}
+    for k, v in beam_scraper_args.items():
+        scraper_ids[k] = (beam_inst_KE > min(v["bins"])) & (beam_inst_KE < max(v["bins"]))
+        threshold = v["mu_e_res"] + 3 * abs(v["sigma_e_res"])
+        
+        scraper_ids[k] = scraper_ids[k] & (delta_KE_upstream > threshold)
+    scraper_ids = SelectionTools.CombineMasks(scraper_ids, operator = "or")
+    return scraper_ids
 
 
 def RatioWeights(mc : Data, func : str, params : list, truncate : int = 10):
@@ -52,8 +54,11 @@ def RatioWeights(mc : Data, func : str, params : list, truncate : int = 10):
     return weights
 
 
-def PlotXSComparison(xs : dict[np.array], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", newFigure : bool = True):
+def PlotXSComparison(xs : dict[np.array], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", newFigure : bool = True):
     xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos, energy_slice.max_pos + energy_slice.width])
+
+    if colors is None:
+        colors = {k : f"C{i}" for i, k in enumerate(xs)}
 
     sim_curve_interp = xs_sim.GetInterpolatedCurve(process)
     x = energy_slice.pos - energy_slice.width/2
@@ -66,9 +71,9 @@ def PlotXSComparison(xs : dict[np.array], energy_slice, process : str = None, co
         Plots.Plot(x, v[0], xerr = energy_slice.width / 2, yerr = v[1], label = k + ", $\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}", color = colors[k], linestyle = "", marker = "x", newFigure = False)
     
     if process == "single_pion_production":
-        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = "simulation", title = "single pion production", newFigure = False, xlabel = "$KE_{int} (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)
+        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = simulation_label, title = "single pion production" if title is not None else title, newFigure = False, xlabel = "$KE_{int} (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)
     else:
-        xs_sim.Plot(process, label = "simulation", color = xs_sim_color)
+        xs_sim.Plot(process, label = simulation_label, color = xs_sim_color, title = title)
 
     Plots.plt.ylim(0)
     if max(Plots.plt.gca().get_ylim()) > np.nanmax(sim_curve_interp(xs_sim.KE).astype(float)) * 2:
@@ -294,8 +299,8 @@ class ApplicationArguments:
         parser.add_argument("-t", "--threads", dest = "threads", type = int, default = 1, help = "Number of threads to use when processsing")
 
     @staticmethod
-    def Output(parser : argparse.ArgumentParser):
-        parser.add_argument("-o", "--out", dest = "out", type = str, default = None, help = "Directory to save plots")
+    def Output(parser : argparse.ArgumentParser, default : str = None):
+        parser.add_argument("-o", "--out", dest = "out", type = str, default = default, help = "Directory to save plots")
         return
 
     @staticmethod
@@ -340,10 +345,6 @@ class ApplicationArguments:
             if hasattr(args, "data_file") and hasattr(args, "data_beam_quality_fit"):
                 if args.data_file is not None and args.data_beam_quality_fit is None:
                     raise Exception("beam quality fit values for data are required")
-
-            if hasattr(args, "correction") and args.correction:
-                args.correction_params = args.correction[1]
-                args.correction = EnergyCorrection.shower_energy_correction[args.correction[0]]
 
         if hasattr(args, "out"):
             if args.out is None:
@@ -417,16 +418,23 @@ class ApplicationArguments:
             elif head == "FINAL_STATE_PI0_SELECTION":
                 args.pi0_selection = ApplicationArguments.__CreateSelection(value, EventSelection)
             elif head == "BEAM_QUALITY_FITS":
-                args.mc_beam_quality_fit = LoadConfiguration(value["mc"])
-                args.data_beam_quality_fit = LoadConfiguration(value["data"])
-            elif head == "BEAM_SCAPER_FITS":
-                args.mc_beam_scraper_fit = LoadConfiguration(value["mc"])
+                args.mc_beam_quality_fit = LoadConfiguration(value["mc"]) # generally expected to have MC at a minimum
+                if "data" in value:
+                    args.data_beam_quality_fit = LoadConfiguration(value["data"])
+            elif head == "BEAM_SCRAPER_FITS":
+                args.beam_scraper_energy_range = value["energy_range"]
+                args.beam_scraper_energy_bins = value["energy_bins"]
+                if "mc" in value:
+                    args.mc_beam_scraper_fit = LoadConfiguration(value["mc"])
             elif head == "ENERGY_CORRECTION":
-                args.correction = value["correction"]
-                args.correction_params = value["correction_params"]
+                args.shower_correction = {}
+                for k, v in value.items():
+                    args.shower_correction[k] = v
             elif head == "UPSTREAM_ENERGY_LOSS":
+                args.upstream_loss_cv_function = value["cv_function"]
                 args.upstream_loss_bins = value["bins"]
-                args.upstream_loss_correction_params = LoadConfiguration(value["correction_params"])
+                if "correction_params" in value:
+                    args.upstream_loss_correction_params = LoadConfiguration(value["correction_params"])
             elif head == "BEAM_REWEIGHT":
                 args.beam_reweight_params = LoadConfiguration(value["params"])
             elif head == "SELECTION_MASKS":
@@ -440,6 +448,17 @@ class ApplicationArguments:
                         args.toy_parameters[k] = getattr(Fitting, v)
                     else:
                         args.toy_parameters[k] = v
+            elif head == "FIT":
+                args.fit = {}
+                for k, v in value.items():
+                    args.fit[k] = v
+            elif head == "ESLICE":
+                if value["width"] is not None:
+                    args.energy_slices = Slices(value["width"], value["min"], value["max"], reversed = True)
+            elif head == "ANALYSIS_INPUTS":
+                args.analysis_input = {k : v for k, v in value.items()}
+            elif head == "UNFOLDING":
+                args.unfolding = {k : v for k, v in value.items()}
             else:
                 setattr(args, head, value) # allow for generic configurations in the json file
         ApplicationArguments.DataMCSelectionArgs(args)
@@ -452,14 +471,14 @@ class ApplicationArguments:
 
     @staticmethod
     def AddEnergyCorrection(args):
-        if hasattr(args, "correction"):
-            method = EnergyCorrection.shower_energy_correction[args.correction]
-            params = LoadConfiguration(args.correction_params)
+        if hasattr(args, "shower_correction") and (args.shower_correction["correction_params"] != None):
+            method = EnergyCorrection.shower_energy_correction[args.shower_correction["correction"]]
+            params = LoadConfiguration(args.shower_correction["correction_params"])
         else:
             method = None
             params = None
-            args.correction = None
-            args.correction_params = None
+            args.shower_correction["correction"] = None
+            args.shower_correction["correction_params"] = None
         args.pi0_selection["mc_arguments"]["Pi0MassSelection"]["correction"] = method
         args.pi0_selection["mc_arguments"]["Pi0MassSelection"]["correction_params"] = params
         args.pi0_selection["data_arguments"]["Pi0MassSelection"]["correction"] = method
@@ -476,11 +495,14 @@ class ApplicationArguments:
 
         for i, s in args.beam_selection["selections"].items():
             if s in [BeamParticleSelection.BeamQualityCut, BeamParticleSelection.DxyCut, BeamParticleSelection.DzCut, BeamParticleSelection.CosThetaCut]:
-                args.beam_selection["mc_arguments"][i]["fits"] = args.mc_beam_quality_fit
-                args.beam_selection["data_arguments"][i]["fits"] = args.data_beam_quality_fit
+                if hasattr(args, "mc_beam_quality_fit"): 
+                    args.beam_selection["mc_arguments"][i]["fits"] = args.mc_beam_quality_fit
+                if hasattr(args, "data_beam_quality_fit"): 
+                    args.beam_selection["data_arguments"][i]["fits"] = args.data_beam_quality_fit
             elif s == BeamParticleSelection.BeamScraperCut:
-                args.beam_selection["mc_arguments"][i]["fits"] = args.mc_beam_scraper_fit
-                args.beam_selection["data_arguments"][i]["fits"] = args.mc_beam_scraper_fit
+                if hasattr(args, "mc_beam_scraper_fit"): 
+                    args.beam_selection["mc_arguments"][i]["fits"] = args.mc_beam_scraper_fit
+                    args.beam_selection["data_arguments"][i]["fits"] = args.mc_beam_scraper_fit
             else:
                 continue
         return args
@@ -627,6 +649,14 @@ class Slices:
         """
         return np.array([ s.pos for s in self])
 
+    @property
+    def pos_overflow(self):
+        return np.insert(self.pos, 0, self.max_pos + self.width)
+
+    @property
+    def pos_bins(self):
+        return np.sort(self.pos_overflow)
+
 
     def pos_to_num(self, pos):
         """ Convert slice positions to numbers
@@ -698,8 +728,8 @@ class GeantCrossSections:
         """ Plot all cross section channels.
         """
         for k in self.labels.values():
-            Plots.Plot(self.KE, getattr(self, k), label = k.replace("_", " "), newFigure = False, xlabel = "KE (MeV)", ylabel = "$\sigma (mb)$", title = title)
-            Plots.plt.fill_between(self.KE, getattr(self, k) - self.Stat_Error(k), getattr(self, k) + self.Stat_Error(k), color = Plots.plt.gca()._get_lines.get_next_color())
+            Plots.Plot(self.KE, getattr(self, k), label = remove_(k), newFigure = False, xlabel = "KE (MeV)", ylabel = "$\sigma (mb)$", title = title)
+            # Plots.plt.fill_between(self.KE, getattr(self, k) - self.Stat_Error(k), getattr(self, k) + self.Stat_Error(k), color = Plots.plt.gca()._get_lines.get_next_color())
 
 
     def Plot(self, xs : str, color : str = None, label : str = None, title : str = None):
@@ -715,11 +745,15 @@ class GeantCrossSections:
             self.__PlotAll(title = title)
         else:
             if label is None:
-                label = xs.replace("_", " ")
+                label = remove_(xs)
             else:
                 if title is None:
-                    title = xs.replace("_", " ")
-            Plots.Plot(self.KE, getattr(self, xs), label = label, title = title, newFigure = False, xlabel = "$KE_{int} (MeV)$", ylabel = "$\sigma (mb)$", color = color)
+                    title = remove_(xs)
+            if xs == "single_pion_production":
+                y = self.quasielastic + self.double_charge_exchange
+            else:
+                y = getattr(self, xs)
+            Plots.Plot(self.KE, y, label = label, title = title, newFigure = False, xlabel = "$KE_{int}$ (MeV)", ylabel = "$\sigma (mb)$", color = color)
             # Plots.plt.fill_between(self.KE, getattr(self, xs) - self.Stat_Error(xs), getattr(self, xs) + self.Stat_Error(xs), color = Plots.plt.gca()._get_lines.get_next_color())
 
 
@@ -777,11 +811,13 @@ class ThinSlice:
         """
         beam_traj_slice = slices.pos_to_num(endPos)
         slice_nums = slices.num
-
+        
         counts = np.histogram(ak.ravel(beam_traj_slice), slice_nums)[0] # histogram of positions will give the counts
 
-        sum_energy = np.histogram(ak.ravel(beam_traj_slice), slice_nums, weights = ak.ravel(energy))[0] # total energy in each bin if you weight by energy
-        sum_energy_sqr = np.histogram(ak.ravel(beam_traj_slice), slice_nums, weights = ak.ravel(energy)**2)[0] # same as above
+        weights = ak.ravel(np.nan_to_num(energy, 0))
+
+        sum_energy = np.histogram(ak.ravel(beam_traj_slice), slice_nums, weights = weights)[0] # total energy in each bin if you weight by energy
+        sum_energy_sqr = np.histogram(ak.ravel(beam_traj_slice), slice_nums, weights = weights**2)[0] # same as above
 
         mean_energy = sum_energy / counts
 
@@ -1058,7 +1094,8 @@ class EnergySlice:
         else:
             var_int_ex = n_int_ex * (1 - nandiv(n_int_ex, n_inc)) # binomial uncertainty
 
-        xs = factor * n_interact_ratio * np.log(nandiv(n_inc, n_inc - n_int))
+
+        xs = factor * n_interact_ratio * nanlog(nandiv(n_inc, n_inc - n_int))
 
         diff_n_int_ex = nandiv(xs, n_int_ex)
         diff_n_inc = factor * n_interact_ratio * (nandiv(1, n_inc) - nandiv(1, n_survived))
@@ -1232,7 +1269,13 @@ class AnalysisInput:
     KE_int_true : np.array
     KE_init_true : np.array
     # extras
-    weights : np.array
+    weights : np.array = None
+
+    def __len__(self):
+        for o in ["outside_tpc_reco", "outside_tpc_true", "track_length_reco", "KE_int_reco", "KE_init_reco", "mean_track_score", "track_length_true", "KE_int_true", "KE_init_true", "weights"]:
+            if getattr(self, o) is not None:
+                return len(getattr(self, o))
+        return
 
     def ToFile(self, file : str):
         """ Save to dill file.
@@ -1471,6 +1514,7 @@ class RegionFit:
                         "data" : s.tolist(),
                         "modifiers" : [
                             {'name': f"mu_{i}", 'type': 'normfactor', 'data': None},
+                            # {'name': "normsys", 'type': "normsys", 'data' : {'lo' : 0.8, 'hi' : 1.2}}
                             ]
                     }
                 for i, s in enumerate(samples)
@@ -1478,6 +1522,8 @@ class RegionFit:
             }
             if mc_stat_unc == True:
                 for i in range(len(samples)):
+                    # ch["samples"][i]["modifiers"].append({"name" : f"{channel_name}_stat_err", "type" : "staterror", "data" : (quadsum(np.sqrt(samples), 0)).astype(int).tolist()})
+                    # ch["samples"][i]["modifiers"].append({"name" : f"{channel_name}_stat_err", "type" : "shapesys", "data" : (quadsum(np.sqrt(samples), 0)).astype(int).tolist()})
                     ch["samples"][i]["modifiers"].append({'name': f"{channel_name}_sample_{i}_pois_err", 'type': 'shapesys', 'data': np.sqrt(samples[i]).astype(int).tolist()})
             return ch
 
@@ -1500,8 +1546,8 @@ class RegionFit:
         print(f"   auxdata: {model.config.auxdata}")
 
     @staticmethod
-    def GenerateObservations(fit_input : AnalysisInput, energy_slices : Slices, mean_track_score_bins : np.array, model : pyhf.Model, verbose : bool = True) -> np.array:
-        data = RegionFit.CreateObservedInputData(fit_input, energy_slices, mean_track_score_bins)
+    def GenerateObservations(fit_input : AnalysisInput, energy_slices : Slices, mean_track_score_bins : np.array, model : pyhf.Model, verbose : bool = True, single_bin : bool = False) -> np.array:
+        data = RegionFit.CreateObservedInputData(fit_input, energy_slices, mean_track_score_bins, single_bin)
         if verbose is True: print(f"{model.config.suggested_init()=}")
         observations = np.concatenate(data + [model.config.auxdata])
         if verbose is True: print(f"{model.logpdf(pars=model.config.suggested_init(), data=observations)=}")
@@ -1511,7 +1557,7 @@ class RegionFit:
     def Fit(observations, model : pyhf.Model, init_params : list[float] = None, par_bounds : list[tuple] = None, verbose : bool = True) -> FitResults:
         pyhf.set_backend(backend = "numpy", custom_optimizer = "minuit")
         if verbose is True: print(f"{init_params=}")
-        result = cabinetry.fit.fit(model, observations, init_pars = init_params, custom_fit = True, tolerance = 0.001, par_bounds = par_bounds)
+        result = cabinetry.fit.fit(model, observations, init_pars = init_params, custom_fit = True, tolerance = 1E-3, par_bounds = par_bounds)
 
         poi_ind = [model.config.par_slice(i).start for i in model.config.par_names if "mu" in i]
         if verbose is True: print(f"{poi_ind=}")
@@ -1538,12 +1584,16 @@ class RegionFit:
         return counts_matrix
 
     @staticmethod
-    def CreateKEIntTemplates(analysis_input : AnalysisInput, energy_slices : Slices) -> list[np.array]:
+    def CreateKEIntTemplates(analysis_input : AnalysisInput, energy_slices : Slices, single_bin : bool = False, pad : bool = False) -> list[np.array]:
         model_input_data = []
         for c in analysis_input.regions:
             tmp = []
             for s in analysis_input.exclusive_process:
-                tmp.append(analysis_input.NInteract(energy_slices, analysis_input.exclusive_process[s], analysis_input.regions[c], True, analysis_input.weights) + 1)
+                n_int = analysis_input.NInteract(energy_slices, analysis_input.exclusive_process[s], analysis_input.regions[c], True, analysis_input.weights) + 1E-10 * int(pad)
+                if single_bin:
+                    tmp.append(np.array([sum(n_int)]))
+                else:
+                    tmp.append(n_int)
             model_input_data.append(tmp)
         return model_input_data
 
@@ -1556,8 +1606,8 @@ class RegionFit:
         return np.array(templates)
 
     @staticmethod
-    def CreateModel(template : AnalysisInput, energy_slice : Slices, mean_track_score_bins : np.array, return_templates : bool = False, weights : np.array = None, mc_stat_unc : bool = True) -> pyhf.Model:
-        templates_energy = RegionFit.CreateKEIntTemplates(template, energy_slice)
+    def CreateModel(template : AnalysisInput, energy_slice : Slices, mean_track_score_bins : np.array, return_templates : bool = False, weights : np.array = None, mc_stat_unc : bool = True, pad : bool = True, single_bin : bool = False) -> pyhf.Model:
+        templates_energy = RegionFit.CreateKEIntTemplates(template, energy_slice, single_bin, pad)
         if mean_track_score_bins is not None:
             templates_mean_track_score = RegionFit.CreateMeanTrackScoreTemplates(template, mean_track_score_bins, weights)
         else:
@@ -1570,14 +1620,18 @@ class RegionFit:
             return model
 
     @staticmethod
-    def CreateObservedInputData(fit_input : AnalysisInput, slices : Slices, mean_track_score_bins : np.array = None) -> np.array:
+    def CreateObservedInputData(fit_input : AnalysisInput, slices : Slices, mean_track_score_bins : np.array = None, single_bin : bool = False) -> np.array:
         observed_binned = []
         if fit_input.inclusive_process is None:
             mask = np.ones_like(fit_input.KE_int_reco, dtype = bool)
         else:
             mask = fit_input.inclusive_process
         for v in fit_input.regions.values():
-            observed_binned.append(fit_input.NInteract(slices, v & mask, reco = True))
+            n_int = fit_input.NInteract(slices, v & mask, reco = True)
+            if single_bin:
+                n_int = [sum(n_int)]
+                print(f"{n_int=}")
+            observed_binned.append(n_int)
         if mean_track_score_bins is not None:
             observed_binned.append(np.histogram(fit_input.mean_track_score[fit_input.inclusive_process], mean_track_score_bins)[0])
         return observed_binned
@@ -1587,10 +1641,55 @@ class RegionFit:
         return cabinetry.model_utils.ModelPrediction(prediction.model, np.array(prediction.model_yields[slice]), np.array(prediction.total_stdev_model_bins[slice]), np.array(prediction.total_stdev_model_channels[slice]), label)
 
     @staticmethod
-    def PlotPrefitPostFit(prefit, prefit_err, postfit, postfit_err, energy_bins):
-        with Plots.RatioPlot(energy_bins[::-1], postfit, prefit, postfit_err, prefit_err, "$KE_{int}$ (MeV)", "fit/ actual") as ratio_plot:
-            Plots.Plot(ratio_plot.x, ratio_plot.y2, yerr = ratio_plot.y2_err, color = "C0", label = "actual", style = "step", newFigure = False)
+    def PlotPrefitPostFit(prefit, prefit_err, postfit, postfit_err, energy_bins, xlabel = "$KE_{int}$ (MeV)"):
+        with Plots.RatioPlot(energy_bins[::-1], postfit, prefit, postfit_err, prefit_err, xlabel, "fit/ true") as ratio_plot:
+            Plots.Plot(ratio_plot.x, ratio_plot.y2, yerr = ratio_plot.y2_err, color = "C0", label = "true", style = "step", newFigure = False)
             Plots.Plot(ratio_plot.x, ratio_plot.y1, yerr = ratio_plot.y1_err, color = "C6", label = "fit", style = "step", ylabel = "Counts", newFigure = False)
+
+    @staticmethod
+    def EstimateCounts(postfit_pred : cabinetry.model_utils.ModelPrediction) -> tuple[np.ndarray, np.ndarray]:
+        if any([c["name"] == "mean_track_score" for c in postfit_pred.model.spec["channels"]]):
+            KE_int_prediction = RegionFit.SliceModelPrediction(postfit_pred, slice(-1), "KE_int_postfit") # exclude the channel which is the mean track score
+        else:
+            KE_int_prediction = RegionFit.SliceModelPrediction(postfit_pred, slice(0, len(postfit_pred.model_yields)), "KE_int_postfit")
+
+        L = KE_int_prediction.model_yields
+
+        L_err = KE_int_prediction.total_stdev_model_bins[:, :-1] # last entry in the array is the total error for the whole channel (but we want the total error in each process)
+
+        return L, L_err
+
+    @staticmethod
+    def EstimateBackgroundAllRegions(postfit_pred : cabinetry.model_utils.ModelPrediction, template : AnalysisInput, signal_process : str) -> tuple[np.ndarray, np.ndarray]:
+        N, N_err = RegionFit.EstimateCounts(postfit_pred)
+        N = np.sum(N, 0)
+        N_err = quadsum(N_err, 0)
+
+        labels = list(template.regions.keys()) #! make property of AnalysisInput dataclass
+        N_bkg_err = N_err[signal_process != np.array(labels)]
+        N_bkg = N[signal_process != np.array(labels)]
+
+        return N_bkg, N_bkg_err
+
+    @staticmethod
+    def EstimateBackgroundInRegions(postfit_pred : cabinetry.model_utils.ModelPrediction, data : AnalysisInput) -> tuple[dict, dict]:
+        N, N_err = RegionFit.EstimateCounts(postfit_pred)
+        processes = list(data.regions.keys())
+
+        bkg_in_region = {}
+        bkg_in_region_err = {}
+
+        for p in processes:
+            signal = p
+            signal_index = processes.index(signal)
+
+            signal_region = N[signal_index]
+            signal_region_err = N_err[signal_index]
+
+            bkg_in_region[signal] = np.array([signal_region[i] for i in range(len(signal_region)) if i != signal_index])
+            bkg_in_region_err[signal] = np.array([signal_region_err[i] for i in range(len(signal_region_err)) if i != signal_index])
+
+        return bkg_in_region, bkg_in_region_err
 
 
 class Unfold:
@@ -1634,9 +1733,9 @@ class Unfold:
 
         column_sums = response_hist.sum(axis=0)
         if remove_overflow is True:
-            normalization_factor = efficiencies[1:] / column_sums
+            normalization_factor = nandiv(efficiencies[1:], column_sums)
         else:
-            normalization_factor = efficiencies / column_sums
+            normalization_factor = nandiv(efficiencies, column_sums)
         response = response_hist * normalization_factor
         response_err = response_hist_err * normalization_factor
         
@@ -1646,7 +1745,7 @@ class Unfold:
         return response, response_err
 
     @staticmethod #? move to Plots?
-    def PlotMatrix(matrix : np.array, title : str = None, c_label : str = None):
+    def PlotMatrix(matrix : np.array, energy_slices : Slices, title : str = None, c_label : str = None):
         """ Plot numpy matrix.
 
         Args:
@@ -1656,17 +1755,19 @@ class Unfold:
         """
         #* cause = true, effect = reco
         Plots.plt.figure()
-        Plots.plt.imshow(matrix, origin = "lower", cmap = "plasma")
-        Plots.plt.xlabel("true")
-        Plots.plt.ylabel("reco")
+        Plots.plt.imshow(np.flip(matrix), origin = "lower", cmap = "plasma")
+        Plots.plt.xlabel("true (MeV)")
+        Plots.plt.ylabel("reco (MeV)")
         Plots.plt.grid(False)
         Plots.plt.colorbar(label = c_label)
-        Plots.plt.tight_layout()
         Plots.plt.title(title)
+        Plots.plt.xticks(np.linspace(0, len(energy_slices.pos_overflow)-1, len(energy_slices.pos_overflow)), energy_slices.pos_overflow[::-1], rotation = 30)
+        Plots.plt.yticks(np.linspace(0, len(energy_slices.pos_overflow)-1, len(energy_slices.pos_overflow)), energy_slices.pos_overflow[::-1], rotation = 30)
+        Plots.plt.tight_layout(pad = 1)
         return
 
     @staticmethod
-    def CalculateResponseMatrices(template : AnalysisInput, process : str, energy_slice : Slices, book : Plots.PlotBook = None, efficiencies : dict[np.array] = None) -> dict[np.array]:
+    def CalculateResponseMatrices(template : AnalysisInput, process : str, energy_slice : Slices, regions : bool = False, book : Plots.PlotBook = None, efficiencies : dict[np.array] = None) -> dict[np.array]:
         """ Calculate response matrix of energy histograms from analysis input.
 
         Args:
@@ -1686,29 +1787,43 @@ class Unfold:
         true_slices = EnergySlice.SliceNumbers(template.KE_int_true, template.KE_init_true, outside_tpc_mask, energy_slice)
         reco_slices = EnergySlice.SliceNumbers(template.KE_int_reco, template.KE_init_reco, outside_tpc_mask, energy_slice)
 
-        channel = template.exclusive_process[process][~outside_tpc_mask]
+        if regions:
+            channel = {i : (template.exclusive_process[i] & template.regions[i])[~outside_tpc_mask] for i in template.regions}
+        else:
+            channel = template.exclusive_process[process][~outside_tpc_mask]
 
-        slice_pairs = {"init" : [reco_slices[0], true_slices[0]], "int" : [reco_slices[1], true_slices[1]], "int_ex" : [reco_slices[1][channel], true_slices[1][channel]]}
+        slice_pairs = {
+            "init" : [reco_slices[0], true_slices[0]],
+            "int" : [reco_slices[1], true_slices[1]]
+        }
+
+        if regions:
+            for i in channel:
+                slice_pairs[i] = [reco_slices[1][channel[i]], true_slices[1][channel[i]]]
+        else:
+            slice_pairs["int_ex"] = [reco_slices[1][channel], true_slices[1][channel]]
+
+        # slice_pairs = {"init" : [reco_slices[0], true_slices[0]], "int" : [reco_slices[1], true_slices[1]], "int_ex" : [reco_slices[1][channel], true_slices[1][channel]]}
 
         corr = {}
         resp = {}
 
-        labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$"}
+        labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$", "absorption": "$N_{int,abs}$", "charge_exchange" : "$N_{int,cex}$", "single_pion_production" : "$N_{int,spip}$", "pion_production" : "$N_{int,pip}$"}
 
 
         for k, v in slice_pairs.items():
             corr[k] = Unfold.CorrelationMarix(*v, bins = slice_bins, remove_overflow = False)
             resp[k] = Unfold.ResponseMatrix(*v, bins = slice_bins, efficiencies = None if efficiencies is None else efficiencies[k], remove_overflow = False)
             if book is not None:
-                Unfold.PlotMatrix(corr[k], title = f"Response Marix: {labels[k]}", c_label = "Counts")
+                Unfold.PlotMatrix(corr[k], energy_slice, title = f"Response Marix: {labels[k]}", c_label = "Counts")
                 book.Save()
             if book is not None:
-                Unfold.PlotMatrix(resp[k][0], title = f"Normalised Response Matrix: {labels[k]}", c_label = "$P(E_{i}|C_{j})$")
+                Unfold.PlotMatrix(resp[k][0], energy_slice, title = f"Normalised Response Matrix: {labels[k]}", c_label = "$P(E_{i}|C_{j})$")
                 book.Save()
         return resp
 
     @staticmethod
-    def Unfold(observed : dict[np.array], observed_err : dict[np.array], response_matrices : dict[np.array], priors : dict[np.array] = None, ts_stop = 0.01, max_iter = 100, ts = "ks", regularizers : dict[UnivariateSpline] = None, verbose : bool = False, efficiencies : dict[np.array] = None) -> dict[dict]:
+    def Unfold(observed : dict[np.array], observed_err : dict[np.array], response_matrices : dict[np.array], priors : dict[np.array] = None, ts_stop = 0.01, max_iter = 100, ts = "ks", regularizers : dict[UnivariateSpline] = None, verbose : bool = False, efficiencies : dict[np.array] = None, covariance : str = "multinomial") -> dict[dict]:
         """ Run iterative bayesian unfolding for each histogram.
 
         Args:
@@ -1739,21 +1854,22 @@ class Unfold:
             cb = make_cb(k)
 
             if efficiencies is not None:
-                efficiency = efficiencies[k]
+                efficiency = efficiencies[k][0]
+                efficiency_err = efficiencies[k][1]
             else:
-                efficiency = np.ones_like(n) #! for the toy, assume perfect selection efficiency, so 1 +- 0
-            efficiency_err = np.zeros_like(n)
+                efficiency = np.ones_like(n, dtype = float) #! for the toy, assume perfect selection efficiency, so 1 +- 0
+                efficiency_err = np.zeros_like(n, dtype = float) #? not exactly zero, make this very small so the systematic uncertainty from the response matrix can still be calculated?
 
             if priors is None:
                 p = n/sum(n)
             else:
                 p = priors[k] / sum(priors[k])
 
-            results[k] = iterative_unfold(n, n_e, v[0], v[1], efficiency, efficiency_err, callbacks = cb, prior = p, ts_stopping = ts_stop, max_iter = max_iter, ts = ts)
+            results[k] = iterative_unfold(n, n_e, v[0], v[1], efficiency, efficiency_err, callbacks = cb, prior = p, ts_stopping = ts_stop, max_iter = max_iter, ts = ts, cov_type = covariance)
         return results
 
     @staticmethod
-    def PlotUnfoldingResults(obs : np.array, true : np.array, results : dict, energy_bins : np.array, label : str, book : Plots.PlotBook = Plots.PlotBook.null):
+    def PlotUnfoldingResults(obs : np.array, true : np.array, results : dict, energy_slices : Slices, label : str, book : Plots.PlotBook = Plots.PlotBook.null):
         """ Plot unfolded histogram in comparison to observed and true.
 
         Args:
@@ -1764,10 +1880,10 @@ class Unfold:
             label (str): x label (units of MeV are automatically applied)
             book (Plots.PlotBook, optional): plot book. Defaults to Plots.PlotBook.null.
         """
-        Plots.Plot(energy_bins[::-1], obs, style = "step", label = "reco", xlabel = label, color = "C6")
-        Plots.Plot(energy_bins[::-1], true, style = "step", label = "true", xlabel = label, color = "C0", newFigure = False)
-        Plots.Plot(energy_bins[::-1], results["unfolded"], yerr = results["stat_err"], style = "step", label = f"unfolded, {results['num_iterations']} iterations", xlabel = label + " (MeV)", color = "C4", newFigure = False)
+        Plots.Plot(energy_slices.pos_bins[::-1], obs, style = "step", label = "Data reco", xlabel = label, color = "C6")
+        Plots.Plot(energy_slices.pos_bins[::-1], true, style = "step", label = "MC true", xlabel = label, color = "C0", newFigure = False)
+        Plots.Plot(energy_slices.pos_bins[::-1], results["unfolded"], yerr = results["stat_err"], style = "step", label = f"Data unfolded, {results['num_iterations']} iterations", xlabel = label + " (MeV)", color = "C4", newFigure = False)
         book.Save() 
-        Unfold.PlotMatrix(results["unfolding_matrix"], title = "Unfolded matrix: " + label, c_label = "$P(C_{j}|E_{i})$")
+        Unfold.PlotMatrix(results["unfolding_matrix"], energy_slices, title = "Unfolded matrix: " + label, c_label = "$P(C_{j}|E_{i})$")
         book.Save() 
         return

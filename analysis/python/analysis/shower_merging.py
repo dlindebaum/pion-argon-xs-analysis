@@ -18,7 +18,7 @@ from python.analysis import Master, Plots, vector, EventSelection
 from python.analysis import LegacyBeamParticleSelection, BeamParticleSelection, PFOSelection
 
 
-def SetPlotStyle(extend_colors : bool = False, dpi : int = 300):
+def SetPlotStyle(extend_colors : bool = False, custom_colors : list = None, dpi : int = 300, dark : bool = False):
     plt.style.use("default") # first load the default to reset any previous changes made by other styles
     plt.style.use('ggplot')
     plt.rcParams.update({'patch.linewidth': 1})
@@ -27,8 +27,23 @@ def SetPlotStyle(extend_colors : bool = False, dpi : int = 300):
     plt.rcParams.update({"axes.titlesize" : 12})
     plt.rcParams['figure.dpi'] = dpi
     plt.rcParams['legend.fontsize'] = "small"
+    plt.rc('text.latex', preamble=r"\\usepackage{amsmath}")
     if extend_colors:
         plt.rcParams.update({"axes.prop_cycle" : plt.cycler("color", get_cmap("tab20").colors)})
+    if custom_colors:
+        plt.rcParams.update({"axes.prop_cycle" : plt.cycler("color", custom_colors)})
+    if dark:
+        l_2 = [
+        get_cmap("tab20c").colors[0],
+        get_cmap("tab20c").colors[8],
+        get_cmap("tab20b").colors[13],
+        get_cmap("tab20b").colors[0],
+        get_cmap("tab20b").colors[17],
+        get_cmap("tab20b").colors[4],
+        get_cmap("tab20c").colors[12],
+        get_cmap("tab20c").colors[16],
+        ]
+        plt.rcParams.update({"axes.prop_cycle" : plt.cycler("color", l_2)})
 
 
 class ShowerMergeQuantities:

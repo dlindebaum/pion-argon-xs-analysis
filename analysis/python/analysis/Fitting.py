@@ -16,7 +16,7 @@ from scipy.optimize import curve_fit
 from scipy.special import gamma, erf
 from scipy.stats import ks_2samp, chi2
 
-from python.analysis import Plots
+from python.analysis import Plots, Utils
 
 class FitFunction(ABC):
     """ An abstract class for defining function pass to Fit(). Contains the following:
@@ -185,7 +185,7 @@ class crystal_ball(FitFunction):
 
         N = 1 / (C + D) # should be 1 / sigma * (C + D), but I dont want to normalise the function
 
-        y = np.where(t > -p3, np.exp(-t**2 / 2), A * (B - t)**-p4)
+        y = np.where(t > -p3, np.exp(-t**2 / 2), A * Utils.fpower(B - t, -p4))
         return p0 * N * y
 
     @staticmethod
@@ -242,8 +242,8 @@ class double_crystal_ball(FitFunction):
         z = (x - p1) / p2
         A, B = double_crystal_ball.ExponentNormalisation(p3, p4)
         C, D = double_crystal_ball.ExponentNormalisation(p5, p6)
-        E1 = A * (B-z)**(-p4)
-        E2 = C * (D+z)**(-p6)
+        E1 = A * Utils.fpower(B - z, -p4)
+        E2 = C * Utils.fpower(D + z, -p6)
         y = np.exp(-0.5*(z**2))
         y = np.where(z < -p3, E1, y)
         y = np.where(z > p5, E2, y)
@@ -366,7 +366,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
 
         #* main plotting
         x_interp = np.linspace(min(x), max(x), 1000)
-        Plots.Plot(x_interp, func.func(x_interp, *popt), newFigure = False, x_scale = "linear", xlabel = xlabel, ylabel = ylabel, color = "#1f77b4", zorder = 11, label = "fit", title = title)
+        Plots.Plot(x_interp, func.func(x_interp, *popt), newFigure = False, x_scale = "linear", ylabel = ylabel, color = "#1f77b4", zorder = 11, label = "fit", title = title)
         
         p_min = popt - perr
         p_max = popt + perr
@@ -390,7 +390,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
             colour = "#d62728"
             label = "observed"
 
-        Plots.Plot(x, y_obs, yerr = y_err, marker = marker, linestyle = "", color = colour, label = label, newFigure = False)
+        Plots.Plot(x, y_obs, yerr = y_err, marker = marker, linestyle = "", color = colour, xlabel = xlabel, label = label, newFigure = False)
         if ylim:
             plt.ylim(*sorted(ylim))
 
@@ -401,9 +401,9 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         plt.gca().add_artist(main_legend)
         text = ""
         for j in range(len(popt)):
-            text += f"\np{j}: ${popt[j]:.2g}\pm${perr[j]:.2g}"
+            text += f"\n$p_{{{j}}}$: ${popt[j]:.2g}\pm${perr[j]:.2g}"
         text += "\n$\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2g}, p : " + f"{p_value:.1g}"
-        legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = "upper right", title = func.__name__)
+        legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = "upper right", title = Utils.remove_(func.__name__))
         legend.set_zorder(12)
         for l in legend.legendHandles:
             l.set_visible(False)
@@ -414,7 +414,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         return popt, perr
 
 
-def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : str, v_range : list, funcs, data_bins : list, hist_bins : int, log : bool = False, rms_err : bool = False):
+def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : str, v_range : list, funcs, data_bins : list, hist_bins : int, log : bool = False, rms_err : bool = False, weights : np.ndarray = None):
     """ Estimate a central value in each reco energy bin based on some FitFunction or collection of FitFunctions.
 
     Args:
@@ -436,9 +436,14 @@ def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : st
     for i in Plots.MultiPlot(len(data_bins) - 1):
         if i == len(data_bins): continue
         print_log(i)
-        binned_data = df[(df[bin_variable] > data_bins[i]) & (df[bin_variable] < data_bins[i+1])]
-    
-        y, edges = np.histogram(binned_data[variable], bins = hist_bins, range = [min(v_range), max(v_range)])
+        mask = (df[bin_variable] > data_bins[i]) & (df[bin_variable] < data_bins[i+1])
+        binned_data = df[mask]
+        if weights is None:
+            binned_weights = None
+        else:
+            binned_weights = np.array(weights)[mask]
+
+        y, edges = np.histogram(binned_data[variable], bins = hist_bins, range = [min(v_range), max(v_range)], weights = binned_weights)
         x = (edges[1:] + edges[:-1]) / 2
         x_interp = np.linspace(min(x), max(x), hist_bins*5)
 
@@ -490,7 +495,7 @@ def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : st
 
             Plots.Plot(x_interp, y_pred_interp, marker = "", color = "black", newFigure = False, label = "fit")
             plt.axvline(mean, color = "black", linestyle = "--", label = "central value")
-        Plots.PlotHist(binned_data[variable], bins = hist_bins, newFigure = False, title = f"bin : {[data_bins[i], data_bins[i+1]]}", range = [min(v_range), max(v_range)])
+        Plots.PlotHist(binned_data[variable], bins = hist_bins, newFigure = False, title = f"bin : {[data_bins[i], data_bins[i+1]]}", range = [min(v_range), max(v_range)], weights = binned_weights)
 
         plt.axvline(np.mean(binned_data[variable]), linestyle = "--", color = "C1", label = "mean")
 

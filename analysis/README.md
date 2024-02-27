@@ -1,5 +1,5 @@
-# pi0-analysis
-Python code for the Pi0 analysis, requires python 3.10.0 or greater. Installing the requirements to run the code is as follows:
+# analysis
+Python code for ProtoDUNE analysis, requires python 3.10.0 or greater. Installing the requirements to run the code is as follows:
 
 Run this once.
 ``` bash
@@ -11,25 +11,168 @@ and each time you load the python environment:
 source env.sh
 ```
 
+---
+
 Code runs on ntuples produced by the Pi0 Analyser module (to be added), a list of produced ntuples are here:
 
 [https://cernbox.cern.ch/index.php/s/8UqObev6XPNhRXn](https://cernbox.cern.ch/index.php/s/8UqObev6XPNhRXn)
 
-Core modules are Master.py, vector.py and Plots.py (optional). A simple example of how to look at true data is shown in truth_info.py, and the other scripts are more complicated examples of how to analyse nTuples.
-
-The example scripts provided can be run on the command line, so you can run the following with the ntuple:
-
-``` bash
-python truth_info.py pi0_0p5GeV_100K_5_7_21.root -s -d pi0_0p5GeV/ 
-```
-and for information on command line options:
-``` bash
-python truth_info.py -h
+if you are working on DICE, i.e. `sc01.dice.priv` files are located in hdfs
+```bash
+/hdfs/DUNE/physics/cex/
 ```
 
-For further detail on each module you can read the docstrings.
+---
 
-## Run shower merging analysis.
+Core modules are Master.py, vector.py and Plots.py (optional). A simple example of how to look at true data is shown in `cex_beam_quality.py`, and the other scripts are more complicated examples of how to analyse nTuples. For further detail on each module you can read the docstrings.
+## Run Cross section analysis
+
+This is run using configuration files, located in `config/`. All applications and notebooks which run the with the prefix `cex`. To run the entire analysis chain with Data and MC (excluding toy studies and systematics) is done through `run_analysis.py`.
+
+First, make a work area in this directory:
+
+```bash
+mkdir work
+cd work
+mkdir analysis_demo
+cd analysis_demo
+```
+
+To create a template configuration called `analysis_config.json`, run the following in your work area:
+
+```bash
+run_analysis.py -C analysis_config.json
+```
+
+This configuration requires entry of basic information such as data file location and some configurations settings some apps cannot run without. To work off a minimal application with the basic information (except MC file location) settings check `config/cex_analysis_2GeV_config_minimal_MC.json`.
+
+For now, copy the minimal config file to your area:
+
+```bash
+cp ../../config/cex_analysis_2GeV_config_minimal_MC.json analysis_config.json
+```
+
+open the file and note the first three entries in the json file:
+
+```json
+  "NTUPLE_FILE":{
+    "mc" : "MC ntuple file ENSURE ALL FILE PATHS ARE ABSOLUTE",
+    "data" : null,
+    "type" : "type of ntuple files, this is either PDSPAnalyser or shower_merging"
+  },
+  "norm" : "normalisation to apply to MC when making Data/MC comparisons, usually defined as the ratio of pion-like triggers from the beam instrumentation",
+  "pmom" : "momentum byte of the beam i.e. central value of beam momentum in GeV, required if ntuple does not have the correct scale for the P_inst distribution",
+
+```
+`null` entries refer to an empty entry in the config, the others have descriptions describing what the entry refers to an possible values. For now populate the information as follows:
+
+```json
+  "NTUPLE_FILE":{
+    "mc" : "<MC file path>",
+    "data" : null,
+    "type" : "PDSPAnalyser"
+  },
+  "norm" : 1,
+  "pmom" : 2,
+```
+
+"mc" should be set to the file path of the 2GeV MC file called `PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03.root` on the machine you are working on. for this ntuple file the "type" is PDSPAnalyser, no data is used, so "norm" is arbitrarily set to 1. For this specific MC file, "pmom" must be 2.
+
+Save and close the file, now run the analysis (or most of it)
+
+```bash
+run_analysis.py -c analysis_config.json -o .
+```
+
+where `-o` sets the output path of the various results.
+
+when running you will see this message:
+
+```bash
+no data file was specified, 'beam_reweight', 'toy_parameters' and 'analyse' will not run
+```
+
+this is because without a data file, the full analysis can't be run. When the script finishes you should see multiple folders which are the outputs of the various applications:
+
+```bash
+ls *
+```
+
+```bash
+analysis_config.json
+
+analysis_input:
+
+beam_quality:
+beam_quality_fits.pdf  mc_beam_quality_fit_values.json
+
+beam_scraper:
+beam_scraper_fits.pdf  mc_beam_scraper_fit_values.json
+
+masks_mc:
+beam_selection_masks.dill  null_pfo_selection_masks.dill  photon_selection_masks.dill  pi0_selection_masks.dill  pip_selection_masks.dill
+
+plots:
+beam.pdf  photon.pdf  pi0.pdf  piplus.pdf  regions.pdf
+
+shower_energy_correction:
+gaussian.json  mean.json  photon_energies.hdf5  plots.pdf  student_t.json
+
+tables_mc:
+beam  null_pfo  photon  pi0  pip
+
+toy_parameters:
+beam_profile  meanTrackScoreKDE  pi_beam_efficiency  reco_regions  smearing
+
+upstream_loss:
+cex_upstream_loss_plots.pdf  fit_parameters.json
+```
+
+outputs will be of five types, `pdf`, `json`, `tex`, `hdf5`, and `dill`.
+
+ * `pdf` are plots produced by the various apps
+ * `json` are values computed by the apps which are important for other apps to function. This could be something like fitted parameters or numerical constants or whole configuration settings
+ * `tex` are tables saved in LaTeX format i.e. for results where plots are not appropriate.
+ * `hdf5` is data which can be stored as a pandas dataframe. This is usally data which is useful for further studies, dut does not require computing them again using the Ntuple file.
+ * `dill`, similar to `hdf5`, this is data which is useful for further study but does not require computing them again. The difference is this data is stored as serialisable python objects i.e. can only be correcty opened using python 
+
+This example ran with MC, to run with Data, you can add the corresponding Data ntuple file path, and run the analysis again, this time forcing all prior steps to be re-ran:
+
+```bash
+run_analysis.py -c analysis_config.json -o . --force
+```
+
+Now, if you run the analysis again, you will notice the application finishes very quickly. This is because the analysis will *NOT* run any steps again it doesn't need to. This can be overriden with the `--force` option but this can be more fine tuned.
+
+If you want to run a specific part of the analysis you can use the `run` option:
+
+```bash
+run_analysis.py -c analysis_config.json -o . --run <list of steps to run>
+```
+
+and you can skip certain steps with
+
+```bash
+run_analysis.py -c analysis_config.json -o . --skip <list of steps to skip>
+```
+
+Note `--skip` will do nothing if --force is not specified or the analysis has not been run for the first time.
+
+Note that these options can be combined e.g.
+
+```bash
+run_analysis.py -c analysis_config.json -o . --skip <selection, photon_correction> --run <beam_scraper_fit>
+```
+
+```bash
+run_analysis.py -c analysis_config.json -o . --skip <selection, photon_correction> --force
+```
+
+check `--help` for the names of all the apps which can be skipped or forced to run.
+
+
+
+## Run shower merging analysis. (Legacy)
 Shower merging analysis workflow is as follows:
 
 ---
@@ -65,29 +208,3 @@ Shower merging analysis workflow is as follows:
  - output:
      - <span style="color: red">various plots of shower quantities (png)</span>
 ---
-
-## Run CEX analysis
-
-For now, just plots for the selection can be made:
-
-**cex_beam_quality_fits.py**
- - input:
-    - <span style="color: maroon">Ntuple file (root)</span>
- - output:
-    - <span style="color: green">beam quality fit parameters (json)</span>
-
-
-**cex_photon_selection.py**
- - input:
-    - <span style="color: maroon">Ntuple file (root)</span>
- - output:
-    - <span style="color: pink">reco and true shower energies (hdf5)</span>
-
-**cex_selection_studies.py**
- - input:
-    - <span style="color: maroon">Ntuple file (root)</span>
-    - <span style="color: green">beam quality fit parameters (json)</span>
-    - <span style="color: blue">linear shower energy correction value (optional)</span>
- - output:
-    - <span style="color: red">performance metrics table of each selection (tex)</span>
-    - <span style="color: red">plots of each selection (png)</span>

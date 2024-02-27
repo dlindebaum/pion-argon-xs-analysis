@@ -18,7 +18,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.ticker import AutoMinorLocator, MultipleLocator
 from scipy.stats import iqr
 
-from python.analysis import vector, Tags
+from python.analysis import vector, Tags, Utils
 from python.analysis.SelectionTools import np_to_ak_indicies
 
 
@@ -857,12 +857,14 @@ class PlotBook:
         self.name = name
         if ".pdf" not in self.name: self.name += ".pdf" 
         if open: self.open()
+        self.is_open = True
 
     def __enter__(self):
         return self
 
     def __exit__(self, type, value, traceback):
         self.close()
+        self.is_open = False
 
     def Save(self):
         if hasattr(self, "pdf"):
@@ -1127,7 +1129,7 @@ def PlotHist2D(data_x, data_y, bins: int = 100, x_range: list = None, y_range: l
     return height, [xedges, yedges]
 
 
-def PlotHistComparison(datas, x_range: list = [], bins: int = 100, xlabel: str = "", title: str = "", labels: list = [], alpha: int = 1, histtype: str = "step", x_scale: str = "linear", y_scale: str = "linear", sf: int = 2, density: bool = True, annotation: str = None, newFigure: bool = True, colours : list = None):
+def PlotHistComparison(datas, x_range: list = [], bins: int = 100, xlabel: str = "", title: str = "", labels: list = [], alpha: int = 1, histtype: str = "step", x_scale: str = "linear", y_scale: str = "linear", sf: int = 2, density: bool = True, annotation: str = None, newFigure: bool = True, colours : list = None, weights : list = None):
     """ Plots multiple histograms on one plot
 
     Args:
@@ -1138,17 +1140,20 @@ def PlotHistComparison(datas, x_range: list = [], bins: int = 100, xlabel: str =
         plt.figure()
     if colours is None:
         colours = [None]*len(labels)
+    if weights is None:
+        weights = [None]*len(labels)
     for i in range(len(labels)):
         data = datas[i]
+        weight = weights[i]
         if x_range and len(x_range) == 2:
-            data = data[data > min(x_range)]
-            data = data[data < max(x_range)]
+            mask = (data > min(x_range)) & (data < max(x_range))
+            data = data[mask]
+            if weight is not None: weight = weight[mask]
         if i == 0:
             _, edges = PlotHist(
-                data, bins, xlabel, title, labels[i], alpha, histtype, sf, density, color = colours[i], range = x_range, newFigure=False)
+                data, bins, xlabel, title, labels[i], alpha, histtype, sf, density, color = colours[i], range = x_range, newFigure=False, weights = weight)
         else:
-            PlotHist(data, edges, xlabel, title,
-                     labels[i], alpha, histtype, sf, density, color = colours[i], range = x_range, newFigure=False)
+            PlotHist(data, edges, xlabel, title, labels[i], alpha, histtype, sf, density, color = colours[i], range = x_range, newFigure=False, weights = weight)
     plt.xscale(x_scale)
     plt.yscale(y_scale)
     plt.tight_layout()
@@ -1250,7 +1255,7 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
         else:
             for m in ind:
                 plt.hist(edges[:-1], edges, weights = h_mc[m], range = x_range, stacked = False, label = mc_labels[m], color = colour[m], alpha = alpha)
-        plt.errorbar(centres, np.sum(h_mc, 0), np.sum(h_mc, 0)**0.5, c = "black", label = "MC total" + f" ({int(ak.count(mc) * scale)})", marker = "x", capsize = 3, linestyle = "")
+        plt.errorbar(centres, np.sum(h_mc, 0), abs(np.sum(h_mc, 0))**0.5, c = "black", label = "MC total" + f" ({int(ak.count(mc) * scale)})", marker = "x", capsize = 3, linestyle = "")
     else:
         plt.hist(edges[:-1], edges, weights = h_mc, range = x_range, stacked = False, label = mc_labels, color = colour, alpha = alpha)
 
@@ -1279,11 +1284,11 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     # if stacked is True:
     if is_tagged:
         h_mc = np.sum(h_mc, axis = 0)
-    mc_error = np.sqrt(h_mc)
+    mc_error = np.sqrt(abs(h_mc)) # weights can cause the counts to be negative
 
     plt.subplot(212) # ratio plot
-    ratio = h_data / h_mc # data / MC
-    ratio_err = ratio * np.sqrt((data_err/h_data)**2 + (mc_error/h_mc)**2)
+    ratio = Utils.nandiv(h_data, h_mc) # data / MC
+    ratio_err = abs(ratio * np.sqrt(Utils.nandiv(data_err, h_data)**2 + Utils.nandiv(mc_error, h_mc)**2))
     ratio[ratio == np.inf] = -1 # if the ratio is undefined, set it to -1
     plt.errorbar(centres, ratio, ratio_err, c = "black", marker = "o", capsize = 3, linestyle = "")
     plt.ylabel("Data/MC")
@@ -1355,6 +1360,56 @@ def PlotHist2DImshowMarginal(data_x, data_y, bins: int = 100, x_range: list = No
     plt.tight_layout()
     plt.subplot(2, 2, 3) # switch back to main plot at the end
     return
+
+
+def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y_tick_labels : list[str] = None, title : str = None, newFigure : bool = True, cmap : str = "cool", x_label : str = None, y_label : str = None):
+    """ Plots confusion matrix
+
+    Args:
+        counts (np.ndarray, optional): confusion matrix of counts.
+        x_tick_labels (list[str], optional): labels for categories in the x axis. Defaults to None.
+        y_tick_labels (list[str], optional): labels for categories in the y axis. Defaults to None.
+        title (str, optional): plot title. Defaults to None.
+        newFigure (bool, optional): create plot in new figure. Defaults to True.
+        cmap (str, optional): colour map. Defaults to "cool".
+        x_label (str, optional): x label. Defaults to None.
+        y_label (str, optional): y label. Defaults to None.
+    """
+    fractions = counts / np.sum(counts, axis = 1)[:, np.newaxis]
+    if newFigure: plt.figure()
+    c_norm = counts/np.sum(counts, axis = 0)
+    plt.imshow(c_norm, cmap = cmap, origin = "lower")
+    plt.colorbar(label = "column normalised counts")
+
+    true_counts = np.sum(counts, axis = 1)
+    reco_counts = np.sum(counts, axis = 0)
+
+    if x_tick_labels is None:
+        x_tick_labels = [f"{i}" for i in range(np.array(counts).shape[0])]
+    if y_tick_labels is None:
+        y_tick_labels = [f"{i}" for i in range(np.array(counts).shape[1])]
+
+    true_counts = [f"{x_tick_labels[t].replace('_', ' ')}\n({true_counts[t]})" for t in range(len(x_tick_labels))]
+    reco_counts = [f"{y_tick_labels[r].replace('_', ' ')}\n({reco_counts[r]})" for r in range(len(y_tick_labels))]
+
+
+    plt.gca().set_xticks(np.arange(len(reco_counts)), labels=reco_counts)
+    plt.gca().set_yticks(np.arange(len(true_counts)), labels=true_counts)
+
+    plt.xlabel(x_label)
+    plt.ylabel(y_label)
+    plt.xticks(rotation = 30)
+    plt.yticks(rotation = 30)
+
+    if title is not None:
+        plt.title(title + "| Key: (counts, fraction(%))")
+    else:
+        plt.title("Key: (counts, fraction(%))")
+
+    for (i, j), z in np.ndenumerate(counts):
+        plt.gca().text(j, i, f"{z},\n{fractions[i][j]*100:.2g}%", ha='center', va='center', fontsize = 8)
+    plt.grid(False)
+    plt.tight_layout()
 
 
 def DrawMultiCutPosition(value : float | list[float], arrow_loc : float = 0.8, arrow_length : float = 0.2, face : str | list[str] = "right", flip : bool = False, color = "black", annotate : bool = False):
@@ -1440,7 +1495,7 @@ def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = N
             colours[i] = "C" + str(i)
 
     if data2 is None:
-        PlotHist(split_data, stacked = stacked, label = sorted_tags.name.values, bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, newFigure = newFigure, alpha = alpha, truncate = truncate, histtype = histtype, weights = split_weights)
+        PlotHist(split_data, stacked = stacked, label = [Utils.remove_(i) for i in sorted_tags.name.values], bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, newFigure = newFigure, alpha = alpha, truncate = truncate, histtype = histtype, weights = split_weights)
         plt.legend(loc = loc, ncols = ncols, labelspacing = 0.25,  columnspacing = 0.25)
     else:
         PlotHistDataMC(ak.ravel(data2), split_data, bins, x_range, stacked, "Data", sorted_tags.name.values, x_label, title, y_scale, loc, ncols, norm, colour = colours, alpha = alpha, truncate = truncate, mc_weights = split_weights)
@@ -1624,12 +1679,12 @@ class RatioPlot():
         if (self.y1_err is None) and (self.y2_err is not None):
             self.y1_err = np.zeros(len(self.y1))
 
-        ratio = self.y1 / self.y2
+        ratio = Utils.nandiv(self.y1, self.y2)
         
         if (self.y2_err is None) and (self.y1_err is None):
             ratio_err = None
         else:
-            ratio_err = abs(ratio * np.sqrt((self.y1_err/self.y1)**2 + (self.y2_err/self.y2)**2))
+            ratio_err = abs(ratio * np.sqrt(Utils.nandiv(self.y1_err, self.y1)**2 + Utils.nandiv(self.y2_err, self.y2)**2))
 
         Plot(self.x, ratio, yerr = ratio_err, xlabel = self.xlabel, ylabel = self.ylabel, marker = "o", color = "black", linestyle = "", newFigure = False)
         ticks = [0, 0.5, 1, 1.5, 2] # hardcode the yaxis to have 5 ticks

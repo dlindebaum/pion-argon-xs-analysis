@@ -59,16 +59,16 @@ def LoadObject(file : str):
     return obj
 
 
-def SaveObject(file : str, masks : dict):
-    """ Saves Masks from selection to file. If not specified it will be left as None.
+def SaveObject(file : str, obj : dict):
+    """ Saves object to file.
 
     Args:
-        file (str): _description_
-        beam_selection_mask (dict): dictionary of masks
+        file (str): file name
+        obj (dict): object to save
     """
     with open(file, "wb") as f:
-        dill.dump(masks, f)
-
+        dill.dump(obj, f)
+    return
 
 def LoadConfiguration(file : str) -> dict:
     """ Loads a json file.
@@ -93,6 +93,7 @@ def SaveConfiguration(params : any, file : str):
     """
     with open(file, "w") as f:
         json.dump(params, f, indent = 2)
+    return
 
 
 def DictToHDF5(dictionary : dict, file : str):
@@ -128,7 +129,7 @@ def ReadHDF5(file : str):
         return {k : pd.read_hdf(file, k) for k in keys}
 
 
-def __GenericFilter__(data, filters: list):
+def __GenericFilter__(data, filters: list, verbose : bool = True):
     """ Applies boolean masks (filters) to data.
 
     Args:
@@ -141,7 +142,8 @@ def __GenericFilter__(data, filters: list):
                 try:
                     setattr(data, var, getattr(data, var)[f])
                 except:
-                    warnings.warn(f"Couldn't apply filters to {var}.")
+                    if verbose: warnings.warn(f"Couldn't apply filters to {var}.")
+    return
 
 
 class IO:
@@ -247,9 +249,9 @@ class Data:
         MergeShowerBT (Data): Merge showers using bactacked matching for pure pi0 sample.
     """
 
-    def __init__(self, filename: str = None, nEvents: int = -1, start: int = 0, nTuple_type : Ntuple_Type = None, target_momentum : int = None):
+    def __init__(self, filename: str = None, nEvents: int = -1, start: int = 0, nTuple_type : Ntuple_Type = None, target_momentum : int = None, verbose : bool = False):
         self.filename = filename
-
+        self.verbose = verbose
         if start < 0:
             raise ValueError("start cannot be less than zero")
 
@@ -259,13 +261,16 @@ class Data:
         else:
             self.nTuple_type = nTuple_type
         if (self.filename != None):
-            if "_data_" in self.filename:
-                self.target_mom = 1
-            else:
-                if "GeV" in self.filename:
-                    self.target_mom = float(self.filename.split("GeV")[0][-1])
+            if target_momentum is None:
+                if ("_data_" in self.filename):
+                    self.target_mom = 1
                 else:
-                    self.target_mom = target_momentum
+                    if "GeV" in self.filename:
+                        self.target_mom = float(self.filename.split("GeV")[0][-1])
+                    else:
+                        self.target_mom = target_momentum
+            else:
+                self.target_mom = target_momentum
             self.nEvents = nEvents
             self.start = start
             self.io = IO(self.filename, self.nEvents, self.start)
@@ -490,7 +495,7 @@ class Data:
                 # has same shape as reco data
                 self.trueParticlesBT.Filter(reco_filters, returnCopy)
 
-            __GenericFilter__(self, reco_filters)
+            __GenericFilter__(self, reco_filters, self.verbose)
             CutTable.apply_filters(self, reco_filters)
             self.trueParticles.events = self
             self.recoParticles.events = self
@@ -500,6 +505,7 @@ class Data:
             # copy filtered attributes into new instance
             filtered = Data(nTuple_type = self.nTuple_type)
             filtered.filename = self.filename
+            filtered.verbose = self.verbose
             filtered.target_mom = self.target_mom
             filtered.nEvents = self.nEvents
             filtered.start = self.start
@@ -519,9 +525,8 @@ class Data:
                     reco_filters)
                 filtered.trueParticlesBT.events = filtered
             # ? should true_filters also be applied?
-            __GenericFilter__(filtered, reco_filters)
+            __GenericFilter__(filtered, reco_filters, self.verbose)
             CutTable.apply_filters(filtered, reco_filters)
-            # CutTable.apply_filters(filtered, reco_filters)
             return filtered
 
     @timer
@@ -856,10 +861,6 @@ class ParticleData(ABC):
         """
         var_name = f"_{type(self).__name__}__{name}"  # variable name which chose to be hidden
         if hasattr(self.events, "io") and not hasattr(self, var_name):
-            # if type(nTuple_name) is list:
-            #     if len(nTuple_name) != 3:
-            #         raise Exception(
-            #             "nTuple list for vector must be of length 3")
             if is_vector:
                 setattr(self, var_name, ak.zip({
                     "x": self.events.io.Get(nTuple_name[0]),
@@ -882,7 +883,7 @@ class ParticleData(ABC):
             subClass(ParticleData): filtered data.
         """
         if returnCopy is False:
-            __GenericFilter__(self, filters)
+            __GenericFilter__(self, filters, self.events.verbose)
             # append list of filters to apply to newly loaded data
             self.filters.extend(filters)
         else:
@@ -892,7 +893,7 @@ class ParticleData(ABC):
             # populate new instance
             for var in vars(self):
                 setattr(filtered, var, getattr(self, var))
-            __GenericFilter__(filtered, filters)
+            __GenericFilter__(filtered, filters, self.events.verbose)
             filtered.filters = list(self.filters + filters)
             return filtered
 
@@ -1344,6 +1345,11 @@ class RecoParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__beam_michelScore")
 
     @property
+    def beam_trackScore(self) -> ak.Array:
+        self.LoadData("beam_trackScore", "reco_beam_PFP_trackScore_collection")
+        return getattr(self, f"_{type(self).__name__}__beam_trackScore")
+
+    @property
     def beam_nHits(self) -> ak.Array:
         self.LoadData("beam_nHits", "reco_beam_vertex_nHits")
         return getattr(self, f"_{type(self).__name__}__beam_nHits")
@@ -1387,6 +1393,7 @@ class RecoParticleData(ParticleData):
     def beam_inst_P(self) -> type:
         self.LoadData("beam_inst_P", "beam_inst_P")
         return self.events.target_mom * 1000 * getattr(self, f"_{type(self).__name__}__beam_inst_P")
+        # return 1000 * getattr(self, f"_{type(self).__name__}__beam_inst_P")
 
     @property
     def beam_inst_pos(self) -> ak.Record:

@@ -115,8 +115,8 @@ def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data
     return
 
 
-def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str, tag : str):
-    events = Master.Data(file, nTuple_type = ntuple_type)
+def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str, tag : str, args : cross_section.argparse.Namespace):
+    events = Master.Data(file, nTuple_type = ntuple_type, target_momentum = args.pmom)
 
     #? should this be made configurable i.e. pass config and apply all selections before the beam quality cuts if it is in the list?
     mask = BeamParticleSelection.PiBeamSelection(events, data)
@@ -165,7 +165,7 @@ def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str, ta
     #* write to json file
     os.makedirs(args.out, exist_ok = True)
     name = out + tag + "_beam_quality_fit_values.json"
-    Master.SaveConfiguration(name, fit_values)
+    Master.SaveConfiguration(fit_values, name)
     print(f"fit values written to {name}")
 
     return events, fit_values
@@ -178,9 +178,9 @@ def main(args):
     os.makedirs(args.out + "beam_quality/", exist_ok = True)
 
     if args.mc_file is not None:
-        mc, fit_values_mc = run(args.mc_file[0], False, args.ntuple_type, args.out + "beam_quality/", "mc")
+        mc, fit_values_mc = run(args.mc_file, False, args.ntuple_type, args.out + "beam_quality/", "mc", args)
     if args.data_file is not None:
-        data, fit_values_data = run(args.data_file[0], True, args.ntuple_type, args.out + "beam_quality/", "data")
+        data, fit_values_data = run(args.data_file, True, args.ntuple_type, args.out + "beam_quality/", "data", args)
 
     MakePlots(mc, fit_values_mc, data, fit_values_data, args.out + "beam_quality/")
 
@@ -189,8 +189,8 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Computes Guassian fit paramters needed for the beam quality cuts in the beam particle selection.", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    cross_section.ApplicationArguments.Ntuples(parser, data = True)
-    
+    # cross_section.ApplicationArguments.Ntuples(parser, data = True)
+    cross_section.ApplicationArguments.Config(parser, True)    
     cross_section.ApplicationArguments.Output(parser)
 
     args = parser.parse_args()

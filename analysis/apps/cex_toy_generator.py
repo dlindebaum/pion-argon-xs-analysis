@@ -24,7 +24,7 @@ from scipy.interpolate import interp1d
 from scipy.stats import gaussian_kde
 
 from python.analysis.Master import timer, LoadConfiguration, ReadHDF5, LoadObject
-from python.analysis import Fitting
+from python.analysis import Fitting, Utils
 from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # supress annoying pandas warnings
@@ -86,16 +86,7 @@ def P_int(sigma : np.array, l : float) -> np.array:
     return 1 - np.exp(-1E-27 * sigma * 6.02214076e23 * BetheBloch.rho * l / BetheBloch.A)
 
 
-def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split(os.pathsep)[0] + "/data/g4_xs.root", scale_factors : dict = None, modified_PDFs : dict[np.array] = None) -> dict:
-    """ Creates a PDF of the inclusive cross section and a stacked PDF of the exclusive process,
-        such that rejection sampling can be used to allocate an exclusive process for a given inclusive process.
-
-    Args:
-        l (float): slice thickness
-
-    Returns:
-        dict: dictionaty of pdfs
-    """
+def ModifyGeantXS(path = os.environ.get('PYTHONPATH', '').split(os.pathsep)[0] + "/data/g4_xs.root", scale_factors : dict = None, modified_PDFs : dict[np.array] = None):
     xs_sim = GeantCrossSections(file = path)
 
     if modified_PDFs is not None:
@@ -114,7 +105,7 @@ def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split
         sum_xs = np.zeros(len(xs_sim.KE))
         for k, v in scale_factors.items():
             sum_xs = sum_xs + v * getattr(xs_sim, k)
-        ratio = sum_xs / xs_sim.total_inelastic # the amount per data point to scale each exclusive process by, such that the total inelastic cross section remains unchanged
+        ratio = Utils.nandiv(sum_xs, xs_sim.total_inelastic) # the amount per data point to scale each exclusive process by, such that the total inelastic cross section remains unchanged
     else:
         ratio = 1
 
@@ -123,18 +114,36 @@ def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split
     else:
         factors = {k : 1 for k in xs_sim.exclusive_processes}
 
+    for v in xs_sim.exclusive_processes:
+        setattr(xs_sim, v, factors[v] * getattr(xs_sim, v)) # rescale cross sections based on scale factors
+
+    return xs_sim
+
+
+def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split(os.pathsep)[0] + "/data/g4_xs.root", scale_factors : dict = None, modified_PDFs : dict[np.array] = None) -> dict:
+    """ Creates a PDF of the inclusive cross section and a stacked PDF of the exclusive process,
+        such that rejection sampling can be used to allocate an exclusive process for a given inclusive process.
+
+    Args:
+        l (float): slice thickness
+
+    Returns:
+        dict: dictionaty of pdfs
+    """
+    xs_sim = ModifyGeantXS(path, scale_factors, modified_PDFs)
+
     pdfs = {}
     pdfs["total_inelastic"] = interp1d(xs_sim.KE, P_int(xs_sim.total_inelastic, l), fill_value = "extrapolate") # total inelastic pdf
 
     # sort the exclusice channels based on area under curve
     area = {}
     for v in xs_sim.exclusive_processes:
-        area[v] = np.trapz(P_int(factors[v] * getattr(xs_sim, v), l))
+        area[v] = np.trapz(P_int(getattr(xs_sim, v), l))
 
     # stack the pdfs in ascending order
     y = np.zeros(len(xs_sim.KE))
     for v, _ in sorted(area.items(), key=lambda x: x[1]):
-        y = y + P_int(factors[v] * getattr(xs_sim, v), l)
+        y = y + P_int(getattr(xs_sim, v), l)
         pdfs[v] = interp1d(xs_sim.KE, y, fill_value = "extrapolate")
     return pdfs
 
@@ -424,6 +433,9 @@ def MeanTrackScore(exclusive_process : pd.Series, kdes : dict, seed : int) -> np
         scores = np.where(exclusive_process == i, GenerateMeanTrackScores(kdes[sample_from], len(exclusive_process), (seed + c) % 2**32 - 1), scores)
     return pd.DataFrame({"mean_track_score" : scores.astype(float)}).reset_index(drop = True)
 
+
+def run(config : dict):
+    return main(ResolveConfig(config))
 
 @timer
 def main(args : argparse.Namespace):

@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # Imports
 from python.analysis import Master, PFOSelection, BeamParticleSelection, SelectionTools, Tags
 import time
@@ -41,12 +39,12 @@ def GenerateTrueFinalStateTags(events : Master.Data = None) -> Tags.Tags:
 #######################################################################
 
 
-def NPhotonCandidateSelection(events : Master.Data, photon_mask : ak.Array, cut : int, return_property : bool = False):
+def NPhotonCandidateSelection(events : Master.Data, photon_mask : ak.Array, cut : int, op = "==", return_property : bool = False):
     n_photons = ak.sum(photon_mask, -1)
-    return SelectionTools.CreateMask(cut, "==", n_photons, return_property)
+    return SelectionTools.CreateMask(cut, op, n_photons, return_property)
 
 
-def Pi0OpeningAngleSelection(events : Master.Data, photon_mask : ak.Array = None, photon_coords : ak.Array = None, cut = [10, 80], return_property : bool = False):
+def Pi0OpeningAngleSelection(events : Master.Data, photon_mask : ak.Array = None, photon_coords : ak.Array = None, cut = [10, 80], op = [">", "<"], return_property : bool = False):
     if photon_mask is not None:
         shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photon_mask)
     elif photon_coords is not None:
@@ -56,10 +54,10 @@ def Pi0OpeningAngleSelection(events : Master.Data, photon_mask : ak.Array = None
 
     angle = ak.fill_none(ak.pad_none(shower_pairs.reco_angle, 1, -1), -999, -1)
     cut = [c * np.pi / 180 for c in cut]
-    return SelectionTools.CreateMask(cut, [">", "<"], angle, return_property)
+    return SelectionTools.CreateMask(cut, op, angle, return_property)
 
 
-def Pi0MassSelection(events : Master.Data, photon_mask : ak.Array = None, photon_coords : ak.Array = None, cut = [50, 250], correction = None, correction_params : list = None, return_property : bool = False):
+def Pi0MassSelection(events : Master.Data, photon_mask : ak.Array = None, photon_coords : ak.Array = None, cut = [50, 250], op = [">", "<"], correction = None, correction_params : list = None, return_property : bool = False):
     if photon_mask is not None:
         shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photon_mask)
     elif photon_coords is not None:
@@ -76,7 +74,7 @@ def Pi0MassSelection(events : Master.Data, photon_mask : ak.Array = None, photon
 
     mass = shower_pairs.Mass(le, se, shower_pairs.reco_angle)
     mass = ak.fill_none(ak.pad_none(mass, 1, -1), -999, -1)
-    return SelectionTools.CreateMask(cut, [">", "<"], mass, return_property)
+    return SelectionTools.CreateMask(cut, op, mass, return_property)
 
 
 def Pi0Selection(
