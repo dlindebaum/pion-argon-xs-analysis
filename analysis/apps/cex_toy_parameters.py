@@ -238,7 +238,7 @@ def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace, out : str):
     os.makedirs(out + "reco_regions/", exist_ok = True)
     pdf = Plots.PlotBook(out + "reco_regions/reco_regions_study")
     counts = cross_section.Toy.ComputeCounts(true_regions, reco_regions)
-    Plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), x_label = "true process", y_label = "reco region")
+    Plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "true process", x_label = "reco region")
     pdf.Save()
     pdf.close()
 
