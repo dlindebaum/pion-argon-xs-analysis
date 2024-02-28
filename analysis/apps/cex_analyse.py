@@ -13,6 +13,7 @@ import numpy as np
 from rich import print
 
 from apps import cex_toy_generator, cex_analysis_input, cex_toy_parameters
+from pyunfold.callbacks import SplineRegularizer
 from python.analysis import cross_section, Plots
 
 process_labels = {"absorption": "abs", "charge_exchange" : "cex", "single_pion_production" : "spip", "pion_production" : "pip"}
@@ -175,7 +176,7 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
                     actual = {l : data.NInteract(energy_slice, data.exclusive_process[l], weights = data.weights) for l in labels}
                     actual_sig = actual[process]
                     actual_bkg = sum(np.array(list(actual.values()))[process != np.array(labels)])
-                    cross_section.RegionFit.PlotPrefitPostFit(actual_sig, np.sqrt(actual_sig), KE_int_fit, KE_int_fit_err, energy_bins, f"$N^{{reco}}_{{int,{process_labels[i]}}}$ (MeV)")
+                    cross_section.RegionFit.PlotPrefitPostFit(actual_sig, np.sqrt(actual_sig), KE_int_fit, KE_int_fit_err, energy_bins, f"$N^{{reco}}_{{int,{process_labels[process]}}}$ (MeV)")
                     book.Save()
                     cross_section.RegionFit.PlotPrefitPostFit(actual_bkg, np.sqrt(actual_bkg), np.sum(bkg, 0), np.sum(bkg_err, 0), energy_bins, "$N^{reco}_{int,bkg}$ (MeV)")
                     book.Save()
@@ -232,30 +233,30 @@ def SelectionEfficiency(true_hists_selected, true_hists):
 def EfficiencyErrStat(eff, err, val, val_eff, norm, true):
     eff_err = np.where(eff[0] == 0,
         np.sqrt(norm * true),
-        val_eff * np.sqrt(cross_section.nandiv(err, val)**2) #+ cross_section.nandiv(eff[1], eff[0])**2
+        val_eff * np.sqrt(cross_section.nandiv(err, val)**2)
         )
     return np.nan_to_num(eff_err)
 
 
-def EfficiencyErrSys(eff, err, val, val_eff, norm, true):
+def EfficiencyErrSys(eff, err, val, val_eff):
     eff_err = np.where(eff[0] == 0,
         0,
-        val_eff * np.sqrt(cross_section.nandiv(err, val)**2) #+ cross_section.nandiv(eff[1], eff[0])**2
+        val_eff * np.sqrt(cross_section.nandiv(err, val)**2)
         )
     return np.nan_to_num(eff_err)
 
 
 def ApplyEfficiency(energy_bins, efficiencies, unfolding_result, true, norm : float = 1, book : Plots.PlotBook = Plots.PlotBook.null):
-    # labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$", "inc" : "$N_{inc}$"}
     labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$", "inc" : "$N_{inc}$", "absorption": "$N_{int,abs}$", "charge_exchange" : "$N_{int,cex}$", "single_pion_production" : "$N_{int,spip}$", "pion_production" : "$N_{int,pip}$"}
 
     hist_unfolded_efficiency_corrected = {}
 
     for k in unfolding_result:
+        print(k)
         unfolded_eff = np.where(efficiencies[k][0] == 0, norm * true[k], cross_section.nandiv(unfolding_result[k]["unfolded"], efficiencies[k][0]))
 
         unfolded_eff_err_stat = EfficiencyErrStat(efficiencies[k], unfolding_result[k]["stat_err"], unfolding_result[k]["unfolded"], unfolded_eff, norm, true[k])
-        unfolded_eff_err_sys = EfficiencyErrSys(efficiencies[k], unfolding_result[k]["sys_err"], unfolding_result[k]["unfolded"], unfolded_eff, norm, true[k])
+        unfolded_eff_err_sys = EfficiencyErrSys(efficiencies[k], unfolding_result[k]["sys_err"], unfolding_result[k]["unfolded"], unfolded_eff)
         hist_unfolded_efficiency_corrected[k] = {"unfolded" : unfolded_eff, "stat_err" : unfolded_eff_err_stat, "sys_err" : unfolded_eff_err_sys}
 
     if book is not None:
@@ -266,8 +267,16 @@ def ApplyEfficiency(energy_bins, efficiencies, unfolding_result, true, norm : fl
     return hist_unfolded_efficiency_corrected
 
 
-def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.AnalysisInput, unfolding_args : dict, signal_process, norm, energy_slices, regions : bool = False, mc_cheat : cross_section.AnalysisInput = None, book : Plots.PlotBook = Plots.PlotBook.null):
-    # labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$", "inc" : "$N_{inc}$"}
+def PlotEfficiency(energy_slices : cross_section.Slices, efficiencies : dict, book : Plots.PlotBook.null):
+    if book is not None:
+        for _, (k, v) in Plots.IterMultiPlot(efficiencies.items()):
+            Plots.Plot(energy_slices.pos_overflow, v[0], yerr = v[1], ylabel = "efficiency", xlabel = f"$N_{{{k}}}$ (MeV)", marker = "x", newFigure = False)
+            Plots.plt.ylim(0, 1)
+        book.Save()
+    return
+
+
+def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.AnalysisInput, unfolding_args : dict, signal_process, norm, energy_slices : cross_section.Slices, regions : bool = False, mc_cheat : cross_section.AnalysisInput = None, book : Plots.PlotBook = Plots.PlotBook.null):
     labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$", "inc" : "$N_{inc}$", "absorption": "$N_{int,abs}$", "charge_exchange" : "$N_{int,cex}$", "single_pion_production" : "$N_{int,spip}$", "pion_production" : "$N_{int,pip}$"}
 
     true_hists_selected = mc.CreateHistograms(energy_slices, signal_process, False, ~mc.inclusive_process)
@@ -287,21 +296,19 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
         if regions:
             int_ex_effieciencies = SelectionEfficiency(true_hists_selected_regions, true_hists_process)
 
-            if book is not None:
-                for _, (k, v) in Plots.IterMultiPlot(int_ex_effieciencies.items()):
-                    Plots.Plot(energy_slices.pos_overflow, v[0], yerr = v[1], ylabel = "efficiency", xlabel = f"$N_{{{k}}}$", marker = "x", newFigure = False)
-                    Plots.plt.ylim(0, 1)
-                book.Save()
+            PlotEfficiency(energy_slices, {process_labels[k] : v for k, v in int_ex_effieciencies.items()}, book)
 
-        if book is not None:
-            for _, (k, v) in Plots.IterMultiPlot(efficiencies.items()):
-                Plots.Plot(energy_slices.pos_overflow, v[0], yerr = v[1], ylabel = "efficiency", xlabel = f"$N_{{{k}}}$", marker = "x", newFigure = False)
-                Plots.plt.ylim(0, 1)
-            book.Save()
+        PlotEfficiency(energy_slices, efficiencies, book)
     else:
-        efficiencies = None
+        efficiencies = {k : np.ones_like(energy_slices.pos_overflow) for k in ["init", "int", "int_ex", "inc"]}
+        true_hists = mc.CreateHistograms(energy_slices, signal_process, False, ~mc.inclusive_process)
+        if regions:
+            true_hists_process = {i : mc.NInteract(energy_slices, mc.exclusive_process[i], None, False, mc.weights) for i in mc.exclusive_process}
+            int_ex_effieciencies = SelectionEfficiency(true_hists_selected_regions, true_hists_process)
+            PlotEfficiency(energy_slices, {process_labels[k] : v for k, v in int_ex_effieciencies.items()}, book)
 
-    e_copy = {k : v[0] for k, v in efficiencies.items()}
+
+    e_copy = {k : v for k, v in efficiencies.items()}
     if regions:
         e_copy.pop("int_ex")
         for k, v in int_ex_effieciencies.items():
@@ -331,6 +338,12 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
     unfolding_args["priors"] = priors
     unfolding_args["response_matrices"] = resp
 
+    if "reg" in unfolding_args:
+        if unfolding_args["reg"]["enable"] is True:
+            spline_reg = SplineRegularizer(unfolding_args["reg"]["k"], unfolding_args["reg"]["s"])
+            unfolding_args["regularizers"] = {i : spline_reg for i in resp}
+        unfolding_args.pop("reg")
+
     result = cross_section.Unfold.Unfold(reco_hists, reco_hists_err, verbose = True, **{k : v for k, v in unfolding_args.items() if k != "method"})
 
     n_incident_unfolded = cross_section.EnergySlice.NIncident(result["init"]["unfolded"], result["int"]["unfolded"])
@@ -356,12 +369,16 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
         Plots.plt.close()
 
     if (unfolding_args["method"] == 1) and (efficiencies is not None):
-        return ApplyEfficiency(energy_slices.pos_bins, e_copy, result, {**true_hists, **true_hists_process}, norm, book)
+        th = true_hists
+        if regions:
+            th = {**th, **true_hists_process}
+            th.pop("int_ex")
+        return ApplyEfficiency(energy_slices.pos_bins, e_copy, result, th, norm, book)
     else:
         return result
 
 
-def XSUnfold(unfolded_result, energy_slices, sys : bool = False, stat = True):
+def XSUnfold(unfolded_result, energy_slices, sys : bool = False, stat = True, regions : bool = False):
     total_err = {}
 
     for r in unfolded_result:
@@ -369,7 +386,7 @@ def XSUnfold(unfolded_result, energy_slices, sys : bool = False, stat = True):
         if sys is True:
             errs.append(unfolded_result[r]["sys_err"][1:]) # MC stat error from template used in fit and unfolding
         if stat is True:
-            errs.append(unfolded_result[r]["stat_err"][1:]) # statistical uncertainties from fit and unfolding
+            errs.append(unfolded_result[r]["stat_err"][1:]) # statistical uncertainties from fit and unfolding, MC stat from fit only
 
         if len(errs) > 1:
             total_err[r] = cross_section.quadsum(errs, 0)
@@ -378,16 +395,29 @@ def XSUnfold(unfolded_result, energy_slices, sys : bool = False, stat = True):
         else:
             total_err[r] = None # statistical uncertianties from histograms only
 
-    return cross_section.EnergySlice.CrossSection(
-        unfolded_result["int_ex"]["unfolded"][1:],
-        unfolded_result["int"]["unfolded"][1:],
-        unfolded_result["inc"]["unfolded"][1:],
-        cross_section.BetheBloch.meandEdX(energy_slices.pos_bins[1:], cross_section.Particle.from_pdgid(211)),
-        energy_slices.width,
-        total_err["int_ex"],
-        total_err["int"],
-        total_err["inc"]
-    )
+    if regions:
+        return {k : cross_section.EnergySlice.CrossSection(
+                unfolded_result[k]["unfolded"][1:],
+                unfolded_result["int"]["unfolded"][1:],
+                unfolded_result["inc"]["unfolded"][1:],
+                cross_section.BetheBloch.meandEdX(energy_slices.pos_bins[1:], cross_section.Particle.from_pdgid(211)),
+                energy_slices.width,
+                total_err[k],
+                total_err["int"],
+                total_err["inc"])
+                for k in list(process_labels.keys())
+        }
+    else:
+        return cross_section.EnergySlice.CrossSection(
+            unfolded_result["int_ex"]["unfolded"][1:],
+            unfolded_result["int"]["unfolded"][1:],
+            unfolded_result["inc"]["unfolded"][1:],
+            cross_section.BetheBloch.meandEdX(energy_slices.pos_bins[1:], cross_section.Particle.from_pdgid(211)),
+            energy_slices.width,
+            total_err["int_ex"],
+            total_err["int"],
+            total_err["inc"]
+        )
 
 def LoadToy(file):
     if file.split(".")[-1] == "hdf5":
@@ -458,19 +488,22 @@ def main(args):
 
         if args.all is True:
             process = {i : None for i in templates[k].exclusive_process}
+        elif args.fit["regions"] is True:
+            process = {"all" : None}
         else:
             process = {args.signal_process : None}
 
         for p in process:
             with Plots.PlotBook(outdir + f"plots_{p}.pdf") as book:
-                if k == "pdsp":
-                    true_hists = mc_cheat.CreateHistograms(args.energy_slices, p, False, ~mc_cheat.inclusive_process)
-                else:
-                    true_hists = templates[k].CreateHistograms(args.energy_slices, p, False, ~templates[k].inclusive_process)
+                if p != "all":
+                    if k == "pdsp":
+                        true_hists = mc_cheat.CreateHistograms(args.energy_slices, p, False, ~mc_cheat.inclusive_process)
+                    else:
+                        true_hists = templates[k].CreateHistograms(args.energy_slices, p, False, ~templates[k].inclusive_process)
 
-                xs_true = cross_section.EnergySlice.CrossSection(true_hists["int_ex"][1:], true_hists["int"][1:], true_hists["inc"][1:], cross_section.BetheBloch.meandEdX(args.energy_slices.pos_bins[1:], cross_section.Particle.from_pdgid(211)), args.energy_slices.width)
+                    xs_true = cross_section.EnergySlice.CrossSection(true_hists["int_ex"][1:], true_hists["int"][1:], true_hists["inc"][1:], cross_section.BetheBloch.meandEdX(args.energy_slices.pos_bins[1:], cross_section.Particle.from_pdgid(211)), args.energy_slices.width)
 
-                _, histograms_reco_obs, histograms_reco_obs_err = BackgroundSubtraction(v, p, args.energy_slices, region_fit_result, args.fit["single_bin"], args.fit["regions"], templates[k], book) #? make separate background subtraction function?
+                _, histograms_reco_obs, histograms_reco_obs_err = BackgroundSubtraction(v, p if p != "all" else "charge_exchange", args.energy_slices, region_fit_result, args.fit["single_bin"], args.fit["regions"], templates[k], book) #? make separate background subtraction function?
                 
                 if k == "toy":
                     data_label = "toy data"
@@ -480,7 +513,7 @@ def main(args):
                     mc_label = "MC cheated (scaled to Data)"
 
 
-                PlotDataBkgSub(samples[k], templates[k], region_fit_result, args.fit["single_bin"], args.fit["regions"], p, args.energy_slices, scale, None, data_label, mc_label, book)
+                PlotDataBkgSub(samples[k], templates[k], region_fit_result, args.fit["single_bin"], args.fit["regions"], p if p != "all" else "charge_exchange", args.energy_slices, scale, None, data_label, mc_label, book)
 
                 if args.fit["regions"]:
                     histograms_reco_obs = {**histograms_reco_obs, **histograms_reco_obs["int_ex"]}
@@ -488,14 +521,29 @@ def main(args):
                     histograms_reco_obs_err = {**histograms_reco_obs_err, **histograms_reco_obs_err["int_ex"]}
                     histograms_reco_obs_err.pop("int_ex")
 
-                unfolding_result = Unfolding(histograms_reco_obs, histograms_reco_obs_err, templates[k], unfolding_args, p, scale, args.energy_slices, args.fit["regions"], mc_cheat, book)
+                unfolding_result = Unfolding(histograms_reco_obs, histograms_reco_obs_err, templates[k], dict(unfolding_args), p if p != "all" else "charge_exchange", scale, args.energy_slices, args.fit["regions"], mc_cheat, book)
 
-                process[p] = XSUnfold(unfolding_result, args.energy_slices)
-
-                cross_section.PlotXSComparison({f"{label_map[k]} Data reco" : process[p], f"{label_map[k]} MC truth" : xs_true}, args.energy_slices, p, {f"{label_map[k]} Data reco" : "C0", f"{label_map[k]} MC truth" : "C1"}, simulation_label = "Geant4 v10.6")
-                book.Save()
+                process[p] = XSUnfold(unfolding_result, args.energy_slices, True, True, regions = args.fit["regions"])
+                if args.fit["regions"] is False:
+                    cross_section.PlotXSComparison({f"{label_map[k]} Data reco" : process[p], f"{label_map[k]} MC truth" : xs_true}, args.energy_slices, p, {f"{label_map[k]} Data reco" : "C0", f"{label_map[k]} MC truth" : "C1"}, simulation_label = "Geant4 v10.6")
+                    book.Save()
             Plots.plt.close("all")
+        if args.fit["regions"] is True:
+            process = {i : j for i, j in process["all"].items()}
+            with Plots.PlotBook(outdir + "results_all_regions.pdf") as book:
+                for i in process:
+                    if k == "pdsp":
+                        true_hists = mc_cheat.CreateHistograms(args.energy_slices, i, False, ~mc_cheat.inclusive_process)
+                    else:
+                        true_hists = templates[k].CreateHistograms(args.energy_slices, i, False, ~templates[k].inclusive_process)
+                    xs_true = cross_section.EnergySlice.CrossSection(true_hists["int_ex"][1:], true_hists["int"][1:], true_hists["inc"][1:], cross_section.BetheBloch.meandEdX(args.energy_slices.pos_bins[1:], cross_section.Particle.from_pdgid(211)), args.energy_slices.width)
+                    cross_section.PlotXSComparison({f"{label_map[k]} Data reco" : process[i], f"{label_map[k]} MC truth" : xs_true}, args.energy_slices, i, {f"{label_map[k]} Data reco" : "C0", f"{label_map[k]} MC truth" : "C1"}, simulation_label = "Geant4 v10.6")
+                    book.Save()
+            Plots.plt.close("all")
+        print(f"{process=}")
         xs[k] = process
+
+
     with Plots.PlotBook(args.out + "results.pdf") as book:
         colours = {f"{label_map[k]} Data" : f"C{i}" for i, k in enumerate(xs.keys())}
         for p in list(xs.values())[0]:

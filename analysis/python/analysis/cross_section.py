@@ -71,7 +71,7 @@ def PlotXSComparison(xs : dict[np.array], energy_slice, process : str = None, co
         Plots.Plot(x, v[0], xerr = energy_slice.width / 2, yerr = v[1], label = k + ", $\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}", color = colors[k], linestyle = "", marker = "x", newFigure = False)
     
     if process == "single_pion_production":
-        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = simulation_label, title = "single pion production" if title is not None else title, newFigure = False, xlabel = "$KE_{int} (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)
+        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = simulation_label, title = "single pion production" if title is None else title, newFigure = False, xlabel = "$KE_{int} (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)
     else:
         xs_sim.Plot(process, label = simulation_label, color = xs_sim_color, title = title)
 
@@ -1847,9 +1847,13 @@ class Unfold:
             if regularizers is not None:
                 cb = cb + [regularizers[key]]
             return cb
-
         results = {}
-        for k, n, n_e, v in zip(response_matrices.keys(), observed.values(), observed_err.values(), response_matrices.values()):
+
+        for k, v in response_matrices.items():
+            
+            n = observed[k]
+            n_e = observed_err[k]
+
 
             cb = make_cb(k)
 
@@ -1880,9 +1884,9 @@ class Unfold:
             label (str): x label (units of MeV are automatically applied)
             book (Plots.PlotBook, optional): plot book. Defaults to Plots.PlotBook.null.
         """
-        Plots.Plot(energy_slices.pos_bins[::-1], obs, style = "step", label = "Data reco", xlabel = label, color = "C6")
-        Plots.Plot(energy_slices.pos_bins[::-1], true, style = "step", label = "MC true", xlabel = label, color = "C0", newFigure = False)
-        Plots.Plot(energy_slices.pos_bins[::-1], results["unfolded"], yerr = results["stat_err"], style = "step", label = f"Data unfolded, {results['num_iterations']} iterations", xlabel = label + " (MeV)", color = "C4", newFigure = False)
+        Plots.Plot(energy_slices.pos_bins[::-1], obs/sum(obs), style = "step", label = "Data reco", xlabel = label, color = "C6")
+        Plots.Plot(energy_slices.pos_bins[::-1], true/sum(true), style = "step", label = "MC true", xlabel = label, color = "C0", newFigure = False)
+        Plots.Plot(energy_slices.pos_bins[::-1], results["unfolded"] / sum(results["unfolded"]), yerr = results["stat_err"] / sum(results["unfolded"]), style = "step", label = f"Data unfolded, {results['num_iterations']} iterations", xlabel = label + " (MeV)", color = "C4", newFigure = False)
         book.Save() 
         Unfold.PlotMatrix(results["unfolding_matrix"], energy_slices, title = "Unfolded matrix: " + label, c_label = "$P(C_{j}|E_{i})$")
         book.Save() 
