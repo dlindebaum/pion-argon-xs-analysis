@@ -77,12 +77,7 @@ def RegionSelection(events : cross_section.Data, args : cross_section.argparse.N
 
         is_pip = events_copy.trueParticles.pdg[:, 0] == 211
 
-        mask = None
-        for m in args.selection_masks["mc"]["beam"].values():
-            if mask is None:
-                mask = m
-            else:
-                mask = mask & m
+        mask = SelectionTools.CombineMasks(args.selection_masks["mc"]["beam"])
         n_pi_true = n_pi_true[mask]
         n_pi0_true = n_pi0_true[mask]
         is_pip = is_pip[mask]
