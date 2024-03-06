@@ -216,12 +216,12 @@ def check_run(args : argparse.Namespace, step : str):
 
 
 def main(args):
+    os.makedirs(args.out, exist_ok = True)
     if args.create_config:
-        SaveConfiguration(template_config(), args.create_config)
-        print(f"template configuration saved as {args.create_config}")
+        SaveConfiguration(template_config(), args.out + args.create_config)
+        print(f"template configuration saved as {args.out + args.create_config}")
         exit()
     else:
-        os.makedirs(args.out, exist_ok = True)
         print("run analysis, checking what steps have already been run")
 
         # keep these to figure out if batch processing is required
@@ -297,6 +297,7 @@ def main(args):
         #* selection studies
         can_run_ss = not hasattr(args, "selection_masks")
         if can_run_ss or check_run(args, "selection"):
+            print("run selection")
             args.mc_only = args.data_file is None
             args.nbins = 50
             # pass multiprocessing args
@@ -332,9 +333,9 @@ def main(args):
             args = update_args() # reload config to continue
 
         #* beam reweight
-        can_run_rw = hasattr(args, "beam_reweight_params") and (args.data_file is None)
+        can_run_rw = (not hasattr(args, "beam_reweight_params")) and (args.data_file is not None)
         if can_run_rw or check_run(args, "reweight"):
-            print("beam reweight")
+            print("run beam reweight")
             cex_beam_reweight.main(args)
             output_path = args.out + "beam_reweight/"
             print("outputs: " + output_path)
@@ -353,7 +354,7 @@ def main(args):
         #* upstream correction
         can_run_uc = not hasattr(args, "upstream_loss_correction_params")
         if can_run_uc or check_run(args, "upstream_correction"):
-            print("upstream correction")
+            print("run upstream correction")
             args.no_reweight = not hasattr(args, "beam_reweight_params")
             cex_upstream_loss.main(args)
 
@@ -373,9 +374,10 @@ def main(args):
             args = update_args() # reload config to continue
 
         #* toy parameters
+        #TODO make config entry for toy_parameters, so the check is easier to make 
         can_run_tp = hasattr(args, "toy_parameters") and hasattr(args, "beam_reweight_params") and ("toy_parameters" not in os.listdir(args.out))
         if can_run_tp or check_run(args, "toy_parameters"):
-            print("toy parameters")
+            print("run toy parameters")
             cex_toy_parameters.main(args)
             # special case where the main config is not updated, rather the results from this would be used in the toy configurations
             #! make function to create the a toy configuration
@@ -383,7 +385,7 @@ def main(args):
         #* analysis input
         can_run_ai = (not hasattr(args, "analysis_input")) and (args.data_file is not None)
         if can_run_ai or check_run(args, "analysis_input"):
-            print("analysis inputs")
+            print("run analysis input")
             cex_analysis_input.main(args)
 
             output_path = args.out + "analysis_input/"
