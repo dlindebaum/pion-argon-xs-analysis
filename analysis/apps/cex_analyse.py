@@ -252,7 +252,6 @@ def ApplyEfficiency(energy_bins, efficiencies, unfolding_result, true, norm : fl
     hist_unfolded_efficiency_corrected = {}
 
     for k in unfolding_result:
-        print(k)
         unfolded_eff = np.where(efficiencies[k][0] == 0, norm * true[k], cross_section.nandiv(unfolding_result[k]["unfolded"], efficiencies[k][0]))
 
         unfolded_eff_err_stat = EfficiencyErrStat(efficiencies[k], unfolding_result[k]["stat_err"], unfolding_result[k]["unfolded"], unfolded_eff, norm, true[k])
@@ -284,6 +283,10 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
     if regions:
         #* true counts in each reconstructed region after selection
         true_hists_selected_regions = {i : mc.NInteract(energy_slices, mc.exclusive_process[i], mc.regions[i], False, mc.weights) for i in mc.exclusive_process}
+        true_hists_selected_process = {i : mc.NInteract(energy_slices, mc.exclusive_process[i], None, False, mc.weights) for i in mc.exclusive_process}
+
+        region_selection_efficiency = SelectionEfficiency(true_hists_selected_regions, true_hists_selected_process)
+        PlotEfficiency(energy_slices, region_selection_efficiency, book)
 
     if mc_cheat is not None:
         if regions:
@@ -355,27 +358,17 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
     if book is not None:
         th = true_hists_selected
         if regions:
-            th = {**th, **true_hists_selected_regions}
+            th = {**th, **true_hists_selected_process}
             th.pop("int_ex")
         for k in result:
-            if k == "inc" : continue
             cross_section.Unfold.PlotUnfoldingResults(reco_hists[k], norm * th[k], result[k], energy_slices, labels[k], book)
             Plots.plt.close()
 
-        Plots.Plot(energy_slices.pos_bins[::-1], reco_hists["inc"], style = "step", label = "Data reco", color = "C6")
-        Plots.Plot(energy_slices.pos_bins[::-1], norm * true_hists_selected["inc"], style = "step", label = "MC true", color = "C0", newFigure = False)
-        Plots.Plot(energy_slices.pos_bins[::-1], result["inc"]["unfolded"], yerr = result["inc"]["stat_err"], style = "step", label = "Data unfolded", xlabel = "$N_{inc}$ (MeV)", color = "C4", newFigure = False)
-        book.Save()
-        Plots.plt.close()
-
-    if (unfolding_args["method"] == 1) and (efficiencies is not None):
-        th = true_hists
-        if regions:
-            th = {**th, **true_hists_process}
-            th.pop("int_ex")
-        return ApplyEfficiency(energy_slices.pos_bins, e_copy, result, th, norm, book)
-    else:
-        return result
+    th = true_hists
+    if regions:
+        th = {**th, **true_hists_process}
+        th.pop("int_ex")
+    return ApplyEfficiency(energy_slices.pos_bins, e_copy, result, th, norm, book) # apparently efficiency correction needs to be applied irregardless of unfolging method
 
 
 def XSUnfold(unfolded_result, energy_slices, sys : bool = False, stat = True, regions : bool = False):
@@ -521,7 +514,7 @@ def main(args):
                     histograms_reco_obs_err = {**histograms_reco_obs_err, **histograms_reco_obs_err["int_ex"]}
                     histograms_reco_obs_err.pop("int_ex")
 
-                unfolding_result = Unfolding(histograms_reco_obs, histograms_reco_obs_err, templates[k], dict(unfolding_args), p if p != "all" else "charge_exchange", scale, args.energy_slices, args.fit["regions"], mc_cheat, book)
+                unfolding_result = Unfolding(histograms_reco_obs, histograms_reco_obs_err, templates[k], dict(unfolding_args) if unfolding_args is not None else unfolding_args, p if p != "all" else "charge_exchange", scale, args.energy_slices, args.fit["regions"], mc_cheat, book)
 
                 process[p] = XSUnfold(unfolding_result, args.energy_slices, True, True, regions = args.fit["regions"])
                 if args.fit["regions"] is False:
@@ -533,7 +526,7 @@ def main(args):
             with Plots.PlotBook(outdir + "results_all_regions.pdf") as book:
                 for i in process:
                     if k == "pdsp":
-                        true_hists = mc_cheat.CreateHistograms(args.energy_slices, i, False, ~mc_cheat.inclusive_process)
+                        true_hists = mc_cheat.CreateHistograms(args.energy_slices, i, False)
                     else:
                         true_hists = templates[k].CreateHistograms(args.energy_slices, i, False, ~templates[k].inclusive_process)
                     xs_true = cross_section.EnergySlice.CrossSection(true_hists["int_ex"][1:], true_hists["int"][1:], true_hists["inc"][1:], cross_section.BetheBloch.meandEdX(args.energy_slices.pos_bins[1:], cross_section.Particle.from_pdgid(211)), args.energy_slices.width)
