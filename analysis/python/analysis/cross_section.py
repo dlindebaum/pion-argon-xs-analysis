@@ -29,6 +29,17 @@ from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, Sa
 from python.analysis.shower_merging import SetPlotStyle
 from python.analysis.Utils import *
 
+# required_parset = pyhf.modifiers.staterror.required_parset
+# def to_poisson(func):
+#     def wrapper(*args, **kwargs):
+#       result = required_parset(*args, **kwargs)
+#       result['paramset_type'] = 'constrained_by_poisson'
+#       result['factors'] = result.pop('sigmas')
+#       return result
+#     return wrapper
+
+# pyhf.modifiers.staterror.required_parset = to_poisson(pyhf.modifiers.staterror.required_parset)
+
 def KE(p, m):
     return (p**2 + m**2)**0.5 - m
 
@@ -1481,7 +1492,7 @@ class AnalysisInput:
         if self.outside_tpc_true is None:
             outside_tpc = self.outside_tpc_reco | mask
         else:
-            outside_tpc = self.outside_tpc_reco | self.outside_tpc_true | mask
+            outside_tpc = self.outside_tpc_true | mask
 
         if self.exclusive_process is not None:
             channel_mask = self.exclusive_process[exclusive_process]
@@ -1522,9 +1533,9 @@ class RegionFit:
             }
             if mc_stat_unc == True:
                 for i in range(len(samples)):
-                    # ch["samples"][i]["modifiers"].append({"name" : f"{channel_name}_stat_err", "type" : "staterror", "data" : (quadsum(np.sqrt(samples), 0)).astype(int).tolist()})
+                    ch["samples"][i]["modifiers"].append({"name" : f"{channel_name}_stat_err", "type" : "staterror", "data" : np.sqrt(np.sum(samples, 0)).astype(int).tolist()})
                     # ch["samples"][i]["modifiers"].append({"name" : f"{channel_name}_stat_err", "type" : "shapesys", "data" : (quadsum(np.sqrt(samples), 0)).astype(int).tolist()})
-                    ch["samples"][i]["modifiers"].append({'name': f"{channel_name}_sample_{i}_pois_err", 'type': 'shapesys', 'data': np.sqrt(samples[i]).astype(int).tolist()})
+                    # ch["samples"][i]["modifiers"].append({'name': f"{channel_name}_sample_{i}_pois_err", 'type': 'shapesys', 'data': np.array(samples[i]).astype(int).tolist()})
             return ch
 
         spec = {"channels" : [channel(f"channel_{n}", KE_int_templates[n], mc_stat_unc) for n in range(n_channels)]}
@@ -1557,7 +1568,7 @@ class RegionFit:
     def Fit(observations, model : pyhf.Model, init_params : list[float] = None, par_bounds : list[tuple] = None, verbose : bool = True) -> FitResults:
         pyhf.set_backend(backend = "numpy", custom_optimizer = "minuit")
         if verbose is True: print(f"{init_params=}")
-        result = cabinetry.fit.fit(model, observations, init_pars = init_params, custom_fit = True, tolerance = 1E-3, par_bounds = par_bounds)
+        result = cabinetry.fit.fit(model, observations, init_pars = init_params, custom_fit = True, tolerance = 1E-4, par_bounds = par_bounds)
 
         poi_ind = [model.config.par_slice(i).start for i in model.config.par_names if "mu" in i]
         if verbose is True: print(f"{poi_ind=}")
@@ -1630,7 +1641,6 @@ class RegionFit:
             n_int = fit_input.NInteract(slices, v & mask, reco = True)
             if single_bin:
                 n_int = [sum(n_int)]
-                print(f"{n_int=}")
             observed_binned.append(n_int)
         if mean_track_score_bins is not None:
             observed_binned.append(np.histogram(fit_input.mean_track_score[fit_input.inclusive_process], mean_track_score_bins)[0])
@@ -1788,7 +1798,8 @@ class Unfold:
         reco_slices = EnergySlice.SliceNumbers(template.KE_int_reco, template.KE_init_reco, outside_tpc_mask, energy_slice)
 
         if regions:
-            channel = {i : (template.exclusive_process[i] & template.regions[i])[~outside_tpc_mask] for i in template.regions}
+            # channel = {i : (template.exclusive_process[i] & template.regions[i])[~outside_tpc_mask] for i in template.regions}
+            channel = {i : (template.exclusive_process[i])[~outside_tpc_mask] for i in template.regions}
         else:
             channel = template.exclusive_process[process][~outside_tpc_mask]
 
@@ -1813,13 +1824,18 @@ class Unfold:
 
         for k, v in slice_pairs.items():
             corr[k] = Unfold.CorrelationMarix(*v, bins = slice_bins, remove_overflow = False)
-            resp[k] = Unfold.ResponseMatrix(*v, bins = slice_bins, efficiencies = None if efficiencies is None else efficiencies[k], remove_overflow = False)
+            resp[k] = Unfold.ResponseMatrix(*v, bins = slice_bins, efficiencies = None if efficiencies is None else efficiencies[k][0], remove_overflow = False)
+                
+        for k in resp:
+            # if k in template.exclusive_process.keys():
+            #     resp[k] = resp["int"] #* weird new thing
             if book is not None:
                 Unfold.PlotMatrix(corr[k], energy_slice, title = f"Response Marix: {labels[k]}", c_label = "Counts")
                 book.Save()
             if book is not None:
                 Unfold.PlotMatrix(resp[k][0], energy_slice, title = f"Normalised Response Matrix: {labels[k]}", c_label = "$P(E_{i}|C_{j})$")
                 book.Save()
+        
         return resp
 
     @staticmethod
@@ -1850,7 +1866,7 @@ class Unfold:
         results = {}
 
         for k, v in response_matrices.items():
-            
+            if verbose: print(k)
             n = observed[k]
             n_e = observed_err[k]
 
@@ -1873,7 +1889,7 @@ class Unfold:
         return results
 
     @staticmethod
-    def PlotUnfoldingResults(obs : np.array, true : np.array, results : dict, energy_slices : Slices, label : str, book : Plots.PlotBook = Plots.PlotBook.null):
+    def PlotUnfoldingResults(obs : np.array, true : np.array, results : dict, energy_slices : Slices, xlabel : str, book : Plots.PlotBook = Plots.PlotBook.null):
         """ Plot unfolded histogram in comparison to observed and true.
 
         Args:
@@ -1884,10 +1900,15 @@ class Unfold:
             label (str): x label (units of MeV are automatically applied)
             book (Plots.PlotBook, optional): plot book. Defaults to Plots.PlotBook.null.
         """
-        Plots.Plot(energy_slices.pos_bins[::-1], obs/sum(obs), style = "step", label = "Data reco", xlabel = label, color = "C6")
-        Plots.Plot(energy_slices.pos_bins[::-1], true/sum(true), style = "step", label = "MC true", xlabel = label, color = "C0", newFigure = False)
-        Plots.Plot(energy_slices.pos_bins[::-1], results["unfolded"] / sum(results["unfolded"]), yerr = results["stat_err"] / sum(results["unfolded"]), style = "step", label = f"Data unfolded, {results['num_iterations']} iterations", xlabel = label + " (MeV)", color = "C4", newFigure = False)
+        if "num_iterations" in results:
+            label = f"Data unfolded, {results['num_iterations']} iterations"
+        else:
+            label = "Data unfolded"
+        Plots.Plot(energy_slices.pos_bins[::-1], obs/sum(obs), style = "step", label = "Data reco", color = "C6")
+        Plots.Plot(energy_slices.pos_bins[::-1], true/sum(true), style = "step", label = "MC true", color = "C0", newFigure = False)
+        Plots.Plot(energy_slices.pos_bins[::-1], results["unfolded"] / sum(results["unfolded"]), yerr = results["stat_err"] / sum(results["unfolded"]), style = "step", label = label, xlabel = xlabel + " (MeV)", color = "C4", newFigure = False)
         book.Save() 
-        Unfold.PlotMatrix(results["unfolding_matrix"], energy_slices, title = "Unfolded matrix: " + label, c_label = "$P(C_{j}|E_{i})$")
-        book.Save() 
+        if "unfolding_matrix" in results:
+            Unfold.PlotMatrix(results["unfolding_matrix"], energy_slices, title = "Unfolded matrix: " + label, c_label = "$P(C_{j}|E_{i})$")
+            book.Save() 
         return
