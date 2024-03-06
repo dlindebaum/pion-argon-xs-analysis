@@ -969,7 +969,7 @@ def MultiPlot(n : int, xlim : tuple = None, ylim : tuple = None):
         yield i
 
 
-def IterMultiPlot(x, xlim : tuple = None, ylim : tuple = None):
+def IterMultiPlot(x, xlim : tuple = None, ylim : tuple = None, threshold = 100):
     """ Generator for subplots but also iterates with the data to plot to reduce boilerplate.
 
     Args:
@@ -981,7 +981,7 @@ def IterMultiPlot(x, xlim : tuple = None, ylim : tuple = None):
     Yields:
         tuple: ith plot and sample to plot.
     """
-    if len(x) > 100:
+    if len(x) > threshold:
         raise Exception("Too many plots specified, did you pass the correct shape data?")
     for i, j in zip(MultiPlot(len(x), xlim, ylim), x):
         yield i, j
