@@ -14,7 +14,8 @@ import pandas as pd
 
 from scipy.optimize import curve_fit
 from scipy.special import gamma, erf
-from scipy.stats import ks_2samp, chi2
+from scipy.stats import ks_2samp, chi2, norm, lognorm
+
 
 from python.analysis import Plots, Utils
 
@@ -285,6 +286,35 @@ class asym(FitFunction):
 
     def func(x, p0, p1, p2):
         return 1/(p0*(x**p2) + p1)
+
+
+class lognormal_gaussian_exp(FitFunction):
+    n_params = 8
+
+    def __new__(cls, x, p0, p1, p2, p3, p4, p5, p6, p7) -> np.array:
+        return cls.func(x, p0, p1, p2, p3, p4, p5, p6, p7)
+
+    def func(x, p0, p1, p2, p3, p4, p5, p6, p7):
+        lognormal_component = lognorm.pdf(x, s = p2, scale = p1)
+        gaussian_component = norm.pdf(x, loc = p4, scale = p5)
+        exponential_component = np.exp(-p7 * x)
+        return p0 * lognormal_component + p3 * gaussian_component + p6 * exponential_component # Adjust weights as needed
+
+    def bounds(x, y):
+        lims = np.array([
+            (0, 1),
+            (min(x), max(x)),
+            (0.001, np.inf),
+
+            (0, 1),
+            (min(x), max(x)),
+            (0.001, np.inf),
+
+            (-np.inf, np.inf),
+            (-np.inf, np.inf),
+
+        ])
+        return (lims[:, 0], lims[:, 1])    
 
 
 def RejectionSampling(num : int, low : float, high : float, func : FitFunction, params : dict, scale_param : str = "p0", rng : np.random.default_rng = None) -> np.array:
