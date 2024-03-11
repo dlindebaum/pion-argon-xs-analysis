@@ -1402,12 +1402,12 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
     plt.yticks(rotation = 30)
 
     if title is not None:
-        plt.title(title + "| Key: (counts, fraction(%))")
+        plt.title(title + "| Key: (counts, efficiency(%), purity(%))")
     else:
         plt.title("Key: (counts, fraction(%))")
 
     for (i, j), z in np.ndenumerate(counts):
-        plt.gca().text(j, i, f"{z},\n{fractions[i][j]*100:.2g}%", ha='center', va='center', fontsize = 8)
+        plt.gca().text(j, i, f"{z},\n{fractions[i][j]*100:.2g}%,{c_norm[i][j]*100:.2g}%", ha='center', va='center', fontsize = 8)
     plt.grid(False)
     plt.tight_layout()
 
@@ -1642,10 +1642,10 @@ def PlotStackedBar(bars, labels, xlabel : str = None, colours : list = None, alp
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
-def PlotTags(tags : Tags.Tags, xlabel : str = "name"):
+def PlotTags(tags : Tags.Tags, xlabel : str = "name", fraction : bool = True):
     plt.figure()
     counts = [ak.sum(m) for m in tags.mask.values]
-    bar = plt.bar(tags.name.values, counts, color = tags.colour.values)
+    bar = plt.bar(tags.name.values, counts / np.sum(counts), color = tags.colour.values)
     plt.xlabel(xlabel)
     plt.ylabel("Counts")
     plt.bar_label(bar)
