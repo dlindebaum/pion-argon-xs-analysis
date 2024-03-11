@@ -409,11 +409,11 @@ def MakePiPlusSelectionPlots(output_mc : dict, output_data : dict, outDir : str,
             pdf.Save()
 
         if "NHitsCut" in output_mc:
-            Plots.PlotTagged(output_mc["NHitsCut"]["value"], output_mc["NHitsCut"]["tags"], data2 = output_data["NHitsCut"]["value"] if output_data else None, bins = nbins, ncols = 2, x_range = [0, 500], x_label = "n_hits", norm = norm)
+            Plots.PlotTagged(output_mc["NHitsCut"]["value"], output_mc["NHitsCut"]["tags"], data2 = output_data["NHitsCut"]["value"] if output_data else None, bins = nbins, ncols = 2, x_range = [0, 500], x_label = "number of hits", norm = norm)
             Plots.DrawMultiCutPosition(output_mc["NHitsCut"]["cuts"], face = output_mc["NHitsCut"]["op"], arrow_length = 100, color = "black")
             pdf.Save()
 
-            Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc["NHitsCut"]["value"]), ak.ravel(output_mc["NHitsCut_completeness"]["value"]), ylabel = "completeness", xlabel = "n_hits", x_range = [0, 500], bins = 50, norm = "column", c_scale = "linear")
+            Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc["NHitsCut"]["value"]), ak.ravel(output_mc["NHitsCut_completeness"]["value"]), ylabel = "completeness", xlabel = "number of hits", x_range = [0, 500], bins = 50, norm = "column", c_scale = "linear")
             Plots.DrawMultiCutPosition(output_mc["NHitsCut"]["cuts"], face = output_mc["NHitsCut"]["op"], arrow_length = 100, arrow_loc = 0.1, color = "C6")
             pdf.Save()
 
