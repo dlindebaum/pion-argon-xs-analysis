@@ -12,8 +12,7 @@ import itertools
 import numpy as np
 import pandas as pd
 
-from rich import print
-from scipy.interpolate import CubicSpline
+from rich import print, rule
 from scipy.ndimage import gaussian_filter1d
 
 
@@ -65,7 +64,7 @@ def ModifiedConfigTest(config : dict, energy_slice : cross_section.Slices, model
     toy_alt_pdf = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.run(config)))
     
     obs = cross_section.RegionFit.GenerateObservations(toy_alt_pdf, energy_slice, mean_track_score_bins, model, False, single_bin)
-    fit_result = cross_section.RegionFit.Fit(obs, model, None, verbose = False)
+    fit_result = cross_section.RegionFit.Fit(obs, model, None, verbose = False, tolerance = 0.1) # relax the tolerance to allow fit to converge for a large parameter space
 
     true_process_counts = {}
     for v in toy_alt_pdf.exclusive_process:
@@ -86,7 +85,7 @@ def NormalisationTest(directory : str, data_config : dict, model : cross_section
     
         scales = {k : 1 for k in ['absorption', 'quasielastic', 'charge_exchange', 'double_charge_exchange', 'pion_production']}
         for i in [0.8, 0.9, 1, 1.1, 1.2]:
-            print(f"normalisation : {i}")
+            print(rule.Rule(f"process : {target} | normalisation : {i}"))
             if i == 1:
                 config = data_config
             else:
@@ -191,7 +190,7 @@ def ShapeTestNew(directory : str, data_config : dict, model : cross_section.pyhf
         true_counts = {}
         expected_mus = {}
         for e, i in enumerate(perms):
-            print(f"process: {target} | iteration : {e} | params : {i}")
+            print(rule.Rule(f"process: {target} | iteration : {e} | params : {i}"))
             if i == "null":
                 config = data_config
             else:
@@ -208,7 +207,7 @@ def ShapeTestNew(directory : str, data_config : dict, model : cross_section.pyhf
     return
 
 
-def PullStudy(template : cross_section.AnalysisInput, model : cross_section.pyhf.Model, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, data_config : dict, n : int) -> dict:
+def PullStudy(template : cross_section.AnalysisInput, model : cross_section.pyhf.Model, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, data_config : dict, n : int, single_bin) -> dict:
     out = {"expected" : None, "scale" : pd.Series(len(template) / data_config["events"]), "bestfit" : None, "uncertainty" : None}
 
     cfg = {k : v for k, v in data_config.items()}
@@ -221,11 +220,12 @@ def PullStudy(template : cross_section.AnalysisInput, model : cross_section.pyhf
     uncertainty = []
 
     for i in range(n):
+        print(rule.Rule(f"iteration : {i} | total : {n}"))
         toy_alt_pdf = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.run(cfg)))
 
         expected.append({s : (sum(toy_alt_pdf.exclusive_process[s]) / len(toy_alt_pdf.exclusive_process[s])) / template_fractions[s] for s in toy_alt_pdf.exclusive_process})
 
-        result = cross_section.RegionFit.Fit(cross_section.RegionFit.GenerateObservations(toy_alt_pdf, energy_slices, mean_track_score_bins, model), model, None, [(0, np.inf)]*4, False)
+        result = cross_section.RegionFit.Fit(cross_section.RegionFit.GenerateObservations(toy_alt_pdf, energy_slices, mean_track_score_bins, model, single_bin = single_bin), model, None, [(0, np.inf)]*model.config.npars, False, tolerance = 0.1)
 
         bestfit.append({list(toy_alt_pdf.exclusive_process.keys())[j] : result.bestfit[j] for j in range(len(template.exclusive_process))})
         uncertainty.append({list(toy_alt_pdf.exclusive_process.keys())[j] : result.uncertainty[j] for j in range(len(template.exclusive_process))})
@@ -651,7 +651,7 @@ def main(args : cross_section.argparse.Namespace):
                     args.energy_slices,
                     args.fit["single_bin"])
             if "pulls" not in args.skip:
-                pull_results = PullStudy(args.template, models[m], args.energy_slices, mean_track_score_bins if m == "track_score" else None, args.toy_data_config, 100)
+                pull_results = PullStudy(args.template, models[m], args.energy_slices, mean_track_score_bins if m == "track_score" else None, args.toy_data_config, 100, args.fit["single_bin"])
                 os.makedirs(args.out + f"pull_test_{m}/", exist_ok = True)
                 DictToHDF5(pull_results, args.out + f"pull_test_{m}/" + "pull_results.hdf5")
 
