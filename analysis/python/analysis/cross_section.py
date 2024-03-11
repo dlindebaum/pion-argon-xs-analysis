@@ -1565,10 +1565,10 @@ class RegionFit:
         return observations
 
     @staticmethod
-    def Fit(observations, model : pyhf.Model, init_params : list[float] = None, par_bounds : list[tuple] = None, verbose : bool = True) -> FitResults:
+    def Fit(observations, model : pyhf.Model, init_params : list[float] = None, par_bounds : list[tuple] = None, verbose : bool = True, tolerance : float = 1E-4) -> FitResults:
         pyhf.set_backend(backend = "numpy", custom_optimizer = "minuit")
         if verbose is True: print(f"{init_params=}")
-        result = cabinetry.fit.fit(model, observations, init_pars = init_params, custom_fit = True, tolerance = 1E-4, par_bounds = par_bounds)
+        result = cabinetry.fit.fit(model, observations, init_pars = init_params, custom_fit = True, tolerance = tolerance, par_bounds = par_bounds)
 
         poi_ind = [model.config.par_slice(i).start for i in model.config.par_names if "mu" in i]
         if verbose is True: print(f"{poi_ind=}")
