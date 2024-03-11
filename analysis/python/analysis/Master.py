@@ -1046,7 +1046,7 @@ class TrueParticleData(ParticleData):
         return self.__direction
 
     @property
-    def shower_start_pos(self) -> ak.Record:
+    def start_pos(self) -> ak.Record:
         if self.events.nTuple_type == Ntuple_Type.PDSP:
             self.PDSPDataVector("shower_start_pos", ["true_beam_startX", "true_beam_startY", "true_beam_startZ"], ["true_beam_daughter_startX", "true_beam_daughter_startY", "true_beam_daughter_startZ"], ["true_beam_Pi0_decay_startX", "true_beam_Pi0_decay_startY", "true_beam_Pi0_decay_startZ"])
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
