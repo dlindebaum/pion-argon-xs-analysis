@@ -377,9 +377,9 @@ def XSUnfold(unfolded_result, energy_slices, sys : bool = False, stat = True, re
     for r in unfolded_result:
         errs = []
         if sys is True:
-            errs.append(unfolded_result[r]["sys_err"][1:]) # MC stat error from template used in fit and unfolding
+            errs.append(unfolded_result[r]["sys_err"][1:-1]) # MC stat error from template used in fit and unfolding
         if stat is True:
-            errs.append(unfolded_result[r]["stat_err"][1:]) # statistical uncertainties from fit and unfolding, MC stat from fit only
+            errs.append(unfolded_result[r]["stat_err"][1:-1]) # statistical uncertainties from fit and unfolding, MC stat from fit only
 
         if len(errs) > 1:
             total_err[r] = cross_section.quadsum(errs, 0)
@@ -390,10 +390,10 @@ def XSUnfold(unfolded_result, energy_slices, sys : bool = False, stat = True, re
 
     if regions:
         return {k : cross_section.EnergySlice.CrossSection(
-                unfolded_result[k]["unfolded"][1:],
-                unfolded_result["int"]["unfolded"][1:],
-                unfolded_result["inc"]["unfolded"][1:],
-                cross_section.BetheBloch.meandEdX(energy_slices.pos_bins[1:], cross_section.Particle.from_pdgid(211)),
+                unfolded_result[k]["unfolded"][1:-1],
+                unfolded_result["int"]["unfolded"][1:-1],
+                unfolded_result["inc"]["unfolded"][1:-1],
+                cross_section.BetheBloch.meandEdX(energy_slices.pos_bins[1:-1], cross_section.Particle.from_pdgid(211)),
                 energy_slices.width,
                 total_err[k],
                 total_err["int"],
@@ -402,9 +402,9 @@ def XSUnfold(unfolded_result, energy_slices, sys : bool = False, stat = True, re
         }
     else:
         return cross_section.EnergySlice.CrossSection(
-            unfolded_result["int_ex"]["unfolded"][1:],
-            unfolded_result["int"]["unfolded"][1:],
-            unfolded_result["inc"]["unfolded"][1:],
+            unfolded_result["int_ex"]["unfolded"][1:-1],
+            unfolded_result["int"]["unfolded"][1:-1],
+            unfolded_result["inc"]["unfolded"][1:-1],
             cross_section.BetheBloch.meandEdX(energy_slices.pos_bins[1:], cross_section.Particle.from_pdgid(211)),
             energy_slices.width,
             total_err["int_ex"],
@@ -529,7 +529,7 @@ def main(args):
                         true_hists = mc_cheat.CreateHistograms(args.energy_slices, i, False)
                     else:
                         true_hists = templates[k].CreateHistograms(args.energy_slices, i, False, ~templates[k].inclusive_process)
-                    xs_true = cross_section.EnergySlice.CrossSection(true_hists["int_ex"][1:], true_hists["int"][1:], true_hists["inc"][1:], cross_section.BetheBloch.meandEdX(args.energy_slices.pos_bins[1:], cross_section.Particle.from_pdgid(211)), args.energy_slices.width)
+                    xs_true = cross_section.EnergySlice.CrossSection(true_hists["int_ex"][1:-1], true_hists["int"][1:-1], true_hists["inc"][1:-1], cross_section.BetheBloch.meandEdX(args.energy_slices.pos_bins[1:-1], cross_section.Particle.from_pdgid(211)), args.energy_slices.width)
                     cross_section.PlotXSComparison({f"{label_map[k]} Data reco" : process[i], f"{label_map[k]} MC truth" : xs_true}, args.energy_slices, i, {f"{label_map[k]} Data reco" : "C0", f"{label_map[k]} MC truth" : "C1"}, simulation_label = "Geant4 v10.6")
                     book.Save()
             Plots.plt.close("all")
