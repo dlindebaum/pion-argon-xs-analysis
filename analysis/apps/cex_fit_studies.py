@@ -310,6 +310,15 @@ def PlotCrossCheckResults(xlabel, model : cross_section.pyhf.Model, template_cou
         Plots.Plot(x, data[f"fe_total_{n}"], yerr = data[f"fe_err_total_{n}"], label = f"${process_map[n]}$", xlabel = xlabel, ylabel = "fractional error", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
         Plots.plt.axhline(0, color = "black", linestyle = "--")
         Plots.plt.ylim(1.5 * np.min(data.filter(regex = "fe_total_").values), 1.5 * np.max(data.filter(regex = "fe_total_").values))
+        Plots.plt.xticks(ticks = x, labels = results.keys())
+    pdf.Save()
+
+    # plot true process fractional error
+    Plots.plt.figure()
+    for n in range(4):
+        Plots.Plot(x, data[f"fe_total_{n}"], yerr = data[f"fe_err_total_{n}"], label = f"${process_map[n]}$", xlabel = xlabel, ylabel = "fractional error", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
+        Plots.plt.axhline(0, color = "black", linestyle = "--")
+        Plots.plt.ylim(1.5 * np.min(data.filter(regex = "fe_total_").values), 1.5 * np.max(data.filter(regex = "fe_total_").values))
     Plots.plt.xticks(ticks = x, labels = results.keys())
     pdf.Save()
 
@@ -443,7 +452,7 @@ def PlotDataShapeTest(data, key, label, vmin = None, vmax = None):
             loc = np.argwhere((grid[0] == i[0]) & (grid[1] == i[1]))[0]
             im[loc[0], loc[1]] = j
 
-        im = Plots.plt.imshow(np.where(im == 0, np.nan, im), cmap = "plasma", vmin = vmin, vmax = vmax)
+        im_c = Plots.plt.imshow(np.where(im == 0, np.nan, im), cmap = "plasma", vmin = vmin, vmax = vmax)
 
         Plots.plt.grid(False)
         if ia == len(remove_zero(unique_values[2])) - 1:
@@ -455,10 +464,16 @@ def PlotDataShapeTest(data, key, label, vmin = None, vmax = None):
         Plots.plt.yticks(ticks = range(len(unique_values[0])), labels = unique_values[0])
         Plots.plt.xticks(ticks = range(len(unique_values[1])), labels = unique_values[1])
 
+        for (i, j), z in np.ndenumerate(im):
+            if z != 0:
+                Plots.plt.gca().text(j, i, f"{z:.2f}", ha='center', va='center', fontsize = 12, color = "limegreen", weight = "bold")
+        Plots.plt.grid(False)
+
+
     Plots.plt.subplots_adjust(wspace = 0, hspace = 0)
     cbar_ax = fig.add_axes([1, 0.15, 0.05, 0.7])
     fig.suptitle(label, size = 20)
-    fig.colorbar(im, label = label, cax = cbar_ax)
+    fig.colorbar(im_c, label = label, cax = cbar_ax)
     fig.tight_layout()
 
 @cross_section.timer
@@ -486,30 +501,17 @@ def PredictedCountsSummary(template_counts : float, directory : str, model : cro
         v = list(results[r]["results"].keys())
 
         pr, pr_energy = ProcessResults(template_counts, results[r]["results"], results[r]["true_counts"], model, single_bin)
-
-        print(f"{pr=}")
-
         fractional_error = pr.filter(regex = "fe_total")
         fractional_error_unc = pr.filter(regex = "fe_err_total")
         fe = pr_energy["fe"]
         fe_err = pr_energy["fe_err"]
-        if test == "normalisation":
-            fractional_error = np.array([fractional_error.loc[0.8], fractional_error.loc[1.2]]).T
-            fractional_error_unc = np.array([fractional_error_unc.loc[0.8], fractional_error_unc.loc[1.2]]).T
-            
-            ind = [v.index(0.8), v.index(1.2)]
-            fe = pr_energy["fe"][:, ind]
-            fe_err = pr_energy["fe_err"][:, ind]
-
-        print(f"{fractional_error.values.shape=}")
-        print(f"{fractional_error_unc.values.shape=}")
 
         n_fe_total_max[r] = (
             np.max(abs(fractional_error.values), 0),
             np.where(np.argmax(abs(fractional_error.values), 0) == 0, fractional_error_unc.values[0, :], fractional_error_unc.values[1, :])
             )
 
-        print(f"{n_fe_total_max=}")
+        print(f"{n_fe_total_max[r]=}")
 
         fe = np.nan_to_num(fe, posinf = 0, nan = 0, neginf = 0)
         fe_err = np.nan_to_num(fe_err, posinf = 0, nan = 0, neginf = 0)        
@@ -520,6 +522,7 @@ def PredictedCountsSummary(template_counts : float, directory : str, model : cro
     return n_fe_max, n_fe_total_max
 
 def CreateSummaryTables(total_summaries, row_names):
+
     table_fe = pd.DataFrame({k : v[0] for k, v in total_summaries.items()}, index = row_names)
     table_err = pd.DataFrame({k : v[1] for k, v in total_summaries.items()}, index = row_names)
 
@@ -547,7 +550,7 @@ def Summary(directory : str, test : str, signal_process : str, model : cross_sec
     indices = ["absorption", "charge_exchange", "single_pion_production", "pion_production"]
     xlabel = "$KE$ (MeV)"
 
-    tables_n = CreateSummaryTables(n_fe_total_max, indices)
+    tables_n = CreateSummaryTables(n_fe_max, indices)
     SaveSummaryTables(directory, tables_n, "processes")
     print(tables_n[2])
 
@@ -706,7 +709,7 @@ def main(args : cross_section.argparse.Namespace):
                             if (t == "shape"):
                                 PlotCrossCheckResultsShape(fit_result, template_counts, models[m], args.energy_slices.pos_overflow, args.fit["single_bin"], pdf)
                             else:
-                                PlotCrossCheckResults(f"{target} {t}", models[m], template_counts, fit_result["results"], fit_result["true_counts"], args.energy_slices.pos_overflow, pdf, args.fit["single_bin"])
+                                PlotCrossCheckResults(f"{cross_section.remove_(target)} {t}", models[m], template_counts, fit_result["results"], fit_result["true_counts"], args.energy_slices.pos_overflow, pdf, args.fit["single_bin"])
                         Plots.plt.close("all")
                 
                     with Plots.PlotBook(f"{directory}summary_plots.pdf", True) as book:
