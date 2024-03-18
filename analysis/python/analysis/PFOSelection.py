@@ -86,7 +86,7 @@ def NHitsCut(events : Master.Data, cut = 80, op = ">", return_property : bool = 
 def BeamParticleDistanceCut(events : Master.Data, cut = [3, 90], op = [">", "<"], return_property : bool = False) -> ak.Array:
     # distance to beam end position in cm
     dist = find_beam_separations(events)
-    return CreateMask(cut, [">", "<"], dist, return_property)
+    return CreateMask(cut, op, dist, return_property)
 
 
 def BeamParticleIPCut(events : Master.Data, cut = 20, op = "<", return_property : bool = False) -> ak.Array:
@@ -115,6 +115,11 @@ def PiPlusSelection(events : Master.Data, cut = [0.5, 2.8], op = [">", "<"], ret
 def ProtonSelection(events : Master.Data, cut = 2.8, op = ">", return_property : bool = False):
     median_dEdX = Median(events.recoParticles.track_dEdX)
     return CreateMask(cut, op, median_dEdX, return_property)
+
+
+def Chi2ProtonSelection(events : Master.Data, cut = 80, op = "<", return_property : bool = False):
+    chi2_ndf = events.recoParticles.track_chi2_proton / events.recoParticles.track_chi2_proton_ndof
+    return CreateMask(cut, op, chi2_ndf, return_property)
 
 
 def InitialPi0PhotonSelection(
