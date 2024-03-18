@@ -1645,7 +1645,9 @@ def PlotStackedBar(bars, labels, xlabel : str = None, colours : list = None, alp
 def PlotTags(tags : Tags.Tags, xlabel : str = "name", fraction : bool = True):
     plt.figure()
     counts = [ak.sum(m) for m in tags.mask.values]
-    bar = plt.bar(tags.name.values, counts / np.sum(counts), color = tags.colour.values)
+    if fraction is True:
+        counts = counts / np.sum(counts)
+    bar = plt.bar(tags.name.values, counts, color = tags.colour.values)
     plt.xlabel(xlabel)
     plt.ylabel("Counts")
     plt.bar_label(bar)
