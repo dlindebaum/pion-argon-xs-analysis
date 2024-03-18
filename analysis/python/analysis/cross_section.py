@@ -65,21 +65,25 @@ def RatioWeights(mc : Data, func : str, params : list, truncate : int = 10):
     return weights
 
 
-def PlotXSComparison(xs : dict[np.array], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", newFigure : bool = True):
-    xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos, energy_slice.max_pos + energy_slice.width])
+def PlotXSComparison(xs : dict[np.array], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", chi2 : bool = True, newFigure : bool = True):
+    xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos])
 
     if colors is None:
         colors = {k : f"C{i}" for i, k in enumerate(xs)}
 
     sim_curve_interp = xs_sim.GetInterpolatedCurve(process)
-    x = energy_slice.pos - energy_slice.width/2
+    x = energy_slice.pos[:-1] - energy_slice.width/2
 
     if newFigure is True: Plots.plt.figure()
     chi_sqrs = {}
     for k, v in xs.items():
         w_chi_sqr = weighted_chi_sqr(v[0], sim_curve_interp(x), v[1])
         chi_sqrs[k] = w_chi_sqr
-        Plots.Plot(x, v[0], xerr = energy_slice.width / 2, yerr = v[1], label = k + ", $\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}", color = colors[k], linestyle = "", marker = "x", newFigure = False)
+        if chi2 is True:
+            chi2_l = ", $\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}"
+        else:
+            chi2_l = ""
+        Plots.Plot(x, v[0], xerr = energy_slice.width / 2, yerr = v[1], label = k + chi2_l, color = colors[k], linestyle = "", marker = "x", newFigure = False)
     
     if process == "single_pion_production":
         Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = simulation_label, title = "single pion production" if title is None else title, newFigure = False, xlabel = "$KE_{int} (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)
@@ -465,7 +469,7 @@ class ApplicationArguments:
                     args.fit[k] = v
             elif head == "ESLICE":
                 if value["width"] is not None:
-                    args.energy_slices = Slices(value["width"], value["min"], value["max"], reversed = True)
+                    args.energy_slices = Slices(value["width"], value["min"] - value["width"], value["max"], reversed = True) # min - width to allocate an underflow bin (not used in the measurement)
             elif head == "ANALYSIS_INPUTS":
                 args.analysis_input = {k : v for k, v in value.items()}
             elif head == "UNFOLDING":
@@ -1565,7 +1569,7 @@ class RegionFit:
         return observations
 
     @staticmethod
-    def Fit(observations, model : pyhf.Model, init_params : list[float] = None, par_bounds : list[tuple] = None, verbose : bool = True, tolerance : float = 1E-4) -> FitResults:
+    def Fit(observations, model : pyhf.Model, init_params : list[float] = None, par_bounds : list[tuple] = None, verbose : bool = True, tolerance : float = 1E-2) -> FitResults:
         pyhf.set_backend(backend = "numpy", custom_optimizer = "minuit")
         if verbose is True: print(f"{init_params=}")
         result = cabinetry.fit.fit(model, observations, init_pars = init_params, custom_fit = True, tolerance = tolerance, par_bounds = par_bounds)
