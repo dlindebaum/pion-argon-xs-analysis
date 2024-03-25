@@ -123,10 +123,10 @@ def CreateAnalysisInputMCTrueBeam(mc : cross_section.Data, args : cross_section.
     is_pip = mc.trueParticles.pdg[:, 0] == 211
     mc_true_beam = mc.Filter([is_pip], [is_pip], True)
 
+    #! this is just a placeholder to populate reco regions
     n_pi =  cross_section.EventSelection.SelectionTools.GetPFOCounts(args.selection_masks["mc"]["pi"])
     n_pi0 = cross_section.EventSelection.SelectionTools.GetPFOCounts(args.selection_masks["mc"]["pi0"])
     reco_regions = cross_section.EventSelection.create_regions_new(n_pi0, n_pi)
-
 
     n_pi_true = mc_true_beam.trueParticles.nPiMinus + mc_true_beam.trueParticles.nPiPlus
     n_pi0_true = mc_true_beam.trueParticles.nPi0
