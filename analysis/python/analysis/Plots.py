@@ -1381,20 +1381,20 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
     plt.imshow(c_norm, cmap = cmap, origin = "lower")
     plt.colorbar(label = "column normalised counts")
 
-    true_counts = np.sum(counts, axis = 1)
-    reco_counts = np.sum(counts, axis = 0)
+    y_counts = np.sum(counts, axis = 1)
+    x_counts = np.sum(counts, axis = 0)
 
     if x_tick_labels is None:
         x_tick_labels = [f"{i}" for i in range(np.array(counts).shape[0])]
     if y_tick_labels is None:
         y_tick_labels = [f"{i}" for i in range(np.array(counts).shape[1])]
 
-    true_counts = [f"{x_tick_labels[t].replace('_', ' ')}\n({true_counts[t]})" for t in range(len(x_tick_labels))]
-    reco_counts = [f"{y_tick_labels[r].replace('_', ' ')}\n({reco_counts[r]})" for r in range(len(y_tick_labels))]
+    x_counts = [f"{x_tick_labels[r].replace('_', ' ')}\n({x_counts[r]})" for r in range(len(x_tick_labels))]
+    y_counts = [f"{y_tick_labels[t].replace('_', ' ')}\n({y_counts[t]})" for t in range(len(y_tick_labels))]
 
 
-    plt.gca().set_xticks(np.arange(len(reco_counts)), labels=reco_counts)
-    plt.gca().set_yticks(np.arange(len(true_counts)), labels=true_counts)
+    plt.gca().set_xticks(np.arange(len(x_counts)), labels=x_counts)
+    plt.gca().set_yticks(np.arange(len(y_counts)), labels=y_counts)
 
     plt.xlabel(x_label)
     plt.ylabel(y_label)
