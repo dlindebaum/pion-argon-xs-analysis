@@ -32,6 +32,9 @@ def template_config():
         },
         "norm" : "normalisation to apply to MC when making Data/MC comparisons, usually defined as the ratio of pion-like triggers from the beam instrumentation", #! this should be inferred from one of the apps!
         "pmom" : "momentum byte of the beam i.e. central value of beam momentum in GeV, required if ntuple does not have the correct scale for the P_inst distribution",
+        "REGION_IDENTIFICATION":{
+            "type" : "default"
+        },
         "BEAM_SCRAPER_FITS":{
             "energy_range" : None,
             "energy_bins" : None
@@ -322,7 +325,9 @@ def main(args):
                 "null_pfo" : 'null_pfo_selection_masks.dill',
                 "photon" : 'photon_selection_masks.dill',
                 "pi0" : 'pi0_selection_masks.dill',
-                "pi" : 'pip_selection_masks.dill'
+                "pi" : 'pip_selection_masks.dill',
+                "loose_pi"  : "loose_pi_selection_masks.dill",
+                "loose_photon" : "loose_photon_selection_masks.dill"
             }
             new_config_entry = {}
             files = os.listdir(output_path)

@@ -24,7 +24,7 @@ from particle import Particle
 from pyunfold import iterative_unfold, Logger
 from scipy.interpolate import interp1d, UnivariateSpline
 
-from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags
+from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, RegionIdentification
 from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer
 from python.analysis.shower_merging import SetPlotStyle
 from python.analysis.Utils import *
@@ -39,6 +39,29 @@ from python.analysis.Utils import *
 #     return wrapper
 
 # pyhf.modifiers.staterror.required_parset = to_poisson(pyhf.modifiers.staterror.required_parset)
+
+
+def CountInRegions(true_regions : dict, reco_regions : dict, selection_efficincy : np.ndarray = None) -> np.ndarray:
+    """ Computes the counts of each combination of reco and true regions.
+
+    Args:
+        true_regions (dict): true region masks
+        reco_regions (dict): reco region masks
+        return_counts (bool, optional): return matrix of counts. Defaults to False.
+
+    Returns:
+        np.ndarray: counts.
+    """
+    counts = []
+    for t in true_regions:
+        true_counts = []
+        for r in reco_regions:
+            mask = true_regions[t] & reco_regions[r]
+            if selection_efficincy is not None: mask = mask & selection_efficincy
+            true_counts.append(ak.sum(mask)) # true counts for each reco region
+        counts.append(true_counts)
+    return counts
+
 
 def KE(p, m):
     return (p**2 + m**2)**0.5 - m
@@ -65,7 +88,7 @@ def RatioWeights(mc : Data, func : str, params : list, truncate : int = 10):
     return weights
 
 
-def PlotXSComparison(xs : dict[np.array], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", chi2 : bool = True, newFigure : bool = True):
+def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", chi2 : bool = True, newFigure : bool = True):
     xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos])
 
     if colors is None:
@@ -266,11 +289,11 @@ class BetheBloch:
         return KE_int
 
     @staticmethod
-    def RangeFromKE(KE_init : np.array, particle : Particle, precision : float = 1) -> ak.Array:
+    def RangeFromKE(KE_init : np.ndarray, particle : Particle, precision : float = 1) -> ak.Array:
         """ Compute the range of particles from the  initial kinetic energy.
 
         Args:
-            KE_init (np.array): initial kinetic energies
+            KE_init (np.ndarray): initial kinetic energies
             particle (Particle): particle type
             precision (float, optional): position step. Defaults to 1.
 
@@ -420,6 +443,8 @@ class ApplicationArguments:
                 args.mc_file = value["mc"]
                 args.data_file = value["data"]
                 args.ntuple_type = value["type"]
+            elif head == "REGION_IDENTIFICATION":
+                args.region_identification = RegionIdentification.regions[value["type"]] 
             elif head == "BEAM_PARTICLE_SELECTION":
                 args.beam_selection = ApplicationArguments.__CreateSelection(value, BeamParticleSelection)
             elif head == "HAS_FINAL_STATE_PFO_SELECTION":
@@ -430,6 +455,10 @@ class ApplicationArguments:
                 args.piplus_selection = ApplicationArguments.__CreateSelection(value, PFOSelection)
             elif head == "FINAL_STATE_PHOTON_SELECTION":
                 args.photon_selection = ApplicationArguments.__CreateSelection(value, PFOSelection)
+            elif head == "FINAL_STATE_LOOSE_PION_SELECTION":
+                args.loose_pion_selection = ApplicationArguments.__CreateSelection(value, PFOSelection)
+            elif head == "FINAL_STATE_LOOSE_PHOTON_SELECTION":
+                args.loose_photon_selection = ApplicationArguments.__CreateSelection(value, PFOSelection)
             elif head == "FINAL_STATE_PI0_SELECTION":
                 args.pi0_selection = ApplicationArguments.__CreateSelection(value, EventSelection)
             elif head == "BEAM_QUALITY_FITS":
@@ -523,13 +552,13 @@ class ApplicationArguments:
         return args
 
 
-def UpstreamEnergyLoss(KE_inst : ak.Array, params : np.array, function : Fitting.FitFunction = Fitting.poly2d) -> ak.Array:
+def UpstreamEnergyLoss(KE_inst : ak.Array, params : np.ndarray, function : Fitting.FitFunction = Fitting.poly2d) -> ak.Array:
     """ compute the upstream loss based on a repsonse function and it's fit parameters.
 
     Args:
         KE_inst (ak.Array): kinetic energy measured by the beam instrumentation
         function (Fitting.FitFunction): repsonse function, defaults to Fitting.poly2d. 
-        params (np.array): function paramters
+        params (np.ndarray): function paramters
 
     Returns:
         ak.Array: upstream energy loss
@@ -647,20 +676,20 @@ class Slices:
                 return self.__create_slice__(i + self.__conversion__(self.min))
 
     @property
-    def num(self) -> np.array:
+    def num(self) -> np.ndarray:
         """ Return all slice numbers.
 
         Returns:
-            np.array: slice numbers
+            np.ndarray: slice numbers
         """
         return np.array([ s.num for s in self], dtype = int)
 
     @property
-    def pos(self) -> np.array:
+    def pos(self) -> np.ndarray:
         """ Return all slice positions.
 
         Returns:
-            np.array: slice positions
+            np.ndarray: slice positions
         """
         return np.array([ s.pos for s in self])
 
@@ -724,14 +753,14 @@ class GeantCrossSections:
         pass
 
 
-    def Stat_Error(self, xs : str) -> np.array:
+    def Stat_Error(self, xs : str) -> np.ndarray:
         """ Statisitical error of the simulation, done using binomial uncertainties. Only works if n_cascades is known.
 
         Args:
             xs (str): cross section process
 
         Returns:
-            np.array: statistical error
+            np.ndarray: statistical error
         """
         if (self.n_cascades is None) or (not hasattr(self, xs + "_frac")):
             return 0 * getattr(self, xs)
@@ -842,16 +871,16 @@ class ThinSlice:
         return mean_energy, error_mean_energy
 
     @staticmethod 
-    def TotalCrossSection(n_incident : np.array, n_interact : np.array, slice_width : float) -> tuple[np.array, np.array]:
+    def TotalCrossSection(n_incident : np.ndarray, n_interact : np.ndarray, slice_width : float) -> tuple[np.ndarray, np.ndarray]:
         """ Returns cross section in mb.
 
         Args:
-            n_incident (np.array): incident histogram
-            n_interact (np.array): interacting histogram
+            n_incident (np.ndarray): incident histogram
+            n_interact (np.ndarray): interacting histogram
             slice_width (float): spatial width of thin slice
 
         Returns:
-            tuple[np.array, np.array]: cross section, statistical uncertainty
+            tuple[np.ndarray, np.ndarray]: cross section, statistical uncertainty
         """
         xs = np.log(n_incident / (n_incident - n_interact)) # calculate a dimensionless cross section
 
@@ -866,17 +895,17 @@ class ThinSlice:
         return factor * xs, abs(factor * xs_e)
 
 
-    def CrossSection(n_int_exclusive : np.array, n_int_inclusive : np.array, n_inc_inclusive : np.array, slice_width : float) -> tuple[np.array, np.array]:
+    def CrossSection(n_int_exclusive : np.ndarray, n_int_inclusive : np.ndarray, n_inc_inclusive : np.ndarray, slice_width : float) -> tuple[np.ndarray, np.ndarray]:
         """ Cross section of exclusive process.
 
         Args:
-            n_int_exclusive (np.array): exclusive interactions
-            n_int_inclusive (np.array): interactions
-            n_inc_inclusive (np.array): incident counts
+            n_int_exclusive (np.ndarray): exclusive interactions
+            n_int_inclusive (np.ndarray): interactions
+            n_inc_inclusive (np.ndarray): incident counts
             slice_width (float): slice width
 
         Returns:
-            tuple[np.array, np.array]: cross section and error
+            tuple[np.ndarray, np.ndarray]: cross section and error
         """
         NA = 6.02214076e23
         factor = 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * slice_width)
@@ -920,22 +949,22 @@ class EnergySlice:
 
 
     @staticmethod
-    def NIncident(n_initial : np.array, n_end : np.array) -> np.array:
+    def NIncident(n_initial : np.ndarray, n_end : np.ndarray) -> np.ndarray:
         """ Calculate number of incident particles
 
         Args:
-            n_initial (np.array): initial particle counts
-            n_end (np.array): interaction counts
+            n_initial (np.ndarray): initial particle counts
+            n_end (np.ndarray): interaction counts
 
         Returns:
-            np.array: incident counts
+            np.ndarray: incident counts
         """
         n_survived_all = np.cumsum(n_initial - n_end)
         n_incident = n_survived_all + n_end
         return n_incident
 
     @staticmethod
-    def SliceNumbers(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak.Array, energy_slices : Slices) -> tuple[np.array, np.array]:
+    def SliceNumbers(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak.Array, energy_slices : Slices) -> tuple[np.ndarray, np.ndarray]:
         """ Convert energies from physical units to slice numbers.
 
         Args:
@@ -945,7 +974,7 @@ class EnergySlice:
             energy_slices (Slices): energy slices
 
         Returns:
-            tuple[np.array, np.array]: initial slice numbers and interacitng slice numbers
+            tuple[np.ndarray, np.ndarray]: initial slice numbers and interacitng slice numbers
         """
         init_slice = energy_slices(init_energy).num + 1 # equivilant to ceil
         int_slice = energy_slices(int_energy).num
@@ -961,7 +990,7 @@ class EnergySlice:
         return init_slice, int_slice
 
     @staticmethod
-    def CountingExperiment(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak.Array, process : ak.Array, energy_slices : Slices, interact_only : bool = False, weights : np.array = None) -> tuple[np.array]:
+    def CountingExperiment(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak.Array, process : ak.Array, energy_slices : Slices, interact_only : bool = False, weights : np.ndarray = None) -> tuple[np.ndarray]:
         """ Creates the interacting and incident histograms.
 
         Args:
@@ -971,10 +1000,10 @@ class EnergySlice:
             process (ak.Array): mask of events for exclusive interactions
             energy_slices (Slices): energy slices
             interact_only (bool, optional): only return exclusive interaction histogram. Defaults to False.
-            weights (np.array, optional): event weights. Defaults to None.
+            weights (np.ndarray, optional): event weights. Defaults to None.
 
         Returns:
-            np.array | tuple[np.array]: exclusive interaction histogram and/or initial histogram, incident histogram and interaction histogram 
+            np.ndarray | tuple[np.ndarray]: exclusive interaction histogram and/or initial histogram, incident histogram and interaction histogram 
         """
         init_slice, int_slice = EnergySlice.SliceNumbers(int_energy, init_energy, outside_tpc, energy_slices)
 
@@ -994,7 +1023,7 @@ class EnergySlice:
             return n_interact_exclusive
 
     @staticmethod
-    def CountingExperimentOld(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices) -> tuple[np.array, np.array]:
+    def CountingExperimentOld(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices) -> tuple[np.ndarray, np.ndarray]:
         """ (Legacy) Creates the interacting and incident histograms.
 
         Args:
@@ -1005,7 +1034,7 @@ class EnergySlice:
             energy_slices (Slices): energy slices
 
         Returns:
-            tuple[np.array, np.array]: n_interact and n_incident histograms
+            tuple[np.ndarray, np.ndarray]: n_interact and n_incident histograms
         """
         true_init_slice = energy_slices(ff_energy).num + 1 # equivilant to ceil
         true_int_slice = energy_slices(int_energy).num
@@ -1044,7 +1073,7 @@ class EnergySlice:
         return n_interact, n_incident + n_interact
 
     @staticmethod
-    def Slice_dEdX(energy_slices : Slices, particle : Particle) -> np.array:
+    def Slice_dEdX(energy_slices : Slices, particle : Particle) -> np.ndarray:
         """ Computes the mean dEdX between energy slices.
 
         Args:
@@ -1052,41 +1081,41 @@ class EnergySlice:
             particle (Particle): particle
 
         Returns:
-            np.array: mean dEdX
+            np.ndarray: mean dEdX
         """
         return BetheBloch.meandEdX(energy_slices.pos - energy_slices.width/2, particle)
 
     @staticmethod
-    def TotalCrossSection(n_interact : np.array, n_incident : np.array, dEdX : np.array, dE : float) -> tuple[np.array, np.array]:
+    def TotalCrossSection(n_interact : np.ndarray, n_incident : np.ndarray, dEdX : np.ndarray, dE : float) -> tuple[np.ndarray, np.ndarray]:
         """ Compute cross section using ThinSlice.CrossSection, by passing an effective spatial slice width.
 
         Args:
-            n_interact (np.array): interacting histogram
-            n_incident (np.array): incident histogram
-            dEdX (np.array): mean slice dEdX
+            n_interact (np.ndarray): interacting histogram
+            n_incident (np.ndarray): incident histogram
+            dEdX (np.ndarray): mean slice dEdX
             dE (float): energy slice width
 
         Returns:
-            tuple[np.array, np.array]: Cross section and statistical uncertainty.
+            tuple[np.ndarray, np.ndarray]: Cross section and statistical uncertainty.
         """
         return ThinSlice.TotalCrossSection(n_incident, n_interact, dE/dEdX)
 
     @staticmethod
-    def CrossSection(n_int_ex : np.array, n_int : np.array, n_inc : np.array, dEdX : np.array, dE : float, n_int_ex_err : np.array = None, n_int_err : np.array = None, n_inc_err : np.array = None) -> tuple[np.array, np.array]:
+    def CrossSection(n_int_ex : np.ndarray, n_int : np.ndarray, n_inc : np.ndarray, dEdX : np.ndarray, dE : float, n_int_ex_err : np.ndarray = None, n_int_err : np.ndarray = None, n_inc_err : np.ndarray = None) -> tuple[np.ndarray, np.ndarray]:
         """ Compute exclusive cross sections. If interactions errors are not provided, staticial uncertainties are used (poisson for incident, binomial for interactions).
 
         Args:
-            n_int_ex (np.array): exclusive interactions
-            n_int (np.array): interactions
-            n_inc (np.array): incident counts
-            dEdX (np.array): slice dEdX
+            n_int_ex (np.ndarray): exclusive interactions
+            n_int (np.ndarray): interactions
+            n_inc (np.ndarray): incident counts
+            dEdX (np.ndarray): slice dEdX
             dE (float): energy slice width
-            n_int_ex_err (np.array, optional): exclusive interaction errors. Defaults to None.
-            n_int_err (np.array, optional): interaction errors. Defaults to None.
-            n_inc_err (np.array, optional): incident count errors. Defaults to None.
+            n_int_ex_err (np.ndarray, optional): exclusive interaction errors. Defaults to None.
+            n_int_err (np.ndarray, optional): interaction errors. Defaults to None.
+            n_inc_err (np.ndarray, optional): incident count errors. Defaults to None.
 
         Returns:
-            tuple[np.array, np.array]: _description_
+            tuple[np.ndarray, np.ndarray]: _description_
         """
         NA = 6.02214076e23
         factor = np.array(dEdX) * 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * dE)
@@ -1150,41 +1179,20 @@ class Toy:
         regions = regions.rename(columns = new_col_names)
         return regions
 
-    @staticmethod
-    def ComputeCounts(true_regions : dict, reco_regions : dict, selection_efficincy : np.array = None) -> np.array:
-        """ Computes the counts of each combination of reco and true regions.
-
-        Args:
-            true_regions (dict): true region masks
-            reco_regions (dict): reco region masks
-            return_counts (bool, optional): return matrix of counts. Defaults to False.
-
-        Returns:
-            np.array: counts.
-        """
-        counts = []
-        for t in true_regions:
-            true_counts = []
-            for r in reco_regions:
-                mask = true_regions[t] & reco_regions[r]
-                if selection_efficincy is not None: mask = mask & selection_efficincy
-                true_counts.append(ak.sum(mask)) # true counts for each reco region
-            counts.append(true_counts)
-        return counts
 
     @staticmethod
-    def GetCorrelationMatrix(toy : pd.DataFrame) -> np.array:
+    def GetCorrelationMatrix(toy : pd.DataFrame) -> np.ndarray:
         """ Compute the confusion matrix for the reco/truth regions.
 
         Args:
             toy (pd.DataFrame): Toy
 
         Returns:
-            np.array: confusion matrix
+            np.ndarray: confusion matrix
         """
         reco_regions = Toy.GetRegion(toy, "reco_regions_")
         true_regions = Toy.GetRegion(toy, "truth_regions_")
-        return Toy.ComputeCounts(true_regions, reco_regions)
+        return CountInRegions(true_regions, reco_regions)
 
 
     def SetProperty(self, name : str, value : any):
@@ -1249,17 +1257,17 @@ class Toy:
         return
 
 
-    def NInteract(self, energy_slice : Slices, process : np.array, mask : np.array = None, weights : np.array = None) -> np.array:
+    def NInteract(self, energy_slice : Slices, process : np.ndarray, mask : np.ndarray = None, weights : np.ndarray = None) -> np.ndarray:
         """ Exclusive interaction histogram using energy slice method.
 
         Args:
             energy_slice (Slices): energy slices
-            process (np.array): exclusive process mask
-            mask (np.array, optional): additional mask to apply. Defaults to None.
-            weights (np.array, optional): event weights. Defaults to None.
+            process (np.ndarray): exclusive process mask
+            mask (np.ndarray, optional): additional mask to apply. Defaults to None.
+            weights (np.ndarray, optional): event weights. Defaults to None.
 
         Returns:
-            np.array: exclusive interaction histogram
+            np.ndarray: exclusive interaction histogram
         """
         if mask is None: mask = np.ones(len(self.df), dtype = bool)
         w = weights if weights is None else weights[mask]
@@ -1270,21 +1278,21 @@ class Toy:
 @dataclass
 class AnalysisInput:
     # masks
-    regions : dict[np.array]
-    inclusive_process : dict[np.array]
-    exclusive_process : dict[np.array]
-    outside_tpc_reco : np.array
-    outside_tpc_true : np.array
+    regions : dict[np.ndarray]
+    inclusive_process : dict[np.ndarray]
+    exclusive_process : dict[np.ndarray]
+    outside_tpc_reco : np.ndarray
+    outside_tpc_true : np.ndarray
     # observables
-    track_length_reco : np.array
-    KE_int_reco : np.array
-    KE_init_reco : np.array
-    mean_track_score : np.array
-    track_length_true : np.array
-    KE_int_true : np.array
-    KE_init_true : np.array
+    track_length_reco : np.ndarray
+    KE_int_reco : np.ndarray
+    KE_init_reco : np.ndarray
+    mean_track_score : np.ndarray
+    track_length_true : np.ndarray
+    KE_int_true : np.ndarray
+    KE_init_true : np.ndarray
     # extras
-    weights : np.array = None
+    weights : np.ndarray = None
 
     def __len__(self):
         for o in ["outside_tpc_reco", "outside_tpc_true", "track_length_reco", "KE_int_reco", "KE_init_reco", "mean_track_score", "track_length_true", "KE_int_true", "KE_init_true", "weights"]:
@@ -1318,18 +1326,18 @@ class AnalysisInput:
             raise Exception("not an analysis input file")
 
 
-    def NInteract(self, energy_slice : Slices, process: np.array, mask : np.array = None, reco : bool = True, weights : np.array = None) -> np.array:
+    def NInteract(self, energy_slice : Slices, process: np.ndarray, mask : np.ndarray = None, reco : bool = True, weights : np.ndarray = None) -> np.ndarray:
         """ Calculate exclusive interaction histogram using the energy slice method.
 
         Args:
             energy_slice (Slices): energy slices
-            process (np.array): exclusive process mask
-            mask (np.array, optional): additional mask. Defaults to None.
+            process (np.ndarray): exclusive process mask
+            mask (np.ndarray, optional): additional mask. Defaults to None.
             reco (bool, optional): use reco KE?. Defaults to True.
-            weights (np.array, optional): event weights. Defaults to None.
+            weights (np.ndarray, optional): event weights. Defaults to None.
 
         Returns:
-            np.array: exclusive interaction histogram.
+            np.ndarray: exclusive interaction histogram.
         """
         if mask is None: mask = np.ones(len(self.KE_int_reco), dtype = bool)
         if reco is True:
@@ -1375,14 +1383,14 @@ class AnalysisInput:
             )
 
     @staticmethod
-    def CreateAnalysisInputNtuple(events : Data, upstream_energy_loss_params : dict, reco_regions : dict[np.array], true_regions : dict[np.array] = None, mc_reweight_params : dict = None) -> "AnalysisInput":
+    def CreateAnalysisInputNtuple(events : Data, upstream_energy_loss_params : dict, reco_regions : dict[np.ndarray], true_regions : dict[np.ndarray] = None, mc_reweight_params : dict = None) -> "AnalysisInput":
         """ Create analysis input from an ntuple sample.
 
         Args:
             events (Data): ntuple sample
             upstream_energy_loss_params (dict): upstream energy loss correction
-            reco_regions (dict[np.array]): reco region masks
-            true_regions (dict[np.array], optional): true process masks. Defaults to None.
+            reco_regions (dict[np.ndarray]): reco region masks
+            true_regions (dict[np.ndarray], optional): true process masks. Defaults to None.
             mc_reweight_params (dict, optional): mc reweight parameters. Defaults to None.
 
         Returns:
@@ -1476,17 +1484,17 @@ class AnalysisInput:
         return {"train" : AnalysisInput(**train), "test" : AnalysisInput(**test)}
 
 
-    def CreateHistograms(self, energy_slice : Slices, exclusive_process : str, reco : bool, mask : np.array = None) -> dict[np.array]:
+    def CreateHistograms(self, energy_slice : Slices, exclusive_process : str, reco : bool, mask : np.ndarray = None) -> dict[np.ndarray]:
         """ Calculate Histogrames required for the cross section measurement using energy slicing. Note exclusive interaction histogram is without background subtraction.
 
         Args:
             energy_slice (Slices): energy slices
             exclusive_process (str): exclusive process
             reco (bool): use reco information?
-            mask (np.array, optional): additional mask. Defaults to None.
+            mask (np.ndarray, optional): additional mask. Defaults to None.
 
         Returns:
-            dict[np.array]: histograms
+            dict[np.ndarray]: histograms
         """
         KE_int = self.KE_int_true if reco is False else self.KE_int_reco
         KE_init = self.KE_init_true if reco is False else self.KE_init_reco
@@ -1519,8 +1527,8 @@ class AnalysisInput:
 class RegionFit:
 
     @staticmethod    
-    def Model(n_channels : int, KE_int_templates : np.array, mean_track_score_templates : np.array = None, mc_stat_unc : bool = False) -> pyhf.Model:
-        def channel(channel_name : str, samples : np.array, mc_stat_unc : bool):
+    def Model(n_channels : int, KE_int_templates : np.ndarray, mean_track_score_templates : np.ndarray = None, mc_stat_unc : bool = False) -> pyhf.Model:
+        def channel(channel_name : str, samples : np.ndarray, mc_stat_unc : bool):
             ch = {
                 "name": channel_name,
                 "samples":[
@@ -1561,7 +1569,7 @@ class RegionFit:
         print(f"   auxdata: {model.config.auxdata}")
 
     @staticmethod
-    def GenerateObservations(fit_input : AnalysisInput, energy_slices : Slices, mean_track_score_bins : np.array, model : pyhf.Model, verbose : bool = True, single_bin : bool = False) -> np.array:
+    def GenerateObservations(fit_input : AnalysisInput, energy_slices : Slices, mean_track_score_bins : np.ndarray, model : pyhf.Model, verbose : bool = True, single_bin : bool = False) -> np.ndarray:
         data = RegionFit.CreateObservedInputData(fit_input, energy_slices, mean_track_score_bins, single_bin)
         if verbose is True: print(f"{model.config.suggested_init()=}")
         observations = np.concatenate(data + [model.config.auxdata])
@@ -1587,7 +1595,7 @@ class RegionFit:
         return result
 
     @staticmethod
-    def GetPredictedCorrelationMatrix(model : pyhf.Model, mu : np.array) -> np.array:
+    def GetPredictedCorrelationMatrix(model : pyhf.Model, mu : np.ndarray) -> np.ndarray:
         counts_matrix = []
         for channel in model.spec["channels"]:
             counts = []
@@ -1599,7 +1607,7 @@ class RegionFit:
         return counts_matrix
 
     @staticmethod
-    def CreateKEIntTemplates(analysis_input : AnalysisInput, energy_slices : Slices, single_bin : bool = False, pad : bool = False) -> list[np.array]:
+    def CreateKEIntTemplates(analysis_input : AnalysisInput, energy_slices : Slices, single_bin : bool = False, pad : bool = False) -> list[np.ndarray]:
         model_input_data = []
         for c in analysis_input.regions:
             tmp = []
@@ -1613,7 +1621,7 @@ class RegionFit:
         return model_input_data
 
     @staticmethod
-    def CreateMeanTrackScoreTemplates(analysis_input : AnalysisInput, bins : np.array, weights : np.array = None) -> np.array:
+    def CreateMeanTrackScoreTemplates(analysis_input : AnalysisInput, bins : np.ndarray, weights : np.ndarray = None) -> np.ndarray:
         templates = []
         for t in analysis_input.exclusive_process:
             mask = analysis_input.exclusive_process[t]
@@ -1621,7 +1629,7 @@ class RegionFit:
         return np.array(templates)
 
     @staticmethod
-    def CreateModel(template : AnalysisInput, energy_slice : Slices, mean_track_score_bins : np.array, return_templates : bool = False, weights : np.array = None, mc_stat_unc : bool = True, pad : bool = True, single_bin : bool = False) -> pyhf.Model:
+    def CreateModel(template : AnalysisInput, energy_slice : Slices, mean_track_score_bins : np.ndarray, return_templates : bool = False, weights : np.ndarray = None, mc_stat_unc : bool = True, pad : bool = True, single_bin : bool = False) -> pyhf.Model:
         templates_energy = RegionFit.CreateKEIntTemplates(template, energy_slice, single_bin, pad)
         if mean_track_score_bins is not None:
             templates_mean_track_score = RegionFit.CreateMeanTrackScoreTemplates(template, mean_track_score_bins, weights)
@@ -1635,7 +1643,7 @@ class RegionFit:
             return model
 
     @staticmethod
-    def CreateObservedInputData(fit_input : AnalysisInput, slices : Slices, mean_track_score_bins : np.array = None, single_bin : bool = False) -> np.array:
+    def CreateObservedInputData(fit_input : AnalysisInput, slices : Slices, mean_track_score_bins : np.ndarray = None, single_bin : bool = False) -> np.ndarray:
         observed_binned = []
         if fit_input.inclusive_process is None:
             mask = np.ones_like(fit_input.KE_int_reco, dtype = bool)
@@ -1708,17 +1716,17 @@ class RegionFit:
 
 class Unfold:
     @staticmethod
-    def CorrelationMarix(observed : np.array, true : np.array, bins : np.array, remove_overflow : bool = True) -> np.array:
+    def CorrelationMarix(observed : np.ndarray, true : np.ndarray, bins : np.ndarray, remove_overflow : bool = True) -> np.ndarray:
         """ Caclulate Correlation matrix of observed and true parameters.
 
         Args:
-            observed (np.array): observed data (reco).
-            true (np.array): true data (truth).
-            bins (np.array): bins.
+            observed (np.ndarray): observed data (reco).
+            true (np.ndarray): true data (truth).
+            bins (np.ndarray): bins.
             remove_overflow (bool, optional): remove the first bins which are interpreted as overflow. Defaults to True.
 
         Returns:
-            np.array: Correlation matrix.
+            np.ndarray: Correlation matrix.
         """
         corr = np.histogram2d(np.array(observed), np.array(true), bins = bins)[0]
         if remove_overflow is True:
@@ -1726,18 +1734,18 @@ class Unfold:
         return corr
 
     @staticmethod
-    def ResponseMatrix(observed : np.array, true : np.array, bins : np.array, efficiencies : np.array = None, remove_overflow : bool = False) -> tuple[np.array, np.array]:
+    def ResponseMatrix(observed : np.ndarray, true : np.ndarray, bins : np.ndarray, efficiencies : np.ndarray = None, remove_overflow : bool = False) -> tuple[np.ndarray, np.ndarray]:
         """ Caclulate Correlation matrix of observed and true parameters.
 
         Args:
-            observed (np.array): observed data (reco).
-            true (np.array): true data (truth).
-            bins (np.array): bins.
-            efficiencies (np.array, optional): selection efficiency. Defaults to None.
+            observed (np.ndarray): observed data (reco).
+            true (np.ndarray): true data (truth).
+            bins (np.ndarray): bins.
+            efficiencies (np.ndarray, optional): selection efficiency. Defaults to None.
             remove_overflow (bool, optional): remove the first bins which are interpreted as overflow. Defaults to True.
 
         Returns:
-            tuple[np.array, np.array]: response matrix and the statistical error in the response matrix
+            tuple[np.ndarray, np.ndarray]: response matrix and the statistical error in the response matrix
         """
         if efficiencies is None:
             efficiencies = np.ones(len(bins) - 1 - int(remove_overflow))
@@ -1759,11 +1767,11 @@ class Unfold:
         return response, response_err
 
     @staticmethod #? move to Plots?
-    def PlotMatrix(matrix : np.array, energy_slices : Slices, title : str = None, c_label : str = None):
+    def PlotMatrix(matrix : np.ndarray, energy_slices : Slices, title : str = None, c_label : str = None):
         """ Plot numpy matrix.
 
         Args:
-            matrix (np.array): matrix
+            matrix (np.ndarray): matrix
             title (str, optional): plot title. Defaults to None.
             c_label (str, optional): colourbar label. Defaults to None.
         """
@@ -1781,7 +1789,7 @@ class Unfold:
         return
 
     @staticmethod
-    def CalculateResponseMatrices(template : AnalysisInput, process : str, energy_slice : Slices, regions : bool = False, book : Plots.PlotBook = None, efficiencies : dict[np.array] = None) -> dict[np.array]:
+    def CalculateResponseMatrices(template : AnalysisInput, process : str, energy_slice : Slices, regions : bool = False, book : Plots.PlotBook = None, efficiencies : dict[np.ndarray] = None) -> dict[np.ndarray]:
         """ Calculate response matrix of energy histograms from analysis input.
 
         Args:
@@ -1789,10 +1797,10 @@ class Unfold:
             process (str): exclusive process
             energy_slice (Slices): energy slices
             book (Plots.PlotBook, optional): plot book. Defaults to None.
-            efficiencies (dict[np.array], optional): selection efficiencies. Defaults to None.
+            efficiencies (dict[np.ndarray], optional): selection efficiencies. Defaults to None.
 
         Returns:
-            dict[np.array]: response matrices with errors for each histogram
+            dict[np.ndarray]: response matrices with errors for each histogram
         """
         slice_bins = np.arange(-1 - 0.5, energy_slice.max_num + 1.5)
 
@@ -1843,20 +1851,20 @@ class Unfold:
         return resp
 
     @staticmethod
-    def Unfold(observed : dict[np.array], observed_err : dict[np.array], response_matrices : dict[np.array], priors : dict[np.array] = None, ts_stop = 0.01, max_iter = 100, ts = "ks", regularizers : dict[UnivariateSpline] = None, verbose : bool = False, efficiencies : dict[np.array] = None, covariance : str = "multinomial") -> dict[dict]:
+    def Unfold(observed : dict[np.ndarray], observed_err : dict[np.ndarray], response_matrices : dict[np.ndarray], priors : dict[np.ndarray] = None, ts_stop = 0.01, max_iter = 100, ts = "ks", regularizers : dict[UnivariateSpline] = None, verbose : bool = False, efficiencies : dict[np.ndarray] = None, covariance : str = "multinomial") -> dict[dict]:
         """ Run iterative bayesian unfolding for each histogram.
 
         Args:
-            observed (dict[np.array]): observed data
-            observed_err (dict[np.array]): observed data error
-            response_matrices (dict[np.array]): repsonse matrices
-            priors (dict[np.array], optional): pior distributions. Defaults to None.
+            observed (dict[np.ndarray]): observed data
+            observed_err (dict[np.ndarray]): observed data error
+            response_matrices (dict[np.ndarray]): repsonse matrices
+            priors (dict[np.ndarray], optional): pior distributions. Defaults to None.
             ts_stop (float, optional): tolerance of test statistic. Defaults to 0.01.
             max_iter (int, optional): maximum number of iterations. Defaults to 100.
             ts (str, optional): test statistic type. Defaults to "ks".
             regularizers (dict[UnivariateSpline], optional): splines to regularise the priors. Defaults to None.
             verbose (bool, optional): verbose printout. Defaults to False.
-            efficiencies (dict[np.array], optional): selection efficiencies. Defaults to None.
+            efficiencies (dict[np.ndarray], optional): selection efficiencies. Defaults to None.
 
         Returns:
             dict: unfolding results for each histogram.
@@ -1893,14 +1901,14 @@ class Unfold:
         return results
 
     @staticmethod
-    def PlotUnfoldingResults(obs : np.array, true : np.array, results : dict, energy_slices : Slices, xlabel : str, book : Plots.PlotBook = Plots.PlotBook.null):
+    def PlotUnfoldingResults(obs : np.ndarray, true : np.ndarray, results : dict, energy_slices : Slices, xlabel : str, book : Plots.PlotBook = Plots.PlotBook.null):
         """ Plot unfolded histogram in comparison to observed and true.
 
         Args:
-            obs (np.array): observation
-            true (np.array): truth
+            obs (np.ndarray): observation
+            true (np.ndarray): truth
             results (dict): unfolding results
-            energy_bins (np.array): energy bins
+            energy_bins (np.ndarray): energy bins
             label (str): x label (units of MeV are automatically applied)
             book (Plots.PlotBook, optional): plot book. Defaults to Plots.PlotBook.null.
         """

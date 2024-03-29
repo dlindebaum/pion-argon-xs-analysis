@@ -6,10 +6,9 @@ Author: Shyam Bhuller
 
 Description: Create analysis input files from Ntuples.
 """
-
 import numpy as np
 
-from python.analysis import cross_section, SelectionTools
+from python.analysis import cross_section, SelectionTools, RegionIdentification
 
 from rich import print
 
@@ -65,9 +64,12 @@ def RegionSelection(events : cross_section.Data, args : cross_section.argparse.N
     else:
         key = "data"
 
-    n_pi =  SelectionTools.GetPFOCounts(args.selection_masks[key]["pi"])
-    n_pi0 = SelectionTools.GetPFOCounts(args.selection_masks[key]["pi0"])
-    reco_regions = cross_section.EventSelection.create_regions_new(n_pi0, n_pi)
+    counts = {}
+    for obj in args.selection_masks[key]:
+        if obj in ["beam", "null_pfo"]: continue
+        counts[f"n_{obj}"] = SelectionTools.GetPFOCounts(args.selection_masks[key][obj])
+    reco_regions = RegionIdentification.CreateRegionIdentification(args.region_identification, **counts)
+
 
     if is_mc:
         events_copy = events.Filter(returnCopy = True)
@@ -81,7 +83,7 @@ def RegionSelection(events : cross_section.Data, args : cross_section.argparse.N
         n_pi_true = n_pi_true[mask]
         n_pi0_true = n_pi0_true[mask]
         is_pip = is_pip[mask]
-        true_regions = cross_section.EventSelection.create_regions_new(n_pi0_true, n_pi_true)
+        true_regions = RegionIdentification.TrueRegions(n_pi0_true, n_pi_true)
         for k in true_regions:
             true_regions[k] = true_regions[k] & (is_pip)
         for k in reco_regions:
@@ -126,11 +128,11 @@ def CreateAnalysisInputMCTrueBeam(mc : cross_section.Data, args : cross_section.
     #! this is just a placeholder to populate reco regions
     n_pi =  cross_section.EventSelection.SelectionTools.GetPFOCounts(args.selection_masks["mc"]["pi"])
     n_pi0 = cross_section.EventSelection.SelectionTools.GetPFOCounts(args.selection_masks["mc"]["pi0"])
-    reco_regions = cross_section.EventSelection.create_regions_new(n_pi0, n_pi)
+    reco_regions = RegionIdentification.TrueRegions(n_pi0, n_pi)
 
     n_pi_true = mc_true_beam.trueParticles.nPiMinus + mc_true_beam.trueParticles.nPiPlus
     n_pi0_true = mc_true_beam.trueParticles.nPi0
-    true_regions = cross_section.EventSelection.create_regions_new(n_pi0_true, n_pi_true)
+    true_regions = RegionIdentification.TrueRegions(n_pi0_true, n_pi_true)
 
     return cross_section.AnalysisInput.CreateAnalysisInputNtuple(mc_true_beam, args.upstream_loss_correction_params["value"], reco_regions, true_regions, args.beam_reweight_params)
 
