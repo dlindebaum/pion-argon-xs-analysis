@@ -1309,13 +1309,13 @@ def PlotHist2DImshow(x : ak.Array, y : ak.Array, bins : int = 100, x_range : lis
     h, x_e, y_e = np.histogram2d(np.array(x), np.array(y), bins = bins, range = [x_range, y_range])
 
     if norm == "row":
-        h_norm = h / np.max(h, 0) # normalised by row
+        h_norm = Utils.nandiv(h, np.nanmax(h, 0)) # normalised by row
     elif norm == "column":
-        h_norm = h / np.max(h, axis = 1)[:, np.newaxis] # normalised by column
+        h_norm = Utils.nandiv(h, np.nanmax(h, axis = 1)[:, np.newaxis]) # normalised by column
     else:
         h_norm = h # don't normalise
 
-    if c_range is None: c_range = [np.min(h_norm), np.max(h_norm)]
+    if c_range is None: c_range = [np.nanmin(h_norm), np.nanmax(h_norm)]
 
     if c_scale == "log":
         cnorm = matplotlib.colors.LogNorm(vmin = max(min(c_range), 1) , vmax = max(c_range))
@@ -1379,7 +1379,7 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
     if newFigure: plt.figure()
     c_norm = counts/np.sum(counts, axis = 0)
     plt.imshow(c_norm, cmap = cmap, origin = "lower")
-    plt.colorbar(label = "column normalised counts")
+    plt.colorbar(label = "column normalised counts", shrink = 0.8)
 
     y_counts = np.sum(counts, axis = 1)
     x_counts = np.sum(counts, axis = 0)
@@ -1414,7 +1414,7 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
 
 def DrawMultiCutPosition(value : float | list[float], arrow_loc : float = 0.8, arrow_length : float = 0.2, face : str | list[str] = "right", flip : bool = False, color = "black", annotate : bool = False):
     if type(value) == list and type(face) == list:
-        for i in range(2):
+        for i in range(max(2, len(value))):
             DrawCutPosition(value[i], arrow_loc, arrow_length, face[i], flip, color, annotate)
     else:
         DrawCutPosition(value, arrow_loc, arrow_length, face, flip, color, annotate)

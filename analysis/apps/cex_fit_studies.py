@@ -344,7 +344,7 @@ def PlotCrossCheckResults(xlabel, model : cross_section.pyhf.Model, template_cou
         pdf.Save()
     return
 
-@cross_section.timer
+
 def ProcessResults(template_counts : int, results : dict, true_counts : dict, model : cross_section.pyhf.Model, single_bin : bool):
     true_counts_all = {}
     for t in true_counts:
@@ -510,8 +510,6 @@ def PredictedCountsSummary(template_counts : float, directory : str, model : cro
             np.max(abs(fractional_error.values), 0),
             np.where(np.argmax(abs(fractional_error.values), 0) == 0, fractional_error_unc.values[0, :], fractional_error_unc.values[1, :])
             )
-
-        print(f"{n_fe_total_max[r]=}")
 
         fe = np.nan_to_num(fe, posinf = 0, nan = 0, neginf = 0)
         fe_err = np.nan_to_num(fe_err, posinf = 0, nan = 0, neginf = 0)        
