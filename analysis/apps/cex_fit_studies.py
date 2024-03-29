@@ -412,7 +412,7 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
     return
 
 
-def ProcessResults(template_counts : int, results : dict, true_counts : dict, expected_mu : dict, model : cross_section.pyhf.Model, single_bin : bool):
+def ProcessResults(template_counts : int, results : dict, true_counts : dict, model : cross_section.pyhf.Model, single_bin : bool):
     true_counts_all = {}
     for t in true_counts:
         true_counts_all[t] = {f"true_counts_{i}" : np.sum(v) for i, v in enumerate(true_counts[t].values())}
