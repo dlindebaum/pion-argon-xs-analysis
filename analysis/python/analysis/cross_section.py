@@ -476,7 +476,8 @@ class ApplicationArguments:
                 args.unfolding = {k : v for k, v in value.items()}
             else:
                 setattr(args, head, value) # allow for generic configurations in the json file
-        ApplicationArguments.DataMCSelectionArgs(args)
+        if hasattr(args, "beam_selection"):
+            ApplicationArguments.DataMCSelectionArgs(args)
         if hasattr(args, "pi0_selection"):
             ApplicationArguments.AddEnergyCorrection(args)
         if hasattr(args, "beam_selection"):
