@@ -718,16 +718,6 @@ def create_regions(pi0_counts, pi_charged_counts):
     return regions_dict
 
 
-def create_regions_new(pi0_counts, pi_charged_counts):
-    regions_dict = {
-        "absorption": np.logical_and(pi0_counts==0, pi_charged_counts==0),
-        "charge_exchange": np.logical_and(pi0_counts==1, pi_charged_counts==0),
-        "single_pion_production": np.logical_and(pi0_counts==0, pi_charged_counts==1),
-        "pion_production": ((pi0_counts >= 0) & (pi_charged_counts > 1)) | ((pi0_counts > 1) & (pi_charged_counts >= 0)) | ((pi0_counts == 1) & (pi_charged_counts == 1)),
-    }
-    return regions_dict
-
-
 #######################################################################
 #######################################################################
 ##########                    DEPRECATED                     ##########

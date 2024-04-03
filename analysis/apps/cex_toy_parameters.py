@@ -17,7 +17,7 @@ import scipy.stats as stats
 
 from alive_progress import alive_bar
 
-from python.analysis import cross_section, Master, Plots, Tags, SelectionTools
+from python.analysis import cross_section, Master, Plots, Tags, SelectionTools, RegionIdentification
 
 from apps.cex_analysis_input import RegionSelection
 
@@ -224,6 +224,7 @@ def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, args :
     Master.DictToHDF5(selection_efficiency_info, out + "pi_beam_efficiency/beam_selection_efficiencies_true.hdf5")
     return
 
+
 @Master.timer
 def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace, out : str):
     """ Study which computes a correlation matrix ofthe event faction for reco regions and true regions.
@@ -237,7 +238,7 @@ def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace, out : str):
 
     os.makedirs(out + "reco_regions/", exist_ok = True)
     pdf = Plots.PlotBook(out + "reco_regions/reco_regions_study")
-    counts = cross_section.Toy.ComputeCounts(true_regions, reco_regions)
+    counts = cross_section.CountInRegions(true_regions, reco_regions)
     Plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "true process", x_label = "reco region")
     pdf.Save()
     pdf.close()
@@ -267,7 +268,7 @@ def MeanTrackScoreKDE(mc : Master.Data, args : argparse.Namespace, out : str):
 
     mean_track_score = ak.fill_none(ak.mean(mc_copy.recoParticles.track_score, axis = -1), -0.05)
 
-    true_processes = cross_section.EventSelection.create_regions_new(mc_copy.trueParticles.nPi0, mc_copy.trueParticles.nPiPlus + mc_copy.trueParticles.nPiMinus)
+    true_processes = RegionIdentification.TrueRegions(mc_copy.trueParticles.nPi0, mc_copy.trueParticles.nPiPlus + mc_copy.trueParticles.nPiMinus)
     tags = Tags.ExclusiveProcessTags(true_processes)
 
     kdes = {}
