@@ -362,7 +362,7 @@ class ApplicationArguments:
         parser.add_argument("-c", "--config", dest = "config", type = str, default = None, required = required, help = "Analysis configuration file, if supplied will override command line arguments.")
 
     @staticmethod
-    def ResolveArgs(args : argparse.Namespace) -> argparse.Namespace:
+    def ResolveArgs(args : argparse.Namespace, override_out : bool = True) -> argparse.Namespace:
         """ Parses command line arguements.
 
         Args:
@@ -384,7 +384,7 @@ class ApplicationArguments:
                 if args.data_file is not None and args.data_beam_quality_fit is None:
                     raise Exception("beam quality fit values for data are required")
 
-        if hasattr(args, "out"):
+        if hasattr(args, "out") and (override_out is True):
             if args.out is None:
                 filename = None
                 if hasattr(args, "mc_file"):

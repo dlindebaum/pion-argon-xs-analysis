@@ -198,6 +198,31 @@ def template_config():
     }
     return template
 
+def template_toy_config(toy_parameters_dir : str, nEvents : int, seed : int, max_cpus : int, step : float, p_init : float):
+    template = {
+        "events" : nEvents,
+        "step" : step,
+        "p_init" : p_init,
+        "beam_profile" : f"{toy_parameters_dir}/beam_profile/beam_profile.json",
+        "beam_width" : 60,
+
+        "smearing_params" : {
+            "KE_init" : f"{toy_parameters_dir}/smearing/KE_init/double_crystal_ball.json",
+            "KE_int" : f"{toy_parameters_dir}/smearing/KE_int/double_crystal_ball.json",
+            "z_int" : f"{toy_parameters_dir}/smearing/z_int/double_crystal_ball.json"
+        },
+        "reco_region_fractions" : f"{toy_parameters_dir}/reco_regions/reco_region_fractions.hdf5",
+        "beam_selection_efficiencies" : f"{toy_parameters_dir}/pi_beam_efficiency/beam_selection_efficiencies_true.hdf5",
+        "mean_track_score_kde" : f"{toy_parameters_dir}/meanTrackScoreKDE/kdes.dill",
+        "pdf_scale_factors" : None,
+        "df_format" : "f",
+        "modified_PDFs" : None,
+        "verbose" : True,
+        "seed" : seed,
+        "max_cpus" : max_cpus
+    }
+    return template
+
 def update_config(config, update : dict):
     json_config = LoadConfiguration(config)
     json_config.update(update)
@@ -386,6 +411,10 @@ def main(args):
             cex_toy_parameters.main(args)
             # special case where the main config is not updated, rather the results from this would be used in the toy configurations
             #! make function to create the a toy configuration
+            template_config = template_toy_config(os.path.abspath(args.out + "toy_parameters"), int(1E7), 1337, os.cpu_count() - 1, 2, args.beam_momentum)
+            data_config = template_toy_config(os.path.abspath(args.out + "toy_parameters"), int(1E6), 1, os.cpu_count() - 1, 2, args.beam_momentum)
+            SaveConfiguration(template_config, args.out + "toy_template_config.json")
+            SaveConfiguration(data_config, args.out + "toy_data_config.json")
 
         #* analysis input
         can_run_ai = (not hasattr(args, "analysis_input")) and (args.data_file is not None)
