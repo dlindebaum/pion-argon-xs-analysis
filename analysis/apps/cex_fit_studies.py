@@ -277,7 +277,7 @@ def PlotShapeExamples(energy_slices : cross_section.Slices, book : Plots.PlotBoo
     return
 
 @cross_section.timer
-def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.ndarray, pdf : Plots.PlotBook = Plots.PlotBook.null, single_bin : bool = False):
+def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.ndarray, pdf : Plots.PlotBook = Plots.PlotBook.null, single_bin : bool = False, ylim = None):
     x = data.index.values
 
     # Plot the fit value for each scale factor 
@@ -308,6 +308,7 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
         Plots.plt.axhline(0, color = "black", linestyle = "--")
         Plots.plt.ylim(1.5 * np.min(data.filter(regex = "fe_total_").values), 1.5 * np.max(data.filter(regex = "fe_total_").values))
         Plots.plt.xticks(ticks = x, labels = x)
+        if ylim: Plots.plt.ylim(ylim)
     pdf.Save()
 
     # plot true process fractional error
@@ -317,6 +318,7 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
         Plots.plt.axhline(0, color = "black", linestyle = "--")
         Plots.plt.ylim(1.5 * np.min(data.filter(regex = "fe_total_").values), 1.5 * np.max(data.filter(regex = "fe_total_").values))
     Plots.plt.xticks(ticks = x, labels = x)
+    if ylim: Plots.plt.ylim(ylim)
     pdf.Save()
 
     if single_bin is False:
@@ -328,6 +330,7 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
             Plots.plt.xlabel("$KE$ (MeV)")
             Plots.plt.title(f"$N_{{{process_map[i]}}}$")
             Plots.plt.legend(title = xlabel)
+            if ylim: Plots.plt.ylim(ylim)
         pdf.Save()
 
         Plots.plt.figure()
@@ -338,6 +341,7 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
             Plots.plt.xlabel("$KE$ (MeV)")
             Plots.plt.title(f"$N_{{{process_map[i]}}}$")
             Plots.plt.legend(title = xlabel)
+            if ylim: Plots.plt.ylim(ylim)
         pdf.Save()
     return
 

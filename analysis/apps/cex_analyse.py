@@ -260,7 +260,7 @@ def ApplyEfficiency(energy_bins, efficiencies, unfolding_result, true, norm : fl
 
     if book is not None:
         for _, k in Plots.IterMultiPlot(unfolding_result):
-            Plots.Plot(energy_bins[::-1], hist_unfolded_efficiency_corrected[k]["unfolded"], yerr = hist_unfolded_efficiency_corrected[k]["stat_err"], style = "step", color = "C4", label = "unfolded, efficiency corrected", newFigure = False, xlabel = labels[k], ylabel  ="Counts")
+            Plots.Plot(energy_bins[::-1], hist_unfolded_efficiency_corrected[k]["unfolded"], yerr = hist_unfolded_efficiency_corrected[k]["stat_err"], style = "step", color = "C4", label = "unfolded, efficiency corrected", newFigure = False, xlabel = labels[k] + " (MeV)", ylabel  ="Counts")
             Plots.Plot(energy_bins[::-1], norm * true[k], style = "step", color = "C0", label = "true", newFigure = False)
         book.Save()
     return hist_unfolded_efficiency_corrected
