@@ -82,8 +82,8 @@ def IsScraper(mc : Data, beam_scraper_args : dict) -> ak.Array:
     return scraper_ids
 
 
-def RatioWeights(mc : Data, func : str, params : list, truncate : int = 10):
-    weights = 1/getattr(Fitting, func)(mc.recoParticles.beam_inst_P, *params)
+def RatioWeights(beam_inst_P : np.ndarray, func : str, params : list, truncate : int = 10):
+    weights = 1/getattr(Fitting, func)(beam_inst_P, *params)
     weights = np.where(weights > truncate, truncate, weights)
     return weights
 
@@ -1398,7 +1398,7 @@ class AnalysisInput:
             AnalysisInput: analysis input.
         """
         if mc_reweight_params is not None:
-            weights = RatioWeights(events, "gaussian", [mc_reweight_params[k]["value"] for k in mc_reweight_params], 3)
+            weights = RatioWeights(events.recoParticles.beam_inst_P, "gaussian", mc_reweight_params, 3)
         else:
             weights = None
 
@@ -1440,7 +1440,7 @@ class AnalysisInput:
             true_track_length,
             true_KE_int,
             true_KE_ff,
-            weights
+            weights,
             )
 
 

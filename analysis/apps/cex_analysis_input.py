@@ -110,7 +110,7 @@ def CreateAnalysisInput(sample : cross_section.Data, args : cross_section.argpar
         sample_selected = BeamPionSelection(sample, args, is_mc)
         if is_mc:
             reco_regions, true_regions = RegionSelection(sample, args, True)
-            reweight_params = args.beam_reweight_params
+            reweight_params = [args.beam_reweight_params[k]["value"] for k in args.beam_reweight_params]
         else:
             reco_regions = RegionSelection(sample, args, False)
             true_regions = None
@@ -134,7 +134,7 @@ def CreateAnalysisInputMCTrueBeam(mc : cross_section.Data, args : cross_section.
     n_pi0_true = mc_true_beam.trueParticles.nPi0
     true_regions = RegionIdentification.TrueRegions(n_pi0_true, n_pi_true)
 
-    return cross_section.AnalysisInput.CreateAnalysisInputNtuple(mc_true_beam, args.upstream_loss_correction_params["value"], reco_regions, true_regions, args.beam_reweight_params)
+    return cross_section.AnalysisInput.CreateAnalysisInputNtuple(mc_true_beam, args.upstream_loss_correction_params["value"], reco_regions, true_regions, [args.beam_reweight_params[k]["value"] for k in args.beam_reweight_params])
 
 
 def main(args):

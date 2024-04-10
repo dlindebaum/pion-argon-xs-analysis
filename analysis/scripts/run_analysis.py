@@ -11,7 +11,7 @@ from rich import print
 from apps import (
     cex_beam_quality_fits, 
     cex_beam_scraper_fits,
-    cex_photon_selection, #! notebook stuff should be moved to the application!
+    cex_photon_selection,
     cex_selection_studies, 
     cex_beam_reweight, 
     cex_upstream_loss,

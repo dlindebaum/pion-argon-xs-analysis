@@ -16,6 +16,8 @@ from apps import cex_toy_generator, cex_analysis_input, cex_toy_parameters
 from pyunfold.callbacks import SplineRegularizer
 from python.analysis import cross_section, Plots
 
+label_map = {"toy" : "toy", "pdsp" : "ProtoDUNE SP"}
+
 process_labels = {"absorption": "abs", "charge_exchange" : "cex", "single_pion_production" : "spip", "pion_production" : "pip"}
 
 def CreateInitParams(model : cross_section.pyhf.Model, analysis_input : cross_section.AnalysisInput, energy_slices : cross_section.Slices, mean_track_score_bins : np.array) -> np.array:
@@ -97,8 +99,8 @@ def BkgSubRegions(data : cross_section.AnalysisInput, energy_slices : cross_sect
         N_int_ex_err[p] = cross_section.quadsum([np.sqrt(N_int_regions[p]), cross_section.quadsum(bkg_err[p], 0)], 0)
     return N_int_ex, N_int_ex_err
 
-def BkgSingleBin(N_bkg_s : np.ndarray, N_bkg_err_s : np.ndarray, template : cross_section.AnalysisInput, energy_slices : cross_section.Slices, signal_process : str):
-    templates_energy = cross_section.RegionFit.CreateKEIntTemplates(template, energy_slices, False, False)
+
+def BkgSingleBin(N_bkg_s : np.ndarray, N_bkg_err_s : np.ndarray, template : cross_section.AnalysisInput, templates_energy : list[np.ndarray], signal_process : str):
     labels = list(template.regions.keys())
     bkg_mask = signal_process != np.array(labels)
 
@@ -118,6 +120,7 @@ def BkgSingleBin(N_bkg_s : np.ndarray, N_bkg_err_s : np.ndarray, template : cros
     N_bkg_err_template_var = ((N_bkg_s.T)**2/N_MC_s[bkg_mask]).T * rel_lambda_bs * (1 + rel_lambda_bs)
  
     return N_bkg, np.sqrt(N_bkg_err_fit_var + N_bkg_err_template_var)
+
 
 def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, energy_slice : cross_section.Slices, postfit_pred : cross_section.cabinetry.model_utils.ModelPrediction = None, single_bin : bool = False, regions : bool = False, template : cross_section.AnalysisInput = None, book : Plots.PlotBook = Plots.PlotBook.null) -> tuple[np.ndarray]:
     """ Background subtraction using the fit if a fit result is specified.
@@ -139,6 +142,8 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
     histograms_reco_obs = data.CreateHistograms(energy_slice, process, True, False)
     histograms_reco_obs_err = {k : np.sqrt(v) for k, v in histograms_reco_obs.items()}
     
+    templates_energy = cross_section.RegionFit.CreateKEIntTemplates(template, energy_slice, False, False)
+
     if postfit_pred is not None:
         if regions:
             bkg, bkg_err = cross_section.RegionFit.EstimateBackgroundInRegions(postfit_pred, data)
@@ -146,7 +151,7 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
                 bkg_b = {}
                 bkg_err_b = {}
                 for p in bkg:
-                    bkg_b[p], bkg_err_b[p] = BkgSingleBin(bkg[p], bkg_err[p], template, energy_slice, p)
+                    bkg_b[p], bkg_err_b[p] = BkgSingleBin(bkg[p], bkg_err[p], template, templates_energy, p)
                 bkg = bkg_b
                 bkg_err = bkg_err_b
             KE_int_fit, KE_int_fit_err = BkgSubRegions(data, energy_slice, bkg, bkg_err)
@@ -154,7 +159,7 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
             print(f"signal: {process}")
             bkg, bkg_err = cross_section.RegionFit.EstimateBackgroundAllRegions(postfit_pred, template, process)
             if single_bin:
-                bkg, bkg_err = BkgSingleBin(bkg, bkg_err, template, energy_slice, process)
+                bkg, bkg_err = BkgSingleBin(bkg, bkg_err, template, templates_energy, process)
             KE_int_fit, KE_int_fit_err = BkgSubAllRegion(data, energy_slice, bkg, bkg_err)
 
         labels = list(data.regions.keys()) #! make property of AnalysisInput dataclass
@@ -421,11 +426,7 @@ def LoadToy(file):
         raise Exception("toy file format not recognised")
     return cross_section.AnalysisInput.CreateAnalysisInputToy(toy)
 
-
-def main(args):
-    cross_section.SetPlotStyle(extend_colors = False, dark = True)
-    args.out = args.out + "measurement/"
-
+def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
     samples = {}
     templates = {}
     if args.toy_template:
@@ -444,7 +445,6 @@ def main(args):
             templates["mc_cheated"] = cex_analysis_input.CreateAnalysisInputMCTrueBeam(cross_section.Data(args.mc_file, nTuple_type = args.ntuple_type, target_momentum = args.pmom), args)
             samples["pdsp"] = cex_analysis_input.CreateAnalysisInput(cross_section.Data(args.data_file, nTuple_type = args.ntuple_type), args, False)
 
-    label_map = {"toy" : "toy", "pdsp" : "ProtoDUNE SP"}
 
     if args.fit["mean_track_score"] == True:
         mean_track_score_bins = np.linspace(0, 1, 21, True) #TODO make configurable
@@ -455,7 +455,8 @@ def main(args):
         print(f"analysing {k}")
 
         outdir = args.out + f"{k}/"
-        os.makedirs(outdir, exist_ok = True)
+        if plot is True:
+            os.makedirs(outdir, exist_ok = True)
 
         if k == "toy":
             scale = len(samples[k].KE_init_reco) / len(templates[k].KE_init_reco)
@@ -476,8 +477,9 @@ def main(args):
         # scale = len(templates[k].KE_int_reco) / len(samples[k].KE_int_reco)
         indices = [f"$\mu_{{{i}}}$" for i in ["abs", "cex", "spip", "pip"]]
         print(f"{fit_values.bestfit=}")
-        table = cross_section.pd.DataFrame({"fit value" : fit_values.bestfit[0:4] / scale, "uncertainty" : fit_values.uncertainty[0:4] / scale}, index = indices).T
-        table.style.to_latex(outdir + "fit_results.tex")
+        if plot:
+            table = cross_section.pd.DataFrame({"fit value" : fit_values.bestfit[0:4] / scale, "uncertainty" : fit_values.uncertainty[0:4] / scale}, index = indices).T
+            table.style.to_latex(outdir + "fit_results.tex")
 
         if args.all is True:
             process = {i : None for i in templates[k].exclusive_process}
@@ -487,7 +489,7 @@ def main(args):
             process = {args.signal_process : None}
 
         for p in process:
-            with Plots.PlotBook(outdir + f"plots_{p}.pdf") as book:
+            with Plots.PlotBook(outdir + f"plots_{p}.pdf", plot) as book:
                 if p != "all":
                     if k == "pdsp":
                         true_hists = mc_cheat.CreateHistograms(args.energy_slices, p, False, ~mc_cheat.inclusive_process)
@@ -523,7 +525,7 @@ def main(args):
             Plots.plt.close("all")
         if args.fit["regions"] is True:
             process = {i : j for i, j in process["all"].items()}
-            with Plots.PlotBook(outdir + "results_all_regions.pdf") as book:
+            with Plots.PlotBook(outdir + "results_all_regions.pdf", plot) as book:
                 for i in process:
                     if k == "pdsp":
                         true_hists = mc_cheat.CreateHistograms(args.energy_slices, i, False)
@@ -536,6 +538,13 @@ def main(args):
         print(f"{process=}")
         xs[k] = process
 
+    return xs[k]
+
+def main(args):
+    cross_section.SetPlotStyle(extend_colors = False, dark = True)
+    args.out = args.out + "measurement/"
+
+    xs = Analyse(args, True)
 
     with Plots.PlotBook(args.out + "results.pdf") as book:
         colours = {f"{label_map[k]} Data" : f"C{i}" for i, k in enumerate(xs.keys())}
