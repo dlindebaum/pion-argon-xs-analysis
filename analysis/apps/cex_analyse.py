@@ -538,13 +538,15 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
         print(f"{process=}")
         xs[k] = process
 
-    return xs[k]
+    return xs
 
 def main(args):
     cross_section.SetPlotStyle(extend_colors = False, dark = True)
     args.out = args.out + "measurement/"
 
     xs = Analyse(args, True)
+
+    cross_section.SaveObject(args.out + "xs.dill", xs)
 
     with Plots.PlotBook(args.out + "results.pdf") as book:
         colours = {f"{label_map[k]} Data" : f"C{i}" for i, k in enumerate(xs.keys())}

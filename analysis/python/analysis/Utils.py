@@ -7,6 +7,11 @@ Description: random functions which are sometimes useful
 """
 import numpy as np
 import os
+import dill
+
+def dill_copy(obj : any):
+    return dill.loads(dill.dumps(obj))
+
 
 def bin_centers(bins : np.ndarray) -> np.ndarray:
     return (bins[1:] + bins[:-1]) / 2
