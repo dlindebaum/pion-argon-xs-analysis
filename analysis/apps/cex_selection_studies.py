@@ -23,7 +23,16 @@ x_label = {
     "PiPlusSelection" : "median $dEdX$ (MeV/cm)",
     "BeamParticleDistanceCut" : "$d$ (cm)",
     "BeamParticleIPCut" : "$b$ (cm)",
-    "Chi2ProtonSelection" : "$(\chi^{2}/ndf)_{p}$"
+    "Chi2ProtonSelection" : "$(\chi^{2}/ndf)_{p}$",
+    "PiBeamSelection" : "True particle ID",
+    "APA3Cut" : "Beam end position z (cm)",
+    "PandoraTagCut" : "Pandora tag",
+    "DxyCut" : "$\delta_{xy}$",
+    "DzCut" : "$\delta_{z}$",
+    "CosThetaCut" : "$\cos(\\theta)$",
+    "MichelScoreCut" : "Michel score",
+    "MedianDEdXCut" : "Median $dE/dX$ (MeV/cm)",
+    "BeamScraperCut" : "$r_{inst}$",
 }
 y_scale = {
     "track_score_all" : "log",
@@ -32,7 +41,16 @@ y_scale = {
     "PiPlusSelection" : "linear",
     "BeamParticleDistanceCut" : "linear",
     "BeamParticleIPCut" : "linear",
-    "Chi2ProtonSelection" : "linear"
+    "Chi2ProtonSelection" : "linear",
+    "PiBeamSelection" : None,
+    "APA3Cut" : "linear",
+    "PandoraTagCut" : None,
+    "DxyCut" : "log",
+    "DzCut" : "log",
+    "CosThetaCut" : "log",
+    "MichelScoreCut" : "log",
+    "MedianDEdXCut" : "log",
+    "BeamScraperCut" : "linear",
 }
 x_range = {
     "track_score_all" : None,
@@ -41,7 +59,16 @@ x_range = {
     "PiPlusSelection" : [0, 10],
     "BeamParticleDistanceCut" : [0, 150],
     "BeamParticleIPCut" : [0, 100],
-    "Chi2ProtonSelection" : [0, 600]
+    "Chi2ProtonSelection" : [0, 600],
+    "PiBeamSelection" : None,
+    "PandoraTagCut" : None,
+    "APA3Cut" : [0, 700],
+    "DxyCut" : [0, 5],
+    "DzCut" : [-10, 10],
+    "CosThetaCut" : [0.9, 1],
+    "MichelScoreCut" : [0, 1],
+    "MedianDEdXCut" : [0, 10],
+    "BeamScraperCut" : [0, 5],
 }
 nbins = {
     "track_score_all" : 50,
@@ -50,7 +77,16 @@ nbins = {
     "PiPlusSelection" : 50,
     "BeamParticleDistanceCut" : 50,
     "BeamParticleIPCut" : 50,
-    "Chi2ProtonSelection" : 50
+    "Chi2ProtonSelection" : 50,
+    "PiBeamSelection" : 50,
+    "APA3Cut" : 50,
+    "PandoraTagCut" : 50,
+    "DxyCut" : 50,
+    "DzCut" : 50,
+    "CosThetaCut" : 50,
+    "MichelScoreCut" : 50,
+    "MedianDEdXCut" : 50,
+    "BeamScraperCut" : 50,
 }
 ncols = {
     "track_score_all" : 2,
@@ -59,7 +95,16 @@ ncols = {
     "PiPlusSelection" : 2,
     "BeamParticleDistanceCut" : 2,
     "BeamParticleIPCut" : 2,
-    "Chi2ProtonSelection" : 2
+    "Chi2ProtonSelection" : 2,
+    "PiBeamSelection" : 2,
+    "APA3Cut" : 2,
+    "PandoraTagCut" : 2,
+    "DxyCut" : 2,
+    "DzCut" : 2,
+    "CosThetaCut" : 2,
+    "MichelScoreCut" : 2,
+    "MedianDEdXCut" : 2,
+    "BeamScraperCut" : 2,
 }
 truncate = {
     "track_score_all" : True,
@@ -69,6 +114,15 @@ truncate = {
     "BeamParticleDistanceCut" : True,
     "BeamParticleIPCut" : True,
     "Chi2ProtonSelection" : True,
+    "PiBeamSelection" : False,
+    "APA3Cut" : False,
+    "PandoraTagCut" : False,
+    "DxyCut" : False,
+    "DzCut" : False,
+    "CosThetaCut" : False,
+    "MichelScoreCut" : False,
+    "MedianDEdXCut" : False,
+    "BeamScraperCut" : False,
 }
 
 
@@ -426,7 +480,7 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
     return output
 
 
-def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, norm : float, nbins : int):
+def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, norm : float):
     """ Beam particle selection plots.
 
     Args:
@@ -435,60 +489,39 @@ def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, n
         outDir (str): output directory
         norm (float): plot normalisation
     """
-
     norm = False if output_data is None else norm
     with Plots.PlotBook(outDir + "beam.pdf") as pdf:
 
-        if "PiBeamSelection" in output_mc:
-            Plots.PlotTags(output_mc["PiBeamSelection"]["tags"], "True particle ID")
-            pdf.Save()
+        for p in output_mc:
+            if p in x_label:
+                if p == "PiBeamSelection":
+                    Plots.PlotTags(output_mc["PiBeamSelection"]["tags"], "True particle ID")
+                    pdf.Save()
+                elif p == "PandoraTagCut":
+                    if output_data is None:
+                        Plots.PlotBar(output_mc[p]["value"], xlabel = x_label[p])
+                    else:
+                        Plots.PlotBarComparision(output_mc[p]["value"], output_data[p]["value"], label_1 = "MC", label_2 = "Data", xlabel = x_label[p], fraction = True, barlabel = True)
+                    pdf.Save()
 
-        if "PandoraTagCut" in output_mc:
-            if output_data is None:
-                Plots.PlotBar(output_mc["PandoraTagCut"]["value"], xlabel = "Pandora tag")
-            else:
-                Plots.PlotBarComparision(output_mc["PandoraTagCut"]["value"], output_data["PandoraTagCut"]["value"], label_1 = "MC", label_2 = "Data", xlabel = "pandora beam tag", fraction = True, barlabel = True)
-            pdf.Save()
-
-        if "DxyCut" in output_mc:
-            Plots.PlotTagged(output_mc["DxyCut"]["value"], output_mc["DxyCut"]["tags"], data2 = output_data["DxyCut"]["value"] if output_data else None, bins = nbins, x_label = "$\delta_{xy}$", y_scale = "log", x_range = [0, 5], norm = norm)
-            Plots.DrawMultiCutPosition(output_mc["DxyCut"]["cuts"], arrow_length = 1, face = output_mc["DxyCut"]["op"])
-            pdf.Save()
-
-        if "DzCut" in output_mc:
-            Plots.PlotTagged(output_mc["DzCut"]["value"], output_mc["DzCut"]["tags"], data2 = output_data["DzCut"]["value"] if output_data else None, bins = nbins, x_label = "$\delta_{z}$", y_scale = "log", x_range = [-10, 10], norm = norm)
-            Plots.DrawMultiCutPosition(output_mc["DzCut"]["cuts"], arrow_length = 1, face = output_mc["DzCut"]["op"])
-            pdf.Save()
-
-        if "CosThetaCut" in output_mc:
-            Plots.PlotTagged(output_mc["CosThetaCut"]["value"], output_mc["CosThetaCut"]["tags"], data2 = output_data["CosThetaCut"]["value"] if output_data else None, x_label = "$\cos(\\theta)$", y_scale = "log", bins = nbins, x_range = [0.9, 1], norm = norm)
-            Plots.DrawMultiCutPosition(output_mc["CosThetaCut"]["cuts"], arrow_length = 0.02, face = output_mc["CosThetaCut"]["op"])
-            pdf.Save()
-
-        if "APA3Cut" in output_mc:
-            for y_scale in ["linear", "log"]:
-                Plots.PlotTagged(output_mc["APA3Cut"]["value"], output_mc["APA3Cut"]["tags"], data2 = output_data["APA3Cut"]["value"] if output_data else None, bins = nbins, x_label = "Beam end position z (cm)", x_range = [0, 700], norm = norm, y_scale = y_scale)
-                Plots.DrawMultiCutPosition(output_mc["APA3Cut"]["cuts"], arrow_length = 50, face = output_mc["APA3Cut"]["op"])
-                pdf.Save()
-
-        if "MichelScoreCut" in output_mc:
-            Plots.PlotTagged(output_mc["MichelScoreCut"]["value"], output_mc["MichelScoreCut"]["tags"], data2 = output_data["MichelScoreCut"]["value"] if output_data else None, x_range = (0, 1), y_scale = "log", bins = nbins, x_label = "Michel score", ncols = 2, norm = norm)
-            Plots.DrawMultiCutPosition(output_mc["MichelScoreCut"]["cuts"], face = output_mc["MichelScoreCut"]["op"], arrow_loc = 0.5)
-            pdf.Save()
-
-        if "MedianDEdXCut" in output_mc:
-            Plots.PlotTagged(output_mc["MedianDEdXCut"]["value"], output_mc["MedianDEdXCut"]["tags"], data2 = output_data["MedianDEdXCut"]["value"] if output_data else None, bins = nbins, y_scale = "log", x_range = [0, 10], x_label = "Median $dE/dX$ (MeV/cm)", norm = norm)
-            Plots.DrawMultiCutPosition(output_mc["MedianDEdXCut"]["cuts"], face = output_mc["MedianDEdXCut"]["op"], arrow_length = 2)
-            pdf.Save()
-
-        if "BeamScraperCut" in output_mc:
-            Plots.PlotTagged(output_mc["BeamScraperCut"]["value"], output_mc["BeamScraperCut"]["tags"], data2 = output_data["BeamScraperCut"]["value"] if output_data else None, bins = nbins, y_scale = "log", x_range = [0, 5], x_label = "$r_{inst}$", norm = norm)
-            Plots.DrawMultiCutPosition(output_mc["BeamScraperCut"]["cuts"], face = output_mc["BeamScraperCut"]["op"], arrow_length = 1)
-            pdf.Save()
-
-            Plots.PlotTagged(output_mc["BeamScraperCut"]["value"], output_mc["BeamScraperCut_scraper_tag"]["tags"], data2 = output_data["BeamScraperCut"]["value"] if output_data else None, bins = nbins, y_scale = "log", x_range = [0, 5], x_label = "$r_{inst}$", norm = norm)
-            Plots.DrawMultiCutPosition(output_mc["BeamScraperCut"]["cuts"], face = output_mc["BeamScraperCut"]["op"], arrow_length = 1)
-            pdf.Save()
+                elif p == "APA3Cut":
+                    for l in ["linear", "log"]:
+                        Plots.PlotTagged(output_mc[p]["value"], output_mc[p]["tags"], data2 = output_data[p]["value"] if output_data else None, norm = norm, y_scale = l, x_label = x_label[p], bins = nbins[p], ncols = ncols[p], x_range = x_range[p], truncate = truncate[p])
+                        Plots.DrawMultiCutPosition(output_mc[p]["cuts"], face = output_mc[p]["op"], arrow_length = CalculateArrowLength(output_mc[p]["value"], x_range[p]), arrow_loc = 0.7, color = "k")
+                        pdf.Save()
+                elif p == "BeamScraperCut":
+                    for t in ["BeamScraperCut", "BeamScraperCut_scraper_tag"]:
+                        Plots.PlotTagged(output_mc[p]["value"], output_mc[t]["tags"], data2 = output_data[p]["value"] if output_data else None, norm = norm, y_scale = y_scale[p], x_label = x_label[p], bins = nbins[p], ncols = ncols[p], x_range = x_range[p], truncate = truncate[p])
+                        Plots.DrawMultiCutPosition(output_mc[p]["cuts"], face = output_mc[p]["op"], arrow_length = CalculateArrowLength(output_mc[p]["value"], x_range[p]), arrow_loc = 0.7, color = "k")
+                        pdf.Save()
+                else:
+                    Plots.PlotTagged(output_mc[p]["value"], output_mc[p]["tags"], data2 = output_data[p]["value"] if output_data else None, norm = norm, y_scale = y_scale[p], x_label = x_label[p], bins = nbins[p], ncols = ncols[p], x_range = x_range[p], truncate = truncate[p])
+                    if p == "CosThetaCut":
+                        arrow_l = 0.02
+                    else:
+                        arrow_l = CalculateArrowLength(output_mc[p]["value"], x_range[p])
+                    Plots.DrawMultiCutPosition(output_mc[p]["cuts"], face = output_mc[p]["op"], arrow_length = arrow_l, arrow_loc = 0.7, color = "k")
+                    pdf.Save()
 
         Plots.PlotTags(output_mc["final_tags"]["tags"], "True particle ID")        
         pdf.Save()
@@ -703,17 +736,11 @@ def main(args):
 
     # plots
     if output_mc["beam"]: #* this is assuming you apply the same cuts as Data and MC (which is implictly assumed for now)
-        MakeBeamSelectionPlots(output_mc["beam"]["data"], output_data["beam"]["data"] if output_data else None, args.out + "plots/", norm = args.norm, nbins = args.nbins)
+        MakeBeamSelectionPlots(output_mc["beam"]["data"], output_data["beam"]["data"] if output_data else None, args.out + "plots/", norm = args.norm)
 
     for i in ["pi", "photon", "loose_pi", "loose_photon"]:
         if output_mc[i]:
             MakePFOSelectionPlots(output_mc[i]["data"], output_data[i]["data"] if output_data else None, args.out + "plots/", norm = args.norm, book_name = i)
-    # if output_mc["photon"]:
-    #     MakePFOSelectionPlots(output_mc["photon"]["data"], output_data["photon"]["data"] if output_data else None, args.out + "plots/", norm = args.norm, book_name = "photon")
-    # if output_mc["loose_pi"]:
-    #     MakePFOSelectionPlots(output_mc["loose_pi"]["data"], output_data["loose_pi"]["data"] if output_data else None, args.out + "plots/", norm = args.norm, book_name = "loose_pi")
-    # if output_mc["loose_photon"]:
-    #     MakePFOSelectionPlots(output_mc["loose_photon"]["data"], output_data["loose_photon"]["data"] if output_data else None, args.out + "plots/", norm = args.norm, book_name = "loose_photon")
 
     if output_mc["pi0"]:
         MakePi0SelectionPlots(output_mc["pi0"]["data"], output_data["pi0"]["data"] if output_data else None, args.out + "plots/", norm = args.norm, nbins = args.nbins)

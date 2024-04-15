@@ -63,7 +63,9 @@ def template_config():
         },
         "FIT":{
             "mc_stat_unc" : True,
-            "mean_track_score" : False
+            "mean_track_score" : False,
+            "single_bin" : True,
+            "regions": True
         },
         "ESLICE":{
             "width" : None,
@@ -350,7 +352,7 @@ def main(args):
                 "null_pfo" : 'null_pfo_selection_masks.dill',
                 "photon" : 'photon_selection_masks.dill',
                 "pi0" : 'pi0_selection_masks.dill',
-                "pi" : 'pip_selection_masks.dill',
+                "pi" : 'pi_selection_masks.dill',
                 "loose_pi"  : "loose_pi_selection_masks.dill",
                 "loose_photon" : "loose_photon_selection_masks.dill"
             }
@@ -358,7 +360,7 @@ def main(args):
             files = os.listdir(output_path)
             for k, v in target_files.items():
                 if v in files:
-                    new_config_entry[k] = {i : os.path.abspath(output_path + v + "/" + j) for i, j in mask_map.items()}
+                    new_config_entry[k] = {i : os.path.abspath(output_path + v + "/" + j) for i, j in mask_map.items() if os.path.isfile(output_path + v + "/" + j)}
             update_config(args.config, {"SELECTION_MASKS" : new_config_entry})
             args = update_args() # reload config to continue
 
@@ -411,9 +413,9 @@ def main(args):
             cex_toy_parameters.main(args)
             # special case where the main config is not updated, rather the results from this would be used in the toy configurations
             #! make function to create the a toy configuration
-            template_config = template_toy_config(os.path.abspath(args.out + "toy_parameters"), int(1E7), 1337, os.cpu_count() - 1, 2, args.beam_momentum)
+            toy_template_config = template_toy_config(os.path.abspath(args.out + "toy_parameters"), int(1E7), 1337, os.cpu_count() - 1, 2, args.beam_momentum)
             data_config = template_toy_config(os.path.abspath(args.out + "toy_parameters"), int(1E6), 1, os.cpu_count() - 1, 2, args.beam_momentum)
-            SaveConfiguration(template_config, args.out + "toy_template_config.json")
+            SaveConfiguration(toy_template_config, args.out + "toy_template_config.json")
             SaveConfiguration(data_config, args.out + "toy_data_config.json")
 
         #* analysis input

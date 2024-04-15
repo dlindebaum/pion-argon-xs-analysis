@@ -119,17 +119,30 @@ def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str, ta
     events = Master.Data(file, nTuple_type = ntuple_type, target_momentum = args.pmom)
 
     #? should this be made configurable i.e. pass config and apply all selections before the beam quality cuts if it is in the list?
-    mask = BeamParticleSelection.PiBeamSelection(events, data)
-    events.Filter([mask], [mask])
 
-    mask = BeamParticleSelection.PandoraTagCut(events)
-    events.Filter([mask], [mask])
+    func_args = "mc_arguments" if data is False else "data_arguments"
 
-    mask = BeamParticleSelection.CaloSizeCut(events)
-    events.Filter([mask], [mask])
+    if ("DxyCut" in args.beam_selection["selections"]) or ("DzCut" in args.beam_selection["selections"]) or ("CosThetaCut" in args.beam_selection["selections"]):
+        for s in args.beam_selection["selections"]:
+            if s in ["DxyCut", "DzCut", "CosThetaCut"]:
+                break # only apply cuts before beam quality
+            else:
+                print(f"{s=}")
+                mask = args.beam_selection["selections"][s](events, **args.beam_selection[func_args][s])
+                events.Filter([mask], [mask])
+    else:
+        # do default selections prior to beam quality
+        mask = BeamParticleSelection.PiBeamSelection(events, data)
+        events.Filter([mask], [mask])
 
-    mask = BeamParticleSelection.HasFinalStatePFOsCut(events)
-    events.Filter([mask], [mask])
+        mask = BeamParticleSelection.PandoraTagCut(events)
+        events.Filter([mask], [mask])
+
+        mask = BeamParticleSelection.CaloSizeCut(events)
+        events.Filter([mask], [mask])
+
+        mask = BeamParticleSelection.HasFinalStatePFOsCut(events)
+        events.Filter([mask], [mask])
 
     #* fit gaussians to the start positions
     mu, sigma, mu_err, sigma_err = Fit_Vector(events.recoParticles.beam_startPos_SCE, 100)
