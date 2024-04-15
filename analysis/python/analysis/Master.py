@@ -129,6 +129,64 @@ def ReadHDF5(file : str):
         return {k : pd.read_hdf(file, k) for k in keys}
 
 
+def dimension(shape):
+    if type(shape) != int:
+        return len(str(shape.type).split(" * ")) - 1
+    else:
+        return 0
+
+def match_dimension(mask_shape, var_shape):
+    target_dim = dimension(mask_shape)
+
+    counter = 0
+    new_shape = var_shape
+    current_dim = dimension(new_shape)
+    while current_dim != target_dim:
+        if counter > 10:
+            break
+        new_shape = ak.num(new_shape, -1)
+        current_dim = dimension(new_shape)
+        counter += 1
+    return new_shape
+
+
+def __IsMaskCompatiable__(var : any, mask : ak.Array, verbose : bool = False):
+    mask_shape = ak.num(mask, -1)
+
+    var_shape = ak.num(var, -1)
+    if type(var) == ak.highlevel.Array:
+        if var.type.numfields != -1:
+            var_shape = ak.num(var[var.fields[0]], -1) # assume records are vectors only (should be true)
+
+    if verbose: print(f"{var_shape=}")
+    if verbose: print(f"{mask_shape=}")
+    if (type(var_shape) == int) and (type(mask_shape) == int): # mask is flat, variable is flat
+        if var_shape == mask_shape:
+            if verbose: print("compatible")
+            return True
+        else:
+            if verbose: print("not compatible, event numbers not the same")
+            return False
+    elif (type(var_shape) == int) and (type(mask_shape) != int): # mask is not flat, variable is flat
+        if verbose: print("not compatible, mask and variable have different dimensions")
+        return False
+    elif (type(var_shape) != int) and (type(mask_shape) == int): # mask is flat, variable is not flat
+        if match_dimension(mask_shape, var_shape) == mask_shape:
+            if verbose: print("compatible")
+            return True
+        else:
+            if verbose: print("not compatible, event numbers not the same")
+            return False
+    else: # mask is not flat, variable is not flat
+        if ak.all(match_dimension(mask_shape, var_shape) == mask_shape):
+            if verbose: print("compatible")
+            return True
+        else:
+            if verbose: print("not compatible, length in higher dimensions not equal")
+            return False
+    return
+
+
 def __GenericFilter__(data, filters: list, verbose : bool = True):
     """ Applies boolean masks (filters) to data.
 
@@ -136,11 +194,15 @@ def __GenericFilter__(data, filters: list, verbose : bool = True):
         data (any): data class which has instance variables with compatible shapes to the filters
         filters (list): list of filters
     """
+    if verbose: print(data)
     for f in filters:
         for var in vars(data):
-            if hasattr(getattr(data, var), "__getitem__"):
+            if var == "filters": continue # skip filters list
+            if hasattr(getattr(data, var), "__getitem__") and (type(getattr(data, var)) != str):
                 try:
-                    setattr(data, var, getattr(data, var)[f])
+                    if verbose is True: print(f"{var, type(getattr(data, var))=}")
+                    if __IsMaskCompatiable__(getattr(data, var), f, verbose):
+                        setattr(data, var, getattr(data, var)[f])
                 except:
                     if verbose: warnings.warn(f"Couldn't apply filters to {var}.")
     return
@@ -846,7 +908,8 @@ class ParticleData(ABC):
         var_name = f"_{type(self).__name__}__{var}"
         for f in self.filters:
             try:
-                setattr(self, var_name, getattr(self, var_name)[f])
+                if __IsMaskCompatiable__(getattr(self, var_name), f, self.events.verbose):
+                    setattr(self, var_name, getattr(self, var_name)[f])
             except:
                 Warning(f"couldn't apply a filter to {var}")
 
