@@ -63,7 +63,6 @@ def RegionSelection(events : cross_section.Data, args : cross_section.argparse.N
         key = "mc"
     else:
         key = "data"
-
     counts = {}
     for obj in args.selection_masks[key]:
         if obj in ["beam", "null_pfo"]: continue

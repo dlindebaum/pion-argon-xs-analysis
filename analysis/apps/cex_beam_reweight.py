@@ -15,7 +15,6 @@ from rich import print
 from python.analysis import cross_section, Plots, SelectionTools
 
 
-
 def ReWeight(sample : dict[cross_section.Data], p_nominal : float, bins : int = 10, p_range : np.array = np.array([0.75, 1.25]), book : Plots.PlotBook = Plots.PlotBook.null):
     p_mc, edges = np.histogram(np.array(sample["mc"].recoParticles.beam_inst_P), bins, range = p_nominal * p_range)
     p_data = np.histogram(np.array(sample["data"].recoParticles.beam_inst_P), bins, range = p_nominal * p_range)[0]

@@ -304,18 +304,28 @@ def PlotSysHist(systematics, energy_slices, book : Plots.PlotBook = Plots.PlotBo
 
 def FinalPlots(cv, systematics, energy_slices, book : Plots.PlotBook = Plots.PlotBook.null):
     for p in cv:
-        xs = {"ProtoDUNE SP: stat + sys" : [cv[p][0], cross_section.quadsum([cv[p][1]] + [systematics[s][p] for s in systematics], 0)]}
-        cross_section.PlotXSComparison(xs, energy_slices, p, simulation_label = "Geant4 v10.6")
+        xs = {
+            "ProtoDUNE SP: Stat + Sys Error" : cv[p],
+            "" : [cv[p][0], cross_section.quadsum([cv[p][1]] + [systematics[s][p] for s in systematics], 0)]
+        }
+        # xs = {"ProtoDUNE SP: stat + sys" : [cv[p][0], cross_section.quadsum([cv[p][1]] + [systematics[s][p] for s in systematics], 0)]}
+        cross_section.PlotXSComparison(xs, energy_slices, p, simulation_label = "Geant4 v10.6", colors = {k : f"C0" for k in xs}, chi2 = False)
         book.Save()
     for _, p in Plots.IterMultiPlot(cv):
-        xs = {"ProtoDUNE SP: stat + sys" : [cv[p][0], cross_section.quadsum([cv[p][1]] + [systematics[s][p] for s in systematics], 0)]}
-        cross_section.PlotXSComparison(xs, energy_slices, p, simulation_label = "Geant4 v10.6", newFigure = False)
+        xs = {
+            "ProtoDUNE SP: Stat + Sys Error" : cv[p],
+            "" : [cv[p][0], cross_section.quadsum([cv[p][1]] + [systematics[s][p] for s in systematics], 0)]
+        }
+        # xs = {"ProtoDUNE SP: stat + sys" : [cv[p][0], cross_section.quadsum([cv[p][1]] + [systematics[s][p] for s in systematics], 0)]}
+        cross_section.PlotXSComparison(xs, energy_slices, p, simulation_label = "Geant4 v10.6", colors = {k : f"C0" for k in xs}, chi2 = False, newFigure = False)
+        book.Save()
     book.Save()
     return
 
 
 @cross_section.timer
 def main(args : cross_section.argparse.Namespace):
+    cross_section.SetPlotStyle(dark = True)
     out = args.out + "systematics/"
     cross_section.os.makedirs(out, exist_ok = True)
 
@@ -345,6 +355,9 @@ def main(args : cross_section.argparse.Namespace):
             cross_section.SaveObject(out + "theory/test_results.dill", results)
 
             NormalisationSystematic.AverageResults(results)
+
+            NormalisationSystematic.PlotNormalisationTestResults(results, args, xs_nominal)
+
             sys_err = NormalisationSystematic.CalculateSysErr(results)
             # norm_sys_max = NormalisationSystematic.TotalSysMax(sys_err)
             frac_err = NormalisationSystematic.CalculateFractionalError(sys_err, xs_nominal)

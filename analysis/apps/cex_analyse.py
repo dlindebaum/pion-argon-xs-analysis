@@ -518,7 +518,7 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
 
                 unfolding_result = Unfolding(histograms_reco_obs, histograms_reco_obs_err, templates[k], dict(unfolding_args) if unfolding_args is not None else unfolding_args, p if p != "all" else "charge_exchange", scale, args.energy_slices, args.fit["regions"], mc_cheat, book)
 
-                process[p] = XSUnfold(unfolding_result, args.energy_slices, True, True, regions = args.fit["regions"])
+                process[p] = XSUnfold(unfolding_result, args.energy_slices, args.fit["mc_stat_unc"], True, regions = args.fit["regions"])
                 if args.fit["regions"] is False:
                     cross_section.PlotXSComparison({f"{label_map[k]} Data reco" : process[p], f"{label_map[k]} MC truth" : xs_true}, args.energy_slices, p, {f"{label_map[k]} Data reco" : "C0", f"{label_map[k]} MC truth" : "C1"}, simulation_label = "Geant4 v10.6")
                     book.Save()
