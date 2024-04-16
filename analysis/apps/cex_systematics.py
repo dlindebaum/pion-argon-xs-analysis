@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 
 from rich import print
+from rich.rule import Rule
 
 from python.analysis import cross_section, Plots
 from python.analysis.Utils import dill_copy, quadsum
@@ -35,7 +36,7 @@ class MCMethod(ABC):
 
         region_fit_result = cex_analyse.RegionFit(analysis_input, self.args.energy_slices, self.args.fit["mean_track_score"], self.model, mc_stat_unc = self.args.fit["mc_stat_unc"], single_bin = self.args.fit["single_bin"])
 
-        _, histograms_reco_obs, histograms_reco_obs_err = cex_analyse.BackgroundSubtraction(analysis_input, self.args.signal_process, self.args.energy_slices, region_fit_result, self.args.fit["single_bin"], self.args.fit["regions"], self.args.toy_template, book)
+        _, histograms_reco_obs, histograms_reco_obs_err = cex_analyse.BackgroundSubtraction(analysis_input, self.args.signal_process, self.args.energy_slices, region_fit_result, self.args.fit["single_bin"], self.args.fit["regions"], self.args.toy_template, self.args.bkgsub_err, book)
 
 
         if self.args.fit["regions"]:
@@ -55,6 +56,7 @@ class MCMethod(ABC):
 
         xs = cex_analyse.XSUnfold(unfolding_result, self.args.energy_slices, True, True, self.args.fit["regions"])
         return xs
+
 
     def RunExperiment(self, config : dict, out : str = None) -> tuple[dict, dict]:
         x = self.args.energy_slices.pos[:-1] - self.args.energy_slices.width / 2
@@ -80,7 +82,7 @@ class MCMethod(ABC):
         return xs, xs_true
 
 
-class DataAnalysis:
+class DataAnalysis(ABC):
     def __init__(self, args : cross_section.argparse.Namespace) -> None:
         self.args = dill_copy(args)
         pass
@@ -93,6 +95,7 @@ class DataAnalysis:
     @classmethod
     def CreateNewAIs():
         pass
+
 
     def __run_analysis(self, new_input):
         args_copy = dill_copy(self.args)
@@ -117,7 +120,65 @@ class DataAnalysis:
 
 
 class NuisanceParameters:
-    pass
+    def __init__(self, args : cross_section.argparse.Namespace) -> None:
+        self.args = dill_copy(args)
+        pass
+
+
+    def __run_analysis(self, np : bool = False):
+        args_copy = dill_copy(self.args)
+        args_copy.fit["mc_stat_unc"] = np
+        args_copy.pdsp = True
+        args_copy.toy_template = None
+        args_copy.out = ""
+        args_copy.all = False
+
+        xs = cex_analyse.Analyse(args_copy, False)["pdsp"]
+        return xs
+
+
+    def RunExperiment(self):
+        xs = self.__run_analysis(False)
+        xs_np = self.__run_analysis(True)
+        return {"no_np" : xs, "np" : xs_np}
+
+
+    def CalculateSysError(self, result : dict):
+        np_sys = {}
+        for p in result["no_np"]:
+            np_sys[p] = np.sqrt(result["np"][p][1]**2 - result["no_np"][p][1]**2)
+        return np_sys
+
+
+class BkgSubSystematic:
+    def __init__(self, args : cross_section.argparse.Namespace) -> None:
+        self.args = dill_copy(args)
+        pass
+
+
+    def __run_analysis(self, bkg_sub : bool = False):
+        args_copy = dill_copy(self.args)
+        args_copy.bkg_sub_err = bkg_sub
+        args_copy.pdsp = True
+        args_copy.toy_template = None
+        args_copy.out = ""
+        args_copy.all = False
+
+        xs = cex_analyse.Analyse(args_copy, False)["pdsp"]
+        return xs
+
+
+    def RunExperiment(self):
+        xs = self.__run_analysis(False)
+        xs_np = self.__run_analysis(True)
+        return {"no_bkg" : xs, "bkg" : xs_np}
+
+
+    def CalculateSysError(self, result : dict):
+        np_sys = {}
+        for p in result["no_bkg"]:
+            np_sys[p] = np.sqrt(result["bkg"][p][1]**2 - result["no_bkg"][p][1]**2)
+        return np_sys
 
 
 class UpstreamCorrectionSystematic(DataAnalysis):
@@ -132,6 +193,25 @@ class UpstreamCorrectionSystematic(DataAnalysis):
         args_copy = dill_copy(self.args)
         for k, v in upl.items():
             args_copy.upstream_loss_correction_params["value"] = v
+            args_copy.out = f"{outdir}{self.name}_{k}/"
+            cex_analysis_input.main(args_copy)
+        return
+
+
+class BeamReweightSystematic(DataAnalysis):
+    name = "beam_reweight_1_sigma"
+
+    def CreateNewAIs(self, outdir : str):
+        cfg = {
+            "low" : {k : v["value"] - v["error"] for k, v in self.args.beam_reweight_params.items()},
+            "high" : {k : v["value"] + v["error"] for k, v in self.args.beam_reweight_params.items()}
+        }
+
+        args_copy = dill_copy(self.args)
+        for k, v in cfg.items():
+            for p in args_copy.beam_reweight_params:
+                args_copy.beam_reweight_params[p]["value"] = v[p]
+            print(args_copy.beam_reweight_params)
             args_copy.out = f"{outdir}{self.name}_{k}/"
             cex_analysis_input.main(args_copy)
         return
@@ -290,7 +370,7 @@ def TheoryXS(theory_sys, cv):
     return theory_xs_T
 
 
-def PlotSysHist(systematics, energy_slices, book : Plots.PlotBook = Plots.PlotBook.null):
+def PlotSysHist(cv, systematics, energy_slices, book : Plots.PlotBook = Plots.PlotBook.null):
     x = energy_slices.pos[:-1] - energy_slices.width/2
     for _, p in Plots.IterMultiPlot(exclusive_proc):
         for s in systematics:
@@ -300,28 +380,35 @@ def PlotSysHist(systematics, energy_slices, book : Plots.PlotBook = Plots.PlotBo
                 err = systematics[s][p]
             Plots.Plot(x, err, label = s, title = cross_section.remove_(p), newFigure = False, style = "step", xlabel = "$KE$ (MeV)", ylabel = "Systematic error (mb)")
     book.Save()
-
+    for _, p in Plots.IterMultiPlot(exclusive_proc):
+        for s in systematics:
+            if systematics[s][p].shape == (2, len(x)):
+                err = cross_section.quadsum(systematics[s][p], 0) / 2
+            else:
+                err = systematics[s][p]
+            Plots.Plot(x, cross_section.nandiv(err, cv[p][0]), label = s, title = cross_section.remove_(p), newFigure = False, style = "step", xlabel = "$KE$ (MeV)", ylabel = "Systematic fractional error")
+    book.Save()
 
 def FinalPlots(cv, systematics, energy_slices, book : Plots.PlotBook = Plots.PlotBook.null):
     for p in cv:
         xs = {
-            "ProtoDUNE SP: Stat + Sys Error" : cv[p],
+            "ProtoDUNE SP: Data Stat + Sys Error" : cv[p],
             "" : [cv[p][0], cross_section.quadsum([cv[p][1]] + [systematics[s][p] for s in systematics], 0)]
         }
-        # xs = {"ProtoDUNE SP: stat + sys" : [cv[p][0], cross_section.quadsum([cv[p][1]] + [systematics[s][p] for s in systematics], 0)]}
         cross_section.PlotXSComparison(xs, energy_slices, p, simulation_label = "Geant4 v10.6", colors = {k : f"C0" for k in xs}, chi2 = False)
         book.Save()
     for _, p in Plots.IterMultiPlot(cv):
         xs = {
-            "ProtoDUNE SP: Stat + Sys Error" : cv[p],
+            "ProtoDUNE SP: Data Stat + Sys Error" : cv[p],
             "" : [cv[p][0], cross_section.quadsum([cv[p][1]] + [systematics[s][p] for s in systematics], 0)]
         }
-        # xs = {"ProtoDUNE SP: stat + sys" : [cv[p][0], cross_section.quadsum([cv[p][1]] + [systematics[s][p] for s in systematics], 0)]}
         cross_section.PlotXSComparison(xs, energy_slices, p, simulation_label = "Geant4 v10.6", colors = {k : f"C0" for k in xs}, chi2 = False, newFigure = False)
-        book.Save()
     book.Save()
     return
 
+
+def can_run(systematic):
+    return (systematic not in args.skip) and (systematic in args.run)
 
 @cross_section.timer
 def main(args : cross_section.argparse.Namespace):
@@ -330,38 +417,62 @@ def main(args : cross_section.argparse.Namespace):
     cross_section.os.makedirs(out, exist_ok = True)
 
     if ("all" not in args.skip) or ("all" in args.run):
-        if ("upstream" not in args.skip) or ("upstream" in args.run):
+        if can_run("bkg_sub"):
+            print(Rule("bkg_sub"))
+            bkg_sub = BkgSubSystematic(args)
+            sys = bkg_sub.CalculateSysError(bkg_sub.RunExperiment())
+            cross_section.os.makedirs(out + "bkg_sub/", exist_ok = True)
+            SaveSystematicError(sys, None, out + "bkg_sub/sys.dill")
+        if can_run("mc_stat"):
+            print(Rule("mc_stat"))
+            mc_stat = NuisanceParameters(args)
+            sys = mc_stat.CalculateSysError(mc_stat.RunExperiment())
+            cross_section.os.makedirs(out + "mc_stat/", exist_ok = True)
+            SaveSystematicError(sys, None, out + "mc_stat/sys.dill")
+
+        if can_run("upstream"):
+            print(Rule("upstream"))
             upl = UpstreamCorrectionSystematic(args)
             upl.CreateNewAIs(out + "upstream/")
             xs = upl.RunAnalysis(out + "upstream/")
             sys = upl.CalculateSysError(xs)
             SaveSystematicError(sys, None, out + "upstream/sys.dill")
 
-        if ("theory" not in args.skip) or ("theory" in args.run):
+        if can_run("beam_reweight"):
+            print(Rule("beam_reweight"))
+            brw = BeamReweightSystematic(args)
+            brw.CreateNewAIs(out + "beam_reweight/")
+            xs = brw.RunAnalysis(out + "beam_reweight/")
+            sys = brw.CalculateSysError(xs)
+            SaveSystematicError(sys, None, out + "beam_reweight/sys.dill")
+
+        if can_run("theory"):
+            print(Rule("theory"))
             cross_section.os.makedirs(out + "theory/", exist_ok = True)
 
             args.toy_template = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(file = args.toy_template))
-
             model = cross_section.RegionFit.CreateModel(args.toy_template, args.energy_slices, args.fit["mean_track_score"], False, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
-
+            
             toy_nominal = cross_section.Toy(df = cex_toy_generator.run(args.toy_data_config))
-
             analysis_input_nominal = cross_section.AnalysisInput.CreateAnalysisInputToy(toy_nominal)
-
+            
             norm_sys = NormalisationSystematic(args, model, args.toy_data_config)
             
             xs_nominal = norm_sys.Analyse(analysis_input_nominal, None)
-            results = norm_sys.Evaluate([0.8, 1.2], 3)
-            cross_section.SaveObject(out + "theory/test_results.dill", results)
 
+            if not cross_section.os.path.isfile(out + "theory/test_results.dill"):    
+                results = norm_sys.Evaluate([0.8, 1.2], 3)
+                cross_section.SaveObject(out + "theory/test_results.dill", results)
+
+            results = cross_section.LoadObject(out + "theory/test_results.dill")
             NormalisationSystematic.AverageResults(results)
 
             NormalisationSystematic.PlotNormalisationTestResults(results, args, xs_nominal)
 
             sys_err = NormalisationSystematic.CalculateSysErr(results)
             # norm_sys_max = NormalisationSystematic.TotalSysMax(sys_err)
-            frac_err = NormalisationSystematic.CalculateFractionalError(sys_err, xs_nominal)
             # norm_sys_qs = cex_systematics.NormalisationSystematic.TotalSysQS(sys_err)
+            frac_err = NormalisationSystematic.CalculateFractionalError(sys_err, xs_nominal)
             SaveSystematicError(sys_err, frac_err, out + "theory/sys.dill")
 
     if args.plot is not None:
@@ -376,17 +487,28 @@ def main(args : cross_section.argparse.Namespace):
 
         systematics = {}
         for f in cross_section.os.listdir(out):
+            if cross_section.os.path.isfile(f"{out}{f}") : continue
             sys = cross_section.LoadObject(f"{out}{f}/sys.dill")
             if f == "theory":
                 t = TheoryXS(sys, cv)
                 systematics =  {**systematics, **{f"theory, {label_short[k]}" : t[k] for k in t}}
             if f == "upstream":
                 systematics[f] = sys["systematic"]
+            if f == "mc_stat":
+                systematics["MC stat"] = sys["systematic"]
+            if f == "beam_reweight":
+                systematics["beam reweight"] = sys["systematic"]
+            if f == "bkg_sub":
+                systematics["theory: bkg sub"] = sys["systematic"]
+        with Plots.PlotBook(out + "plots") as book:
+            PlotSysHist(cv, systematics, args.energy_slices, book)
+
+            FinalPlots(cv, systematics, args.energy_slices, book)
 
     return
 
 if __name__ == "__main__":
-    systematics = ["mc_stat", "theory", "upstream", "beam_reweight", "shower_energy", "all"]
+    systematics = ["mc_stat", "theory", "upstream", "beam_reweight", "shower_energy", "bkg_sub", "all"]
 
     parser = cross_section.argparse.ArgumentParser("Estimate Systematics for the cross section analysis")
     cross_section.ApplicationArguments.Config(parser)

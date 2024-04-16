@@ -109,7 +109,7 @@ def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, 
         Plots.Plot(x, v[0], xerr = energy_slice.width / 2, yerr = v[1], label = k + chi2_l, color = colors[k], linestyle = "", marker = "x", newFigure = False)
     
     if process == "single_pion_production":
-        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = simulation_label, title = "single pion production" if title is None else title, newFigure = False, xlabel = "$KE_{int} (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)
+        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = simulation_label, title = "single pion production" if title is None else title, newFigure = False, xlabel = "$KE (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)
     else:
         xs_sim.Plot(process, label = simulation_label, color = xs_sim_color, title = title)
 

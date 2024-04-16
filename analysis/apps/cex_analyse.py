@@ -100,7 +100,7 @@ def BkgSubRegions(data : cross_section.AnalysisInput, energy_slices : cross_sect
     return N_int_ex, N_int_ex_err
 
 
-def BkgSingleBin(N_bkg_s : np.ndarray, N_bkg_err_s : np.ndarray, template : cross_section.AnalysisInput, templates_energy : list[np.ndarray], signal_process : str):
+def BkgSingleBin(N_bkg_s : np.ndarray, N_bkg_err_s : np.ndarray, template : cross_section.AnalysisInput, templates_energy : list[np.ndarray], signal_process : str, theory_err : bool):
     labels = list(template.regions.keys())
     bkg_mask = signal_process != np.array(labels)
 
@@ -112,17 +112,22 @@ def BkgSingleBin(N_bkg_s : np.ndarray, N_bkg_err_s : np.ndarray, template : cros
 
     rel_lambda_bs = (rel_scales * np.sum(lambda_cbs, 0).T).T[bkg_mask]
 
+    N_thoery_err_cbs = N_bkg_s * rel_lambda_bs * 0.2
 
     N_bkg = (N_bkg_s * rel_lambda_bs)
 
     N_bkg_err_fit_var = (N_bkg_err_s * rel_lambda_bs)**2
 
     N_bkg_err_template_var = ((N_bkg_s.T)**2/N_MC_s[bkg_mask]).T * rel_lambda_bs * (1 + rel_lambda_bs)
- 
-    return N_bkg, np.sqrt(N_bkg_err_fit_var + N_bkg_err_template_var)
 
 
-def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, energy_slice : cross_section.Slices, postfit_pred : cross_section.cabinetry.model_utils.ModelPrediction = None, single_bin : bool = False, regions : bool = False, template : cross_section.AnalysisInput = None, book : Plots.PlotBook = Plots.PlotBook.null) -> tuple[np.ndarray]:
+    N_bkg_var = N_bkg_err_fit_var + N_bkg_err_template_var
+    if theory_err is True:
+        N_bkg_var = N_bkg_var + (N_thoery_err_cbs**2)
+    return N_bkg, np.sqrt(N_bkg_var)
+
+
+def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, energy_slice : cross_section.Slices, postfit_pred : cross_section.cabinetry.model_utils.ModelPrediction = None, single_bin : bool = False, regions : bool = False, template : cross_section.AnalysisInput = None, theory_err : bool = False, book : Plots.PlotBook = Plots.PlotBook.null) -> tuple[np.ndarray]:
     """ Background subtraction using the fit if a fit result is specified.
 
     Args:
@@ -151,7 +156,7 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
                 bkg_b = {}
                 bkg_err_b = {}
                 for p in bkg:
-                    bkg_b[p], bkg_err_b[p] = BkgSingleBin(bkg[p], bkg_err[p], template, templates_energy, p)
+                    bkg_b[p], bkg_err_b[p] = BkgSingleBin(bkg[p], bkg_err[p], template, templates_energy, p, theory_err)
                 bkg = bkg_b
                 bkg_err = bkg_err_b
             KE_int_fit, KE_int_fit_err = BkgSubRegions(data, energy_slice, bkg, bkg_err)
@@ -159,7 +164,7 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
             print(f"signal: {process}")
             bkg, bkg_err = cross_section.RegionFit.EstimateBackgroundAllRegions(postfit_pred, template, process)
             if single_bin:
-                bkg, bkg_err = BkgSingleBin(bkg, bkg_err, template, templates_energy, process)
+                bkg, bkg_err = BkgSingleBin(bkg, bkg_err, template, templates_energy, process, theory_err)
             KE_int_fit, KE_int_fit_err = BkgSubAllRegion(data, energy_slice, bkg, bkg_err)
 
         labels = list(data.regions.keys()) #! make property of AnalysisInput dataclass
@@ -196,9 +201,9 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
     return histograms_true_obs, histograms_reco_obs, histograms_reco_obs_err
 
 
-def PlotDataBkgSub(data : cross_section.AnalysisInput, mc : cross_section.AnalysisInput, postfit_pred : cross_section.cabinetry.model_utils.ModelPrediction, single_bin : bool, regions : bool, signal_process : str, energy_slices : cross_section.Slices, scale : float, sample_name : str, data_label = "data", mc_label = "mc", book : Plots.PlotBook = Plots.PlotBook.null):
+def PlotDataBkgSub(data : cross_section.AnalysisInput, mc : cross_section.AnalysisInput, postfit_pred : cross_section.cabinetry.model_utils.ModelPrediction, single_bin : bool, regions : bool, signal_process : str, energy_slices : cross_section.Slices, scale : float, sample_name : str, data_label = "data", mc_label = "mc", theory_err : bool = False, book : Plots.PlotBook = Plots.PlotBook.null):
     labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$", "inc" : "$N_{inc}$"}
-    _, histograms_data, histograms_data_err = BackgroundSubtraction(data, signal_process, energy_slices, postfit_pred, single_bin, regions, mc, None)
+    _, histograms_data, histograms_data_err = BackgroundSubtraction(data, signal_process, energy_slices, postfit_pred, single_bin, regions, mc, theory_err, None)
 
     histograms_mc_reco = mc.CreateHistograms(energy_slices, signal_process, True, False)
 
@@ -498,8 +503,8 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
 
                     xs_true = cross_section.EnergySlice.CrossSection(true_hists["int_ex"][1:], true_hists["int"][1:], true_hists["inc"][1:], cross_section.BetheBloch.meandEdX(args.energy_slices.pos_bins[1:], cross_section.Particle.from_pdgid(211)), args.energy_slices.width)
 
-                _, histograms_reco_obs, histograms_reco_obs_err = BackgroundSubtraction(v, p if p != "all" else "charge_exchange", args.energy_slices, region_fit_result, args.fit["single_bin"], args.fit["regions"], templates[k], book) #? make separate background subtraction function?
-                
+                _, histograms_reco_obs, histograms_reco_obs_err = BackgroundSubtraction(v, p if p != "all" else "charge_exchange", args.energy_slices, region_fit_result, args.fit["single_bin"], args.fit["regions"], templates[k], args.bkg_sub_err, book) #? make separate background subtraction function?
+
                 if k == "toy":
                     data_label = "toy data"
                     mc_label = "toy template"
@@ -508,7 +513,7 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
                     mc_label = "MC cheated (scaled to Data)"
 
 
-                PlotDataBkgSub(samples[k], templates[k], region_fit_result, args.fit["single_bin"], args.fit["regions"], p if p != "all" else "charge_exchange", args.energy_slices, scale, None, data_label, mc_label, book)
+                PlotDataBkgSub(samples[k], templates[k], region_fit_result, args.fit["single_bin"], args.fit["regions"], p if p != "all" else "charge_exchange", args.energy_slices, scale, None, data_label, mc_label, args.bkg_sub_err, book)
 
                 if args.fit["regions"]:
                     histograms_reco_obs = {**histograms_reco_obs, **histograms_reco_obs["int_ex"]}
