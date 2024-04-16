@@ -462,9 +462,11 @@ class ApplicationArguments:
             elif head == "FINAL_STATE_PI0_SELECTION":
                 args.pi0_selection = ApplicationArguments.__CreateSelection(value, EventSelection)
             elif head == "BEAM_QUALITY_FITS":
-                args.mc_beam_quality_fit = LoadConfiguration(value["mc"]) # generally expected to have MC at a minimum
+                if "mc" in value:
+                    args.mc_beam_quality_fit = LoadConfiguration(value["mc"]) # generally expected to have MC at a minimum
                 if "data" in value:
                     args.data_beam_quality_fit = LoadConfiguration(value["data"])
+                args.beam_quality_truncate = value["truncate"]
             elif head == "BEAM_SCRAPER_FITS":
                 args.beam_scraper_energy_range = value["energy_range"]
                 args.beam_scraper_energy_bins = value["energy_bins"]

@@ -90,6 +90,23 @@ def plot_range(mu : float, sigma : float, tolerance : float = 5) -> list:
     return sorted([mu - tolerance * sigma, mu + tolerance * sigma])
 
 
+def GetPos(sample : Master.Data):
+    if args.beam_quality_truncate is not None:
+        ak.count(sample.recoParticles.beam_calo_pos.z[2])
+        truncated_start = ak.argmax(sample.recoParticles.beam_calo_pos.z >= args.beam_quality_truncate, -1, keepdims = True)
+        start_pos = sample.recoParticles.beam_calo_pos[truncated_start]
+        start_pos = ak.fill_none(start_pos, vector.vector(-999, -999, -999))
+
+        end_pos = sample.recoParticles.beam_calo_pos[:, -1:]
+        end_pos = ak.pad_none(end_pos, 1, -1)
+        end_pos = ak.fill_none(end_pos, vector.vector(-999, -999, -999))
+    else:
+        start_pos = sample.recoParticles.beam_startPos_SCE
+        end_pos = sample.recoParticles.beam_endPos_SCE
+
+    return start_pos, end_pos
+
+
 def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data, data_fits : dict, out : str):
     """ Make plots showing the fits for MC and or Data.
 
@@ -102,6 +119,9 @@ def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data
     """
     SetPlotStyle()
 
+    data_start_pos, _ = GetPos(data_events)
+    mc_start_pos, _ = GetPos(mc_events)
+
     with Plots.PlotBook(out + "beam_quality_fits.pdf") as pdf:
         for i in ["x", "y", "z"]:
             plt.figure()
@@ -109,8 +129,8 @@ def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data
             data_ranges = [] if data_fits is None else plot_range(data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"])
 
             plot_ranges = mc_ranges + data_ranges
-            if mc_events is not None: plot(mc_events.recoParticles.beam_startPos_SCE[i], f"Beam start position {i} (cm)", mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"], "C0", "MC", range = [min(plot_ranges), max(plot_ranges)])
-            if data_events is not None: plot(data_events.recoParticles.beam_startPos_SCE[i], f"Beam start position {i} (cm)", data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"], "C1", "Data", range = [min(plot_ranges), max(plot_ranges)])
+            if mc_events is not None: plot(mc_start_pos[i], f"Beam start position {i} (cm)", mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"], "C0", "MC", range = [min(plot_ranges), max(plot_ranges)])
+            if data_events is not None: plot(data_start_pos[i], f"Beam start position {i} (cm)", data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"], "C1", "Data", range = [min(plot_ranges), max(plot_ranges)])
             pdf.Save()
     return
 
@@ -145,12 +165,13 @@ def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str, ta
         events.Filter([mask], [mask])
 
     #* fit gaussians to the start positions
-    mu, sigma, mu_err, sigma_err = Fit_Vector(events.recoParticles.beam_startPos_SCE, 100)
+    start_pos, end_pos = GetPos(events)
+    mu, sigma, mu_err, sigma_err = Fit_Vector(start_pos, 100)
 
     #* compute the mean of beam direction components
-    beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos_SCE, events.recoParticles.beam_startPos_SCE))
-    mu_dir = {i : ak.mean(beam_dir[i]) for i in ["x", "y", "z"]}
-    mu_dir_err = {i : ak.std(beam_dir[i])/np.sqrt(ak.count(beam_dir[i])) for i in ["x", "y", "z"]}
+    beam_dir = vector.normalize(vector.sub(end_pos, start_pos))
+    mu_dir = {i : ak.mean(ak.nan_to_num(beam_dir[i])) for i in ["x", "y", "z"]}
+    mu_dir_err = {i : ak.std(ak.nan_to_num(beam_dir[i]))/np.sqrt(ak.count(beam_dir[i])) for i in ["x", "y", "z"]}
 
     #* convert to dictionary undestood by the BeamQualityCut function
     fit_values = {
@@ -208,7 +229,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    cross_section.ApplicationArguments.ResolveArgs(args)
-
+    args = cross_section.ApplicationArguments.ResolveArgs(args)
     print(vars(args))
     main(args)

@@ -35,6 +35,9 @@ def template_config():
         "REGION_IDENTIFICATION":{
             "type" : "default"
         },
+        "BEAM_QUALITY_FITS": {
+            "trunacte" : None,
+        },
         "BEAM_SCRAPER_FITS":{
             "energy_range" : None,
             "energy_bins" : None
@@ -279,6 +282,7 @@ def main(args):
             for k, v in target_files.items():
                 if v in files:
                     new_config_entry[k] = os.path.abspath(output_path + v)
+            new_config_entry["trunacte"] = args.beam_quality_truncate
             update_config(args.config, {"BEAM_QUALITY_FITS" : new_config_entry})
             args = update_args() # reload config to continue
         
