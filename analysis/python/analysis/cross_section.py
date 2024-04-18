@@ -810,7 +810,7 @@ class GeantCrossSections:
                 y = self.quasielastic + self.double_charge_exchange
             else:
                 y = getattr(self, xs)
-            Plots.Plot(self.KE, y, label = label, title = title, newFigure = False, xlabel = "$KE_{int}$ (MeV)", ylabel = "$\sigma (mb)$", color = color)
+            Plots.Plot(self.KE, y, label = label, title = title, newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\sigma (mb)$", color = color)
             # Plots.plt.fill_between(self.KE, getattr(self, xs) - self.Stat_Error(xs), getattr(self, xs) + self.Stat_Error(xs), color = Plots.plt.gca()._get_lines.get_next_color())
 
 

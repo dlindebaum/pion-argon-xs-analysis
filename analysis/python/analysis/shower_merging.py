@@ -18,15 +18,17 @@ from python.analysis import Master, Plots, vector, EventSelection
 from python.analysis import LegacyBeamParticleSelection, BeamParticleSelection, PFOSelection
 
 
-def SetPlotStyle(extend_colors : bool = False, custom_colors : list = None, dpi : int = 300, dark : bool = False):
+def SetPlotStyle(extend_colors : bool = False, custom_colors : list = None, dpi : int = 300, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):
     plt.style.use("default") # first load the default to reset any previous changes made by other styles
     plt.style.use('ggplot')
     plt.rcParams.update({'patch.linewidth': 1})
-    plt.rcParams.update({'font.size': 10})
+    plt.rcParams.update({'font.size': font_scale * 10})
     plt.rcParams.update({"axes.titlecolor" : "#555555"})
-    plt.rcParams.update({"axes.titlesize" : 12})
+    plt.rcParams.update({"axes.titlesize" : font_scale * 12})
     plt.rcParams['figure.dpi'] = dpi
     plt.rcParams['legend.fontsize'] = "small"
+    plt.rcParams["font.family"] = font_style
+
     plt.rc('text.latex', preamble=r"\\usepackage{amsmath}")
     if extend_colors:
         plt.rcParams.update({"axes.prop_cycle" : plt.cycler("color", get_cmap("tab20").colors)})
