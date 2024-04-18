@@ -90,24 +90,7 @@ def plot_range(mu : float, sigma : float, tolerance : float = 5) -> list:
     return sorted([mu - tolerance * sigma, mu + tolerance * sigma])
 
 
-def GetPos(sample : Master.Data):
-    if args.beam_quality_truncate is not None:
-        ak.count(sample.recoParticles.beam_calo_pos.z[2])
-        truncated_start = ak.argmax(sample.recoParticles.beam_calo_pos.z >= args.beam_quality_truncate, -1, keepdims = True)
-        start_pos = sample.recoParticles.beam_calo_pos[truncated_start]
-        start_pos = ak.fill_none(start_pos, vector.vector(-999, -999, -999))
-
-        end_pos = sample.recoParticles.beam_calo_pos[:, -1:]
-        end_pos = ak.pad_none(end_pos, 1, -1)
-        end_pos = ak.fill_none(end_pos, vector.vector(-999, -999, -999))
-    else:
-        start_pos = sample.recoParticles.beam_startPos_SCE
-        end_pos = sample.recoParticles.beam_endPos_SCE
-
-    return start_pos, end_pos
-
-
-def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data, data_fits : dict, out : str):
+def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data, data_fits : dict, out : str, truncate : float):
     """ Make plots showing the fits for MC and or Data.
 
     Args:
@@ -119,8 +102,8 @@ def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data
     """
     SetPlotStyle()
 
-    data_start_pos, _ = GetPos(data_events)
-    mc_start_pos, _ = GetPos(mc_events)
+    data_start_pos, _ = BeamParticleSelection.GetPos(data_events, truncate)
+    mc_start_pos, _ = BeamParticleSelection.GetPos(mc_events, truncate)
 
     with Plots.PlotBook(out + "beam_quality_fits.pdf") as pdf:
         for i in ["x", "y", "z"]:
@@ -165,7 +148,7 @@ def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str, ta
         events.Filter([mask], [mask])
 
     #* fit gaussians to the start positions
-    start_pos, end_pos = GetPos(events)
+    start_pos, end_pos = BeamParticleSelection.GetPos(events, args.beam_quality_truncate)
     mu, sigma, mu_err, sigma_err = Fit_Vector(start_pos, 100)
 
     #* compute the mean of beam direction components
@@ -193,6 +176,7 @@ def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str, ta
         "mu_dir_err_x" : mu_dir_err["x"],
         "mu_dir_err_y" : mu_dir_err["y"],
         "mu_dir_err_z" : mu_dir_err["z"],
+        "truncate"     : args.beam_quality_truncate
     }
     print(fit_values)
 
@@ -216,7 +200,7 @@ def main(args):
     if args.data_file is not None:
         data, fit_values_data = run(args.data_file, True, args.ntuple_type, args.out + "beam_quality/", "data", args)
 
-    MakePlots(mc, fit_values_mc, data, fit_values_data, args.out + "beam_quality/")
+    MakePlots(mc, fit_values_mc, data, fit_values_data, args.out + "beam_quality/", args.beam_quality_truncate)
 
     return
 

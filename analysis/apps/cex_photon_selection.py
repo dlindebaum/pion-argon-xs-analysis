@@ -47,6 +47,10 @@ def run(i, file, n_events, start, selected_events, args):
     events = Master.Data(file, n_events, start, args["ntuple_type"])
 
     if "selection_masks" in args:
+        if "fiducial" in args["selection_masks"]:
+            mask = SelectionTools.CombineMasks(args["selection_masks"]["mc"]["fiducial"])
+            events.Filter([mask], [mask])
+
         mask = SelectionTools.CombineMasks(args["selection_masks"]["mc"]["beam"])
         events.Filter([mask], [mask])
 

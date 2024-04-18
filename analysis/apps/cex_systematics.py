@@ -203,15 +203,15 @@ class BeamReweightSystematic(DataAnalysis):
 
     def CreateNewAIs(self, outdir : str):
         cfg = {
-            "low" : {k : v["value"] - v["error"] for k, v in self.args.beam_reweight_params.items()},
-            "high" : {k : v["value"] + v["error"] for k, v in self.args.beam_reweight_params.items()}
+            "low" : {k : v["value"] - v["error"] for k, v in self.args.beam_reweight["params"].items()},
+            "high" : {k : v["value"] + v["error"] for k, v in self.args.beam_reweight["params"].items()}
         }
 
         args_copy = dill_copy(self.args)
         for k, v in cfg.items():
-            for p in args_copy.beam_reweight_params:
-                args_copy.beam_reweight_params[p]["value"] = v[p]
-            print(args_copy.beam_reweight_params)
+            for p in args_copy.beam_reweight["params"]:
+                args_copy.beam_reweight["params"][p]["value"] = v[p]
+            print(args_copy.beam_reweight["params"])
             args_copy.out = f"{outdir}{self.name}_{k}/"
             cex_analysis_input.main(args_copy)
         return

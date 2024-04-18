@@ -32,20 +32,25 @@ def template_config():
         },
         "norm" : "normalisation to apply to MC when making Data/MC comparisons, usually defined as the ratio of pion-like triggers from the beam instrumentation", #! this should be inferred from one of the apps!
         "pmom" : "momentum byte of the beam i.e. central value of beam momentum in GeV, required if ntuple does not have the correct scale for the P_inst distribution",
+        "fiducial_volume" : [0, 700],
         "REGION_IDENTIFICATION":{
             "type" : "default"
         },
         "BEAM_QUALITY_FITS": {
-            "trunacte" : None,
+            "truncate" : None,
         },
         "BEAM_SCRAPER_FITS":{
             "energy_range" : None,
             "energy_bins" : None
         },
         "ENERGY_CORRECTION":{
-            "energy_range" : None,
             "correction_params" : None,
+            "energy_range" : None,
             "correction" : "response"
+        },
+        "BEAM_REWEIGHT": {
+            "strength" : 3,
+            "params": None
         },
         "UPSTREAM_ENERGY_LOSS":{
             "cv_function" : "gaussian",
@@ -140,60 +145,138 @@ def template_config():
         "VALID_PFO_SELECTION":{
             "enable" : True
         },
-        "FINAL_STATE_PIPLUS_SELECTION":{
-            "TrackScoreCut":{
-                "enable" : True,
-                "cut" : 0.5,
-                "op" : ">"
+        "FINAL_STATE_PIPLUS_SELECTION": {
+            "Chi2ProtonSelection": {
+            "enable": True,
+            "cut": 61.2,
+            "op": ">"
             },
-            "NHitsCut":{
-                "enable" : True,
-                "cut" : 20,
-                "op" : ">"
+            "TrackScoreCut": {
+            "enable": True,
+            "cut": 0.5,
+            "op": ">"
             },
-            "PiPlusSelection":{
-                "enable" : True,
-                "cut" : [0.5, 2.8],
-                "op" : [">", "<"]
+            "NHitsCut": {
+            "enable": True,
+            "cut": 20,
+            "op": ">"
+            },
+            "PiPlusSelection": {
+            "enable": True,
+            "cut": [
+                0.5,
+                2.8
+            ],
+            "op": [
+                ">",
+                "<"
+            ]
             }
         },
-        "FINAL_STATE_PHOTON_SELECTION":{    
-            "TrackScoreCut":{
-                "enable" : True,
-                "cut" : 0.5,
-                "op" : "<"
+        "FINAL_STATE_PHOTON_SELECTION": {
+            "Chi2ProtonSelection": {
+            "enable": True,
+            "cut": 61.2,
+            "op": ">"
             },
-            "NHitsCut":{
-                "enable" : True,
-                "cut" : 80,
-                "op" : ">"
+            "TrackScoreCut": {
+            "enable": True,
+            "cut": 0.45,
+            "op": "<"
             },
-            "BeamParticleDistanceCut":{
-                "enable" : True,
-                "cut" : [3, 90],
-                "op" : [">", "<"]
+            "NHitsCut": {
+            "enable": True,
+            "cut": 80,
+            "op": ">"
             },
-            "BeamParticleIPCut":{
-                "enable" : True,
-                "cut" : 20,
-                "op" : "<"
+            "BeamParticleDistanceCut": {
+            "enable": True,
+            "cut": [
+                3,
+                90
+            ],
+            "op": [
+                ">",
+                "<"
+            ]
+            },
+            "BeamParticleIPCut": {
+            "enable": True,
+            "cut": 20,
+            "op": "<"
             }
         },
-        "FINAL_STATE_PI0_SELECTION":{
-            "NPhotonCandidateSelection":{
-                "enable" : True,
-                "cut" : 2,
-                "op" : "=="
+        "FINAL_STATE_PI0_SELECTION": {
+            "NPhotonCandidateSelection": {
+            "enable": True,
+            "cut": 2,
+            "op": "=="
             },
-            "Pi0MassSelection":{
-                "enable" : True,
-                "cut" : [50, 250],
-                "op" : [">", "<"]
+            "Pi0MassSelection": {
+            "enable": True,
+            "cut": [
+                50,
+                250
+            ],
+            "op": [
+                ">",
+                "<"
+            ]
             },
-            "Pi0OpeningAngleSelection":{
-                "enable" : True,
-                "cut" : [10, 80],
-                "op" : [">", "<"]
+            "Pi0OpeningAngleSelection": {
+            "enable": True,
+            "cut": [
+                10,
+                80
+            ],
+            "op": [
+                ">",
+                "<"
+            ]
+            }
+        },
+        "FINAL_STATE_LOOSE_PHOTON_SELECTION": {
+            "Chi2ProtonSelection": {
+            "enable": True,
+            "cut": 61.2,
+            "op": ">"
+            },
+            "TrackScoreCut": {
+            "enable": True,
+            "cut": 0.45,
+            "op": "<"
+            },
+            "NHitsCut": {
+            "enable": True,
+            "cut": 31,
+            "op": ">"
+            },
+            "BeamParticleDistanceCut": {
+            "enable": True,
+            "cut": 114,
+            "op": "<"
+            },
+            "BeamParticleIPCut": {
+            "enable": True,
+            "cut": 80,
+            "op": "<"
+            }
+        },
+        "FINAL_STATE_LOOSE_PION_SELECTION": {
+            "Chi2ProtonSelection": {
+            "enable": True,
+            "cut": 61.2,
+            "op": ">"
+            },
+            "TrackScoreCut": {
+            "enable": True,
+            "cut": 0.39,
+            "op": ">"
+            },
+            "PiPlusSelection": {
+            "enable": True,
+            "cut": 6.3,
+            "op": "<"
             }
         },
         "beam_momentum" : "nominal beam momentum in MeV", #! should be deprciated
@@ -248,7 +331,6 @@ def file_len(file : str):
 def check_run(args : argparse.Namespace, step : str):
     return ((step in args.run) or (args.force is True)) and (step not in args.skip)
 
-
 def main(args):
     os.makedirs(args.out, exist_ok = True)
     if args.create_config:
@@ -282,10 +364,11 @@ def main(args):
             for k, v in target_files.items():
                 if v in files:
                     new_config_entry[k] = os.path.abspath(output_path + v)
-            new_config_entry["trunacte"] = args.beam_quality_truncate
+            new_config_entry["truncate"] = args.beam_quality_truncate
             update_config(args.config, {"BEAM_QUALITY_FITS" : new_config_entry})
             args = update_args() # reload config to continue
-        
+        if args.stop == "beam_quality": return
+
         #* beam scraper
         can_run_bs = not hasattr(args, "mc_beam_scraper_fit")
         if can_run_bs or check_run(args, "beam_scraper"):
@@ -305,6 +388,7 @@ def main(args):
             new_config_entry["energy_bins"] = args.beam_scraper_energy_bins
             update_config(args.config, {"BEAM_SCRAPER_FITS" : new_config_entry})
             args = update_args() # reload config to continue
+        if args.stop == "beam_scraper": return
 
         #* photon energy correction
         can_run_pec = hasattr(args, "shower_correction") and (args.shower_correction["correction_params"] is None)
@@ -328,6 +412,7 @@ def main(args):
             new_config_entry["correction"] = "response"
             update_config(args.config, {"ENERGY_CORRECTION" : new_config_entry})
             args = update_args() # reload config to continue
+        if args.stop == "photon_correction": return
 
         #* selection studies
         can_run_ss = not hasattr(args, "selection_masks")
@@ -359,7 +444,8 @@ def main(args):
                 "pi0" : 'pi0_selection_masks.dill',
                 "pi" : 'pi_selection_masks.dill',
                 "loose_pi"  : "loose_pi_selection_masks.dill",
-                "loose_photon" : "loose_photon_selection_masks.dill"
+                "loose_photon" : "loose_photon_selection_masks.dill",
+                "fiducial" : "fiducial_selection_masks.dill"
             }
             new_config_entry = {}
             files = os.listdir(output_path)
@@ -368,9 +454,10 @@ def main(args):
                     new_config_entry[k] = {i : os.path.abspath(output_path + v + "/" + j) for i, j in mask_map.items() if os.path.isfile(output_path + v + "/" + j)}
             update_config(args.config, {"SELECTION_MASKS" : new_config_entry})
             args = update_args() # reload config to continue
+        if args.stop == "selection": return
 
         #* beam reweight
-        can_run_rw = (not hasattr(args, "beam_reweight_params")) and (args.data_file is not None)
+        can_run_rw = ("params" not in args.beam_reweight) and (args.data_file is not None)
         if can_run_rw or check_run(args, "reweight"):
             print("run beam reweight")
             cex_beam_reweight.main(args)
@@ -384,15 +471,16 @@ def main(args):
             for k, v in target_files.items():
                 if v in files:
                     new_config_entry[k] = os.path.abspath(output_path + v)
+            new_config_entry["strength"] = args.beam_reweight["strength"]
             update_config(args.config, {"BEAM_REWEIGHT" : new_config_entry})
             args = update_args() # reload config to continue
-            
+        if args.stop == "reweight": return
 
         #* upstream correction
         can_run_uc = not hasattr(args, "upstream_loss_correction_params")
         if can_run_uc or check_run(args, "upstream_correction"):
             print("run upstream correction")
-            args.no_reweight = not hasattr(args, "beam_reweight_params")
+            args.no_reweight = (not hasattr(args, "beam_reweight")) or ("params" in args.beam_reweight) 
             cex_upstream_loss.main(args)
 
             output_path = args.out + "upstream_loss/"
@@ -409,10 +497,11 @@ def main(args):
             new_config_entry["bins"] = args.upstream_loss_bins
             update_config(args.config, {"UPSTREAM_ENERGY_LOSS" : new_config_entry})
             args = update_args() # reload config to continue
+        if args.stop == "upstream_correction": return
 
         #* toy parameters
         #TODO make config entry for toy_parameters, so the check is easier to make 
-        can_run_tp = hasattr(args, "toy_parameters") and hasattr(args, "beam_reweight_params") and ("toy_parameters" not in os.listdir(args.out))
+        can_run_tp = hasattr(args, "toy_parameters") and hasattr(args, "beam_reweight") and ("toy_parameters" not in os.listdir(args.out))
         if can_run_tp or check_run(args, "toy_parameters"):
             print("run toy parameters")
             cex_toy_parameters.main(args)
@@ -422,6 +511,7 @@ def main(args):
             data_config = template_toy_config(os.path.abspath(args.out + "toy_parameters"), int(1E6), 1, os.cpu_count() - 1, 2, args.beam_momentum)
             SaveConfiguration(toy_template_config, args.out + "toy_template_config.json")
             SaveConfiguration(data_config, args.out + "toy_data_config.json")
+        if args.stop == "toy_parameters": return
 
         #* analysis input
         can_run_ai = (not hasattr(args, "analysis_input")) and (args.data_file is not None)
@@ -443,6 +533,7 @@ def main(args):
                     new_config_entry[k] = os.path.abspath(output_path + v)
             update_config(args.config, {"ANALYSIS_INPUTS" : new_config_entry})
             args = update_args() # reload config to continue
+        if args.stop == "analysis_input": return
 
         # if all other prerequisites were met, this should run
         if check_run(args, "analyse"):
@@ -451,6 +542,7 @@ def main(args):
             args.all = False
             args.pdsp = True # run with PDSP samples (no toys yet)
             cex_analyse.main(args)
+        if args.stop == "analyse": return
 
     return
 
@@ -465,6 +557,7 @@ if __name__ == "__main__":
     parser.add_argument("--skip", type = str, nargs = "+", default = [], choices = analysis_options)
     parser.add_argument("--run", type = str, nargs = "+", default = [], choices = analysis_options)
     parser.add_argument("--force", action = "store_true")
+    parser.add_argument("--stop", type = str, default = None, choices = analysis_options)
 
     original_args = parser.parse_args()
     

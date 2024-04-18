@@ -83,8 +83,7 @@ def main(args : argparse.Namespace):
     mc = BeamPionSelection(mc, args, True)
 
     if args.no_reweight is False:
-        # mc_weights = cross_section.RatioWeights(mc, "gaussian", [args.beam_reweight_params[k]["value"] for k in args.beam_reweight_params], 3)
-        mc_weights = cross_section.RatioWeights(mc.recoParticles.beam_inst_P, "gaussian", [args.beam_reweight_params[k]["value"] for k in args.beam_reweight_params], 3)
+        mc_weights = cross_section.RatioWeights(mc.recoParticles.beam_inst_P, "gaussian", [args.beam_reweight["params"][k]["value"] for k in args.beam_reweight["params"]], args.beam_reweight["strength"])
     else:
         mc_weights = None
     bins = ak.Array(args.upstream_loss_bins)

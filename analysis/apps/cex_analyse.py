@@ -110,9 +110,9 @@ def BkgSingleBin(N_bkg_s : np.ndarray, N_bkg_err_s : np.ndarray, template : cros
     lambda_cbs = N_MC_cbs/N_MC
     rel_scales = N_MC/N_MC_s
 
-    rel_lambda_bs = (rel_scales * np.sum(lambda_cbs, 0).T).T[bkg_mask]
+    f = 0.2 # theory uncertainty in background shape
 
-    N_thoery_err_cbs = N_bkg_s * rel_lambda_bs * 0.2
+    rel_lambda_bs = (rel_scales * np.sum(lambda_cbs, 0).T).T[bkg_mask]
 
     N_bkg = (N_bkg_s * rel_lambda_bs)
 
@@ -120,10 +120,11 @@ def BkgSingleBin(N_bkg_s : np.ndarray, N_bkg_err_s : np.ndarray, template : cros
 
     N_bkg_err_template_var = ((N_bkg_s.T)**2/N_MC_s[bkg_mask]).T * rel_lambda_bs * (1 + rel_lambda_bs)
 
+    N_bkg_err_theory_var = ((N_bkg_s.T)**2 ).T * (rel_lambda_bs * f)**2
 
     N_bkg_var = N_bkg_err_fit_var + N_bkg_err_template_var
     if theory_err is True:
-        N_bkg_var = N_bkg_var + (N_thoery_err_cbs**2)
+        N_bkg_var = N_bkg_var + N_bkg_err_theory_var
     return N_bkg, np.sqrt(N_bkg_var)
 
 
@@ -403,7 +404,7 @@ def XSUnfold(unfolded_result, energy_slices, sys : bool = False, stat = True, re
                 unfolded_result[k]["unfolded"][1:-1],
                 unfolded_result["int"]["unfolded"][1:-1],
                 unfolded_result["inc"]["unfolded"][1:-1],
-                cross_section.BetheBloch.meandEdX(energy_slices.pos_bins[1:-1], cross_section.Particle.from_pdgid(211)),
+                cross_section.EnergySlice.Slice_dEdX(energy_slices, cross_section.Particle.from_pdgid(211))[:-1],
                 energy_slices.width,
                 total_err[k],
                 total_err["int"],
@@ -415,7 +416,7 @@ def XSUnfold(unfolded_result, energy_slices, sys : bool = False, stat = True, re
             unfolded_result["int_ex"]["unfolded"][1:-1],
             unfolded_result["int"]["unfolded"][1:-1],
             unfolded_result["inc"]["unfolded"][1:-1],
-            cross_section.BetheBloch.meandEdX(energy_slices.pos_bins[1:], cross_section.Particle.from_pdgid(211)),
+            cross_section.EnergySlice.Slice_dEdX(energy_slices, cross_section.Particle.from_pdgid(211))[:-1],
             energy_slices.width,
             total_err["int_ex"],
             total_err["int"],

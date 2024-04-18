@@ -482,7 +482,11 @@ class ApplicationArguments:
                 if "correction_params" in value:
                     args.upstream_loss_correction_params = LoadConfiguration(value["correction_params"])
             elif head == "BEAM_REWEIGHT":
-                args.beam_reweight_params = LoadConfiguration(value["params"])
+                args.beam_reweight = {}
+                if value["params"] is not None:
+                    args.beam_reweight["params"] = LoadConfiguration(value["params"])
+                args.beam_reweight["strength"] = value["strength"]
+
             elif head == "SELECTION_MASKS":
                 args.selection_masks = {}
                 for k, v in value.items():
@@ -512,7 +516,13 @@ class ApplicationArguments:
         if hasattr(args, "pi0_selection"):
             ApplicationArguments.AddEnergyCorrection(args)
         if hasattr(args, "beam_selection"):
-            args.beam_selection["data_arguments"]["PiBeamSelection"]["use_beam_inst"] = True # make sure to set the correct settings for data.
+            if "PiBeamSelection" in args.beam_selection["mc_arguments"]:
+                args.beam_selection["data_arguments"]["PiBeamSelection"]["use_beam_inst"] = True # make sure to set the correct settings for data.
+                args.beam_selection["mc_arguments"]["PiBeamSelection"]["use_beam_inst"] = False # make sure to set the correct settings for data.
+            if "TrueFiducialCut" in args.beam_selection["mc_arguments"]:            
+                args.beam_selection["data_arguments"]["TrueFiducialCut"]["is_mc"] = False
+                args.beam_selection["mc_arguments"]["TrueFiducialCut"]["is_mc"] = True
+
         return args
 
 
@@ -1290,10 +1300,12 @@ class AnalysisInput:
     track_length_reco : np.ndarray
     KE_int_reco : np.ndarray
     KE_init_reco : np.ndarray
+    KE_ff_reco : np.ndarray
     mean_track_score : np.ndarray
     track_length_true : np.ndarray
     KE_int_true : np.ndarray
     KE_init_true : np.ndarray
+    KE_ff_true : np.ndarray
     # extras
     weights : np.ndarray = None
 
@@ -1378,15 +1390,17 @@ class AnalysisInput:
             toy.df.z_int_smeared.values,
             toy.df.KE_int_smeared.values,
             toy.df.KE_init_smeared.values,
+            toy.df.KE_init_smeared.values,
             toy.df.mean_track_score.values,
             toy.df.z_int.values,
             toy.df.KE_int.values,
+            toy.df.KE_init.values,
             toy.df.KE_init.values,
             None
             )
 
     @staticmethod
-    def CreateAnalysisInputNtuple(events : Data, upstream_energy_loss_params : dict, reco_regions : dict[np.ndarray], true_regions : dict[np.ndarray] = None, mc_reweight_params : dict = None) -> "AnalysisInput":
+    def CreateAnalysisInputNtuple(events : Data, upstream_energy_loss_params : dict, reco_regions : dict[np.ndarray], true_regions : dict[np.ndarray] = None, mc_reweight_params : dict = None, mc_reweight_stength : float = 3, fiducial_volume : list[float] = [0, 700]) -> "AnalysisInput":
         """ Create analysis input from an ntuple sample.
 
         Args:
@@ -1400,28 +1414,42 @@ class AnalysisInput:
             AnalysisInput: analysis input.
         """
         if mc_reweight_params is not None:
-            weights = RatioWeights(events.recoParticles.beam_inst_P, "gaussian", mc_reweight_params, 3)
+            weights = RatioWeights(events.recoParticles.beam_inst_P, "gaussian", mc_reweight_params, mc_reweight_stength)
         else:
             weights = None
 
         reco_KE_inst = KE(events.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass)
         reco_upstream_loss = UpstreamEnergyLoss(reco_KE_inst, upstream_energy_loss_params)
         reco_KE_ff = reco_KE_inst - reco_upstream_loss
-        reco_KE_int = reco_KE_ff - RecoDepositedEnergy(events, reco_KE_ff, "bb")
+
+        if min(fiducial_volume) > 0:
+            reco_KE_init = BetheBloch.InteractingKE(reco_KE_ff, min(fiducial_volume) * np.ones_like(reco_KE_ff), 25) # initial kinetic energy in the fiducial volume
+        else:
+            reco_KE_init = reco_KE_ff
+
+        reco_KE_int = reco_KE_ff - RecoDepositedEnergy(events, reco_KE_ff, "bb") # interacting kinetic energy
         reco_track_length = events.recoParticles.beam_track_length
-        outside_tpc_reco = (events.recoParticles.beam_endPos_SCE.z < 0) | (events.recoParticles.beam_endPos_SCE.z > 700)
+        outside_tpc_reco = (events.recoParticles.beam_endPos_SCE.z < min(fiducial_volume)) | (events.recoParticles.beam_endPos_SCE.z > max(fiducial_volume))
 
 
         if true_regions is not None:
             true_KE_ff = events.trueParticles.beam_KE_front_face
+
+            if min(fiducial_volume) > 0:
+                true_KE_init = BetheBloch.InteractingKE(true_KE_ff, min(fiducial_volume) * np.ones_like(true_KE_ff), 25) # initial kinetic energy in the fiducial volume
+            else:
+                true_KE_init = true_KE_ff
+
+
             true_KE_int = events.trueParticles.beam_traj_KE[:, -2]
             true_track_length = events.trueParticles.beam_track_length
-            outside_tpc_true = (events.trueParticles.beam_traj_pos.z[:, -1] < 0) | (events.trueParticles.beam_traj_pos.z[:, -1] > 700)
+            outside_tpc_true = (events.trueParticles.beam_traj_pos.z[:, -1] < min(fiducial_volume)) | (events.trueParticles.beam_traj_pos.z[:, -1] > max(fiducial_volume))
             # inelastic = np.ones(len(events.eventNum), dtype = bool)
             inelastic = events.trueParticles.true_beam_endProcess == "pi+Inelastic"
 
         else:
             true_KE_int = None
+            true_KE_init = None
             true_KE_ff = None
             true_track_length = None
             outside_tpc_true = None
@@ -1437,10 +1465,12 @@ class AnalysisInput:
             outside_tpc_true,
             reco_track_length,
             reco_KE_int,
+            reco_KE_init,
             reco_KE_ff,
             mean_track_score,
             true_track_length,
             true_KE_int,
+            true_KE_init,
             true_KE_ff,
             weights,
             )

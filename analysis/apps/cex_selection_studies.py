@@ -26,6 +26,7 @@ x_label = {
     "Chi2ProtonSelection" : "$(\chi^{2}/ndf)_{p}$",
     "PiBeamSelection" : "True particle ID",
     "APA3Cut" : "Beam end position z (cm)",
+    "TrueFiducialCut" : "True beam end position z (cm)",
     "PandoraTagCut" : "Pandora tag",
     "DxyCut" : "$\delta_{xy}$",
     "DzCut" : "$\delta_{z}$",
@@ -44,6 +45,7 @@ y_scale = {
     "Chi2ProtonSelection" : "linear",
     "PiBeamSelection" : None,
     "APA3Cut" : "linear",
+    "TrueFiducialCut" : "linear",
     "PandoraTagCut" : None,
     "DxyCut" : "log",
     "DzCut" : "log",
@@ -63,8 +65,9 @@ x_range = {
     "PiBeamSelection" : None,
     "PandoraTagCut" : None,
     "APA3Cut" : [0, 700],
+    "TrueFiducialCut" : [0, 700],
     "DxyCut" : [0, 5],
-    "DzCut" : [-10, 10],
+    "DzCut" : [-5, 5],
     "CosThetaCut" : [0.9, 1],
     "MichelScoreCut" : [0, 1],
     "MedianDEdXCut" : [0, 10],
@@ -80,6 +83,7 @@ nbins = {
     "Chi2ProtonSelection" : 50,
     "PiBeamSelection" : 50,
     "APA3Cut" : 50,
+    "TrueFiducialCut" : 50,
     "PandoraTagCut" : 50,
     "DxyCut" : 50,
     "DzCut" : 50,
@@ -98,6 +102,7 @@ ncols = {
     "Chi2ProtonSelection" : 2,
     "PiBeamSelection" : 2,
     "APA3Cut" : 2,
+    "TrueFiducialCut" : 2,
     "PandoraTagCut" : 2,
     "DxyCut" : 2,
     "DzCut" : 2,
@@ -116,6 +121,7 @@ truncate = {
     "Chi2ProtonSelection" : True,
     "PiBeamSelection" : False,
     "APA3Cut" : False,
+    "TrueFiducialCut" : False,
     "PandoraTagCut" : False,
     "DxyCut" : False,
     "DzCut" : False,
@@ -151,6 +157,31 @@ def MakeOutput(value : ak.Array, tags : Tags.Tags, cuts : list = [], op : list =
     return {"value" : value, "tags" : tags, "cuts" : cuts, "op" : op, "fs_tags" : fs_tags}
 
 
+def AnalyseBeamFiducialCut(events : Master.Data, beam_instrumentation : bool, functions : dict, args : dict):
+    output = {}
+    masks = {}
+    cut_table = Master.CutTable.CutHandler(events, tags = Tags.GenerateTrueBeamParticleTags(events) if beam_instrumentation is False else None)
+    output["no_selection"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, None, EventSelection.GenerateTrueFinalStateTags(events))
+    if "TrueFiducialCut" in args:
+        masks = {k : functions[k](events, **v) for k, v in args.items() if k in ["APA3Cut", "TrueFiducialCut"]}
+        for a in ["APA3Cut", "TrueFiducialCut"]:
+            mask, property = functions[a](events, **args[a], return_property = True)
+            cut_table.add_mask(mask, a)
+            cut_values = args[a]["cut"] if "cut" in args[a] else None
+            operations = args[a]["op"] if "op" in args[a] else None
+            output[a] = MakeOutput(property, Tags.GenerateTrueBeamParticleTags(events), cut_values, operations)
+
+            events.Filter([mask], [mask])
+            output[a]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
+
+    #* true particle population
+    output["final_tags"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, None, EventSelection.GenerateTrueFinalStateTags(events))
+
+    df = cut_table.get_table(init_data_name = "no selection", pfos = False, percent_remain = False, relative_percent = False, ave_per_event = False)
+
+    return output, df, masks
+
+
 def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame, dict]:
     """ Manually applies the beam selection while storing the value being cut on, cut values and truth tags in order to do plotting
         and produce performance tables.
@@ -181,7 +212,8 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, func
     output["PiBeamSelection"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
 
     for a in args:
-        if a == "PiBeamSelection": continue
+        if a in ["PiBeamSelection", "TrueFiducialCut"]: continue
+        if ("TrueFiducialCut" in args) and (a == "APA3Cut"): continue # should have applied fiducial cuts first
         mask, property = functions[a](events, **args[a], return_property = True)
         cut_table.add_mask(mask, a)
         cut_values = args[a]["cut"] if "cut" in args[a] else None
@@ -396,6 +428,7 @@ def CreatePFOMasks(sample : Master.Data, selections : dict, args_type : str, ext
 def run(i, file, n_events, start, selected_events, args) -> dict:
     events = Master.Data(file, nEvents = n_events, start = start, nTuple_type = args["ntuple_type"]) # load data
     output = {
+        "fiducial" : None,
         "beam" : None,
         "null_pfo" : None,
         "pi" : None,
@@ -413,6 +446,11 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
 
     if "beam_selection" in args:
         print("beam particle selection")
+
+        if "TrueFiducialCut" in args["beam_selection"]["selections"]:
+            output_fd, table_fd, fd_masks = AnalyseBeamFiducialCut(events, args["data"], args["beam_selection"]["selections"], args["beam_selection"][selection_args])
+            output["fiducial"] = {"data" : output_fd, "table" : table_fd, "masks" : fd_masks}
+
         output_beam, table_beam, beam_masks = AnalyseBeamSelection(events, args["data"], args["beam_selection"]["selections"], args["beam_selection"][selection_args]) # events are cut after this
         output["beam"] = {"data" : output_beam, "table" : table_beam, "masks" : beam_masks}
 
@@ -480,7 +518,7 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
     return output
 
 
-def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, norm : float):
+def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, norm : float, book_name = "beam"):
     """ Beam particle selection plots.
 
     Args:
@@ -490,7 +528,7 @@ def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, n
         norm (float): plot normalisation
     """
     norm = False if output_data is None else norm
-    with Plots.PlotBook(outDir + "beam.pdf") as pdf:
+    with Plots.PlotBook(outDir + f"{book_name}.pdf") as pdf:
 
         for p in output_mc:
             if p in x_label:
@@ -507,6 +545,11 @@ def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, n
                 elif p == "APA3Cut":
                     for l in ["linear", "log"]:
                         Plots.PlotTagged(output_mc[p]["value"], output_mc[p]["tags"], data2 = output_data[p]["value"] if output_data else None, norm = norm, y_scale = l, x_label = x_label[p], bins = nbins[p], ncols = ncols[p], x_range = x_range[p], truncate = truncate[p])
+                        Plots.DrawMultiCutPosition(output_mc[p]["cuts"], face = output_mc[p]["op"], arrow_length = CalculateArrowLength(output_mc[p]["value"], x_range[p]), arrow_loc = 0.7, color = "k")
+                        pdf.Save()
+                elif p == "TrueFiducialCut":
+                    for l in ["linear", "log"]:
+                        Plots.PlotTagged(output_mc[p]["value"], output_mc[p]["tags"], data2 = None, norm = norm, y_scale = l, x_label = x_label[p], bins = nbins[p], ncols = ncols[p], x_range = x_range[p], truncate = truncate[p])
                         Plots.DrawMultiCutPosition(output_mc[p]["cuts"], face = output_mc[p]["op"], arrow_length = CalculateArrowLength(output_mc[p]["value"], x_range[p]), arrow_loc = 0.7, color = "k")
                         pdf.Save()
                 elif p == "BeamScraperCut":
@@ -735,8 +778,11 @@ def main(args):
     os.makedirs(args.out + "plots/", exist_ok = True)
 
     # plots
+    if output_mc["fiducial"]:
+        MakeBeamSelectionPlots(output_mc["fiducial"]["data"], output_data["fiducial"]["data"] if output_data else None, args.out + "plots/", norm = args.norm, book_name = "fiducial")
+
     if output_mc["beam"]: #* this is assuming you apply the same cuts as Data and MC (which is implictly assumed for now)
-        MakeBeamSelectionPlots(output_mc["beam"]["data"], output_data["beam"]["data"] if output_data else None, args.out + "plots/", norm = args.norm)
+        MakeBeamSelectionPlots(output_mc["beam"]["data"], output_data["beam"]["data"] if output_data else None, args.out + "plots/", norm = args.norm, book_name = "beam")
 
     for i in ["pi", "photon", "loose_pi", "loose_photon"]:
         if output_mc[i]:
