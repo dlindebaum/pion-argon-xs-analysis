@@ -20,6 +20,28 @@ label_map = {"toy" : "toy", "pdsp" : "ProtoDUNE SP"}
 
 process_labels = {"absorption": "abs", "charge_exchange" : "cex", "single_pion_production" : "spip", "pion_production" : "pip"}
 
+def PlotKEs(mc : cross_section.AnalysisInput, data : cross_section.AnalysisInput, args : cross_section.argparse.Namespace, book : Plots.PlotBook):
+    def PlotDataMCTruth(mc, data, truth, bins, xlabel, x_range, norm, weights, mc_label = "MC reco", data_label = "Data reco", truth_label = "MC truth"):
+        Plots.PlotHistDataMC(data, mc, bins = bins, x_range = x_range, norm = norm, xlabel = xlabel, mc_labels = mc_label, data_label = data_label, mc_weights = weights)
+
+        y, edges = np.histogram(np.array(truth), bins, range = x_range, weights = weights)
+        Plots.Plot(cross_section.bin_centers(edges), args.norm * y, label = truth_label, style = "step", color = "C2", newFigure = False)
+
+        h, l = Plots.plt.gca().get_legend_handles_labels()
+        Plots.plt.legend(h + [Plots.matplotlib.patches.Rectangle((0,0), 0, 0, fill = False, edgecolor='none', visible=False)], l + [f"norm: {args.norm:.3g}"], labelspacing = 0.25,  columnspacing = 0.25, ncols = 2)
+        return
+
+    # PlotDataMCTruth(analysis_input_mc_s.KE_init_reco, analysis_input_data_s.KE_init_reco, analysis_input_mc_s.KE_init_true, 50, "$KE_{init}$ (MeV)", args.KE_init_range, args.norm, None)
+    # PlotDataMCTruth(analysis_input_mc_s.KE_int_reco, analysis_input_data_s.KE_int_reco, analysis_input_mc_s.KE_int_true, 50, "$KE_{int}$ (MeV)", args.KE_int_range, args.norm, None)
+
+    # with Plots.PlotBook("upstream_comparison", True) as book:
+    PlotDataMCTruth(mc.KE_init_reco, data.KE_init_reco, mc.KE_init_true, 50, "$KE_{init}$ (MeV)", args.KE_init_range, args.norm, np.array(mc.weights))
+    book.Save()
+    PlotDataMCTruth(mc.KE_int_reco, data.KE_int_reco, mc.KE_int_true, 50, "$KE_{int}$ (MeV)", args.KE_int_range, args.norm, np.array(mc.weights))
+    book.Save()
+
+    return
+
 def CreateInitParams(model : cross_section.pyhf.Model, analysis_input : cross_section.AnalysisInput, energy_slices : cross_section.Slices, mean_track_score_bins : np.array) -> np.array:
     """ Create initial parameters for the region fit, using the proportion of reco regions and template to get a rough estimate of the process rates.
 
@@ -477,6 +499,10 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
         mc_cheat = None if k == "toy" else templates["mc_cheated"]
 
         #* should some pre-requisit plots be made?
+        if k == "pdsp":
+            with Plots.PlotBook(outdir + f"pre_plots_{k}.pdf", plot) as book:
+                PlotKEs(templates[k], samples[k], args, book)
+            Plots.plt.close("all")
 
         region_fit_result, fit_values = RegionFit(v, args.energy_slices, mean_track_score_bins, templates[k], return_fit_results = True, mc_stat_unc = args.fit["mc_stat_unc"], single_bin = args.fit["single_bin"])
 

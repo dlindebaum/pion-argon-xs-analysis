@@ -102,8 +102,8 @@ def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data
     """
     SetPlotStyle()
 
-    data_start_pos, _ = BeamParticleSelection.GetPos(data_events, truncate)
-    mc_start_pos, _ = BeamParticleSelection.GetPos(mc_events, truncate)
+    data_start_pos, _ = BeamParticleSelection.GetTruncatedPos(data_events, truncate)
+    mc_start_pos, _ = BeamParticleSelection.GetTruncatedPos(mc_events, truncate)
 
     with Plots.PlotBook(out + "beam_quality_fits.pdf") as pdf:
         for i in ["x", "y", "z"]:
@@ -148,7 +148,7 @@ def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str, ta
         events.Filter([mask], [mask])
 
     #* fit gaussians to the start positions
-    start_pos, end_pos = BeamParticleSelection.GetPos(events, args.beam_quality_truncate)
+    start_pos, end_pos = BeamParticleSelection.GetTruncatedPos(events, args.beam_quality_truncate)
     mu, sigma, mu_err, sigma_err = Fit_Vector(start_pos, 100)
 
     #* compute the mean of beam direction components

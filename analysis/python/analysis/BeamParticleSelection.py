@@ -16,7 +16,12 @@ from python.analysis.PFOSelection import Median, GoodShowerSelection
 from python.analysis.SelectionTools import *
 
 
-def GetPos(sample : Data, truncate : float) -> tuple[ak.Array, ak.Array]:
+def GetTruncatedDEdX(sample : Data, truncate : float):
+    truncated_start = sample.recoParticles.beam_calo_pos.z >= truncate
+    return sample.recoParticles.beam_dEdX[truncated_start]
+
+
+def GetTruncatedPos(sample : Data, truncate : float) -> tuple[ak.Array, ak.Array]:
     if truncate is not None:
         truncated_start = ak.argmax(sample.recoParticles.beam_calo_pos.z >= truncate, -1, keepdims = True)
         start_pos = sample.recoParticles.beam_calo_pos[truncated_start]
@@ -132,7 +137,7 @@ def BeamQualityCut(events: Data, fits : dict, dxy_cut : list = [-3, 3], dz_cut :
     Returns:
         ak.Array: boolean mask.
     """
-    start_pos, end_pos = GetPos(events, fits["truncate"])
+    start_pos, end_pos = GetTruncatedPos(events, fits["truncate"])
 
     beam_dx = (start_pos.x - fits["mu_x"]) / fits["sigma_x"]
     beam_dy = (start_pos.y - fits["mu_y"]) / fits["sigma_y"]
@@ -172,7 +177,7 @@ def DxyCut(events: Data, fits : dict, cut, op = "<", return_property : bool = Fa
     Returns:
         mask and or property cut on.
     """
-    start_pos = GetPos(events, fits["truncate"])[0]
+    start_pos = GetTruncatedPos(events, fits["truncate"])[0]
 
     beam_dx = (start_pos.x - fits["mu_x"]) / fits["sigma_x"]
     beam_dy = (start_pos.y - fits["mu_y"]) / fits["sigma_y"]
@@ -193,7 +198,7 @@ def DzCut(events: Data, fits : dict, cut, op = [">", "<"], return_property : boo
     Returns:
         mask and or property cut on.
     """
-    start_pos = GetPos(events, fits["truncate"])[0]
+    start_pos = GetTruncatedPos(events, fits["truncate"])[0]
 
     beam_dz = (start_pos.z - fits["mu_z"]) / fits["sigma_z"]
     return CreateMask(cut, op, beam_dz, return_property)
@@ -212,7 +217,7 @@ def CosThetaCut(events: Data, fits : dict, cut, op = ">", return_property : bool
     Returns:
         mask and or property cut on.
     """
-    start_pos, end_pos = GetPos(events, fits["truncate"])
+    start_pos, end_pos = GetTruncatedPos(events, fits["truncate"])
 
     beam_dir = vector.normalize(vector.sub(end_pos, start_pos))
 
@@ -252,7 +257,7 @@ def MichelScoreCut(events: Data, cut : float = 0.55, op = "<", return_property :
     return CreateMask(cut, op, score, return_property)
 
 
-def MedianDEdXCut(events: Data, cut : float = 2.4, op = "<", return_property : bool = False) -> ak.Array:
+def MedianDEdXCut(events: Data, cut : float = 2.4, op = "<", truncate : float = None, return_property : bool = False) -> ak.Array:
     """ cut on median dEdX to exlude proton background.
 
     Args:
@@ -261,7 +266,11 @@ def MedianDEdXCut(events: Data, cut : float = 2.4, op = "<", return_property : b
     Returns:
         ak.Array: boolean mask.
     """
-    median = Median(events.recoParticles.beam_dEdX)
+    if truncate is None:
+        dEdX = events.recoParticles.beam_dEdX
+    else:
+        dEdX = GetTruncatedDEdX(events, truncate)
+    median = Median(dEdX)
     return CreateMask(cut, op, median, return_property)
 
 

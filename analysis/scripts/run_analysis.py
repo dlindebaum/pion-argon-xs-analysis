@@ -9,6 +9,7 @@ Description:
 from rich import print
 
 from apps import (
+    cex_normalisation,
     cex_beam_quality_fits, 
     cex_beam_scraper_fits,
     cex_photon_selection,
@@ -133,7 +134,8 @@ def template_config():
             "MedianDEdXCut":{
                 "enable" : True,
                 "cut" : 2.4,
-                "op" : "<"
+                "op" : "<",
+                "truncate": None
             },
             "BeamScraperCut":{
                 "enable" : True,
@@ -348,6 +350,18 @@ def main(args):
             n_data = file_len(args.data_file)
         n_mc = file_len(args.mc_file)
 
+        #* normalisation 
+        can_run_norm = (args.norm is None) or ("beam_norm/" not in os.listdir(args.out))
+        if can_run_norm or check_run(args, "normalisation"):
+            print("calculate beam normalisation")
+            cex_normalisation.main(args)
+            output_path = args.out + "beam_norm/"
+            print("outputs: " + output_path)
+            norm = LoadConfiguration(os.path.abspath(output_path + "norm.json"))
+            update_config(args.config, {"norm" : norm["norm"]})
+            args = update_args() # reload config to continue
+        if args.stop == "normalisation": return
+
         #* beam quality
         can_run_bq = (not hasattr(args, "mc_beam_quality_fit")) or ((args.data_file is not None) and (not hasattr(args, "data_beam_quality_fit")))
         if can_run_bq or check_run(args, "beam_quality"):
@@ -421,9 +435,9 @@ def main(args):
             args.mc_only = args.data_file is None
             args.nbins = 50
             # pass multiprocessing args
-            if (n_data >= 1E6) or (n_mc >= 1E6):
+            if (n_data >= 7E5) or (n_mc >= 7E5):
                 args.events = None
-                args.batches = int(2 * max(n_data, n_mc) // 1E6)
+                args.batches = int(2 * max(n_data, n_mc) // 7E5)
                 args.threads = 1
             else:
                 args.events = None
@@ -548,7 +562,7 @@ def main(args):
 
 if __name__ == "__main__":
 
-    analysis_options = ["beam_quality", "beam_scraper", "selection", "photon_correction", "reweight", "upstream_correction", "toy_parameters", "analysis_input", "analyse"]
+    analysis_options = ["normalisation", "beam_quality", "beam_scraper", "selection", "photon_correction", "reweight", "upstream_correction", "toy_parameters", "analysis_input", "analyse"]
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-C", "--create_config", type = str, help = "Create a template configuration with the default selection")

@@ -70,7 +70,7 @@ x_range = {
     "DzCut" : [-5, 5],
     "CosThetaCut" : [0.9, 1],
     "MichelScoreCut" : [0, 1],
-    "MedianDEdXCut" : [0, 10],
+    "MedianDEdXCut" : [1.5, 3],
     "BeamScraperCut" : [0, 5],
 }
 nbins = {
@@ -566,7 +566,7 @@ def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, n
                     Plots.DrawMultiCutPosition(output_mc[p]["cuts"], face = output_mc[p]["op"], arrow_length = arrow_l, arrow_loc = 0.7, color = "k")
                     pdf.Save()
 
-        Plots.PlotTags(output_mc["final_tags"]["tags"], "True particle ID")        
+        Plots.PlotTags(output_mc["final_tags"]["tags"], "True particle ID")
         pdf.Save()
     Plots.plt.close("all")
     return
@@ -588,6 +588,34 @@ def MakePFOSelectionPlots(output_mc : dict, output_data : dict, outDir : str, no
                     pdf.Save()
         Plots.PlotTags(output_mc["final_tags"]["tags"], xlabel = "true particle ID")
         pdf.Save()
+    Plots.plt.close("all")
+    return
+
+
+def MakePFOSelectionPlotsConsdensed(output_mc : dict, output_mc_loose : dict, output_data : dict, output_data_loose : dict, outDir : str, norm : float, book_name : str):
+    norm = False if output_data is None else norm
+
+    with Plots.PlotBook(outDir + book_name) as pdf:
+
+        for p in output_mc_loose:
+            if p in x_label:
+                Plots.PlotTagged(output_mc_loose[p]["value"], output_mc_loose[p]["tags"], data2 = output_data_loose[p]["value"] if output_data_loose else None, norm = norm, y_scale = y_scale[p], x_label = x_label[p], bins = nbins[p], ncols = ncols[p], x_range = x_range[p], truncate = truncate[p])
+                
+                for c, mc in zip(["red", "magenta"], [output_mc, output_mc_loose]):
+                    Plots.DrawMultiCutPosition(mc[p]["cuts"], face = mc[p]["op"], arrow_length = CalculateArrowLength(mc[p]["value"], x_range[p]), arrow_loc = 0.5, color = c)
+                
+                pdf.Save()
+                if f"{p}_completeness" in output_mc:
+                    Plots.PlotHist2DImshowMarginal(ak.ravel(mc[p]["value"]), ak.ravel(mc[f"{p}_completeness"]["value"]), ylabel = "completeness", xlabel = x_label[p], x_range = x_range[p], bins = nbins[p], norm = "column", c_scale = "linear")
+
+                    for c, mc in zip(["red", "magenta"], [output_mc, output_mc_loose]):
+                        Plots.DrawMultiCutPosition(mc[p]["cuts"], face = mc[p]["op"], arrow_length = CalculateArrowLength(mc[p]["value"], x_range[p]), arrow_loc = 0.1, color = c)
+                
+                    pdf.Save()
+
+        for mc in [output_mc, output_mc_loose]:
+            Plots.PlotTags(mc["final_tags"]["tags"], xlabel = "true particle ID")
+            pdf.Save()
     Plots.plt.close("all")
     return
 
@@ -787,6 +815,28 @@ def main(args):
     for i in ["pi", "photon", "loose_pi", "loose_photon"]:
         if output_mc[i]:
             MakePFOSelectionPlots(output_mc[i]["data"], output_data[i]["data"] if output_data else None, args.out + "plots/", norm = args.norm, book_name = i)
+
+    if output_mc["loose_pi"]:
+        MakePFOSelectionPlotsConsdensed(
+            output_mc["pi"]["data"],
+            output_mc["loose_pi"]["data"],
+            output_data["pi"]["data"] if output_data else None,
+            output_data["loose_pi"]["data"] if output_data else None,
+            args.out + "plots/",
+            norm = args.norm,
+            book_name = "pi_both"
+            )
+
+    if output_mc["loose_photon"]:
+        MakePFOSelectionPlotsConsdensed(
+            output_mc["photon"]["data"],
+            output_mc["loose_photon"]["data"],
+            output_data["photon"]["data"] if output_data else None,
+            output_data["loose_photon"]["data"] if output_data else None,
+            args.out + "plots/",
+            norm = args.norm,
+            book_name = "photon_both"
+            )
 
     if output_mc["pi0"]:
         MakePi0SelectionPlots(output_mc["pi0"]["data"], output_data["pi0"]["data"] if output_data else None, args.out + "plots/", norm = args.norm, nbins = args.nbins)
