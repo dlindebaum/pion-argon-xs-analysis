@@ -760,6 +760,10 @@ def MakeTables(output : dict, out : str, sample : str):
             print(df)
             purity = pd.concat([df["Name"], df.iloc[:, df.columns.to_list().index("Name") + 1:].div(df.iloc[:, df.columns.to_list().index("Name") + 1], axis = 0)], axis = 1)
             efficiency = pd.concat([df["Name"], df.iloc[:, df.columns.to_list().index("Name") + 1:].div(df.iloc[0, df.columns.to_list().index("Name") + 1:], axis = 1)], axis = 1)
+
+            df.to_hdf(outdir + s + "_counts.hdf5", key='df')
+            purity.to_hdf(outdir + s + "_purity.hdf5", key='df')
+            efficiency.to_hdf(outdir + s + "_efficiency.hdf5", key='df')
             
             df.style.hide(axis = "index").to_latex(outdir + s + "_counts.tex")
             purity.style.hide(axis = "index").to_latex(outdir + s + "_purity.tex")
