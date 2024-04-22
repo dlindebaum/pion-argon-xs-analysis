@@ -9,6 +9,7 @@ Description: Runs cross section measurement.
 import os
 
 import numpy as np
+import pandas as pd
 
 from rich import print
 
@@ -445,6 +446,7 @@ def XSUnfold(unfolded_result, energy_slices, sys : bool = False, stat = True, re
             total_err["inc"]
         )
 
+
 def LoadToy(file):
     if file.split(".")[-1] == "hdf5":
         toy = cross_section.Toy(file = file)
@@ -453,6 +455,14 @@ def LoadToy(file):
     else:
         raise Exception("toy file format not recognised")
     return cross_section.AnalysisInput.CreateAnalysisInputToy(toy)
+
+
+def PlotRegions(mc : cross_section.AnalysisInput, book : Plots.PlotBook):
+    counts = cross_section.CountInRegions(mc.exclusive_process, mc.regions)
+    Plots.PlotConfusionMatrix(counts, list(mc.exclusive_process.keys()), list(mc.regions.keys()), y_label = "true process", x_label = "reco region")
+    book.Save()
+    return
+
 
 def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
     samples = {}
@@ -502,6 +512,14 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
         if k == "pdsp":
             with Plots.PlotBook(outdir + f"pre_plots_{k}.pdf", plot) as book:
                 PlotKEs(templates[k], samples[k], args, book)
+                PlotRegions(templates[k], book)
+
+            if plot:
+                region_counts = {
+                    "MC" : {cross_section.remove_(k) : np.sum(v) for k, v in templates[k].regions.items()},
+                    "Data" : {cross_section.remove_(k) : np.sum(v) for k, v in samples[k].regions.items()}
+                }
+                pd.DataFrame(region_counts).style.to_latex(outdir + "regions.tex")
             Plots.plt.close("all")
 
         region_fit_result, fit_values = RegionFit(v, args.energy_slices, mean_track_score_bins, templates[k], return_fit_results = True, mc_stat_unc = args.fit["mc_stat_unc"], single_bin = args.fit["single_bin"])

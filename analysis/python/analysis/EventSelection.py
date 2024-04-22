@@ -53,7 +53,10 @@ def Pi0OpeningAngleSelection(events : Master.Data, photon_mask : ak.Array = None
         raise Exception("photon mask and photon_coords cannot both be None")
 
     angle = ak.fill_none(ak.pad_none(shower_pairs.reco_angle, 1, -1), -999, -1)
-    cut = [c * np.pi / 180 for c in cut]
+    if hasattr(cut, "__getitem__"):
+        cut = [c * np.pi / 180 for c in cut]
+    else:
+        cut * np.pi / 180
     return SelectionTools.CreateMask(cut, op, angle, return_property)
 
 

@@ -47,7 +47,7 @@ def run(i, file, n_events, start, selected_events, args):
     events = Master.Data(file, n_events, start, args["ntuple_type"])
 
     if "selection_masks" in args:
-        if "fiducial" in args["selection_masks"]:
+        if "fiducial" in args["selection_masks"]["mc"]:
             mask = SelectionTools.CombineMasks(args["selection_masks"]["mc"]["fiducial"])
             events.Filter([mask], [mask])
 
@@ -323,8 +323,8 @@ def MethodComparison(df : pd.DataFrame, linear_correction : float, response_para
 
     return
 
-
 def main(args):
+    cross_section.SetPlotStyle(False)
     outputs = Processing.mutliprocess(run, [args.mc_file], args.batches, args.events, vars(args), args.threads)
 
     output = {}
@@ -359,6 +359,9 @@ def main(args):
     df["fractional_error"] = (df.reco_shower_energy / df.true_energy) - 1
 
     book = Plots.PlotBook(out + "plots.pdf")
+
+    #* initial plots
+    PhotonSelection(df, book)
 
     #* linear correction
     energy_range = args.shower_correction["energy_range"]

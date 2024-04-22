@@ -1404,7 +1404,7 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
     if title is not None:
         plt.title(title + "| Key: (counts, efficiency(%), purity(%))")
     else:
-        plt.title("Key: (counts, fraction(%))")
+        plt.title("Key: (counts, efficiency(%), purity(%))")
 
     for (i, j), z in np.ndenumerate(counts):
         plt.gca().text(j, i, f"{z},\n{fractions[i][j]*100:.2g}%,{c_norm[i][j]*100:.2g}%", ha='center', va='center', fontsize = 8)

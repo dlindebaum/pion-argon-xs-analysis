@@ -580,7 +580,7 @@ def MakePFOSelectionPlots(output_mc : dict, output_data : dict, outDir : str, no
         for p in output_mc:
             if p in x_label:
                 Plots.PlotTagged(output_mc[p]["value"], output_mc[p]["tags"], data2 = output_data[p]["value"] if output_data else None, norm = norm, y_scale = y_scale[p], x_label = x_label[p], bins = nbins[p], ncols = ncols[p], x_range = x_range[p], truncate = truncate[p])
-                Plots.DrawMultiCutPosition(output_mc[p]["cuts"], face = output_mc[p]["op"], arrow_length = CalculateArrowLength(output_mc[p]["value"], x_range[p]), arrow_loc = 0.5, color = "k")
+                Plots.DrawMultiCutPosition(output_mc[p]["cuts"], face = output_mc[p]["op"], arrow_length = CalculateArrowLength(output_mc[p]["value"], x_range[p]), arrow_loc = 0.5, color = "C6")
                 pdf.Save()
                 if f"{p}_completeness" in output_mc:
                     Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc[p]["value"]), ak.ravel(output_mc[f"{p}_completeness"]["value"]), ylabel = "completeness", xlabel = x_label[p], x_range = x_range[p], bins = nbins[p], norm = "column", c_scale = "linear")
@@ -601,14 +601,14 @@ def MakePFOSelectionPlotsConsdensed(output_mc : dict, output_mc_loose : dict, ou
             if p in x_label:
                 Plots.PlotTagged(output_mc_loose[p]["value"], output_mc_loose[p]["tags"], data2 = output_data_loose[p]["value"] if output_data_loose else None, norm = norm, y_scale = y_scale[p], x_label = x_label[p], bins = nbins[p], ncols = ncols[p], x_range = x_range[p], truncate = truncate[p])
                 
-                for c, mc in zip(["red", "magenta"], [output_mc, output_mc_loose]):
+                for c, mc in zip(["C6", "magenta"], [output_mc, output_mc_loose]):
                     Plots.DrawMultiCutPosition(mc[p]["cuts"], face = mc[p]["op"], arrow_length = CalculateArrowLength(mc[p]["value"], x_range[p]), arrow_loc = 0.5, color = c)
                 
                 pdf.Save()
                 if f"{p}_completeness" in output_mc:
                     Plots.PlotHist2DImshowMarginal(ak.ravel(mc[p]["value"]), ak.ravel(mc[f"{p}_completeness"]["value"]), ylabel = "completeness", xlabel = x_label[p], x_range = x_range[p], bins = nbins[p], norm = "column", c_scale = "linear")
 
-                    for c, mc in zip(["red", "magenta"], [output_mc, output_mc_loose]):
+                    for c, mc in zip(["C6", "magenta"], [output_mc, output_mc_loose]):
                         Plots.DrawMultiCutPosition(mc[p]["cuts"], face = mc[p]["op"], arrow_length = CalculateArrowLength(mc[p]["value"], x_range[p]), arrow_loc = 0.1, color = c)
                 
                     pdf.Save()
@@ -647,16 +647,16 @@ def MakePi0SelectionPlots(output_mc : dict, output_data : dict, outDir : str, no
             pdf.Save()
 
         if "Pi0MassSelection" in output_mc:
-            Plots.PlotTagged(output_mc["Pi0MassSelection"]["value"], output_mc["Pi0MassSelection"]["tags"], data2 = output_data["Pi0MassSelection"]["value"] if output_data else None, bins = nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm, ncols = 1)
+            Plots.PlotTagged(output_mc["Pi0MassSelection"]["value"], output_mc["Pi0MassSelection"]["tags"], data2 = output_data["Pi0MassSelection"]["value"] if output_data else None, bins = nbins, x_label = "$m_{\gamma\gamma}$ (MeV)", x_range = [0, 500], norm = norm, ncols = 1)
             Plots.DrawMultiCutPosition(output_mc["Pi0MassSelection"]["cuts"], face = output_mc["Pi0MassSelection"]["op"], arrow_length = 50)
             pdf.Save()
 
-            Plots.PlotTagged(output_mc["Pi0MassSelection"]["value"], output_mc["mass_event_tag"]["tags"], data2 = output_data["Pi0MassSelection"]["value"] if output_data else None, bins = nbins, x_label = "Invariant mass (MeV)", x_range = [0, 500], norm = norm, ncols = 1)
+            Plots.PlotTagged(output_mc["Pi0MassSelection"]["value"], output_mc["mass_event_tag"]["tags"], data2 = output_data["Pi0MassSelection"]["value"] if output_data else None, bins = nbins, x_label = "$m_{\gamma\gamma}$ (MeV)", x_range = [0, 500], norm = norm, ncols = 1)
             Plots.DrawMultiCutPosition(output_mc["Pi0MassSelection"]["cuts"], face = output_mc["Pi0MassSelection"]["op"], arrow_length = 50)
             pdf.Save()
 
         if "Pi0OpeningAngleSelection" in output_mc:
-            Plots.PlotTagged(output_mc["Pi0OpeningAngleSelection"]["value"], output_mc["Pi0OpeningAngleSelection"]["tags"], data2 = output_data["Pi0OpeningAngleSelection"]["value"] if output_data else None, bins = nbins, x_label = "Opening angle (rad)", norm = norm, ncols = 1)
+            Plots.PlotTagged(output_mc["Pi0OpeningAngleSelection"]["value"], output_mc["Pi0OpeningAngleSelection"]["tags"], data2 = output_data["Pi0OpeningAngleSelection"]["value"] if output_data else None, bins = nbins, x_label = "$\phi$ (rad)", norm = norm, ncols = 1)
 
             Plots.DrawMultiCutPosition((np.array(output_mc["Pi0OpeningAngleSelection"]["cuts"]) * np.pi / 180).tolist(), face = output_mc["Pi0OpeningAngleSelection"]["op"], arrow_length = 0.25)
             pdf.Save()

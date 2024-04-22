@@ -72,7 +72,7 @@ def template_config():
         },
         "FIT":{
             "mc_stat_unc" : True,
-            "mean_track_score" : False,
+            "mean_track_score" : None,
             "single_bin" : True,
             "regions": True
         },
@@ -351,7 +351,7 @@ def main(args):
         n_mc = file_len(args.mc_file)
 
         #* normalisation 
-        can_run_norm = (args.norm is None) or ("beam_norm/" not in os.listdir(args.out))
+        can_run_norm = (args.norm is None) or ("beam_norm" not in os.listdir(args.out))
         if can_run_norm or check_run(args, "normalisation"):
             print("calculate beam normalisation")
             cex_normalisation.main(args)

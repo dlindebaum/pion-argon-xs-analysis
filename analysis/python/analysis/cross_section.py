@@ -88,7 +88,7 @@ def RatioWeights(beam_inst_P : np.ndarray, func : str, params : list, truncate :
     return weights
 
 
-def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", chi2 : bool = True, newFigure : bool = True):
+def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", chi2 : bool = True, newFigure : bool = True, cv_only : bool = False):
     xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos])
 
     if colors is None:
@@ -102,11 +102,11 @@ def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, 
     for k, v in xs.items():
         w_chi_sqr = weighted_chi_sqr(v[0], sim_curve_interp(x), v[1])
         chi_sqrs[k] = w_chi_sqr
-        if chi2 is True:
+        if (chi2 is True) and (cv_only is False):
             chi2_l = ", $\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}"
         else:
             chi2_l = ""
-        Plots.Plot(x, v[0], xerr = energy_slice.width / 2, yerr = v[1], label = k + chi2_l, color = colors[k], linestyle = "", marker = "x", newFigure = False)
+        Plots.Plot(x, v[0], xerr = energy_slice.width / 2  if cv_only is False else None, yerr = v[1] if cv_only is False else None, label = k + chi2_l, color = colors[k], linestyle = "", marker = "x", newFigure = False)
     
     if process == "single_pion_production":
         Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = simulation_label, title = "single pion production" if title is None else title, newFigure = False, xlabel = "$KE (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)

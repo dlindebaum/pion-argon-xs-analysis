@@ -8,12 +8,14 @@ Description: app to calculate systematic uncertainties for cross section measure
 """
 from abc import ABC, abstractmethod
 
+import pandas as pd
 import numpy as np
 
 from rich import print
 from rich.rule import Rule
 
 from python.analysis import cross_section, Plots
+from python.analysis.Master import DictToHDF5
 from python.analysis.Utils import dill_copy, quadsum
 from apps import cex_toy_generator, cex_analyse, cex_fit_studies, cex_analysis_input
 
@@ -110,13 +112,63 @@ class DataAnalysis(ABC):
         xs = cex_analyse.Analyse(args_copy, False)["pdsp"]
         return xs
 
+
     def RunAnalysis(self, path):
         xs = {i : self.__run_analysis(f"{path}{self.name}_{i}/") for i in ["low", "high"]}
         return xs
 
+
+    def PlotResults(self, xs_nominal : dict, result : dict, book : Plots.PlotBook = Plots.PlotBook.null):
+        for p in xs_nominal["pdsp"]:
+            cross_section.PlotXSComparison({"low" : result["low"][p], "nominal" : xs_nominal["pdsp"][p], "high" : result["high"][p]}, self.args.energy_slices, p, cv_only = True)
+            book.Save()
+        return
+
     @staticmethod
     def CalculateSysError(xs):
         return {p : abs((xs["high"][p][0] - xs["low"][p][0]) / 2) for p in xs["low"]}
+
+
+    @staticmethod
+    def CalculateSysErrorAsym(xs_nominal : dict, xs : dict):
+        errs = {}
+        for p in xs_nominal["pdsp"]:
+            e_low = xs_nominal["pdsp"][p][0] - xs["low"][p][0]
+            e_high = xs_nominal["pdsp"][p][0] - xs["high"][p][0]
+
+            err_high = np.max(abs(np.array([np.where(e_low < 0, e_low, 0), np.where(e_high < 0, e_high, 0)])), 0)
+
+            err_low = np.max(np.array([np.where(e_low >= 0, e_low, 0), np.where(e_high >= 0, e_high, 0)]), 0)
+            errs[p] = {"low" : err_low, "high" : err_high}
+        return errs
+
+
+    def DataAnalysisTables(self, xs_nominal : dict, err_asym : dict, name : str):
+        x = self.args.energy_slices.pos_overflow[1:-1] - (self.args.energy_slices.width/2)
+
+        KEs = pd.Series(np.array(x, dtype = int), name = "$KE$ (MeV)")
+
+        data_stat_err = pd.DataFrame({p : xs_nominal["pdsp"][p][1] for p in xs_nominal["pdsp"]})
+
+        err_low = pd.DataFrame({p : err_asym[p]["low"] for p in xs_nominal["pdsp"]})
+        err_high = pd.DataFrame({p : err_asym[p]["high"] for p in xs_nominal["pdsp"]})
+
+        tables = {}
+        for p in xs_nominal["pdsp"]:
+            d = data_stat_err[p] / xs_nominal["pdsp"][p][0]
+            d.name = "Data stat"
+
+            l = err_low[p] / xs_nominal["pdsp"][p][0]
+            l.name = name + " low"
+            h = err_high[p] / xs_nominal["pdsp"][p][0]
+            h.name = name + " high"
+            table = pd.concat([KEs, d, l, h], axis = 1)
+
+            avg = table.mean()
+            avg["$KE$ (MeV)"] = "average"
+            tables[p] = pd.concat([table, pd.DataFrame(avg).T])
+
+        return tables
 
 
 class NuisanceParameters:
@@ -148,6 +200,34 @@ class NuisanceParameters:
         for p in result["no_np"]:
             np_sys[p] = np.sqrt(result["np"][p][1]**2 - result["no_np"][p][1]**2)
         return np_sys
+
+
+    def PlotXSMCStat(self, result, book : Plots.PlotBook = Plots.PlotBook.null):
+        for p in result["np"]:
+            cross_section.PlotXSComparison({"Data stat + MC stat" : result["np"][p], "Data stat" : result["no_np"][p]}, self.args.energy_slices, process = p)
+            book.Save()
+
+
+    def MCStatTables(self, result : dict):
+        x = self.args.energy_slices.pos_overflow[1:-1] - (self.args.energy_slices.width/2)
+
+        KEs = pd.Series(np.array(x, dtype = int), name = "$KE$ (MeV)")
+
+        mc_stat_err = self.CalculateSysError(result)
+        data_stat_err = {p : result["no_np"][p][1] for p in result["no_np"]}
+
+        tables = {}
+        for p in data_stat_err:
+            d = pd.DataFrame(data_stat_err)[p] / result["no_np"][p][0]
+            d.name = "Data stat"
+            m = pd.DataFrame(mc_stat_err)[p] / result["no_np"][p][0]
+            m.name = "MC stat"
+
+            table = pd.concat([KEs, d, m], axis = 1)
+            avg = table.mean()
+            avg["$KE$ (MeV)"] = "average"
+            tables[p] = pd.concat([table, pd.DataFrame(avg).T])
+        return tables
 
 
 class BkgSubSystematic:
@@ -426,17 +506,35 @@ def main(args : cross_section.argparse.Namespace):
         if can_run("mc_stat"):
             print(Rule("mc_stat"))
             mc_stat = NuisanceParameters(args)
-            sys = mc_stat.CalculateSysError(mc_stat.RunExperiment())
+            result = mc_stat.RunExperiment()
+            sys = mc_stat.CalculateSysError(result)
             cross_section.os.makedirs(out + "mc_stat/", exist_ok = True)
+            cross_section.SaveObject(out + "mc_stat/result.dill", result)
             SaveSystematicError(sys, None, out + "mc_stat/sys.dill")
+
+            with Plots.PlotBook(out + "mc_stat/plots.pdf") as book:
+                mc_stat.PlotXSMCStat(result, book)
+            tables = mc_stat.MCStatTables(result)
+            DictToHDF5(tables, out + "mc_stat/tables.hdf5")
+            for t in tables:
+                tables[t].style.format(precision = 2).hide(axis = 0).to_latex(out + f"mc_stat/table_{t}.tex")
+
 
         if can_run("upstream"):
             print(Rule("upstream"))
             upl = UpstreamCorrectionSystematic(args)
             upl.CreateNewAIs(out + "upstream/")
             xs = upl.RunAnalysis(out + "upstream/")
-            sys = upl.CalculateSysError(xs)
+            # sys = upl.CalculateSysError(xs)
+            # SaveSystematicError(sys, None, out + "upstream/sys.dill")
+            sys = upl.CalculateSysErrorAsym(args.cv, xs)
             SaveSystematicError(sys, None, out + "upstream/sys.dill")
+            with Plots.PlotBook(out + "upstream/plots.pdf") as book:
+                upl.PlotResults(args.cv, xs, book)
+            tables = upl.DataAnalysisTables(args.cv, sys, "Upstream")
+            DictToHDF5(tables, out + "mc_stat/tables.hdf5")
+            for t in tables:
+                tables[t].style.format(precision = 2).hide(axis = 0).to_latex(out + f"upstream/table_{t}.tex")
 
         if can_run("beam_reweight"):
             print(Rule("beam_reweight"))
@@ -520,6 +618,8 @@ if __name__ == "__main__":
     parser.add_argument("--skip", type = str, nargs = "+", default = [], choices = systematics)
     parser.add_argument("--run", type = str, nargs = "+", default = [], choices = systematics)
 
+    parser.add_argument("--cv", "-v", dest = "cv", type = str, default = None, help = "plot systematics with central value measurement")
+
     parser.add_argument("--plot", "-p", dest = "plot", type = str, default = None, help = "plot systematics with central value measurement")
 
     args = cross_section.ApplicationArguments.ResolveArgs(parser.parse_args())
@@ -530,5 +630,11 @@ if __name__ == "__main__":
         if not args.toy_data_config:
             raise Exception("--toy_data_config must be specified")        
         args.toy_data_config = cross_section.LoadConfiguration(args.toy_data_config)
+
+    if ("all" in args.run) or ("upstream" in args.run) or ("beam_reweight" in args.run) or ("shower_energy" in args.run):
+        if not args.cv:
+            raise Exception("--cv must be specified")
+        args.cv = cross_section.LoadObject(args.cv)
+
     print(vars(args))
     main(args)

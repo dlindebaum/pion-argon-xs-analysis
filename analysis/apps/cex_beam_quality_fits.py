@@ -105,6 +105,8 @@ def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data
     data_start_pos, _ = BeamParticleSelection.GetTruncatedPos(data_events, truncate)
     mc_start_pos, _ = BeamParticleSelection.GetTruncatedPos(mc_events, truncate)
 
+    label_name = "Beam" if truncate is None else "Truncacted beam"
+
     with Plots.PlotBook(out + "beam_quality_fits.pdf") as pdf:
         for i in ["x", "y", "z"]:
             plt.figure()
@@ -112,8 +114,8 @@ def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data
             data_ranges = [] if data_fits is None else plot_range(data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"])
 
             plot_ranges = mc_ranges + data_ranges
-            if mc_events is not None: plot(mc_start_pos[i], f"Beam start position {i} (cm)", mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"], "C0", "MC", range = [min(plot_ranges), max(plot_ranges)])
-            if data_events is not None: plot(data_start_pos[i], f"Beam start position {i} (cm)", data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"], "C1", "Data", range = [min(plot_ranges), max(plot_ranges)])
+            if mc_events is not None: plot(mc_start_pos[i], f"{label_name} start position {i} (cm)", mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"], "C0", "MC", range = [min(plot_ranges), max(plot_ranges)])
+            if data_events is not None: plot(data_start_pos[i], f"{label_name} start position {i} (cm)", data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"], "C1", "Data", range = [min(plot_ranges), max(plot_ranges)])
             pdf.Save()
     return
 
