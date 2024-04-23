@@ -53,7 +53,7 @@ def BeamPionSelection(events : cross_section.Data, args : cross_section.argparse
 
 
 @cross_section.timer
-def RegionSelection(events : cross_section.Data, args : cross_section.argparse.Namespace, is_mc : bool, region_type : str = None) -> dict[np.ndarray]:
+def RegionSelection(events : cross_section.Data, args : cross_section.argparse.Namespace, is_mc : bool, region_type : str = None, removed : bool = False) -> dict[np.ndarray]:
     """ Get reco and true regions (if possible) for ntuple.
 
     Args:
@@ -76,7 +76,7 @@ def RegionSelection(events : cross_section.Data, args : cross_section.argparse.N
         region_def = args.region_identification
     else:
         region_def = RegionIdentification.regions[region_type]
-    reco_regions = RegionIdentification.CreateRegionIdentification(region_def, **counts)
+    reco_regions = RegionIdentification.CreateRegionIdentification(region_def, **counts, removed = removed)
 
 
     if is_mc:

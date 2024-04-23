@@ -56,7 +56,7 @@ def Pi0OpeningAngleSelection(events : Master.Data, photon_mask : ak.Array = None
     if hasattr(cut, "__getitem__"):
         cut = [c * np.pi / 180 for c in cut]
     else:
-        cut * np.pi / 180
+        cut = cut * np.pi / 180
     return SelectionTools.CreateMask(cut, op, angle, return_property)
 
 

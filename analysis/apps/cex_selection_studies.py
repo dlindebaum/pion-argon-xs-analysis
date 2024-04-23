@@ -331,7 +331,7 @@ def AnalysePhotonCandidateSelection(events : Master.Data, data : bool, functions
     return output, df
 
 
-def AnalysePi0Selection(events : Master.Data, data : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
+def AnalysePi0Selection(events : Master.Data, data : bool, functions : dict, args : dict, photon_mask : ak.Array) -> tuple[dict, pd.DataFrame]:
     """ Analyse the pi0 selection.
 
     Args:
@@ -349,8 +349,8 @@ def AnalysePi0Selection(events : Master.Data, data : bool, functions : dict, arg
         return tag
 
     output = {}
-    photonCandidates = PFOSelection.InitialPi0PhotonSelection(events) # repeat the photon candidate selection, but only require the mask
-    cut_table = Master.CutTable.CutHandler(events, tags = Tags.GeneratePi0Tags(events, photonCandidates) if data is False else None)
+    photonCandidates = ak.Array(photon_mask)
+    cut_table = Master.CutTable.CutHandler(events, tags = Tags.GeneratePi0Tags(events, photon_mask) if data is False else None)
 
     for a in args:
         if a == "Pi0MassSelection":
@@ -503,7 +503,7 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
 
         if "pi0_selection" in args:
             print("pi0 selection")
-            output_pi0, table_pi0 = AnalysePi0Selection(events.Filter(returnCopy = True), args["data"], args["pi0_selection"]["selections"], args["pi0_selection"][selection_args])
+            output_pi0, table_pi0 = AnalysePi0Selection(events.Filter(returnCopy = True), args["data"], args["pi0_selection"]["selections"], args["pi0_selection"][selection_args], photon_selection_mask)
             pi0_masks = CreatePFOMasks(events, args["pi0_selection"], selection_args, {"photon_mask" : photon_selection_mask})
             output["pi0"] = {"data" : output_pi0, "table" : table_pi0, "masks" : pi0_masks}
 

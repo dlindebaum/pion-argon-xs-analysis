@@ -15,7 +15,7 @@ import pandas as pd
 
 from rich import print
 
-from python.analysis.Master import ReadHDF5
+from python.analysis.Master import ReadHDF5, LoadConfiguration
 from python.analysis.cross_section import ApplicationArguments
 
 selection_map = {
@@ -221,22 +221,59 @@ def FormatTable(filename):
     return
 
 
+def bq_xy(values : dict):
+    t = {}
+    for i in ["mu", "sigma"]:
+        for j in ["x", "y"]:
+            v = values[f"{i}_{j}"]
+            e = values[f"{i}_err_{j}"]
+
+            sf = len(f"{e:.1g}") - 2
+            t[f"$\{i}_{{{j}}}$"] = f"${v:.{sf}f} \pm {e:.1g}$"
+
+    return t
+
+
+def bq_angle(values : dict):
+    t = {}
+    for j in ["x", "y", "z"]:
+        v = values[f"mu_dir_{j}"]
+        e = values[f"mu_dir_err_{j}"]
+
+        sf = len(f"{e:.1g}") - 2
+        t[f"$\mu_{{\hat{{n}}_{{{j}}}}}$"] = f"${v:.{sf}f} \pm {e:.1g}$"
+    return t
+
+
 def main(args : argparse.Namespace):
+    path = os.path.abspath(args.workdir + "/")
+    out = f"{path}/formatted_tables/"
 
     fmt_tables = {}
-    path = os.path.abspath(args.workdir + "/")
     for s in signal:
         fmt_tables[s] = CreateTables(path, s, signal[s])
 
     for f in fmt_tables:
-        outp = f"{path}/formatted_tables/{f}/"
+        outp = f"{out}{f}/"
         os.makedirs(outp, exist_ok = True)
         if fmt_tables[f][0] is not None:
             fmt_tables[f][0].style.format(precision = 1).to_latex(f"{outp}/signal_table.tex")
             FormatTable(f"{outp}/signal_table.tex")
         fmt_tables[f][1].style.format(precision = 1).to_latex(f"{outp}/total_counts.tex")
         FormatTable(f"{outp}/total_counts.tex") 
+
+
+    bq = {i : LoadConfiguration(f"{path}/beam_quality/{i}_beam_quality_fit_values.json") for i in ["mc", "data"]}
     
+    outp = f"{out}beam_quality/"
+    os.makedirs(outp, exist_ok = True)
+    t_xy = pd.DataFrame([bq_xy(bq[m]) for m in ["mc", "data"]], index = ["MC", "Data"])
+    t_angle = pd.DataFrame([bq_angle(bq[m]) for m in ["mc", "data"]], index = ["MC", "Data"])
+    t_xy.style.to_latex(f"{outp}/xy.tex")
+    FormatTable(f"{outp}/xy.tex")
+    t_angle.style.to_latex(f"{outp}/angle.tex")
+    FormatTable(f"{outp}/angle.tex")
+
     return
 
 

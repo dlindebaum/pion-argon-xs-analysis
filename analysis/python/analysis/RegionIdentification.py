@@ -48,7 +48,7 @@ def CreateRegionIdentification(region_defs : dict[list], n_loose_pi : ak.Array, 
         regions[n] = ak.any(defs, 0)
 
     if removed:
-        regions["removed"] = ~SelectionTools.CombineMasks(regions, "or")
+        regions["uncategorised"] = ~SelectionTools.CombineMasks(regions, "or")
 
     return regions
 

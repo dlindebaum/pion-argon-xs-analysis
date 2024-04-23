@@ -238,18 +238,26 @@ def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace, out : str):
 
     os.makedirs(out + "reco_regions/", exist_ok = True)
     pdf = Plots.PlotBook(out + "reco_regions/reco_regions_study")
+    pe = {}
     for r in RegionIdentification.regions:
         print(r)
-        reco_regions, true_regions = RegionSelection(mc, args, True, r)
+        reco_regions, true_regions = RegionSelection(mc, args, True, r, True)
 
         counts = cross_section.CountInRegions(true_regions, reco_regions)
         Plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "true process", x_label = "reco region", title = cross_section.remove_(r))
         pdf.Save()
 
+        pe[cross_section.remove_(r)] = (np.diag(counts) / np.sum(counts, 0)[:-1]) * (np.diag(counts) / np.sum(counts, 1))
+
+        reco_regions.pop("uncategorised")
+        counts = cross_section.CountInRegions(true_regions, reco_regions)
+
         fractions_df = counts / np.sum(counts, axis = 1)[:, np.newaxis]
-        fractions_df = pd.DataFrame(np.array(fractions_df).T, columns = true_regions, index = reco_regions)# columns are the true regions, so index over those to get the fractions
+        fractions_df = pd.DataFrame(np.array(fractions_df).T, columns = true_regions, index = reco_regions) # columns are the true regions, so index over those to get the fractions
         fractions_df.to_hdf(out + f"reco_regions/{r}_reco_region_fractions.hdf5", "df")
     pdf.close()
+    ind = [cross_section.remove_(i) for i in true_regions.keys()]
+    pd.DataFrame(pe, index = ind).style.format(precision = 2).to_latex(out + "reco_regions/pe.tex")
     return
 
 @Master.timer
