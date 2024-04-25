@@ -72,8 +72,8 @@ def Pi0MassSelection(events : Master.Data, photon_mask : ak.Array = None, photon
         le = shower_pairs.reco_lead_energy
         se = shower_pairs.reco_sub_energy
     else:
-        le = correction(shower_pairs.reco_lead_energy, **correction_params)
-        se = correction(shower_pairs.reco_sub_energy, **correction_params)
+        le = correction(shower_pairs.reco_lead_energy, **correction_params["value"])
+        se = correction(shower_pairs.reco_sub_energy, **correction_params["value"])
 
     mass = shower_pairs.Mass(le, se, shower_pairs.reco_angle)
     mass = ak.fill_none(ak.pad_none(mass, 1, -1), -999, -1)

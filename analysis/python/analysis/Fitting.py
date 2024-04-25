@@ -226,6 +226,25 @@ class poly2d(FitFunction):
         return ([-np.inf, -np.inf, -np.inf], [np.inf]*3)
 
 
+class poly3d(FitFunction):
+    n_params = 4
+
+    def __new__(cls, x, p0, p1, p2, p3) -> np.array:
+        return cls.func(x, p0, p1, p2, p3)
+
+    @staticmethod
+    def func(x, p0, p1, p2, p3):
+        return p0 + (p1 * x) + (p2 * (x**2)) + (p3 * (x**3))
+
+    @staticmethod
+    def p0(x, y):
+        return None
+
+    @staticmethod
+    def bounds(x, y):
+        return ([-np.inf]*4, [np.inf]*4)
+
+
 class double_crystal_ball(FitFunction):
     n_params = 7
 
@@ -275,7 +294,7 @@ class line(FitFunction):
         return cls.func(x, p0, p1)
 
     def func(x, p0, p1):
-        return p0 * x + p1
+        return (p0 * x) + p1
 
 
 class asym(FitFunction):
@@ -347,7 +366,7 @@ def RejectionSampling(num : int, low : float, high : float, func : FitFunction, 
     return x[:num] #? is there a way to generate only the desired number rather than truncating x?
 
 
-def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, method = "trf", maxfev = int(10E4), plot : bool = False, xlabel : str = "", ylabel : str = "", ylim : list = None, plot_style : str = "scatter", title : str = "", plot_range : list = None, return_chi_sqr : bool = False) -> tuple[np.array, np.array]:
+def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, method = "trf", maxfev = int(10E4), plot : bool = False, xlabel : str = "", ylabel : str = "", ylim : list = None, plot_style : str = "scatter", title : str = "", plot_range : list = None, return_chi_sqr : bool = False, loc = "upper right") -> tuple[np.array, np.array]:
     """ Implementation of scipy's curve fit, with some constraints, checks to handle nan data and optional plotting.
 
     Args:
@@ -433,7 +452,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         for j in range(len(popt)):
             text += f"\n$p_{{{j}}}$: ${popt[j]:.2g}\pm${perr[j]:.2g}"
         text += "\n$\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2g}, p : " + f"{p_value:.1g}"
-        legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = "upper right", title = Utils.remove_(func.__name__))
+        legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = loc, title = Utils.remove_(func.__name__))
         legend.set_zorder(12)
         for l in legend.legendHandles:
             l.set_visible(False)

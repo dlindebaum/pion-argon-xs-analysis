@@ -55,6 +55,7 @@ def template_config():
         },
         "UPSTREAM_ENERGY_LOSS":{
             "cv_function" : "gaussian",
+            "response" : "poly2d",
             "bins" : None,
         },
         "TOY_PARAMETERS":{
@@ -508,6 +509,7 @@ def main(args):
                 if v in files:
                     new_config_entry[k] = os.path.abspath(output_path + v)
             new_config_entry["cv_function"] = args.upstream_loss_cv_function
+            new_config_entry["response"] = args.upstream_loss_response.__name__
             new_config_entry["bins"] = args.upstream_loss_bins
             update_config(args.config, {"UPSTREAM_ENERGY_LOSS" : new_config_entry})
             args = update_args() # reload config to continue

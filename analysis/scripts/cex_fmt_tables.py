@@ -34,7 +34,7 @@ selection_map = {
 
     "GoodShowerSelection" : "Well reconstructed PFOs",
 
-    "Chi2ProtonSelection" : "$\chi^{2}_{p}/ndf$",
+    "Chi2ProtonSelection" : "$(\chi^{2}/ndf)_{p}$",
     "TrackScoreCut" : "track score",
     "NHitsCut" : "Number of hits",
     "BeamParticleDistanceCut" : "$d$",
@@ -273,6 +273,20 @@ def main(args : argparse.Namespace):
     FormatTable(f"{outp}/xy.tex")
     t_angle.style.to_latex(f"{outp}/angle.tex")
     FormatTable(f"{outp}/angle.tex")
+
+
+    with open(f"{path}/shower_energy_correction/table.tex") as f:
+        with open(f"{out}shower_correction.tex", "w") as of:
+            of.writelines(f.readlines())
+    FormatTable(f"{out}shower_correction.tex")
+
+
+    os.makedirs(f"{out}/reco_regions/", exist_ok = True)
+    with open(f"{path}/toy_parameters/reco_regions/pe.tex") as f:
+        with open(f"{out}/reco_regions/pe.tex", "w") as of:
+            of.writelines(f.readlines())
+    FormatTable(f"{out}/reco_regions/pe.tex")
+
 
     return
 

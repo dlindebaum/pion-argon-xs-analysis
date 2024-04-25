@@ -127,7 +127,7 @@ def CreateAnalysisInput(sample : cross_section.Data, args : cross_section.argpar
             reco_regions = RegionSelection(sample, args, False)
             true_regions = None
             reweight_params = None
-        ai = cross_section.AnalysisInput.CreateAnalysisInputNtuple(sample_selected, args.upstream_loss_correction_params["value"], reco_regions, true_regions, reweight_params, args.beam_reweight["strength"], args.fiducial_volume)
+        ai = cross_section.AnalysisInput.CreateAnalysisInputNtuple(sample_selected, args.upstream_loss_correction_params["value"], reco_regions, true_regions, reweight_params, args.beam_reweight["strength"], args.fiducial_volume, args.upstream_loss_response)
     else:
         raise Exception(f"object type {type(sample)} not a valid sample")
     return ai
@@ -153,7 +153,7 @@ def CreateAnalysisInputMCTrueBeam(mc : cross_section.Data, args : cross_section.
     n_pi0_true = mc_true_beam.trueParticles.nPi0
     true_regions = RegionIdentification.TrueRegions(n_pi0_true, n_pi_true)
 
-    return cross_section.AnalysisInput.CreateAnalysisInputNtuple(mc_true_beam, args.upstream_loss_correction_params["value"], reco_regions, true_regions, [args.beam_reweight["params"][k]["value"] for k in args.beam_reweight["params"]], args.beam_reweight["strength"])
+    return cross_section.AnalysisInput.CreateAnalysisInputNtuple(mc_true_beam, args.upstream_loss_correction_params["value"], reco_regions, true_regions, [args.beam_reweight["params"][k]["value"] for k in args.beam_reweight["params"]], args.beam_reweight["strength"], upstream_loss_func = args.upstream_loss_response)
 
 
 def main(args):

@@ -88,7 +88,7 @@ def RatioWeights(beam_inst_P : np.ndarray, func : str, params : list, truncate :
     return weights
 
 
-def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", chi2 : bool = True, newFigure : bool = True, cv_only : bool = False):
+def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", chi2 : bool = True, newFigure : bool = True, cv_only : bool = False, marker_size : float = 6):
     xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos])
 
     if colors is None:
@@ -106,7 +106,7 @@ def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, 
             chi2_l = ", $\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}"
         else:
             chi2_l = ""
-        Plots.Plot(x, v[0], xerr = energy_slice.width / 2  if cv_only is False else None, yerr = v[1] if cv_only is False else None, label = k + chi2_l, color = colors[k], linestyle = "", marker = "x", newFigure = False)
+        Plots.Plot(x, v[0], xerr = energy_slice.width / 2  if cv_only is False else None, yerr = v[1] if cv_only is False else None, label = k + chi2_l, color = colors[k], linestyle = "", marker = "x", newFigure = False, markersize = marker_size, capsize = marker_size/2)
     
     if process == "single_pion_production":
         Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = simulation_label, title = "single pion production" if title is None else title, newFigure = False, xlabel = "$KE (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)
@@ -478,6 +478,7 @@ class ApplicationArguments:
                     args.shower_correction[k] = v
             elif head == "UPSTREAM_ENERGY_LOSS":
                 args.upstream_loss_cv_function = value["cv_function"]
+                args.upstream_loss_response = getattr(Fitting, value["response"])
                 args.upstream_loss_bins = value["bins"]
                 if "correction_params" in value:
                     args.upstream_loss_correction_params = LoadConfiguration(value["correction_params"])
@@ -1400,7 +1401,7 @@ class AnalysisInput:
             )
 
     @staticmethod
-    def CreateAnalysisInputNtuple(events : Data, upstream_energy_loss_params : dict, reco_regions : dict[np.ndarray], true_regions : dict[np.ndarray] = None, mc_reweight_params : dict = None, mc_reweight_stength : float = 3, fiducial_volume : list[float] = [0, 700]) -> "AnalysisInput":
+    def CreateAnalysisInputNtuple(events : Data, upstream_energy_loss_params : dict, reco_regions : dict[np.ndarray], true_regions : dict[np.ndarray] = None, mc_reweight_params : dict = None, mc_reweight_stength : float = 3, fiducial_volume : list[float] = [0, 700], upstream_loss_func : callable = Fitting.poly2d) -> "AnalysisInput":
         """ Create analysis input from an ntuple sample.
 
         Args:
@@ -1419,7 +1420,7 @@ class AnalysisInput:
             weights = None
 
         reco_KE_inst = KE(events.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass)
-        reco_upstream_loss = UpstreamEnergyLoss(reco_KE_inst, upstream_energy_loss_params)
+        reco_upstream_loss = UpstreamEnergyLoss(reco_KE_inst, upstream_energy_loss_params, upstream_loss_func)
         reco_KE_ff = reco_KE_inst - reco_upstream_loss
 
         if min(fiducial_volume) > 0:

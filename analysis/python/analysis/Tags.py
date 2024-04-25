@@ -337,6 +337,8 @@ def ExclusiveProcessTags(true_masks):
         "pion_production" : "pip"
     }
 
+    if true_masks is None:
+        true_masks = {k : None for k in name_simple}
     for i, t in enumerate(true_masks):
         tags[t] = Tag(t, name_simple[t], colours[t], true_masks[t], i)
     return tags

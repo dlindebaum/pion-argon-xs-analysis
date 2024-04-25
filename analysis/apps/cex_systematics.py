@@ -7,6 +7,7 @@ Author: Shyam Bhuller
 Description: app to calculate systematic uncertainties for cross section measurement
 """
 from abc import ABC, abstractmethod
+from argparse import Namespace
 
 import pandas as pd
 import numpy as np
@@ -120,7 +121,7 @@ class DataAnalysis(ABC):
 
     def PlotResults(self, xs_nominal : dict, result : dict, book : Plots.PlotBook = Plots.PlotBook.null):
         for p in xs_nominal["pdsp"]:
-            cross_section.PlotXSComparison({"low" : result["low"][p], "nominal" : xs_nominal["pdsp"][p], "high" : result["high"][p]}, self.args.energy_slices, p, cv_only = True)
+            cross_section.PlotXSComparison({"low" : result["low"][p], "nominal" : xs_nominal["pdsp"][p], "high" : result["high"][p]}, self.args.energy_slices, p, cv_only = True, marker_size = 12)
             book.Save()
         return
 
@@ -162,11 +163,15 @@ class DataAnalysis(ABC):
             l.name = name + " low"
             h = err_high[p] / xs_nominal["pdsp"][p][0]
             h.name = name + " high"
-            table = pd.concat([KEs, d, l, h], axis = 1)
+        
+            t = pd.Series(quadsum([d, l, h], 0))
+            t.name = "Total"
+        
+            table = pd.concat([KEs, t, d, l, h], axis = 1).sort_values(by = ["$KE$ (MeV)"])
 
             avg = table.mean()
             avg["$KE$ (MeV)"] = "average"
-            tables[p] = pd.concat([table, pd.DataFrame(avg).T])
+            tables[p] = pd.concat([table, pd.DataFrame(avg).T]).reset_index(drop = True)
 
         return tables
 
@@ -223,10 +228,14 @@ class NuisanceParameters:
             m = pd.DataFrame(mc_stat_err)[p] / result["no_np"][p][0]
             m.name = "MC stat"
 
-            table = pd.concat([KEs, d, m], axis = 1)
+            t = pd.Series(quadsum([d, m], 0))
+            t.name = "Total"
+        
+            table = pd.concat([KEs, t, d, m], axis = 1).sort_values(by = ["$KE$ (MeV)"])
+
             avg = table.mean()
             avg["$KE$ (MeV)"] = "average"
-            tables[p] = pd.concat([table, pd.DataFrame(avg).T])
+            tables[p] = pd.concat([table, pd.DataFrame(avg).T]).reset_index(drop = True)
         return tables
 
 
@@ -266,8 +275,8 @@ class UpstreamCorrectionSystematic(DataAnalysis):
 
     def CreateNewAIs(self, outdir : str):
         upl = {
-            "low" : {f"p{i}" : self.args.upstream_loss_correction_params["value"][f"p{i}"] - self.args.upstream_loss_correction_params["error"][f"p{i}"] for i in range(getattr(cross_section.Fitting, self.args.upstream_loss_cv_function).n_params)},
-            "high" : {f"p{i}" : self.args.upstream_loss_correction_params["value"][f"p{i}"] + self.args.upstream_loss_correction_params["error"][f"p{i}"] for i in range(getattr(cross_section.Fitting, self.args.upstream_loss_cv_function).n_params)}
+            "low" : {f"p{i}" : self.args.upstream_loss_correction_params["value"][f"p{i}"] - self.args.upstream_loss_correction_params["error"][f"p{i}"] for i in range(self.args.upstream_loss_response.n_params)},
+            "high" : {f"p{i}" : self.args.upstream_loss_correction_params["value"][f"p{i}"] + self.args.upstream_loss_correction_params["error"][f"p{i}"] for i in range(self.args.upstream_loss_response.n_params)}
         }
 
         args_copy = dill_copy(self.args)
@@ -294,6 +303,60 @@ class BeamReweightSystematic(DataAnalysis):
             print(args_copy.beam_reweight["params"])
             args_copy.out = f"{outdir}{self.name}_{k}/"
             cex_analysis_input.main(args_copy)
+        return
+
+
+class ShowerEnergyCorrectionSystematic(DataAnalysis):
+    name = "shower_energy_correction_1_sigma"
+
+    def __init__(self, args: Namespace) -> None:
+        super().__init__(args)
+        self.LoadSamples()
+
+    def LoadSamples(self):
+        self.mc = cross_section.Data(self.args.mc_file, nTuple_type = self.args.ntuple_type, target_momentum = self.args.pmom)
+        self.data = cross_section.Data(self.args.data_file, nTuple_type = self.args.ntuple_type, target_momentum = 1)
+        return
+
+    def CreateAltPi0Selections(self):
+        samples = {
+            "mc" : cex_analysis_input.BeamPionSelection(self.mc, self.args, True),
+            "data" : cex_analysis_input.BeamPionSelection(self.data, self.args, False)
+        }
+
+        photon_candidates = {s : cex_analysis_input.SelectionTools.CombineMasks(self.args.selection_masks[s]["photon"]) for s in samples}
+
+        masks_sample = {}
+        for sample in ["mc", "data"]:
+            masks_sys = {}
+            for name, sign in zip(["low", "high"], [1, -1]):
+                masks = {}
+                selection_args_copy = cross_section.dill_copy(self.args.pi0_selection[f"{sample}_arguments"].values())
+                for (s, f), a in zip(self.args.pi0_selection["selections"].items(), selection_args_copy):
+                    if s == "Pi0MassSelection":
+                        a["correction_params"]["value"] = {f"p{i}" : a["correction_params"]["value"][f"p{i}"] + sign * a["correction_params"]["error"][f"p{i}"] for i in range(len(a["correction_params"]["error"]))}
+                    mask = f(samples[sample], **a, photon_mask = photon_candidates[sample])
+                    masks[s] = mask
+                masks_sys[name] = masks
+            masks_sample[sample] = masks_sys
+        return masks_sample
+
+
+    def CreateNewAIs(self, outdir : str):
+
+        masks = self.CreateAltPi0Selections()
+        cross_section.SaveObject(f"{outdir}pi0_selection_masks.dill", masks)
+
+        args_copy = {}
+        for i in ["low", "high"]:
+            a = cross_section.dill_copy(self.args)
+            a.selection_masks["mc"]["pi0"] = masks["mc"][i]
+            a.selection_masks["data"]["pi0"] = masks["data"][i]
+            args_copy[i] = a
+
+        for k, v in args_copy.items():
+            v.out = f"{outdir}{self.name}_{k}/"
+            cex_analysis_input.main(v)
         return
 
 
@@ -532,7 +595,7 @@ def main(args : cross_section.argparse.Namespace):
             with Plots.PlotBook(out + "upstream/plots.pdf") as book:
                 upl.PlotResults(args.cv, xs, book)
             tables = upl.DataAnalysisTables(args.cv, sys, "Upstream")
-            DictToHDF5(tables, out + "mc_stat/tables.hdf5")
+            DictToHDF5(tables, out + "upstream/tables.hdf5")
             for t in tables:
                 tables[t].style.format(precision = 2).hide(axis = 0).to_latex(out + f"upstream/table_{t}.tex")
 
@@ -541,8 +604,17 @@ def main(args : cross_section.argparse.Namespace):
             brw = BeamReweightSystematic(args)
             brw.CreateNewAIs(out + "beam_reweight/")
             xs = brw.RunAnalysis(out + "beam_reweight/")
-            sys = brw.CalculateSysError(xs)
+            # sys = brw.CalculateSysError(xs)
+            # SaveSystematicError(sys, None, out + "beam_reweight/sys.dill")
+            sys = brw.CalculateSysErrorAsym(args.cv, xs)
             SaveSystematicError(sys, None, out + "beam_reweight/sys.dill")
+            with Plots.PlotBook(out + "beam_reweight/plots.pdf") as book:
+                brw.PlotResults(args.cv, xs, book)
+            tables = brw.DataAnalysisTables(args.cv, sys, "Reweight")
+            DictToHDF5(tables, out + "beam_reweight/tables.hdf5")
+            for t in tables:
+                tables[t].style.format(precision = 2).hide(axis = 0).to_latex(out + f"beam_reweight/table_{t}.tex")
+
 
         if can_run("theory"):
             print(Rule("theory"))

@@ -36,7 +36,7 @@ def ComputeQuantities(mc : Master.Data, args : argparse.Namespace) -> dict[dict,
         dict[dict, dict]: dictionary of quantities, one for reco and truth.
     """
     with alive_bar(title = "computng reco quantities") as bar:
-        reco_upstream_loss = cross_section.UpstreamEnergyLoss(cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass), args.upstream_loss_correction_params["value"])
+        reco_upstream_loss = cross_section.UpstreamEnergyLoss(cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass), args.upstream_loss_correction_params["value"], args.upstream_loss_response)
         
         reco_KE_ff = cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass) - reco_upstream_loss
         reco_KE_int = reco_KE_ff - cross_section.RecoDepositedEnergy(mc, reco_KE_ff, "bb")
@@ -235,7 +235,6 @@ def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace, out : str):
         mc (Master.Data): mc events.
         args (argparse.Namespace): application arguments.
     """
-
     os.makedirs(out + "reco_regions/", exist_ok = True)
     pdf = Plots.PlotBook(out + "reco_regions/reco_regions_study")
     pe = {}
@@ -256,8 +255,7 @@ def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace, out : str):
         fractions_df = pd.DataFrame(np.array(fractions_df).T, columns = true_regions, index = reco_regions) # columns are the true regions, so index over those to get the fractions
         fractions_df.to_hdf(out + f"reco_regions/{r}_reco_region_fractions.hdf5", "df")
     pdf.close()
-    ind = [cross_section.remove_(i) for i in true_regions.keys()]
-    pd.DataFrame(pe, index = ind).style.format(precision = 2).to_latex(out + "reco_regions/pe.tex")
+    pd.DataFrame(pe, index = Tags.ExclusiveProcessTags(None).name_simple.values).style.format(precision = 2).to_latex(out + "reco_regions/pe.tex")
     return
 
 @Master.timer
@@ -268,15 +266,7 @@ def MeanTrackScoreKDE(mc : Master.Data, args : argparse.Namespace, out : str):
         mc (Master.Data): mc sample
         args (argparse.Namespace): application arguments.
     """
-    # mc_copy = mc.Filter(returnCopy = True)
-
     mc_copy = BeamPionSelection(mc, args, True)
-
-    # masks = [SelectionTools.CombineMasks(args.selection_masks["mc"]["beam"])]
-    # if "fiducial" in args.selection_masks["mc"]:
-    #     masks.insert(0, SelectionTools.CombineMasks(args.selection_masks["mc"]["fiducial"]))
-    # mc_copy.Filter(masks, masks)
-    # mc_copy.Filter([args.selection_masks["mc"]['null_pfo']['ValidPFOSelection']])
 
     mean_track_score = ak.fill_none(ak.mean(mc_copy.recoParticles.track_score, axis = -1), -0.05)
 
