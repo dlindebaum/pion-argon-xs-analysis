@@ -360,6 +360,53 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
         return
 
 
+class TrackLengthResolutionSystematic(DataAnalysis):
+    name = "track_length_1_sigma"
+
+    def CalculateResolution(self):
+        ai_mc = cross_section.AnalysisInput.FromFile(self.args.analysis_input["mc"])
+
+        r = np.array(cross_section.nandiv(ai_mc.track_length_reco - ai_mc.track_length_true, ai_mc.track_length_reco))
+
+        y, edges = np.histogram(r, 150, [-0.5, 0.5])
+        x = cross_section.bin_centers(edges)
+
+        p = cross_section.Fitting.Fit(x, y,np.sqrt(y), cross_section.Fitting.double_crystal_ball, method = "dogbox", plot = True, xlabel = "$(l^{reco} - l^{true}) / l^{reco}$", ylabel = "Counts", plot_style = "scatter")
+
+        y_interp = cross_section.Fitting.double_crystal_ball(x, *p[0])
+
+        w = []
+        for v in [-0.5, 0.5]:
+            for i in np.linspace(0, v, 10000):
+                if cross_section.Fitting.double_crystal_ball(i, *p[0]) <= (max(y_interp) / 2):
+                    print(i)
+                    break
+            w.append(i)
+
+        self.resolution = max(w) - min(w)
+        return
+
+    def CreateNewAIs(self, outdir : str):
+        cross_section.os.makedirs(f"{outdir}{self.name}_high/", exist_ok = True)
+        cross_section.os.makedirs(f"{outdir}{self.name}_low/", exist_ok = True)
+        
+        for i in self.args.analysis_input:
+            ai = cross_section.AnalysisInput.FromFile(self.args.analysis_input[i])
+            if i == "data":
+                cross_section.SaveObject(f"{outdir}{self.name}_high/{i}.dill", ai)
+                cross_section.SaveObject(f"{outdir}{self.name}_low/{i}.dill", ai)
+            else:
+                Ep = cross_section.BetheBloch.InteractingKE(ai.KE_ff_reco, ai.track_length_reco * (1+self.resolution), 50)
+                Em = cross_section.BetheBloch.InteractingKE(ai.KE_ff_reco, ai.track_length_reco * (1-self.resolution), 50)
+                
+                ai.KE_int_reco = Ep
+                cross_section.SaveObject(f"{outdir}{self.name}_high/{i}.dill", ai)
+                ai.KE_int_reco = Em
+                cross_section.SaveObject(f"{outdir}{self.name}_low/{i}.dill", ai)
+        cross_section.SaveConfiguration({"value" : self.resolution}, f"{outdir}resolution.json")
+        return
+
+
 class NormalisationSystematic(MCMethod):
     def Evaluate(self, norms = [0.8, 1.2], repeats : int = 1):
         cvs = {}
@@ -600,7 +647,7 @@ def main(args : cross_section.argparse.Namespace):
                 tables[t].style.format(precision = 2).hide(axis = 0).to_latex(out + f"upstream/table_{t}.tex")
 
         if can_run("beam_reweight"):
-            print(Rule("beam_reweight"))
+            print(Rule("beam reweight"))
             brw = BeamReweightSystematic(args)
             brw.CreateNewAIs(out + "beam_reweight/")
             xs = brw.RunAnalysis(out + "beam_reweight/")
@@ -614,6 +661,20 @@ def main(args : cross_section.argparse.Namespace):
             DictToHDF5(tables, out + "beam_reweight/tables.hdf5")
             for t in tables:
                 tables[t].style.format(precision = 2).hide(axis = 0).to_latex(out + f"beam_reweight/table_{t}.tex")
+
+        if can_run("track_length"):
+            print(Rule("track length"))
+            trk = TrackLengthResolutionSystematic(args)
+            trk.CreateNewAIs(out + "track_length/")
+            xs = trk.RunAnalysis(out + "track_length/")
+            sys = trk.CalculateSysErrorAsym(args.cv, xs)
+            SaveSystematicError(sys, None, out + "track_length/sys.dill")
+            with Plots.PlotBook(out + "track_length/plots.pdf") as book:
+                trk.PlotResults(args.cv, xs, book)
+            tables = trk.DataAnalysisTables(args.cv, sys, "Track length")
+            DictToHDF5(tables, out + "track_length/tables.hdf5")
+            for t in tables:
+                tables[t].style.format(precision = 2).hide(axis = 0).to_latex(out + f"track_length/table_{t}.tex")
 
 
         if can_run("theory"):
@@ -678,7 +739,7 @@ def main(args : cross_section.argparse.Namespace):
     return
 
 if __name__ == "__main__":
-    systematics = ["mc_stat", "theory", "upstream", "beam_reweight", "shower_energy", "bkg_sub", "all"]
+    systematics = ["mc_stat", "theory", "upstream", "beam_reweight", "shower_energy", "bkg_sub", "track_length", "all"]
 
     parser = cross_section.argparse.ArgumentParser("Estimate Systematics for the cross section analysis")
     cross_section.ApplicationArguments.Config(parser)

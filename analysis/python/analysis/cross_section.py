@@ -596,7 +596,7 @@ def RecoDepositedEnergy(events : Data, ff_KE : ak.Array, method : str) -> ak.Arr
     if method == "calo":
         dE = ak.sum(events.recoParticles.beam_dEdX[:, :-1] * reco_pitch, -1)
     elif method == "bb":
-        KE_int_bb = BetheBloch.InteractingKE(ff_KE, ak.sum(reco_pitch, -1), 50)
+        KE_int_bb = BetheBloch.InteractingKE(ff_KE, events.recoParticles.beam_track_length, 50)
         dE = ff_KE - KE_int_bb
     else:
         raise Exception(f"{method} not a valid method, pick 'calo' or 'bb'")
