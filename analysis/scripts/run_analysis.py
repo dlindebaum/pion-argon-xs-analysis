@@ -290,7 +290,7 @@ def template_config():
     }
     return template
 
-def template_toy_config(toy_parameters_dir : str, nEvents : int, seed : int, max_cpus : int, step : float, p_init : float):
+def template_toy_config(toy_parameters_dir : str, nEvents : int, seed : int, max_cpus : int, step : float, p_init : float, region_selection : str):
     template = {
         "events" : nEvents,
         "step" : step,
@@ -303,7 +303,7 @@ def template_toy_config(toy_parameters_dir : str, nEvents : int, seed : int, max
             "KE_int" : f"{toy_parameters_dir}/smearing/KE_int/double_crystal_ball.json",
             "z_int" : f"{toy_parameters_dir}/smearing/z_int/double_crystal_ball.json"
         },
-        "reco_region_fractions" : f"{toy_parameters_dir}/reco_regions/reco_region_fractions.hdf5",
+        "reco_region_fractions" : f"{toy_parameters_dir}/reco_regions/{region_selection}_reco_region_fractions.hdf5",
         "beam_selection_efficiencies" : f"{toy_parameters_dir}/pi_beam_efficiency/beam_selection_efficiencies_true.hdf5",
         "mean_track_score_kde" : f"{toy_parameters_dir}/meanTrackScoreKDE/kdes.dill",
         "pdf_scale_factors" : None,
@@ -523,8 +523,9 @@ def main(args):
             cex_toy_parameters.main(args)
             # special case where the main config is not updated, rather the results from this would be used in the toy configurations
             #! make function to create the a toy configuration
-            toy_template_config = template_toy_config(os.path.abspath(args.out + "toy_parameters"), int(1E7), 1337, os.cpu_count() - 1, 2, args.beam_momentum)
-            data_config = template_toy_config(os.path.abspath(args.out + "toy_parameters"), int(1E6), 1, os.cpu_count() - 1, 2, args.beam_momentum)
+            selection_type = LoadConfiguration(args.config)["REGION_IDENTIFICATION"]["type"]
+            toy_template_config = template_toy_config(os.path.abspath(args.out + "toy_parameters"), int(1E7), 1337, os.cpu_count() - 1, 2, args.beam_momentum, selection_type)
+            data_config = template_toy_config(os.path.abspath(args.out + "toy_parameters"), int(1E6), 1, os.cpu_count() - 1, 2, args.beam_momentum, selection_type)
             SaveConfiguration(toy_template_config, args.out + "toy_template_config.json")
             SaveConfiguration(data_config, args.out + "toy_data_config.json")
         if args.stop == "toy_parameters": return

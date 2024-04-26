@@ -998,10 +998,27 @@ def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label:
         plt.bar(x, y, width, xerr = xerr, yerr = yerr, linestyle = linestyle, label = label, color = color, alpha = alpha, capsize = capsize, zorder = zorder)
     elif style == "step":
         if (xerr is not None): warnings.warn("x error bars are not supported with style 'step'")
-        p1 = plt.step(x, y, where = "mid", linestyle = linestyle, color = color, alpha = alpha, zorder = zorder, label = label)
+        
+        y = np.array([i for _, i in sorted(zip(x, y))])
         if yerr is not None:
-            plt.fill_between(x, y + yerr, y - yerr, step = "mid", alpha = 0.25, color = color)
-            p2 = mpatches.Patch(color=color, alpha=0.25, linewidth=0)
+            yerr = np.array([i for _, i in sorted(zip(x, yerr))])
+        x = sorted(x)
+
+        width = abs(x[0] - x[1]) if len(x) > 1 else 0
+        edges = []
+        for i in x:
+            edges.append(i + width/2)
+        edges.insert(0, edges[0] - width)
+        
+        if color is None: color = next(plt.gca()._get_lines.prop_cycler)["color"] # cause apparently stairs suck
+
+        # p1 = plt.step(x, y, where = "mid", linestyle = linestyle, color = color, alpha = alpha, zorder = zorder, label = label)
+        p1 = plt.stairs(y, edges, linestyle = linestyle, edgecolor = color, color = color, alpha = alpha, zorder = zorder, label = label)
+
+        if yerr is not None:
+            # plt.fill_between(x, y + yerr, y - yerr, step = "mid", alpha = 0.25, color = color)
+            plt.stairs(y+yerr, edges, baseline=y-yerr, fill = True, alpha = 0.25, color = color)
+            # p2 = mpatches.Patch(color=color, alpha=0.25, linewidth=0)
         # handles = ((p1[0],p2),)
         # labels  = (label,)
     elif style == "scatter":

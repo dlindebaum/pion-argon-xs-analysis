@@ -245,6 +245,16 @@ def bq_angle(values : dict):
     return t
 
 
+def copy_table(source : str, dest : str):
+    name = source.split("/")[-1]
+    os.makedirs(dest, exist_ok = True)
+    with open(source) as f:
+        with open(f"{dest}{name}", "w") as of:
+            of.writelines(f.readlines())
+    FormatTable(f"{dest}{name}")
+    return
+
+
 def main(args : argparse.Namespace):
     path = os.path.abspath(args.workdir + "/")
     out = f"{path}/formatted_tables/"
@@ -280,13 +290,12 @@ def main(args : argparse.Namespace):
             of.writelines(f.readlines())
     FormatTable(f"{out}shower_correction.tex")
 
+    # copy_table(f"{path}/shower_energy_correction/table.tex", f"{out}shower_correction_")
 
-    os.makedirs(f"{out}/reco_regions/", exist_ok = True)
-    with open(f"{path}/toy_parameters/reco_regions/pe.tex") as f:
-        with open(f"{out}/reco_regions/pe.tex", "w") as of:
-            of.writelines(f.readlines())
-    FormatTable(f"{out}/reco_regions/pe.tex")
+    copy_table(f"{path}/toy_parameters/reco_regions/pe.tex", f"{out}/reco_regions/")
 
+    copy_table(f"{path}/measurement/pdsp/fit_results_NP.tex", f"{out}/data_fit/")
+    copy_table(f"{path}/measurement/pdsp/fit_results_POI.tex", f"{out}/data_fit/")
 
     return
 

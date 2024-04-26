@@ -88,6 +88,21 @@ def RatioWeights(beam_inst_P : np.ndarray, func : str, params : list, truncate :
     return weights
 
 
+def PlotXSHists(energy_slices, hist_counts : np.ndarray, hist_counts_err : np.ndarray = None, overflow : bool = True, scale : float = 1, xlabel : str = "$KE$ (MeV)", ylabel : str = "Counts", label : str = None, color : str = None, newFigure : bool = True, title : str = None):
+    if hist_counts_err is None:
+        hist_counts_err = np.sqrt(hist_counts)
+
+    if overflow is False:
+        s = slice(1, -1)
+    else:
+        s = slice(0, len(energy_slices.pos_overflow))
+    x = energy_slices.pos_overflow - energy_slices.width/2
+    x = x[s]
+
+    Plots.Plot(x, scale * hist_counts[s], yerr = scale * hist_counts_err[s], xlabel = xlabel, newFigure = newFigure, style = "step", label = label, color = color, ylabel = ylabel, title = title)
+    return
+
+
 def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", chi2 : bool = True, newFigure : bool = True, cv_only : bool = False, marker_size : float = 6):
     xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos])
 
@@ -1310,6 +1325,14 @@ class AnalysisInput:
     # extras
     weights : np.ndarray = None
 
+    @property
+    def region_labels(self):
+        return list(self.regions.keys())
+
+    @property
+    def process_labels(self):
+        return list(self.exclusive_process.keys())
+
     def __len__(self):
         for o in ["outside_tpc_reco", "outside_tpc_true", "track_length_reco", "KE_int_reco", "KE_init_reco", "mean_track_score", "track_length_true", "KE_int_true", "KE_init_true", "weights"]:
             if getattr(self, o) is not None:
@@ -1812,8 +1835,8 @@ class Unfold:
         #* cause = true, effect = reco
         Plots.plt.figure()
         Plots.plt.imshow(np.flip(matrix), origin = "lower", cmap = "plasma")
-        Plots.plt.xlabel("true (MeV)")
-        Plots.plt.ylabel("reco (MeV)")
+        Plots.plt.xlabel("True $KE$ (MeV)")
+        Plots.plt.ylabel("Reco $KE$ (MeV)")
         Plots.plt.grid(False)
         Plots.plt.colorbar(label = c_label)
         Plots.plt.title(title)
@@ -1876,10 +1899,10 @@ class Unfold:
             # if k in template.exclusive_process.keys():
             #     resp[k] = resp["int"] #* weird new thing
             if book is not None:
-                Unfold.PlotMatrix(corr[k], energy_slice, title = f"Response Marix: {labels[k]}", c_label = "Counts")
+                Unfold.PlotMatrix(corr[k], energy_slice, title = f"Response marix: {labels[k]}", c_label = "Counts")
                 book.Save()
             if book is not None:
-                Unfold.PlotMatrix(resp[k][0], energy_slice, title = f"Normalised Response Matrix: {labels[k]}", c_label = "$P(E_{i}|C_{j})$")
+                Unfold.PlotMatrix(resp[k][0], energy_slice, title = f"Normalised response matrix: {labels[k]}", c_label = "$P(E_{i}|C_{j})$")
                 book.Save()
         
         return resp
@@ -1935,7 +1958,7 @@ class Unfold:
         return results
 
     @staticmethod
-    def PlotUnfoldingResults(obs : np.ndarray, true : np.ndarray, results : dict, energy_slices : Slices, xlabel : str, book : Plots.PlotBook = Plots.PlotBook.null):
+    def PlotUnfoldingResults(obs : np.ndarray, obs_err : np.ndarray, true : np.ndarray, results : dict, energy_slices : Slices, title : str, book : Plots.PlotBook = Plots.PlotBook.null):
         """ Plot unfolded histogram in comparison to observed and true.
 
         Args:
@@ -1950,9 +1973,15 @@ class Unfold:
             label = f"Data unfolded, {results['num_iterations']} iterations"
         else:
             label = "Data unfolded"
-        Plots.Plot(energy_slices.pos_bins[::-1], obs/sum(obs), style = "step", label = "Data reco", color = "C6")
-        Plots.Plot(energy_slices.pos_bins[::-1], true/sum(true), style = "step", label = "MC true", color = "C0", newFigure = False)
-        Plots.Plot(energy_slices.pos_bins[::-1], results["unfolded"] / sum(results["unfolded"]), yerr = results["stat_err"] / sum(results["unfolded"]), style = "step", label = label, xlabel = xlabel + " (MeV)", color = "C4", newFigure = False)
+
+        PlotXSHists(energy_slices, obs, obs_err, True, 1/sum(obs), label = "Data reco", ylabel = "Fractional counts", color = "k")
+        PlotXSHists(energy_slices, true, None, True, 1/sum(true), label = "MC true", ylabel = "Fractional counts", color = "C1", newFigure = False)
+        PlotXSHists(energy_slices, results["unfolded"], results["stat_err"], True, 1 / sum(results["unfolded"]), label =  label, color = "C4", ylabel = "Fractional counts", newFigure = False, title = title)
+
+
+        # Plots.Plot(energy_slices.pos_bins[::-1], obs/sum(obs), style = "step", label = "Data reco", color = "C6")
+        # Plots.Plot(energy_slices.pos_bins[::-1], true/sum(true), style = "step", label = "MC true", color = "C0", newFigure = False)
+        # Plots.Plot(energy_slices.pos_bins[::-1], results["unfolded"] / sum(results["unfolded"]), yerr = results["stat_err"] / sum(results["unfolded"]), style = "step", label = label, xlabel = xlabel + " (MeV)", color = "C4", newFigure = False)
         book.Save() 
         if "unfolding_matrix" in results:
             Unfold.PlotMatrix(results["unfolding_matrix"], energy_slices, title = "Unfolded matrix: " + label, c_label = "$P(C_{j}|E_{i})$")
