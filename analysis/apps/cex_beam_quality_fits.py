@@ -90,7 +90,7 @@ def plot_range(mu : float, sigma : float, tolerance : float = 5) -> list:
     return sorted([mu - tolerance * sigma, mu + tolerance * sigma])
 
 
-def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data, data_fits : dict, out : str):
+def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data, data_fits : dict, out : str, truncate : float):
     """ Make plots showing the fits for MC and or Data.
 
     Args:
@@ -102,6 +102,11 @@ def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data
     """
     SetPlotStyle()
 
+    data_start_pos, _ = BeamParticleSelection.GetTruncatedPos(data_events, truncate)
+    mc_start_pos, _ = BeamParticleSelection.GetTruncatedPos(mc_events, truncate)
+
+    label_name = "Beam" if truncate is None else "Truncacted beam"
+
     with Plots.PlotBook(out + "beam_quality_fits.pdf") as pdf:
         for i in ["x", "y", "z"]:
             plt.figure()
@@ -109,8 +114,8 @@ def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data
             data_ranges = [] if data_fits is None else plot_range(data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"])
 
             plot_ranges = mc_ranges + data_ranges
-            if mc_events is not None: plot(mc_events.recoParticles.beam_startPos_SCE[i], f"Beam start position {i} (cm)", mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"], "C0", "MC", range = [min(plot_ranges), max(plot_ranges)])
-            if data_events is not None: plot(data_events.recoParticles.beam_startPos_SCE[i], f"Beam start position {i} (cm)", data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"], "C1", "Data", range = [min(plot_ranges), max(plot_ranges)])
+            if mc_events is not None: plot(mc_start_pos[i], f"{label_name} start position {i} (cm)", mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"], "C0", "MC", range = [min(plot_ranges), max(plot_ranges)])
+            if data_events is not None: plot(data_start_pos[i], f"{label_name} start position {i} (cm)", data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"], "C1", "Data", range = [min(plot_ranges), max(plot_ranges)])
             pdf.Save()
     return
 
@@ -119,25 +124,39 @@ def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str, ta
     events = Master.Data(file, nTuple_type = ntuple_type, target_momentum = args.pmom)
 
     #? should this be made configurable i.e. pass config and apply all selections before the beam quality cuts if it is in the list?
-    mask = BeamParticleSelection.PiBeamSelection(events, data)
-    events.Filter([mask], [mask])
 
-    mask = BeamParticleSelection.PandoraTagCut(events)
-    events.Filter([mask], [mask])
+    func_args = "mc_arguments" if data is False else "data_arguments"
 
-    mask = BeamParticleSelection.CaloSizeCut(events)
-    events.Filter([mask], [mask])
+    if ("DxyCut" in args.beam_selection["selections"]) or ("DzCut" in args.beam_selection["selections"]) or ("CosThetaCut" in args.beam_selection["selections"]):
+        for s in args.beam_selection["selections"]:
+            if s in ["DxyCut", "DzCut", "CosThetaCut"]:
+                break # only apply cuts before beam quality
+            else:
+                print(f"{s=}")
+                mask = args.beam_selection["selections"][s](events, **args.beam_selection[func_args][s])
+                events.Filter([mask], [mask])
+    else:
+        # do default selections prior to beam quality
+        mask = BeamParticleSelection.PiBeamSelection(events, data)
+        events.Filter([mask], [mask])
 
-    mask = BeamParticleSelection.HasFinalStatePFOsCut(events)
-    events.Filter([mask], [mask])
+        mask = BeamParticleSelection.PandoraTagCut(events)
+        events.Filter([mask], [mask])
+
+        mask = BeamParticleSelection.CaloSizeCut(events)
+        events.Filter([mask], [mask])
+
+        mask = BeamParticleSelection.HasFinalStatePFOsCut(events)
+        events.Filter([mask], [mask])
 
     #* fit gaussians to the start positions
-    mu, sigma, mu_err, sigma_err = Fit_Vector(events.recoParticles.beam_startPos_SCE, 100)
+    start_pos, end_pos = BeamParticleSelection.GetTruncatedPos(events, args.beam_quality_truncate)
+    mu, sigma, mu_err, sigma_err = Fit_Vector(start_pos, 100)
 
     #* compute the mean of beam direction components
-    beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos_SCE, events.recoParticles.beam_startPos_SCE))
-    mu_dir = {i : ak.mean(beam_dir[i]) for i in ["x", "y", "z"]}
-    mu_dir_err = {i : ak.std(beam_dir[i])/np.sqrt(ak.count(beam_dir[i])) for i in ["x", "y", "z"]}
+    beam_dir = vector.normalize(vector.sub(end_pos, start_pos))
+    mu_dir = {i : ak.mean(ak.nan_to_num(beam_dir[i])) for i in ["x", "y", "z"]}
+    mu_dir_err = {i : ak.std(ak.nan_to_num(beam_dir[i]))/np.sqrt(ak.count(beam_dir[i])) for i in ["x", "y", "z"]}
 
     #* convert to dictionary undestood by the BeamQualityCut function
     fit_values = {
@@ -159,6 +178,7 @@ def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str, ta
         "mu_dir_err_x" : mu_dir_err["x"],
         "mu_dir_err_y" : mu_dir_err["y"],
         "mu_dir_err_z" : mu_dir_err["z"],
+        "truncate"     : args.beam_quality_truncate
     }
     print(fit_values)
 
@@ -182,7 +202,7 @@ def main(args):
     if args.data_file is not None:
         data, fit_values_data = run(args.data_file, True, args.ntuple_type, args.out + "beam_quality/", "data", args)
 
-    MakePlots(mc, fit_values_mc, data, fit_values_data, args.out + "beam_quality/")
+    MakePlots(mc, fit_values_mc, data, fit_values_data, args.out + "beam_quality/", args.beam_quality_truncate)
 
     return
 
@@ -195,7 +215,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    cross_section.ApplicationArguments.ResolveArgs(args)
-
+    args = cross_section.ApplicationArguments.ResolveArgs(args)
     print(vars(args))
     main(args)

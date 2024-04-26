@@ -83,7 +83,7 @@ def main(args : argparse.Namespace):
     mc = BeamPionSelection(mc, args, True)
 
     if args.no_reweight is False:
-        mc_weights = cross_section.RatioWeights(mc, "gaussian", [args.beam_reweight_params[k]["value"] for k in args.beam_reweight_params], 3)
+        mc_weights = cross_section.RatioWeights(mc.recoParticles.beam_inst_P, "gaussian", [args.beam_reweight["params"][k]["value"] for k in args.beam_reweight["params"]], args.beam_reweight["strength"])
     else:
         mc_weights = None
     bins = ak.Array(args.upstream_loss_bins)
@@ -96,7 +96,7 @@ def main(args : argparse.Namespace):
         pdf.savefig()
 
         Plots.plt.figure()
-        params = cross_section.Fitting.Fit(x, cv[0], cv[1], cross_section.Fitting.poly2d, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$(MeV)", ylabel = "$\mu(KE^{reco}_{inst} - KE^{true}_{init})$(MeV)")
+        params = cross_section.Fitting.Fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$(MeV)", ylabel = "$\mu(KE^{reco}_{inst} - KE^{true}_{init})$(MeV)", loc = "upper center")
         pdf.savefig()
 
         params_dict = {
@@ -104,7 +104,7 @@ def main(args : argparse.Namespace):
             "error" : {f"p{i}" : params[1][i] for i in range(len(params[1]))}
         }
 
-        reco_KE_ff =  reco_KE_inst - cross_section.UpstreamEnergyLoss(reco_KE_inst, params_dict["value"])
+        reco_KE_ff =  reco_KE_inst - cross_section.UpstreamEnergyLoss(reco_KE_inst, params_dict["value"], args.upstream_loss_response)
 
         Plots.PlotHistComparison([reco_KE_ff, mc.trueParticles.beam_KE_front_face], labels = ["$KE^{reco}_{init}$", "$KE^{true}_{init}$"], x_range = [bins[0], bins[-1]], xlabel = "Kinetic energy (MeV)", weights = [mc_weights, mc_weights])
         pdf.savefig()

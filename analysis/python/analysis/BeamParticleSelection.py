@@ -16,6 +16,29 @@ from python.analysis.PFOSelection import Median, GoodShowerSelection
 from python.analysis.SelectionTools import *
 
 
+def GetTruncatedDEdX(sample : Data, truncate : float):
+    truncated_start = sample.recoParticles.beam_calo_pos.z >= truncate
+    return sample.recoParticles.beam_dEdX[truncated_start]
+
+
+def GetTruncatedPos(sample : Data, truncate : float) -> tuple[ak.Array, ak.Array]:
+    if truncate is not None:
+        truncated_start = ak.argmax(sample.recoParticles.beam_calo_pos.z >= truncate, -1, keepdims = True)
+        start_pos = sample.recoParticles.beam_calo_pos[truncated_start]
+        # start_pos = ak.flatten(ak.fill_none(start_pos, vector.vector(-999, -999, -999)))
+        start_pos = ak.flatten(start_pos)
+
+        end_pos = sample.recoParticles.beam_calo_pos[:, -1:]
+        end_pos = ak.pad_none(end_pos, 1, -1)
+        # end_pos = ak.flatten(ak.fill_none(end_pos, vector.vector(-999, -999, -999)))
+        end_pos = ak.flatten(end_pos)
+    else:
+        start_pos = sample.recoParticles.beam_startPos_SCE
+        end_pos = sample.recoParticles.beam_endPos_SCE
+
+    return start_pos, end_pos
+
+
 def BeamTriggerSelection(events: Data, pdgs : list[int] = [211, 13, -13], use_beam_inst : bool = False, return_property : bool = False):
     """ Beam particle selection using beam instrumentation information for Data and truth information if MC.
 
@@ -50,6 +73,16 @@ def BeamTriggerSelection(events: Data, pdgs : list[int] = [211, 13, -13], use_be
         return mask, beam_pdg
     else:
         return mask
+
+
+def TrueFiducialCut(events, is_mc : bool, cut : int = [30, 220], op = [">", "<"], return_property : bool = False):
+    if is_mc:
+        return CreateMask(cut, op, events.trueParticles.endPos.z[:, 0], return_property)
+    else:
+        if return_property == True:
+            return ak.ones_like(events.eventNum, dtype = bool), ak.zeros_like(events.eventNum, dtype = bool)
+        else:
+            return ak.ones_like(events.eventNum, dtype = bool)
 
 
 def PiBeamSelection(events: Data, use_beam_inst : bool = False, return_property : bool = False) -> ak.Array:
@@ -104,12 +137,14 @@ def BeamQualityCut(events: Data, fits : dict, dxy_cut : list = [-3, 3], dz_cut :
     Returns:
         ak.Array: boolean mask.
     """
-    beam_dx = (events.recoParticles.beam_startPos_SCE.x - fits["mu_x"]) / fits["sigma_x"]
-    beam_dy = (events.recoParticles.beam_startPos_SCE.y - fits["mu_y"]) / fits["sigma_y"]
-    beam_dxy = (beam_dx**2 + beam_dy**2)**0.5
-    beam_dz = (events.recoParticles.beam_startPos_SCE.z - fits["mu_z"]) / fits["sigma_z"]
+    start_pos, end_pos = GetTruncatedPos(events, fits["truncate"])
 
-    beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos_SCE, events.recoParticles.beam_startPos_SCE))
+    beam_dx = (start_pos.x - fits["mu_x"]) / fits["sigma_x"]
+    beam_dy = (start_pos.y - fits["mu_y"]) / fits["sigma_y"]
+    beam_dxy = (beam_dx**2 + beam_dy**2)**0.5
+    beam_dz = (start_pos.z - fits["mu_z"]) / fits["sigma_z"]
+
+    beam_dir = vector.normalize(vector.sub(end_pos, start_pos))
 
     beam_dir_mc = vector.vector(
         fits["mu_dir_x"],
@@ -142,8 +177,10 @@ def DxyCut(events: Data, fits : dict, cut, op = "<", return_property : bool = Fa
     Returns:
         mask and or property cut on.
     """
-    beam_dx = (events.recoParticles.beam_startPos_SCE.x - fits["mu_x"]) / fits["sigma_x"]
-    beam_dy = (events.recoParticles.beam_startPos_SCE.y - fits["mu_y"]) / fits["sigma_y"]
+    start_pos = GetTruncatedPos(events, fits["truncate"])[0]
+
+    beam_dx = (start_pos.x - fits["mu_x"]) / fits["sigma_x"]
+    beam_dy = (start_pos.y - fits["mu_y"]) / fits["sigma_y"]
     beam_dxy = (beam_dx**2 + beam_dy**2)**0.5
     return CreateMask(cut, op, beam_dxy, return_property)
 
@@ -161,7 +198,9 @@ def DzCut(events: Data, fits : dict, cut, op = [">", "<"], return_property : boo
     Returns:
         mask and or property cut on.
     """
-    beam_dz = (events.recoParticles.beam_startPos_SCE.z - fits["mu_z"]) / fits["sigma_z"]
+    start_pos = GetTruncatedPos(events, fits["truncate"])[0]
+
+    beam_dz = (start_pos.z - fits["mu_z"]) / fits["sigma_z"]
     return CreateMask(cut, op, beam_dz, return_property)
 
 
@@ -178,7 +217,9 @@ def CosThetaCut(events: Data, fits : dict, cut, op = ">", return_property : bool
     Returns:
         mask and or property cut on.
     """
-    beam_dir = vector.normalize(vector.sub(events.recoParticles.beam_endPos_SCE, events.recoParticles.beam_startPos_SCE))
+    start_pos, end_pos = GetTruncatedPos(events, fits["truncate"])
+
+    beam_dir = vector.normalize(vector.sub(end_pos, start_pos))
 
     beam_dir_mc = vector.vector(
         fits["mu_dir_x"],
@@ -216,7 +257,7 @@ def MichelScoreCut(events: Data, cut : float = 0.55, op = "<", return_property :
     return CreateMask(cut, op, score, return_property)
 
 
-def MedianDEdXCut(events: Data, cut : float = 2.4, op = "<", return_property : bool = False) -> ak.Array:
+def MedianDEdXCut(events: Data, cut : float = 2.4, op = "<", truncate : float = None, return_property : bool = False) -> ak.Array:
     """ cut on median dEdX to exlude proton background.
 
     Args:
@@ -225,7 +266,11 @@ def MedianDEdXCut(events: Data, cut : float = 2.4, op = "<", return_property : b
     Returns:
         ak.Array: boolean mask.
     """
-    median = Median(events.recoParticles.beam_dEdX)
+    if truncate is None:
+        dEdX = events.recoParticles.beam_dEdX
+    else:
+        dEdX = GetTruncatedDEdX(events, truncate)
+    median = Median(dEdX)
     return CreateMask(cut, op, median, return_property)
 
 

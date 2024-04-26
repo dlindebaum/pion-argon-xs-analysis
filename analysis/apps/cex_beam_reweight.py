@@ -15,7 +15,6 @@ from rich import print
 from python.analysis import cross_section, Plots, SelectionTools
 
 
-
 def ReWeight(sample : dict[cross_section.Data], p_nominal : float, bins : int = 10, p_range : np.array = np.array([0.75, 1.25]), book : Plots.PlotBook = Plots.PlotBook.null):
     p_mc, edges = np.histogram(np.array(sample["mc"].recoParticles.beam_inst_P), bins, range = p_nominal * p_range)
     p_data = np.histogram(np.array(sample["data"].recoParticles.beam_inst_P), bins, range = p_nominal * p_range)[0]
@@ -42,14 +41,8 @@ def ReWeight(sample : dict[cross_section.Data], p_nominal : float, bins : int = 
     return results
 
 
-def RatioWeights(mc : cross_section.Data, func : str, params : list, truncate : int = 10):
-    weights = 1/getattr(cross_section.Fitting, func)(np.array(mc.recoParticles.beam_inst_P), *params)
-    weights = np.where(weights > truncate, truncate, weights)
-    return weights
-
-
 def ReWeightResults(sample : dict[cross_section.Data], args : cross_section.argparse.Namespace, bins : int, reweight_results : dict, reweight_func : str, book : Plots.PlotBook = Plots.PlotBook.null):
-    weights = RatioWeights(sample["mc"], reweight_func, reweight_results[reweight_func][0], 3)
+    weights = cross_section.RatioWeights(np.array(sample["mc"].recoParticles.beam_inst_P), reweight_func, reweight_results[reweight_func][0], args.beam_reweight["strength"])
 
     plot_range = [args.beam_momentum * 0.75, args.beam_momentum * 1.25]
 
@@ -75,6 +68,11 @@ def main(args : cross_section.argparse.Namespace):
     cross_section.SetPlotStyle(extend_colors = True, dpi = 100)
     out = args.out + "beam_reweight/"
 
+    if "fiducial" in args.selection_masks["mc"]:
+        fiducial_masks = {s : SelectionTools.CombineMasks(args.selection_masks[s]["fiducial"]) for s in args.selection_masks}
+    else:
+        fiducial_masks = None
+
     invert = "HasFinalStatePFOsCut"
     sideband_selection = {}
     for k, sample in args.selection_masks.items():
@@ -94,11 +92,19 @@ def main(args : cross_section.argparse.Namespace):
     analysis_sample = {}
     for s in events:
         mask = SelectionTools.CombineMasks(args.selection_masks[s]["beam"])
-        analysis_sample[s] = events[s].Filter([mask], [mask], returnCopy = True)
+        if fiducial_masks is not None:
+            masks = [fiducial_masks[s], mask]
+        else:
+            masks = [mask]
+        analysis_sample[s] = events[s].Filter(masks, masks, returnCopy = True)
 
     sideband_sample = {}
     for s in events:
-        sideband_sample[s] = events[s].Filter([sideband_selection[s]], [sideband_selection[s]], returnCopy = True)
+        if fiducial_masks is not None:
+            masks = [fiducial_masks[s], sideband_selection[s]]
+        else:
+            masks = [sideband_selection[s]]
+        sideband_sample[s] = events[s].Filter(masks, masks, returnCopy = True)
 
     with Plots.PlotBook(out + "plots/" + "reweight_fits.pdf", True) as book:
         results = ReWeight(sideband_sample, args.beam_momentum, 20, np.array([0.75, 1.25]), book = book)

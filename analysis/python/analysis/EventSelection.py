@@ -53,7 +53,10 @@ def Pi0OpeningAngleSelection(events : Master.Data, photon_mask : ak.Array = None
         raise Exception("photon mask and photon_coords cannot both be None")
 
     angle = ak.fill_none(ak.pad_none(shower_pairs.reco_angle, 1, -1), -999, -1)
-    cut = [c * np.pi / 180 for c in cut]
+    if hasattr(cut, "__getitem__"):
+        cut = [c * np.pi / 180 for c in cut]
+    else:
+        cut = cut * np.pi / 180
     return SelectionTools.CreateMask(cut, op, angle, return_property)
 
 
@@ -69,8 +72,8 @@ def Pi0MassSelection(events : Master.Data, photon_mask : ak.Array = None, photon
         le = shower_pairs.reco_lead_energy
         se = shower_pairs.reco_sub_energy
     else:
-        le = correction(shower_pairs.reco_lead_energy, **correction_params)
-        se = correction(shower_pairs.reco_sub_energy, **correction_params)
+        le = correction(shower_pairs.reco_lead_energy, **correction_params["value"])
+        se = correction(shower_pairs.reco_sub_energy, **correction_params["value"])
 
     mass = shower_pairs.Mass(le, se, shower_pairs.reco_angle)
     mass = ak.fill_none(ak.pad_none(mass, 1, -1), -999, -1)
@@ -714,16 +717,6 @@ def create_regions(pi0_counts, pi_charged_counts):
         "pion_prod_0_pi0": np.logical_and(pi0_counts==0, pi_charged_counts>=1),
         "pion_prod_1_pi0": np.logical_and(pi0_counts==1, pi_charged_counts>=1),
         "pion_prod_>1_pi0": pi0_counts>=2
-    }
-    return regions_dict
-
-
-def create_regions_new(pi0_counts, pi_charged_counts):
-    regions_dict = {
-        "absorption": np.logical_and(pi0_counts==0, pi_charged_counts==0),
-        "charge_exchange": np.logical_and(pi0_counts==1, pi_charged_counts==0),
-        "single_pion_production": np.logical_and(pi0_counts==0, pi_charged_counts==1),
-        "pion_production": ((pi0_counts >= 0) & (pi_charged_counts > 1)) | ((pi0_counts > 1) & (pi_charged_counts >= 0)) | ((pi0_counts == 1) & (pi_charged_counts == 1)),
     }
     return regions_dict
 

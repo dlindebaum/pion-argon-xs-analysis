@@ -14,7 +14,8 @@ import pandas as pd
 
 from scipy.optimize import curve_fit
 from scipy.special import gamma, erf
-from scipy.stats import ks_2samp, chi2
+from scipy.stats import ks_2samp, chi2, norm, lognorm
+
 
 from python.analysis import Plots, Utils
 
@@ -225,6 +226,25 @@ class poly2d(FitFunction):
         return ([-np.inf, -np.inf, -np.inf], [np.inf]*3)
 
 
+class poly3d(FitFunction):
+    n_params = 4
+
+    def __new__(cls, x, p0, p1, p2, p3) -> np.array:
+        return cls.func(x, p0, p1, p2, p3)
+
+    @staticmethod
+    def func(x, p0, p1, p2, p3):
+        return p0 + (p1 * x) + (p2 * (x**2)) + (p3 * (x**3))
+
+    @staticmethod
+    def p0(x, y):
+        return None
+
+    @staticmethod
+    def bounds(x, y):
+        return ([-np.inf]*4, [np.inf]*4)
+
+
 class double_crystal_ball(FitFunction):
     n_params = 7
 
@@ -274,7 +294,7 @@ class line(FitFunction):
         return cls.func(x, p0, p1)
 
     def func(x, p0, p1):
-        return p0 * x + p1
+        return (p0 * x) + p1
 
 
 class asym(FitFunction):
@@ -285,6 +305,35 @@ class asym(FitFunction):
 
     def func(x, p0, p1, p2):
         return 1/(p0*(x**p2) + p1)
+
+
+class lognormal_gaussian_exp(FitFunction):
+    n_params = 8
+
+    def __new__(cls, x, p0, p1, p2, p3, p4, p5, p6, p7) -> np.array:
+        return cls.func(x, p0, p1, p2, p3, p4, p5, p6, p7)
+
+    def func(x, p0, p1, p2, p3, p4, p5, p6, p7):
+        lognormal_component = lognorm.pdf(x, s = p2, scale = p1)
+        gaussian_component = norm.pdf(x, loc = p4, scale = p5)
+        exponential_component = np.exp(-p7 * x)
+        return p0 * lognormal_component + p3 * gaussian_component + p6 * exponential_component # Adjust weights as needed
+
+    def bounds(x, y):
+        lims = np.array([
+            (0, 1),
+            (min(x), max(x)),
+            (0.001, np.inf),
+
+            (0, 1),
+            (min(x), max(x)),
+            (0.001, np.inf),
+
+            (-np.inf, np.inf),
+            (-np.inf, np.inf),
+
+        ])
+        return (lims[:, 0], lims[:, 1])    
 
 
 def RejectionSampling(num : int, low : float, high : float, func : FitFunction, params : dict, scale_param : str = "p0", rng : np.random.default_rng = None) -> np.array:
@@ -317,7 +366,7 @@ def RejectionSampling(num : int, low : float, high : float, func : FitFunction, 
     return x[:num] #? is there a way to generate only the desired number rather than truncating x?
 
 
-def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, method = "trf", maxfev = int(10E4), plot : bool = False, xlabel : str = "", ylabel : str = "", ylim : list = None, plot_style : str = "scatter", title : str = "", plot_range : list = None, return_chi_sqr : bool = False) -> tuple[np.array, np.array]:
+def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, method = "trf", maxfev = int(10E4), plot : bool = False, xlabel : str = "", ylabel : str = "", ylim : list = None, plot_style : str = "scatter", title : str = "", plot_range : list = None, return_chi_sqr : bool = False, loc = "upper right") -> tuple[np.array, np.array]:
     """ Implementation of scipy's curve fit, with some constraints, checks to handle nan data and optional plotting.
 
     Args:
@@ -403,7 +452,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         for j in range(len(popt)):
             text += f"\n$p_{{{j}}}$: ${popt[j]:.2g}\pm${perr[j]:.2g}"
         text += "\n$\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2g}, p : " + f"{p_value:.1g}"
-        legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = "upper right", title = Utils.remove_(func.__name__))
+        legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = loc, title = Utils.remove_(func.__name__))
         legend.set_zorder(12)
         for l in legend.legendHandles:
             l.set_visible(False)

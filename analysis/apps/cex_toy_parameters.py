@@ -17,9 +17,9 @@ import scipy.stats as stats
 
 from alive_progress import alive_bar
 
-from python.analysis import cross_section, Master, Plots, Tags, SelectionTools
+from python.analysis import cross_section, Master, Plots, Tags, SelectionTools, RegionIdentification
 
-from apps.cex_analysis_input import RegionSelection
+from apps.cex_analysis_input import RegionSelection, BeamPionSelection
 
 from rich import print
 
@@ -36,7 +36,7 @@ def ComputeQuantities(mc : Master.Data, args : argparse.Namespace) -> dict[dict,
         dict[dict, dict]: dictionary of quantities, one for reco and truth.
     """
     with alive_bar(title = "computng reco quantities") as bar:
-        reco_upstream_loss = cross_section.UpstreamEnergyLoss(cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass), args.upstream_loss_correction_params["value"])
+        reco_upstream_loss = cross_section.UpstreamEnergyLoss(cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass), args.upstream_loss_correction_params["value"], args.upstream_loss_response)
         
         reco_KE_ff = cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass) - reco_upstream_loss
         reco_KE_int = reco_KE_ff - cross_section.RecoDepositedEnergy(mc, reco_KE_ff, "bb")
@@ -123,6 +123,7 @@ def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : 
     params = {}
     with Plots.PlotBook(out + "smearing/smearing_study") as pdf:
         for k in labels:
+            print(f"{k=}")
             params[k] = ResolutionStudy(pdf, selected_quantities["reco"][k], selected_quantities["true"][k], selected_quantities["reco"][k] != 0, labels[k], args.toy_parameters["plot_ranges"][k], args.toy_parameters["smearing_residual_ranges"][k], trial_functions)
 
     for q in labels:
@@ -224,6 +225,7 @@ def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, args :
     Master.DictToHDF5(selection_efficiency_info, out + "pi_beam_efficiency/beam_selection_efficiencies_true.hdf5")
     return
 
+
 @Master.timer
 def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace, out : str):
     """ Study which computes a correlation matrix ofthe event faction for reco regions and true regions.
@@ -233,19 +235,27 @@ def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace, out : str):
         mc (Master.Data): mc events.
         args (argparse.Namespace): application arguments.
     """
-    reco_regions, true_regions = RegionSelection(mc, args, True)
-
     os.makedirs(out + "reco_regions/", exist_ok = True)
     pdf = Plots.PlotBook(out + "reco_regions/reco_regions_study")
-    counts = cross_section.Toy.ComputeCounts(true_regions, reco_regions)
-    Plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), x_label = "true process", y_label = "reco region")
-    pdf.Save()
+    pe = {}
+    for r in RegionIdentification.regions:
+        print(r)
+        reco_regions, true_regions = RegionSelection(mc, args, True, r, True)
+
+        counts = cross_section.CountInRegions(true_regions, reco_regions)
+        Plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "true process", x_label = "reco region", title = cross_section.remove_(r))
+        pdf.Save()
+
+        pe[cross_section.remove_(r)] = (np.diag(counts) / np.sum(counts, 0)[:-1]) * (np.diag(counts) / np.sum(counts, 1))
+
+        reco_regions.pop("uncategorised")
+        counts = cross_section.CountInRegions(true_regions, reco_regions)
+
+        fractions_df = counts / np.sum(counts, axis = 1)[:, np.newaxis]
+        fractions_df = pd.DataFrame(np.array(fractions_df).T, columns = true_regions, index = reco_regions) # columns are the true regions, so index over those to get the fractions
+        fractions_df.to_hdf(out + f"reco_regions/{r}_reco_region_fractions.hdf5", "df")
     pdf.close()
-
-
-    fractions_df = counts / np.sum(counts, axis = 1)[:, np.newaxis]
-    fractions_df = pd.DataFrame(np.array(fractions_df).T, columns = true_regions, index = reco_regions)# columns are the true regions, so index over those to get the fractions
-    fractions_df.to_hdf(out + "reco_regions/reco_region_fractions.hdf5", "df")
+    pd.DataFrame(pe, index = Tags.ExclusiveProcessTags(None).name_simple.values).style.format(precision = 2).to_latex(out + "reco_regions/pe.tex")
     return
 
 @Master.timer
@@ -256,18 +266,11 @@ def MeanTrackScoreKDE(mc : Master.Data, args : argparse.Namespace, out : str):
         mc (Master.Data): mc sample
         args (argparse.Namespace): application arguments.
     """
-    mc_copy = mc.Filter(returnCopy = True)
-
-    mask = SelectionTools.CombineMasks(args.selection_masks["mc"]["beam"])
-    mc_copy.Filter([mask], [mask])
-    mc_copy.Filter([args.selection_masks["mc"]['null_pfo']['ValidPFOSelection']])
-
-    has_pfo = cross_section.BeamParticleSelection.HasFinalStatePFOsCut(mc_copy) #! add as preselection
-    mc_copy.Filter([has_pfo], [has_pfo])
+    mc_copy = BeamPionSelection(mc, args, True)
 
     mean_track_score = ak.fill_none(ak.mean(mc_copy.recoParticles.track_score, axis = -1), -0.05)
 
-    true_processes = cross_section.EventSelection.create_regions_new(mc_copy.trueParticles.nPi0, mc_copy.trueParticles.nPiPlus + mc_copy.trueParticles.nPiMinus)
+    true_processes = RegionIdentification.TrueRegions(mc_copy.trueParticles.nPi0, mc_copy.trueParticles.nPiPlus + mc_copy.trueParticles.nPiMinus)
     tags = Tags.ExclusiveProcessTags(true_processes)
 
     kdes = {}

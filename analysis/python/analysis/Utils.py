@@ -6,6 +6,12 @@ Author: Shyam Bhuller
 Description: random functions which are sometimes useful
 """
 import numpy as np
+import os
+import dill
+
+def dill_copy(obj : any):
+    return dill.loads(dill.dumps(obj))
+
 
 def bin_centers(bins : np.ndarray) -> np.ndarray:
     return (bins[1:] + bins[:-1]) / 2
@@ -19,8 +25,10 @@ def fpower(num : np.ndarray, exp, real : bool = True):
 def nandiv(num, den) -> np.ndarray:
     return np.divide(num, np.where(den == 0, np.nan, den))
 
+
 def nanlog(x) -> np.ndarray:
     return np.log(np.where(x < 0, np.nan, x))
+
 
 def weighted_chi_sqr(observed, expected, uncertainties) -> np.ndarray:
     u = np.array(uncertainties)
@@ -38,3 +46,7 @@ def nanquadsum(x : np.ndarray | list, axis : int = None) -> np.ndarray:
 
 def remove_(str) -> str:
     return str.replace("_", " ")
+
+
+def ls_recursive(path : os.PathLike):
+    return [os.path.join(dp, f) for dp, dn, fn in os.walk(os.path.expanduser(path)) for f in fn]

@@ -969,7 +969,7 @@ def MultiPlot(n : int, xlim : tuple = None, ylim : tuple = None):
         yield i
 
 
-def IterMultiPlot(x, xlim : tuple = None, ylim : tuple = None):
+def IterMultiPlot(x, xlim : tuple = None, ylim : tuple = None, threshold = 100):
     """ Generator for subplots but also iterates with the data to plot to reduce boilerplate.
 
     Args:
@@ -981,7 +981,7 @@ def IterMultiPlot(x, xlim : tuple = None, ylim : tuple = None):
     Yields:
         tuple: ith plot and sample to plot.
     """
-    if len(x) > 100:
+    if len(x) > threshold:
         raise Exception("Too many plots specified, did you pass the correct shape data?")
     for i, j in zip(MultiPlot(len(x), xlim, ylim), x):
         yield i, j
@@ -998,10 +998,27 @@ def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label:
         plt.bar(x, y, width, xerr = xerr, yerr = yerr, linestyle = linestyle, label = label, color = color, alpha = alpha, capsize = capsize, zorder = zorder)
     elif style == "step":
         if (xerr is not None): warnings.warn("x error bars are not supported with style 'step'")
-        p1 = plt.step(x, y, where = "mid", linestyle = linestyle, color = color, alpha = alpha, zorder = zorder, label = label)
+        
+        y = np.array([i for _, i in sorted(zip(x, y))])
         if yerr is not None:
-            plt.fill_between(x, y + yerr, y - yerr, step = "mid", alpha = 0.25, color = color)
-            p2 = mpatches.Patch(color=color, alpha=0.25, linewidth=0)
+            yerr = np.array([i for _, i in sorted(zip(x, yerr))])
+        x = sorted(x)
+
+        width = abs(x[0] - x[1]) if len(x) > 1 else 0
+        edges = []
+        for i in x:
+            edges.append(i + width/2)
+        edges.insert(0, edges[0] - width)
+        
+        if color is None: color = next(plt.gca()._get_lines.prop_cycler)["color"] # cause apparently stairs suck
+
+        # p1 = plt.step(x, y, where = "mid", linestyle = linestyle, color = color, alpha = alpha, zorder = zorder, label = label)
+        p1 = plt.stairs(y, edges, linestyle = linestyle, edgecolor = color, color = color, alpha = alpha, zorder = zorder, label = label)
+
+        if yerr is not None:
+            # plt.fill_between(x, y + yerr, y - yerr, step = "mid", alpha = 0.25, color = color)
+            plt.stairs(y+yerr, edges, baseline=y-yerr, fill = True, alpha = 0.25, color = color)
+            # p2 = mpatches.Patch(color=color, alpha=0.25, linewidth=0)
         # handles = ((p1[0],p2),)
         # labels  = (label,)
     elif style == "scatter":
@@ -1309,13 +1326,13 @@ def PlotHist2DImshow(x : ak.Array, y : ak.Array, bins : int = 100, x_range : lis
     h, x_e, y_e = np.histogram2d(np.array(x), np.array(y), bins = bins, range = [x_range, y_range])
 
     if norm == "row":
-        h_norm = h / np.max(h, 0) # normalised by row
+        h_norm = Utils.nandiv(h, np.nanmax(h, 0)) # normalised by row
     elif norm == "column":
-        h_norm = h / np.max(h, axis = 1)[:, np.newaxis] # normalised by column
+        h_norm = Utils.nandiv(h, np.nanmax(h, axis = 1)[:, np.newaxis]) # normalised by column
     else:
         h_norm = h # don't normalise
 
-    if c_range is None: c_range = [np.min(h_norm), np.max(h_norm)]
+    if c_range is None: c_range = [np.nanmin(h_norm), np.nanmax(h_norm)]
 
     if c_scale == "log":
         cnorm = matplotlib.colors.LogNorm(vmin = max(min(c_range), 1) , vmax = max(c_range))
@@ -1379,22 +1396,22 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
     if newFigure: plt.figure()
     c_norm = counts/np.sum(counts, axis = 0)
     plt.imshow(c_norm, cmap = cmap, origin = "lower")
-    plt.colorbar(label = "column normalised counts")
+    plt.colorbar(label = "column normalised counts", shrink = 0.8)
 
-    true_counts = np.sum(counts, axis = 1)
-    reco_counts = np.sum(counts, axis = 0)
+    y_counts = np.sum(counts, axis = 1)
+    x_counts = np.sum(counts, axis = 0)
 
     if x_tick_labels is None:
         x_tick_labels = [f"{i}" for i in range(np.array(counts).shape[0])]
     if y_tick_labels is None:
         y_tick_labels = [f"{i}" for i in range(np.array(counts).shape[1])]
 
-    true_counts = [f"{x_tick_labels[t].replace('_', ' ')}\n({true_counts[t]})" for t in range(len(x_tick_labels))]
-    reco_counts = [f"{y_tick_labels[r].replace('_', ' ')}\n({reco_counts[r]})" for r in range(len(y_tick_labels))]
+    x_counts = [f"{x_tick_labels[r].replace('_', ' ')}\n({x_counts[r]})" for r in range(len(x_tick_labels))]
+    y_counts = [f"{y_tick_labels[t].replace('_', ' ')}\n({y_counts[t]})" for t in range(len(y_tick_labels))]
 
 
-    plt.gca().set_xticks(np.arange(len(reco_counts)), labels=reco_counts)
-    plt.gca().set_yticks(np.arange(len(true_counts)), labels=true_counts)
+    plt.gca().set_xticks(np.arange(len(x_counts)), labels=x_counts)
+    plt.gca().set_yticks(np.arange(len(y_counts)), labels=y_counts)
 
     plt.xlabel(x_label)
     plt.ylabel(y_label)
@@ -1402,19 +1419,19 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
     plt.yticks(rotation = 30)
 
     if title is not None:
-        plt.title(title + "| Key: (counts, fraction(%))")
+        plt.title(title + "| Key: (counts, efficiency(%), purity(%))")
     else:
-        plt.title("Key: (counts, fraction(%))")
+        plt.title("Key: (counts, efficiency(%), purity(%))")
 
     for (i, j), z in np.ndenumerate(counts):
-        plt.gca().text(j, i, f"{z},\n{fractions[i][j]*100:.2g}%", ha='center', va='center', fontsize = 8)
+        plt.gca().text(j, i, f"{z},\n{fractions[i][j]*100:.2g}%,{c_norm[i][j]*100:.2g}%", ha='center', va='center', fontsize = 8)
     plt.grid(False)
     plt.tight_layout()
 
 
 def DrawMultiCutPosition(value : float | list[float], arrow_loc : float = 0.8, arrow_length : float = 0.2, face : str | list[str] = "right", flip : bool = False, color = "black", annotate : bool = False):
     if type(value) == list and type(face) == list:
-        for i in range(2):
+        for i in range(max(2, len(value))):
             DrawCutPosition(value[i], arrow_loc, arrow_length, face[i], flip, color, annotate)
     else:
         DrawCutPosition(value, arrow_loc, arrow_length, face, flip, color, annotate)
@@ -1642,9 +1659,11 @@ def PlotStackedBar(bars, labels, xlabel : str = None, colours : list = None, alp
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
-def PlotTags(tags : Tags.Tags, xlabel : str = "name"):
-    plt.figure()
+def PlotTags(tags : Tags.Tags, xlabel : str = "name", fraction : bool = True, newFigure : bool = True):
+    if newFigure: plt.figure()    
     counts = [ak.sum(m) for m in tags.mask.values]
+    if fraction is True:
+        counts = counts / np.sum(counts)
     bar = plt.bar(tags.name.values, counts, color = tags.colour.values)
     plt.xlabel(xlabel)
     plt.ylabel("Counts")

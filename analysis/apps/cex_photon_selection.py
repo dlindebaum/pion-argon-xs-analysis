@@ -47,6 +47,10 @@ def run(i, file, n_events, start, selected_events, args):
     events = Master.Data(file, n_events, start, args["ntuple_type"])
 
     if "selection_masks" in args:
+        if "fiducial" in args["selection_masks"]["mc"]:
+            mask = SelectionTools.CombineMasks(args["selection_masks"]["mc"]["fiducial"])
+            events.Filter([mask], [mask])
+
         mask = SelectionTools.CombineMasks(args["selection_masks"]["mc"]["beam"])
         events.Filter([mask], [mask])
 
@@ -253,10 +257,10 @@ def ResponseFits(central_values : dict, bins : np.ndarray, book : Plots.PlotBook
     for _, cv in Plots.IterMultiPlot(central_values):
         print(cv)
         print(central_values[cv][1])
-        popt, _ = Fitting.Fit(x, central_values[cv][0], central_values[cv][1], cross_section.EnergyCorrection.ResponseFit, method = "lm", plot = True, xlabel = "Reco shower energy (MeV)", ylabel = "Fractional error", maxfev = int(1E6))
+        popt, perr = Fitting.Fit(x, central_values[cv][0], central_values[cv][1], cross_section.EnergyCorrection.ResponseFit, method = "lm", plot = True, xlabel = "Reco shower energy (MeV)", ylabel = "Fractional error", maxfev = int(1E6))
         Plots.plt.ylim(-1, 1)
         Plots.plt.title(cv)
-        response_params[cv] = popt
+        response_params[cv] = {"value" : popt, "error" : perr}
 
     print(response_params)
     book.Save()
@@ -274,7 +278,7 @@ def MethodComparison(df : pd.DataFrame, linear_correction : float, response_para
     energies = {"uncorrected" : df.reco_shower_energy, "linear" : df.reco_shower_energy / linear_correction}
 
     for p in response_params:
-        energies[p] = cross_section.EnergyCorrection.ResponseCorrection(df.reco_shower_energy, *response_params[p])
+        energies[p] = cross_section.EnergyCorrection.ResponseCorrection(df.reco_shower_energy, *response_params[p]["value"])
 
     energies = {"uncorrected" : energies["uncorrected"], "gaussian" : energies["gaussian"]}
 
@@ -293,9 +297,12 @@ def MethodComparison(df : pd.DataFrame, linear_correction : float, response_para
         Plots.plt.plot(energy_range, energy_range)
     book.Save()
 
+    tab = {}
     for l, f in fe.items():
         v = f[(f > -1) & (f < 1)]
-        print(f"{l} : mean {v.mean():.3f} std {v.std():.3f}")
+        tab[l] = {"$\mu$" : v.mean(), "$\sigma$" : v.std()}
+        # print(f"{l} : mean {v.mean():.3f} std {v.std():.3f}")
+    tab = pd.DataFrame(tab)
 
     for i, f in Plots.IterMultiPlot(fe):
         binned_data = [fe[f][(df.reco_shower_energy > bins[i + 0]) & (df.reco_shower_energy < bins[i + 1])] for i in range(len(bins)-1)]
@@ -317,10 +324,10 @@ def MethodComparison(df : pd.DataFrame, linear_correction : float, response_para
         Plots.plt.legend()
     book.Save()
 
-    return
-
+    return tab
 
 def main(args):
+    cross_section.SetPlotStyle(False)
     outputs = Processing.mutliprocess(run, [args.mc_file], args.batches, args.events, vars(args), args.threads)
 
     output = {}
@@ -356,6 +363,9 @@ def main(args):
 
     book = Plots.PlotBook(out + "plots.pdf")
 
+    #* initial plots
+    PhotonSelection(df, book)
+
     #* linear correction
     energy_range = args.shower_correction["energy_range"]
     bins = np.linspace(min(energy_range), max(energy_range), 11)
@@ -368,10 +378,18 @@ def main(args):
     central_values = CalculateCentralValues(df, bins, book)
     response_params = ResponseFits(central_values, bins, book)
 
-    MethodComparison(df, linear_correction, response_params, bins, energy_range, book)
+    tab = MethodComparison(df, linear_correction, response_params, bins, energy_range, book)
     book.close()
     
-    params = {p : {f"p{i}" : response_params[p][i] for i in range(len(response_params[p]))} for p in response_params}
+    tab.T.style.format(precision = 3).to_latex(out + "table.tex")
+
+    params = {p :
+        {
+            "value" : {f"p{i}" : response_params[p]["value"][i] for i in range(len(response_params[p]["value"]))},
+            "error" : {f"p{i}" : response_params[p]["error"][i] for i in range(len(response_params[p]["error"]))}
+        }
+    for p in response_params}
+
     for name, p in params.items():
         cross_section.SaveConfiguration(p, out + name + ".json")
 

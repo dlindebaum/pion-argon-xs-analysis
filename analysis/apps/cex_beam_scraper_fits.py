@@ -180,9 +180,14 @@ def main(args : argparse.Namespace):
     cross_section.SetPlotStyle(True)
 
     mc = Master.Data(args.mc_file, nTuple_type = args.ntuple_type, target_momentum = args.pmom)
-    bq_fit = args.mc_beam_quality_fit
-    mask = cross_section.BeamParticleSelection.CreateDefaultSelection(mc, False, bq_fit, return_table = False)#! make configurable! #
-    mc.Filter([mask], [mask]) # apply default beam selection
+    for s in args.beam_selection["selections"]:
+        if s == "BeamScraperCut": break
+        mask = args.beam_selection["selections"][s](mc, **args.beam_selection["mc_arguments"][s])
+        mc.Filter([mask], [mask])
+
+    # bq_fit = args.mc_beam_quality_fit
+    # mask = cross_section.BeamParticleSelection.CreateDefaultSelection(mc, False, bq_fit, return_table = False)#! make configurable! #
+    # mc.Filter([mask], [mask]) # apply default beam selection
 
     beam_inst_KE = cross_section.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
     true_ffKE = mc.trueParticles.beam_KE_front_face
