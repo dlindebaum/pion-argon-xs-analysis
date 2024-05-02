@@ -12,6 +12,7 @@ import itertools
 import numpy as np
 import pandas as pd
 
+from pathos.pools import ProcessPool
 from rich import print, rule
 from scipy.ndimage import gaussian_filter1d
 
@@ -235,6 +236,46 @@ def PullStudy(template : cross_section.AnalysisInput, model : cross_section.pyhf
     out["uncertainty"] = pd.DataFrame(uncertainty)
     return out
 
+
+def PullStudyFast(toys : cross_section.Toy, n_template : int, n_data : int, args, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, n : int) -> dict:
+    out = {"expected" : None, "scale" : pd.Series(n_template / n_data), "bestfit" : None, "uncertainty" : None}
+
+    @cross_section.timer
+    def Pull():
+        output = {"expected" : None, "bestfit" : None, "uncertainty" : None}
+        print(rule.Rule(f"iteration : {i} | total : {n}"))
+        template = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = toys.df.iloc[np.random.choice(len(toys.df), int(n_template))].reset_index()))
+        data = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = toys.df.iloc[np.random.choice(len(toys.df), int(n_data))].reset_index()))
+
+        if mean_track_score_bins:
+            model = cross_section.RegionFit.CreateModel(template, args.energy_slices, mean_track_score_bins, False, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
+        else:
+            model = cross_section.RegionFit.CreateModel(template, args.energy_slices, None, False, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
+
+        template_fractions = {s : (sum(template.exclusive_process[s]) / len(template)) for s in template.exclusive_process}
+
+        output["expected"] = {s : (sum(data.exclusive_process[s]) / len(data.exclusive_process[s])) / template_fractions[s] for s in data.exclusive_process}
+
+        result = cross_section.RegionFit.Fit(cross_section.RegionFit.GenerateObservations(data, energy_slices, mean_track_score_bins, model, single_bin = args.fit["single_bin"]), model, None, [(0, np.inf)]*model.config.npars, False, tolerance = 0.1)
+
+        output["bestfit"] = {list(data.exclusive_process.keys())[j] : result.bestfit[j] for j in range(len(template.exclusive_process))}
+        output["uncertainty"] = {list(data.exclusive_process.keys())[j] : result.uncertainty[j] for j in range(len(template.exclusive_process))}
+
+        return output
+
+    expected = []
+    bestfit = []
+    uncertainty = []
+    for i in range(n):
+        o = Pull()
+        expected.append(o["expected"])
+        bestfit.append(o["bestfit"])
+        uncertainty.append(o["uncertainty"])
+
+    out["expected"] = pd.DataFrame(expected)
+    out["bestfit"] = pd.DataFrame(bestfit)
+    out["uncertainty"] = pd.DataFrame(uncertainty)
+    return out
 
 def PlotShapeExamples(energy_slices : cross_section.Slices, book : Plots.PlotBook = Plots.PlotBook.null):
     norms = [0.8, 1.2]
@@ -664,7 +705,7 @@ def main(args : cross_section.argparse.Namespace):
     if args.toy_data_config:
         print("Running tests")
         if args.out is None:
-            args.out = "region_fit_studies"
+            args.out = "region_fit_studies/"
         os.makedirs(args.out, exist_ok = True)
         for m in models:
 
@@ -694,7 +735,8 @@ def main(args : cross_section.argparse.Namespace):
                     args.energy_slices,
                     args.fit["single_bin"])
             if "pulls" not in args.skip:
-                pull_results = PullStudy(args.template, models[m], args.energy_slices, mean_track_score_bins if m == "track_score" else None, args.toy_data_config, 100, args.fit["single_bin"])
+                # pull_results = PullStudy(args.template, models[m], args.energy_slices, mean_track_score_bins if m == "track_score" else None, args.toy_data_config, 100, args.fit["single_bin"])
+                pull_results = PullStudyFast(toys, int(5E6), int(1E6), args, args.energy_slices, mean_track_score_bins if m == "track_score" else None, 500)
                 os.makedirs(args.out + f"pull_test_{m}/", exist_ok = True)
                 DictToHDF5(pull_results, args.out + f"pull_test_{m}/" + "pull_results.hdf5")
 
