@@ -1456,7 +1456,6 @@ class RecoParticleData(ParticleData):
     def beam_inst_P(self) -> type:
         self.LoadData("beam_inst_P", "beam_inst_P")
         return self.events.target_mom * 1000 * getattr(self, f"_{type(self).__name__}__beam_inst_P")
-        # return 1000 * getattr(self, f"_{type(self).__name__}__beam_inst_P")
 
     @property
     def beam_inst_pos(self) -> ak.Record:

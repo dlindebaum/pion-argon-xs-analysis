@@ -283,14 +283,15 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
     # Plot the fit value for each scale factor 
     Plots.plt.figure()
     for i in range(4):
-        Plots.Plot(x, data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], newFigure = False, label = f"$\mu_{{{process_map[i]}}}$", marker = "o", ylabel = "fit value", color = list(region_colours.values())[i], linestyle = "")
+        Plots.Plot(x, data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], newFigure = False, label = f"${process_map[i]}$", marker = "o", ylabel = "$\mu^{fit}_{s}$", color = list(region_colours.values())[i], linestyle = "")
+    Plots.plt.legend(title = "$s$")
     Plots.plt.xticks(ticks = x, labels = x)
     Plots.plt.xlabel(xlabel)
     pdf.Save()
 
     # same as above, in separate plots
     for i in Plots.MultiPlot(4):
-        Plots.Plot(x, data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], newFigure = False, title = f"$\mu_{{{process_map[i]}}}$", marker = "o", xlabel = xlabel, ylabel = "fit value", color = list(region_colours.values())[i], linestyle = "")
+        Plots.Plot(x, data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], newFigure = False, marker = "o", xlabel = xlabel, ylabel = f"$\mu^{{fit}}_{{{process_map[i]}}}$", color = list(region_colours.values())[i], linestyle = "")
         Plots.plt.xticks(ticks = x, labels = x)
     pdf.Save()
 
@@ -304,7 +305,7 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
     # plot true process fractional error
     Plots.plt.figure()
     for n in Plots.MultiPlot(4):
-        Plots.Plot(x, data[f"fe_total_{n}"], yerr = data[f"fe_err_total_{n}"], label = f"${process_map[n]}$", xlabel = xlabel, ylabel = "fractional error", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
+        Plots.Plot(x, data[f"fe_total_{n}"], yerr = data[f"fe_err_total_{n}"], xlabel = xlabel, ylabel = f"$f_{process_map[n]}$", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
         Plots.plt.axhline(0, color = "black", linestyle = "--")
         Plots.plt.ylim(1.5 * np.min(data.filter(regex = "fe_total_").values), 1.5 * np.max(data.filter(regex = "fe_total_").values))
         Plots.plt.xticks(ticks = x, labels = x)
@@ -314,9 +315,10 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
     # plot true process fractional error
     Plots.plt.figure()
     for n in range(4):
-        Plots.Plot(x, data[f"fe_total_{n}"], yerr = data[f"fe_err_total_{n}"], label = f"${process_map[n]}$", xlabel = xlabel, ylabel = "fractional error", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
+        Plots.Plot(x, data[f"fe_total_{n}"], yerr = data[f"fe_err_total_{n}"], label = f"${process_map[n]}$", xlabel = xlabel, ylabel = "$f_{s}$", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
         Plots.plt.axhline(0, color = "black", linestyle = "--")
         Plots.plt.ylim(1.5 * np.min(data.filter(regex = "fe_total_").values), 1.5 * np.max(data.filter(regex = "fe_total_").values))
+    Plots.plt.legend(title = "$s$")
     Plots.plt.xticks(ticks = x, labels = x)
     if ylim: Plots.plt.ylim(ylim)
     pdf.Save()
@@ -336,7 +338,7 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
         Plots.plt.figure()
         for i, s in Plots.IterMultiPlot(process_map):
             for l, y, e in zip(x, data_energy["fe"][i], data_energy["fe_err"][i]):
-                Plots.Plot(energy_overflow, y, yerr = e, label = l, ylabel = "fractional error", newFigure = False)
+                Plots.Plot(energy_overflow, y, yerr = e, label = l, ylabel = "$f$", newFigure = False)
             Plots.plt.axhline(0, color = "black", linestyle = "--")
             Plots.plt.xlabel("$KE$ (MeV)")
             Plots.plt.title(f"$N_{{{process_map[i]}}}$")
@@ -522,6 +524,7 @@ def PredictedCountsSummary(template_counts : float, model : cross_section.pyhf.M
     return n_fe_max, n_fe_total_max
 
 def CreateSummaryTables(total_summaries, row_names):
+    proc_tags = cross_section.Tags.ExclusiveProcessTags(None)
 
     table_fe = pd.DataFrame({k : v[0] for k, v in total_summaries.items()}, index = row_names)
     table_err = pd.DataFrame({k : v[1] for k, v in total_summaries.items()}, index = row_names)
@@ -532,8 +535,8 @@ def CreateSummaryTables(total_summaries, row_names):
         for c, v, e in zip(table_fe.columns, i, j):
             e_s = f"{100 * e:.1g}"
             v_s = str(round(100 * v, len(e_s.split(".")[-1])))
-            row[cross_section.remove_(c)] = f"{v_s} $\pm$ {e_s}"
-        table_str[cross_section.remove_(r) + "(\%)"] = row
+            row[proc_tags[c].name_simple] = f"{v_s} $\pm$ {e_s}"
+        table_str[proc_tags[r].name_simple + "(\%)"] = row
     return table_fe, table_err, pd.DataFrame(table_str)
 
 
@@ -636,13 +639,17 @@ def CalculateResultsFromFile(workdirs, test_name, model_name, template_counts, m
             results_total[k], results_bins[k] = MeanProcessedResults(results_total[k], results_bins[k])
         else:
             results_total[k], results_bins[k] = results_total[k][0], results_bins[k][0]
+
+    nominal = results_total['absorption'].loc[1]
+    for p in results_total:
+        results_total[p].loc[1] = nominal
     return results_total, results_bins
 
 
 
 @cross_section.timer
 def main(args : cross_section.argparse.Namespace):
-    cross_section.SetPlotStyle(extend_colors = True, dark = True)
+    cross_section.SetPlotStyle(extend_colors = True, dark = True, font_scale = 1.2)
     args.template = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(file = args.template))
 
     mean_track_score_bins = np.linspace(0, 1, 21, True)
@@ -730,12 +737,28 @@ def main(args : cross_section.argparse.Namespace):
 
                         pulls = (pull_results["bestfit"] - (pull_results["expected"] / pull_results["scale"][0])) / pull_results["uncertainty"]
 
+                        means = {}
+                        stds = {}
                         for _, k in Plots.IterMultiPlot(pulls.columns):
                             mean = np.mean(pulls[k])
                             std = np.std(pulls[k])
                             sem = std / np.sqrt(len(pulls[k]))
+                            p = len(f"{sem:.1g}") - 2
+                            print(folder[k])
+                            means[folder[k]] = f"{mean:.{p}g} $\pm$ {sem:.1g}"
+                            stds[folder[k]] = f"{std:.3g}"
                             Plots.PlotHist(pulls[k], bins = 10, title = f"$\mu_{{{label_map[k]}}}$ | mean : {mean:.3g} $\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = False)
                         book.Save()
+                        for k in pulls.columns:
+                            mean = np.mean(pulls[k])
+                            std = np.std(pulls[k])
+                            sem = std / np.sqrt(len(pulls[k]))
+                            Plots.PlotHist(pulls[k], bins = 10, title = f"$\mu_{{{label_map[k]}}}$ | mean : {mean:.3g} $\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = True)
+                            book.Save()
+
+                        table = pd.DataFrame({"mean" : means, "st.dev" : stds}).T
+                        table.style.to_latex(outdir + f"pull_test_{m}/pulls.tex")
+
 
                 else:
 
@@ -747,7 +770,7 @@ def main(args : cross_section.argparse.Namespace):
                             if (t == "shape"):
                                 PlotCrossCheckResultsShape(results_total[f], results_bins[f], args.energy_slices.pos_overflow, args.fit["single_bin"], pdf)
                             else:
-                                PlotCrossCheckResults(f"{cross_section.remove_(f)} {t}", results_total[f], results_bins[f], args.energy_slices.pos_overflow, pdf, args.fit["single_bin"])
+                                PlotCrossCheckResults(f"{cross_section.remove_(f)} {t}", results_total[f], results_bins[f], args.energy_slices.pos_overflow, pdf, args.fit["single_bin"], [-0.02, 0.06])
                         Plots.plt.close("all")
                 
                     with Plots.PlotBook(outdir + f"{t}_test_{m}/summary_plots.pdf", True) as book:

@@ -17,6 +17,7 @@ from rich import print
 
 from python.analysis.Master import ReadHDF5, LoadConfiguration
 from python.analysis.cross_section import ApplicationArguments
+from python.analysis import Utils
 
 selection_map = {
     "no selection" : "No selection",
@@ -245,8 +246,11 @@ def bq_angle(values : dict):
     return t
 
 
-def copy_table(source : str, dest : str):
+def copy_table(source : str, dest : str, new_name : str = None):
     name = source.split("/")[-1]
+
+    if new_name: name = new_name.split(".tex")[0] + ".tex"
+
     os.makedirs(dest, exist_ok = True)
     with open(source) as f:
         with open(f"{dest}{name}", "w") as of:
@@ -284,19 +288,21 @@ def main(args : argparse.Namespace):
     t_angle.style.to_latex(f"{outp}/angle.tex")
     FormatTable(f"{outp}/angle.tex")
 
-
-    with open(f"{path}/shower_energy_correction/table.tex") as f:
-        with open(f"{out}shower_correction.tex", "w") as of:
-            of.writelines(f.readlines())
-    FormatTable(f"{out}shower_correction.tex")
-
-    # copy_table(f"{path}/shower_energy_correction/table.tex", f"{out}shower_correction_")
+    copy_table(f"{path}/shower_energy_correction/table.tex", f"{out}", "shower_correction.tex")
 
     copy_table(f"{path}/toy_parameters/reco_regions/pe.tex", f"{out}/reco_regions/")
 
     copy_table(f"{path}/measurement/pdsp/fit_results_NP.tex", f"{out}/data_fit/")
     copy_table(f"{path}/measurement/pdsp/fit_results_POI.tex", f"{out}/data_fit/")
 
+    for f in Utils.ls_recursive(f'{path}'):
+        if out in f: continue
+        if "table_processes_fmt.tex" in f:
+            copy_table(f, f"{out}", "normalisation_test_summary.tex")
+        if "pulls_no_np.tex" in f:
+            copy_table(f, f"{out}", "pulls_no_np.tex")
+        if "pulls_np.tex" in f:
+            copy_table(f, f"{out}", "pulls_np.tex")
     return
 
 

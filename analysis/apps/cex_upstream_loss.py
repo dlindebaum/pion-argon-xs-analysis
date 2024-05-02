@@ -77,7 +77,7 @@ def CentralValueEstimation(bins : np.ndarray, KE_reco_inst : np.ndarray, KE_true
 
 
 def main(args : argparse.Namespace):
-    cross_section.SetPlotStyle(False)
+    cross_section.SetPlotStyle(False, dpi = 100)
     mc = Master.Data(args.mc_file, -1, 0, args.ntuple_type, args.pmom)
 
     mc = BeamPionSelection(mc, args, True)
@@ -90,14 +90,14 @@ def main(args : argparse.Namespace):
     x = (bins[1:] + bins[:-1]) / 2
 
     os.makedirs(args.out + "upstream_loss/", exist_ok = True)
-    with Plots.PdfPages(args.out + "upstream_loss/" + "cex_upstream_loss_plots.pdf") as pdf:
+    with Plots.PlotBook(args.out + "upstream_loss/" + "cex_upstream_loss_plots.pdf") as pdf:
         reco_KE_inst = cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass)
         cv = CentralValueEstimation(bins, reco_KE_inst, mc.trueParticles.beam_KE_front_face, cv_method[args.upstream_loss_cv_function], mc_weights)
-        pdf.savefig()
+        pdf.Save()
 
         Plots.plt.figure()
         params = cross_section.Fitting.Fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$(MeV)", ylabel = "$\mu(KE^{reco}_{inst} - KE^{true}_{init})$(MeV)", loc = "upper center")
-        pdf.savefig()
+        pdf.Save()
 
         params_dict = {
             "value" : {f"p{i}" : params[0][i] for i in range(len(params[0]))},
@@ -107,8 +107,8 @@ def main(args : argparse.Namespace):
         reco_KE_ff =  reco_KE_inst - cross_section.UpstreamEnergyLoss(reco_KE_inst, params_dict["value"], args.upstream_loss_response)
 
         Plots.PlotHistComparison([reco_KE_ff, mc.trueParticles.beam_KE_front_face], labels = ["$KE^{reco}_{init}$", "$KE^{true}_{init}$"], x_range = [bins[0], bins[-1]], xlabel = "Kinetic energy (MeV)", weights = [mc_weights, mc_weights])
-        pdf.savefig()
-
+        pdf.Save()
+    Plots.plt.close("all")
     print(f"fitted parameters : {params_dict}")
     cross_section.SaveConfiguration(params_dict, args.out + "upstream_loss/" + "fit_parameters.json")
     return
