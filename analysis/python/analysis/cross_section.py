@@ -669,6 +669,8 @@ class ApplicationArguments:
         """
         args = argparse.Namespace()
         for head, value in config.items():
+            if head == "NTUPLE_FILES":
+                args.ntuple_files = value
             if head == "NTUPLE_FILE":
                 args.mc_file = value["mc"]
                 args.data_file = value["data"]
@@ -973,27 +975,26 @@ class GeantCrossSections:
     labels = {"abs_KE;1" : "absorption", "inel_KE;1" : "quasielastic", "cex_KE;1" : "charge_exchange", "dcex_KE;1" : "double_charge_exchange", "prod_KE;1" : "pion_production", "total_inel_KE;1" : "total_inelastic"}
 
     def __init__(self, file : str = os.environ["PYTHONPATH"] + "/data/g4_xs.root", energy_range : list = None, n_cascades : int = None) -> None:
-        self.file = uproot.open(file) # open root file
+        with uproot.open(file) as ufile: # open root file
+            self.KE = ufile["abs_KE;1"].all_members["fX"] # load kinetic energy from one channel (shared for all cross section channels)
 
-        self.KE = self.file["abs_KE;1"].all_members["fX"] # load kinetic energy from one channel (shared for all cross section channels)
+            if energy_range:
+                self.KE = self.KE[(self.KE <= max(energy_range)) & (self.KE >= min(energy_range))]
 
-        if energy_range:
-            self.KE = self.KE[(self.KE <= max(energy_range)) & (self.KE >= min(energy_range))]
+            for k in ufile.keys():
+                if "KE" in k:
+                    g = ufile[k]
+                    if energy_range:
+                        mask = (g.all_members["fX"] <= max(energy_range)) & (g.all_members["fX"] >= min(energy_range))
+                        xs = g.all_members["fY"][mask]
+                    else:
+                        xs = g.all_members["fY"]
+                    s = "_frac" if "frac" in k else "" 
+                    setattr(self, self.labels[k.replace("_frac", "")] + s, xs[0:len(self.KE)]) # assign class variables for each cross section channel
 
-        for k in self.file.keys():
-            if "KE" in k:
-                g = self.file[k]
-                if energy_range:
-                    mask = (g.all_members["fX"] <= max(energy_range)) & (g.all_members["fX"] >= min(energy_range))
-                    xs = g.all_members["fY"][mask]
-                else:
-                    xs = g.all_members["fY"]
-                s = "_frac" if "frac" in k else "" 
-                setattr(self, self.labels[k.replace("_frac", "")] + s, xs[0:len(self.KE)]) # assign class variables for each cross section channel
-
-        self.exclusive_processes = list(self.labels.values())
-        self.exclusive_processes.remove("total_inelastic")
-        self.n_cascades = n_cascades
+            self.exclusive_processes = list(self.labels.values())
+            self.exclusive_processes.remove("total_inelastic")
+            self.n_cascades = n_cascades
         pass
 
 
@@ -1614,26 +1615,26 @@ class AnalysisInput:
         Returns:
             AnalysisInput: analysis input object.
         """
-        inclusive_events = (toy.df.inclusive_process != "decay").values
+        inclusive_events = np.array((toy.df.inclusive_process != "decay").values)
 
-        regions = {k : v.values for k, v in toy.reco_regions.items()}
-        process = {k : v.values for k, v in toy.truth_regions.items()}
+        regions = {k : np.array(v.values) for k, v in toy.reco_regions.items()}
+        process = {k : np.array(v.values) for k, v in toy.truth_regions.items()}
 
         return AnalysisInput(
             regions,
             inclusive_events,
             process,
-            toy.outside_tpc_smeared.values,
-            toy.outside_tpc.values,
-            toy.df.z_int_smeared.values,
-            toy.df.KE_int_smeared.values,
-            toy.df.KE_init_smeared.values,
-            toy.df.KE_init_smeared.values,
-            toy.df.mean_track_score.values,
-            toy.df.z_int.values,
-            toy.df.KE_int.values,
-            toy.df.KE_init.values,
-            toy.df.KE_init.values,
+            np.array(toy.outside_tpc_smeared.values),
+            np.array(toy.outside_tpc.values),
+            np.array(toy.df.z_int_smeared.values),
+            np.array(toy.df.KE_int_smeared.values),
+            np.array(toy.df.KE_init_smeared.values),
+            np.array(toy.df.KE_init_smeared.values),
+            np.array(toy.df.mean_track_score.values),
+            np.array(toy.df.z_int.values),
+            np.array(toy.df.KE_int.values),
+            np.array(toy.df.KE_init.values),
+            np.array(toy.df.KE_init.values),
             None
             )
 
@@ -2114,11 +2115,10 @@ class Unfold:
             corr[k] = Unfold.CorrelationMarix(*v, bins = slice_bins, remove_overflow = False)
             resp[k] = Unfold.ResponseMatrix(*v, bins = slice_bins, efficiencies = None if efficiencies is None else efficiencies[k][0], remove_overflow = False)
 
-        for k in resp:
-            if book is not None:
+        if book is not None:
+            for k in resp:
                 Unfold.PlotMatrix(corr[k], energy_slice, title = f"Response marix: {labels[k]}", c_label = "Counts")
                 book.Save()
-            if book is not None:
                 Unfold.PlotMatrix(resp[k][0], energy_slice, title = f"Normalised response matrix: {labels[k]}", c_label = "$P(E_{i}|C_{j})$")
                 book.Save()
 

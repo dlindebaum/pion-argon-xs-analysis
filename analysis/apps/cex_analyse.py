@@ -360,7 +360,8 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
 
         #! not actually used for anything...
         region_selection_efficiency = SelectionEfficiency(true_hists_selected_regions, true_hists_selected_process)
-        PlotEfficiency(energy_slices, {f"$N_{{int}}$ : {cross_section.remove_(k).capitalize()}" : v for k, v in region_selection_efficiency.items()}, book)
+        if book is not None:
+            PlotEfficiency(energy_slices, {f"$N_{{int}}$ : {cross_section.remove_(k).capitalize()}" : v for k, v in region_selection_efficiency.items()}, book)
 
     if mc_cheat is not None:
         if regions:
@@ -373,18 +374,20 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
         if regions:
             int_ex_effieciencies = SelectionEfficiency(true_hists_selected_regions, true_hists_process)
 
-            PlotEfficiency(energy_slices, {f"$N_{{int, ex}}$ : {cross_section.remove_(k).capitalize()}" : v for k, v in int_ex_effieciencies.items()}, book)
+            if book is not None:
+                PlotEfficiency(energy_slices, {f"$N_{{int, ex}}$ : {cross_section.remove_(k).capitalize()}" : v for k, v in int_ex_effieciencies.items()}, book)
 
             efficiencies.pop("int_ex")
-
-        PlotEfficiency(energy_slices, {labels[k] : v for k, v in efficiencies.items()}, book)
+        if book is not None:
+            PlotEfficiency(energy_slices, {labels[k] : v for k, v in efficiencies.items()}, book)
     else:
         efficiencies = {k : np.ones_like(energy_slices.pos_overflow) for k in ["init", "int", "int_ex", "inc"]}
         true_hists = mc.CreateHistograms(energy_slices, signal_process, False, ~mc.inclusive_process)
         if regions:
             true_hists_process = {i : mc.NInteract(energy_slices, mc.exclusive_process[i], None, False, mc.weights) for i in mc.exclusive_process}
             int_ex_effieciencies = SelectionEfficiency(true_hists_selected_regions, true_hists_process)
-            PlotEfficiency(energy_slices, {process_labels[k] : v for k, v in int_ex_effieciencies.items()}, book)
+            if book is not None:
+                PlotEfficiency(energy_slices, {process_labels[k] : v for k, v in int_ex_effieciencies.items()}, book)
 
 
     e_copy = {k : v for k, v in efficiencies.items()}

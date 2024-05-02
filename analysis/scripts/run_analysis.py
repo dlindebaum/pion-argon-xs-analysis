@@ -24,6 +24,7 @@ from apps import (
 from python.analysis.cross_section import ApplicationArguments, argparse, os
 from python.analysis.Master import SaveConfiguration, LoadConfiguration, IO
 
+
 def template_config():
     template = {
         "NTUPLE_FILE":{
@@ -290,6 +291,7 @@ def template_config():
     }
     return template
 
+
 def template_toy_config(toy_parameters_dir : str, nEvents : int, seed : int, max_cpus : int, step : float, p_init : float, region_selection : str):
     template = {
         "events" : nEvents,
@@ -315,6 +317,7 @@ def template_toy_config(toy_parameters_dir : str, nEvents : int, seed : int, max
     }
     return template
 
+
 def update_config(config, update : dict):
     json_config = LoadConfiguration(config)
     json_config.update(update)
@@ -333,6 +336,7 @@ def file_len(file : str):
 
 def check_run(args : argparse.Namespace, step : str):
     return ((step in args.run) or (args.force is True)) and (step not in args.skip)
+
 
 def main(args):
     os.makedirs(args.out, exist_ok = True)
@@ -516,13 +520,11 @@ def main(args):
         if args.stop == "upstream_correction": return
 
         #* toy parameters
-        #TODO make config entry for toy_parameters, so the check is easier to make 
         can_run_tp = hasattr(args, "toy_parameters") and hasattr(args, "beam_reweight") and ("toy_parameters" not in os.listdir(args.out))
         if can_run_tp or check_run(args, "toy_parameters"):
             print("run toy parameters")
             cex_toy_parameters.main(args)
             # special case where the main config is not updated, rather the results from this would be used in the toy configurations
-            #! make function to create the a toy configuration
             selection_type = LoadConfiguration(args.config)["REGION_IDENTIFICATION"]["type"]
             toy_template_config = template_toy_config(os.path.abspath(args.out + "toy_parameters"), int(1E7), 1337, os.cpu_count() - 1, 2, args.beam_momentum, selection_type)
             data_config = template_toy_config(os.path.abspath(args.out + "toy_parameters"), int(1E6), 1, os.cpu_count() - 1, 2, args.beam_momentum, selection_type)
@@ -562,6 +564,7 @@ def main(args):
         if args.stop == "analyse": return
 
     return
+
 
 if __name__ == "__main__":
 
