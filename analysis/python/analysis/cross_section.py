@@ -23,7 +23,7 @@ from cabinetry.fit.results_containers import FitResults
 from particle import Particle
 from scipy.interpolate import interp1d, UnivariateSpline
 
-from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, RegionIdentification
+from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, RegionIdentification, Processing
 from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer
 from python.analysis.shower_merging import SetPlotStyle
 from python.analysis.Utils import *
@@ -254,6 +254,48 @@ def _unfold_custom(prior=None, mixer=None, ts_func=None, max_iter=100,
 #     return wrapper
 
 # pyhf.modifiers.staterror.required_parset = to_poisson(pyhf.modifiers.staterror.required_parset)
+
+
+def RunProcess(ntuple_files : list[str], is_data : bool, args : argparse.Namespace, func : callable, merge : bool = True) -> list:
+    output = []
+    for i in ntuple_files:
+        func_args = vars(args)
+        func_args["data"] = is_data
+        func_args["nTuple_type"] = i["type"]
+        func_args["pmom"] = i["pmom"]
+        output.extend(Processing.mutliprocess(func, [i["file"]], args.batches, args.events, func_args, args.threads))
+    if merge:
+        output = MergeOutputs(output)
+    return output
+
+
+def MergeOutputs(outputs : list[dict]) -> dict:
+    def search(collection : dict, output : dict):
+        for k, v in collection.items():
+            if type(v) is dict:
+                if k not in output:
+                    output[k] = {}
+                search(v, output[k])
+            else:
+                if k not in output:
+                    output[k] = v
+                else:
+                    if type(v) == ak.Array:
+                        output[k] = ak.concatenate([output[k], v])
+                    elif type(v) == Tags.Tags:
+                        output[k] = Tags.MergeTags([output[k], v])
+                    elif type(v) == list:
+                        output[k].extend(v)
+                    else:
+                        if type(output[k]) != list:
+                            output[k] = [output[k], v]
+                        else:
+                            output[k].append(v)
+
+    merged_output = {}
+    for o in outputs:
+        search(o, merged_output)
+    return merged_output
 
 
 def CountInRegions(true_regions : dict, reco_regions : dict, selection_efficincy : np.ndarray = None) -> np.ndarray:
@@ -671,10 +713,6 @@ class ApplicationArguments:
         for head, value in config.items():
             if head == "NTUPLE_FILES":
                 args.ntuple_files = value
-            if head == "NTUPLE_FILE":
-                args.mc_file = value["mc"]
-                args.data_file = value["data"]
-                args.ntuple_type = value["type"]
             elif head == "REGION_IDENTIFICATION":
                 args.region_identification = RegionIdentification.regions[value["type"]] 
             elif head == "BEAM_PARTICLE_SELECTION":
@@ -1713,6 +1751,12 @@ class AnalysisInput:
             true_KE_ff,
             weights,
             )
+
+
+    @staticmethod
+    def Concatenate(ais : list["AnalysisInput"]):
+        fields = MergeOutputs([vars(a) for a in ais])
+        return AnalysisInput(**fields)
 
 
     def CreateTrainTestSamples(self, seed : int, train_fraction : float = None) -> dict:

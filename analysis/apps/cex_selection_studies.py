@@ -424,10 +424,11 @@ def CreatePFOMasks(sample : Master.Data, selections : dict, args_type : str, ext
         masks[n] = c(sample, **v)
     return masks
 
-# @Processing.log_process
 def run(i, file, n_events, start, selected_events, args) -> dict:
-    events = Master.Data(file, nEvents = n_events, start = start, nTuple_type = args["ntuple_type"]) # load data
+    events = Master.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
+
     output = {
+        "name" : file,
         "fiducial" : None,
         "beam" : None,
         "null_pfo" : None,
@@ -470,7 +471,6 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
 
     if "piplus_selection" in args:
         print("pion selection")
-        # output_pip, table_pip = AnalysePiPlusSelection(events.Filter(returnCopy = True), args["data"], args["piplus_selection"]["selections"], args["piplus_selection"][selection_args]) # pass the PFO selections a copy of the event        
         output_pip, table_pip = AnalysePFOSelection(events.Filter(returnCopy = True), args["data"], args["piplus_selection"]["selections"], args["piplus_selection"][selection_args])        
         pip_masks = CreatePFOMasks(events, args["piplus_selection"], selection_args)
         output["pi"] = {"data" : output_pip, "table" : table_pip, "masks" : pip_masks}
@@ -489,7 +489,6 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
 
     if "photon_selection" in args:
         print("photon selection")
-        # output_photon, table_photon = AnalysePhotonCandidateSelection(events.Filter(returnCopy = True), args["data"], args["photon_selection"]["selections"], args["photon_selection"][selection_args])
         output_photon, table_photon = AnalysePFOSelection(events.Filter(returnCopy = True), args["data"], args["photon_selection"]["selections"], args["photon_selection"][selection_args])
         photon_masks = CreatePFOMasks(events, args["photon_selection"], selection_args)
         output["photon"] = {"data" : output_photon, "table" : table_photon, "masks" : photon_masks}
@@ -701,14 +700,23 @@ def MergeOutputs(outputs : list) -> dict:
 
     for output in outputs:
         for selection in output:
+            if selection == "name":
+                if selection not in merged_output:
+                    merged_output[selection] = [output[selection]]
+                else:
+                    merged_output[selection].append(output[selection])
+                continue
             if selection not in merged_output:
                 merged_output[selection] = {}
             if output[selection] is None:
                 continue
             for o in output[selection]:
                 if o not in merged_output[selection]:
-                    merged_output[selection][o] = output[selection][o]
-                    continue
+                    if o == "masks":
+                        merged_output[selection][o] = [output[selection][o]] # need to treat mask merging more carefully
+                    else:
+                        merged_output[selection][o] = output[selection][o]
+                    continue                    
                 if output[selection][o] is None: continue
                 if selection == "regions":
                     for m in output[selection][o]:
@@ -719,8 +727,7 @@ def MergeOutputs(outputs : list) -> dict:
                         tmp.Name = merged_output[selection][o].Name
                         merged_output[selection][o] = tmp
                     elif o == "masks":
-                        for c in output[selection][o]:
-                            merged_output[selection][o][c] = ak.concatenate([merged_output[selection][o][c], output[selection][o][c]])
+                        merged_output[selection][o].append(output[selection][o]) # need to treat mask merging more carefully
                     else:
                         for c in output[selection][o]:
                             if output[selection][o][c]["value"] is not None:
@@ -743,6 +750,56 @@ def MergeOutputs(outputs : list) -> dict:
     return merged_output
 
 
+def MergeSelectionMasks(output):
+    files = output["name"]
+
+    masks ={}
+    for k, v in output.items():
+        if (k not in ["name", "regions"]) and (len(v) > 0):
+            masks[k] = v["masks"]
+
+    unique_files = np.unique(files)
+
+    merged_masks = {}
+
+    for i, file in enumerate(unique_files):
+        merged_masks[file] = {} 
+        for k, v in masks.items():
+            merged_v = []
+            for j, f in zip(v, files):
+                if f == file:
+                    merged_v.append(j)
+            merged_masks[file][k] = merged_v
+
+    for f in merged_masks:
+        selection_masks = {}
+        for t in merged_masks[f]:
+            m = {}
+            for i in merged_masks[f][t]:
+                for k, v in i.items():
+                    if k not in m:
+                        m[k] = v
+                    else:
+                        m[k] = ak.concatenate([m[k], v])
+            selection_masks[t] = m
+        merged_masks[f] = selection_masks
+
+    sorted_masks = {}
+    for f in merged_masks:
+        for k, v in merged_masks[f].items():
+            if k not in sorted_masks:
+                sorted_masks[k] = [v]
+            else:
+                sorted_masks[k].append(v)
+
+    for k in output:
+        if (k not in ["name", "regions"]) and (k in sorted_masks):
+            output[k]["masks"] = sorted_masks[k]
+    output["name"] = list(merged_masks.keys())
+
+    return output
+
+
 def MakeTables(output : dict, out : str, sample : str):
     """ Create cutflow tables.
 
@@ -752,6 +809,7 @@ def MakeTables(output : dict, out : str, sample : str):
         sample (str): sample name i.e. mc or data
     """
     for s in output:
+        print(f"{s=}")
         if "table" in output[s]:
             outdir = out + s + "/"
             os.makedirs(outdir, exist_ok = True)
@@ -779,24 +837,29 @@ def SaveMasks(output : dict, out : str):
         out (str): output file directory
     """
     os.makedirs(out, exist_ok = True)
-    for head in output:
-        if "masks" not in output[head]: continue 
-        cross_section.SaveObject(out + f"{head}_selection_masks.dill", output[head]["masks"])
+
+    files = output["name"]
+
+    masks = {}
+    for k, v in output.items():
+        if (k not in ["name", "regions"]) and (len(v) > 0):
+            masks[k] = {}
+            for f, i in zip(files, v["masks"]):
+                masks[k][f] = i
+    
+    for k in masks:
+        cross_section.SaveObject(out + f"{k}_selection_masks.dill", masks[k])
 
 @Master.timer
 def main(args):
     shower_merging.SetPlotStyle(extend_colors = True)
 
-    func_args = vars(args)
-    func_args["data"] = False
-
-    output_mc = MergeOutputs(Processing.mutliprocess(run, [args.mc_file], args.batches, args.events, func_args, args.threads)) # run the main analysing method
-
+    output_mc = MergeSelectionMasks(MergeOutputs(cross_section.RunProcess(args.ntuple_files["mc"], False, args, run, False)))
     output_data = None
-    if args.mc_only != True:
-        if args.data_file is not None:
-            func_args["data"] = True
-            output_data = MergeOutputs(Processing.mutliprocess(run, [args.data_file], args.batches, args.events, func_args, args.threads)) # run the main analysing method
+    if "data" in args.ntuple_files:
+        if len(args.ntuple_files["data"]) > 0:
+            if args.mc_only is False:
+                output_data = MergeSelectionMasks(MergeOutputs(cross_section.RunProcess(args.ntuple_files["data"], True, args, run, False)))
 
     # tables
     MakeTables(output_mc, args.out + "tables_mc/", "mc")

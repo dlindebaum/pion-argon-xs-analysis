@@ -590,7 +590,6 @@ def SaveSummaryTables(directory : str, tables : tuple[pd.DataFrame], name : str)
 
 def Summary(directory : str, test_name : str, model_name : str, model : cross_section.pyhf.Model, energy_overflow : np.ndarray, template_counts : float, single_bin : bool, book : Plots.PlotBook = Plots.PlotBook.null, ymax = None):
 
-    # n_fe_max, n_fe_total_max = CalculateResultsFromFile(test_name, model_name, template_counts, model)
     n_fe_max, n_fe_total_max = PredictedCountsSummary(template_counts, model, test_name, model_name, args.workdir, single_bin)
 
     indices = ["absorption", "charge_exchange", "single_pion_production", "pion_production"]
@@ -691,7 +690,8 @@ def CalculateResultsFromFile(workdirs, test_name, model_name, template_counts, m
 @cross_section.timer
 def main(args : cross_section.argparse.Namespace):
     cross_section.SetPlotStyle(extend_colors = True, dark = True, font_scale = 1.2)
-    args.template = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(file = args.template))
+    toys = cross_section.Toy(file = args.template)
+    args.template = cross_section.AnalysisInput.CreateAnalysisInputToy(toys)
 
     mean_track_score_bins = np.linspace(0, 1, 21, True)
 
@@ -816,7 +816,6 @@ def main(args : cross_section.argparse.Namespace):
                         Plots.plt.close("all")
                 
                     with Plots.PlotBook(outdir + f"{t}_test_{m}/summary_plots.pdf", True) as book:
-                        # Summary(outdir + f"{t}_test_{m}/", t, args.signal_process, models[m], args.energy_slices.pos_overflow, args.template, template_counts, args.fit["single_bin"], book, ymax = ymax[t])
                         Summary(outdir + f"{t}_test_{m}/", t, m, models[m], args.energy_slices.pos_overflow, template_counts, args.fit["single_bin"], book, ymax = ymax[t])
                     Plots.plt.close("all")
 

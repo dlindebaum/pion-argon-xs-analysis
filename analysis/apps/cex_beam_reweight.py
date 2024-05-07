@@ -15,9 +15,9 @@ from rich import print
 from python.analysis import cross_section, Plots, SelectionTools
 
 
-def ReWeight(sample : dict[cross_section.Data], p_nominal : float, bins : int = 10, p_range : np.array = np.array([0.75, 1.25]), book : Plots.PlotBook = Plots.PlotBook.null):
-    p_mc, edges = np.histogram(np.array(sample["mc"].recoParticles.beam_inst_P), bins, range = p_nominal * p_range)
-    p_data = np.histogram(np.array(sample["data"].recoParticles.beam_inst_P), bins, range = p_nominal * p_range)[0]
+def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.array = np.array([0.75, 1.25]), book : Plots.PlotBook = Plots.PlotBook.null):
+    p_mc, edges = np.histogram(np.array(p_MC), bins, range = p_nominal * p_range)
+    p_data = np.histogram(np.array(p_Data), bins, range = p_nominal * p_range)[0]
 
     with Plots.RatioPlot((edges[1:] + edges[:-1]) / 2, p_data, p_mc, np.sqrt(p_data), np.sqrt(p_mc), "$P_{inst}^{reco}$ (MeV)", "Data/MC") as ratio_plot:
         Plots.Plot(ratio_plot.x, ratio_plot.y1, yerr = ratio_plot.y1_err, newFigure = False)
@@ -29,7 +29,6 @@ def ReWeight(sample : dict[cross_section.Data], p_nominal : float, bins : int = 
     ratio = scale * np.nan_to_num(cross_section.nandiv(ratio_plot.y2, ratio_plot.y1), posinf = 0)
     ratio_err = np.nan_to_num(abs(ratio * np.sqrt(cross_section.nandiv(ratio_plot.y1_err, ratio_plot.y1)**2 + cross_section.nandiv(ratio_plot.y2_err, ratio_plot.y2)**2)))
 
-    # r = "$\\frac{R N_{mc}}{N_{data}}$"
     Plots.Plot(ratio_plot.x, ratio, yerr = ratio_err, xlabel = "$P_{inst}^{reco}$ (MeV)", ylabel = "$r$")
     book.Save()
 
@@ -41,18 +40,18 @@ def ReWeight(sample : dict[cross_section.Data], p_nominal : float, bins : int = 
     return results
 
 
-def ReWeightResults(sample : dict[cross_section.Data], args : cross_section.argparse.Namespace, bins : int, reweight_results : dict, reweight_func : str, book : Plots.PlotBook = Plots.PlotBook.null):
-    weights = cross_section.RatioWeights(np.array(sample["mc"].recoParticles.beam_inst_P), reweight_func, reweight_results[reweight_func][0], args.beam_reweight["strength"])
+def ReWeightResults(sideband_mc : dict, sideband_data : dict, args : cross_section.argparse.Namespace, bins : int, reweight_results : dict, reweight_func : str, book : Plots.PlotBook = Plots.PlotBook.null):
+    weights = cross_section.RatioWeights(np.array(sideband_mc["p_inst"]), reweight_func, reweight_results[reweight_func][0], args.beam_reweight["strength"])
 
     plot_range = [args.beam_momentum * 0.75, args.beam_momentum * 1.25]
 
     Plots.PlotHist(weights, range = [0, 3], xlabel = "weights", truncate = True)
     book.Save()
 
-    Plots.PlotTagged(sample["mc"].recoParticles.beam_inst_P, cross_section.Tags.GenerateTrueBeamParticleTags(sample["mc"]), data2 = sample["data"].recoParticles.beam_inst_P, x_range = plot_range, norm = args.norm, data_weights = None, bins = bins, title = "nominal", x_label = "$P_{inst}^{reco}$ (MeV)")
+    Plots.PlotTagged(sideband_mc["p_inst"], sideband_mc["tags"], data2 = sideband_data["p_inst"], x_range = plot_range, norm = args.norm, data_weights = None, bins = bins, title = "nominal", x_label = "$P_{inst}^{reco}$ (MeV)")
     book.Save()
 
-    Plots.PlotTagged(sample["mc"].recoParticles.beam_inst_P, cross_section.Tags.GenerateTrueBeamParticleTags(sample["mc"]), data2 = sample["data"].recoParticles.beam_inst_P, x_range = plot_range, norm = args.norm, data_weights = weights, bins = bins, title = f"reweighted : {reweight_func}", x_label = "$P_{inst}^{reco}$ (MeV)")
+    Plots.PlotTagged(sideband_mc["p_inst"], sideband_mc["tags"], data2 = sideband_data["p_inst"], x_range = plot_range, norm = args.norm, data_weights = weights, bins = bins, title = f"reweighted : {reweight_func}", x_label = "$P_{inst}^{reco}$ (MeV)")
     book.Save()
     return
 
@@ -63,56 +62,87 @@ def SmearingFactors(sample, weights : np.array = None):
     std = np.sqrt(variance)
     return average, std
 
+
+def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
+
+    sample = "data" if args["data"] else "mc"
+
+    selections = args["selection_masks"][sample]
+
+    if "fiducial" in selections:
+        if len(selections["fiducial"]) > 0:
+            fiducial_mask = SelectionTools.CombineMasks(selections["fiducial"][file])
+        else:
+            fiducial_mask = None
+    else:
+        fiducial_mask = None
+
+    invert = "HasFinalStatePFOsCut"
+
+    sideband_selection = {}
+    for m in selections["beam"][file]:
+        if m == invert:
+            sideband_selection[m] = ~selections["beam"][file][m]
+        else:
+            sideband_selection[m] = selections["beam"][file][m]
+    sideband_selection = SelectionTools.CombineMasks(sideband_selection)
+    print(sample, sum(sideband_selection))
+
+    events = cross_section.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
+
+    mask = SelectionTools.CombineMasks(selections["beam"][file])
+
+    if fiducial_mask is not None:
+        masks = [fiducial_mask, mask]
+    else:
+        masks = [mask]
+
+    analysis_sample = events.Filter(masks, masks, returnCopy = True)
+
+    if fiducial_mask is not None:
+        masks = [fiducial_mask, sideband_selection]
+    else:
+        masks = [sideband_selection]
+
+    sideband_sample = events.Filter(masks, masks, returnCopy = True)
+
+    output = {
+        "sideband" : {
+            "p_inst" : sideband_sample.recoParticles.beam_inst_P,
+            "tags" : cross_section.Tags.GenerateTrueBeamParticleTags(sideband_sample)
+        },
+        "analysis" : {
+            "p_inst" : analysis_sample.recoParticles.beam_inst_P,
+            "tags" : cross_section.Tags.GenerateTrueBeamParticleTags(analysis_sample)
+        }
+    }
+
+    return output
+
+
 @cross_section.timer
 def main(args : cross_section.argparse.Namespace):
     cross_section.SetPlotStyle(extend_colors = True, dpi = 100)
     out = args.out + "beam_reweight/"
 
-    if "fiducial" in args.selection_masks["mc"]:
-        fiducial_masks = {s : SelectionTools.CombineMasks(args.selection_masks[s]["fiducial"]) for s in args.selection_masks}
-    else:
-        fiducial_masks = None
+    args.batches = None
+    args.events = None
+    args.threads = 1
 
-    invert = "HasFinalStatePFOsCut"
-    sideband_selection = {}
-    for k, sample in args.selection_masks.items():
-        masks = {}
-        for m in sample["beam"]:
-            if m == invert:
-                masks[m] = ~sample["beam"][m]
-            else:
-                masks[m] = sample["beam"][m]
-        sideband_selection[k] = SelectionTools.CombineMasks(masks, "and")
-    print({k : sum(v) for k, v in sideband_selection.items()})
+    output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
+
+    output_data = cross_section.RunProcess(args.ntuple_files["data"], True, args, run)
+
     os.makedirs(out, exist_ok = True)
     os.makedirs(out + "plots/", exist_ok = True)
 
-    events = {"mc" : cross_section.Data(args.mc_file, nTuple_type = args.ntuple_type, target_momentum = args.pmom), "data" : cross_section.Data(args.data_file, nTuple_type = args.ntuple_type)}
-
-    analysis_sample = {}
-    for s in events:
-        mask = SelectionTools.CombineMasks(args.selection_masks[s]["beam"])
-        if fiducial_masks is not None:
-            masks = [fiducial_masks[s], mask]
-        else:
-            masks = [mask]
-        analysis_sample[s] = events[s].Filter(masks, masks, returnCopy = True)
-
-    sideband_sample = {}
-    for s in events:
-        if fiducial_masks is not None:
-            masks = [fiducial_masks[s], sideband_selection[s]]
-        else:
-            masks = [sideband_selection[s]]
-        sideband_sample[s] = events[s].Filter(masks, masks, returnCopy = True)
-
     with Plots.PlotBook(out + "plots/" + "reweight_fits.pdf", True) as book:
-        results = ReWeight(sideband_sample, args.beam_momentum, 20, np.array([0.75, 1.25]), book = book)
+        results = ReWeight(output_mc["sideband"]["p_inst"], output_data["sideband"]["p_inst"], args.beam_momentum, 20, np.array([0.75, 1.25]), book = book)
 
     for r in results:
         with Plots.PlotBook(out + "plots/" + f"reweight_results_{r}.pdf", True) as book:
-            ReWeightResults(sideband_sample, args, 25, results, r, book = book)
-            ReWeightResults(analysis_sample, args, 50, results, r, book = book)
+            ReWeightResults(output_mc["sideband"], output_data["sideband"], args, 25, results, r, book = book)
+            ReWeightResults(output_mc["analysis"], output_data["analysis"], args, 50, results, r, book = book)
             reweight_params = {f"p{i}" : {"value" : results[r][0][i], "error" : results[r][1][i]} for i in range(getattr(cross_section.Fitting, r).n_params)}
             cross_section.SaveConfiguration(reweight_params, out + r + ".json")
         Plots.plt.close("all")

@@ -4,7 +4,6 @@ Created on: 02/04/2023 19:40
 Author: Shyam Bhuller
 
 Description: Tools for parallel processing a task which takes an input file and can be divided into batches i.e. analysing ntuples.
-TODO make more generic (work on inputs files that are not ntuples)
 """
 from pathos.multiprocessing import ProcessPool
 
@@ -126,7 +125,7 @@ def GenerateFunctionArguments(files : list, nBatches : int, nEvents : int, args 
 
 
 @Master.timer
-def mutliprocess(func, files : list, nBatches : list, nEvents : list, args : dict, nodes : int = None, event_indices : list = None):
+def mutliprocess(func, files : list, nBatches : int, nEvents : int, args : dict, nodes : int = None, event_indices : list = None):
     """ Run a function with parallel processing, requires that it analyses ntuples.
 
     Args:

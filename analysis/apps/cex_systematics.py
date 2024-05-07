@@ -313,38 +313,61 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
 
     def __init__(self, args: Namespace) -> None:
         super().__init__(args)
-        self.LoadSamples()
+        self.args.batches = None
+        self.args.events = None
+        self.args.threads = 1
 
-    def LoadSamples(self):
-        self.mc = cross_section.Data(self.args.mc_file, nTuple_type = self.args.ntuple_type, target_momentum = self.args.pmom)
-        self.data = cross_section.Data(self.args.data_file, nTuple_type = self.args.ntuple_type, target_momentum = 1)
-        return
+
+    @staticmethod
+    def __run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
+        sample = "data" if args["data"] is True else "mc"
+
+        print(f"{sample=}")
+
+        events = cross_section.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
+        events = cex_analysis_input.BeamPionSelection(events, args, not args["data"])
+
+        photon_candidates = cex_analysis_input.SelectionTools.CombineMasks(args["selection_masks"][sample]["photon"][file])
+        output = {}
+        for name, sign in zip(["low", "high"], [1, -1]):
+            masks = {}
+            selection_args_copy = cross_section.dill_copy(args["pi0_selection"][f"{sample}_arguments"].values())
+            for (s, f), a in zip(args["pi0_selection"]["selections"].items(), selection_args_copy):
+                if s == "Pi0MassSelection":
+                    a["correction_params"]["value"] = {f"p{i}" : a["correction_params"]["value"][f"p{i}"] + sign * a["correction_params"]["error"][f"p{i}"] for i in range(len(a["correction_params"]["error"]))}
+                mask = f(events, **a, photon_mask = photon_candidates)
+                masks[s] = mask
+            output[name] = masks
+        output["name"] = file
+
+        return output
+
+
+    def __merge(self, output : dict) -> dict:
+        names = np.unique([o["name"] for o in output])
+
+        split_output = {n : [] for n in names}
+        for n in names:
+            for o in output:
+                if o["name"] == n:
+                    split_output[n].append(o)
+
+        merged_output = []
+        for s in split_output:
+            o = cross_section.MergeOutputs(split_output[s])
+            merged_output.append(o)
+        return merged_output
+
 
     def CreateAltPi0Selections(self):
-        samples = {
-            "mc" : cex_analysis_input.BeamPionSelection(self.mc, self.args, True),
-            "data" : cex_analysis_input.BeamPionSelection(self.data, self.args, False)
-        }
-
-        photon_candidates = {s : cex_analysis_input.SelectionTools.CombineMasks(self.args.selection_masks[s]["photon"]) for s in samples}
-
-        masks_sample = {}
-        for sample in ["mc", "data"]:
-            masks_sys = {}
-            for name, sign in zip(["low", "high"], [1, -1]):
-                masks = {}
-                selection_args_copy = cross_section.dill_copy(self.args.pi0_selection[f"{sample}_arguments"].values())
-                for (s, f), a in zip(self.args.pi0_selection["selections"].items(), selection_args_copy):
-                    if s == "Pi0MassSelection":
-                        a["correction_params"]["value"] = {f"p{i}" : a["correction_params"]["value"][f"p{i}"] + sign * a["correction_params"]["error"][f"p{i}"] for i in range(len(a["correction_params"]["error"]))}
-                    mask = f(samples[sample], **a, photon_mask = photon_candidates[sample])
-                    masks[s] = mask
-                masks_sys[name] = masks
-            masks_sample[sample] = masks_sys
-        return masks_sample
+        output_mc = self.__merge(cross_section.RunProcess(self.args.ntuple_files["mc"], False, self.args, self.__run, False))
+        output_data = self.__merge(cross_section.RunProcess(self.args.ntuple_files["data"], True, self.args, self.__run, False))
+        return {"mc" : output_mc, "data" : output_data}
 
 
     def CreateNewAIs(self, outdir : str):
+
+        cross_section.os.makedirs(outdir, exist_ok = True)
 
         masks = self.CreateAltPi0Selections()
         cross_section.SaveObject(f"{outdir}pi0_selection_masks.dill", masks)
@@ -352,8 +375,9 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
         args_copy = {}
         for i in ["low", "high"]:
             a = cross_section.dill_copy(self.args)
-            a.selection_masks["mc"]["pi0"] = masks["mc"][i]
-            a.selection_masks["data"]["pi0"] = masks["data"][i]
+            a.selection_masks["mc"]["pi0"] = {j["name"] : j[i] for j in masks["mc"]}
+
+            a.selection_masks["data"]["pi0"] = {j["name"] : j[i] for j in masks["data"]}
             args_copy[i] = a
 
         for k, v in args_copy.items():
@@ -723,6 +747,7 @@ def main(args : cross_section.argparse.Namespace):
                 sys = bkg_sub.CalculateSysError(bkg_sub.RunExperiment())
                 cross_section.os.makedirs(out + "bkg_sub/", exist_ok = True)
                 SaveSystematicError(sys, None, out + "bkg_sub/sys.dill")
+
         if can_run("mc_stat"):
             print(Rule("mc_stat"))
             mc_stat = NuisanceParameters(args)
@@ -743,6 +768,23 @@ def main(args : cross_section.argparse.Namespace):
             for t in tables:
                 tables[t].style.format(precision = 2).hide(axis = 0).to_latex(out + f"mc_stat/table_{t}.tex")
 
+        if can_run("shower_energy"):
+            print(Rule("shower energy"))
+            sc = ShowerEnergyCorrectionSystematic(args)
+            if can_regen(out + "shower_energy/"):
+                sc.CreateNewAIs(out + "shower_energy/")
+                xs = sc.RunAnalysis(out + "shower_energy/")
+                sys = sc.CalculateSysErrorAsym(args.cv, xs)
+                SaveSystematicError(sys, None, out + "shower_energy/sys.dill")
+            else:
+                sys = cross_section.LoadObject(out + "shower_energy/sys.dill")
+
+            with Plots.PlotBook(out + "shower_energy/plots.pdf") as book:
+                sc.PlotResults(args.cv, xs, book)
+            tables = sc.DataAnalysisTables(args.cv, sys, "Shower energy")
+            DictToHDF5(tables, out + "shower_energy/tables.hdf5")
+            for t in tables:
+                tables[t].style.format(precision = 2).hide(axis = 0).to_latex(out + f"shower_energy/table_{t}.tex")
 
         if can_run("upstream"):
             print(Rule("upstream"))

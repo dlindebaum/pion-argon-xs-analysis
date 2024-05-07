@@ -66,6 +66,23 @@ class TagIterator:
         return str(self.values)
 
 
+def MergeTags(tags : list[Tags]) -> Tags:
+    new_tags = Tags()
+    for t in tags:
+        for tag in t:
+            if tag not in new_tags:
+                new_tags[tag] = t[tag]
+            else:
+                if (t[tag].mask is not None) and (new_tags[tag].mask is not None):
+                    new_tags[tag].mask = ak.concatenate([new_tags[tag].mask, t[tag].mask])
+                elif (t[tag].mask is not None) and (new_tags[tag].mask is None):
+                    new_tags[tag].mask = t[tag].mask
+                else:
+                    continue
+
+    return new_tags
+
+
 def ParticleMasks(pdgs : ak.Array, to_tag : list) -> dict:
     """ produces a dictionry of masks based on particle pdg codes to tag specified by the user.
 
