@@ -467,7 +467,6 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
 
     if "piplus_selection" in args:
         print("pion selection")
-        # output_pip, table_pip = AnalysePiPlusSelection(events.Filter(returnCopy = True), args["data"], args["piplus_selection"]["selections"], args["piplus_selection"][selection_args]) # pass the PFO selections a copy of the event        
         output_pip, table_pip = AnalysePFOSelection(events.Filter(returnCopy = True), args["data"], args["piplus_selection"]["selections"], args["piplus_selection"][selection_args])        
         pip_masks = CreatePFOMasks(events, args["piplus_selection"], selection_args)
         output["pi"] = {"data" : output_pip, "table" : table_pip, "masks" : pip_masks}
@@ -486,7 +485,6 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
 
     if "photon_selection" in args:
         print("photon selection")
-        # output_photon, table_photon = AnalysePhotonCandidateSelection(events.Filter(returnCopy = True), args["data"], args["photon_selection"]["selections"], args["photon_selection"][selection_args])
         output_photon, table_photon = AnalysePFOSelection(events.Filter(returnCopy = True), args["data"], args["photon_selection"]["selections"], args["photon_selection"][selection_args])
         photon_masks = CreatePFOMasks(events, args["photon_selection"], selection_args)
         output["photon"] = {"data" : output_photon, "table" : table_photon, "masks" : photon_masks}
@@ -826,13 +824,12 @@ def main(args):
     outdir = args.out + "selection/"
     cross_section.os.makedirs(outdir, exist_ok = True)
 
-    output_mc = MergeSelectionMasks(MergeOutputs(cross_section.ApplicationProcessing(["mc"], outdir, args, run, False, "output_mc")["mc"]))
-
+    output_mc = MergeSelectionMasks(MergeOutputs(cross_section.RunProcess(args.ntuple_files["mc"], False, args, run, False)))
     output_data = None
     if "data" in args.ntuple_files:
         if len(args.ntuple_files["data"]) > 0:
             if args.mc_only is False:
-                output_data = MergeSelectionMasks(MergeOutputs(cross_section.ApplicationProcessing(["data"], outdir, args, run, False, "output_data")["data"]))
+                output_data = MergeSelectionMasks(MergeOutputs(cross_section.RunProcess(args.ntuple_files["data"], True, args, run, False)))
 
     # tables
     MakeTables(output_mc, args.out + "tables_mc/", "mc")

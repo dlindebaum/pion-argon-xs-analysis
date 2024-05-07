@@ -48,12 +48,10 @@ def ReWeightResults(sideband_mc : dict, sideband_data : dict, args : cross_secti
     Plots.PlotHist(weights, range = [0, 3], xlabel = "weights", truncate = True)
     book.Save()
 
-    Plots.PlotTagged(sideband_mc["p_inst"], sideband_mc["tags"], data2 = sideband_data["p_inst"], x_range = plot_range, norm = args.norm, data_weights = None, bins = bins, x_label = "$P_{inst}^{reco}$ (MeV)", ncols = 1)
-    Plots.plt.title("nominal", pad = 15)
+    Plots.PlotTagged(sideband_mc["p_inst"], sideband_mc["tags"], data2 = sideband_data["p_inst"], x_range = plot_range, norm = args.norm, data_weights = None, bins = bins, title = "nominal", x_label = "$P_{inst}^{reco}$ (MeV)")
     book.Save()
 
-    Plots.PlotTagged(sideband_mc["p_inst"], sideband_mc["tags"], data2 = sideband_data["p_inst"], x_range = plot_range, norm = args.norm, data_weights = weights, bins = bins, x_label = "$P_{inst}^{reco}$ (MeV)", ncols = 1)
-    Plots.plt.title(f"reweighted : {reweight_func}", pad = 15)
+    Plots.PlotTagged(sideband_mc["p_inst"], sideband_mc["tags"], data2 = sideband_data["p_inst"], x_range = plot_range, norm = args.norm, data_weights = weights, bins = bins, title = f"reweighted : {reweight_func}", x_label = "$P_{inst}^{reco}$ (MeV)")
     book.Save()
     return
 
@@ -79,26 +77,16 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
     else:
         fiducial_mask = None
 
-    invert = ["HasFinalStatePFOsCut"] # invert preselection
+    invert = "HasFinalStatePFOsCut"
 
     sideband_selection = {}
     for m in selections["beam"][file]:
-        if m in invert:
+        if m == invert:
             sideband_selection[m] = ~selections["beam"][file][m]
         else:
             sideband_selection[m] = selections["beam"][file][m]
-
-    table = {}
-    mask = None
-    for s in sideband_selection:
-        if mask is None:
-            mask = sideband_selection[s]
-        else:
-            mask = mask & sideband_selection[s]
-        table[s] = sum(mask)
-
-    print(table)
     sideband_selection = SelectionTools.CombineMasks(sideband_selection)
+    print(sample, sum(sideband_selection))
 
     events = cross_section.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
 
@@ -126,8 +114,7 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
         "analysis" : {
             "p_inst" : analysis_sample.recoParticles.beam_inst_P,
             "tags" : cross_section.Tags.GenerateTrueBeamParticleTags(analysis_sample)
-        },
-        "table" : table
+        }
     }
 
     return output
@@ -137,6 +124,15 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
 def main(args : cross_section.argparse.Namespace):
     cross_section.PlotStyler.SetPlotStyle(extend_colors = True, dpi = 100)
     out = args.out + "beam_reweight/"
+
+    args.batches = None
+    args.events = None
+    args.threads = 1
+
+    output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
+
+    output_data = cross_section.RunProcess(args.ntuple_files["data"], True, args, run)
+
     os.makedirs(out, exist_ok = True)
 
     args.batches = None

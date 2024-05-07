@@ -78,19 +78,6 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
     return {"kinematic_quantities" : cross_section_quantities, "true_pion_mask" : true_pion_mask, "pion_inel_mask" : pion_inel_mask, "region_identification" : ri, "mean_track_score" : mean_track_score, "beam_selection_mask" : mask}
 
 
-def CreateFitTable(params, errors):
-    table = {}
-    for i, (p, e) in enumerate(zip(params, errors)):
-        sf = len(str(float(f"{e:.1g}")))
-        if e > 1:
-            sf = -(sf - 3)
-        else:
-            sf = sf - 2
-        table[f"$p_{{{i}}}$"] = f"${round(p, sf)} \pm {float(f'{e:.1g}')}$"
-
-    return pd.DataFrame(table, index = [0])
-
-
 def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_quantity : ak.Array, mask : ak.Array = None, label = "quantity(units)", plot_range = None, residual_range = None, fit_functions : list[cross_section.Fitting.FitFunction] = [cross_section.Fitting.gaussian, cross_section.Fitting.student_t]) -> dict:
     """ Study of residuals of cross section inputs, used to smear toy observables. Done by fitting a curve to the residual, returning the fit parameters.
 
@@ -398,8 +385,7 @@ def main(args : argparse.Namespace):
         "z_int" : "$l^{res,MC}$ (cm)"
     }
 
-    # output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
-    output_mc = cross_section.ApplicationProcessing(["mc"], out, args, run, True)["mc"]
+    output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
 
     print(f"{output_mc=}")
 
@@ -420,7 +406,8 @@ if __name__ == "__main__":
 
     cross_section.ApplicationArguments.Config(parser, True)
     cross_section.ApplicationArguments.Output(parser)
-    cross_section.ApplicationArguments.Regen(parser)
+    cross_section.ApplicationArguments.Processing(parser)
+    cross_section.ApplicationArguments.Config(parser)
 
     args = parser.parse_args()
     args = cross_section.ApplicationArguments.ResolveArgs(args)

@@ -312,7 +312,17 @@ def MethodComparison(df : pd.DataFrame, linear_correction : float, response_para
 
 @Master.timer
 def main(args):
-    cross_section.PlotStyler.SetPlotStyle(False)
+    cross_section.SetPlotStyle(False)    
+    output = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
+
+    output_photons = pd.DataFrame({i : output[i] for i in output if "shower_pairs" not in i and "tags" not in i})
+    output_pairs = pd.DataFrame({i : output[i] for i in output if "shower_pairs" in i and "tags" not in i})
+    output_tags = pd.DataFrame({i : output[i] for i in output if "tags" in i})
+
+    print(output_photons)
+    print(output_pairs)
+    print(output_tags)
+
     out = args.out + "shower_energy_correction/"
 
     if (not os.path.isfile(out + "photon_energies.hdf5")) or args.regen:

@@ -105,14 +105,14 @@ def RegionSelection(events : cross_section.Data, args : cross_section.argparse.N
         events_copy = events.Filter(returnCopy = True)
         
         if "fiducial" in selection_masks and (len(selection_masks["fiducial"]) > 0):
-            mask = SelectionTools.CombineMasks(selection_masks["fiducial"][events_copy.filename])
+            mask = SelectionTools.CombineMasks(selection_masks["fiducial"][events.filename])
             events_copy.Filter([mask], [mask])
 
         # is_pip = events_copy.trueParticles.pdg[:, 0] == 211
 
         mask = SelectionTools.CombineMasks(selection_masks["beam"][events_copy.filename])
 
-        n_pi_true, n_pi0_true = GetTruePionCounts(events_copy, args_c["pi_KE_lim"])
+        mask = SelectionTools.CombineMasks(selection_masks["beam"][events.filename])
         n_pi_true = n_pi_true[mask]
         n_pi0_true = n_pi0_true[mask]
         # is_pip = is_pip[mask]
@@ -154,17 +154,6 @@ def CreateAnalysisInput(sample : cross_section.Data, args : cross_section.argpar
     else:
         raise Exception(f"object type {type(sample)} not a valid sample")
     return ai
-
-
-def GetTruePionCounts(events : cross_section.Data, ke_lim : float = 0):
-    n_pi_true = (events.trueParticles.number != 1) & (abs(events.trueParticles.pdg) == 211) & (events.trueParticles.mother == 1)
-
-    ke = cross_section.KE(cross_section.vector.magnitude(events.trueParticles.momentum), cross_section.Particle.from_pdgid(211).mass)
-
-    n_pi_true = ak.sum(n_pi_true & (ke > ke_lim), axis = -1)
-    n_pi0_true = events.trueParticles.nPi0
-
-    return n_pi_true, n_pi0_true
 
 
 def CreateAnalysisInputMCTrueBeam(mc : cross_section.Data, args : cross_section.argparse.Namespace | dict):

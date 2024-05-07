@@ -348,20 +348,14 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
 
     @staticmethod
     def __run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
-        print(f"starting process {i}")
         sample = "data" if args["data"] is True else "mc"
 
+        print(f"{sample=}")
+
         events = cross_section.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
+        events = cex_analysis_input.BeamPionSelection(events, args, not args["data"])
 
-        for s, a in zip(args["beam_selection"]["selections"].values(), args["beam_selection"][f"{sample}_arguments"].values()):
-            mask = s(events, **a)
-            events.Filter([mask], [mask])
-        photon_masks = {}
-        if args["valid_pfo_selection"] is True:
-            for k, s, a in zip(args["photon_selection"]["selections"].keys(), args["photon_selection"]["selections"].values(), args["photon_selection"][f"{sample}_arguments"].values()):
-                photon_masks[k] = s(events, **a)
-        photon_candidates = cross_section.SelectionTools.CombineMasks(photon_masks)
-
+        photon_candidates = cex_analysis_input.SelectionTools.CombineMasks(args["selection_masks"][sample]["photon"][file])
         output = {}
         for name, sign in zip(["low", "high"], [1, -1]):
             masks = {}
@@ -374,7 +368,6 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
             output[name] = masks
         output["name"] = file
 
-        print(f"finished process {i}")
         return output
 
 
@@ -390,22 +383,12 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
         merged_output = []
         for s in split_output:
             o = cross_section.MergeOutputs(split_output[s])
-            if type(o["name"]) == list:
-                o["name"] = o["name"][0] 
             merged_output.append(o)
         return merged_output
 
 
     def CreateAltPi0Selections(self):
-
-        self.args.cpus = 1
-        processing_args = cross_section.CalculateBatches(self.args)
-        for k, v in processing_args.items():
-            setattr(self.args, k, v)
-
-        print("running MC")
         output_mc = self.__merge(cross_section.RunProcess(self.args.ntuple_files["mc"], False, self.args, self.__run, False))
-        print("running Data")
         output_data = self.__merge(cross_section.RunProcess(self.args.ntuple_files["data"], True, self.args, self.__run, False))
         return {"mc" : output_mc, "data" : output_data}
 
@@ -876,6 +859,14 @@ def main(args : cross_section.argparse.Namespace):
 
 
     if ("all" not in args.skip) or ("all" in args.run):
+        if can_run("bkg_sub"):
+            print(Rule("bkg_sub"))
+            if can_regen(out + "bkg_sub/"):
+                bkg_sub = BkgSubSystematic(args)
+                sys = bkg_sub.CalculateSysError(bkg_sub.RunExperiment())
+                cross_section.os.makedirs(out + "bkg_sub/", exist_ok = True)
+                SaveSystematicError(sys, None, out + "bkg_sub/sys.dill")
+
         if can_run("mc_stat"):
             outdir = out + "mc_stat/"
             cross_section.os.makedirs(outdir, exist_ok = True)
@@ -898,24 +889,22 @@ def main(args : cross_section.argparse.Namespace):
             SaveTables(tables, outdir, 2)
 
         if can_run("shower_energy"):
-            outdir = out + "shower_energy/"
+            print(Rule("shower energy"))
             sc = ShowerEnergyCorrectionSystematic(args)
-            if can_regen(outdir):
-                sc.CreateNewAIs(outdir)
-                result = sc.RunAnalysis(outdir)
-                # sys = sc.CalculateSysErrorAsym(args.cv, result)
-                cross_section.SaveObject(f"{outdir}results.dill", result)
-                # SaveSystematicError(sys, None, f"{outdir}sys.dill")
+            if can_regen(out + "shower_energy/"):
+                sc.CreateNewAIs(out + "shower_energy/")
+                xs = sc.RunAnalysis(out + "shower_energy/")
+                sys = sc.CalculateSysErrorAsym(args.cv, xs)
+                SaveSystematicError(sys, None, out + "shower_energy/sys.dill")
             else:
-                result = cross_section.LoadObject(f"{outdir}results.dill")
-                # sys = cross_section.LoadObject(f"{outdir}sys.dill")["systematic"]
+                sys = cross_section.LoadObject(out + "shower_energy/sys.dill")
 
-            sys = sc.CalculateSysErrorAsym(args.cv, result)
-            SaveSystematicError(sys, None, f"{outdir}sys.dill")
-            with Plots.PlotBook(f"{outdir}plots.pdf") as book:
-                sc.PlotResults(args.cv, result, book)
+            with Plots.PlotBook(out + "shower_energy/plots.pdf") as book:
+                sc.PlotResults(args.cv, xs, book)
             tables = sc.DataAnalysisTables(args.cv, sys, "Shower energy")
-            SaveTables(tables, outdir, 2)
+            DictToHDF5(tables, out + "shower_energy/tables.hdf5")
+            for t in tables:
+                tables[t].style.format(precision = 2).hide(axis = 0).to_latex(out + f"shower_energy/table_{t}.tex")
 
         if can_run("upstream"):
             outdir = out + "upstream/"

@@ -89,15 +89,13 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
 
 
 def main(args : argparse.Namespace):
-    cross_section.PlotStyler.SetPlotStyle(False)
-    outdir = args.out + "upstream_loss/"
-    os.makedirs(outdir, exist_ok = True)
+    cross_section.SetPlotStyle(False, dpi = 100)
 
     args.batches = None
     args.events = None
     args.threads = 1
 
-    output_mc = cross_section.ApplicationProcessing(["mc"], outdir, args, run, True)["mc"]
+    output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
 
     if all(v is None for v in output_mc["weights"]):
         output_mc["weights"] = None
@@ -105,10 +103,10 @@ def main(args : argparse.Namespace):
     bins = ak.Array(args.upstream_loss_bins)
     x = (bins[1:] + bins[:-1]) / 2
 
-    with Plots.PlotBook(outdir + "cex_upstream_loss_plots.pdf") as pdf:
+    os.makedirs(args.out + "upstream_loss/", exist_ok = True)
+    with Plots.PlotBook(args.out + "upstream_loss/" + "cex_upstream_loss_plots.pdf") as pdf:
         reco_KE_inst = cross_section.KE(output_mc["p_inst"], cross_section.Particle.from_pdgid(211).mass)
-        with cross_section.PlotStyler().Update(font_scale = 1.3):
-            cv = CentralValueEstimation(bins, reco_KE_inst, output_mc["KE_ff"], cv_method[args.upstream_loss_cv_function], output_mc["weights"])
+        cv = CentralValueEstimation(bins, reco_KE_inst, output_mc["KE_ff"], cv_method[args.upstream_loss_cv_function], output_mc["weights"])
         pdf.Save()
 
         Plots.plt.figure()

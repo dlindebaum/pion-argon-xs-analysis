@@ -21,7 +21,6 @@
       ]
     },
     "norm": 2.497,
-    "pi_KE_lim": -1,
     "fiducial_volume": [
       30,
       220
@@ -110,6 +109,7 @@
       "regions": true,
       "fix_np": false
     },
+    "bkg_sub_err": false,
     "ESLICE": {
       "width": 150,
       "min": 1400,

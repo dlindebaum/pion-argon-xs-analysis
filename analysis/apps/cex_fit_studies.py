@@ -706,7 +706,7 @@ def CalculateResultsFromFile(workdirs, test_name, model_name, template_counts, m
 
 @cross_section.timer
 def main(args : cross_section.argparse.Namespace):
-    cross_section.SetPlotStyle(extend_colors = True, dark = True)
+    cross_section.SetPlotStyle(extend_colors = True, dark = True, font_scale = 1.2)
     toys = cross_section.Toy(file = args.template)
     args.template = cross_section.AnalysisInput.CreateAnalysisInputToy(toys)
 

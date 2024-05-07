@@ -27,7 +27,7 @@ from python.analysis.Master import SaveConfiguration, LoadConfiguration
 
 def template_config():
     template = {
-        "NTUPLE_FILES":{
+        "NTUPLE_FILE":{
             "mc" : [
                 {
                     "file": "ABSOLUTE file path",
@@ -44,7 +44,6 @@ def template_config():
             ]
         },
         "norm" : "normalisation to apply to MC when making Data/MC comparisons, usually defined as the ratio of pion-like triggers from the beam instrumentation", #! this should be inferred from one of the apps!
-        "pi_KE_lim": -1,
         "fiducial_volume" : [0, 700],
         "REGION_IDENTIFICATION":{
             "type" : "default"
@@ -342,6 +341,9 @@ def update_args(processing_args : dict = {}):
         setattr(new_args, k, v)
     return new_args
 
+def file_len(file : str):
+    return len(IO(file).Get(["EventID", "event"]))
+
 
 def check_run(args : argparse.Namespace, step : str):
     return ((step in args.run) or (args.force is True)) and (step not in args.skip)
@@ -360,11 +362,24 @@ def main(args):
             n_data = [file_len(file["file"]) for file in args.ntuple_files["data"]]
         else:
             n_data = []
-        no_data = len(n_data) == 0
-        if no_data:
-            print("no data file was specified, 'normalisation', 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
 
-        processing_args = CalculateBatches(args)
+        if len(n_data) == 0:
+            print("no data file was specified, 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
+
+        n_mc = [file_len(file["file"]) for file in args.ntuple_files["mc"]] # must have MC
+
+        processing_args = {"events" : None, "batches" : None, "threads" : None}
+
+        # pass multiprocessing args
+        if max([*n_data, *n_mc]) >= 7E5:
+            processing_args["events"] = None
+            processing_args["batches"] = int(2 * max([*n_data, *n_mc]) // 7E5)
+            processing_args["threads"] = args.cpus
+        else:
+            processing_args["events"] = None
+            processing_args["batches"] = None
+            processing_args["threads"] = args.cpus
+
         args = update_args(processing_args)
 
         #* normalisation 
@@ -479,7 +494,7 @@ def main(args):
         if args.stop == "selection": return
 
         #* beam reweight
-        can_run_rw = ("params" not in args.beam_reweight) and (not no_data)
+        can_run_rw = ("params" not in args.beam_reweight) and (len(n_data) > 0)
         if can_run_rw or check_run(args, "reweight"):
             print("run beam reweight")
             cex_beam_reweight.main(args)
