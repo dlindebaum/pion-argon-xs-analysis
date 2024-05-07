@@ -24,15 +24,26 @@ from apps import (
 from python.analysis.cross_section import ApplicationArguments, argparse, os
 from python.analysis.Master import SaveConfiguration, LoadConfiguration, IO
 
+
 def template_config():
     template = {
         "NTUPLE_FILE":{
-            "mc" : "MC ntuple file ENSURE ALL FILE PATHS ARE ABSOLUTE",
-            "data" : "Data ntuple file",
-            "type" : "type of ntuple files, this is either PDSPAnalyser or shower_merging"
+            "mc" : [
+                {
+                    "file": "ABSOLUTE file path",
+                    "type": "PDSPAnalyser or shower_merging",
+                    "pmom": "momentum byte of the beam, may need a value different to 1 if MC was not generated properly"
+                }
+            ],
+            "data" : [
+                {
+                    "file": "ABSOLUTE file path",
+                    "type": "PDSPAnalyser or shower_merging",
+                    "pmom": 1
+                }
+            ]
         },
         "norm" : "normalisation to apply to MC when making Data/MC comparisons, usually defined as the ratio of pion-like triggers from the beam instrumentation", #! this should be inferred from one of the apps!
-        "pmom" : "momentum byte of the beam i.e. central value of beam momentum in GeV, required if ntuple does not have the correct scale for the P_inst distribution",
         "fiducial_volume" : [0, 700],
         "REGION_IDENTIFICATION":{
             "type" : "default"
@@ -290,6 +301,7 @@ def template_config():
     }
     return template
 
+
 def template_toy_config(toy_parameters_dir : str, nEvents : int, seed : int, max_cpus : int, step : float, p_init : float, region_selection : str):
     template = {
         "events" : nEvents,
@@ -315,6 +327,7 @@ def template_toy_config(toy_parameters_dir : str, nEvents : int, seed : int, max
     }
     return template
 
+
 def update_config(config, update : dict):
     json_config = LoadConfiguration(config)
     json_config.update(update)
@@ -323,9 +336,11 @@ def update_config(config, update : dict):
     return
 
 
-def update_args():
-    return ApplicationArguments.ResolveArgs(original_args)
-
+def update_args(processing_args : dict = {}):
+    new_args = ApplicationArguments.ResolveArgs(original_args)
+    for k, v in processing_args.items():
+        setattr(new_args, k, v)
+    return new_args
 
 def file_len(file : str):
     return len(IO(file).Get(["EventID", "event"]))
@@ -333,6 +348,7 @@ def file_len(file : str):
 
 def check_run(args : argparse.Namespace, step : str):
     return ((step in args.run) or (args.force is True)) and (step not in args.skip)
+
 
 def main(args):
     os.makedirs(args.out, exist_ok = True)
@@ -343,13 +359,29 @@ def main(args):
     else:
         print("run analysis, checking what steps have already been run")
 
-        # keep these to figure out if batch processing is required
-        if args.data_file is None:
-            print("no data file was specified, 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
-            n_data = 0
+        if "data" in args.ntuple_files:
+            n_data = [file_len(file["file"]) for file in args.ntuple_files["data"]]
         else:
-            n_data = file_len(args.data_file)
-        n_mc = file_len(args.mc_file)
+            n_data = []
+
+        if len(n_data) == 0:
+            print("no data file was specified, 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
+
+        n_mc = [file_len(file["file"]) for file in args.ntuple_files["mc"]] # must have MC
+
+        processing_args = {"events" : None, "batches" : None, "threads" : None}
+
+        # pass multiprocessing args
+        if max([*n_data, *n_mc]) >= 7E5:
+            processing_args["events"] = None
+            processing_args["batches"] = int(2 * max([*n_data, *n_mc]) // 7E5)
+            processing_args["threads"] = args.cpus
+        else:
+            processing_args["events"] = None
+            processing_args["batches"] = None
+            processing_args["threads"] = args.cpus
+
+        args = update_args(processing_args)
 
         #* normalisation 
         can_run_norm = (args.norm is None) or ("beam_norm" not in os.listdir(args.out))
@@ -360,11 +392,11 @@ def main(args):
             print("outputs: " + output_path)
             norm = LoadConfiguration(os.path.abspath(output_path + "norm.json"))
             update_config(args.config, {"norm" : norm["norm"]})
-            args = update_args() # reload config to continue
+            args = update_args(processing_args) # reload config to continue
         if args.stop == "normalisation": return
 
         #* beam quality
-        can_run_bq = (not hasattr(args, "mc_beam_quality_fit")) or ((args.data_file is not None) and (not hasattr(args, "data_beam_quality_fit")))
+        can_run_bq = (not hasattr(args, "mc_beam_quality_fit")) or ((len(n_data) > 0) and (not hasattr(args, "data_beam_quality_fit")))
         if can_run_bq or check_run(args, "beam_quality"):
             print("run beam quality fit")
             cex_beam_quality_fits.main(args)
@@ -381,7 +413,7 @@ def main(args):
                     new_config_entry[k] = os.path.abspath(output_path + v)
             new_config_entry["truncate"] = args.beam_quality_truncate
             update_config(args.config, {"BEAM_QUALITY_FITS" : new_config_entry})
-            args = update_args() # reload config to continue
+            args = update_args(processing_args) # reload config to continue
         if args.stop == "beam_quality": return
 
         #* beam scraper
@@ -402,7 +434,7 @@ def main(args):
             new_config_entry["energy_range"] = args.beam_scraper_energy_range
             new_config_entry["energy_bins"] = args.beam_scraper_energy_bins
             update_config(args.config, {"BEAM_SCRAPER_FITS" : new_config_entry})
-            args = update_args() # reload config to continue
+            args = update_args(processing_args) # reload config to continue
         if args.stop == "beam_scraper": return
 
         #* photon energy correction
@@ -426,24 +458,15 @@ def main(args):
             new_config_entry["energy_range"] = args.shower_correction["energy_range"]
             new_config_entry["correction"] = "response"
             update_config(args.config, {"ENERGY_CORRECTION" : new_config_entry})
-            args = update_args() # reload config to continue
+            args = update_args(processing_args) # reload config to continue
         if args.stop == "photon_correction": return
 
         #* selection studies
         can_run_ss = not hasattr(args, "selection_masks")
         if can_run_ss or check_run(args, "selection"):
             print("run selection")
-            args.mc_only = args.data_file is None
+            args.mc_only = len(n_data) == 0
             args.nbins = 50
-            # pass multiprocessing args
-            if (n_data >= 7E5) or (n_mc >= 7E5):
-                args.events = None
-                args.batches = int(2 * max(n_data, n_mc) // 7E5)
-                args.threads = 1
-            else:
-                args.events = None
-                args.batches = None
-                args.threads = 1
             cex_selection_studies.main(args)
 
             output_path = args.out
@@ -468,11 +491,11 @@ def main(args):
                 if v in files:
                     new_config_entry[k] = {i : os.path.abspath(output_path + v + "/" + j) for i, j in mask_map.items() if os.path.isfile(output_path + v + "/" + j)}
             update_config(args.config, {"SELECTION_MASKS" : new_config_entry})
-            args = update_args() # reload config to continue
+            args = update_args(processing_args) # reload config to continue
         if args.stop == "selection": return
 
         #* beam reweight
-        can_run_rw = ("params" not in args.beam_reweight) and (args.data_file is not None)
+        can_run_rw = ("params" not in args.beam_reweight) and (len(n_data) > 0)
         if can_run_rw or check_run(args, "reweight"):
             print("run beam reweight")
             cex_beam_reweight.main(args)
@@ -495,7 +518,7 @@ def main(args):
         can_run_uc = not hasattr(args, "upstream_loss_correction_params")
         if can_run_uc or check_run(args, "upstream_correction"):
             print("run upstream correction")
-            args.no_reweight = (not hasattr(args, "beam_reweight")) or ("params" in args.beam_reweight) 
+            args.no_reweight = (not hasattr(args, "beam_reweight")) or ("params" not in args.beam_reweight) 
             cex_upstream_loss.main(args)
 
             output_path = args.out + "upstream_loss/"
@@ -516,13 +539,11 @@ def main(args):
         if args.stop == "upstream_correction": return
 
         #* toy parameters
-        #TODO make config entry for toy_parameters, so the check is easier to make 
         can_run_tp = hasattr(args, "toy_parameters") and hasattr(args, "beam_reweight") and ("toy_parameters" not in os.listdir(args.out))
         if can_run_tp or check_run(args, "toy_parameters"):
             print("run toy parameters")
             cex_toy_parameters.main(args)
             # special case where the main config is not updated, rather the results from this would be used in the toy configurations
-            #! make function to create the a toy configuration
             selection_type = LoadConfiguration(args.config)["REGION_IDENTIFICATION"]["type"]
             toy_template_config = template_toy_config(os.path.abspath(args.out + "toy_parameters"), int(1E7), 1337, os.cpu_count() - 1, 2, args.beam_momentum, selection_type)
             data_config = template_toy_config(os.path.abspath(args.out + "toy_parameters"), int(1E6), 1, os.cpu_count() - 1, 2, args.beam_momentum, selection_type)
@@ -531,7 +552,7 @@ def main(args):
         if args.stop == "toy_parameters": return
 
         #* analysis input
-        can_run_ai = (not hasattr(args, "analysis_input")) and (args.data_file is not None)
+        can_run_ai = (not hasattr(args, "analysis_input")) and (len(n_data) > 0)
         if can_run_ai or check_run(args, "analysis_input"):
             print("run analysis input")
             cex_analysis_input.main(args)
@@ -563,6 +584,7 @@ def main(args):
 
     return
 
+
 if __name__ == "__main__":
 
     analysis_options = ["normalisation", "beam_quality", "beam_scraper", "selection", "photon_correction", "reweight", "upstream_correction", "toy_parameters", "analysis_input", "analyse"]
@@ -575,6 +597,7 @@ if __name__ == "__main__":
     parser.add_argument("--run", type = str, nargs = "+", default = [], choices = analysis_options)
     parser.add_argument("--force", action = "store_true")
     parser.add_argument("--stop", type = str, default = None, choices = analysis_options)
+    parser.add_argument("--cpus", type = int, default = 1)
 
     original_args = parser.parse_args()
     

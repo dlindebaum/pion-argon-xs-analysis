@@ -14,8 +14,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from rich import print
-from python.analysis import Master, BeamParticleSelection, vector, Plots, cross_section, Fitting
-from python.analysis.shower_merging import SetPlotStyle
+from python.analysis import Master, BeamParticleSelection, vector, Plots, cross_section, Fitting, Processing, Tags
+from python.analysis.cross_section import SetPlotStyle
 
 
 def Fit_Vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
@@ -90,20 +90,17 @@ def plot_range(mu : float, sigma : float, tolerance : float = 5) -> list:
     return sorted([mu - tolerance * sigma, mu + tolerance * sigma])
 
 
-def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data, data_fits : dict, out : str, truncate : float):
+def MakePlots(output_mc : dict[ak.Array], mc_fits : dict, output_data : dict[ak.Array], data_fits : dict, out : str, truncate : float):
     """ Make plots showing the fits for MC and or Data.
 
     Args:
-        mc_events (Master.Data): mc
+        output_mc (dict[ak.Array]): mc
         mc_fits (dict): fits made on mc
-        data_events (Master.Data): data
+        output_data (dict[ak.Array]): data
         data_fits (dict): fits made on data
         out (str): output directory
     """
     SetPlotStyle()
-
-    data_start_pos, _ = BeamParticleSelection.GetTruncatedPos(data_events, truncate)
-    mc_start_pos, _ = BeamParticleSelection.GetTruncatedPos(mc_events, truncate)
 
     label_name = "Beam" if truncate is None else "Truncacted beam"
 
@@ -114,51 +111,20 @@ def MakePlots(mc_events : Master.Data, mc_fits : dict, data_events : Master.Data
             data_ranges = [] if data_fits is None else plot_range(data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"])
 
             plot_ranges = mc_ranges + data_ranges
-            if mc_events is not None: plot(mc_start_pos[i], f"{label_name} start position {i} (cm)", mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"], "C0", "MC", range = [min(plot_ranges), max(plot_ranges)])
-            if data_events is not None: plot(data_start_pos[i], f"{label_name} start position {i} (cm)", data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"], "C1", "Data", range = [min(plot_ranges), max(plot_ranges)])
+            if output_mc is not None: plot(output_mc["start_pos"][i], f"{label_name} start position {i} (cm)", mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"], "C0", "MC", range = [min(plot_ranges), max(plot_ranges)])
+            if output_data is not None: plot(output_data["start_pos"][i], f"{label_name} start position {i} (cm)", data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"], "C1", "Data", range = [min(plot_ranges), max(plot_ranges)])
             pdf.Save()
     return
 
 
-def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str, tag : str, args : cross_section.argparse.Namespace):
-    events = Master.Data(file, nTuple_type = ntuple_type, target_momentum = args.pmom)
-
-    #? should this be made configurable i.e. pass config and apply all selections before the beam quality cuts if it is in the list?
-
-    func_args = "mc_arguments" if data is False else "data_arguments"
-
-    if ("DxyCut" in args.beam_selection["selections"]) or ("DzCut" in args.beam_selection["selections"]) or ("CosThetaCut" in args.beam_selection["selections"]):
-        for s in args.beam_selection["selections"]:
-            if s in ["DxyCut", "DzCut", "CosThetaCut"]:
-                break # only apply cuts before beam quality
-            else:
-                print(f"{s=}")
-                mask = args.beam_selection["selections"][s](events, **args.beam_selection[func_args][s])
-                events.Filter([mask], [mask])
-    else:
-        # do default selections prior to beam quality
-        mask = BeamParticleSelection.PiBeamSelection(events, data)
-        events.Filter([mask], [mask])
-
-        mask = BeamParticleSelection.PandoraTagCut(events)
-        events.Filter([mask], [mask])
-
-        mask = BeamParticleSelection.CaloSizeCut(events)
-        events.Filter([mask], [mask])
-
-        mask = BeamParticleSelection.HasFinalStatePFOsCut(events)
-        events.Filter([mask], [mask])
-
-    #* fit gaussians to the start positions
-    start_pos, end_pos = BeamParticleSelection.GetTruncatedPos(events, args.beam_quality_truncate)
+def Fits(args : cross_section.argparse.Namespace, output : dict, out : str, sample_name : str):
+    start_pos = output["start_pos"]
+    beam_dir = output["beam_dir"]
     mu, sigma, mu_err, sigma_err = Fit_Vector(start_pos, 100)
 
-    #* compute the mean of beam direction components
-    beam_dir = vector.normalize(vector.sub(end_pos, start_pos))
     mu_dir = {i : ak.mean(ak.nan_to_num(beam_dir[i])) for i in ["x", "y", "z"]}
     mu_dir_err = {i : ak.std(ak.nan_to_num(beam_dir[i]))/np.sqrt(ak.count(beam_dir[i])) for i in ["x", "y", "z"]}
 
-    #* convert to dictionary undestood by the BeamQualityCut function
     fit_values = {
         "mu_x"         : mu["x"],
         "mu_y"         : mu["y"],
@@ -184,33 +150,71 @@ def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, out : str, ta
 
     #* write to json file
     os.makedirs(args.out, exist_ok = True)
-    name = out + tag + "_beam_quality_fit_values.json"
+    name = out + sample_name + "_beam_quality_fit_values.json"
     Master.SaveConfiguration(fit_values, name)
     print(f"fit values written to {name}")
 
-    return events, fit_values
+    return fit_values
+
+
+def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
+    events = Master.Data(file, nTuple_type = args["nTuple_type"], target_momentum = args["pmom"])
+
+    #? should this be made configurable i.e. pass config and apply all selections before the beam quality cuts if it is in the list?
+
+    func_args = "mc_arguments" if args["data"] is False else "data_arguments"
+
+    if ("DxyCut" in args["beam_selection"]["selections"]) or ("DzCut" in args["beam_selection"]["selections"]) or ("CosThetaCut" in args["beam_selection"]["selections"]):
+        for s in args["beam_selection"]["selections"]:
+            if s in ["DxyCut", "DzCut", "CosThetaCut"]:
+                break # only apply cuts before beam quality
+            else:
+                print(f"{s=}")
+                mask = args["beam_selection"]["selections"][s](events, **args["beam_selection"][func_args][s])
+                events.Filter([mask], [mask])
+    else:
+        # do default selections prior to beam quality
+        mask = BeamParticleSelection.PiBeamSelection(events, args["data"])
+        events.Filter([mask], [mask])
+
+        mask = BeamParticleSelection.PandoraTagCut(events)
+        events.Filter([mask], [mask])
+
+        mask = BeamParticleSelection.CaloSizeCut(events)
+        events.Filter([mask], [mask])
+
+        mask = BeamParticleSelection.HasFinalStatePFOsCut(events)
+        events.Filter([mask], [mask])
+
+    #* fit gaussians to the start positions
+    start_pos, end_pos = BeamParticleSelection.GetTruncatedPos(events, args["beam_quality_truncate"])
+    beam_dir = vector.normalize(vector.sub(end_pos, start_pos))
+    return {"start_pos" : start_pos, "end_pos" : end_pos, "beam_dir": beam_dir}
 
 @Master.timer
 def main(args):
-    mc, fit_values_mc = None, None
-    data, fit_values_data = None, None
+    output_mc, fit_values_mc = None, None
+    output_data, fit_values_data = None, None
 
-    os.makedirs(args.out + "beam_quality/", exist_ok = True)
+    outdir = args.out + "beam_quality/"
+    os.makedirs(outdir, exist_ok = True)
 
-    if args.mc_file is not None:
-        mc, fit_values_mc = run(args.mc_file, False, args.ntuple_type, args.out + "beam_quality/", "mc", args)
-    if args.data_file is not None:
-        data, fit_values_data = run(args.data_file, True, args.ntuple_type, args.out + "beam_quality/", "data", args)
+    output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
+    fit_values_mc = Fits(args, output_mc, outdir, "mc")
 
-    MakePlots(mc, fit_values_mc, data, fit_values_data, args.out + "beam_quality/", args.beam_quality_truncate)
+    output_data = cross_section.RunProcess(args.ntuple_files["data"], True, args, run)
+    print(output_data)
+    fit_values_data = Fits(args, output_data, outdir, "data")
+
+    MakePlots(output_mc, fit_values_mc, output_data, fit_values_data, outdir, args.beam_quality_truncate)
 
     return
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Computes Guassian fit paramters needed for the beam quality cuts in the beam particle selection.", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    # cross_section.ApplicationArguments.Ntuples(parser, data = True)
-    cross_section.ApplicationArguments.Config(parser, True)    
+    cross_section.ApplicationArguments.Config(parser, True)
+    cross_section.ApplicationArguments.Processing(parser)
     cross_section.ApplicationArguments.Output(parser)
 
     args = parser.parse_args()

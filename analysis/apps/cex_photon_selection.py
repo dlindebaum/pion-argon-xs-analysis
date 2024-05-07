@@ -44,29 +44,17 @@ def CreatePFOMasks(masks : dict[ak.Array]) -> ak.Array:
 def run(i, file, n_events, start, selected_events, args):
     output = {}
 
-    events = Master.Data(file, n_events, start, args["ntuple_type"])
+    events = Master.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
 
-    if "selection_masks" in args:
-        if "fiducial" in args["selection_masks"]["mc"]:
-            mask = SelectionTools.CombineMasks(args["selection_masks"]["mc"]["fiducial"])
-            events.Filter([mask], [mask])
-
-        mask = SelectionTools.CombineMasks(args["selection_masks"]["mc"]["beam"])
+    for s, a in zip(args["beam_selection"]["selections"].values(), args["beam_selection"]["mc_arguments"].values()):
+        mask = s(events, **a)
         events.Filter([mask], [mask])
-
-        events.Filter([args["selection_masks"]["mc"]["null_pfo"]["ValidPFOSelection"]])
-        photon_mask = CreatePFOMasks(args["selection_masks"]["mc"]["photon"])
-        events.Filter([photon_mask])
-    else:
-        for s, a in zip(args["beam_selection"]["selections"].values(), args["beam_selection"]["mc_arguments"].values()):
-            mask = s(events, **a)
-            events.Filter([mask], [mask])
-        photon_masks = {}
-        if args["valid_pfo_selection"] is True:
-            for k, s, a in zip(args["photon_selection"]["selections"].keys(), args["photon_selection"]["selections"].values(), args["photon_selection"]["mc_arguments"].values()):
-                photon_masks[k] = s(events, **a)
-        photon_mask = CreatePFOMasks(photon_masks)
-        events.Filter([photon_mask])
+    photon_masks = {}
+    if args["valid_pfo_selection"] is True:
+        for k, s, a in zip(args["photon_selection"]["selections"].keys(), args["photon_selection"]["selections"].values(), args["photon_selection"]["mc_arguments"].values()):
+            photon_masks[k] = s(events, **a)
+    photon_mask = SelectionTools.CombineMasks(photon_masks)
+    events.Filter([photon_mask])
     print("making pairs")
     pairs = EventSelection.NPhotonCandidateSelection(events, photon_mask[photon_mask], 2)
 
@@ -301,7 +289,6 @@ def MethodComparison(df : pd.DataFrame, linear_correction : float, response_para
     for l, f in fe.items():
         v = f[(f > -1) & (f < 1)]
         tab[l] = {"$\mu$" : v.mean(), "$\sigma$" : v.std()}
-        # print(f"{l} : mean {v.mean():.3f} std {v.std():.3f}")
     tab = pd.DataFrame(tab)
 
     for i, f in Plots.IterMultiPlot(fe):
@@ -327,21 +314,9 @@ def MethodComparison(df : pd.DataFrame, linear_correction : float, response_para
     return tab
 
 def main(args):
-    cross_section.SetPlotStyle(False)
-    outputs = Processing.mutliprocess(run, [args.mc_file], args.batches, args.events, vars(args), args.threads)
+    cross_section.SetPlotStyle(False)    
+    output = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
 
-    output = {}
-    for o in outputs:
-        for k, v in o.items():
-            if k not in output:
-                output[k] = v
-            else:
-                if "tag" in k:
-                    for tag in v:
-                        output[k][tag].mask = ak.concatenate([output[k][tag].mask, v[tag].mask])
-                else:
-                    output[k] = ak.concatenate([output[k], v])
-    print(output)
     output_photons = pd.DataFrame({i : output[i] for i in output if "shower_pairs" not in i and "tags" not in i})
     output_pairs = pd.DataFrame({i : output[i] for i in output if "shower_pairs" in i and "tags" not in i})
     output_tags = pd.DataFrame({i : output[i] for i in output if "tags" in i})

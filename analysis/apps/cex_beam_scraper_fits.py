@@ -13,11 +13,28 @@ import awkward as ak
 import matplotlib.pyplot as plt
 import numpy as np
 
-from matplotlib.backends.backend_pdf import PdfPages
 from particle import Particle
 from rich import print
 
-from python.analysis import Master, cross_section, vector, Plots, Fitting
+from python.analysis import Master, cross_section, Plots, Fitting, Processing
+
+
+def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
+    mc = Master.Data(file, nTuple_type = args["nTuple_type"], target_momentum = args["pmom"])
+    for s in args["beam_selection"]["selections"]:
+        if s == "BeamScraperCut": break
+        mask = args["beam_selection"]["selections"][s](mc, **args["beam_selection"]["mc_arguments"][s])
+        mc.Filter([mask], [mask])
+
+    beam_inst_KE = cross_section.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
+    true_ffKE = mc.trueParticles.beam_KE_front_face
+
+    beam_inst_x = mc.recoParticles.beam_inst_pos.x
+    beam_inst_y = mc.recoParticles.beam_inst_pos.y
+
+    delta_KE_upstream = beam_inst_KE - true_ffKE
+
+    return {"beam_inst_KE" : beam_inst_KE, "true_ffKE" : true_ffKE, "beam_inst_x" : beam_inst_x, "beam_inst_y" : beam_inst_y, "delta_KE_upstream" : delta_KE_upstream}
 
 
 def GetTrueFFKE(KE_tpc : ak.Array, length_to_ff : ak.Array) -> ak.Array:
@@ -125,7 +142,7 @@ def GetScraperFits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : 
     return scraper_fit
 
 
-def BeamScraperPlots(mc: Master.Data, beam_inst_KE_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : ak.Array, scraper_fits : dict) -> dict:
+def BeamScraperPlots(beam_inst_KE_bins : list, output_mc : dict[ak.Array], scraper_fits : dict) -> dict:
     """ Scatter plots of events to show beam scraper events as a function of the XY position at the beam instrumentation.
 
     Args:
@@ -145,20 +162,20 @@ def BeamScraperPlots(mc: Master.Data, beam_inst_KE_bins : list, beam_inst_KE : a
         if i == len(beam_inst_KE_bins): continue
         bin_edges = (beam_inst_KE_bins[i], beam_inst_KE_bins[i+1])
         bin_label = "$KE^{reco}_{inst}$:" + f"[{beam_inst_KE_bins[i]},{beam_inst_KE_bins[i+1]}] (MeV)"
-        e = (beam_inst_KE < beam_inst_KE_bins[i+1]) & (beam_inst_KE > beam_inst_KE_bins[i])
+        e = (output_mc["beam_inst_KE"] < beam_inst_KE_bins[i+1]) & (output_mc["beam_inst_KE"] > beam_inst_KE_bins[i])
         fit_values = scraper_fits[(beam_inst_KE_bins[i], beam_inst_KE_bins[i+1])]
 
-        is_scraper = delta_KE_upstream[e] > (fit_values["mu_e_res"] + 3 * fit_values["sigma_e_res"])
+        is_scraper = output_mc["delta_KE_upstream"][e] > (fit_values["mu_e_res"] + 3 * fit_values["sigma_e_res"])
 
-        Plots.Plot(mc.recoParticles.beam_inst_pos.x[e][~is_scraper], mc.recoParticles.beam_inst_pos.y[e][~is_scraper], newFigure = False, linestyle = "", marker = "o", markersize = 2, color = "C0", alpha = 0.5, label = "non-scraper")
-        Plots.Plot(mc.recoParticles.beam_inst_pos.x[e][is_scraper], mc.recoParticles.beam_inst_pos.y[e][is_scraper], newFigure = False, linestyle = "", marker = "o", markersize = 2, color = "C6", alpha = 0.5, label = "scraper")
+        Plots.Plot(output_mc["beam_inst_x"][e][~is_scraper], output_mc["beam_inst_y"][e][~is_scraper], newFigure = False, linestyle = "", marker = "o", markersize = 2, color = "C0", alpha = 0.5, label = "non-scraper")
+        Plots.Plot(output_mc["beam_inst_x"][e][is_scraper], output_mc["beam_inst_y"][e][is_scraper], newFigure = False, linestyle = "", marker = "o", markersize = 2, color = "C6", alpha = 0.5, label = "scraper")
 
-        mu_x = ak.mean(mc.recoParticles.beam_inst_pos[e].x)
-        mu_y = ak.mean(mc.recoParticles.beam_inst_pos[e].y)
+        mu_x = ak.mean(output_mc["beam_inst_x"][e])
+        mu_y = ak.mean(output_mc["beam_inst_y"])
         print(bin_label)
         print(mu_x, mu_y)
-        sigma_x = ak.std(mc.recoParticles.beam_inst_pos[e].x)
-        sigma_y = ak.std(mc.recoParticles.beam_inst_pos[e].y)
+        sigma_x = ak.std(output_mc["beam_inst_x"][e])
+        sigma_y = ak.std(output_mc["beam_inst_y"])
 
         output[bin_edges] = {"mu_x_inst" : mu_x, "mu_y_inst" : mu_y, "sigma_x_inst" : sigma_x, "sigma_y_inst" : sigma_y}
 
@@ -176,23 +193,11 @@ def BeamScraperPlots(mc: Master.Data, beam_inst_KE_bins : list, beam_inst_KE : a
         plt.legend()
     return output
 
+
 def main(args : argparse.Namespace):
     cross_section.SetPlotStyle(True)
 
-    mc = Master.Data(args.mc_file, nTuple_type = args.ntuple_type, target_momentum = args.pmom)
-    for s in args.beam_selection["selections"]:
-        if s == "BeamScraperCut": break
-        mask = args.beam_selection["selections"][s](mc, **args.beam_selection["mc_arguments"][s])
-        mc.Filter([mask], [mask])
-
-    # bq_fit = args.mc_beam_quality_fit
-    # mask = cross_section.BeamParticleSelection.CreateDefaultSelection(mc, False, bq_fit, return_table = False)#! make configurable! #
-    # mc.Filter([mask], [mask]) # apply default beam selection
-
-    beam_inst_KE = cross_section.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
-    true_ffKE = mc.trueParticles.beam_KE_front_face
-
-    delta_KE_upstream = beam_inst_KE - true_ffKE
+    output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
 
     residual_range = [-300, 300] # range of residual for plots
     bins = 50
@@ -201,18 +206,18 @@ def main(args : argparse.Namespace):
 
     with Plots.PlotBook(args.out + "beam_scraper/" + "beam_scraper_fits.pdf") as pdf:
         Plots.Plot(args.beam_scraper_energy_range, args.beam_scraper_energy_range, color = "red")
-        Plots.PlotHist2D(beam_inst_KE, true_ffKE, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$KE^{true}_{init}$ (MeV)", x_range = args.beam_scraper_energy_range, y_range = args.beam_scraper_energy_range, newFigure = False)
+        Plots.PlotHist2D(output_mc["beam_inst_KE"], output_mc["true_ffKE"], xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$KE^{true}_{init}$ (MeV)", x_range = args.beam_scraper_energy_range, y_range = args.beam_scraper_energy_range, newFigure = False)
         pdf.Save()
 
-        Plots.PlotHist2D(beam_inst_KE, delta_KE_upstream, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$KE^{reco}_{inst} - KE^{true}_{init}$ (MeV)", x_range = args.beam_scraper_energy_range, y_range = residual_range)
+        Plots.PlotHist2D(output_mc["beam_inst_KE"], output_mc["delta_KE_upstream"], xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$KE^{reco}_{inst} - KE^{true}_{init}$ (MeV)", x_range = args.beam_scraper_energy_range, y_range = residual_range)
         for i in args.beam_scraper_energy_bins: plt.axvline(i, color = "red")
         pdf.Save()
 
-        scraper_thresholds = GetScraperFits(args.beam_scraper_energy_bins, beam_inst_KE, delta_KE_upstream, bins, residual_range)
+        scraper_thresholds = GetScraperFits(args.beam_scraper_energy_bins, output_mc["beam_inst_KE"], output_mc["delta_KE_upstream"], bins, residual_range)
         pdf.Save()
         print(scraper_thresholds)
 
-        position_means = BeamScraperPlots(mc, args.beam_scraper_energy_bins, beam_inst_KE, delta_KE_upstream, scraper_thresholds)
+        position_means = BeamScraperPlots(args.beam_scraper_energy_bins, output_mc, scraper_thresholds)
         print(position_means)
         pdf.Save()
 
@@ -227,18 +232,17 @@ def main(args : argparse.Namespace):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description = "Applies beam particle selection, PFO selection, produces tables and basic plots.", formatter_class = argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(description = "Applies beam particle selection, PFO selection, produces tables and basic plots.")
 
-    # cross_section.ApplicationArguments.Ntuples(parser)
-    # cross_section.ApplicationArguments.BeamQualityCuts(parser)
     cross_section.ApplicationArguments.Config(parser, required = True)
+    cross_section.ApplicationArguments.Processing(parser)
     cross_section.ApplicationArguments.Output(parser)
 
     parser.add_argument("--energy_range", dest = "beam_scraper_energy_range", type = float, nargs = 2, help = "energy range to study (MeV).")
     parser.add_argument("--energy_bins", dest = "beam_scraper_energy_bins", type = float, nargs = 5, help = "kinetic energy bin edges (currently allows only 4 bins to be made) (MeV)")
 
     args = parser.parse_args()
-    cross_section.ApplicationArguments.ResolveArgs(args)
+    args = cross_section.ApplicationArguments.ResolveArgs(args)
 
-    print(vars(args))   
+    print(vars(args))
     main(args)

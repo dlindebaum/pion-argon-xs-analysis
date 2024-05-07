@@ -25,18 +25,18 @@ from rich import print
 
 
 @Master.timer
-def ComputeQuantities(mc : Master.Data, args : argparse.Namespace) -> dict[dict, dict]:
+def ComputeQuantities(mc : Master.Data, args : dict) -> dict[dict, dict]:
     """ Compute Quantities used for the cross section measurement.
 
     Args:
         mc (Master.Data): mc events.
-        args (argparse.Namespace): application arguments.
+        args (dict): application arguments.
 
     Returns:
         dict[dict, dict]: dictionary of quantities, one for reco and truth.
     """
     with alive_bar(title = "computng reco quantities") as bar:
-        reco_upstream_loss = cross_section.UpstreamEnergyLoss(cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass), args.upstream_loss_correction_params["value"], args.upstream_loss_response)
+        reco_upstream_loss = cross_section.UpstreamEnergyLoss(cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass), args["upstream_loss_correction_params"]["value"], args["upstream_loss_response"])
         
         reco_KE_ff = cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass) - reco_upstream_loss
         reco_KE_int = reco_KE_ff - cross_section.RecoDepositedEnergy(mc, reco_KE_ff, "bb")
@@ -51,6 +51,31 @@ def ComputeQuantities(mc : Master.Data, args : argparse.Namespace) -> dict[dict,
         "reco" : {"KE_init" : reco_KE_ff, "KE_int" : reco_KE_int, "z_int" : reco_track_length},
         "true" : {"KE_init" : true_KE_ff, "KE_int" : true_KE_int, "z_int" : true_track_length}
     }
+
+
+def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
+    mc = Master.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
+
+    true_pion_mask = mc.trueParticles.pdg[:, 0] == 211
+
+    pion_inel_mask = GetTotalPionInelMasks(mc)
+    
+    cross_section_quantities = ComputeQuantities(mc, args)
+
+    ri = {}
+    for r in RegionIdentification.regions:
+        print(r)
+        reco_regions, true_regions = RegionSelection(mc, args, True, r, True)
+        ri[r] = {"reco_regions" : reco_regions, "true_regions" : true_regions}
+
+    mc_copy = BeamPionSelection(mc, args, True)
+
+    mean_track_score = ak.fill_none(ak.mean(mc_copy.recoParticles.track_score, axis = -1), -0.05)
+
+    selection = args["selection_masks"]["mc"]["beam"][file]
+    mask = SelectionTools.CombineMasks(selection)
+
+    return {"kinematic_quantities" : cross_section_quantities, "true_pion_mask" : true_pion_mask, "pion_inel_mask" : pion_inel_mask, "region_identification" : ri, "mean_track_score" : mean_track_score, "beam_selection_mask" : mask}
 
 
 def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_quantity : ak.Array, mask : ak.Array = None, label = "quantity(units)", plot_range = None, residual_range = None, fit_functions : list[cross_section.Fitting.FitFunction] = [cross_section.Fitting.gaussian, cross_section.Fitting.student_t]) -> dict:
@@ -179,7 +204,7 @@ def Efficiency(selected_count : np.array, total_count : np.array) -> tuple[np.ar
     return p, error
 
 @Master.timer
-def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, args : argparse.Namespace, ranges : dict, labels : dict, bins : dict, out : str):
+def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, beam_selection_mask : ak.Array, args : argparse.Namespace, ranges : dict, labels : dict, bins : dict, out : str):
     """ Study which looks at the beam selection efficiency as a function of each cross section quantity, then saves the per bin efficiencies to file to use for the toy simulation.
 
     Args:
@@ -191,17 +216,14 @@ def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, args :
         bins (dict): plot bins
     """
     initial_counts_true = GetTotalPionCounts(pion_inel_mask, quantities, bins, ranges)
-    
-    selection = args.selection_masks["mc"]["beam"]
 
     selected_pion_inel_mask = ak.Array(pion_inel_mask)
     selected_quantities = {i : ak.Array(quantities[i]) for i in quantities}
 
-    mask = SelectionTools.CombineMasks(selection)
 
-    selected_pion_inel_mask = selected_pion_inel_mask[mask]
+    selected_pion_inel_mask = selected_pion_inel_mask[beam_selection_mask]
     for q in selected_quantities:
-        selected_quantities[q] = selected_quantities[q][mask]
+        selected_quantities[q] = selected_quantities[q][beam_selection_mask]
 
     selected_counts_true = GetTotalPionCounts(selected_pion_inel_mask, selected_quantities, bins, ranges)
 
@@ -227,7 +249,7 @@ def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, args :
 
 
 @Master.timer
-def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace, out : str):
+def RecoRegionSelection(region_selections : dict[dict], args : argparse.Namespace, out : str):
     """ Study which computes a correlation matrix ofthe event faction for reco regions and true regions.
         Saved to file to be used in toy simulation.
 
@@ -238,9 +260,10 @@ def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace, out : str):
     os.makedirs(out + "reco_regions/", exist_ok = True)
     pdf = Plots.PlotBook(out + "reco_regions/reco_regions_study")
     pe = {}
-    for r in RegionIdentification.regions:
+    for r in region_selections:
         print(r)
-        reco_regions, true_regions = RegionSelection(mc, args, True, r, True)
+        reco_regions = region_selections[r]["reco_regions"]
+        true_regions = region_selections[r]["true_regions"]
 
         counts = cross_section.CountInRegions(true_regions, reco_regions)
         Plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "true process", x_label = "reco region", title = cross_section.remove_(r))
@@ -259,18 +282,13 @@ def RecoRegionSelection(mc : Master.Data, args : argparse.Namespace, out : str):
     return
 
 @Master.timer
-def MeanTrackScoreKDE(mc : Master.Data, args : argparse.Namespace, out : str):
+def MeanTrackScoreKDE(mean_track_score : ak.Array, true_processes : dict[ak.Array], args : argparse.Namespace, out : str):
     """ Derives mean track score kernels from mc.
 
     Args:
         mc (Master.Data): mc sample
         args (argparse.Namespace): application arguments.
     """
-    mc_copy = BeamPionSelection(mc, args, True)
-
-    mean_track_score = ak.fill_none(ak.mean(mc_copy.recoParticles.track_score, axis = -1), -0.05)
-
-    true_processes = RegionIdentification.TrueRegions(mc_copy.trueParticles.nPi0, mc_copy.trueParticles.nPiPlus + mc_copy.trueParticles.nPiMinus)
     tags = Tags.ExclusiveProcessTags(true_processes)
 
     kdes = {}
@@ -343,6 +361,9 @@ def main(args : argparse.Namespace):
     cross_section.SetPlotStyle(True)
     out = args.out + "toy_parameters/"
 
+    args.batches = None
+    args.events = None
+    args.threads = 1
 
     bins = {r : np.linspace(min(args.toy_parameters["plot_ranges"][r]), max(args.toy_parameters["plot_ranges"][r]), 50) for r in args.toy_parameters["plot_ranges"]}
     labels = {
@@ -351,33 +372,27 @@ def main(args : argparse.Namespace):
         "z_int" : "$l^{res, MC}$ (cm)"
     }
 
-    with alive_bar(title = "load mc") as bar:
-        mc = Master.Data(args.mc_file, -1, nTuple_type = args.ntuple_type, target_momentum = args.pmom)
+    output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
 
-    with alive_bar(title = "create mask") as bar:
-        true_pion_mask = mc.trueParticles.pdg[:, 0] == 211
+    print(f"{output_mc=}")
 
-    with alive_bar(title = "pion inel mask") as bar:
-        pion_inel_mask = GetTotalPionInelMasks(mc)
-    
-    cross_section_quantities = ComputeQuantities(mc, args)
-    print(cross_section_quantities)
 
-    BeamProfileStudy(cross_section_quantities, args, true_pion_mask, args.toy_parameters["beam_profile"], args.toy_parameters["plot_ranges"]["KE_init"], out)
+    BeamProfileStudy(output_mc["kinematic_quantities"], args, output_mc["true_pion_mask"], args.toy_parameters["beam_profile"], args.toy_parameters["plot_ranges"]["KE_init"], out)
 
-    Smearing(cross_section_quantities, true_pion_mask, args, labels, out)
+    Smearing(output_mc["kinematic_quantities"], output_mc["true_pion_mask"], args, labels, out)
 
-    BeamSelectionEfficiency(cross_section_quantities["true"], pion_inel_mask, args, args.toy_parameters["plot_ranges"], labels, bins, out)
+    BeamSelectionEfficiency(output_mc["kinematic_quantities"]["true"], output_mc["pion_inel_mask"], output_mc["beam_selection_mask"], args, args.toy_parameters["plot_ranges"], labels, bins, out)
 
-    RecoRegionSelection(mc, args, out)
+    RecoRegionSelection(output_mc["region_identification"], args, out)
 
-    MeanTrackScoreKDE(mc, args, out)
+    MeanTrackScoreKDE(output_mc["mean_track_score"], output_mc["region_identification"][list(output_mc["region_identification"].keys())[0]]["true_regions"], args, out)
     return
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Analyses MC ntuples in order to determine parameters used to emulate selection efficiency and detector effects for the toy model.")
 
     cross_section.ApplicationArguments.Output(parser)
+    cross_section.ApplicationArguments.Processing(parser)
     cross_section.ApplicationArguments.Config(parser)
 
     args = parser.parse_args()

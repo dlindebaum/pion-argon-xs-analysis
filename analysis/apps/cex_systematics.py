@@ -18,7 +18,8 @@ from rich.rule import Rule
 from python.analysis import cross_section, Plots
 from python.analysis.Master import DictToHDF5
 from python.analysis.Utils import dill_copy, quadsum
-from apps import cex_toy_generator, cex_analyse, cex_fit_studies, cex_analysis_input
+from apps import cex_toy_generator, cex_analyse, cex_fit_studies, cex_analysis_input, cex_beam_reweight, cex_upstream_loss
+
 
 exclusive_proc = ["absorption", "charge_exchange", "single_pion_production", "pion_production"]
 
@@ -39,7 +40,7 @@ class MCMethod(ABC):
 
         region_fit_result = cex_analyse.RegionFit(analysis_input, self.args.energy_slices, self.args.fit["mean_track_score"], self.model, mc_stat_unc = self.args.fit["mc_stat_unc"], single_bin = self.args.fit["single_bin"])
 
-        _, histograms_reco_obs, histograms_reco_obs_err = cex_analyse.BackgroundSubtraction(analysis_input, self.args.signal_process, self.args.energy_slices, region_fit_result, self.args.fit["single_bin"], self.args.fit["regions"], self.args.toy_template, self.args.bkgsub_err, book)
+        _, histograms_reco_obs, histograms_reco_obs_err = cex_analyse.BackgroundSubtraction(analysis_input, self.args.signal_process, self.args.energy_slices, region_fit_result, self.args.fit["single_bin"], self.args.fit["regions"], self.args.toy_template, self.args.bkg_sub_err, book)
 
 
         if self.args.fit["regions"]:
@@ -48,7 +49,7 @@ class MCMethod(ABC):
             histograms_reco_obs_err = {**histograms_reco_obs_err, **histograms_reco_obs_err["int_ex"]}
             histograms_reco_obs_err.pop("int_ex")
 
-        unfolding_result = cex_analyse.Unfolding(histograms_reco_obs, histograms_reco_obs_err, self.args.toy_template, self.args.unfolding, self.args.signal_process, len(analysis_input.KE_init_reco)/len(self.args.toy_template.KE_init_reco), self.args.energy_slices, self.args.fit["regions"], None, book)
+        unfolding_result = cex_analyse.Unfolding(histograms_reco_obs, histograms_reco_obs_err, self.args.toy_template, self.args.unfolding, self.args.signal_process, len(analysis_input.KE_init_reco)/len(self.args.toy_template.KE_init_reco), self.args.energy_slices, self.args.fit["regions"], self.args.fit["mc_stat_unc"], None, book)
 
         if book is not None:
             for p in cex_analyse.process_labels:
@@ -59,7 +60,6 @@ class MCMethod(ABC):
 
         xs = cex_analyse.XSUnfold(unfolding_result, self.args.energy_slices, True, True, self.args.fit["regions"])
         return xs
-
 
     def RunExperiment(self, config : dict, out : str = None) -> tuple[dict, dict]:
         x = self.args.energy_slices.pos[:-1] - self.args.energy_slices.width / 2
@@ -184,7 +184,9 @@ class NuisanceParameters:
 
     def __run_analysis(self, np : bool = False):
         args_copy = dill_copy(self.args)
-        args_copy.fit["mc_stat_unc"] = np
+        args_copy.bkg_sub_err = False
+        args_copy.fit["mc_stat_unc"] = True
+        args_copy.fit["fix_np"] = not np
         args_copy.pdsp = True
         args_copy.toy_template = None
         args_copy.out = ""
@@ -311,38 +313,61 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
 
     def __init__(self, args: Namespace) -> None:
         super().__init__(args)
-        self.LoadSamples()
+        self.args.batches = None
+        self.args.events = None
+        self.args.threads = 1
 
-    def LoadSamples(self):
-        self.mc = cross_section.Data(self.args.mc_file, nTuple_type = self.args.ntuple_type, target_momentum = self.args.pmom)
-        self.data = cross_section.Data(self.args.data_file, nTuple_type = self.args.ntuple_type, target_momentum = 1)
-        return
+
+    @staticmethod
+    def __run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
+        sample = "data" if args["data"] is True else "mc"
+
+        print(f"{sample=}")
+
+        events = cross_section.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
+        events = cex_analysis_input.BeamPionSelection(events, args, not args["data"])
+
+        photon_candidates = cex_analysis_input.SelectionTools.CombineMasks(args["selection_masks"][sample]["photon"][file])
+        output = {}
+        for name, sign in zip(["low", "high"], [1, -1]):
+            masks = {}
+            selection_args_copy = cross_section.dill_copy(args["pi0_selection"][f"{sample}_arguments"].values())
+            for (s, f), a in zip(args["pi0_selection"]["selections"].items(), selection_args_copy):
+                if s == "Pi0MassSelection":
+                    a["correction_params"]["value"] = {f"p{i}" : a["correction_params"]["value"][f"p{i}"] + sign * a["correction_params"]["error"][f"p{i}"] for i in range(len(a["correction_params"]["error"]))}
+                mask = f(events, **a, photon_mask = photon_candidates)
+                masks[s] = mask
+            output[name] = masks
+        output["name"] = file
+
+        return output
+
+
+    def __merge(self, output : dict) -> dict:
+        names = np.unique([o["name"] for o in output])
+
+        split_output = {n : [] for n in names}
+        for n in names:
+            for o in output:
+                if o["name"] == n:
+                    split_output[n].append(o)
+
+        merged_output = []
+        for s in split_output:
+            o = cross_section.MergeOutputs(split_output[s])
+            merged_output.append(o)
+        return merged_output
+
 
     def CreateAltPi0Selections(self):
-        samples = {
-            "mc" : cex_analysis_input.BeamPionSelection(self.mc, self.args, True),
-            "data" : cex_analysis_input.BeamPionSelection(self.data, self.args, False)
-        }
-
-        photon_candidates = {s : cex_analysis_input.SelectionTools.CombineMasks(self.args.selection_masks[s]["photon"]) for s in samples}
-
-        masks_sample = {}
-        for sample in ["mc", "data"]:
-            masks_sys = {}
-            for name, sign in zip(["low", "high"], [1, -1]):
-                masks = {}
-                selection_args_copy = cross_section.dill_copy(self.args.pi0_selection[f"{sample}_arguments"].values())
-                for (s, f), a in zip(self.args.pi0_selection["selections"].items(), selection_args_copy):
-                    if s == "Pi0MassSelection":
-                        a["correction_params"]["value"] = {f"p{i}" : a["correction_params"]["value"][f"p{i}"] + sign * a["correction_params"]["error"][f"p{i}"] for i in range(len(a["correction_params"]["error"]))}
-                    mask = f(samples[sample], **a, photon_mask = photon_candidates[sample])
-                    masks[s] = mask
-                masks_sys[name] = masks
-            masks_sample[sample] = masks_sys
-        return masks_sample
+        output_mc = self.__merge(cross_section.RunProcess(self.args.ntuple_files["mc"], False, self.args, self.__run, False))
+        output_data = self.__merge(cross_section.RunProcess(self.args.ntuple_files["data"], True, self.args, self.__run, False))
+        return {"mc" : output_mc, "data" : output_data}
 
 
     def CreateNewAIs(self, outdir : str):
+
+        cross_section.os.makedirs(outdir, exist_ok = True)
 
         masks = self.CreateAltPi0Selections()
         cross_section.SaveObject(f"{outdir}pi0_selection_masks.dill", masks)
@@ -350,8 +375,9 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
         args_copy = {}
         for i in ["low", "high"]:
             a = cross_section.dill_copy(self.args)
-            a.selection_masks["mc"]["pi0"] = masks["mc"][i]
-            a.selection_masks["data"]["pi0"] = masks["data"][i]
+            a.selection_masks["mc"]["pi0"] = {j["name"] : j[i] for j in masks["mc"]}
+
+            a.selection_masks["data"]["pi0"] = {j["name"] : j[i] for j in masks["data"]}
             args_copy[i] = a
 
         for k, v in args_copy.items():
@@ -390,6 +416,7 @@ class TrackLengthResolutionSystematic(DataAnalysis):
         cross_section.os.makedirs(f"{outdir}{self.name}_high/", exist_ok = True)
         cross_section.os.makedirs(f"{outdir}{self.name}_low/", exist_ok = True)
         
+        self.CalculateResolution()
         for i in self.args.analysis_input:
             ai = cross_section.AnalysisInput.FromFile(self.args.analysis_input[i])
             if i == "data":
@@ -407,12 +434,71 @@ class TrackLengthResolutionSystematic(DataAnalysis):
         return
 
 
+class BeamMomentumResolutionSystematic(DataAnalysis):
+    name = "beam_momentum_resolution"
+
+    def CreateNewConfigEntry(self, target_files, additional_args, output_path):
+        print("outputs: " + output_path)
+        new_config_entry = {}
+        files = cross_section.os.listdir(output_path)
+        for k, v in target_files.items():
+            if v in files:
+                new_config_entry[k] = cross_section.os.path.abspath(output_path + v)
+        for k, v in additional_args.items():
+            new_config_entry[k] = v
+        return new_config_entry
+
+    def CreateNewAIs(self, outdir : str, resolution : float):
+
+        for k, v in zip(["low", "high"], [-1, 1]):
+            args_copy = cross_section.dill_copy(self.args)
+            args_copy.out = f"{outdir}/{self.name}_{k}/"
+            args_copy.pmom = args_copy.pmom * (1 + (v * resolution))
+            cex_beam_reweight.main(args_copy)
+
+            output_path = args_copy.out + "beam_reweight/"
+
+            target_files = {
+                "params" : "gaussian.json", # default choice, rework reweight to include a choice in the config
+            }
+            additional_args = {"strength" : args_copy.beam_reweight["strength"]}
+
+            new_config_entry = self.CreateNewConfigEntry(target_files, additional_args, output_path)
+
+            new_config_entry["params"] = cross_section.LoadConfiguration(new_config_entry["params"])
+            args_copy.beam_reweight = new_config_entry
+
+            args_copy.no_reweight = False
+            cex_upstream_loss.main(args_copy)
+
+            output_path = args_copy.out + "upstream_loss/"
+            target_files = {
+            "correction_params" : "fit_parameters.json",
+            }
+
+            additional_args = {
+                "cv_function" : args_copy.upstream_loss_cv_function,
+                "response" : args_copy.upstream_loss_response,
+                "bins" : args_copy.upstream_loss_bins,
+            }
+
+            new_config_entry = self.CreateNewConfigEntry(target_files, additional_args, output_path)
+
+            args_copy.upstream_loss_bins = new_config_entry["bins"]
+            args_copy.upstream_loss_response = new_config_entry["response"]
+            args_copy.upstream_loss_cv_function = new_config_entry["cv_function"]
+            args_copy.upstream_loss_correction_params = cross_section.LoadConfiguration(new_config_entry["correction_params"])
+
+            cex_analysis_input.main(args_copy)
+        return
+
+
 class NormalisationSystematic(MCMethod):
     def Evaluate(self, norms = [0.8, 1.2], repeats : int = 1):
         cvs = {}
         true_cvs = {}
         for target in exclusive_proc:
-            print(f"{target=}")
+            print(Rule(f"normalisation systematic: {target}"))
             scales = {k : 1 for k in ['absorption', 'quasielastic', 'charge_exchange', 'double_charge_exchange', 'pion_production']}
             xs = {i : [] for i in norms}
             xs_true = {}
@@ -439,45 +525,44 @@ class NormalisationSystematic(MCMethod):
         return {"cv" : cvs, "true_cv" : true_cvs}
 
     @staticmethod
-    def PlotNormalisationTestResults(results : dict, args : cross_section.argparse.Namespace, xs_nominal : dict):
-        with Plots.PlotBook("test/normalisation_systematic/raw_results", False) as book:
-            xs_sim = cross_section.GeantCrossSections()
-            scale_factors = {"absorption" : 1, "charge_exchange" : 1, "pion_production" : 1, "double_charge_exchange" : 1, "quasielastic" : 1}
-            for r in results["cv"]:
-                for _, p in Plots.IterMultiPlot(results["cv"][r][list(results["cv"][r].keys())[0]]):
-                    for n in results["cv"][r]:
-                        mod_norm = {k : v for k, v in scale_factors.items()}
-                        if r == "single_pion_production":
-                            mod_norm["double_charge_exchange"] = n
-                            mod_norm["quasielastic"] = n
-                        else:
-                            mod_norm[r] = n
-                        mod_sim = cex_toy_generator.ModifyGeantXS(scale_factors = mod_norm, modified_PDFs = None)
-
-                        if p == "single_pion_production":
-                            gxs = getattr(mod_sim, "double_charge_exchange") + getattr(mod_sim, "quasielastic")
-                        else:
-                            gxs = getattr(mod_sim, p)
-
-                        Plots.Plot(mod_sim.KE, gxs, newFigure = False, label = f"true, $\mathcal{{N}} = {n}$", title = f"process : {cross_section.remove_(p)}", ylabel = "$\sigma$ (mb)", xlabel = "$KE$ (MeV)")
-                        Plots.Plot(args.energy_slices.pos[:-1] - args.energy_slices.width/2, results["cv"][r][n][p][0], yerr = results["cv"][r][n][p][1], xerr = args.energy_slices.width/2, marker = "x", linestyle = "", label = f"measured, $\mathcal{{N}} = {n}$", newFigure = False)
-                        Plots.plt.xlim(args.energy_slices.min_pos - args.energy_slices.width, args.energy_slices.max_pos + args.energy_slices.width)
-                        Plots.plt.ylim(0, 1.5 * max(results["cv"][r][n][p][0]))
-                    if p == "single_pion_production":
-                        gxs = getattr(xs_sim, "double_charge_exchange") + getattr(xs_sim, "quasielastic")
+    def PlotNormalisationTestResults(results : dict, args : cross_section.argparse.Namespace, xs_nominal : dict, book : Plots.PlotBook = Plots.PlotBook.null):
+        xs_sim = cross_section.GeantCrossSections()
+        scale_factors = {"absorption" : 1, "charge_exchange" : 1, "pion_production" : 1, "double_charge_exchange" : 1, "quasielastic" : 1}
+        for r in results["cv"]:
+            for _, p in Plots.IterMultiPlot(results["cv"][r][list(results["cv"][r].keys())[0]]):
+                for n in results["cv"][r]:
+                    mod_norm = {k : v for k, v in scale_factors.items()}
+                    if r == "single_pion_production":
+                        mod_norm["double_charge_exchange"] = n
+                        mod_norm["quasielastic"] = n
                     else:
-                        gxs = getattr(xs_sim, p)
-                    Plots.Plot(mod_sim.KE, gxs, newFigure = False, label = f"true, $\mathcal{{N}} = 1$")
-                    Plots.Plot(args.energy_slices.pos[:-1] - args.energy_slices.width/2, xs_nominal[p][0], yerr = xs_nominal[p][1], xerr = args.energy_slices.width/2, marker = "x", linestyle = "", label = f"measured, $\mathcal{{N}} = 1$", newFigure = False)
-                Plots.plt.suptitle(f"normalisation test : {cross_section.remove_(r)}")
-                Plots.plt.tight_layout()
-                book.Save()
+                        mod_norm[r] = n
+                    mod_sim = cex_toy_generator.ModifyGeantXS(scale_factors = mod_norm, modified_PDFs = None)
+
+                    if p == "single_pion_production":
+                        gxs = getattr(mod_sim, "double_charge_exchange") + getattr(mod_sim, "quasielastic")
+                    else:
+                        gxs = getattr(mod_sim, p)
+
+                    Plots.Plot(mod_sim.KE, gxs, newFigure = False, label = f"true, $\mathcal{{N}} = {n}$", title = f"process : {cross_section.remove_(p)}", ylabel = "$\sigma$ (mb)", xlabel = "$KE$ (MeV)")
+                    Plots.Plot(args.energy_slices.pos[:-1] - args.energy_slices.width/2, results["cv"][r][n][p][0], yerr = results["cv"][r][n][p][1], xerr = args.energy_slices.width/2, marker = "x", linestyle = "", label = f"measured, $\mathcal{{N}} = {n}$", newFigure = False)
+                    Plots.plt.xlim(args.energy_slices.min_pos - args.energy_slices.width, args.energy_slices.max_pos + args.energy_slices.width)
+                    Plots.plt.ylim(0, 1.5 * max(results["cv"][r][n][p][0]))
+                if p == "single_pion_production":
+                    gxs = getattr(xs_sim, "double_charge_exchange") + getattr(xs_sim, "quasielastic")
+                else:
+                    gxs = getattr(xs_sim, p)
+                Plots.Plot(mod_sim.KE, gxs, newFigure = False, label = f"true, $\mathcal{{N}} = 1$")
+                Plots.Plot(args.energy_slices.pos[:-1] - args.energy_slices.width/2, xs_nominal[p][0], yerr = xs_nominal[p][1], xerr = args.energy_slices.width/2, marker = "x", linestyle = "", label = f"measured, $\mathcal{{N}} = 1$", newFigure = False)
+            Plots.plt.suptitle(f"normalisation test : {cross_section.remove_(r)}")
+            Plots.plt.tight_layout()
+            book.Save()
         return
 
     @staticmethod
     def CalculateSysErr(results):
         def sys_err(r, tr):
-            return {p : r[p][0] - tr[p] for p in r}
+            return {p : abs(r[p][0] - tr[p]) for p in r}
 
         sys_err_low = {}
         sys_err_high = {}
@@ -544,6 +629,40 @@ class NormalisationSystematic(MCMethod):
 
         return {"low" : frac_low, "high" : frac_high}
 
+    
+    def CreateTables(self, xs_nominal, sys):
+        x = args.energy_slices.pos_overflow[1:-1] - (args.energy_slices.width/2)
+
+        KEs = pd.Series(np.array(x, dtype = int), name = "$KE$ (MeV)")
+
+        data_stat_err = pd.DataFrame({p : xs_nominal["pdsp"][p][1] for p in xs_nominal["pdsp"]})
+
+        tags = cross_section.Tags.ExclusiveProcessTags(None)
+
+        tables = {}
+        for p in xs_nominal["pdsp"]:
+            d = data_stat_err[p] / xs_nominal["pdsp"][p][0]
+            d.name = "Data stat"
+            ls = []
+            hs = []
+            for q in sys["fractional"]["low"]:
+                l = pd.Series(sys["fractional"]["low"][p][q])
+                l.name = "Model inaccuracy " + tags[q].name_simple + " low"
+
+                h = pd.Series(sys["fractional"]["high"][p][q])
+                h.name = "Model inaccuracy" + tags[q].name_simple + " high"
+                ls.append(l)
+                hs.append(h)
+            t = pd.Series(quadsum([d, *ls, *hs], 0))
+            t.name = "Total"
+
+            table = pd.concat([KEs, t, d, *ls, *hs], axis = 1).sort_values(by = ["$KE$ (MeV)"])
+
+            avg = table.mean()
+            avg["$KE$ (MeV)"] = "average"
+            tables[p] = pd.concat([table, pd.DataFrame(avg).T]).reset_index(drop = True)
+        return tables
+
 
 def TheoryXS(theory_sys, cv):
     theory_xs = {}
@@ -598,7 +717,18 @@ def FinalPlots(cv, systematics, energy_slices, book : Plots.PlotBook = Plots.Plo
 
 
 def can_run(systematic):
-    return (systematic not in args.skip) and (systematic in args.run)
+    return ((systematic not in args.skip) and (systematic in args.run)) or ("all" in args.run)
+
+
+def can_regen(dir):
+    if cross_section.os.path.exists(dir):
+        for f in cross_section.ls_recursive(dir):
+            print(f)
+            if ("dill" in f) and ("analysis_input" not in f) and (args.regen is True):
+                return True
+    else:
+        return True
+    return False
 
 @cross_section.timer
 def main(args : cross_section.argparse.Namespace):
@@ -606,21 +736,30 @@ def main(args : cross_section.argparse.Namespace):
     out = args.out + "systematics/"
     cross_section.os.makedirs(out, exist_ok = True)
 
+    print(f"{args.skip=}")
+    print(f"{args.run=}")
+
     if ("all" not in args.skip) or ("all" in args.run):
         if can_run("bkg_sub"):
             print(Rule("bkg_sub"))
-            bkg_sub = BkgSubSystematic(args)
-            sys = bkg_sub.CalculateSysError(bkg_sub.RunExperiment())
-            cross_section.os.makedirs(out + "bkg_sub/", exist_ok = True)
-            SaveSystematicError(sys, None, out + "bkg_sub/sys.dill")
+            if can_regen(out + "bkg_sub/"):
+                bkg_sub = BkgSubSystematic(args)
+                sys = bkg_sub.CalculateSysError(bkg_sub.RunExperiment())
+                cross_section.os.makedirs(out + "bkg_sub/", exist_ok = True)
+                SaveSystematicError(sys, None, out + "bkg_sub/sys.dill")
+
         if can_run("mc_stat"):
             print(Rule("mc_stat"))
             mc_stat = NuisanceParameters(args)
-            result = mc_stat.RunExperiment()
-            sys = mc_stat.CalculateSysError(result)
-            cross_section.os.makedirs(out + "mc_stat/", exist_ok = True)
-            cross_section.SaveObject(out + "mc_stat/result.dill", result)
-            SaveSystematicError(sys, None, out + "mc_stat/sys.dill")
+
+            if can_regen(out + "mc_stat/"):
+                result = mc_stat.RunExperiment()
+                sys = mc_stat.CalculateSysError(result)
+                cross_section.os.makedirs(out + "mc_stat/", exist_ok = True)
+                cross_section.SaveObject(out + "mc_stat/result.dill", result)
+                SaveSystematicError(sys, None, out + "mc_stat/sys.dill")
+            else:
+                result = cross_section.LoadObject(out + "mc_stat/result.dill")
 
             with Plots.PlotBook(out + "mc_stat/plots.pdf") as book:
                 mc_stat.PlotXSMCStat(result, book)
@@ -629,16 +768,36 @@ def main(args : cross_section.argparse.Namespace):
             for t in tables:
                 tables[t].style.format(precision = 2).hide(axis = 0).to_latex(out + f"mc_stat/table_{t}.tex")
 
+        if can_run("shower_energy"):
+            print(Rule("shower energy"))
+            sc = ShowerEnergyCorrectionSystematic(args)
+            if can_regen(out + "shower_energy/"):
+                sc.CreateNewAIs(out + "shower_energy/")
+                xs = sc.RunAnalysis(out + "shower_energy/")
+                sys = sc.CalculateSysErrorAsym(args.cv, xs)
+                SaveSystematicError(sys, None, out + "shower_energy/sys.dill")
+            else:
+                sys = cross_section.LoadObject(out + "shower_energy/sys.dill")
+
+            with Plots.PlotBook(out + "shower_energy/plots.pdf") as book:
+                sc.PlotResults(args.cv, xs, book)
+            tables = sc.DataAnalysisTables(args.cv, sys, "Shower energy")
+            DictToHDF5(tables, out + "shower_energy/tables.hdf5")
+            for t in tables:
+                tables[t].style.format(precision = 2).hide(axis = 0).to_latex(out + f"shower_energy/table_{t}.tex")
 
         if can_run("upstream"):
             print(Rule("upstream"))
             upl = UpstreamCorrectionSystematic(args)
-            upl.CreateNewAIs(out + "upstream/")
-            xs = upl.RunAnalysis(out + "upstream/")
-            # sys = upl.CalculateSysError(xs)
-            # SaveSystematicError(sys, None, out + "upstream/sys.dill")
-            sys = upl.CalculateSysErrorAsym(args.cv, xs)
-            SaveSystematicError(sys, None, out + "upstream/sys.dill")
+
+            if can_regen(out + "upstream/"):
+                upl.CreateNewAIs(out + "upstream/")
+                xs = upl.RunAnalysis(out + "upstream/")
+                sys = upl.CalculateSysErrorAsym(args.cv, xs)
+                SaveSystematicError(sys, None, out + "upstream/sys.dill")
+            else:
+                sys = cross_section.LoadObject(out + "upstream/sys.dill")
+
             with Plots.PlotBook(out + "upstream/plots.pdf") as book:
                 upl.PlotResults(args.cv, xs, book)
             tables = upl.DataAnalysisTables(args.cv, sys, "Upstream")
@@ -649,12 +808,15 @@ def main(args : cross_section.argparse.Namespace):
         if can_run("beam_reweight"):
             print(Rule("beam reweight"))
             brw = BeamReweightSystematic(args)
-            brw.CreateNewAIs(out + "beam_reweight/")
-            xs = brw.RunAnalysis(out + "beam_reweight/")
-            # sys = brw.CalculateSysError(xs)
-            # SaveSystematicError(sys, None, out + "beam_reweight/sys.dill")
-            sys = brw.CalculateSysErrorAsym(args.cv, xs)
-            SaveSystematicError(sys, None, out + "beam_reweight/sys.dill")
+
+            if can_regen(out + "beam_reweight/"):
+                brw.CreateNewAIs(out + "beam_reweight/")
+                xs = brw.RunAnalysis(out + "beam_reweight/")
+                sys = brw.CalculateSysErrorAsym(args.cv, xs)
+                SaveSystematicError(sys, None, out + "beam_reweight/sys.dill")
+            else:
+                sys = cross_section.LoadObject(out + "beam_reweight/sys.dill")
+
             with Plots.PlotBook(out + "beam_reweight/plots.pdf") as book:
                 brw.PlotResults(args.cv, xs, book)
             tables = brw.DataAnalysisTables(args.cv, sys, "Reweight")
@@ -665,16 +827,42 @@ def main(args : cross_section.argparse.Namespace):
         if can_run("track_length"):
             print(Rule("track length"))
             trk = TrackLengthResolutionSystematic(args)
-            trk.CreateNewAIs(out + "track_length/")
-            xs = trk.RunAnalysis(out + "track_length/")
-            sys = trk.CalculateSysErrorAsym(args.cv, xs)
-            SaveSystematicError(sys, None, out + "track_length/sys.dill")
+
+            if can_regen(out + "track_length/"):
+                trk.CreateNewAIs(out + "track_length/")
+                xs = trk.RunAnalysis(out + "track_length/")
+                sys = trk.CalculateSysErrorAsym(args.cv, xs)
+                SaveSystematicError(sys, None, out + "track_length/sys.dill")
+            else:
+                sys = cross_section.LoadObject(out + "track_length/sys.dill")
+
             with Plots.PlotBook(out + "track_length/plots.pdf") as book:
                 trk.PlotResults(args.cv, xs, book)
             tables = trk.DataAnalysisTables(args.cv, sys, "Track length")
             DictToHDF5(tables, out + "track_length/tables.hdf5")
             for t in tables:
                 tables[t].style.format(precision = 2).hide(axis = 0).to_latex(out + f"track_length/table_{t}.tex")
+
+        if can_run("beam_res"):
+            print(Rule("beam resolution"))
+            resolution = 2.5/100
+            bm = BeamMomentumResolutionSystematic(args)
+
+            if can_regen(out + "beam_res/"):
+                cross_section.os.makedirs(out + "beam_res/", exist_ok = True)
+                bm.CreateNewAIs(out + "beam_res/", resolution)
+                xs = bm.RunAnalysis(out + "beam_res/")
+                sys = bm.CalculateSysErrorAsym(args.cv, xs)
+                SaveSystematicError(sys, None, out + "beam_res/sys.dill")
+            else:
+                sys = cross_section.LoadObject(out + "beam_res/sys.dill")
+
+            with Plots.PlotBook(out + "beam_res/plots.pdf") as book:
+                bm.PlotResults(args.cv, xs, book)
+            tables = bm.DataAnalysisTables(args.cv, sys, "Beam momentum")
+            DictToHDF5(tables, out + "beam_res/tables.hdf5")
+            for t in tables:
+                tables[t].style.format(precision = 2).hide(axis = 0).to_latex(out + f"beam_res/table_{t}.tex")
 
 
         if can_run("theory"):
@@ -691,20 +879,30 @@ def main(args : cross_section.argparse.Namespace):
             
             xs_nominal = norm_sys.Analyse(analysis_input_nominal, None)
 
-            if not cross_section.os.path.isfile(out + "theory/test_results.dill"):    
-                results = norm_sys.Evaluate([0.8, 1.2], 3)
-                cross_section.SaveObject(out + "theory/test_results.dill", results)
+            if can_regen(out + "theory/"):
+                if not cross_section.os.path.isfile(out + "theory/test_results.dill"):    
+                    results = norm_sys.Evaluate([0.8, 1.2], 3)
+                    cross_section.SaveObject(out + "theory/test_results.dill", results)
 
-            results = cross_section.LoadObject(out + "theory/test_results.dill")
-            NormalisationSystematic.AverageResults(results)
+                results = cross_section.LoadObject(out + "theory/test_results.dill")
+                NormalisationSystematic.AverageResults(results)
+                sys_err = NormalisationSystematic.CalculateSysErr(results)
+                frac_err = NormalisationSystematic.CalculateFractionalError(sys_err, xs_nominal)
+                SaveSystematicError(sys_err, frac_err, out + "theory/sys.dill")
+            else:
+                results = cross_section.LoadObject(out + "theory/test_results.dill")
+                NormalisationSystematic.AverageResults(results)
+                sys = cross_section.LoadObject(out + "theory/sys.dill")
 
-            NormalisationSystematic.PlotNormalisationTestResults(results, args, xs_nominal)
+            with Plots.PlotBook(out + "theory/plots", True) as book:
+                cross_section.SetPlotStyle(dark = False, extend_colors = True)
+                NormalisationSystematic.PlotNormalisationTestResults(results, args, xs_nominal, book)
+                cross_section.SetPlotStyle(dark = True, extend_colors = False)
 
-            sys_err = NormalisationSystematic.CalculateSysErr(results)
-            # norm_sys_max = NormalisationSystematic.TotalSysMax(sys_err)
-            # norm_sys_qs = cex_systematics.NormalisationSystematic.TotalSysQS(sys_err)
-            frac_err = NormalisationSystematic.CalculateFractionalError(sys_err, xs_nominal)
-            SaveSystematicError(sys_err, frac_err, out + "theory/sys.dill")
+            tables = norm_sys.CreateTables(cross_section.LoadObject(args.cv), sys)
+            DictToHDF5(tables, out + "theory/tables.hdf5")
+            for t in tables:
+                tables[t].style.format(precision = 2).hide(axis = 0).to_latex(out + f"theory/table_{t}.tex")
 
     if args.plot is not None:
         label_short = {
@@ -739,7 +937,7 @@ def main(args : cross_section.argparse.Namespace):
     return
 
 if __name__ == "__main__":
-    systematics = ["mc_stat", "theory", "upstream", "beam_reweight", "shower_energy", "bkg_sub", "track_length", "all"]
+    systematics = ["mc_stat", "theory", "upstream", "beam_reweight", "shower_energy", "bkg_sub", "track_length", "beam_res", "all"]
 
     parser = cross_section.argparse.ArgumentParser("Estimate Systematics for the cross section analysis")
     cross_section.ApplicationArguments.Config(parser)
@@ -750,6 +948,8 @@ if __name__ == "__main__":
 
     parser.add_argument("--skip", type = str, nargs = "+", default = [], choices = systematics)
     parser.add_argument("--run", type = str, nargs = "+", default = [], choices = systematics)
+
+    parser.add_argument("--regen", "-r", dest = "regen", action = "store_true", help = "fully rerun systematic tests if results already exist")
 
     parser.add_argument("--cv", "-v", dest = "cv", type = str, default = None, help = "plot systematics with central value measurement")
 
@@ -764,7 +964,7 @@ if __name__ == "__main__":
             raise Exception("--toy_data_config must be specified")        
         args.toy_data_config = cross_section.LoadConfiguration(args.toy_data_config)
 
-    if ("all" in args.run) or ("upstream" in args.run) or ("beam_reweight" in args.run) or ("shower_energy" in args.run):
+    if ("all" in args.run) or ("upstream" in args.run) or ("beam_reweight" in args.run) or ("shower_energy" in args.run) or ("track_length" in args.run) or ("beam_res" in args.run):
         if not args.cv:
             raise Exception("--cv must be specified")
         args.cv = cross_section.LoadObject(args.cv)

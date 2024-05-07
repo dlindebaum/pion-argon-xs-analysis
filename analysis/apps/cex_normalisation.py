@@ -17,16 +17,14 @@ from rich import print
 from python.analysis import Master, Plots, cross_section, BeamParticleSelection, Tags
 
 
-def run(file : str, data : bool, ntuple_type : Master.Ntuple_Type, args : cross_section.argparse.Namespace):
-    events = Master.Data(file, nTuple_type = ntuple_type, target_momentum = args.pmom)
-
-    mask = BeamParticleSelection.PiBeamSelection(events, data)
-    if data is False:
+def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
+    events = Master.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
+    mask = BeamParticleSelection.PiBeamSelection(events, args["data"])
+    if args["data"] is False:
         tags = Tags.GenerateTrueBeamParticleTags(events)
     else:
         tags = None
-
-    return mask, tags
+    return {"mask" : mask, "tags" : tags}
 
 
 @Master.timer
@@ -34,14 +32,15 @@ def main(args):
     cross_section.SetPlotStyle(extend_colors = True)
     out = args.out + "beam_norm/"
     os.makedirs(out, exist_ok = True)
+    
 
-    mc_mask, mc_tags = run(args.mc_file, False, args.ntuple_type, args)
-    data_mask, _ = run(args.data_file, True, args.ntuple_type, args)
+    output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
+    output_data = cross_section.RunProcess(args.ntuple_files["data"], True, args, run)
 
-    norm = round(ak.sum(data_mask) / ak.sum(mc_mask), 3)
+    norm = round(ak.sum(output_data["mask"]) / ak.sum(output_mc["mask"]), 3)
 
     with Plots.PlotBook(out + "plots.pdf") as book:
-        Plots.PlotTags(mc_tags, "True particle ID")
+        Plots.PlotTags(output_mc["tags"], "True particle ID")
         book.Save()
 
     Master.SaveConfiguration({"norm" : norm}, out + "norm.json")
@@ -52,7 +51,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Computes normalisation for beam pion analysis.", formatter_class = argparse.RawDescriptionHelpFormatter)
 
     # cross_section.ApplicationArguments.Ntuples(parser, data = True)
-    cross_section.ApplicationArguments.Config(parser, True)    
+    cross_section.ApplicationArguments.Config(parser, True)
+    cross_section.ApplicationArguments.Processing(parser)
     cross_section.ApplicationArguments.Output(parser)
 
     args = parser.parse_args()

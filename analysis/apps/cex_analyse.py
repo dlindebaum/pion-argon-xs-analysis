@@ -32,10 +32,6 @@ def PlotKEs(mc : cross_section.AnalysisInput, data : cross_section.AnalysisInput
         Plots.plt.legend(h + [Plots.matplotlib.patches.Rectangle((0,0), 0, 0, fill = False, edgecolor='none', visible=False)], l + [f"norm: {args.norm:.3g}"], labelspacing = 0.25,  columnspacing = 0.25, ncols = 2)
         return
 
-    # PlotDataMCTruth(analysis_input_mc_s.KE_init_reco, analysis_input_data_s.KE_init_reco, analysis_input_mc_s.KE_init_true, 50, "$KE_{init}$ (MeV)", args.KE_init_range, args.norm, None)
-    # PlotDataMCTruth(analysis_input_mc_s.KE_int_reco, analysis_input_data_s.KE_int_reco, analysis_input_mc_s.KE_int_true, 50, "$KE_{int}$ (MeV)", args.KE_int_range, args.norm, None)
-
-    # with Plots.PlotBook("upstream_comparison", True) as book:
     PlotDataMCTruth(mc.KE_init_reco, data.KE_init_reco, mc.KE_init_true, 50, "$KE_{init}$ (MeV)", args.KE_init_range, args.norm, np.array(mc.weights))
     book.Save()
     PlotDataMCTruth(mc.KE_int_reco, data.KE_int_reco, mc.KE_int_true, 50, "$KE_{int}$ (MeV)", args.KE_int_range, args.norm, np.array(mc.weights))
@@ -68,7 +64,7 @@ def CreateInitParams(model : cross_section.pyhf.Model, analysis_input : cross_se
     return init
 
 
-def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_section.Slices, mean_track_score_bins : np.array, template_input : cross_section.AnalysisInput | cross_section.pyhf.Model, suggest_init : bool = False, template_weights : np.array = None, return_fit_results : bool = False, mc_stat_unc : bool = False, single_bin : bool = False) -> cross_section.cabinetry.model_utils.ModelPrediction | cross_section.FitResults:
+def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_section.Slices, mean_track_score_bins : np.array, template_input : cross_section.AnalysisInput | cross_section.pyhf.Model, suggest_init : bool = False, template_weights : np.array = None, return_fit_results : bool = False, mc_stat_unc : bool = False, single_bin : bool = False, fix_np : bool = False) -> cross_section.cabinetry.model_utils.ModelPrediction | cross_section.FitResults:
     """ Fit model to analysis input to predict the normalaisations of each process.
 
     Args:
@@ -96,7 +92,18 @@ def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_sect
         init_params = None
 
     result = cross_section.RegionFit.Fit(observed, model, init_params, [[0, np.inf]]*model.config.npars, verbose = False)
-    # result = cross_section.RegionFit.Fit(observed, model, init_params, verbose = False)
+
+    # redo fit, but fix the NPs to their already determined values
+    if (mc_stat_unc and fix_np) is True:
+        fix = ["mu" not in i for i in model.config.par_order]
+
+        index = [j for j, i in enumerate(model.config.par_order) if "mu" not in i]
+
+        if init_params is None:
+            init_params = np.ones_like(model.config.par_order, dtype = float)
+        init_params[index] = result.bestfit[index]
+        result = cross_section.RegionFit.Fit(observed, model, fix_pars = list(fix), init_params = list(init_params), par_bounds = [[0, np.inf]]*model.config.npars, verbose = False)
+
     if return_fit_results is True:
         return cross_section.cabinetry.model_utils.prediction(model, fit_results = result), result
     else:
@@ -201,7 +208,8 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
                 bkg = bkg_b
                 bkg_err = bkg_err_b
             KE_int_fit, KE_int_fit_err = BkgSubRegions(data, energy_slice, bkg, bkg_err)
-            PlotBkgRegions(energy_slice, data, bkg, bkg_err, bkg_label, book)
+            if book is not None:
+                PlotBkgRegions(energy_slice, data, bkg, bkg_err, bkg_label, book)
         else:
             print(f"signal: {process}")
             bkg, bkg_err = cross_section.RegionFit.EstimateBackgroundAllRegions(postfit_pred, template, process)
@@ -250,27 +258,20 @@ def PlotDataBkgSub(hist_data : dict[np.ndarray], hist_data_err : dict[np.ndarray
     if regions:
         histograms_mc_reco.pop("int_ex")
         N_ex_MC = {l : mc.NInteract(energy_slices, mc.exclusive_process[l], mask = mc.regions[l], weights = mc.weights) for l in mc.regions}
-        # for _, i in Plots.IterMultiPlot(histograms_mc_reco):
         for i in histograms_mc_reco:
             cross_section.PlotXSHists(energy_slices, histograms_mc_reco[i], None, True, scale, label = mc_label, color = "C1", title = labels[i])
             cross_section.PlotXSHists(energy_slices, hist_data[i], hist_data_err[i], True, newFigure = False, label = data_label, color = "k")
             Plots.plt.legend(loc = "upper left")
             book.Save()
-        # for _, i in Plots.IterMultiPlot(N_ex_MC):
         for i in N_ex_MC:
             cross_section.PlotXSHists(energy_slices, N_ex_MC[i], title = f"$N_{{int, {process_labels[i]}}}$", label = mc_label, color = "C1", scale = scale)
             cross_section.PlotXSHists(energy_slices, hist_data["int_ex"][i], hist_data_err["int_ex"][i], newFigure = False, label = data_label, color = "k")
             book.Save()
     else:
-        # for _, i in Plots.IterMultiPlot(hist_data):
         for i in hist_data:
             cross_section.PlotXSHists(energy_slices, histograms_mc_reco[i], scale = scale, title = labels[i], label = mc_label, color = "C1")
             cross_section.PlotXSHists(energy_slices, hist_data[i], hist_data_err[i], newFigure = False, label = data_label, color = "k")
             book.Save()
-
-            # Plots.plt.legend(loc = "upper left")
-        # Plots.plt.suptitle(sample_name)
-        # Plots.plt.tight_layout()
 
         cross_section.PlotXSHists(energy_slices, histograms_mc_reco["int_ex"], scale = scale, title = labels["int_ex"]  + ":" + sample_name, label = mc_label, color = "C1")
         cross_section.PlotXSHists(energy_slices,hist_data["int_ex"], hist_data_err["int_ex"], newFigure = False, label = f"{data_label}, background subtracted", color = "k")
@@ -313,7 +314,6 @@ def ApplyEfficiency(energy_slices : cross_section.Slices, efficiencies, unfoldin
         hist_unfolded_efficiency_corrected[k] = {"unfolded" : unfolded_eff, "stat_err" : unfolded_eff_err_stat, "sys_err" : unfolded_eff_err_sys}
 
     if book is not None:
-        # for _, k in Plots.IterMultiPlot(unfolding_result):
         for k in unfolding_result:
             if mc_stat_unc is True:
                 err = cross_section.quadsum([hist_unfolded_efficiency_corrected[k]["stat_err"], hist_unfolded_efficiency_corrected[k]["sys_err"]], 0)
@@ -327,9 +327,10 @@ def ApplyEfficiency(energy_slices : cross_section.Slices, efficiencies, unfoldin
 
 def PlotEfficiency(energy_slices : cross_section.Slices, efficiencies : dict, book : Plots.PlotBook.null):
     if book is not None:
+        x = energy_slices.pos_overflow - energy_slices.width/2
         # for _, (k, v) in Plots.IterMultiPlot(efficiencies.items()):
         for k, v in efficiencies.items():
-            Plots.Plot(energy_slices.pos_overflow, v[0], yerr = v[1], ylabel = "efficiency", xlabel = f"$KE$ (MeV)", marker = "x", newFigure = True, title = k)
+            Plots.Plot(x, v[0], yerr = v[1], ylabel = "efficiency", xlabel = f"$KE$ (MeV)", marker = "x", newFigure = True, title = k)
             Plots.plt.ylim(0, 1)
             book.Save()
     return
@@ -347,7 +348,8 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
 
         #! not actually used for anything...
         region_selection_efficiency = SelectionEfficiency(true_hists_selected_regions, true_hists_selected_process)
-        PlotEfficiency(energy_slices, {f"$N_{{int}}$ : {cross_section.remove_(k).capitalize()}" : v for k, v in region_selection_efficiency.items()}, book)
+        if book is not None:
+            PlotEfficiency(energy_slices, {f"$N_{{int}}$ : {cross_section.remove_(k).capitalize()}" : v for k, v in region_selection_efficiency.items()}, book)
 
     if mc_cheat is not None:
         if regions:
@@ -360,18 +362,20 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
         if regions:
             int_ex_effieciencies = SelectionEfficiency(true_hists_selected_regions, true_hists_process)
 
-            PlotEfficiency(energy_slices, {f"$N_{{int, ex}}$ : {cross_section.remove_(k).capitalize()}" : v for k, v in int_ex_effieciencies.items()}, book)
+            if book is not None:
+                PlotEfficiency(energy_slices, {f"$N_{{int, ex}}$ : {cross_section.remove_(k).capitalize()}" : v for k, v in int_ex_effieciencies.items()}, book)
 
             efficiencies.pop("int_ex")
-
-        PlotEfficiency(energy_slices, {labels[k] : v for k, v in efficiencies.items()}, book)
+        if book is not None:
+            PlotEfficiency(energy_slices, {labels[k] : v for k, v in efficiencies.items()}, book)
     else:
         efficiencies = {k : np.ones_like(energy_slices.pos_overflow) for k in ["init", "int", "int_ex", "inc"]}
         true_hists = mc.CreateHistograms(energy_slices, signal_process, False, ~mc.inclusive_process)
         if regions:
             true_hists_process = {i : mc.NInteract(energy_slices, mc.exclusive_process[i], None, False, mc.weights) for i in mc.exclusive_process}
             int_ex_effieciencies = SelectionEfficiency(true_hists_selected_regions, true_hists_process)
-            PlotEfficiency(energy_slices, {process_labels[k] : v for k, v in int_ex_effieciencies.items()}, book)
+            if book is not None:
+                PlotEfficiency(energy_slices, {process_labels[k] : v for k, v in int_ex_effieciencies.items()}, book)
 
 
     e_copy = {k : v for k, v in efficiencies.items()}
@@ -503,14 +507,9 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
         samples["toy"] = LoadToy(args.toy_data)
     if args.pdsp:
         print("loading Data and MC")
-        if args.analysis_input:
-            templates["pdsp"] = cross_section.AnalysisInput.FromFile(args.analysis_input["mc"])
-            samples["pdsp"] = cross_section.AnalysisInput.FromFile(args.analysis_input["data"])
-            templates["mc_cheated"] = cross_section.AnalysisInput.FromFile(args.analysis_input["mc_cheated"])
-        else:
-            templates["pdsp"] = cex_analysis_input.CreateAnalysisInput(cross_section.Data(args.mc_file, nTuple_type = args.ntuple_type, target_momentum = args.pmom), args, True)
-            templates["mc_cheated"] = cex_analysis_input.CreateAnalysisInputMCTrueBeam(cross_section.Data(args.mc_file, nTuple_type = args.ntuple_type, target_momentum = args.pmom), args)
-            samples["pdsp"] = cex_analysis_input.CreateAnalysisInput(cross_section.Data(args.data_file, nTuple_type = args.ntuple_type), args, False)
+        templates["pdsp"] = cross_section.AnalysisInput.FromFile(args.analysis_input["mc"])
+        samples["pdsp"] = cross_section.AnalysisInput.FromFile(args.analysis_input["data"])
+        templates["mc_cheated"] = cross_section.AnalysisInput.FromFile(args.analysis_input["mc_cheated"])
 
 
     if args.fit["mean_track_score"] == True:
@@ -551,19 +550,19 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
                 pd.DataFrame(region_counts).style.to_latex(outdir + "regions.tex")
             Plots.plt.close("all")
 
-        region_fit_result, fit_values = RegionFit(v, args.energy_slices, mean_track_score_bins, templates[k], return_fit_results = True, mc_stat_unc = args.fit["mc_stat_unc"], single_bin = args.fit["single_bin"])
+        region_fit_result, fit_values = RegionFit(v, args.energy_slices, mean_track_score_bins, templates[k], return_fit_results = True, mc_stat_unc = args.fit["mc_stat_unc"], single_bin = args.fit["single_bin"], fix_np = args.fit["fix_np"])
 
         # scale = len(templates[k].KE_int_reco) / len(samples[k].KE_int_reco)
         print(f"{fit_values.bestfit=}")
         if plot:
             indices = [f"$\mu_{{{i}}}$" for i in ["abs", "cex", "spip", "pip"]]
             table = cross_section.pd.DataFrame({"fit value" : fit_values.bestfit[0:4] / scale, "uncertainty" : fit_values.uncertainty[0:4] / scale}, index = indices).T
-            table.to_hdf("fit_results_POI.hdf5")
+            table.to_hdf("fit_results_POI.hdf5", key = "df")
             table.style.to_latex(outdir + "fit_results_POI.tex")
             if len(fit_values.bestfit) > 4:
                 indices = [f"$\\alpha_{{{i}}}$" for i in ["abs", "cex", "spip", "pip"]]
                 table = cross_section.pd.DataFrame({"fit value" : fit_values.bestfit[4:], "uncertainty" : fit_values.uncertainty[4:]}, index = indices).T
-                table.to_hdf("fit_results_NP.hdf5")
+                table.to_hdf("fit_results_NP.hdf5", key = "df")
                 table.style.to_latex(outdir + "fit_results_NP.tex")
 
 
@@ -600,9 +599,11 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
                     histograms_reco_obs_err = {**histograms_reco_obs_err, **histograms_reco_obs_err["int_ex"]}
                     histograms_reco_obs_err.pop("int_ex")
 
-                unfolding_result = Unfolding(histograms_reco_obs, histograms_reco_obs_err, templates[k], dict(unfolding_args) if unfolding_args is not None else unfolding_args, p if p != "all" else "charge_exchange", scale, args.energy_slices, args.fit["regions"], args.fit["mc_stat_unc"], mc_cheat, book)
+                unfolding_stat = args.fit["mc_stat_unc"] and (not args.fit["fix_np"])
 
-                process[p] = XSUnfold(unfolding_result, args.energy_slices, args.fit["mc_stat_unc"], True, regions = args.fit["regions"])
+                unfolding_result = Unfolding(histograms_reco_obs, histograms_reco_obs_err, templates[k], dict(unfolding_args) if unfolding_args is not None else unfolding_args, p if p != "all" else "charge_exchange", scale, args.energy_slices, args.fit["regions"], unfolding_stat, mc_cheat, book)
+
+                process[p] = XSUnfold(unfolding_result, args.energy_slices, unfolding_stat, True, regions = args.fit["regions"])
                 if args.fit["regions"] is False:
                     cross_section.PlotXSComparison({f"{label_map[k]} Data reco" : process[p], f"{label_map[k]} MC truth" : xs_true}, args.energy_slices, p, {f"{label_map[k]} Data reco" : "C0", f"{label_map[k]} MC truth" : "C1"}, simulation_label = "Geant4 v10.6")
                     book.Save()

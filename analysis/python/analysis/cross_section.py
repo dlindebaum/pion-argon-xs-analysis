@@ -21,13 +21,228 @@ import uproot
 
 from cabinetry.fit.results_containers import FitResults
 from particle import Particle
-from pyunfold import iterative_unfold, Logger
 from scipy.interpolate import interp1d, UnivariateSpline
 
-from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, RegionIdentification
+from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, RegionIdentification, Processing
 from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer
 from python.analysis.shower_merging import SetPlotStyle
 from python.analysis.Utils import *
+
+
+### OVERRIDE UNFOLDING API TO RETURN COVARIANCE MATRIX ###
+
+from pyunfold.callbacks import setup_callbacks_regularizer, Logger
+from pyunfold.mix import Mixer
+from pyunfold.teststat import get_ts
+from pyunfold.priors import setup_prior
+from pyunfold.utils import cast_to_array
+
+def iterative_unfold(data=None, data_err=None, response=None,
+                     response_err=None, efficiencies=None,
+                     efficiencies_err=None, prior=None, ts='ks',
+                     ts_stopping=0.01, max_iter=100, cov_type='multinomial',
+                     return_iterations=False, callbacks=None):
+    """Performs iterative unfolding. Custom method which returns the covariance matrix.
+
+    Parameters
+    ----------
+    data : array_like
+        Input observed data distribution.
+    data_err : array_like
+        Uncertainties of the input observed data distribution. Must be the
+        same shape as ``data``.
+    response : array_like
+        Response matrix.
+    response_err : array_like
+        Uncertainties of response matrix. Must be the same shape as
+        ``response``.
+    efficiencies : array_like
+        Detection efficiencies for the cause distribution.
+    efficiencies_err : array_like
+        Uncertainties of detection efficiencies. Must be the same shape as
+        ``efficiencies``.
+    prior : array_like, optional
+        Prior distribution to use in unfolding. If None, then a uniform
+        (or flat) prior will be used. If array_like, then must have the same
+        shape as ``efficiencies`` (default is None).
+    ts : {'ks', 'chi2', 'bf', 'rmd'}
+        Test statistic to use for stopping condition (default is 'ks').
+        For more information about the available test statistics, see the
+        `Test Statistics API documentation <api.rst#test-statistics>`__.
+    ts_stopping : float, optional
+        Test statistic stopping condition. At each unfolding iteration, the
+        test statistic is computed between the current and previous iteration.
+        Once the test statistic drops below ts_stopping, the unfolding
+        procedure is stopped (default is 0.01).
+    max_iter : int, optional
+        Maximum number of iterations to allow (default is 100).
+    cov_type : {'multinomial', 'poisson'}
+        Whether to use the Multinomial or Poisson form for the covariance
+        matrix (default is 'multinomial').
+    return_iterations : bool, optional
+        Whether to return unfolded distributions for each iteration
+        (default is False).
+    callbacks : list, optional
+        List of ``pyunfold.callbacks.Callback`` instances to be applied during
+        unfolding (default is None, which means no Callbacks are applied).
+
+    Returns
+    -------
+    unfolded_result : dict
+        Returned if ``return_iterations`` is False (default). Dictionary
+        containing the final unfolded distribution, associated uncertainties,
+        and test statistic information.
+
+        The returned ``dict`` has the following keys:
+
+            unfolded
+                Final unfolded cause distribution
+            stat_err
+                Statistical uncertainties on the unfolded cause distribution
+            sys_err
+                Systematic uncertainties on the unfolded cause distribution
+                associated with limited statistics in the response matrix
+            ts_iter
+                Final test statistic value
+            ts_stopping
+                Test statistic stopping criterion
+            num_iterations
+                Number of unfolding iterations
+            unfolding_matrix
+                Unfolding matrix
+
+    unfolding_iters : pandas.DataFrame
+        Returned if ``return_iterations`` is True. DataFrame containing the
+        unfolded distribution, associated uncertainties, test statistic
+        information, etc. at each iteration.
+    """
+    # Validate user input
+    inputs = {'data': data,
+              'data_err': data_err,
+              'response': response,
+              'response_err': response_err,
+              'efficiencies': efficiencies,
+              'efficiencies_err': efficiencies_err
+              }
+    for name in inputs:
+        if inputs[name] is None:
+            raise ValueError('The input for {} must not be None.'.format(name))
+        elif np.amin(inputs[name]) < 0:
+            raise ValueError('The items in {} must be non-negative.'.format(name))
+
+    data, data_err = cast_to_array(data, data_err)
+    response, response_err = cast_to_array(response, response_err)
+    efficiencies, efficiencies_err = cast_to_array(efficiencies,
+                                                   efficiencies_err)
+
+    num_causes = len(efficiencies)
+
+    # Setup prior
+    prior = setup_prior(prior=prior, num_causes=num_causes)
+
+    # Define first prior counts distribution
+    n_c = np.sum(data) * prior
+
+    # Setup Mixer
+    mixer = Mixer(data=data,
+                  data_err=data_err,
+                  efficiencies=efficiencies,
+                  efficiencies_err=efficiencies_err,
+                  response=response,
+                  response_err=response_err,
+                  cov_type=cov_type)
+
+    # Setup test statistic
+    ts_obj = get_ts(ts)
+    ts_func = ts_obj(tol=ts_stopping,
+                     num_causes=num_causes,
+                     TestRange=[0, 1e2],
+                     verbose=False)
+
+    unfolding_iters = _unfold_custom(prior=n_c,
+                                     mixer=mixer,
+                                     ts_func=ts_func,
+                                     max_iter=max_iter,
+                                     callbacks=callbacks)
+
+    if return_iterations:
+        return unfolding_iters
+    else:
+        unfolded_result = dict(unfolding_iters.iloc[-1])
+        return unfolded_result
+
+
+def _unfold_custom(prior=None, mixer=None, ts_func=None, max_iter=100,
+            callbacks=None):
+    """Perform iterative unfolding. Custom version of the method which just returns the covariance method in addition to the regular output
+
+    Parameters
+    ----------
+    prior : array_like
+        Initial cause distribution.
+    mixer : pyunfold.Mix.Mixer
+        Mixer to perform the unfolding.
+    ts_func : pyunfold.Utils.TestStat
+        Test statistic object.
+    max_iter : int, optional
+        Maximum allowed number of iterations to perform.
+    callbacks : list, optional
+        List of ``pyunfold.callbacks.Callback`` instances to be applied during
+        unfolding (default is None, which means no Callbacks are applied).
+
+    Returns
+    -------
+    unfolding_iters : pandas.DataFrame
+        DataFrame containing the unfolded result for each iteration.
+        Each row in unfolding_result corresponds to an iteration.
+    """
+    # Set up callbacks, regularizer Callbacks are treated separately
+    callbacks, regularizer = setup_callbacks_regularizer(callbacks)
+    callbacks.on_unfolding_begin()
+
+    current_n_c = prior.copy()
+    iteration = 0
+    unfolding_iters = []
+    while not ts_func.pass_tol() and iteration < max_iter:
+        callbacks.on_iteration_begin(iteration=iteration)
+
+        # Perform unfolding for this iteration
+        unfolded_n_c = mixer.smear(current_n_c)
+        iteration += 1
+        status = {'unfolded': unfolded_n_c,
+                  'stat_err': mixer.get_stat_err(),
+                  'sys_err': mixer.get_MC_err(),
+                  'num_iterations': iteration,
+                  'unfolding_matrix': mixer.Mij,
+                  'covariance_matrix': mixer.get_cov()}
+
+        if regularizer:
+            # Will want the nonregularized distribution for the final iteration
+            unfolded_nonregularized = status['unfolded'].copy()
+            regularizer.on_iteration_end(iteration=iteration, status=status)
+
+        ts_iter = ts_func.calc(status['unfolded'], current_n_c)
+        status['ts_iter'] = ts_iter
+        status['ts_stopping'] = ts_func.tol
+
+        callbacks.on_iteration_end(iteration=iteration, status=status)
+        unfolding_iters.append(status)
+
+        # Updated current distribution for next iteration of unfolding
+        current_n_c = status['unfolded'].copy()
+
+    # Convert unfolding_iters list of dictionaries to a pandas DataFrame
+    unfolding_iters = pd.DataFrame.from_records(unfolding_iters)
+
+    # Replace final folded iteration with un-regularized distribution
+    if regularizer:
+        last_iteration_index = unfolding_iters.index[-1]
+        unfolding_iters.at[last_iteration_index, 'unfolded'] = unfolded_nonregularized
+
+    callbacks.on_unfolding_end(status=status)
+
+    return unfolding_iters
+
 
 # required_parset = pyhf.modifiers.staterror.required_parset
 # def to_poisson(func):
@@ -39,6 +254,48 @@ from python.analysis.Utils import *
 #     return wrapper
 
 # pyhf.modifiers.staterror.required_parset = to_poisson(pyhf.modifiers.staterror.required_parset)
+
+
+def RunProcess(ntuple_files : list[str], is_data : bool, args : argparse.Namespace, func : callable, merge : bool = True) -> list:
+    output = []
+    for i in ntuple_files:
+        func_args = vars(args)
+        func_args["data"] = is_data
+        func_args["nTuple_type"] = i["type"]
+        func_args["pmom"] = i["pmom"]
+        output.extend(Processing.mutliprocess(func, [i["file"]], args.batches, args.events, func_args, args.threads))
+    if merge:
+        output = MergeOutputs(output)
+    return output
+
+
+def MergeOutputs(outputs : list[dict]) -> dict:
+    def search(collection : dict, output : dict):
+        for k, v in collection.items():
+            if type(v) is dict:
+                if k not in output:
+                    output[k] = {}
+                search(v, output[k])
+            else:
+                if k not in output:
+                    output[k] = v
+                else:
+                    if type(v) == ak.Array:
+                        output[k] = ak.concatenate([output[k], v])
+                    elif type(v) == Tags.Tags:
+                        output[k] = Tags.MergeTags([output[k], v])
+                    elif type(v) == list:
+                        output[k].extend(v)
+                    else:
+                        if type(output[k]) != list:
+                            output[k] = [output[k], v]
+                        else:
+                            output[k].append(v)
+
+    merged_output = {}
+    for o in outputs:
+        search(o, merged_output)
+    return merged_output
 
 
 def CountInRegions(true_regions : dict, reco_regions : dict, selection_efficincy : np.ndarray = None) -> np.ndarray:
@@ -454,10 +711,8 @@ class ApplicationArguments:
         """
         args = argparse.Namespace()
         for head, value in config.items():
-            if head == "NTUPLE_FILE":
-                args.mc_file = value["mc"]
-                args.data_file = value["data"]
-                args.ntuple_type = value["type"]
+            if head == "NTUPLE_FILES":
+                args.ntuple_files = value
             elif head == "REGION_IDENTIFICATION":
                 args.region_identification = RegionIdentification.regions[value["type"]] 
             elif head == "BEAM_PARTICLE_SELECTION":
@@ -758,27 +1013,26 @@ class GeantCrossSections:
     labels = {"abs_KE;1" : "absorption", "inel_KE;1" : "quasielastic", "cex_KE;1" : "charge_exchange", "dcex_KE;1" : "double_charge_exchange", "prod_KE;1" : "pion_production", "total_inel_KE;1" : "total_inelastic"}
 
     def __init__(self, file : str = os.environ["PYTHONPATH"] + "/data/g4_xs.root", energy_range : list = None, n_cascades : int = None) -> None:
-        self.file = uproot.open(file) # open root file
+        with uproot.open(file) as ufile: # open root file
+            self.KE = ufile["abs_KE;1"].all_members["fX"] # load kinetic energy from one channel (shared for all cross section channels)
 
-        self.KE = self.file["abs_KE;1"].all_members["fX"] # load kinetic energy from one channel (shared for all cross section channels)
+            if energy_range:
+                self.KE = self.KE[(self.KE <= max(energy_range)) & (self.KE >= min(energy_range))]
 
-        if energy_range:
-            self.KE = self.KE[(self.KE <= max(energy_range)) & (self.KE >= min(energy_range))]
+            for k in ufile.keys():
+                if "KE" in k:
+                    g = ufile[k]
+                    if energy_range:
+                        mask = (g.all_members["fX"] <= max(energy_range)) & (g.all_members["fX"] >= min(energy_range))
+                        xs = g.all_members["fY"][mask]
+                    else:
+                        xs = g.all_members["fY"]
+                    s = "_frac" if "frac" in k else "" 
+                    setattr(self, self.labels[k.replace("_frac", "")] + s, xs[0:len(self.KE)]) # assign class variables for each cross section channel
 
-        for k in self.file.keys():
-            if "KE" in k:
-                g = self.file[k]
-                if energy_range:
-                    mask = (g.all_members["fX"] <= max(energy_range)) & (g.all_members["fX"] >= min(energy_range))
-                    xs = g.all_members["fY"][mask]
-                else:
-                    xs = g.all_members["fY"]
-                s = "_frac" if "frac" in k else "" 
-                setattr(self, self.labels[k.replace("_frac", "")] + s, xs[0:len(self.KE)]) # assign class variables for each cross section channel
-
-        self.exclusive_processes = list(self.labels.values())
-        self.exclusive_processes.remove("total_inelastic")
-        self.n_cascades = n_cascades
+            self.exclusive_processes = list(self.labels.values())
+            self.exclusive_processes.remove("total_inelastic")
+            self.n_cascades = n_cascades
         pass
 
 
@@ -1209,8 +1463,7 @@ class Toy:
         return regions
 
 
-    @staticmethod
-    def GetCorrelationMatrix(toy : pd.DataFrame) -> np.ndarray:
+    def GetCorrelationMatrix(self) -> np.ndarray:
         """ Compute the confusion matrix for the reco/truth regions.
 
         Args:
@@ -1219,8 +1472,8 @@ class Toy:
         Returns:
             np.ndarray: confusion matrix
         """
-        reco_regions = Toy.GetRegion(toy, "reco_regions_")
-        true_regions = Toy.GetRegion(toy, "truth_regions_")
+        reco_regions = Toy.GetRegion(self.df, "reco_regions_")
+        true_regions = Toy.GetRegion(self.df, "truth_regions_")
         return CountInRegions(true_regions, reco_regions)
 
 
@@ -1400,26 +1653,26 @@ class AnalysisInput:
         Returns:
             AnalysisInput: analysis input object.
         """
-        inclusive_events = (toy.df.inclusive_process != "decay").values
+        inclusive_events = np.array((toy.df.inclusive_process != "decay").values)
 
-        regions = {k : v.values for k, v in toy.reco_regions.items()}
-        process = {k : v.values for k, v in toy.truth_regions.items()}
+        regions = {k : np.array(v.values) for k, v in toy.reco_regions.items()}
+        process = {k : np.array(v.values) for k, v in toy.truth_regions.items()}
 
         return AnalysisInput(
             regions,
             inclusive_events,
             process,
-            toy.outside_tpc_smeared.values,
-            toy.outside_tpc.values,
-            toy.df.z_int_smeared.values,
-            toy.df.KE_int_smeared.values,
-            toy.df.KE_init_smeared.values,
-            toy.df.KE_init_smeared.values,
-            toy.df.mean_track_score.values,
-            toy.df.z_int.values,
-            toy.df.KE_int.values,
-            toy.df.KE_init.values,
-            toy.df.KE_init.values,
+            np.array(toy.outside_tpc_smeared.values),
+            np.array(toy.outside_tpc.values),
+            np.array(toy.df.z_int_smeared.values),
+            np.array(toy.df.KE_int_smeared.values),
+            np.array(toy.df.KE_init_smeared.values),
+            np.array(toy.df.KE_init_smeared.values),
+            np.array(toy.df.mean_track_score.values),
+            np.array(toy.df.z_int.values),
+            np.array(toy.df.KE_int.values),
+            np.array(toy.df.KE_init.values),
+            np.array(toy.df.KE_init.values),
             None
             )
 
@@ -1498,6 +1751,12 @@ class AnalysisInput:
             true_KE_ff,
             weights,
             )
+
+
+    @staticmethod
+    def Concatenate(ais : list["AnalysisInput"]):
+        fields = MergeOutputs([vars(a) for a in ais])
+        return AnalysisInput(**fields)
 
 
     def CreateTrainTestSamples(self, seed : int, train_fraction : float = None) -> dict:
@@ -1634,10 +1893,10 @@ class RegionFit:
         return observations
 
     @staticmethod
-    def Fit(observations, model : pyhf.Model, init_params : list[float] = None, par_bounds : list[tuple] = None, verbose : bool = True, tolerance : float = 1E-2) -> FitResults:
+    def Fit(observations, model : pyhf.Model, init_params : list[float] = None, par_bounds : list[tuple] = None, verbose : bool = True, tolerance : float = 1E-2, fix_pars : list[bool] = None) -> FitResults:
         pyhf.set_backend(backend = "numpy", custom_optimizer = "minuit")
         if verbose is True: print(f"{init_params=}")
-        result = cabinetry.fit.fit(model, observations, init_pars = init_params, custom_fit = True, tolerance = tolerance, par_bounds = par_bounds)
+        result = cabinetry.fit.fit(model, observations, init_pars = init_params, custom_fit = True, tolerance = tolerance, par_bounds = par_bounds, fix_pars = fix_pars)
 
         poi_ind = [model.config.par_slice(i).start for i in model.config.par_names if "mu" in i]
         if verbose is True: print(f"{poi_ind=}")
@@ -1824,7 +2083,7 @@ class Unfold:
         return response, response_err
 
     @staticmethod #? move to Plots?
-    def PlotMatrix(matrix : np.ndarray, energy_slices : Slices, title : str = None, c_label : str = None):
+    def PlotMatrix(matrix : np.ndarray, energy_slices : Slices, title : str = None, c_label : str = None, text : bool = False, text_colour = "k", cmap = "plasma"):
         """ Plot numpy matrix.
 
         Args:
@@ -1832,17 +2091,22 @@ class Unfold:
             title (str, optional): plot title. Defaults to None.
             c_label (str, optional): colourbar label. Defaults to None.
         """
+        x = energy_slices.pos_overflow - energy_slices.width/2
         #* cause = true, effect = reco
         Plots.plt.figure()
-        Plots.plt.imshow(np.flip(matrix), origin = "lower", cmap = "plasma")
+        Plots.plt.imshow(np.flip(matrix), origin = "lower", cmap = cmap, vmin = np.nanmin(matrix), vmax = np.nanmax(matrix))
         Plots.plt.xlabel("True $KE$ (MeV)")
         Plots.plt.ylabel("Reco $KE$ (MeV)")
         Plots.plt.grid(False)
         Plots.plt.colorbar(label = c_label)
         Plots.plt.title(title)
-        Plots.plt.xticks(np.linspace(0, len(energy_slices.pos_overflow)-1, len(energy_slices.pos_overflow)), energy_slices.pos_overflow[::-1], rotation = 30)
-        Plots.plt.yticks(np.linspace(0, len(energy_slices.pos_overflow)-1, len(energy_slices.pos_overflow)), energy_slices.pos_overflow[::-1], rotation = 30)
+        Plots.plt.xticks(np.linspace(0, len(x) - 1, len(x)), np.array(x[::-1], dtype = int), rotation = 30)
+        Plots.plt.yticks(np.linspace(0, len(x) - 1, len(x)), np.array(x[::-1], dtype = int), rotation = 30)
         Plots.plt.tight_layout(pad = 1)
+
+        if text:
+            for (i, j), z in np.ndenumerate(np.flip(matrix)):
+                Plots.plt.gca().text(j, i, f"{z:.1g}", ha='center', va='center', fontsize = 10, color = text_colour)
         return
 
     @staticmethod
@@ -1894,17 +2158,14 @@ class Unfold:
         for k, v in slice_pairs.items():
             corr[k] = Unfold.CorrelationMarix(*v, bins = slice_bins, remove_overflow = False)
             resp[k] = Unfold.ResponseMatrix(*v, bins = slice_bins, efficiencies = None if efficiencies is None else efficiencies[k][0], remove_overflow = False)
-                
-        for k in resp:
-            # if k in template.exclusive_process.keys():
-            #     resp[k] = resp["int"] #* weird new thing
-            if book is not None:
+
+        if book is not None:
+            for k in resp:
                 Unfold.PlotMatrix(corr[k], energy_slice, title = f"Response marix: {labels[k]}", c_label = "Counts")
                 book.Save()
-            if book is not None:
                 Unfold.PlotMatrix(resp[k][0], energy_slice, title = f"Normalised response matrix: {labels[k]}", c_label = "$P(E_{i}|C_{j})$")
                 book.Save()
-        
+
         return resp
 
     @staticmethod
@@ -1984,6 +2245,21 @@ class Unfold:
         # Plots.Plot(energy_slices.pos_bins[::-1], results["unfolded"] / sum(results["unfolded"]), yerr = results["stat_err"] / sum(results["unfolded"]), style = "step", label = label, xlabel = xlabel + " (MeV)", color = "C4", newFigure = False)
         book.Save() 
         if "unfolding_matrix" in results:
-            Unfold.PlotMatrix(results["unfolding_matrix"], energy_slices, title = "Unfolded matrix: " + label, c_label = "$P(C_{j}|E_{i})$")
-            book.Save() 
+            Unfold.PlotMatrix(results["unfolding_matrix"], energy_slices, title = "Unfolded matrix: " + label, c_label = "$P(C_{j}|E_{i})$", text = True, text_colour = "red")
+            book.Save()
+
+            Unfold.PlotMatrix((results["unfolding_matrix"].T * obs).T, energy_slices, "Migrations : " + label, c_label = "Counts")
+            book.Save()
+
+            #! same as unfolding matrix
+            # Unfold.PlotMatrix((results["unfolding_matrix"].T * obs / np.sum(results["unfolding_matrix"].T * obs, 0)).T, energy_slices, "Fractional Migrations : " + label, c_label = "Fractional Counts", text = True, text_colour = "red")
+            # book.Save()
+
+        if "covariance_matrix" in results:
+            Unfold.PlotMatrix(results["covariance_matrix"], energy_slices, title = "Covariance matrix: " + label, c_label = "Counts")
+            book.Save()
+
+            Unfold.PlotMatrix(np.corrcoef(results["covariance_matrix"]), energy_slices, title = "Correlation matrix: " + label, c_label = "Correlation coefficient", text = True, text_colour = "k", cmap = "coolwarm")
+            book.Save()
+
         return
