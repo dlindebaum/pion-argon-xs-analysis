@@ -118,6 +118,30 @@ def fmt_op(op):
         return op
 
 
+def selection_names_criteria(df : pd.DataFrame):
+    defs = criteria_defs()
+    fancy_names = {}
+    for n in df.index:
+        if defs["beam"] is None: continue
+        if n in defs["beam"]:
+            cuts = defs["beam"][n]
+        else:
+            cuts = None
+        
+        if n not in selection_map:
+            fancy_name = n
+        else:
+            fancy_name = selection_map[n]
+
+        if (cuts is not None) and (len(cuts) > 0):
+            if type(cuts["cut"]) == list:
+                fancy_name = f'{min(cuts["cut"])} {units_map[n]} $<$ {fancy_name} $<$ {max(cuts["cut"])} {units_map[n]}'
+            else:
+                fancy_name = f'{fancy_name} ${fmt_op(cuts["op"])}$ {cuts["cut"]} {units_map[n]}'
+        fancy_names[n] = fancy_name
+    return fancy_names
+
+
 def CreateTables(path : str, selection_name : str, signal : str = None):
     tables_mc = {}
     tables_data = {}
@@ -137,7 +161,7 @@ def CreateTables(path : str, selection_name : str, signal : str = None):
     else:
         counts_col = "Remaining events"
 
-    total_counts = pd.concat({k : v[col_map["counts"]][counts_col] for k, v in {"data" : tables_data, "mc" : tables_mc}.items()}, axis = 1)
+    total_counts = pd.concat(objs = {k : v[col_map["counts"]][counts_col] for k, v in {"Data" : tables_data, "MC" : tables_mc}.items()}, axis = 1)
     total_counts = total_counts.set_index(names)
 
     if signal is not None:
@@ -147,27 +171,7 @@ def CreateTables(path : str, selection_name : str, signal : str = None):
     else:
         signal_tables = None
 
-    defs = criteria_defs()
-
-    fancy_names = {}
-    for n in total_counts.index:
-        if defs[selection_name] is None: continue
-        if n in defs[selection_name]:
-            cuts = defs[selection_name][n]
-        else:
-            cuts = None
-        
-        if n not in selection_map:
-            fancy_name = n
-        else:
-            fancy_name = selection_map[n]
-
-        if (cuts is not None) and (len(cuts) > 0):
-            if type(cuts["cut"]) == list:
-                fancy_name = f'{min(cuts["cut"])} {units_map[n]} $<$ {fancy_name} $<$ {max(cuts["cut"])} {units_map[n]}'
-            else:
-                fancy_name = f'{fancy_name} ${fmt_op(cuts["op"])}$ {cuts["cut"]} {units_map[n]}'
-        fancy_names[n] = fancy_name
+    fancy_names = selection_names_criteria(total_counts)
 
     if len(fancy_names) > 0:
         total_counts = total_counts.set_index(pd.Series(list(fancy_names.values())))
@@ -177,7 +181,7 @@ def CreateTables(path : str, selection_name : str, signal : str = None):
     return signal_tables, total_counts
 
 
-def FormatTable(filename):
+def FormatTable(filename, bf_column : bool = True):
     with open(filename) as file:
         lines = list(file.readlines())
         new_lines = []
@@ -198,7 +202,8 @@ def FormatTable(filename):
             else:
                 formatted = []
                 entries = l.split(" & ")
-                entries[0] = f"\\textbf{{{entries[0]}}}"
+                if bf_column:
+                    entries[0] = f"\\textbf{{{entries[0]}}}"
                 for j in range(len(entries)):
                     if j == len(entries) - 1:
                         s = entries[j].split(" \\\\\n")[0]
@@ -246,7 +251,29 @@ def bq_angle(values : dict):
     return t
 
 
-def copy_table(source : str, dest : str, new_name : str = None):
+def brw_table(brw : dict):
+    table = {}
+    for i, p in enumerate(brw):
+        sf = len(str(float(f'{brw[p]["error"]:.1g}'))) - 1
+
+        cv = f'{brw[p]["value"]:.{sf}g}'
+        err = f'{brw[p]["error"]:.1g}'
+        table[f"$p_{{{i}}}$"] = f'{float(cv)} $\pm$ {float(err)}'
+
+    table = pd.DataFrame(table, index = [0])
+    return table
+
+def upl_table(upl : dict):
+    table = {}
+    for i in range(args.upstream_loss_response.n_params):
+        sf = len(str(float(f'{upl["error"][f"p{i}"]:.1g}'))) - 1
+        cv = f'{upl["value"][f"p{i}"]:.{sf}g}'
+        err = f'{upl["error"][f"p{i}"]:.1g}'
+        table[f"$p_{{{i}}}$"] = f'{float(cv)} $\pm$ {float(err)}'
+    table = pd.DataFrame(table, index = [0])
+    return table
+
+def copy_table(source : str, dest : str, new_name : str = None, bf_cols : bool = True):
     name = source.split("/")[-1]
 
     if new_name: name = new_name.split(".tex")[0] + ".tex"
@@ -255,13 +282,39 @@ def copy_table(source : str, dest : str, new_name : str = None):
     with open(source) as f:
         with open(f"{dest}{name}", "w") as of:
             of.writelines(f.readlines())
-    FormatTable(f"{dest}{name}")
+    FormatTable(f"{dest}{name}", bf_cols)
     return
+
+
+def brw_selection(path):
+    selection_data = ReadHDF5(f"{path}/beam_reweight/selection_data.hdf5")
+    selection_mc = ReadHDF5(f"{path}/beam_reweight/selection_mc.hdf5")
+
+    selection_table = pd.concat(objs = [selection_data.rename(columns = {"Counts" : "Data"}), selection_mc.rename(columns = {"Counts" : "MC"})], axis = 1)
+    selection_table = selection_table.rename(index = {"TrueFiducialCut" : "Fiducial region", "HasFinalStatePFOsCut" : "Inverted preselection"})
+    fancy_names = selection_names_criteria(selection_table)
+
+    selection_table = selection_table.drop(index = ["CaloSizeCut", "PandoraTagCut"])
+
+    selection_table = selection_table.rename(index = fancy_names)
+    return selection_table
 
 
 def main(args : argparse.Namespace):
     path = os.path.abspath(args.workdir + "/")
     out = f"{path}/formatted_tables/"
+
+    os.makedirs(f"{out}upstream/", exist_ok = True)
+    upl_table(LoadConfiguration(f"{path}/upstream_loss/fit_parameters.json")).style.hide(axis = "index").to_latex(f"{out}upstream/fit.tex")
+    FormatTable(f"{out}upstream/fit.tex", False)
+
+    os.makedirs(f"{out}beam_reweight/", exist_ok = True)
+    brw_selection(path).style.to_latex(f"{out}beam_reweight/selection.tex")
+    FormatTable(f"{out}beam_reweight/selection.tex")
+
+    brw = brw_table(LoadConfiguration(f"{path}/beam_reweight/gaussian.json"))
+    brw.style.hide(axis = "index").to_latex(f"{out}/beam_reweight/fit.tex")
+    FormatTable(f"{out}/beam_reweight/fit.tex", False)
 
     fmt_tables = {}
     for s in signal:
@@ -288,12 +341,25 @@ def main(args : argparse.Namespace):
     t_angle.style.to_latex(f"{outp}/angle.tex")
     FormatTable(f"{outp}/angle.tex")
 
-    copy_table(f"{path}/shower_energy_correction/table.tex", f"{out}", "shower_correction.tex")
+    for f in Utils.ls_recursive(f"{path}/shower_energy_correction/"):
+        if ".tex" in f:
+            copy_table(f, f"{out}/shower_correction/", bf_cols = False)
+
 
     copy_table(f"{path}/toy_parameters/reco_regions/pe.tex", f"{out}/reco_regions/")
 
-    copy_table(f"{path}/measurement/pdsp/fit_results_NP.tex", f"{out}/data_fit/")
-    copy_table(f"{path}/measurement/pdsp/fit_results_POI.tex", f"{out}/data_fit/")
+    for f in Utils.ls_recursive(f"{path}/toy_parameters/smearing/"):
+        if (".tex" in f):
+            copy_table(f, f"{out}/smearing/{f.split('/')[-2]}/", bf_cols = False)
+
+    copy_table(f"{path}/toy_parameters/beam_profile/fit.tex", f"{out}/beam_profile/", bf_cols = False)
+
+    copy_table(f"{path}/toy_parameters/reco_regions/pe.tex", f"{out}/reco_regions/")
+
+
+    copy_table(f"{path}/measurement/pdsp/fit_results_NP.tex", f"{out}/data_fit/", bf_cols = False)
+    copy_table(f"{path}/measurement/pdsp/fit_results_POI.tex", f"{out}/data_fit/", bf_cols = False)
+    copy_table(f"{path}/measurement/pdsp/regions.tex", f"{out}/")
 
     for f in Utils.ls_recursive(f'{path}'):
         if out in f: continue
@@ -303,6 +369,9 @@ def main(args : argparse.Namespace):
             copy_table(f, f"{out}", "pulls_no_np.tex")
         if "pulls_np.tex" in f:
             copy_table(f, f"{out}", "pulls_np.tex")
+
+    if os.path.isdir(f"{path}/systematics/track_length/"):
+        copy_table(f"{path}/systematics/track_length/fit_params.tex", f"{out}/track_length_resolution/", bf_cols = False)
     return
 
 

@@ -77,16 +77,26 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
     else:
         fiducial_mask = None
 
-    invert = "HasFinalStatePFOsCut"
+    invert = ["HasFinalStatePFOsCut"] # invert preselection
 
     sideband_selection = {}
     for m in selections["beam"][file]:
-        if m == invert:
+        if m in invert:
             sideband_selection[m] = ~selections["beam"][file][m]
         else:
             sideband_selection[m] = selections["beam"][file][m]
+
+    table = {}
+    mask = None
+    for s in sideband_selection:
+        if mask is None:
+            mask = sideband_selection[s]
+        else:
+            mask = mask & sideband_selection[s]
+        table[s] = sum(mask)
+
+    print(table)
     sideband_selection = SelectionTools.CombineMasks(sideband_selection)
-    print(sample, sum(sideband_selection))
 
     events = cross_section.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
 
@@ -114,7 +124,8 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
         "analysis" : {
             "p_inst" : analysis_sample.recoParticles.beam_inst_P,
             "tags" : cross_section.Tags.GenerateTrueBeamParticleTags(analysis_sample)
-        }
+        },
+        "table" : table
     }
 
     return output
@@ -131,9 +142,25 @@ def main(args : cross_section.argparse.Namespace):
 
     output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
 
+    for t in output_mc["table"]:
+        output_mc["table"][t] = sum(output_mc["table"][t])
+
     output_data = cross_section.RunProcess(args.ntuple_files["data"], True, args, run)
 
+    for t in output_data["table"]:
+        if type(output_data["table"][t]) == list:
+            output_data["table"][t] = sum(output_data["table"][t])
+
+    table_data = cross_section.pd.DataFrame(output_data["table"], index = ["Counts"]).T
+    table_mc = cross_section.pd.DataFrame(output_mc["table"], index = ["Counts"]).T
+
+    print(table_data)
+    print(table_mc)
+
     os.makedirs(out, exist_ok = True)
+
+    table_data.to_hdf(out + "selection_data.hdf5", key = "df")
+    table_mc.to_hdf(out + "selection_mc.hdf5", key = "df")
     os.makedirs(out + "plots/", exist_ok = True)
 
     with Plots.PlotBook(out + "plots/" + "reweight_fits.pdf", True) as book:

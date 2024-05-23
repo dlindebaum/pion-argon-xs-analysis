@@ -185,7 +185,7 @@ def BeamScraperPlots(beam_inst_KE_bins : list, output_mc : dict[ak.Array], scrap
             x = r*np.cos(theta) + mu_x
             y = r*np.sin(theta) + mu_y
 
-            Plots.Plot(x, y, linestyle = "--", color = f"C{7+j}", alpha = 1, label = f"{m}$r$", newFigure = False)
+            Plots.Plot(x, y, linestyle = "--", color = f"C{7+j}", alpha = 1, label = f"{m}$r_{{inst}}$", newFigure = False)
         plt.xlabel("$X^{reco}_{inst}$ (cm)")
         plt.ylabel("$Y^{reco}_{inst}$ (cm)")
         plt.title(bin_label)

@@ -497,6 +497,17 @@ def PlotRegions(mc : cross_section.AnalysisInput, book : Plots.PlotBook):
     return
 
 
+def FitParamTables(table : pd.DataFrame):
+    sf = [len(str(float(f"{i:.1g}"))) - 2 for i in table.loc["uncertainty"]]
+    cv = [float(f"{v:.{sf[i]}f}") for i, v in enumerate(table.loc["fit value"])]
+    err = [float(f"{v:.1g}") for v in table.loc["uncertainty"]]
+
+    t = {}
+    for i , v in enumerate(table.columns):
+        t[v] = f"${cv[i]} \pm {err[i]}$"
+    return pd.DataFrame(t, index = [0])
+
+
 def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
     samples = {}
     templates = {}
@@ -543,9 +554,10 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
                 PlotRegions(templates[k], book)
 
             if plot:
+                tags = cross_section.Tags.ExclusiveProcessTags(None)
                 region_counts = {
-                    "MC" : {cross_section.remove_(k) : np.sum(v) for k, v in templates[k].regions.items()},
-                    "Data" : {cross_section.remove_(k) : np.sum(v) for k, v in samples[k].regions.items()}
+                    "MC" : {tags[k].name_simple : np.sum(v) for k, v in templates[k].regions.items()},
+                    "Data" : {tags[k].name_simple : np.sum(v) for k, v in samples[k].regions.items()}
                 }
                 pd.DataFrame(region_counts).style.to_latex(outdir + "regions.tex")
             Plots.plt.close("all")
@@ -557,13 +569,13 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
         if plot:
             indices = [f"$\mu_{{{i}}}$" for i in ["abs", "cex", "spip", "pip"]]
             table = cross_section.pd.DataFrame({"fit value" : fit_values.bestfit[0:4] / scale, "uncertainty" : fit_values.uncertainty[0:4] / scale}, index = indices).T
-            table.to_hdf("fit_results_POI.hdf5", key = "df")
-            table.style.to_latex(outdir + "fit_results_POI.tex")
+            table.to_hdf(outdir + "fit_results_POI.hdf5", key = "df")
+            FitParamTables(table).style.hide(axis = "index").to_latex(outdir + "fit_results_POI.tex")
             if len(fit_values.bestfit) > 4:
                 indices = [f"$\\alpha_{{{i}}}$" for i in ["abs", "cex", "spip", "pip"]]
                 table = cross_section.pd.DataFrame({"fit value" : fit_values.bestfit[4:], "uncertainty" : fit_values.uncertainty[4:]}, index = indices).T
                 table.to_hdf("fit_results_NP.hdf5", key = "df")
-                table.style.to_latex(outdir + "fit_results_NP.tex")
+                FitParamTables(table).style.hide(axis = "index").to_latex(outdir + "fit_results_NP.tex")
 
 
         if args.all is True:
@@ -627,6 +639,7 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
 
 def main(args):
     cross_section.SetPlotStyle(extend_colors = False, dark = True)
+    Plots.preliminary = True
     args.out = args.out + "measurement/"
 
     xs = Analyse(args, True)

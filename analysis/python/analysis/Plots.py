@@ -21,6 +21,12 @@ from scipy.stats import iqr
 from python.analysis import vector, Tags, Utils
 from python.analysis.SelectionTools import np_to_ak_indicies
 
+preliminary = False
+
+def PlotPreliminaryLabel():
+    plt.text(0.5, 0.5, 'PRELIMINARY', transform=plt.gca().transAxes, fontsize=40, color='gray', alpha=0.5, ha='center', va='center', rotation=30)
+    return
+
 
 class PlotConfig():
 
@@ -867,8 +873,11 @@ class PlotBook:
         self.is_open = False
 
     def Save(self):
+        global preliminary
         if hasattr(self, "pdf"):
             try:
+                if preliminary is True:
+                    PlotPreliminaryLabel()
                 self.pdf.savefig(bbox_inches='tight')
             except AttributeError:
                 pass

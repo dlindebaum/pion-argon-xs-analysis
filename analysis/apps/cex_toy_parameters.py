@@ -78,6 +78,19 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
     return {"kinematic_quantities" : cross_section_quantities, "true_pion_mask" : true_pion_mask, "pion_inel_mask" : pion_inel_mask, "region_identification" : ri, "mean_track_score" : mean_track_score, "beam_selection_mask" : mask}
 
 
+def CreateFitTable(params, errors):
+    table = {}
+    for i, (p, e) in enumerate(zip(params, errors)):
+        sf = len(str(float(f"{e:.1g}")))
+        if e > 1:
+            sf = -(sf - 3)
+        else:
+            sf = sf - 2
+        table[f"$p_{{{i}}}$"] = f"${round(p, sf)} \pm {float(f'{e:.1g}')}$"
+
+    return pd.DataFrame(table, index = [0])
+
+
 def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_quantity : ak.Array, mask : ak.Array = None, label = "quantity(units)", plot_range = None, residual_range = None, fit_functions : list[cross_section.Fitting.FitFunction] = [cross_section.Fitting.gaussian, cross_section.Fitting.student_t]) -> dict:
     """ Study of residuals of cross section inputs, used to smear toy observables. Done by fitting a curve to the residual, returning the fit parameters.
 
@@ -109,9 +122,12 @@ def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_q
 
     params = {}
     errors = {}
+    tables = {}
     for f in fit_functions:
         Plots.plt.figure()
         params[f.__name__], errors[f.__name__] = cross_section.Fitting.Fit(centers, counts, np.sqrt(counts), f, plot = True, xlabel = label, ylabel = "counts", plot_style = "hist")
+        tables[f.__name__] = CreateFitTable(params[f.__name__], errors[f.__name__])
+        
         plot_book.Save()
         Plots.plt.close()
     params_formatted = {p : {"function" : p, "values" : {f"p{i}" : params[p][i] for i in range(len(params[p]))}} for p in params}
@@ -124,7 +140,8 @@ def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_q
             "errors" : {f"p{i}" : errors[p][i] for i in range(len(errors[p]))},
             "range" : residual_range
             }
-    return params_formatted
+
+    return params_formatted, tables
 
 @Master.timer
 def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : argparse.Namespace, labels : dict, out : str):
@@ -146,16 +163,20 @@ def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : 
     trial_functions = [cross_section.Fitting.gaussian, cross_section.Fitting.student_t, cross_section.Fitting.crystal_ball, cross_section.Fitting.double_crystal_ball]
 
     params = {}
+    tables = {}
     with Plots.PlotBook(out + "smearing/smearing_study") as pdf:
         for k in labels:
             print(f"{k=}")
-            params[k] = ResolutionStudy(pdf, selected_quantities["reco"][k], selected_quantities["true"][k], selected_quantities["reco"][k] != 0, labels[k], args.toy_parameters["plot_ranges"][k], args.toy_parameters["smearing_residual_ranges"][k], trial_functions)
+            params[k], tables[k] = ResolutionStudy(pdf, selected_quantities["reco"][k], selected_quantities["true"][k], selected_quantities["reco"][k] != 0, labels[k], args.toy_parameters["plot_ranges"][k], args.toy_parameters["smearing_residual_ranges"][k], trial_functions)
 
     for q in labels:
         sout = out + f"smearing/{q}/"
         os.makedirs(sout, exist_ok = True)
         for k in params[q]:
             Master.SaveConfiguration(params[q][k], sout + f"{k}.json")
+        
+        for k in tables[q]:
+            tables[q][k].style.hide(axis = "index").to_latex(sout + f"{k}.tex")
     return
 
 @Master.timer
@@ -330,14 +351,17 @@ def FitBeamProfile(KE_init : np.array, func : cross_section.Fitting.FitFunction,
 
     Plots.plt.figure()
     print(f"{book.open=}")
-    params = cross_section.Fitting.Fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = book.is_open, plot_style = "hist", xlabel = "$KE^{true}_{init}$ (MeV)")[0]
+    params, error = cross_section.Fitting.Fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = book.is_open, plot_style = "hist", xlabel = "$KE^{true}_{init}$ (MeV)")
     book.Save()
+
+    table = CreateFitTable(params, error)
+
     return {
         "function" : func.__name__,
         "parameters" : {f"p{i}" : params[i] for i in range(len(params))},
         "min" : min(KE_range),
         "max" : max(KE_range)
-        }
+        }, table
 
 @Master.timer
 def BeamProfileStudy(quantities : dict, args : argparse.Namespace, true_beam_mask : ak.Array, func : cross_section.Fitting.FitFunction, KE_range : list, out : str):
@@ -352,18 +376,15 @@ def BeamProfileStudy(quantities : dict, args : argparse.Namespace, true_beam_mas
     """
     os.makedirs(out + "beam_profile/", exist_ok = True)
     with Plots.PlotBook(out + "beam_profile/beam_profile.pdf") as book:
-        beam_profile = FitBeamProfile(quantities["true"]["KE_init"][true_beam_mask], func, KE_range, 50, book)
+        beam_profile, table = FitBeamProfile(quantities["true"]["KE_init"][true_beam_mask], func, KE_range, 50, book)
         Master.SaveConfiguration(beam_profile, out + "beam_profile/beam_profile.json")
+        table.style.hide(axis = "index").to_latex(out + "beam_profile/fit.tex")
     return
 
 @Master.timer
 def main(args : argparse.Namespace):
     cross_section.SetPlotStyle(True)
     out = args.out + "toy_parameters/"
-
-    args.batches = None
-    args.events = None
-    args.threads = 1
 
     bins = {r : np.linspace(min(args.toy_parameters["plot_ranges"][r]), max(args.toy_parameters["plot_ranges"][r]), 50) for r in args.toy_parameters["plot_ranges"]}
     labels = {
