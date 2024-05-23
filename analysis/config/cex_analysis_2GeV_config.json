@@ -21,6 +21,7 @@
       ]
     },
     "norm": 2.497,
+    "pi_KE_lim": -1,
     "fiducial_volume": [
       30,
       220

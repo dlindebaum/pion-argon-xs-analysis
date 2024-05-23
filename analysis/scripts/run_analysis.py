@@ -21,8 +21,8 @@ from apps import (
     cex_analyse
     )
 
-from python.analysis.cross_section import ApplicationArguments, argparse, os
-from python.analysis.Master import SaveConfiguration, LoadConfiguration, IO
+from python.analysis.cross_section import ApplicationArguments, argparse, os, CalculateBatches, file_len
+from python.analysis.Master import SaveConfiguration, LoadConfiguration
 
 
 def template_config():
@@ -44,6 +44,7 @@ def template_config():
             ]
         },
         "norm" : "normalisation to apply to MC when making Data/MC comparisons, usually defined as the ratio of pion-like triggers from the beam instrumentation", #! this should be inferred from one of the apps!
+        "pi_KE_lim": -1,
         "fiducial_volume" : [0, 700],
         "REGION_IDENTIFICATION":{
             "type" : "default"
@@ -342,9 +343,6 @@ def update_args(processing_args : dict = {}):
         setattr(new_args, k, v)
     return new_args
 
-def file_len(file : str):
-    return len(IO(file).Get(["EventID", "event"]))
-
 
 def check_run(args : argparse.Namespace, step : str):
     return ((step in args.run) or (args.force is True)) and (step not in args.skip)
@@ -367,20 +365,7 @@ def main(args):
         if len(n_data) == 0:
             print("no data file was specified, 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
 
-        n_mc = [file_len(file["file"]) for file in args.ntuple_files["mc"]] # must have MC
-
-        processing_args = {"events" : None, "batches" : None, "threads" : None}
-
-        # pass multiprocessing args
-        if max([*n_data, *n_mc]) >= 7E5:
-            processing_args["events"] = None
-            processing_args["batches"] = int(2 * max([*n_data, *n_mc]) // 7E5)
-            processing_args["threads"] = args.cpus
-        else:
-            processing_args["events"] = None
-            processing_args["batches"] = None
-            processing_args["threads"] = args.cpus
-
+        processing_args = CalculateBatches(args)
         args = update_args(processing_args)
 
         #* normalisation 

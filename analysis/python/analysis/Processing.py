@@ -140,6 +140,7 @@ def mutliprocess(func, files : list, nBatches : int, nEvents : int, args : dict,
         Any: function output
     """
     pool = ProcessPool(nodes = nodes) # use all my threads, damn it!
+    pool.restart(True)
 
     inputs = GenerateFunctionArguments(files, nBatches, nEvents, args = args, event_indices = event_indices)
     batch_numbers = list(range(len(inputs[0])))

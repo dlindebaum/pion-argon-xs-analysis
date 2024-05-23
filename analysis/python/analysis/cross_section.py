@@ -24,7 +24,7 @@ from particle import Particle
 from scipy.interpolate import interp1d, UnivariateSpline
 
 from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, RegionIdentification, Processing
-from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer
+from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer, IO
 from python.analysis.shower_merging import SetPlotStyle
 from python.analysis.Utils import *
 
@@ -255,6 +255,34 @@ def _unfold_custom(prior=None, mixer=None, ts_func=None, max_iter=100,
 
 # pyhf.modifiers.staterror.required_parset = to_poisson(pyhf.modifiers.staterror.required_parset)
 
+def file_len(file : str):
+    return len(IO(file).Get(["EventID", "event"]))
+
+
+def CalculateBatches(args):
+    if "data" in args.ntuple_files:
+        n_data = [file_len(file["file"]) for file in args.ntuple_files["data"]]
+    else:
+        n_data = []
+
+    if len(n_data) == 0:
+        print("no data file was specified, 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
+
+    n_mc = [file_len(file["file"]) for file in args.ntuple_files["mc"]] # must have MC
+
+    processing_args = {"events" : None, "batches" : None, "threads" : None}
+
+    # pass multiprocessing args
+    if max([*n_data, *n_mc]) >= 7E5:
+        processing_args["events"] = None
+        processing_args["batches"] = int(2 * max([*n_data, *n_mc]) // 7E5)
+        processing_args["threads"] = args.cpus
+    else:
+        processing_args["events"] = None
+        processing_args["batches"] = None
+        processing_args["threads"] = args.cpus
+    return processing_args
+
 
 def RunProcess(ntuple_files : list[str], is_data : bool, args : argparse.Namespace, func : callable, merge : bool = True) -> list:
     output = []
@@ -381,9 +409,9 @@ def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, 
         Plots.Plot(x, v[0], xerr = energy_slice.width / 2  if cv_only is False else None, yerr = v[1] if cv_only is False else None, label = k + chi2_l, color = colors[k], linestyle = "", marker = "x", newFigure = False, markersize = marker_size, capsize = marker_size/2)
     
     if process == "single_pion_production":
-        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = simulation_label, title = "single pion production" if title is None else title, newFigure = False, xlabel = "$KE (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)
+        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = simulation_label, title = "Single pion production" if title is None else title.capitalize(), newFigure = False, xlabel = "$KE (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)
     else:
-        xs_sim.Plot(process, label = simulation_label, color = xs_sim_color, title = title)
+        xs_sim.Plot(process, label = simulation_label, color = xs_sim_color, title = title.capitalize() if type(title) is str else title)
 
     Plots.plt.ylim(0)
     if max(Plots.plt.gca().get_ylim()) > np.nanmax(sim_curve_interp(xs_sim.KE).astype(float)) * 2:
@@ -1075,7 +1103,7 @@ class GeantCrossSections:
                 label = remove_(xs)
             else:
                 if title is None:
-                    title = remove_(xs)
+                    title = remove_(xs).capitalize()
             if xs == "single_pion_production":
                 y = self.quasielastic + self.double_charge_exchange
             else:

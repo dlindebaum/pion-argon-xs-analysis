@@ -7,7 +7,6 @@ Author: Shyam Bhuller
 Description: app to calculate systematic uncertainties for cross section measurement
 """
 from abc import ABC, abstractmethod
-from argparse import Namespace
 
 import pandas as pd
 import numpy as np
@@ -30,12 +29,11 @@ def SaveSystematicError(systematic : dict, fractional : dict, out : str):
 
 class MCMethod(ABC):
     def __init__(self, args : cross_section.argparse.Namespace, model : cross_section.pyhf.Model, data_config : dict) -> None:
-        self.args = args
+        self.args = cross_section.dill_copy(args)
         self.model = model
         self.data_config = data_config
         pass
 
-    @cross_section.timer
     def Analyse(self, analysis_input : cross_section.AnalysisInput, book : Plots.PlotBook = Plots.PlotBook.null):
 
         region_fit_result = cex_analyse.RegionFit(analysis_input, self.args.energy_slices, self.args.fit["mean_track_score"], self.model, mc_stat_unc = self.args.fit["mc_stat_unc"], single_bin = self.args.fit["single_bin"])
@@ -61,28 +59,67 @@ class MCMethod(ABC):
         xs = cex_analyse.XSUnfold(unfolding_result, self.args.energy_slices, True, True, self.args.fit["regions"])
         return xs
 
-    def RunExperiment(self, config : dict, out : str = None) -> tuple[dict, dict]:
-        x = self.args.energy_slices.pos[:-1] - self.args.energy_slices.width / 2
+    @abstractmethod
+    def RunExperiment(self, config : dict) -> tuple[dict, dict]:
+        pass
 
-        ai = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.run(config)))
 
-        if out:
-            book = Plots.PlotBook(out)
-        else:
-            book = None
+    def CalculateSysCov(self, results : list[dict], book : Plots.PlotBook = Plots.PlotBook.null):
+        values = {k : [] for k in results[0]}
+        for i in results:
+            for k in i:
+                values[k].append(i[k][0])
 
-        xs = self.Analyse(ai, book)
-        if out:
-            book.close()
-            Plots.plt.close("all")
-        xs_sim_mod = cex_toy_generator.ModifyGeantXS(scale_factors = config["pdf_scale_factors"])
+        cov = {k : np.cov(values[k], rowvar = False) for k in values}
 
-        if self.args.fit["regions"]:
-            xs_true = {k : xs_sim_mod.GetInterpolatedCurve(k)(x) for k in exclusive_proc}
-        else:
-            xs_true = xs_sim_mod.GetInterpolatedCurve(self.args.signal_process)(x)
+        if book:
+            for k in cov:
+                Plots.plt.figure()
+                Plots.plt.imshow(cov[k])
+                Plots.plt.grid(False)
+                Plots.plt.colorbar()
+                Plots.plt.title(cross_section.remove_(k).capitalize())
 
-        return xs, xs_true
+                x = self.args.energy_slices.pos_overflow[1:-1] - self.args.energy_slices.width/2
+                Plots.plt.xticks(np.linspace(0, len(x) - 1, len(x)), np.array(x[::-1], dtype = int), rotation = 30)
+                Plots.plt.yticks(np.linspace(0, len(x) - 1, len(x)), np.array(x[::-1], dtype = int), rotation = 30)
+                Plots.plt.xlabel("KE (MeV)")
+                Plots.plt.ylabel("KE (MeV)")
+
+                for (i, j), z in np.ndenumerate(np.flip(cov[k])):
+                    Plots.plt.gca().text(j, i, f"{z:.1g}", ha='center', va='center', fontsize = 10, color = "red")
+                book.Save()
+        return {k : np.sqrt(np.diag(cov[k])) for k in cov}
+
+
+    def Tables(self, xs_nominal : dict, sys : dict, name : str) -> dict[pd.DataFrame]:
+        x = self.args.energy_slices.pos_overflow[1:-1] - (self.args.energy_slices.width/2)
+
+        KEs = pd.Series(np.array(x, dtype = int), name = "$KE$ (MeV)")
+
+        data_stat_err = pd.DataFrame({p : xs_nominal["pdsp"][p][1] for p in xs_nominal["pdsp"]})
+
+        err = pd.DataFrame({p : sys[p] for p in xs_nominal["pdsp"]})
+
+        tables = {}
+        for p in xs_nominal["pdsp"]:
+            d = data_stat_err[p] / xs_nominal["pdsp"][p][0]
+            d.name = "Data stat"
+
+            e = err[p] / xs_nominal["pdsp"][p][0]
+            e.name = name
+        
+            t = pd.Series(quadsum([d, e], 0))
+            t.name = "Total"
+        
+            table = pd.concat([KEs, t, d, e], axis = 1).sort_values(by = ["$KE$ (MeV)"])
+
+            avg = table.mean()
+            avg["$KE$ (MeV)"] = "average"
+            tables[p] = pd.concat([table, pd.DataFrame(avg).T]).reset_index(drop = True)
+
+        return tables
+
 
 
 class DataAnalysis(ABC):
@@ -311,7 +348,7 @@ class BeamReweightSystematic(DataAnalysis):
 class ShowerEnergyCorrectionSystematic(DataAnalysis):
     name = "shower_energy_correction_1_sigma"
 
-    def __init__(self, args: Namespace) -> None:
+    def __init__(self, args: cross_section.argparse.Namespace) -> None:
         super().__init__(args)
         self.args.batches = None
         self.args.events = None
@@ -320,14 +357,23 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
 
     @staticmethod
     def __run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
+        print(f"starting process {i}")
         sample = "data" if args["data"] is True else "mc"
 
-        print(f"{sample=}")
-
         events = cross_section.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
-        events = cex_analysis_input.BeamPionSelection(events, args, not args["data"])
 
-        photon_candidates = cex_analysis_input.SelectionTools.CombineMasks(args["selection_masks"][sample]["photon"][file])
+        for s, a in zip(args["beam_selection"]["selections"].values(), args["beam_selection"][f"{sample}_arguments"].values()):
+            mask = s(events, **a)
+            events.Filter([mask], [mask])
+        photon_masks = {}
+        if args["valid_pfo_selection"] is True:
+            for k, s, a in zip(args["photon_selection"]["selections"].keys(), args["photon_selection"]["selections"].values(), args["photon_selection"][f"{sample}_arguments"].values()):
+                photon_masks[k] = s(events, **a)
+        photon_candidates = cross_section.SelectionTools.CombineMasks(photon_masks)
+        # events.Filter([photon_mask])
+        # events = cex_analysis_input.BeamPionSelection(events, args, not args["data"])
+
+        # photon_candidates = cex_analysis_input.SelectionTools.CombineMasks(args["selection_masks"][sample]["photon"][file])
         output = {}
         for name, sign in zip(["low", "high"], [1, -1]):
             masks = {}
@@ -340,6 +386,7 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
             output[name] = masks
         output["name"] = file
 
+        print(f"finished process {i}")
         return output
 
 
@@ -355,12 +402,22 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
         merged_output = []
         for s in split_output:
             o = cross_section.MergeOutputs(split_output[s])
+            if type(o["name"]) == list:
+                o["name"] = o["name"][0] 
             merged_output.append(o)
         return merged_output
 
 
     def CreateAltPi0Selections(self):
+
+        self.args.cpus = 1
+        processing_args = cross_section.CalculateBatches(self.args)
+        for k, v in processing_args.items():
+            setattr(self.args, k, v)
+
+        print("running MC")
         output_mc = self.__merge(cross_section.RunProcess(self.args.ntuple_files["mc"], False, self.args, self.__run, False))
+        print("running Data")
         output_data = self.__merge(cross_section.RunProcess(self.args.ntuple_files["data"], True, self.args, self.__run, False))
         return {"mc" : output_mc, "data" : output_data}
 
@@ -386,8 +443,59 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
         return
 
 
-class TrackLengthResolutionSystematic(DataAnalysis):
-    name = "track_length_1_sigma"
+class BeamMomentumResolutionSystematic(MCMethod):
+    name = "beam_momentum_resolution"
+
+    def __init__(self, args: cross_section.argparse.Namespace, model: cross_section.pyhf.Model, data_config: dict) -> None:
+        super().__init__(args, model, data_config)
+        self.P_reco_original = np.sqrt((self.args.toy_template.KE_init_reco + cross_section.Particle.from_pdgid(211).mass)**2 - (cross_section.Particle.from_pdgid(211).mass)**2)
+
+
+    def RunExperiment(self, analysis_input_data : cross_section.AnalysisInput, resolution : float) -> tuple[dict, dict]:
+        P_reco_smeared = self.P_reco_original * (1 + np.random.normal(0, resolution, len(self.P_reco_original)))
+
+        KE_init_reco = cross_section.KE(P_reco_smeared, cross_section.Particle.from_pdgid(211).mass)
+        KE_int_reco = cross_section.BetheBloch.InteractingKE(KE_init_reco, self.args.toy_template.track_length_reco, 10)
+
+        self.args.toy_template.KE_ff_reco = KE_init_reco
+        self.args.toy_template.KE_init_reco = KE_init_reco
+        self.args.toy_template.KE_int_reco = KE_int_reco
+
+        if self.args.fit["single_bin"] == False:
+            self.model = cross_section.RegionFit.CreateModel(self.args.toy_template, self.args.energy_slices, self.args.fit["mean_track_score"], False, self.args.toy_template.weights, self.args.fit["mc_stat_unc"], True, self.args.fit["single_bin"])
+        xs = self.Analyse(analysis_input_data, None)
+        return xs
+    
+
+    def Evaluate(self, n : int, resolution : float):
+        data = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.run(self.data_config)))
+
+        xs = []
+        for i in range(n):
+            print(Rule(f"Experiment : {i + 1}"))
+            xs.append(self.RunExperiment(data, resolution))
+        return xs
+
+
+class TrackLengthResolutionSystematic(BeamMomentumResolutionSystematic):
+    name = "track_length_resolution"
+
+    def __init__(self, args: cross_section.argparse.Namespace, model: cross_section.pyhf.Model, data_config: dict) -> None:
+        super().__init__(args, model, data_config)
+        self.track_length_original = self.args.toy_template.track_length_reco
+
+
+    def RunExperiment(self, analysis_input_data : cross_section.AnalysisInput, resolution : float) -> tuple[dict, dict]:
+        track_length_smeared = self.track_length_original * (1 + np.random.normal(0, resolution, len(self.P_reco_original)))
+
+        KE_int_reco = cross_section.BetheBloch.InteractingKE(self.args.toy_template.KE_init_reco, track_length_smeared, 10)
+        self.args.toy_template.KE_int_reco = KE_int_reco
+
+        if self.args.fit["single_bin"] == False:
+            self.model = cross_section.RegionFit.CreateModel(self.args.toy_template, self.args.energy_slices, self.args.fit["mean_track_score"], False, self.args.toy_template.weights, self.args.fit["mc_stat_unc"], True, self.args.fit["single_bin"])
+        xs = self.Analyse(analysis_input_data, None)
+        return xs
+    
 
     def CalculateResolution(self):
         ai_mc = cross_section.AnalysisInput.FromFile(self.args.analysis_input["mc"])
@@ -397,7 +505,7 @@ class TrackLengthResolutionSystematic(DataAnalysis):
         y, edges = np.histogram(r, 150, [-0.5, 0.5])
         x = cross_section.bin_centers(edges)
 
-        p = cross_section.Fitting.Fit(x, y,np.sqrt(y), cross_section.Fitting.double_crystal_ball, method = "dogbox", plot = True, xlabel = "$(l^{reco} - l^{true}) / l^{reco}$", ylabel = "Counts", plot_style = "scatter")
+        p = cross_section.Fitting.Fit(x, y,np.sqrt(y), cross_section.Fitting.double_crystal_ball, method = "dogbox", plot = True, xlabel = "$\\theta$", ylabel = "Counts", plot_style = "scatter")
 
         y_interp = cross_section.Fitting.double_crystal_ball(x, *p[0])
 
@@ -410,90 +518,59 @@ class TrackLengthResolutionSystematic(DataAnalysis):
             w.append(i)
 
         self.resolution = max(w) - min(w)
-        return
-
-    def CreateNewAIs(self, outdir : str):
-        cross_section.os.makedirs(f"{outdir}{self.name}_high/", exist_ok = True)
-        cross_section.os.makedirs(f"{outdir}{self.name}_low/", exist_ok = True)
-        
-        self.CalculateResolution()
-        for i in self.args.analysis_input:
-            ai = cross_section.AnalysisInput.FromFile(self.args.analysis_input[i])
-            if i == "data":
-                cross_section.SaveObject(f"{outdir}{self.name}_high/{i}.dill", ai)
-                cross_section.SaveObject(f"{outdir}{self.name}_low/{i}.dill", ai)
-            else:
-                Ep = cross_section.BetheBloch.InteractingKE(ai.KE_ff_reco, ai.track_length_reco * (1+self.resolution), 50)
-                Em = cross_section.BetheBloch.InteractingKE(ai.KE_ff_reco, ai.track_length_reco * (1-self.resolution), 50)
-                
-                ai.KE_int_reco = Ep
-                cross_section.SaveObject(f"{outdir}{self.name}_high/{i}.dill", ai)
-                ai.KE_int_reco = Em
-                cross_section.SaveObject(f"{outdir}{self.name}_low/{i}.dill", ai)
-        cross_section.SaveConfiguration({"value" : self.resolution}, f"{outdir}resolution.json")
-        return
+        self.popt = p
+        return self.resolution
 
 
-class BeamMomentumResolutionSystematic(DataAnalysis):
-    name = "beam_momentum_resolution"
+class TheoryShape(MCMethod):
+    def __init__(self, args: cross_section.argparse.Namespace, model: cross_section.pyhf.Model, data_config: dict) -> None:
+        super().__init__(args, model, data_config)
 
-    def CreateNewConfigEntry(self, target_files, additional_args, output_path):
-        print("outputs: " + output_path)
-        new_config_entry = {}
-        files = cross_section.os.listdir(output_path)
-        for k, v in target_files.items():
-            if v in files:
-                new_config_entry[k] = cross_section.os.path.abspath(output_path + v)
-        for k, v in additional_args.items():
-            new_config_entry[k] = v
-        return new_config_entry
 
-    def CreateNewAIs(self, outdir : str, resolution : float):
+    def GenerateKEShapeWeights(self, bins : int, shape_lims : list):
+        KE_int = self.args.toy_template.KE_int_true
+        hist, edges = np.histogram(KE_int[~np.isnan(KE_int)], bins = bins)
+        weights = np.random.uniform(min(shape_lims), max(shape_lims), len(hist))
+        scale = sum(hist) / sum(hist * weights)
+        weights = scale * weights
 
-        for k, v in zip(["low", "high"], [-1, 1]):
-            args_copy = cross_section.dill_copy(self.args)
-            args_copy.out = f"{outdir}/{self.name}_{k}/"
-            args_copy.pmom = args_copy.pmom * (1 + (v * resolution))
-            cex_beam_reweight.main(args_copy)
+        ind = np.digitize(KE_int, edges[1:-1])
+        return weights[ind]
 
-            output_path = args_copy.out + "beam_reweight/"
 
-            target_files = {
-                "params" : "gaussian.json", # default choice, rework reweight to include a choice in the config
-            }
-            additional_args = {"strength" : args_copy.beam_reweight["strength"]}
+    def RunExperiment(self, analysis_input_data : cross_section.AnalysisInput) -> tuple[dict, dict]:
+        weights = self.GenerateKEShapeWeights(self.args.toy_template.KE_int_true, 50, [0.8, 1.2])
+        self.args.toy_template.weights = weights
 
-            new_config_entry = self.CreateNewConfigEntry(target_files, additional_args, output_path)
+        xs = self.Analyse(analysis_input_data, None)
+        return xs
 
-            new_config_entry["params"] = cross_section.LoadConfiguration(new_config_entry["params"])
-            args_copy.beam_reweight = new_config_entry
 
-            args_copy.no_reweight = False
-            cex_upstream_loss.main(args_copy)
-
-            output_path = args_copy.out + "upstream_loss/"
-            target_files = {
-            "correction_params" : "fit_parameters.json",
-            }
-
-            additional_args = {
-                "cv_function" : args_copy.upstream_loss_cv_function,
-                "response" : args_copy.upstream_loss_response,
-                "bins" : args_copy.upstream_loss_bins,
-            }
-
-            new_config_entry = self.CreateNewConfigEntry(target_files, additional_args, output_path)
-
-            args_copy.upstream_loss_bins = new_config_entry["bins"]
-            args_copy.upstream_loss_response = new_config_entry["response"]
-            args_copy.upstream_loss_cv_function = new_config_entry["cv_function"]
-            args_copy.upstream_loss_correction_params = cross_section.LoadConfiguration(new_config_entry["correction_params"])
-
-            cex_analysis_input.main(args_copy)
-        return
+    def Evaluate(self, analysis_input_data : cross_section.AnalysisInput, n : int):
+        xs = []
+        for i in range(n):
+            print(Rule(f"Experiment : {i + 1}"))
+            xs.append(self.RunExperiment(analysis_input_data))
+        return xs
 
 
 class NormalisationSystematic(MCMethod):
+    def RunExperiment(self, config : dict) -> tuple[dict, dict]:
+        x = self.args.energy_slices.pos[:-1] - self.args.energy_slices.width / 2
+
+        ai = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.run(config)))
+
+        xs = self.Analyse(ai, None)
+        xs_sim_mod = cex_toy_generator.ModifyGeantXS(scale_factors = config["pdf_scale_factors"])
+
+        if self.args.fit["regions"]:
+            xs_true = {k : xs_sim_mod.GetInterpolatedCurve(k)(x) for k in exclusive_proc}
+        else:
+            xs_true = xs_sim_mod.GetInterpolatedCurve(self.args.signal_process)(x)
+
+        return xs, xs_true
+
+
     def Evaluate(self, norms = [0.8, 1.2], repeats : int = 1):
         cvs = {}
         true_cvs = {}
@@ -722,13 +799,14 @@ def can_run(systematic):
 
 def can_regen(dir):
     if cross_section.os.path.exists(dir):
-        for f in cross_section.ls_recursive(dir):
-            print(f)
-            if ("dill" in f) and ("analysis_input" not in f) and (args.regen is True):
-                return True
+        if len(cross_section.ls_recursive(dir)) > 0:
+            for f in cross_section.ls_recursive(dir):
+                if ("dill" not in f) or ("analysis_input" not in f) or (args.regen is True):
+                    return True
+        else:
+            return True
     else:
         return True
-    return False
 
 @cross_section.timer
 def main(args : cross_section.argparse.Namespace):
@@ -738,6 +816,14 @@ def main(args : cross_section.argparse.Namespace):
 
     print(f"{args.skip=}")
     print(f"{args.run=}")
+
+    if args.toy_template:
+        args.toy_template = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(file = args.toy_template))
+        model = cross_section.RegionFit.CreateModel(args.toy_template, args.energy_slices, args.fit["mean_track_score"], False, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
+    
+        toy_nominal = cross_section.Toy(df = cex_toy_generator.run(args.toy_data_config))
+        analysis_input_nominal = cross_section.AnalysisInput.CreateAnalysisInputToy(toy_nominal)
+
 
     if ("all" not in args.skip) or ("all" in args.run):
         if can_run("bkg_sub"):
@@ -771,6 +857,7 @@ def main(args : cross_section.argparse.Namespace):
         if can_run("shower_energy"):
             print(Rule("shower energy"))
             sc = ShowerEnergyCorrectionSystematic(args)
+            print(f"{can_regen(out + 'shower_energy/')=}")
             if can_regen(out + "shower_energy/"):
                 sc.CreateNewAIs(out + "shower_energy/")
                 xs = sc.RunAnalysis(out + "shower_energy/")
@@ -826,43 +913,46 @@ def main(args : cross_section.argparse.Namespace):
 
         if can_run("track_length"):
             print(Rule("track length"))
-            trk = TrackLengthResolutionSystematic(args)
+            trk = TrackLengthResolutionSystematic(args, model, args.toy_data_config)
 
             if can_regen(out + "track_length/"):
-                trk.CreateNewAIs(out + "track_length/")
-                xs = trk.RunAnalysis(out + "track_length/")
-                sys = trk.CalculateSysErrorAsym(args.cv, xs)
+                cross_section.os.makedirs(out + "track_length/", exist_ok = True)
+                trk.CalculateResolution()
+                xs = trk.Evaluate(50, trk.resolution)
+                with Plots.PlotBook(out + "track_length/cov_mat") as book:
+                    sys = trk.CalculateSysCov(xs, book)
+                # trk.CreateNewAIs(out + "track_length/")
+                # xs = trk.RunAnalysis(out + "track_length/")
+                # sys = trk.CalculateSysErrorAsym(args.cv, xs)
+                cross_section.SaveObject(out + "track_length/results.dill", xs)
                 SaveSystematicError(sys, None, out + "track_length/sys.dill")
             else:
-                sys = cross_section.LoadObject(out + "track_length/sys.dill")
+                sys = cross_section.LoadObject(out + "track_length/sys.dill")["systematic"]
 
-            with Plots.PlotBook(out + "track_length/plots.pdf") as book:
-                trk.PlotResults(args.cv, xs, book)
-            tables = trk.DataAnalysisTables(args.cv, sys, "Track length")
+            tables = trk.Tables(args.cv, sys, "Track length")
             DictToHDF5(tables, out + "track_length/tables.hdf5")
             for t in tables:
-                tables[t].style.format(precision = 2).hide(axis = 0).to_latex(out + f"track_length/table_{t}.tex")
+                tables[t].style.format(precision = 3).hide(axis = 0).to_latex(out + f"track_length/table_{t}.tex")
 
         if can_run("beam_res"):
             print(Rule("beam resolution"))
             resolution = 2.5/100
-            bm = BeamMomentumResolutionSystematic(args)
+            bm = BeamMomentumResolutionSystematic(args, model, args.toy_data_config)
 
             if can_regen(out + "beam_res/"):
                 cross_section.os.makedirs(out + "beam_res/", exist_ok = True)
-                bm.CreateNewAIs(out + "beam_res/", resolution)
-                xs = bm.RunAnalysis(out + "beam_res/")
-                sys = bm.CalculateSysErrorAsym(args.cv, xs)
+                xs = bm.Evaluate(50, resolution)
+                with Plots.PlotBook(out + "beam_res/cov_mat") as book:
+                    sys = bm.CalculateSysCov(xs, book)
+                cross_section.SaveObject(out + "beam_res/results.dill", xs)
                 SaveSystematicError(sys, None, out + "beam_res/sys.dill")
             else:
-                sys = cross_section.LoadObject(out + "beam_res/sys.dill")
+                sys = cross_section.LoadObject(out + "beam_res/sys.dill")["systematic"]
 
-            with Plots.PlotBook(out + "beam_res/plots.pdf") as book:
-                bm.PlotResults(args.cv, xs, book)
-            tables = bm.DataAnalysisTables(args.cv, sys, "Beam momentum")
+            tables = bm.Tables(args.cv, sys, "Beam momentum")
             DictToHDF5(tables, out + "beam_res/tables.hdf5")
             for t in tables:
-                tables[t].style.format(precision = 2).hide(axis = 0).to_latex(out + f"beam_res/table_{t}.tex")
+                tables[t].style.format(precision = 3).hide(axis = 0).to_latex(out + f"beam_res/table_{t}.tex")
 
 
         if can_run("theory"):
@@ -941,7 +1031,9 @@ if __name__ == "__main__":
 
     parser = cross_section.argparse.ArgumentParser("Estimate Systematics for the cross section analysis")
     cross_section.ApplicationArguments.Config(parser)
-    cross_section.ApplicationArguments.Output(parser)
+    cross_section.ApplicationArguments.Output(parser, "systematic/")
+
+    parser.add_argument("--cv", "-v", dest = "cv", type = str, default = None, help = "plot systematics with central value measurement", required = True)
 
     parser.add_argument("--toy_template", "-t", dest = "toy_template", type = str, help = "toy template hdf5 file", required = False)
     parser.add_argument("--toy_data_config", "-d", dest = "toy_data_config", type = str, help = "json config for toy data", required = False)
@@ -951,23 +1043,20 @@ if __name__ == "__main__":
 
     parser.add_argument("--regen", "-r", dest = "regen", action = "store_true", help = "fully rerun systematic tests if results already exist")
 
-    parser.add_argument("--cv", "-v", dest = "cv", type = str, default = None, help = "plot systematics with central value measurement")
 
     parser.add_argument("--plot", "-p", dest = "plot", type = str, default = None, help = "plot systematics with central value measurement")
 
     args = cross_section.ApplicationArguments.ResolveArgs(parser.parse_args())
 
-    if ("all" in args.run) or ("theory" in args.run):
+    if ("all" in args.run) or ("theory" in args.run) or ("track_length" in args.run) or ("beam_res" in args.run):
         if not args.toy_template:
             raise Exception("--toy_template must be specified")
         if not args.toy_data_config:
             raise Exception("--toy_data_config must be specified")        
+    if args.toy_data_config:
         args.toy_data_config = cross_section.LoadConfiguration(args.toy_data_config)
 
-    if ("all" in args.run) or ("upstream" in args.run) or ("beam_reweight" in args.run) or ("shower_energy" in args.run) or ("track_length" in args.run) or ("beam_res" in args.run):
-        if not args.cv:
-            raise Exception("--cv must be specified")
-        args.cv = cross_section.LoadObject(args.cv)
+    args.cv = cross_section.LoadObject(args.cv)
 
     print(vars(args))
     main(args)

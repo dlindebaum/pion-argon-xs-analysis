@@ -16,6 +16,7 @@
     ]
   },
   "norm": "normalisation to apply to MC when making Data/MC comparisons, usually defined as the ratio of pion-like triggers from the beam instrumentation",
+  "pi_KE_lim": -1,
   "fiducial_volume": [
     0,
     700
