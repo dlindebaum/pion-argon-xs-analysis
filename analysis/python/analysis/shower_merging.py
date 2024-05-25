@@ -30,8 +30,6 @@ def SetPlotStyle(extend_colors : bool = False, custom_colors : list = None, dpi 
     plt.rcParams["font.family"] = font_style
 
     plt.rc('text.latex', preamble=r"\\usepackage{amsmath}")
-    if extend_colors:
-        plt.rcParams.update({"axes.prop_cycle" : plt.cycler("color", get_cmap("tab20").colors)})
     if custom_colors:
         plt.rcParams.update({"axes.prop_cycle" : plt.cycler("color", custom_colors)})
     if dark:
@@ -46,6 +44,8 @@ def SetPlotStyle(extend_colors : bool = False, custom_colors : list = None, dpi 
         get_cmap("tab20c").colors[16],
         ]
         plt.rcParams.update({"axes.prop_cycle" : plt.cycler("color", l_2)})
+    if extend_colors:
+        plt.rcParams.update({"axes.prop_cycle" : plt.cycler("color", get_cmap("tab20").colors)})
 
 
 class ShowerMergeQuantities:
