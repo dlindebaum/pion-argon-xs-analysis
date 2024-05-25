@@ -226,6 +226,45 @@ class poly2d(FitFunction):
         return ([-np.inf, -np.inf, -np.inf], [np.inf]*3)
 
 
+class poly(FitFunction):
+    n_params = 5
+
+    def __new__(cls, x, p0, p1, p2, p3, p4) -> np.array:
+        return cls.func(x, p0, p1, p2, p3, p4)
+
+    @staticmethod
+    def func(x, p0, p1, p2, p3, p4):
+        return p0 + (p1 * (x**p3)) + p2 * (x**p4)
+
+    @staticmethod
+    def p0(x, y):
+        return None
+
+    @staticmethod
+    def bounds(x, y):
+        return ([-np.inf] + [0, 0, 0, 0], [np.inf]*5)
+
+
+class exp(FitFunction):
+    n_params = 3
+
+    def __new__(cls, x, p0, p1, p2) -> np.array:
+        return cls.func(x, p0, p1, p2)
+
+    @staticmethod
+    def func(x, p0, p1, p2):
+        return p0 + (p1 * np.exp(p2 * x))
+
+    @staticmethod
+    def p0(x, y):
+        return [0, 1, 1E-3]
+
+    @staticmethod
+    def bounds(x, y):
+        return ([-np.inf]*3, [np.inf]*3)
+
+
+
 class poly3d(FitFunction):
     n_params = 4
 
