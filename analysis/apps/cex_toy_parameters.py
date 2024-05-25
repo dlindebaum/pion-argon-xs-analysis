@@ -386,6 +386,10 @@ def main(args : argparse.Namespace):
     cross_section.SetPlotStyle(True)
     out = args.out + "toy_parameters/"
 
+    args.batches = None
+    args.events = None
+    args.threads = 1
+
     bins = {r : np.linspace(min(args.toy_parameters["plot_ranges"][r]), max(args.toy_parameters["plot_ranges"][r]), 50) for r in args.toy_parameters["plot_ranges"]}
     labels = {
         "KE_init" : "$KE^{res, MC}_{init}$ (MeV)",

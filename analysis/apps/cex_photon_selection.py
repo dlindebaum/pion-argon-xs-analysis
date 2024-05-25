@@ -348,7 +348,7 @@ def main(args):
     LinearFitPerformance(df, linear_correction, book)
 
     #* response correction
-    bins = np.array(create_bins_df(df.reco_shower_energy, 850, energy_range), dtype = int)
+    bins = np.array(create_bins_df(df.reco_shower_energy, int(len(df.reco_shower_energy)//11), energy_range), dtype = int)
 
     central_values = CalculateCentralValues(df, bins, book)
     response_params = ResponseFits(central_values, bins, book)

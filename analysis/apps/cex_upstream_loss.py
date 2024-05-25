@@ -95,7 +95,11 @@ def main(args : argparse.Namespace):
     args.events = None
     args.threads = 1
 
-    output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
+    if os.path.isfile(args.out + "upstream_loss/output_mc.dill"):
+        output_mc = cross_section.LoadObject(args.out + "upstream_loss/output_mc.dill")
+    else:
+        output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
+        cross_section.SaveObject(args.out + "upstream_loss/output_mc.dill", output_mc)
 
     if all(v is None for v in output_mc["weights"]):
         output_mc["weights"] = None

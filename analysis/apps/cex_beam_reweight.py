@@ -140,12 +140,19 @@ def main(args : cross_section.argparse.Namespace):
     args.events = None
     args.threads = 1
 
-    output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
+    outputs = {}
+    for s in args.ntuple_files:
+        if os.path.isfile(out + f"output_{s}.dill"):
+            outputs[s] = cross_section.LoadObject(out + f"output_{s}.dill")
+        else:
+            outputs[s] = cross_section.RunProcess(args.ntuple_files[s], s == "data", args, run)
+            cross_section.SaveObject(out + f"output_{s}.dill", outputs[s])
+
+    output_mc = outputs["mc"]
+    output_data = outputs["data"]
 
     for t in output_mc["table"]:
         output_mc["table"][t] = sum(output_mc["table"][t])
-
-    output_data = cross_section.RunProcess(args.ntuple_files["data"], True, args, run)
 
     for t in output_data["table"]:
         if type(output_data["table"][t]) == list:

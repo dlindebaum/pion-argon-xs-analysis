@@ -574,7 +574,7 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
             if len(fit_values.bestfit) > 4:
                 indices = [f"$\\alpha_{{{i}}}$" for i in ["abs", "cex", "spip", "pip"]]
                 table = cross_section.pd.DataFrame({"fit value" : fit_values.bestfit[4:], "uncertainty" : fit_values.uncertainty[4:]}, index = indices).T
-                table.to_hdf("fit_results_NP.hdf5", key = "df")
+                table.to_hdf(outdir + "fit_results_NP.hdf5", key = "df")
                 FitParamTables(table).style.hide(axis = "index").to_latex(outdir + "fit_results_NP.tex")
 
 
@@ -639,7 +639,7 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
 
 def main(args):
     cross_section.SetPlotStyle(extend_colors = False, dark = True)
-    Plots.preliminary = True
+    Plots.preliminary = False
     args.out = args.out + "measurement/"
 
     xs = Analyse(args, True)
