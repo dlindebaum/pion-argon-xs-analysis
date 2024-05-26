@@ -25,7 +25,6 @@ from scipy.interpolate import interp1d, UnivariateSpline
 
 from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, RegionIdentification, Processing
 from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer, IO
-from python.analysis.shower_merging import SetPlotStyle
 from python.analysis.Utils import *
 
 
@@ -254,6 +253,37 @@ def _unfold_custom(prior=None, mixer=None, ts_func=None, max_iter=100,
 #     return wrapper
 
 # pyhf.modifiers.staterror.required_parset = to_poisson(pyhf.modifiers.staterror.required_parset)
+
+
+def SetPlotStyle(extend_colors : bool = False, custom_colors : list = None, dpi : int = 300, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):
+    Plots.plt.style.use("default") # first load the default to reset any previous changes made by other styles
+    Plots.plt.style.use('ggplot')
+    Plots.plt.rcParams.update({'patch.linewidth': 1})
+    Plots.plt.rcParams.update({'font.size': font_scale * 10})
+    Plots.plt.rcParams.update({"axes.titlecolor" : "#555555"})
+    Plots.plt.rcParams.update({"axes.titlesize" : font_scale * 12})
+    Plots.plt.rcParams['figure.dpi'] = dpi
+    Plots.plt.rcParams['legend.fontsize'] = "small"
+    Plots.plt.rcParams["font.family"] = font_style
+
+    Plots.plt.rc('text.latex', preamble=r"\\usepackage{amsmath}")
+    if custom_colors:
+        Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", custom_colors)})
+    if dark:
+        l_2 = [
+        Plots.matplotlib.cm.get_cmap("tab20c").colors[0],
+        Plots.matplotlib.cm.get_cmap("tab20c").colors[8],
+        Plots.matplotlib.cm.get_cmap("tab20b").colors[13],
+        Plots.matplotlib.cm.get_cmap("tab20b").colors[0],
+        Plots.matplotlib.cm.get_cmap("tab20b").colors[17],
+        Plots.matplotlib.cm.get_cmap("tab20b").colors[4],
+        Plots.matplotlib.cm.get_cmap("tab20c").colors[12],
+        Plots.matplotlib.cm.get_cmap("tab20c").colors[16],
+        ]
+        Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", l_2)})
+    if extend_colors:
+        Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", Plots.matplotlib.cm.get_cmap("tab20").colors)})
+
 
 def file_len(file : str):
     return len(IO(file).Get(["EventID", "event"]))
@@ -1749,7 +1779,6 @@ class AnalysisInput:
             true_KE_int = events.trueParticles.beam_traj_KE[:, -2]
             true_track_length = events.trueParticles.beam_track_length
             outside_tpc_true = (events.trueParticles.beam_traj_pos.z[:, -1] < min(fiducial_volume)) | (events.trueParticles.beam_traj_pos.z[:, -1] > max(fiducial_volume))
-            # inelastic = np.ones(len(events.eventNum), dtype = bool)
             inelastic = events.trueParticles.true_beam_endProcess == "pi+Inelastic"
 
         else:
@@ -2159,7 +2188,6 @@ class Unfold:
         reco_slices = EnergySlice.SliceNumbers(template.KE_int_reco, template.KE_init_reco, outside_tpc_mask, energy_slice)
 
         if regions:
-            # channel = {i : (template.exclusive_process[i] & template.regions[i])[~outside_tpc_mask] for i in template.regions}
             channel = {i : (template.exclusive_process[i])[~outside_tpc_mask] for i in template.regions}
         else:
             channel = template.exclusive_process[process][~outside_tpc_mask]
@@ -2174,8 +2202,6 @@ class Unfold:
                 slice_pairs[i] = [reco_slices[1][channel[i]], true_slices[1][channel[i]]]
         else:
             slice_pairs["int_ex"] = [reco_slices[1][channel], true_slices[1][channel]]
-
-        # slice_pairs = {"init" : [reco_slices[0], true_slices[0]], "int" : [reco_slices[1], true_slices[1]], "int_ex" : [reco_slices[1][channel], true_slices[1][channel]]}
 
         corr = {}
         resp = {}
@@ -2266,11 +2292,6 @@ class Unfold:
         PlotXSHists(energy_slices, obs, obs_err, True, 1/sum(obs), label = "Data reco", ylabel = "Fractional counts", color = "k")
         PlotXSHists(energy_slices, true, None, True, 1/sum(true), label = "MC true", ylabel = "Fractional counts", color = "C1", newFigure = False)
         PlotXSHists(energy_slices, results["unfolded"], results["stat_err"], True, 1 / sum(results["unfolded"]), label =  label, color = "C4", ylabel = "Fractional counts", newFigure = False, title = title)
-
-
-        # Plots.Plot(energy_slices.pos_bins[::-1], obs/sum(obs), style = "step", label = "Data reco", color = "C6")
-        # Plots.Plot(energy_slices.pos_bins[::-1], true/sum(true), style = "step", label = "MC true", color = "C0", newFigure = False)
-        # Plots.Plot(energy_slices.pos_bins[::-1], results["unfolded"] / sum(results["unfolded"]), yerr = results["stat_err"] / sum(results["unfolded"]), style = "step", label = label, xlabel = xlabel + " (MeV)", color = "C4", newFigure = False)
         book.Save() 
         if "unfolding_matrix" in results:
             Unfold.PlotMatrix(results["unfolding_matrix"], energy_slices, title = "Unfolded matrix: " + label, c_label = "$P(C_{j}|E_{i})$", text = True, text_colour = "red")
@@ -2278,10 +2299,6 @@ class Unfold:
 
             Unfold.PlotMatrix((results["unfolding_matrix"].T * obs).T, energy_slices, "Migrations : " + label, c_label = "Counts")
             book.Save()
-
-            #! same as unfolding matrix
-            # Unfold.PlotMatrix((results["unfolding_matrix"].T * obs / np.sum(results["unfolding_matrix"].T * obs, 0)).T, energy_slices, "Fractional Migrations : " + label, c_label = "Fractional Counts", text = True, text_colour = "red")
-            # book.Save()
 
         if "covariance_matrix" in results:
             Unfold.PlotMatrix(results["covariance_matrix"], energy_slices, title = "Covariance matrix: " + label, c_label = "Counts")

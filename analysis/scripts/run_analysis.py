@@ -89,7 +89,6 @@ def template_config():
             "single_bin" : True,
             "regions": True
         },
-        "bkg_sub_err" : False,
         "ESLICE":{
             "width" : None,
             "min" : None,

@@ -64,7 +64,6 @@
     "single_bin": true,
     "regions": true
   },
-  "bkg_sub_err": false,
   "ESLICE": {
     "width": null,
     "min": null,

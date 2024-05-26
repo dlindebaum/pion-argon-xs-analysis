@@ -13,7 +13,7 @@ import pandas as pd
 
 from rich import print
 
-from apps import cex_toy_generator, cex_analysis_input, cex_toy_parameters
+from apps import cex_toy_generator, cex_toy_parameters
 from pyunfold.callbacks import SplineRegularizer
 from python.analysis import cross_section, Plots
 
@@ -130,7 +130,7 @@ def BkgSubRegions(data : cross_section.AnalysisInput, energy_slices : cross_sect
     return N_int_ex, N_int_ex_err
 
 
-def BkgSingleBin(N_bkg_s : np.ndarray, N_bkg_err_s : np.ndarray, template : cross_section.AnalysisInput, templates_energy : list[np.ndarray], signal_process : str, theory_err : bool):
+def BkgSingleBin(N_bkg_s : np.ndarray, N_bkg_err_s : np.ndarray, template : cross_section.AnalysisInput, templates_energy : list[np.ndarray], signal_process : str):
     bkg_mask = signal_process != np.array(template.region_labels)
     labels = np.array(template.region_labels)[bkg_mask]
 
@@ -140,8 +140,6 @@ def BkgSingleBin(N_bkg_s : np.ndarray, N_bkg_err_s : np.ndarray, template : cros
     lambda_cbs = N_MC_cbs/N_MC
     rel_scales = N_MC/N_MC_s
 
-    f = 0.2 # theory uncertainty in background shape
-
     rel_lambda_bs = (rel_scales * np.sum(lambda_cbs, 0).T).T[bkg_mask]
 
     N_bkg = (N_bkg_s * rel_lambda_bs)
@@ -150,11 +148,7 @@ def BkgSingleBin(N_bkg_s : np.ndarray, N_bkg_err_s : np.ndarray, template : cros
 
     N_bkg_err_template_var = ((N_bkg_s.T)**2/N_MC_s[bkg_mask]).T * rel_lambda_bs * (1 + rel_lambda_bs)
 
-    N_bkg_err_theory_var = ((N_bkg_s.T)**2 ).T * (rel_lambda_bs * f)**2
-
     N_bkg_var = N_bkg_err_fit_var + N_bkg_err_template_var
-    if theory_err is True:
-        N_bkg_var = N_bkg_var + N_bkg_err_theory_var
 
     return N_bkg, np.sqrt(N_bkg_var), labels
 
@@ -174,7 +168,7 @@ def PlotBkgRegions(energy_slices : cross_section.Slices, data : cross_section.An
     return
 
 
-def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, energy_slice : cross_section.Slices, postfit_pred : cross_section.cabinetry.model_utils.ModelPrediction = None, single_bin : bool = False, regions : bool = False, template : cross_section.AnalysisInput = None, theory_err : bool = False, book : Plots.PlotBook = Plots.PlotBook.null) -> tuple[np.ndarray]:
+def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, energy_slice : cross_section.Slices, postfit_pred : cross_section.cabinetry.model_utils.ModelPrediction = None, single_bin : bool = False, regions : bool = False, template : cross_section.AnalysisInput = None, book : Plots.PlotBook = Plots.PlotBook.null) -> tuple[np.ndarray]:
     """ Background subtraction using the fit if a fit result is specified.
 
     Args:
@@ -204,7 +198,7 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
                 bkg_err_b = {}
                 bkg_label = {}
                 for p in bkg:
-                    bkg_b[p], bkg_err_b[p], bkg_label[p] = BkgSingleBin(bkg[p], bkg_err[p], template, templates_energy, p, theory_err)
+                    bkg_b[p], bkg_err_b[p], bkg_label[p] = BkgSingleBin(bkg[p], bkg_err[p], template, templates_energy, p)
                 bkg = bkg_b
                 bkg_err = bkg_err_b
             KE_int_fit, KE_int_fit_err = BkgSubRegions(data, energy_slice, bkg, bkg_err)
@@ -214,7 +208,7 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
             print(f"signal: {process}")
             bkg, bkg_err = cross_section.RegionFit.EstimateBackgroundAllRegions(postfit_pred, template, process)
             if single_bin:
-                bkg, bkg_err, bkg_label = BkgSingleBin(bkg, bkg_err, template, templates_energy, process, theory_err)
+                bkg, bkg_err, bkg_label = BkgSingleBin(bkg, bkg_err, template, templates_energy, process)
             KE_int_fit, KE_int_fit_err = BkgSubAllRegion(data, energy_slice, bkg, bkg_err)
 
         if book is not None:
@@ -328,7 +322,6 @@ def ApplyEfficiency(energy_slices : cross_section.Slices, efficiencies, unfoldin
 def PlotEfficiency(energy_slices : cross_section.Slices, efficiencies : dict, book : Plots.PlotBook.null):
     if book is not None:
         x = energy_slices.pos_overflow - energy_slices.width/2
-        # for _, (k, v) in Plots.IterMultiPlot(efficiencies.items()):
         for k, v in efficiencies.items():
             Plots.Plot(x, v[0], yerr = v[1], ylabel = "efficiency", xlabel = f"$KE$ (MeV)", marker = "x", newFigure = True, title = k)
             Plots.plt.ylim(0, 1)
@@ -380,7 +373,6 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
 
     e_copy = {k : v for k, v in efficiencies.items()}
     if regions:
-        # e_copy.pop("int_ex")
         for k, v in int_ex_effieciencies.items():
             e_copy[k] = v
 
@@ -564,7 +556,6 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
 
         region_fit_result, fit_values = RegionFit(v, args.energy_slices, mean_track_score_bins, templates[k], return_fit_results = True, mc_stat_unc = args.fit["mc_stat_unc"], single_bin = args.fit["single_bin"], fix_np = args.fit["fix_np"])
 
-        # scale = len(templates[k].KE_int_reco) / len(samples[k].KE_int_reco)
         print(f"{fit_values.bestfit=}")
         if plot:
             indices = [f"$\mu_{{{i}}}$" for i in ["abs", "cex", "spip", "pip"]]
@@ -595,7 +586,7 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
 
                     xs_true = cross_section.EnergySlice.CrossSection(true_hists["int_ex"][1:], true_hists["int"][1:], true_hists["inc"][1:], cross_section.BetheBloch.meandEdX(args.energy_slices.pos_bins[1:], cross_section.Particle.from_pdgid(211)), args.energy_slices.width)
 
-                _, histograms_reco_obs, histograms_reco_obs_err = BackgroundSubtraction(v, p if p != "all" else "charge_exchange", args.energy_slices, region_fit_result, args.fit["single_bin"], args.fit["regions"], templates[k], args.bkg_sub_err, book) #? make separate background subtraction function?
+                _, histograms_reco_obs, histograms_reco_obs_err = BackgroundSubtraction(v, p if p != "all" else "charge_exchange", args.energy_slices, region_fit_result, args.fit["single_bin"], args.fit["regions"], templates[k], book) #? make separate background subtraction function?
 
                 if k == "toy":
                     data_label = "toy data"

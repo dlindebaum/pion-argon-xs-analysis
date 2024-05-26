@@ -17,7 +17,7 @@ from rich.rule import Rule
 from python.analysis import cross_section, Plots
 from python.analysis.Master import DictToHDF5
 from python.analysis.Utils import dill_copy, quadsum
-from apps import cex_toy_generator, cex_analyse, cex_fit_studies, cex_analysis_input, cex_beam_reweight, cex_upstream_loss
+from apps import cex_toy_generator, cex_analyse, cex_fit_studies, cex_analysis_input
 
 systematics = ["mc_stat", "fit_inaccuracy", "upstream", "beam_reweight", "shower_energy", "track_length", "beam_res", "theory", "all"]
 systematics_label = {"mc_stat" : "MC stat", "fit_inaccuracy" : "Fit inaccuracy", "upstream" : "Upstream", "beam_reweight" : "Reweight", "shower_energy" : "Shower energy", "track_length" : "Track length", "beam_res" : "Beam momentum", "theory" : "Theory"}
@@ -47,7 +47,7 @@ class MCMethod(ABC):
 
         region_fit_result = cex_analyse.RegionFit(analysis_input, self.args.energy_slices, self.args.fit["mean_track_score"], self.model, mc_stat_unc = self.args.fit["mc_stat_unc"], single_bin = self.args.fit["single_bin"])
 
-        _, histograms_reco_obs, histograms_reco_obs_err = cex_analyse.BackgroundSubtraction(analysis_input, self.args.signal_process, self.args.energy_slices, region_fit_result, self.args.fit["single_bin"], self.args.fit["regions"], self.args.toy_template, self.args.bkg_sub_err, book)
+        _, histograms_reco_obs, histograms_reco_obs_err = cex_analyse.BackgroundSubtraction(analysis_input, self.args.signal_process, self.args.energy_slices, region_fit_result, self.args.fit["single_bin"], self.args.fit["regions"], self.args.toy_template, book)
 
 
         if self.args.fit["regions"]:
@@ -237,7 +237,6 @@ class NuisanceParameters:
 
     def __run_analysis(self, np : bool = False):
         args_copy = dill_copy(self.args)
-        args_copy.bkg_sub_err = False
         args_copy.fit["mc_stat_unc"] = True
         args_copy.fit["fix_np"] = not np
         args_copy.pdsp = True
@@ -449,16 +448,6 @@ class BeamMomentumResolutionSystematic(MCMethod):
         return xs
     
 
-    # def Evaluate(self, n : int, resolution : float):
-    #     data = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.run(self.data_config)))
-
-    #     xs = []
-    #     for i in range(n):
-    #         print(Rule(f"Experiment : {i + 1}"))
-    #         xs.append(self.RunExperiment(data, resolution))
-    #     return xs
-
-
 class TrackLengthResolutionSystematic(MCMethod):
     name = "track_length_resolution"
 
@@ -526,14 +515,6 @@ class TheoryShape(MCMethod):
 
         xs = self.Analyse(analysis_input_data, None)
         return xs
-
-
-    # def Evaluate(self, n : int, analysis_input_data : cross_section.AnalysisInput):
-    #     xs = []
-    #     for i in range(n):
-    #         print(Rule(f"Experiment : {i + 1}"))
-    #         xs.append(self.RunExperiment(analysis_input_data))
-    #     return xs
 
 
 class NormalisationSystematic(MCMethod):
@@ -621,7 +602,6 @@ class NormalisationSystematic(MCMethod):
     @staticmethod
     def CalculateSysErr(results):
         def sys_err(r, tr):
-            # return {p : abs(r[p][0] - tr[p]) for p in r}
             return cross_section.quadsum([abs(r[p][0] - tr[p]) for p in r], 0)
 
         sys_err_low = {}
@@ -681,15 +661,6 @@ class NormalisationSystematic(MCMethod):
         for i in xs_nominal:
             frac_low[i] = sys_err_avg["low"][i] / xs_nominal[i][0]
             frac_high[i] = sys_err_avg["high"][i] / xs_nominal[i][0]
-            # lo = {}
-            # hi = {}
-
-            # for p in xs_nominal:
-            #     lo[p] = sys_err_avg["low"][i][p] / xs_nominal[p][0]
-            #     hi[p] = sys_err_avg["high"][i][p] / xs_nominal[p][0]
-            # frac_low[i] = lo
-            # frac_high[i] = hi
-
         return {"low" : frac_low, "high" : frac_high}
 
     
@@ -706,16 +677,6 @@ class NormalisationSystematic(MCMethod):
         for p in xs_nominal["pdsp"]:
             d = data_stat_err[p] / xs_nominal["pdsp"][p][0]
             d.name = "Data stat"
-            # ls = []
-            # hs = []
-            # for q in sys["fractional"]["low"]:
-                # l = pd.Series(sys["fractional"]["low"][p][q])
-                # l.name = "Model inaccuracy " + tags[q].name_simple + " low"
-
-                # h = pd.Series(sys["fractional"]["high"][p][q])
-                # h.name = "Model inaccuracy " + tags[q].name_simple + " high"
-                # ls.append(l)
-                # hs.append(h)
             ls = pd.Series(sys["fractional"]["low"][p])
             ls.name = "Fit inaccuracy low"
 
@@ -830,13 +791,6 @@ def FinalPlots(cv, systematics_table : dict[pd.DataFrame], energy_slices, book :
         }
         cross_section.PlotXSComparison(xs, energy_slices, p, simulation_label = "Geant4 v10.6", colors = {k : f"C0" for k in xs}, chi2 = False)
         book.Save()
-    # for _, p in Plots.IterMultiPlot(cv):
-    #     xs = {
-    #         "ProtoDUNE SP: Data Stat + Sys Error" : cv[p],
-    #         "" : [cv[p][0], cross_section.quadsum([cv[p][1]] + [systematics[s][p] for s in systematics], 0)]
-    #     }
-    #     cross_section.PlotXSComparison(xs, energy_slices, p, simulation_label = "Geant4 v10.6", colors = {k : f"C0" for k in xs}, chi2 = False, newFigure = False)
-    # book.Save()
     return
 
 
@@ -891,7 +845,7 @@ def main(args : cross_section.argparse.Namespace):
                 result = cross_section.LoadObject(f"{outdir}result.dill")
                 sys = cross_section.LoadObject(f"{outdir}sys.dill")
 
-            with Plots.PlotBook("{outdir}plots.pdf") as book:
+            with Plots.PlotBook(f"{outdir}plots.pdf") as book:
                 mc_stat.PlotXSMCStat(result, book)
             tables = mc_stat.MCStatTables(result)
             SaveTables(tables, outdir, 2)

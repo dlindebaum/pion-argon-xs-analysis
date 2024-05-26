@@ -735,7 +735,6 @@ def main(args : cross_section.argparse.Namespace):
                     args.energy_slices,
                     args.fit["single_bin"])
             if "pulls" not in args.skip:
-                # pull_results = PullStudy(args.template, models[m], args.energy_slices, mean_track_score_bins if m == "track_score" else None, args.toy_data_config, 100, args.fit["single_bin"])
                 pull_results = PullStudyFast(toys, int(5E6), int(1E6), args, args.energy_slices, mean_track_score_bins if m == "track_score" else None, 500)
                 os.makedirs(args.out + f"pull_test_{m}/", exist_ok = True)
                 DictToHDF5(pull_results, args.out + f"pull_test_{m}/" + "pull_results.hdf5")

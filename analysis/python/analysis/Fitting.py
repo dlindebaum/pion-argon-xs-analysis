@@ -226,25 +226,6 @@ class poly2d(FitFunction):
         return ([-np.inf, -np.inf, -np.inf], [np.inf]*3)
 
 
-class poly(FitFunction):
-    n_params = 5
-
-    def __new__(cls, x, p0, p1, p2, p3, p4) -> np.array:
-        return cls.func(x, p0, p1, p2, p3, p4)
-
-    @staticmethod
-    def func(x, p0, p1, p2, p3, p4):
-        return p0 + (p1 * (x**p3)) + p2 * (x**p4)
-
-    @staticmethod
-    def p0(x, y):
-        return None
-
-    @staticmethod
-    def bounds(x, y):
-        return ([-np.inf] + [0, 0, 0, 0], [np.inf]*5)
-
-
 class exp(FitFunction):
     n_params = 3
 
@@ -448,22 +429,12 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
     p_value = 1 - chi2.cdf(chisqr, ndf)
 
     if plot is True:
-        # y_pred_min = func.func(x, *(popt - perr)) # y values predicted from the lower limit of the fit
-        # y_pred_max = func.func(x, *(popt + perr)) # y values predicted from the upper limit of the fit
-        # y_pred_err = (abs(y_pred - y_pred_min) + abs(y_pred - y_pred_max)) / 2 # error in the predicted fit value, taken to be the average deviation from the lower and upper limits
-
         #* main plotting
         x_interp = np.linspace(min(x), max(x), 1000)
         Plots.Plot(x_interp, func.func(x_interp, *popt), newFigure = False, x_scale = "linear", ylabel = ylabel, color = "#1f77b4", zorder = 11, label = "fit", title = title)
         
         p_min = popt - perr
         p_max = popt + perr
-
-        # in_range = (p_min > func.bounds(x, y_obs)[0]) & (p_min < func.bounds(x, y_obs)[1])
-        # p_min = np.where(in_range, func.bounds(x, y_obs)[0], p_min)
-
-        # in_range = (p_max > func.bounds(x, y_obs)[0]) & (p_max < func.bounds(x, y_obs)[1])
-        # p_min = np.where(in_range, func.bounds(x, y_obs)[1], p_max)
 
         plt.fill_between(x_interp, func.func(x_interp, *p_max), func.func(x_interp, *p_min), color = "#7f7f7f", alpha = 0.5, zorder = 10, label = "$1\sigma$ error region")
 

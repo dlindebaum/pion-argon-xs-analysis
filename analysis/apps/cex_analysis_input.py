@@ -108,9 +108,6 @@ def RegionSelection(events : cross_section.Data, args : cross_section.argparse.N
             mask = SelectionTools.CombineMasks(selection_masks["fiducial"][events.filename])
             events_copy.Filter([mask], [mask])
 
-        # n_pi_true = events_copy.trueParticles.nPiMinus + events_copy.trueParticles.nPiPlus
-        # n_pi0_true = events_copy.trueParticles.nPi0
-
         is_pip = events_copy.trueParticles.pdg[:, 0] == 211
 
         mask = SelectionTools.CombineMasks(selection_masks["beam"][events.filename])

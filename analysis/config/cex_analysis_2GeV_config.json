@@ -110,7 +110,6 @@
       "regions": true,
       "fix_np": false
     },
-    "bkg_sub_err": false,
     "ESLICE": {
       "width": 150,
       "min": 1400,

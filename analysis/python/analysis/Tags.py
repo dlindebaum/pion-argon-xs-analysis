@@ -191,9 +191,6 @@ def GenerateTrueParticleTagsPiPlus(events):# : Data) -> Tags:
     particles_to_tag = [
         211, -211, 13, -13, -11, 22, 2212
     ] # anything not in this list is tagged as other
-    # particles_to_tag = [
-    #     211, -211, 13, -13, 11, -11, 22, 2212, 321
-    # ]
 
     if ak.count(events.trueParticlesBT.pdg) == 0: # the ntuple has no MC, so provide some null data base off recoParticles array shape
         pdg = ak.where(events.recoParticles.number, -1, 0)
@@ -328,7 +325,6 @@ def GeneratePi0Tags(events, photon_PFOs : ak.Array) -> Tags:# : Data, photon_PFO
     correctly_matched_photons = ak.sum(pi0_photon & photon_PFOs, -1)
     photon_mothers = events.trueParticlesBT.mother[pi0_photon & photon_PFOs]
     photon_mothers = ak.pad_none(photon_mothers, 2, -1)
-    # same_mother = photon_mothers[correctly_matched_photons == 2][:, 0] == photon_mothers[correctly_matched_photons == 2][:, 1]
     same_mother = ak.where(correctly_matched_photons == 2, photon_mothers[:, 0] == photon_mothers[:, 1], False)
 
     pi0_tags = Tags()

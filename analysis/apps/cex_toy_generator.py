@@ -291,20 +291,7 @@ def ApplySmearing(df : pd.DataFrame, smearings : pd.DataFrame) -> pd.DataFrame:
     KE_init_smeared = df.KE_init + smearings.KE_init_smearing
     z_int_smeared = df.z_int + smearings.z_int_smearing
     KE_int_smeared = df.KE_int + smearings.KE_int_smearing
-    #! while this seems like the natural choice for smearing KE_int, the resolution using this method
-    #! is smaller than the resolution observed in MC, so use original approach for now
-    #? make this an option?
 
-    # KE_to_dEdX = BetheBloch.InterpolatedEdX(max(KE_init_smeared), step_size)
-    # dist_travelled = np.zeros(len(KE_init_smeared))
-    # KE_int_smeared = df.KE_init + smearings.KE_init_smearing
-    # while any(dist_travelled < z_int_smeared):
-    #     dEdX = KE_to_dEdX(KE_int_smeared)
-    #     KE_int_smeared = KE_int_smeared - (dist_travelled < z_int_smeared) * step_size * dEdX
-    #     dist_travelled = dist_travelled + (dist_travelled < z_int_smeared) * step_size
-
-    # KE_int_smeared = np.where(df.inclusive_process != "total_inelastic", 0, KE_int_smeared)
-    # KE_int_smeared = np.where(np.isnan(KE_int_smeared) | (KE_int_smeared < 0), 0, KE_int_smeared)
     return pd.DataFrame({
         "KE_int_smeared" : KE_int_smeared,
         "KE_init_smeared" : KE_init_smeared,

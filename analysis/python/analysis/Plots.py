@@ -12,7 +12,6 @@ import warnings
 import awkward as ak
 import matplotlib
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.ticker import AutoMinorLocator, MultipleLocator
@@ -1021,15 +1020,10 @@ def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label:
         
         if color is None: color = next(plt.gca()._get_lines.prop_cycler)["color"] # cause apparently stairs suck
 
-        # p1 = plt.step(x, y, where = "mid", linestyle = linestyle, color = color, alpha = alpha, zorder = zorder, label = label)
-        p1 = plt.stairs(y, edges, linestyle = linestyle, edgecolor = color, color = color, alpha = alpha, zorder = zorder, label = label)
+        plt.stairs(y, edges, linestyle = linestyle, edgecolor = color, color = color, alpha = alpha, zorder = zorder, label = label)
 
         if yerr is not None:
-            # plt.fill_between(x, y + yerr, y - yerr, step = "mid", alpha = 0.25, color = color)
             plt.stairs(y+yerr, edges, baseline=y-yerr, fill = True, alpha = 0.25, color = color)
-            # p2 = mpatches.Patch(color=color, alpha=0.25, linewidth=0)
-        # handles = ((p1[0],p2),)
-        # labels  = (label,)
     elif style == "scatter":
         plt.errorbar(x, y, yerr, xerr, marker = marker, linestyle = linestyle, label = label, color = color, markersize = markersize, alpha = alpha, capsize = capsize, zorder = zorder)
     else:
@@ -1042,9 +1036,6 @@ def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label:
     plt.xscale(x_scale)
     plt.yscale(y_scale)
     if label != "":
-        # if style == "step":
-        #     plt.legend(handles = handles, labels = labels)
-        # else:
         plt.legend()
     if annotation is not None:
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
@@ -1071,7 +1062,6 @@ def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None
     if truncate == True:
         if range is None:
             raise Exception("if truncate is true, range must be provided")
-        # data = np.clip(data, min(range), max(range))
         data = ClipJagged(data, min(range), max(range))
 
     height, edges, _ = plt.hist(data, bins, label = label, alpha = alpha, density = density, histtype = histtype, stacked = stacked, color = color, range = range if range and len(range) == 2 else None, weights = weights)
@@ -1263,7 +1253,6 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
         h_mc, edges = np.histogram(np.array(mc), bins, range = x_range, weights = mc_weights)
         h_mc = h_mc * scale
 
-    # sum_mc = np.sum(h_mc, 1, dtype = int) # number of each species in MC
     ind = np.argsort(sum_mc)[::-1]
     if stacked == "ascending":
         ind = ind[::-1]
@@ -1307,7 +1296,6 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
 
     plt.tick_params("x", labelbottom = False) # hide x axes tick labels
 
-    # if stacked is True:
     if is_tagged:
         h_mc = np.sum(h_mc, axis = 0)
     mc_error = np.sqrt(abs(h_mc)) # weights can cause the counts to be negative
@@ -1371,7 +1359,6 @@ def PlotHist2DImshowMarginal(data_x, data_y, bins: int = 100, x_range: list = No
     plt.xticks(ticks = x_e, labels = [])
     plt.locator_params(axis='both', nbins=4)
     plt.xlim(min(x_e), max(x_e))
-    # plt.ylabel("fraction")
     plt.gca().yaxis.get_major_ticks()[0].label1.set_visible(False)
 
     plt.subplot(2, 2, 4) # bottom right (y projection)
@@ -1379,7 +1366,6 @@ def PlotHist2DImshowMarginal(data_x, data_y, bins: int = 100, x_range: list = No
     plt.yticks(ticks = y_e, labels = [])
     plt.locator_params(axis='both', nbins=4)
     plt.ylim(min(y_e), max(y_e))
-    # plt.xlabel("fraction")
     plt.gca().xaxis.get_major_ticks()[0].label1.set_visible(False)
 
     plt.colorbar(ax = plt.gca())
