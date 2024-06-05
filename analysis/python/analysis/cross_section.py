@@ -22,6 +22,7 @@ import uproot
 from cabinetry.fit.results_containers import FitResults
 from particle import Particle
 from scipy.interpolate import interp1d, UnivariateSpline
+from scipy.stats import chi2
 
 from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, RegionIdentification, Processing
 from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer, IO
@@ -417,6 +418,18 @@ def PlotXSHists(energy_slices, hist_counts : np.ndarray, hist_counts_err : np.nd
     Plots.Plot(x, scale * hist_counts[s], yerr = scale * hist_counts_err[s], xlabel = xlabel, newFigure = newFigure, style = "step", label = label, color = color, ylabel = ylabel, title = title)
     return
 
+def HypTestXS(cv, error, process, energy_slice):
+    xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos])
+    sim_curve_interp = xs_sim.GetInterpolatedCurve(process)
+    x = energy_slice.pos[:-1] - energy_slice.width/2
+
+    w_chi_sqr = weighted_chi_sqr(cv, sim_curve_interp(x), error)
+
+    p = chi2.sf((len(x)-1) * w_chi_sqr, len(x) - 1)
+
+    print(f"{w_chi_sqr, p=}")
+
+    return {"w_chi2" : w_chi_sqr, "p" : p}
 
 def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", chi2 : bool = True, newFigure : bool = True, cv_only : bool = False, marker_size : float = 6):
     xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos])
@@ -1980,12 +1993,12 @@ class RegionFit:
         return counts_matrix
 
     @staticmethod
-    def CreateKEIntTemplates(analysis_input : AnalysisInput, energy_slices : Slices, single_bin : bool = False, pad : bool = False) -> list[np.ndarray]:
+    def CreateKEIntTemplates(analysis_input : AnalysisInput, energy_slices : Slices, single_bin : bool = False, pad : bool = False, reco : bool = True) -> list[np.ndarray]:
         model_input_data = []
         for c in analysis_input.regions:
             tmp = []
             for s in analysis_input.exclusive_process:
-                n_int = analysis_input.NInteract(energy_slices, analysis_input.exclusive_process[s], analysis_input.regions[c], True, analysis_input.weights) + 1E-10 * int(pad)
+                n_int = analysis_input.NInteract(energy_slices, analysis_input.exclusive_process[s], analysis_input.regions[c], reco, analysis_input.weights) + 1E-10 * int(pad)
                 if single_bin:
                     tmp.append(np.array([sum(n_int)]))
                 else:

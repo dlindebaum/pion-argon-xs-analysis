@@ -95,6 +95,8 @@ def main(args : argparse.Namespace):
     args.events = None
     args.threads = 1
 
+    os.makedirs(args.out + "upstream_loss/", exist_ok = True)
+
     if os.path.isfile(args.out + "upstream_loss/output_mc.dill"):
         output_mc = cross_section.LoadObject(args.out + "upstream_loss/output_mc.dill")
     else:

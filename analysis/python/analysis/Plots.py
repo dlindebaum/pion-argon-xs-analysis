@@ -995,7 +995,7 @@ def IterMultiPlot(x, xlim : tuple = None, ylim : tuple = None, threshold = 100):
         yield i, j
 
 
-def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None, xerr = None, yerr = None, capsize : float = 3, zorder : int = None, style : str = "scatter"):
+def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None, xerr = None, yerr = None, capsize : float = 3, zorder : int = None, style : str = "scatter", rasterized : bool = False):
     """ Make scatter plot.
     """
     if newFigure is True:
@@ -1025,7 +1025,7 @@ def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label:
         if yerr is not None:
             plt.stairs(y+yerr, edges, baseline=y-yerr, fill = True, alpha = 0.25, color = color)
     elif style == "scatter":
-        plt.errorbar(x, y, yerr, xerr, marker = marker, linestyle = linestyle, label = label, color = color, markersize = markersize, alpha = alpha, capsize = capsize, zorder = zorder)
+        plt.errorbar(x, y, yerr, xerr, marker = marker, linestyle = linestyle, label = label, color = color, markersize = markersize, alpha = alpha, capsize = capsize, zorder = zorder, rasterized = True)
     else:
         raise Exception(f"{style} not a valid style")
 

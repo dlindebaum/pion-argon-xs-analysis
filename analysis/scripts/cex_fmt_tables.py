@@ -231,11 +231,7 @@ def bq_xy(values : dict):
     t = {}
     for i in ["mu", "sigma"]:
         for j in ["x", "y"]:
-            v = values[f"{i}_{j}"]
-            e = values[f"{i}_err_{j}"]
-
-            sf = len(f"{e:.1g}") - 2
-            t[f"$\{i}_{{{j}}}$"] = f"${v:.{sf}f} \pm {e:.1g}$"
+            t[f"$\{i}_{{{j}}}$"] = Utils.round_value_to_error(values[f"{i}_{j}"], values[f"{i}_err_{j}"])
 
     return t
 
@@ -246,19 +242,14 @@ def bq_angle(values : dict):
         v = values[f"mu_dir_{j}"]
         e = values[f"mu_dir_err_{j}"]
 
-        sf = len(f"{e:.1g}") - 2
-        t[f"$\mu_{{\hat{{n}}_{{{j}}}}}$"] = f"${v:.{sf}f} \pm {e:.1g}$"
+        t[f"$\mu_{{\hat{{n}}_{{{j}}}}}$"] = Utils.round_value_to_error(values[f"mu_dir_{j}"], values[f"mu_dir_err_{j}"])
     return t
 
 
 def brw_table(brw : dict):
     table = {}
     for i, p in enumerate(brw):
-        sf = len(str(float(f'{brw[p]["error"]:.1g}'))) - 1
-
-        cv = f'{brw[p]["value"]:.{sf}g}'
-        err = f'{brw[p]["error"]:.1g}'
-        table[f"$p_{{{i}}}$"] = f'{float(cv)} $\pm$ {float(err)}'
+        table[f"$p_{{{i}}}$"] = Utils.round_value_to_error(brw[p]["value"], brw[p]["error"])
 
     table = pd.DataFrame(table, index = [0])
     return table
@@ -266,10 +257,7 @@ def brw_table(brw : dict):
 def upl_table(upl : dict):
     table = {}
     for i in range(args.upstream_loss_response.n_params):
-        sf = len(str(float(f'{upl["error"][f"p{i}"]:.1g}'))) - 1
-        cv = f'{upl["value"][f"p{i}"]:.{sf}g}'
-        err = f'{upl["error"][f"p{i}"]:.1g}'
-        table[f"$p_{{{i}}}$"] = f'{float(cv)} $\pm$ {float(err)}'
+        table[f"$p_{{{i}}}$"] = Utils.round_value_to_error(upl["value"][f"p{i}"], upl["error"][f"p{i}"])
     table = pd.DataFrame(table, index = [0])
     return table
 
@@ -372,6 +360,12 @@ def main(args : argparse.Namespace):
 
     if os.path.isdir(f"{path}/systematics/track_length/"):
         copy_table(f"{path}/systematics/track_length/fit_params.tex", f"{out}/track_length_resolution/", bf_cols = False)
+
+    if os.path.isdir(f"{path}/systematics/combined/"):
+        for f in Utils.ls_recursive(f"{path}/systematics/combined/"):
+            if ".tex" in f:
+                copy_table(f, f"{out}/systematics/", bf_cols = True)
+
     return
 
 

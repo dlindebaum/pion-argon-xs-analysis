@@ -37,13 +37,15 @@ def main(args):
     output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
     output_data = cross_section.RunProcess(args.ntuple_files["data"], True, args, run)
 
-    norm = round(ak.sum(output_data["mask"]) / ak.sum(output_mc["mask"]), 3)
+    n_data = ak.sum(output_data["mask"])
+    n_mc = ak.sum(output_mc["mask"])
+    norm = round(n_data / n_mc, 3)
 
     with Plots.PlotBook(out + "plots.pdf") as book:
         Plots.PlotTags(output_mc["tags"], "True particle ID")
         book.Save()
 
-    Master.SaveConfiguration({"norm" : norm}, out + "norm.json")
+    Master.SaveConfiguration({"norm" : norm, "mc" : int(n_mc), "data" : int(n_data)}, out + "norm.json")
 
     return
 

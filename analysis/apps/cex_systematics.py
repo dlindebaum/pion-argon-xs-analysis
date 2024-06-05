@@ -16,10 +16,10 @@ from rich.rule import Rule
 
 from python.analysis import cross_section, Plots
 from python.analysis.Master import DictToHDF5
-from python.analysis.Utils import dill_copy, quadsum
+from python.analysis.Utils import dill_copy, quadsum, round_value_to_error
 from apps import cex_toy_generator, cex_analyse, cex_fit_studies, cex_analysis_input
 
-systematics = ["mc_stat", "fit_inaccuracy", "upstream", "beam_reweight", "shower_energy", "track_length", "beam_res", "theory", "all"]
+systematics = ["mc_stat", "upstream", "beam_reweight", "shower_energy", "track_length", "beam_res", "fit_inaccuracy", "theory", "all"]
 systematics_label = {"mc_stat" : "MC stat", "fit_inaccuracy" : "Fit inaccuracy", "upstream" : "Upstream", "beam_reweight" : "Reweight", "shower_energy" : "Shower energy", "track_length" : "Track length", "beam_res" : "Beam momentum", "theory" : "Theory"}
 
 exclusive_proc = ["absorption", "charge_exchange", "single_pion_production", "pion_production"]
@@ -47,7 +47,7 @@ class MCMethod(ABC):
 
         region_fit_result = cex_analyse.RegionFit(analysis_input, self.args.energy_slices, self.args.fit["mean_track_score"], self.model, mc_stat_unc = self.args.fit["mc_stat_unc"], single_bin = self.args.fit["single_bin"])
 
-        _, histograms_reco_obs, histograms_reco_obs_err = cex_analyse.BackgroundSubtraction(analysis_input, self.args.signal_process, self.args.energy_slices, region_fit_result, self.args.fit["single_bin"], self.args.fit["regions"], self.args.toy_template, book)
+        _, histograms_reco_obs, histograms_reco_obs_err = cex_analyse.BackgroundSubtraction(analysis_input, self.args.signal_process, self.args.energy_slices, region_fit_result, self.args.fit["single_bin"], self.args.fit["regions"], self.args.toy_template, args.bkg_sub_mc_stat, book)
 
 
         if self.args.fit["regions"]:
@@ -239,6 +239,13 @@ class NuisanceParameters:
         args_copy = dill_copy(self.args)
         args_copy.fit["mc_stat_unc"] = True
         args_copy.fit["fix_np"] = not np
+        args_copy.bkg_sub_mc_stat = np
+        args_copy.unfolding["mc_stat_unc"] = np
+
+        # print(f'{args_copy.fit["fix_np"]=}')
+        # print(f"{args_copy.bkg_sub_mc_stat=}")
+        # print(f'{args_copy.unfolding["mc_stat_unc"]=}')
+
         args_copy.pdsp = True
         args_copy.toy_template = None
         args_copy.out = ""
@@ -468,7 +475,7 @@ class TrackLengthResolutionSystematic(MCMethod):
         return xs
     
 
-    def CalculateResolution(self):
+    def CalculateResolution(self, book : Plots.PlotBook = Plots.PlotBook.null):
         ai_mc = cross_section.AnalysisInput.FromFile(self.args.analysis_input["mc"])
 
         r = np.array(cross_section.nandiv(ai_mc.track_length_reco - ai_mc.track_length_true, ai_mc.track_length_reco))
@@ -477,6 +484,7 @@ class TrackLengthResolutionSystematic(MCMethod):
         x = cross_section.bin_centers(edges)
 
         p = cross_section.Fitting.Fit(x, y,np.sqrt(y), cross_section.Fitting.double_crystal_ball, method = "dogbox", plot = True, xlabel = "$\\theta$", ylabel = "Counts", plot_style = "scatter")
+        book.Save()
 
         y_interp = cross_section.Fitting.double_crystal_ball(x, *p[0])
 
@@ -747,12 +755,13 @@ def CreateSystematicTable(out : str, data_only : dict, args : cross_section.argp
         names = {c : c + " (mb)" for c in table.index}
         table = table.rename(index = names)
 
-        fmt_tables[t] = cross_section.pd.concat([cross_section.pd.DataFrame({"KE (MeV)" : x}).T, table, total_sys_err, total_err])
+        fmt_tables[t] = cross_section.pd.concat([cross_section.pd.DataFrame({"KE (MeV)" : x, "Central value (mb)" : data_only["pdsp"][t][0]}).T, table, total_sys_err, total_err])
     return fmt_tables
 
 
 def SaveSystematicTables(systematic_tables : dict[pd.DataFrame], out : str):
     for k, v in systematic_tables.items():
+        v.to_hdf(out + f"systematic_table_{k}.hdf5", key = "df")
         v.style.format(
             precision = 2
               ).format(
@@ -767,7 +776,7 @@ def PlotSysHist(systematic_table : dict[pd.DataFrame], book : Plots.PlotBook = P
     for t in systematic_table:
         Plots.plt.figure()
         for i in systematic_table[t].T:
-            if i == "KE (MeV)" : continue
+            if i in ["KE (MeV)", "Central value (mb)"] : continue
             if i in ["Total uncertainty (mb)", "Total systematic uncertainty (mb)"]:
                 color = "k"
             else:
@@ -780,18 +789,48 @@ def PlotSysHist(systematic_table : dict[pd.DataFrame], book : Plots.PlotBook = P
             Plots.plt.legend(ncols = 2)
         Plots.plt.ylim(0, 1.5 * max(Plots.plt.gca().get_ylim()))
         book.Save()
+
+    table_filtered = {k : v[~v.index.isin(["KE (MeV)", "Central value (mb)", "Total uncertainty (mb)", "Total systematic uncertainty (mb)"])] for k, v in systematic_table.items()}
+    order = {k : v.sum(axis = 1).values.argsort() for k, v in table_filtered.items()}
+    total = {k : v.sum(axis = 0) for k, v in table_filtered.items()}
+
+
+    for t in systematic_table:
+        Plots.plt.figure()
+        prev = 0
+        for e, i in enumerate(reversed(order[t])):
+            v = table_filtered[t].iloc[i]
+            prev = prev + v.T.values
+            Plots.Plot(systematic_table[t].loc["KE (MeV)"].values, prev, newFigure = False, xlabel = "KE (MeV)", ylabel = "Relative uncertainty (mb)", label = v.name.split(" (mb)")[0], title = cross_section.remove_(t).capitalize(), style = "bar", linestyle = "-", color = f"C{i}", zorder = 100-e)
+        Plots.plt.legend(ncols = 2)
+        Plots.plt.ylim(0, 1.5 * max(Plots.plt.gca().get_ylim()))
+        book.Save()
+
+    for t in systematic_table:
+        Plots.plt.figure()
+        prev = 0
+        for e, i in enumerate(reversed(order[t])):
+            v = table_filtered[t].iloc[i]
+            prev = prev + v.T.values
+            Plots.Plot(systematic_table[t].loc["KE (MeV)"].values, prev/total[t], newFigure = False, xlabel = "KE (MeV)", ylabel = "Relative uncertainty", label = v.name.split(" (mb)")[0], title = cross_section.remove_(t).capitalize(), style = "bar", linestyle = "-", color = f"C{i}", zorder = 100-e)
+        Plots.plt.legend(ncols = 2)
+        Plots.plt.ylim(0, 1.5 * max(Plots.plt.gca().get_ylim()))
+        book.Save()
+
     return
 
 
 def FinalPlots(cv, systematics_table : dict[pd.DataFrame], energy_slices, book : Plots.PlotBook = Plots.PlotBook.null):
+    goodness_of_fit = {}
     for p in cv:
         xs = {
             "ProtoDUNE SP: Data Stat + Sys Error" : cv[p],
             "" : [cv[p][0], systematics_table[p].loc["Total systematic uncertainty (mb)"]]
         }
         cross_section.PlotXSComparison(xs, energy_slices, p, simulation_label = "Geant4 v10.6", colors = {k : f"C0" for k in xs}, chi2 = False)
+        goodness_of_fit[p] = cross_section.HypTestXS(cv[p][0], systematics_table[p].loc["Total systematic uncertainty (mb)"], p, energy_slices)
         book.Save()
-    return
+    return pd.DataFrame(goodness_of_fit)
 
 
 def can_run(systematic : str):
@@ -861,7 +900,7 @@ def main(args : cross_section.argparse.Namespace):
                 SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
                 result = cross_section.LoadObject(f"{outdir}result.dill")
-                sys = cross_section.LoadObject(f"{outdir}sys.dill")
+                sys = cross_section.LoadObject(f"{outdir}sys.dill")["systematic"]
 
             with Plots.PlotBook(f"{outdir}plots.pdf") as book:
                 sc.PlotResults(args.cv, result, book)
@@ -901,7 +940,7 @@ def main(args : cross_section.argparse.Namespace):
                 SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
                 result = cross_section.LoadObject(f"{outdir}result.dill")
-                sys = cross_section.LoadObject(f"{outdir}sys.dill")
+                sys = cross_section.LoadObject(f"{outdir}sys.dill")["systematic"]
 
             with Plots.PlotBook(f"{outdir}plots.pdf") as book:
                 brw.PlotResults(args.cv, result, book)
@@ -913,12 +952,18 @@ def main(args : cross_section.argparse.Namespace):
             cross_section.os.makedirs(outdir, exist_ok = True)
             trk = TrackLengthResolutionSystematic(args, model, args.toy_data_config)
 
+            with Plots.PlotBook(outdir + "trk_res.pdf") as book:
+                trk.CalculateResolution(book)
+            table = {}
+            for i in range(len(trk.popt[0])):
+                table[f"$p_{{{i}}}$"] = round_value_to_error(trk.popt[0][i], trk.popt[1][i])
+            pd.DataFrame(table, index = [0]).style.hide(axis = "index").to_latex(outdir + "fit_params.tex")
+
             if can_regen(outdir):
-                trk.CalculateResolution()
                 result = trk.Evaluate(50, analysis_input_data = analysis_input_nominal, resolution = trk.resolution)
                 with Plots.PlotBook(f"{outdir}cov_mat") as book:
                     sys = trk.CalculateSysCov(result, book)
-                cross_section.SaveObject(f"{outdir}results.dill", result)
+                cross_section.SaveObject(f"{outdir}result.dill", result)
                 SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
                 result = cross_section.LoadObject(f"{outdir}result.dill")
@@ -1005,7 +1050,11 @@ def main(args : cross_section.argparse.Namespace):
         with Plots.PlotBook(outdir + "plots.pdf") as book:
             with Plots.matplotlib.rc_context({"axes.prop_cycle" : Plots.plt.cycler("color", Plots.matplotlib.cm.get_cmap("tab20").colors)}):
                 PlotSysHist(tables, book)
-            FinalPlots(args.cv["pdsp"], tables, args.energy_slices, book) 
+            table = FinalPlots(args.cv["pdsp"], tables, args.energy_slices, book)
+
+        tags = cross_section.Tags.ExclusiveProcessTags(None)
+        table = table.rename(index = {"w_chi2" : "$\chi^{2}/ndf$", "p" : "$p$"}, columns={t : tags[t].name_simple.capitalize() for t in tags})
+        table.style.format("{:.3g}").to_latex(outdir + "goodness_of_fit.tex")
     return
 
 if __name__ == "__main__":
