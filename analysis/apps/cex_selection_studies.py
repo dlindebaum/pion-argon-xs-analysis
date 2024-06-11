@@ -17,16 +17,16 @@ import numpy as np
 import pandas as pd
 
 x_label = {
-    "track_score_all" : "track score", 
-    "TrackScoreCut" : "track score",
-    "NHitsCut" : "number of hits",
-    "PiPlusSelection" : "median $dEdX$ (MeV/cm)",
+    "track_score_all" : "Track score", 
+    "TrackScoreCut" : "Track score",
+    "NHitsCut" : "Number of hits",
+    "PiPlusSelection" : "Median $dE/dX$ (MeV/cm)",
     "BeamParticleDistanceCut" : "$d$ (cm)",
     "BeamParticleIPCut" : "$b$ (cm)",
     "Chi2ProtonSelection" : "$(\chi^{2}/ndf)_{p}$",
     "PiBeamSelection" : "True particle ID",
-    "APA3Cut" : "Beam end position z (cm)",
-    "TrueFiducialCut" : "True beam end position z (cm)",
+    "APA3Cut" : "Beam end position $z$ (cm)",
+    "TrueFiducialCut" : "True beam end position $z$ (cm)",
     "PandoraTagCut" : "Pandora tag",
     "DxyCut" : "$\delta_{xy}$",
     "DzCut" : "$\delta_{z}$",
@@ -582,10 +582,10 @@ def MakePFOSelectionPlots(output_mc : dict, output_data : dict, outDir : str, no
                 Plots.DrawMultiCutPosition(output_mc[p]["cuts"], face = output_mc[p]["op"], arrow_length = CalculateArrowLength(output_mc[p]["value"], x_range[p]), arrow_loc = 0.5, color = "C6")
                 pdf.Save()
                 if f"{p}_completeness" in output_mc:
-                    Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc[p]["value"]), ak.ravel(output_mc[f"{p}_completeness"]["value"]), ylabel = "completeness", xlabel = x_label[p], x_range = x_range[p], bins = nbins[p], norm = "column", c_scale = "linear")
+                    Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc[p]["value"]), ak.ravel(output_mc[f"{p}_completeness"]["value"]), ylabel = "Completeness", xlabel = x_label[p], x_range = x_range[p], bins = nbins[p], norm = "column", c_scale = "linear")
                     Plots.DrawMultiCutPosition(output_mc[p]["cuts"], face = output_mc[p]["op"], arrow_length = CalculateArrowLength(output_mc[p]["value"], x_range[p]), arrow_loc = 0.1, color = "C6")
                     pdf.Save()
-        Plots.PlotTags(output_mc["final_tags"]["tags"], xlabel = "true particle ID")
+        Plots.PlotTags(output_mc["final_tags"]["tags"], xlabel = "True particle ID")
         pdf.Save()
     Plots.plt.close("all")
     return
@@ -605,7 +605,7 @@ def MakePFOSelectionPlotsConsdensed(output_mc : dict, output_mc_loose : dict, ou
                 
                 pdf.Save()
                 if f"{p}_completeness" in output_mc:
-                    Plots.PlotHist2DImshowMarginal(ak.ravel(mc[p]["value"]), ak.ravel(mc[f"{p}_completeness"]["value"]), ylabel = "completeness", xlabel = x_label[p], x_range = x_range[p], bins = nbins[p], norm = "column", c_scale = "linear")
+                    Plots.PlotHist2DImshowMarginal(ak.ravel(mc[p]["value"]), ak.ravel(mc[f"{p}_completeness"]["value"]), ylabel = "Completeness", xlabel = x_label[p], x_range = x_range[p], bins = nbins[p], norm = "column", c_scale = "linear")
 
                     for c, mc in zip(["C6", "magenta"], [output_mc, output_mc_loose]):
                         Plots.DrawMultiCutPosition(mc[p]["cuts"], face = mc[p]["op"], arrow_length = CalculateArrowLength(mc[p]["value"], x_range[p]), arrow_loc = 0.1, color = c)
@@ -613,7 +613,7 @@ def MakePFOSelectionPlotsConsdensed(output_mc : dict, output_mc_loose : dict, ou
                     pdf.Save()
 
         for mc in [output_mc, output_mc_loose]:
-            Plots.PlotTags(mc["final_tags"]["tags"], xlabel = "true particle ID")
+            Plots.PlotTags(mc["final_tags"]["tags"], xlabel = "True particle ID")
             pdf.Save()
     Plots.plt.close("all")
     return
@@ -640,24 +640,25 @@ def MakePi0SelectionPlots(output_mc : dict, output_data : dict, outDir : str, no
                 for i, j in zip(u, c):
                     n_photons_scaled.extend([i]* int(scale * j))
 
-                Plots.PlotBarComparision(n_photons_scaled, output_data["NPhotonCandidateSelection"]["value"], xlabel = "number of $\pi^{0}$ photon candidates", label_1 = "MC", label_2 = "Data", fraction = True, barlabel = False)
+                Plots.PlotBarComparision(n_photons_scaled, output_data["NPhotonCandidateSelection"]["value"], xlabel = "Number of $\pi^{0}$ photon candidates", label_1 = "MC", label_2 = "Data", fraction = True, barlabel = False)
             else:
-                Plots.PlotBar(output_mc["NPhotonCandidateSelection"]["value"], xlabel = "number of $\pi^{0}$ photon candidates")
+                Plots.PlotBar(output_mc["NPhotonCandidateSelection"]["value"], xlabel = "Number of $\pi^{0}$ photon candidates")
             pdf.Save()
 
         if "Pi0MassSelection" in output_mc:
             Plots.PlotTagged(output_mc["Pi0MassSelection"]["value"], output_mc["Pi0MassSelection"]["tags"], data2 = output_data["Pi0MassSelection"]["value"] if output_data else None, bins = nbins, x_label = "$m_{\gamma\gamma}$ (MeV)", x_range = [0, 500], norm = norm, ncols = 1)
-            Plots.DrawMultiCutPosition(output_mc["Pi0MassSelection"]["cuts"], face = output_mc["Pi0MassSelection"]["op"], arrow_length = 50)
+            Plots.DrawMultiCutPosition(output_mc["Pi0MassSelection"]["cuts"], face = output_mc["Pi0MassSelection"]["op"], arrow_length = 50, color = "C6")
             pdf.Save()
 
             Plots.PlotTagged(output_mc["Pi0MassSelection"]["value"], output_mc["mass_event_tag"]["tags"], data2 = output_data["Pi0MassSelection"]["value"] if output_data else None, bins = nbins, x_label = "$m_{\gamma\gamma}$ (MeV)", x_range = [0, 500], norm = norm, ncols = 1)
-            Plots.DrawMultiCutPosition(output_mc["Pi0MassSelection"]["cuts"], face = output_mc["Pi0MassSelection"]["op"], arrow_length = 50)
+            Plots.DrawMultiCutPosition(output_mc["Pi0MassSelection"]["cuts"], face = output_mc["Pi0MassSelection"]["op"], arrow_length = 50, color = "C6")
             pdf.Save()
 
         if "Pi0OpeningAngleSelection" in output_mc:
             Plots.PlotTagged(output_mc["Pi0OpeningAngleSelection"]["value"], output_mc["Pi0OpeningAngleSelection"]["tags"], data2 = output_data["Pi0OpeningAngleSelection"]["value"] if output_data else None, bins = nbins, x_label = "$\phi$ (rad)", norm = norm, ncols = 1)
 
-            Plots.DrawMultiCutPosition((np.array(output_mc["Pi0OpeningAngleSelection"]["cuts"]) * np.pi / 180).tolist(), face = output_mc["Pi0OpeningAngleSelection"]["op"], arrow_length = 0.25)
+            Plots.DrawMultiCutPosition((np.array(output_mc["Pi0OpeningAngleSelection"]["cuts"]) * np.pi / 180).tolist(), face = output_mc["Pi0OpeningAngleSelection"]["op"], arrow_length = 0.25, color = "C6")
+            Plots.plt.ylim(bottom = 0)
             pdf.Save()
     Plots.plt.close("all")
     return
@@ -853,13 +854,16 @@ def SaveMasks(output : dict, out : str):
 @Master.timer
 def main(args):
     shower_merging.SetPlotStyle(extend_colors = True)
+    outdir = args.out + "selection/"
+    cross_section.os.makedirs(outdir, exist_ok = True)
 
-    output_mc = MergeSelectionMasks(MergeOutputs(cross_section.RunProcess(args.ntuple_files["mc"], False, args, run, False)))
+    output_mc = MergeSelectionMasks(MergeOutputs(cross_section.ApplicationProcessing(["mc"], outdir, args, run, False, "output_mc")["mc"]))
+
     output_data = None
     if "data" in args.ntuple_files:
         if len(args.ntuple_files["data"]) > 0:
             if args.mc_only is False:
-                output_data = MergeSelectionMasks(MergeOutputs(cross_section.RunProcess(args.ntuple_files["data"], True, args, run, False)))
+                output_data = MergeSelectionMasks(MergeOutputs(cross_section.ApplicationProcessing(["data"], outdir, args, run, False, "output_data")["data"]))
 
     # tables
     MakeTables(output_mc, args.out + "tables_mc/", "mc")
@@ -870,18 +874,18 @@ def main(args):
     if output_data is not None: SaveMasks(output_data, args.out + "masks_data/")
 
     # output directories
-    os.makedirs(args.out + "plots/", exist_ok = True)
+    os.makedirs(outdir + "plots/", exist_ok = True)
 
     # plots
     if output_mc["fiducial"]:
-        MakeBeamSelectionPlots(output_mc["fiducial"]["data"], output_data["fiducial"]["data"] if output_data else None, args.out + "plots/", norm = args.norm, book_name = "fiducial")
+        MakeBeamSelectionPlots(output_mc["fiducial"]["data"], output_data["fiducial"]["data"] if output_data else None, outdir + "plots/", norm = args.norm, book_name = "fiducial")
 
     if output_mc["beam"]: #* this is assuming you apply the same cuts as Data and MC (which is implictly assumed for now)
-        MakeBeamSelectionPlots(output_mc["beam"]["data"], output_data["beam"]["data"] if output_data else None, args.out + "plots/", norm = args.norm, book_name = "beam")
+        MakeBeamSelectionPlots(output_mc["beam"]["data"], output_data["beam"]["data"] if output_data else None, outdir + "plots/", norm = args.norm, book_name = "beam")
 
     for i in ["pi", "photon", "loose_pi", "loose_photon"]:
         if output_mc[i]:
-            MakePFOSelectionPlots(output_mc[i]["data"], output_data[i]["data"] if output_data else None, args.out + "plots/", norm = args.norm, book_name = i)
+            MakePFOSelectionPlots(output_mc[i]["data"], output_data[i]["data"] if output_data else None, outdir + "plots/", norm = args.norm, book_name = i)
 
     if output_mc["loose_pi"]:
         MakePFOSelectionPlotsConsdensed(
@@ -889,7 +893,7 @@ def main(args):
             output_mc["loose_pi"]["data"],
             output_data["pi"]["data"] if output_data else None,
             output_data["loose_pi"]["data"] if output_data else None,
-            args.out + "plots/",
+            outdir + "plots/",
             norm = args.norm,
             book_name = "pi_both"
             )
@@ -900,15 +904,15 @@ def main(args):
             output_mc["loose_photon"]["data"],
             output_data["photon"]["data"] if output_data else None,
             output_data["loose_photon"]["data"] if output_data else None,
-            args.out + "plots/",
+            outdir + "plots/",
             norm = args.norm,
             book_name = "photon_both"
             )
 
     if output_mc["pi0"]:
-        MakePi0SelectionPlots(output_mc["pi0"]["data"], output_data["pi0"]["data"] if output_data else None, args.out + "plots/", norm = args.norm, nbins = args.nbins)
+        MakePi0SelectionPlots(output_mc["pi0"]["data"], output_data["pi0"]["data"] if output_data else None, outdir + "plots/", norm = args.norm, nbins = 50)
     if output_mc["regions"]:
-        MakeRegionPlots(output_mc["regions"], output_data["regions"] if output_data else None, args.out + "plots/")
+        MakeRegionPlots(output_mc["regions"], output_data["regions"] if output_data else None, outdir + "plots/")
     return
 
 
@@ -918,7 +922,7 @@ if __name__ == "__main__":
     cross_section.ApplicationArguments.Config(parser, required = True)
     cross_section.ApplicationArguments.Processing(parser)
     cross_section.ApplicationArguments.Output(parser)
-    cross_section.ApplicationArguments.Plots(parser)
+    cross_section.ApplicationArguments.Regen(parser)
 
     parser.add_argument("--mc", dest = "mc_only", action = "store_true", help = "Only analyse the MC file.")
 

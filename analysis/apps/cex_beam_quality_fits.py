@@ -14,9 +14,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from rich import print
-from python.analysis import Master, BeamParticleSelection, vector, Plots, cross_section, Fitting, Processing, Tags
-from python.analysis.cross_section import SetPlotStyle
-
+from python.analysis import Master, BeamParticleSelection, vector, Plots, cross_section, Fitting
 
 def Fit_Vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
     """ Gaussian fit to each component in the vector.
@@ -100,9 +98,9 @@ def MakePlots(output_mc : dict[ak.Array], mc_fits : dict, output_data : dict[ak.
         data_fits (dict): fits made on data
         out (str): output directory
     """
-    SetPlotStyle()
+    cross_section.SetPlotStyle()
 
-    label_name = "Beam" if truncate is None else "Truncacted beam"
+    label_name = "Beam" if truncate is None else "Truncated beam"
 
     with Plots.PlotBook(out + "beam_quality_fits.pdf") as pdf:
         for i in ["x", "y", "z"]:
@@ -111,8 +109,8 @@ def MakePlots(output_mc : dict[ak.Array], mc_fits : dict, output_data : dict[ak.
             data_ranges = [] if data_fits is None else plot_range(data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"])
 
             plot_ranges = mc_ranges + data_ranges
-            if output_mc is not None: plot(output_mc["start_pos"][i], f"{label_name} start position {i} (cm)", mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"], "C0", "MC", range = [min(plot_ranges), max(plot_ranges)])
-            if output_data is not None: plot(output_data["start_pos"][i], f"{label_name} start position {i} (cm)", data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"], "C1", "Data", range = [min(plot_ranges), max(plot_ranges)])
+            if output_mc is not None: plot(output_mc["start_pos"][i], f"{label_name} start position ${i}$ (cm)", mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"], "C0", "MC", range = [min(plot_ranges), max(plot_ranges)])
+            if output_data is not None: plot(output_data["start_pos"][i], f"{label_name} start position ${i}$ (cm)", data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"], "C1", "Data", range = [min(plot_ranges), max(plot_ranges)])
             pdf.Save()
     return
 
@@ -193,20 +191,14 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
 
 @Master.timer
 def main(args):
-    output_mc, fit_values_mc = None, None
-    output_data, fit_values_data = None, None
-
     outdir = args.out + "beam_quality/"
     os.makedirs(outdir, exist_ok = True)
 
-    output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
-    fit_values_mc = Fits(args, output_mc, outdir, "mc")
+    outputs = cross_section.ApplicationProcessing(list(args.ntuple_files.keys()), outdir, args, run, True)
 
-    output_data = cross_section.RunProcess(args.ntuple_files["data"], True, args, run)
-    print(output_data)
-    fit_values_data = Fits(args, output_data, outdir, "data")
+    fit_values = {s : Fits(args, outputs[s], outdir, s) for s in outputs}
 
-    MakePlots(output_mc, fit_values_mc, output_data, fit_values_data, outdir, args.beam_quality_truncate)
+    MakePlots(outputs["mc"], fit_values["mc"], outputs["data"], fit_values["data"], outdir, args.beam_quality_truncate)
 
     return
 
@@ -216,6 +208,7 @@ if __name__ == "__main__":
     cross_section.ApplicationArguments.Config(parser, True)
     cross_section.ApplicationArguments.Processing(parser)
     cross_section.ApplicationArguments.Output(parser)
+    cross_section.ApplicationArguments.Regen(parser)
 
     args = parser.parse_args()
 

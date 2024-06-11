@@ -7,10 +7,12 @@ Description: Library for code used in the cross section analysis. Refer to the R
 """
 import argparse
 import copy
+import glob
 import os
 
 from collections import namedtuple
 from dataclasses import dataclass
+from enum import Enum
 
 import awkward as ak
 import cabinetry
@@ -357,6 +359,22 @@ def MergeOutputs(outputs : list[dict]) -> dict:
     return merged_output
 
 
+class Sample(str, Enum):
+    MC = "mc"
+    DATA = "data"
+
+
+def ApplicationProcessing(samples : list[Sample], outdir : str, args : argparse.Namespace, func : callable, merge : bool, outname : str = "output"):
+    if args.regen or os.path.isfile(f"{outdir}{outname}.dill"):
+        print("Loading existing outputs")
+        outputs = LoadObject(f"{outdir}{outname}.dill")
+    else:
+        print("Processing Ntuples")
+        outputs = {s : RunProcess(args.ntuple_files[s], s == Sample.DATA, args, func, merge) for s in samples}
+        SaveObject(f"{outdir}{outname}.dill", outputs)
+    return outputs
+
+
 def CountInRegions(true_regions : dict, reco_regions : dict, selection_efficincy : np.ndarray = None) -> np.ndarray:
     """ Computes the counts of each combination of reco and true regions.
 
@@ -418,17 +436,14 @@ def PlotXSHists(energy_slices, hist_counts : np.ndarray, hist_counts_err : np.nd
     Plots.Plot(x, scale * hist_counts[s], yerr = scale * hist_counts_err[s], xlabel = xlabel, newFigure = newFigure, style = "step", label = label, color = color, ylabel = ylabel, title = title)
     return
 
-def HypTestXS(cv, error, process, energy_slice):
-    xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos])
+def HypTestXS(cv, error, process, energy_slice, file = os.environ["PYTHONPATH"] + "/data/g4_xs.root"):
+    xs_sim = GeantCrossSections(file, energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos])
     sim_curve_interp = xs_sim.GetInterpolatedCurve(process)
     x = energy_slice.pos[:-1] - energy_slice.width/2
 
     w_chi_sqr = weighted_chi_sqr(cv, sim_curve_interp(x), error)
 
     p = chi2.sf((len(x)-1) * w_chi_sqr, len(x) - 1)
-
-    print(f"{w_chi_sqr, p=}")
-
     return {"w_chi2" : w_chi_sqr, "p" : p}
 
 def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", chi2 : bool = True, newFigure : bool = True, cv_only : bool = False, marker_size : float = 6):
@@ -654,50 +669,24 @@ class BetheBloch:
 
 class ApplicationArguments:
     @staticmethod
-    def Ntuples(parser : argparse.ArgumentParser, data : bool = False):
-        parser.add_argument("-m", "--mc-file", dest = "mc_file", nargs = "+", help = "MC NTuple file to study.", required = False)
-        if data: parser.add_argument("-d", "--data-file", dest = "data_file", nargs = "+", help = "Data Ntuple to study", required = False)
-        parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Ntuple_Type, help = f"type of ntuple I am looking at {[m.value for m in Ntuple_Type]}.", required = False)
-        return
-
-    @staticmethod
-    def SingleNtuple(parser : argparse.ArgumentParser, define_sample : bool = True):
-        parser.add_argument(dest = "file", help = "NTuple file to study.")
-        parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Ntuple_Type, help = f"type of ntuple I am looking at {[m.value for m in Ntuple_Type]}.", required = False)
-        if define_sample : parser.add_argument("-S", "--sample-type", dest = "sample_type", type = str, choices = ["mc", "data"], help = f"type of sample I am looking at.", required = False)
-        return
-
-    @staticmethod
-    def BeamQualityCuts(parser : argparse.ArgumentParser, data : bool = False):
-        parser.add_argument("--mc_beam_quality_fit", dest = "mc_beam_quality_fit", type = str, help = "MC fit values for the beam quality cut.", required = False)
-        if data: parser.add_argument("--data_beam_quality_fit", dest = "data_beam_quality_fit", type = str, default = None, help = "Data fit values for the beam quality cut.", required = False)
-        return
-    
-    @staticmethod
     def Processing(parser : argparse.ArgumentParser):
         parser.add_argument("-b", "--batches", dest = "batches", type = int, default = None, help = "Number of batches to split n tuple files into when parallel processing processing data.")
         parser.add_argument("-e", "--events", dest = "events", type = int, default = None, help = "Number of events to process when parallel processing data.")
-        parser.add_argument("-t", "--threads", dest = "threads", type = int, default = 1, help = "Number of threads to use when processsing")
+        parser.add_argument("-t", "--threads", dest = "threads", type = int, default = 1, help = "Number of threads to use when processsing.")
+
+    @staticmethod
+    def Regen(parser : argparse.ArgumentParser):
+        parser.add_argument("-r", "--regen", dest = "regen", action = "store_true", help = "Regenerate any stored data.")
 
     @staticmethod
     def Output(parser : argparse.ArgumentParser, default : str = None):
-        parser.add_argument("-o", "--out", dest = "out", type = str, default = default, help = "Directory to save plots")
-        return
-
-    @staticmethod
-    def BeamSelection(parser : argparse.ArgumentParser):
-        parser.add_argument("--scraper", action = "store_true", help = "Toggle to enable the beam scraper cut for the beam particle selection.")
-        return
-
-    @staticmethod
-    def ShowerCorrection(parser : argparse.ArgumentParser):
-        parser.add_argument("-C, --shower_correction", nargs = 2, dest = "correction", help = f"Shower energy correction method {tuple(EnergyCorrection.shower_energy_correction.keys())} followed by a correction parameters json file.", required = False)
+        parser.add_argument("-o", "--out", dest = "out", type = str, default = default, help = "Directory to save output files.")
         return
 
     @staticmethod
     def Plots(parser : argparse.ArgumentParser):
         parser.add_argument("--nbins", dest = "nbins", type = int, default = 50, help = "Number of bins to make for histogram plots.")
-        parser.add_argument("-a", "--annotation", dest = "annotation", type = str, default = None, help = "Annotation to add to plots")
+        parser.add_argument("-a", "--annotation", dest = "annotation", type = str, default = None, help = "Annotation to add to plots.")
         return
 
     @staticmethod

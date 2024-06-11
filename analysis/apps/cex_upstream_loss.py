@@ -90,18 +90,14 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
 
 def main(args : argparse.Namespace):
     cross_section.SetPlotStyle(False, dpi = 100)
+    outdir = args.out + "upstream_loss/"
+    os.makedirs(outdir, exist_ok = True)
 
     args.batches = None
     args.events = None
     args.threads = 1
 
-    os.makedirs(args.out + "upstream_loss/", exist_ok = True)
-
-    if os.path.isfile(args.out + "upstream_loss/output_mc.dill"):
-        output_mc = cross_section.LoadObject(args.out + "upstream_loss/output_mc.dill")
-    else:
-        output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
-        cross_section.SaveObject(args.out + "upstream_loss/output_mc.dill", output_mc)
+    output_mc = cross_section.ApplicationProcessing(["mc"], outdir, args, run, True)["mc"]
 
     if all(v is None for v in output_mc["weights"]):
         output_mc["weights"] = None
@@ -109,8 +105,7 @@ def main(args : argparse.Namespace):
     bins = ak.Array(args.upstream_loss_bins)
     x = (bins[1:] + bins[:-1]) / 2
 
-    os.makedirs(args.out + "upstream_loss/", exist_ok = True)
-    with Plots.PlotBook(args.out + "upstream_loss/" + "cex_upstream_loss_plots.pdf") as pdf:
+    with Plots.PlotBook(outdir + "cex_upstream_loss_plots.pdf") as pdf:
         reco_KE_inst = cross_section.KE(output_mc["p_inst"], cross_section.Particle.from_pdgid(211).mass)
         cv = CentralValueEstimation(bins, reco_KE_inst, output_mc["KE_ff"], cv_method[args.upstream_loss_cv_function], output_mc["weights"])
         pdf.Save()
@@ -130,15 +125,16 @@ def main(args : argparse.Namespace):
         pdf.Save()
     Plots.plt.close("all")
     print(f"fitted parameters : {params_dict}")
-    cross_section.SaveConfiguration(params_dict, args.out + "upstream_loss/" + "fit_parameters.json")
+    cross_section.SaveConfiguration(params_dict, outdir + "fit_parameters.json")
     return
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Computes the upstream energy loss for beam particles after beam particle selection, then writes the fitted parameters to file.", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    cross_section.ApplicationArguments.Config(parser)
+    cross_section.ApplicationArguments.Config(parser, True)
     cross_section.ApplicationArguments.Output(parser)
+    cross_section.ApplicationArguments.Regen(parser)
     parser.add_argument("--cv_function", dest = "upstream_loss_cv_function", type = str, default = "gaussian", help = "method to extract central value, possible options are ['None', 'gaussian', 'student_t', 'double_gaussian', 'crystal_ball']")
     parser.add_argument("--no_reweight", dest = "no_reweight", action = "store_true", help = "perform correction without reweighted MC")
 

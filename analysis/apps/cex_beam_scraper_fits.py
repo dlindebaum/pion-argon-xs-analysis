@@ -193,18 +193,18 @@ def BeamScraperPlots(beam_inst_KE_bins : list, output_mc : dict[ak.Array], scrap
         plt.legend()
     return output
 
-
+@Master.timer
 def main(args : argparse.Namespace):
     cross_section.SetPlotStyle(True)
+    outdir = args.out + "beam_scraper/"
+    os.makedirs(outdir, exist_ok = True)
 
-    output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
+    output_mc = cross_section.ApplicationProcessing(["mc"], outdir, args, run, True)["mc"]
 
     residual_range = [-300, 300] # range of residual for plots
     bins = 50
 
-    os.makedirs(args.out + "beam_scraper/", exist_ok = True)
-
-    with Plots.PlotBook(args.out + "beam_scraper/" + "beam_scraper_fits.pdf") as pdf:
+    with Plots.PlotBook(outdir + "beam_scraper_fits.pdf") as pdf:
         Plots.Plot(args.beam_scraper_energy_range, args.beam_scraper_energy_range, color = "red")
         Plots.PlotHist2D(output_mc["beam_inst_KE"], output_mc["true_ffKE"], xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$KE^{true}_{init}$ (MeV)", x_range = args.beam_scraper_energy_range, y_range = args.beam_scraper_energy_range, newFigure = False)
         pdf.Save()
@@ -225,18 +225,19 @@ def main(args : argparse.Namespace):
     for i, k in enumerate(scraper_thresholds):
         json_dict[str(i)] = {**{"bins" : k}, **scraper_thresholds[k], **position_means[k]}
 
-    name = args.out + "beam_scraper/" + "mc_beam_scraper_fit_values.json"
+    name = outdir + "mc_beam_scraper_fit_values.json"
     cross_section.SaveConfiguration(json_dict, name)
     print(f"fit values written to {name}")
     return
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description = "Applies beam particle selection, PFO selection, produces tables and basic plots.")
+    parser = argparse.ArgumentParser(description = "Calculates parameters required to idenfify beam scrapers and apply the selection.")
 
     cross_section.ApplicationArguments.Config(parser, required = True)
     cross_section.ApplicationArguments.Processing(parser)
     cross_section.ApplicationArguments.Output(parser)
+    cross_section.ApplicationArguments.Regen(parser)
 
     parser.add_argument("--energy_range", dest = "beam_scraper_energy_range", type = float, nargs = 2, help = "energy range to study (MeV).")
     parser.add_argument("--energy_bins", dest = "beam_scraper_energy_bins", type = float, nargs = 5, help = "kinetic energy bin edges (currently allows only 4 bins to be made) (MeV)")

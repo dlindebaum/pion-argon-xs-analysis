@@ -36,7 +36,7 @@ selection_map = {
     "GoodShowerSelection" : "Well reconstructed PFOs",
 
     "Chi2ProtonSelection" : "$(\chi^{2}/ndf)_{p}$",
-    "TrackScoreCut" : "track score",
+    "TrackScoreCut" : "Track score",
     "NHitsCut" : "Number of hits",
     "BeamParticleDistanceCut" : "$d$",
     "BeamParticleIPCut" : "$b$",
@@ -118,13 +118,14 @@ def fmt_op(op):
         return op
 
 
-def selection_names_criteria(df : pd.DataFrame):
+def selection_names_criteria(df : pd.DataFrame, name : str):
     defs = criteria_defs()
+    # print(f"{defs=}")
     fancy_names = {}
     for n in df.index:
-        if defs["beam"] is None: continue
-        if n in defs["beam"]:
-            cuts = defs["beam"][n]
+        if defs[name] is None: continue
+        if n in defs[name]:
+            cuts = defs[name][n]
         else:
             cuts = None
         
@@ -171,7 +172,9 @@ def CreateTables(path : str, selection_name : str, signal : str = None):
     else:
         signal_tables = None
 
-    fancy_names = selection_names_criteria(total_counts)
+    fancy_names = selection_names_criteria(total_counts, selection_name)
+    print(f"{signal=}")
+    print(f"{fancy_names=}")
 
     if len(fancy_names) > 0:
         total_counts = total_counts.set_index(pd.Series(list(fancy_names.values())))
@@ -186,7 +189,14 @@ def FormatTable(filename, bf_column : bool = True):
         lines = list(file.readlines())
         new_lines = []
         for i, l in enumerate(lines):
-            if i in [0, len(lines) - 1]:
+            if i == 0:
+                ncols = len(l.split("{")[-1][:-2])
+                if bf_column is True:
+                    cf = "l" + "".join(["r"] * (ncols - 1))
+                else:
+                    cf = "".join(["c"] * ncols)
+                new_lines.append(f"\\begin{{tabular}}{{{cf}}}\n")
+            elif i == len(lines) - 1:
                 new_lines.append(l)
             elif i == 1:
                 entries = l.split(" & ")
@@ -229,9 +239,9 @@ def FormatTable(filename, bf_column : bool = True):
 
 def bq_xy(values : dict):
     t = {}
-    for i in ["mu", "sigma"]:
+    for i, e in zip(["mu", "sigma"], [1, 2]):
         for j in ["x", "y"]:
-            t[f"$\{i}_{{{j}}}$"] = Utils.round_value_to_error(values[f"{i}_{j}"], values[f"{i}_err_{j}"])
+            t[f"$p_{{{e}}}^{{{j}}}$"] = Utils.round_value_to_error(values[f"{i}_{j}"], values[f"{i}_err_{j}"])
 
     return t
 
@@ -280,7 +290,7 @@ def brw_selection(path):
 
     selection_table = pd.concat(objs = [selection_data.rename(columns = {"Counts" : "Data"}), selection_mc.rename(columns = {"Counts" : "MC"})], axis = 1)
     selection_table = selection_table.rename(index = {"TrueFiducialCut" : "Fiducial region", "HasFinalStatePFOsCut" : "Inverted preselection"})
-    fancy_names = selection_names_criteria(selection_table)
+    fancy_names = selection_names_criteria(selection_table, "beam")
 
     selection_table = selection_table.drop(index = ["CaloSizeCut", "PandoraTagCut"])
 
@@ -330,8 +340,12 @@ def main(args : argparse.Namespace):
     FormatTable(f"{outp}/angle.tex")
 
     for f in Utils.ls_recursive(f"{path}/shower_energy_correction/"):
+        if f.split("/")[-1].split(".")[0] == "table":
+            cols = True
+        else:
+            cols = False
         if ".tex" in f:
-            copy_table(f, f"{out}/shower_correction/", bf_cols = False)
+            copy_table(f, f"{out}/shower_correction/", bf_cols = cols)
 
 
     copy_table(f"{path}/toy_parameters/reco_regions/pe.tex", f"{out}/reco_regions/")

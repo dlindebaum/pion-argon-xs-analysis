@@ -30,32 +30,30 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
 @Master.timer
 def main(args):
     cross_section.SetPlotStyle(extend_colors = True)
-    out = args.out + "beam_norm/"
-    os.makedirs(out, exist_ok = True)
+    outdir = args.out + "beam_norm/"
+    os.makedirs(outdir, exist_ok = True)
     
+    outputs = cross_section.ApplicationProcessing(list(args.ntuple_files.keys()), outdir, args, run, True)
 
-    output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
-    output_data = cross_section.RunProcess(args.ntuple_files["data"], True, args, run)
-
-    n_data = ak.sum(output_data["mask"])
-    n_mc = ak.sum(output_mc["mask"])
+    n_data = ak.sum(outputs["data"]["mask"])
+    n_mc = ak.sum(outputs["mc"]["mask"])
     norm = round(n_data / n_mc, 3)
 
-    with Plots.PlotBook(out + "plots.pdf") as book:
-        Plots.PlotTags(output_mc["tags"], "True particle ID")
+    with Plots.PlotBook(outdir + "plots.pdf") as book:
+        Plots.PlotTags(outputs["mc"]["tags"], "True particle ID")
         book.Save()
 
-    Master.SaveConfiguration({"norm" : norm, "mc" : int(n_mc), "data" : int(n_data)}, out + "norm.json")
+    Master.SaveConfiguration({"norm" : norm, "mc" : int(n_mc), "data" : int(n_data)}, outdir + "norm.json")
 
     return
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Computes normalisation for beam pion analysis.", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    # cross_section.ApplicationArguments.Ntuples(parser, data = True)
     cross_section.ApplicationArguments.Config(parser, True)
     cross_section.ApplicationArguments.Processing(parser)
     cross_section.ApplicationArguments.Output(parser)
+    cross_section.ApplicationArguments.Regen(parser)
 
     args = parser.parse_args()
 

@@ -1391,7 +1391,7 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
     if newFigure: plt.figure()
     c_norm = counts/np.sum(counts, axis = 0)
     plt.imshow(c_norm, cmap = cmap, origin = "lower")
-    plt.colorbar(label = "column normalised counts", shrink = 0.8)
+    plt.colorbar(label = "Column normalised counts", shrink = 0.8)
 
     y_counts = np.sum(counts, axis = 1)
     x_counts = np.sum(counts, axis = 0)
@@ -1419,7 +1419,7 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
         plt.title("Key: (counts, efficiency(%), purity(%))")
 
     for (i, j), z in np.ndenumerate(counts):
-        plt.gca().text(j, i, f"{z},\n{fractions[i][j]*100:.2g}%,{c_norm[i][j]*100:.2g}%", ha='center', va='center', fontsize = 8)
+        plt.gca().text(j, i, f"{z},\n{fractions[i][j]*100:.2g}%,\n{c_norm[i][j]*100:.2g}%", ha='center', va='center', fontsize = 8)
     plt.grid(False)
     plt.tight_layout()
 
@@ -1584,7 +1584,7 @@ def PlotBarComparision(data_1, data_2, width: float = 0.4, xlabel: str = "", tit
     if fraction is True:
         y_1 = counts_1 / np.sum(counts_1)
         y_2 = counts_2 / np.sum(counts_2)
-        yl = "Fraction"
+        yl = "Fractional counts"
     else:
         y_1 = counts_1
         y_2 = counts_2
@@ -1654,15 +1654,17 @@ def PlotStackedBar(bars, labels, xlabel : str = None, colours : list = None, alp
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
-def PlotTags(tags : Tags.Tags, xlabel : str = "name", fraction : bool = True, newFigure : bool = True):
+def PlotTags(tags : Tags.Tags, xlabel : str = "name", fraction : bool = True, newFigure : bool = True, display_values : bool = False):
     if newFigure: plt.figure()    
     counts = [ak.sum(m) for m in tags.mask.values]
+    yl = "Counts"
     if fraction is True:
         counts = counts / np.sum(counts)
+        yl = "Fractional counts"
     bar = plt.bar(tags.name.values, counts, color = tags.colour.values)
     plt.xlabel(xlabel)
-    plt.ylabel("Counts")
-    plt.bar_label(bar)
+    plt.ylabel(yl)
+    if display_values: plt.bar_label(bar)
     plt.xticks(rotation = 30)
 
 

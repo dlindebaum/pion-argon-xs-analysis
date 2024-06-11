@@ -310,27 +310,28 @@ def MethodComparison(df : pd.DataFrame, linear_correction : float, response_para
         Plots.plt.ylabel("Fractional error")
         Plots.plt.legend()
     book.Save()
-
     return tab
 
+@Master.timer
 def main(args):
-    cross_section.SetPlotStyle(False)    
-    output = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
-
-    output_photons = pd.DataFrame({i : output[i] for i in output if "shower_pairs" not in i and "tags" not in i})
-    output_pairs = pd.DataFrame({i : output[i] for i in output if "shower_pairs" in i and "tags" not in i})
-    output_tags = pd.DataFrame({i : output[i] for i in output if "tags" in i})
-
-    print(output_photons)
-    print(output_pairs)
-    print(output_tags)
-
+    cross_section.SetPlotStyle(False)
     out = args.out + "shower_energy_correction/"
-    os.makedirs(out, exist_ok = True)
-    output_photons.to_hdf(out + "photon_energies.hdf5", "all_photons")
-    output_pairs.to_hdf(out + "photon_energies.hdf5", "photon_pairs")
-    output_tags.to_hdf(out + "photon_energies.hdf5", "tags")
 
+    if (not os.path.isfile(out + "photon_energies.hdf5")) or args.regen:
+        output = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
+
+        output_photons = pd.DataFrame({i : output[i] for i in output if "shower_pairs" not in i and "tags" not in i})
+        output_pairs = pd.DataFrame({i : output[i] for i in output if "shower_pairs" in i and "tags" not in i})
+        output_tags = pd.DataFrame({i : output[i] for i in output if "tags" in i})
+
+        print(output_photons)
+        print(output_pairs)
+        print(output_tags)
+
+        os.makedirs(out, exist_ok = True)
+        output_photons.to_hdf(out + "photon_energies.hdf5", "all_photons")
+        output_pairs.to_hdf(out + "photon_energies.hdf5", "photon_pairs")
+        output_tags.to_hdf(out + "photon_energies.hdf5", "tags")
 
     df = cross_section.ReadHDF5(out + "photon_energies.hdf5")["all_photons"]
     df["residual"] = df.reco_shower_energy - df.true_energy
@@ -377,6 +378,7 @@ if __name__ == "__main__":
     cross_section.ApplicationArguments.Processing(parser)
     cross_section.ApplicationArguments.Output(parser)
     cross_section.ApplicationArguments.Config(parser)
+    cross_section.ApplicationArguments.Regen(parser)
 
     args = parser.parse_args()
     args = cross_section.ApplicationArguments.ResolveArgs(args)

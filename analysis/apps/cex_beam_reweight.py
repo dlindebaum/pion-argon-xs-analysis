@@ -141,13 +141,7 @@ def main(args : cross_section.argparse.Namespace):
     args.events = None
     args.threads = 1
 
-    outputs = {}
-    for s in args.ntuple_files:
-        if os.path.isfile(out + f"output_{s}.dill"):
-            outputs[s] = cross_section.LoadObject(out + f"output_{s}.dill")
-        else:
-            outputs[s] = cross_section.RunProcess(args.ntuple_files[s], s == "data", args, run)
-            cross_section.SaveObject(out + f"output_{s}.dill", outputs[s])
+    outputs = cross_section.ApplicationProcessing(list(args.ntuple_files.keys()), out, args, run, True)
 
     for o in outputs:
         for t in outputs[o]["table"]:
@@ -181,8 +175,9 @@ def main(args : cross_section.argparse.Namespace):
 
 if __name__ == "__main__":
     args = cross_section.argparse.ArgumentParser("Calculates reweighting parameters for beam momentum.")
-    cross_section.ApplicationArguments.Config(args, "True")
+    cross_section.ApplicationArguments.Config(args, True)
     cross_section.ApplicationArguments.Output(args)
+    cross_section.ApplicationArguments.Regen(args)
 
     args = cross_section.ApplicationArguments.ResolveArgs(args.parse_args())
     print(vars(args))

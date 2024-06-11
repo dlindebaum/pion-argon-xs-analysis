@@ -473,7 +473,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         return popt, perr
 
 
-def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : str, v_range : list, funcs, data_bins : list, hist_bins : int, log : bool = False, rms_err : bool = False, weights : np.ndarray = None):
+def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : str, v_range : list, funcs, data_bins : list, hist_bins : int, log : bool = False, rms_err : bool = False, weights : np.ndarray = None, outer_legend : bool = False):
     """ Estimate a central value in each reco energy bin based on some FitFunction or collection of FitFunctions.
 
     Args:
@@ -572,7 +572,8 @@ def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : st
         cv.append(mean)
         cv_err.append(abs(mean_error) if mean_error is not None else mean_error)
     
-    plt.gcf().legend(fig_handles, fig_labels, loc = "lower right", ncols = 3)
-    plt.gcf().supxlabel(variable.replace("_", " "))
+    if outer_legend:
+        plt.gcf().legend(fig_handles, fig_labels, loc = "lower right", ncols = 3)
+    plt.gcf().supxlabel(variable.replace("_", " ").capitalize())
     plt.tight_layout()
     return np.array(cv), np.array(cv_err)

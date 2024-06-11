@@ -287,7 +287,7 @@ def RecoRegionSelection(region_selections : dict[dict], args : argparse.Namespac
         true_regions = region_selections[r]["true_regions"]
 
         counts = cross_section.CountInRegions(true_regions, reco_regions)
-        Plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "true process", x_label = "reco region", title = cross_section.remove_(r))
+        Plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "True process", x_label = "Reco region", title = cross_section.remove_(r))
         pdf.Save()
 
         pe[cross_section.remove_(r)] = (np.diag(counts) / np.sum(counts, 0)[:-1]) * (np.diag(counts) / np.sum(counts, 1))
@@ -397,7 +397,8 @@ def main(args : argparse.Namespace):
         "z_int" : "$l^{res, MC}$ (cm)"
     }
 
-    output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
+    # output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
+    output_mc = cross_section.ApplicationProcessing(["mc"], out, args, run, True)["mc"]
 
     print(f"{output_mc=}")
 
@@ -416,9 +417,9 @@ def main(args : argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Analyses MC ntuples in order to determine parameters used to emulate selection efficiency and detector effects for the toy model.")
 
+    cross_section.ApplicationArguments.Config(parser, True)
     cross_section.ApplicationArguments.Output(parser)
-    cross_section.ApplicationArguments.Processing(parser)
-    cross_section.ApplicationArguments.Config(parser)
+    cross_section.ApplicationArguments.Regen(parser)
 
     args = parser.parse_args()
     args = cross_section.ApplicationArguments.ResolveArgs(args)

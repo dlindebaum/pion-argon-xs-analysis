@@ -820,8 +820,11 @@ def PlotSysHist(systematic_table : dict[pd.DataFrame], book : Plots.PlotBook = P
     return
 
 
-def FinalPlots(cv, systematics_table : dict[pd.DataFrame], energy_slices, book : Plots.PlotBook = Plots.PlotBook.null):
+def FinalPlots(cv, systematics_table : dict[pd.DataFrame], energy_slices, book : Plots.PlotBook = Plots.PlotBook.null, alt_xs : bool = False):
     goodness_of_fit = {}
+    if alt_xs:
+        xs_alt = cross_section.GeantCrossSections(cross_section.os.environ["PYTHONPATH"] + "/data/g4_xs_pi_KE_100.root", energy_range = [energy_slices.min_pos - energy_slices.width, energy_slices.max_pos])
+    goodness_of_fit_alt = {}
     for p in cv:
         xs = {
             "ProtoDUNE SP: Data Stat + Sys Error" : cv[p],
@@ -829,8 +832,11 @@ def FinalPlots(cv, systematics_table : dict[pd.DataFrame], energy_slices, book :
         }
         cross_section.PlotXSComparison(xs, energy_slices, p, simulation_label = "Geant4 v10.6", colors = {k : f"C0" for k in xs}, chi2 = False)
         goodness_of_fit[p] = cross_section.HypTestXS(cv[p][0], systematics_table[p].loc["Total systematic uncertainty (mb)"], p, energy_slices)
+        if alt_xs:
+            xs_alt.Plot(p, "red", label = "Geant4 v10.6, $\pi^{\pm}$:$2^{nd}$ $KE > 100 MeV$")
+            goodness_of_fit_alt[p] = cross_section.HypTestXS(cv[p][0], systematics_table[p].loc["Total systematic uncertainty (mb)"], p, energy_slices, cross_section.os.environ["PYTHONPATH"] + "/data/g4_xs_pi_KE_100.root")
         book.Save()
-    return pd.DataFrame(goodness_of_fit)
+    return pd.DataFrame(goodness_of_fit), pd.DataFrame(goodness_of_fit_alt)
 
 
 def can_run(systematic : str):
@@ -1050,11 +1056,15 @@ def main(args : cross_section.argparse.Namespace):
         with Plots.PlotBook(outdir + "plots.pdf") as book:
             with Plots.matplotlib.rc_context({"axes.prop_cycle" : Plots.plt.cycler("color", Plots.matplotlib.cm.get_cmap("tab20").colors)}):
                 PlotSysHist(tables, book)
-            table = FinalPlots(args.cv["pdsp"], tables, args.energy_slices, book)
+            table, table_alt = FinalPlots(args.cv["pdsp"], tables, args.energy_slices, book, alt_xs = False)
 
         tags = cross_section.Tags.ExclusiveProcessTags(None)
         table = table.rename(index = {"w_chi2" : "$\chi^{2}/ndf$", "p" : "$p$"}, columns={t : tags[t].name_simple.capitalize() for t in tags})
         table.style.format("{:.3g}").to_latex(outdir + "goodness_of_fit.tex")
+
+        if len(table_alt) > 0:
+            table_alt = table_alt.rename(index = {"w_chi2" : "$\chi^{2}/ndf$", "p" : "$p$"}, columns={t : tags[t].name_simple.capitalize() for t in tags})
+            table_alt.style.format("{:.3g}").to_latex(outdir + "goodness_of_fit_alt.tex")
     return
 
 if __name__ == "__main__":
