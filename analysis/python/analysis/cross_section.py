@@ -257,6 +257,65 @@ def _unfold_custom(prior=None, mixer=None, ts_func=None, max_iter=100,
 
 # pyhf.modifiers.staterror.required_parset = to_poisson(pyhf.modifiers.staterror.required_parset)
 
+class PlotStyler:
+    def __init__(self, extend_colors : bool = False, custom_colors : list = None, dpi : int = 100, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):
+        self.args = locals()
+        self.args.pop("self")
+        PlotStyler.SetPlotStyle(**self.args)
+
+    class __updater__:
+        def __init__(self, parent : "PlotStyler", extend_colors : bool = None, custom_colors : list = None, dpi : int = None, dark : bool = None, font_scale : float = None, font_style : str = None):
+            self.args = locals()
+            self.args.pop("self")
+            self.args.pop("parent")
+            self.parent = parent
+
+            for k in self.args:
+                if self.args[k] is None:
+                    self.args[k] = self.parent.args[k]
+
+            pass
+        def __enter__(self):
+            PlotStyler.SetPlotStyle(**self.args)
+            pass
+        def __exit__(self, type, value, traceback):
+            PlotStyler.SetPlotStyle(**self.parent.args)
+            pass
+
+    def Update(self, extend_colors : bool = None, custom_colors : list = None, dpi : int = None, dark : bool = None, font_scale : float = None, font_style : str = None):
+        return self.__updater__(self, extend_colors, custom_colors, dpi, dark, font_scale, font_style)
+
+    @staticmethod
+    def SetPlotStyle(extend_colors : bool = False, custom_colors : list = None, dpi : int = 300, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):
+        Plots.plt.style.use("default") # first load the default to reset any previous changes made by other styles
+        Plots.plt.style.use('ggplot')
+        Plots.plt.rcParams.update({'patch.linewidth': 1})
+        Plots.plt.rcParams.update({'font.size': font_scale * 10})
+        Plots.plt.rcParams.update({"axes.titlecolor" : "#555555"})
+        Plots.plt.rcParams.update({"axes.titlesize" : font_scale * 12})
+        Plots.plt.rcParams['figure.dpi'] = dpi
+        Plots.plt.rcParams['legend.fontsize'] = "small"
+        Plots.plt.rcParams["font.family"] = font_style
+
+        Plots.plt.rc('text.latex', preamble=r"\\usepackage{amsmath}")
+        if custom_colors:
+            Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", custom_colors)})
+        if dark:
+            l_2 = [
+            Plots.matplotlib.cm.get_cmap("tab20c").colors[0],
+            Plots.matplotlib.cm.get_cmap("tab20c").colors[8],
+            Plots.matplotlib.cm.get_cmap("tab20b").colors[13],
+            Plots.matplotlib.cm.get_cmap("tab20b").colors[0],
+            Plots.matplotlib.cm.get_cmap("tab20b").colors[17],
+            Plots.matplotlib.cm.get_cmap("tab20b").colors[4],
+            Plots.matplotlib.cm.get_cmap("tab20c").colors[12],
+            Plots.matplotlib.cm.get_cmap("tab20c").colors[16],
+            ]
+            Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", l_2)})
+        if extend_colors:
+            Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", Plots.matplotlib.cm.get_cmap("tab20").colors)})
+        return
+
 
 def SetPlotStyle(extend_colors : bool = False, custom_colors : list = None, dpi : int = 300, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):
     Plots.plt.style.use("default") # first load the default to reset any previous changes made by other styles
@@ -1068,7 +1127,7 @@ class Slices:
 
 
 class GeantCrossSections:
-    """ Object for accessing Geant 4 cross sections from the root file generated with Geant4reweight tools.
+    """ Object for accessing Geant 4 cross sections from the root file generated with Geant4Reweight tools.
     """
     labels = {"abs_KE;1" : "absorption", "inel_KE;1" : "quasielastic", "cex_KE;1" : "charge_exchange", "dcex_KE;1" : "double_charge_exchange", "prod_KE;1" : "pion_production", "total_inel_KE;1" : "total_inelastic"}
 
@@ -1115,7 +1174,7 @@ class GeantCrossSections:
         """ Plot all cross section channels.
         """
         for k in self.labels.values():
-            Plots.Plot(self.KE, getattr(self, k), label = remove_(k), newFigure = False, xlabel = "KE (MeV)", ylabel = "$\sigma (mb)$", title = title)
+            Plots.Plot(self.KE, getattr(self, k), label = remove_(k), newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\sigma$ (mb)", title = title)
             # Plots.plt.fill_between(self.KE, getattr(self, k) - self.Stat_Error(k), getattr(self, k) + self.Stat_Error(k), color = Plots.plt.gca()._get_lines.get_next_color())
 
 
@@ -1140,7 +1199,7 @@ class GeantCrossSections:
                 y = self.quasielastic + self.double_charge_exchange
             else:
                 y = getattr(self, xs)
-            Plots.Plot(self.KE, y, label = label, title = title, newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\sigma (mb)$", color = color)
+            Plots.Plot(self.KE, y, label = label, title = title, newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\sigma$  (mb)", color = color)
             # Plots.plt.fill_between(self.KE, getattr(self, xs) - self.Stat_Error(xs), getattr(self, xs) + self.Stat_Error(xs), color = Plots.plt.gca()._get_lines.get_next_color())
 
 
@@ -2158,7 +2217,7 @@ class Unfold:
         Plots.plt.ylabel("Reco $KE$ (MeV)")
         Plots.plt.grid(False)
         Plots.plt.colorbar(label = c_label)
-        Plots.plt.title(title)
+        Plots.plt.title(title, pad = 10)
         Plots.plt.xticks(np.linspace(0, len(x) - 1, len(x)), np.array(x[::-1], dtype = int), rotation = 30)
         Plots.plt.yticks(np.linspace(0, len(x) - 1, len(x)), np.array(x[::-1], dtype = int), rotation = 30)
         Plots.plt.tight_layout(pad = 1)

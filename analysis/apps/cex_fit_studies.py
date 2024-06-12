@@ -346,7 +346,7 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
     # plot true process fractional error
     Plots.plt.figure()
     for n in Plots.MultiPlot(4):
-        Plots.Plot(x, data[f"fe_total_{n}"], yerr = data[f"fe_err_total_{n}"], xlabel = xlabel, ylabel = f"$f_{process_map[n]}$", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
+        Plots.Plot(x, data[f"fe_total_{n}"], yerr = data[f"fe_err_total_{n}"], xlabel = xlabel, ylabel = f"$f_{{{process_map[n]}}}$", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
         Plots.plt.axhline(0, color = "black", linestyle = "--")
         Plots.plt.ylim(1.5 * np.min(data.filter(regex = "fe_total_").values), 1.5 * np.max(data.filter(regex = "fe_total_").values))
         Plots.plt.xticks(ticks = x, labels = x)
@@ -689,7 +689,7 @@ def CalculateResultsFromFile(workdirs, test_name, model_name, template_counts, m
 
 @cross_section.timer
 def main(args : cross_section.argparse.Namespace):
-    cross_section.SetPlotStyle(extend_colors = True, dark = True, font_scale = 1.2)
+    cross_section.PlotStyler.SetPlotStyle(extend_colors = True, dark = True, font_scale = 1.5)
     toys = cross_section.Toy(file = args.template)
     args.template = cross_section.AnalysisInput.CreateAnalysisInputToy(toys)
 
@@ -761,7 +761,7 @@ def main(args : cross_section.argparse.Namespace):
             with Plots.PlotBook(outdir + "xs_curves") as book:
                 PlotShapeExamples(args.energy_slices, book)
 
-        label_map = {"absorption" : "abs", "charge_exchange" : "cex", "single_pion_production" : "spip", "pion_production" : "pip"}
+        tags = cross_section.Tags.ExclusiveProcessTags(None)
 
         test = ["shape", "normalisation", "pulls"] 
 
@@ -788,13 +788,13 @@ def main(args : cross_section.argparse.Namespace):
                             print(folder[k])
                             means[folder[k]] = f"{mean:.{p}g} $\pm$ {sem:.1g}"
                             stds[folder[k]] = f"{std:.3g}"
-                            Plots.PlotHist(pulls[k], bins = 10, title = f"$\mu_{{{label_map[k]}}}$ | mean : {mean:.3g} $\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = False)
+                            Plots.PlotHist(pulls[k], bins = 10, title = f"$\mu_{{{tags[k].name_simple}}}$ | mean : {mean:.3g} $\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = False)
                         book.Save()
                         for k in pulls.columns:
                             mean = np.mean(pulls[k])
                             std = np.std(pulls[k])
                             sem = std / np.sqrt(len(pulls[k]))
-                            Plots.PlotHist(pulls[k], bins = 10, title = f"$\mu_{{{label_map[k]}}}$ | mean : {mean:.3g} $\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = True)
+                            Plots.PlotHist(pulls[k], bins = 10, title = f"$\mu_{{{tags[k].name_simple}}}$ | mean : {mean:.3g} $\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = True)
                             book.Save()
 
                         table = pd.DataFrame({"mean" : means, "st.dev" : stds}).T
@@ -811,7 +811,7 @@ def main(args : cross_section.argparse.Namespace):
                             if (t == "shape"):
                                 PlotCrossCheckResultsShape(results_total[f], results_bins[f], args.energy_slices.pos_overflow, args.fit["single_bin"], pdf)
                             else:
-                                PlotCrossCheckResults(f"{cross_section.remove_(f)} {t}", results_total[f], results_bins[f], args.energy_slices.pos_overflow, pdf, args.fit["single_bin"], [-0.02, 0.06])
+                                PlotCrossCheckResults(f"$\mathcal{{N}}_{{{tags[f].name_simple}}}$", results_total[f], results_bins[f], args.energy_slices.pos_overflow, pdf, args.fit["single_bin"], [-0.02, 0.06])
                         Plots.plt.close("all")
                 
                     with Plots.PlotBook(outdir + f"{t}_test_{m}/summary_plots.pdf", True) as book:

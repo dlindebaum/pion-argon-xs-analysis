@@ -89,7 +89,7 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
 
 
 def main(args : argparse.Namespace):
-    cross_section.SetPlotStyle(False, dpi = 100)
+    cross_section.PlotStyler.SetPlotStyle(False)
     outdir = args.out + "upstream_loss/"
     os.makedirs(outdir, exist_ok = True)
 

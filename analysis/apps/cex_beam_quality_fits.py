@@ -98,7 +98,7 @@ def MakePlots(output_mc : dict[ak.Array], mc_fits : dict, output_data : dict[ak.
         data_fits (dict): fits made on data
         out (str): output directory
     """
-    cross_section.SetPlotStyle()
+    cross_section.PlotStyler.SetPlotStyle()
 
     label_name = "Beam" if truncate is None else "Truncated beam"
 

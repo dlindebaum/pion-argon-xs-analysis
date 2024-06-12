@@ -383,7 +383,7 @@ def BeamProfileStudy(quantities : dict, args : argparse.Namespace, true_beam_mas
 
 @Master.timer
 def main(args : argparse.Namespace):
-    cross_section.SetPlotStyle(True)
+    cross_section.PlotStyler.SetPlotStyle(True)
     out = args.out + "toy_parameters/"
 
     args.batches = None

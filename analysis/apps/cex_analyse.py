@@ -327,7 +327,7 @@ def PlotEfficiency(energy_slices : cross_section.Slices, efficiencies : dict, bo
     if book is not None:
         x = energy_slices.pos_overflow - energy_slices.width/2
         for k, v in efficiencies.items():
-            Plots.Plot(x, v[0], yerr = v[1], ylabel = "efficiency", xlabel = f"$KE$ (MeV)", marker = "x", newFigure = True, title = k)
+            Plots.Plot(x, v[0], yerr = v[1], ylabel = "Efficiency", xlabel = f"$KE$ (MeV)", marker = "x", newFigure = True, title = k)
             Plots.plt.ylim(0, 1)
             book.Save()
     return
@@ -379,21 +379,21 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
         print("using default options for unfolding")
         unfolding_args = {"ts_stop" : 0.01, "max_iter" : 100, "ts" : "ks", "method" : 1}
 
-    if unfolding_args["method"] == 1: #* Unfold defector effect only
-        resp = cross_section.Unfold.CalculateResponseMatrices(mc, signal_process, energy_slices, regions, book, None)
-        priors = {k : v for k, v in true_hists_selected.items()}
-        if regions:
-            priors.pop("int_ex")
-            for k, v in true_hists_selected_regions.items():
-                priors[k] = v
+    with cross_section.PlotStyler(extend_colors = False, dark = True).Update(font_scale = 1.1):
+        if unfolding_args["method"] == 1: #* Unfold defector effect only
+            resp = cross_section.Unfold.CalculateResponseMatrices(mc, signal_process, energy_slices, regions, book, None)
+            priors = {k : v for k, v in true_hists_selected.items()}
+            if regions:
+                priors.pop("int_ex")
+                for k, v in true_hists_selected_regions.items():
+                    priors[k] = v
 
-    if unfolding_args["method"] == 2: #* Unfold detector effect and efficiency
-        
-        resp = cross_section.Unfold.CalculateResponseMatrices(mc_cheat, signal_process, energy_slices, regions, book, e_copy)
-        priors = {k : v for k, v in true_hists.items()}
-        if regions:
-            for k, v in true_hists_process.items():
-                priors[k] = v
+        if unfolding_args["method"] == 2: #* Unfold detector effect and efficiency
+            resp = cross_section.Unfold.CalculateResponseMatrices(mc_cheat, signal_process, energy_slices, regions, book, e_copy)
+            priors = {k : v for k, v in true_hists.items()}
+            if regions:
+                for k, v in true_hists_process.items():
+                    priors[k] = v
 
     unfolding_args["priors"] = priors
     unfolding_args["response_matrices"] = resp
@@ -485,7 +485,7 @@ def LoadToy(file):
 
 def PlotRegions(mc : cross_section.AnalysisInput, book : Plots.PlotBook):
     counts = cross_section.CountInRegions(mc.exclusive_process, mc.regions)
-    Plots.PlotConfusionMatrix(counts, list(mc.exclusive_process.keys()), list(mc.regions.keys()), y_label = "true process", x_label = "reco region")
+    Plots.PlotConfusionMatrix(counts, list(mc.exclusive_process.keys()), list(mc.regions.keys()), y_label = "True process", x_label = "Reco region")
     book.Save()
     return
 
@@ -630,7 +630,7 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
     return xs
 
 def main(args):
-    cross_section.SetPlotStyle(extend_colors = False, dark = True)
+    cross_section.PlotStyler.SetPlotStyle(extend_colors = False, dark = True)
     Plots.preliminary = False
     args.out = args.out + "measurement/"
 

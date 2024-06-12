@@ -29,7 +29,7 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
 
 @Master.timer
 def main(args):
-    cross_section.SetPlotStyle(extend_colors = True)
+    cross_section.PlotStyler.SetPlotStyle(extend_colors = True)
     outdir = args.out + "beam_norm/"
     os.makedirs(outdir, exist_ok = True)
     

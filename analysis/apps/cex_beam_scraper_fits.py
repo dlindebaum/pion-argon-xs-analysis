@@ -195,7 +195,7 @@ def BeamScraperPlots(beam_inst_KE_bins : list, output_mc : dict[ak.Array], scrap
 
 @Master.timer
 def main(args : argparse.Namespace):
-    cross_section.SetPlotStyle(True)
+    cross_section.PlotStyler.SetPlotStyle(True)
     outdir = args.out + "beam_scraper/"
     os.makedirs(outdir, exist_ok = True)
 

@@ -1094,24 +1094,32 @@ def PlotHist2DMarginal(data_x, data_y, bins: int = 100, x_range: list = None, y_
     h, (x_e, y_e) = PlotHist2D(data_x[not_nan], data_y[not_nan], bins, x_range, y_range, z_range, xlabel, ylabel, title, label, x_scale, y_scale, False, annotation, cmap, norm, False)
 
     plt.subplot(2, 2, 1) # top right (x projection)
-    plt.hist(x_e[:-1], bins = x_e, weights = np.sum(h, 1), density = True)
+    ny, _, _ = plt.hist(x_e[:-1], bins = x_e, weights = np.sum(h, 1), density = True)
     plt.xticks(ticks = x_e, labels = [])
-    plt.locator_params(axis='both', nbins=4)
+    plt.locator_params(axis='x', nbins=4)
     plt.xlim(min(x_e), max(x_e))
-    plt.ylabel("fraction")
-    plt.gca().yaxis.get_major_ticks()[0].label1.set_visible(False)
+    # plt.ylabel("fraction")
+    plt.locator_params(axis='y', nbins=2)
+    plt.gca().yaxis.get_major_ticks()[0].label1.set_visible(True)
+
+    ty = [max(ny)/2, max(ny)]
+    plt.yticks(ty, [f"{i:.1g}" for i in ty], fontsize = "small")
 
     plt.subplot(2, 2, 4) # bottom right (y projection)
-    plt.hist(y_e[:-1], bins = y_e, weights = np.sum(h, 0), density = True, orientation="horizontal")
+    nx, _, _ = plt.hist(y_e[:-1], bins = y_e, weights = np.sum(h, 0), density = True, orientation="horizontal")
     plt.yticks(ticks = y_e, labels = [])
-    plt.locator_params(axis='both', nbins=4)
+    plt.locator_params(axis='y', nbins=4)
     plt.ylim(min(y_e), max(y_e))
-    plt.xlabel("fraction")
-    plt.gca().xaxis.get_major_ticks()[0].label1.set_visible(False)
+    # plt.xlabel("fraction")
+    plt.locator_params(axis='x', nbins=2)
+    plt.gca().xaxis.get_major_ticks()[0].label1.set_visible(True)
+
+    tx = [max(nx)/2, max(nx)]
+    plt.xticks(tx, [f"{i:.1g}" for i in tx], fontsize = "small")
 
     plt.colorbar(ax = plt.gca())
-    plt.tight_layout()
     plt.subplot(2, 2, 3) # switch back to main plot at the end
+    plt.tight_layout()
     return
 
 

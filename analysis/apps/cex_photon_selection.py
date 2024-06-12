@@ -314,7 +314,7 @@ def MethodComparison(df : pd.DataFrame, linear_correction : float, response_para
 
 @Master.timer
 def main(args):
-    cross_section.SetPlotStyle(False)
+    cross_section.PlotStyler.SetPlotStyle(False)
     out = args.out + "shower_energy_correction/"
 
     if (not os.path.isfile(out + "photon_energies.hdf5")) or args.regen:

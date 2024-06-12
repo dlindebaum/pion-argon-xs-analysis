@@ -860,7 +860,7 @@ def can_regen(dir : str):
 
 @cross_section.timer
 def main(args : cross_section.argparse.Namespace):
-    cross_section.SetPlotStyle(dark = True)
+    cross_section.PlotStyler.SetPlotStyle(dark = True)
     out = args.out + "systematics/"
     cross_section.os.makedirs(out, exist_ok = True)
 
@@ -1040,9 +1040,10 @@ def main(args : cross_section.argparse.Namespace):
             sys = cross_section.LoadObject(f"{outdir}sys.dill")
 
             with Plots.PlotBook(f"{outdir}plots", True) as book:
-                cross_section.SetPlotStyle(dark = False, extend_colors = True)
+                #! use styler properly
+                cross_section.PlotStyler.SetPlotStyle(dark = False, extend_colors = True)
                 NormalisationSystematic.PlotNormalisationTestResults(results, args, xs_nominal, book)
-                cross_section.SetPlotStyle(dark = True, extend_colors = False)
+                cross_section.PlotStyler.SetPlotStyle(dark = True, extend_colors = False)
 
             tables = norm_sys.CreateTables(args.cv, sys)
             SaveTables(tables, outdir, 2)

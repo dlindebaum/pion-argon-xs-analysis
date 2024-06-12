@@ -48,10 +48,12 @@ def ReWeightResults(sideband_mc : dict, sideband_data : dict, args : cross_secti
     Plots.PlotHist(weights, range = [0, 3], xlabel = "weights", truncate = True)
     book.Save()
 
-    Plots.PlotTagged(sideband_mc["p_inst"], sideband_mc["tags"], data2 = sideband_data["p_inst"], x_range = plot_range, norm = args.norm, data_weights = None, bins = bins, title = "nominal", x_label = "$P_{inst}^{reco}$ (MeV)", ncols = 1)
+    Plots.PlotTagged(sideband_mc["p_inst"], sideband_mc["tags"], data2 = sideband_data["p_inst"], x_range = plot_range, norm = args.norm, data_weights = None, bins = bins, x_label = "$P_{inst}^{reco}$ (MeV)", ncols = 1)
+    Plots.plt.title("nominal", pad = 15)
     book.Save()
 
-    Plots.PlotTagged(sideband_mc["p_inst"], sideband_mc["tags"], data2 = sideband_data["p_inst"], x_range = plot_range, norm = args.norm, data_weights = weights, bins = bins, title = f"reweighted : {reweight_func}", x_label = "$P_{inst}^{reco}$ (MeV)", ncols = 1)
+    Plots.PlotTagged(sideband_mc["p_inst"], sideband_mc["tags"], data2 = sideband_data["p_inst"], x_range = plot_range, norm = args.norm, data_weights = weights, bins = bins, x_label = "$P_{inst}^{reco}$ (MeV)", ncols = 1)
+    Plots.plt.title(f"reweighted : {reweight_func}", pad = 15)
     book.Save()
     return
 
@@ -133,7 +135,7 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
 
 @cross_section.timer
 def main(args : cross_section.argparse.Namespace):
-    cross_section.SetPlotStyle(extend_colors = True, dpi = 100)
+    cross_section.PlotStyler.SetPlotStyle(extend_colors = True, dpi = 100)
     out = args.out + "beam_reweight/"
     os.makedirs(out, exist_ok = True)
 
