@@ -1,3 +1,4 @@
 analysis/python/__pycache__/*
 analysis/python/analysis/__pycache__/*
+analysis/gnn-data/*
 *.pyc
