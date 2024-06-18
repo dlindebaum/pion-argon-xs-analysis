@@ -271,12 +271,13 @@ def get_ak_intersection(vals, tests):
     mask = np.isin(vals_offset, tests_offset, kind="sort")
     return ak.unflatten(mask, n_vals_per_event)
 
-def get_pi0_photons(events, mc=False):
-    true_beam_pi0s = events.trueParticles.number[np.logical_and(
-        events.trueParticles.mother == 1, events.trueParticles.pdg == 111)]
+def get_pi0_photons(events, mc=False, beam_only=True):
+    beam_pi0s = events.trueParticles.mother == 1 if beam_only else True
+    true_pi0s = events.trueParticles.number[np.logical_and(
+        beam_pi0s, events.trueParticles.pdg == 111)]
     particles = events.trueParticles if mc else events.trueParticlesBT
-    photon_mothers = particles.mother[evts.trueParticlesBT.pdg == 22]
-    return get_ak_intersection(photon_mothers, true_beam_pi0s)
+    photon_mothers = particles.mother[events.trueParticlesBT.pdg == 22]
+    return get_ak_intersection(photon_mothers, true_pi0s)
 
 def get_impact_parameter(direction, start_pos, beam_vertex):
     """
