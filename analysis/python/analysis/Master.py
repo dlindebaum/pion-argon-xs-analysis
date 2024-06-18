@@ -2294,7 +2294,7 @@ class ShowerPairs:
         return vector.add(pos1, vector.prod(separation/2, joining_dir))
 
     @staticmethod
-    def ClosestApproach(dir1, dir2, start1, start2):
+    def ClosestApproach(dir1, dir2, start1, start2, magnitude=True):
         """
         Finds the closest approach between two showers.
 
@@ -2319,6 +2319,8 @@ class ShowerPairs:
         rel_start = vector.sub(start1, start2)
         # Separation between the lines
         d = vector.dot(rel_start, cross)
+        if magnitude:
+            return abs(d)
         return d
 
     ##############################################################################################
