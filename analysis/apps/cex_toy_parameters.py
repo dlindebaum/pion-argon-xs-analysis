@@ -160,8 +160,8 @@ def PlotCorrelationMatrix(counts : np.array = None, true_labels = None, reco_lab
     fractions = counts / np.sum(counts, axis = 1)[:, np.newaxis]
 
     # fractions, counts = ComputeFractions(true_regions, reco_regions, return_counts = True)
-    if newFigure: Plots.plt.figure()
-    Plots.plt.imshow(counts/np.max(counts, axis = 0), cmap = "cool", origin = "lower")
+    if newFigure: Plots.plt.figure(figsize=(8, 6))
+    Plots.plt.imshow(counts/np.sum(counts, axis = 0), cmap = "cool", vmin=0., vmax=1., origin = "lower")
     Plots.plt.colorbar(label = "counts (column normalised)")
 
     # true_counts = [f"{t.replace('_', ' ')}\n({sum(true_regions[t])})" for t in true_regions]
