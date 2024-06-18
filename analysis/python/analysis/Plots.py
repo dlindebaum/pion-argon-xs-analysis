@@ -375,7 +375,7 @@ class PlotConfig():
             iqrange = np.max(data) - np.min(data)
 
         # Freedman–Diaconis rule for optimal bin width
-        bin_width = 2*iqrange/len(data)**(1/3)
+        bin_width = 2*iqrange/(len(data)**(1/3))
         bins = int(round((np.max(data) - np.min(data))/bin_width))
         return bins, bin_width
 
@@ -404,7 +404,7 @@ class PlotConfig():
         if min(data) < bins[0]:
             low_bin_width = bins[1] - bins[0]
             bins = np.concatenate((np.arange(
-                bins[0] - low_bin_width, min(data) - low_bin_width, low_bin_width)[::-1], bins))
+                bins[0] - low_bin_width, min(data) - low_bin_width, -low_bin_width)[::-1], bins))
         if max(data) >= bins[-1]:
             high_bin_width = bins[-1] - bins[-2]
             # TODO nicer way to do this?
