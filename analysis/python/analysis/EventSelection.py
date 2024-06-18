@@ -383,20 +383,21 @@ def count_all_pi0s(events, beam_daughters=True):
 
 def count_non_beam_charged_pi(events, beam_daughters=True):
     """
-    Returns the number of truth pi+ particles event in `events`.
+    Returns the number of truth pi+ and pi- particles event in
+    `events`.
 
     Parameters
     ----------
     events : Data
-        Events in which to count pi+ occurances.
+        Events in which to count charged pion occurances.
     beam_daughters : boolean, optional
-        Whether to only accept a pi+ if it is a daughter of the beam
+        Whether to only accept a pion if it is a daughter of the beam
         particle. Default is True.
 
     Returns
     -------
     counts : ak.Array
-        Array containing the number of pi+ particles for each event.
+        Array containing the number of pion particles for each event.
     """
     if beam_daughters:
         daughter_truth = events.trueParticles.mother == 1
@@ -404,7 +405,8 @@ def count_non_beam_charged_pi(events, beam_daughters=True):
         daughter_truth = ak.ones_like(events.trueParticles.mother, dtype=bool)
     non_beam_pi_mask = np.logical_and(
         daughter_truth,
-        np.logical_and(events.trueParticles.pdg == 211,
+        np.logical_and(np.logical_or(events.trueParticles.pdg == 211,
+                                     events.trueParticles.pdg == -211),
                        events.trueParticles.number != 1))
     return ak.sum(non_beam_pi_mask, axis=-1)
 
