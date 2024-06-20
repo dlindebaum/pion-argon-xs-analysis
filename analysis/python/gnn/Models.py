@@ -4,6 +4,7 @@
 
 import os
 import pickle
+import dill
 import copy
 import numpy as np
 import awkward as ak
@@ -11,7 +12,7 @@ import tensorflow as tf
 import tensorflow_gnn as tfgnn
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
-from python.gnn import DataPreparation
+from python.gnn import DataPreparation, Layers
 # from python.gnn.model_plots import *
 from apps.cex_toy_parameters import PlotCorrelationMatrix as plot_confusion_matrix
 # from python.analysis import Plots
@@ -75,11 +76,15 @@ def make_model_paths(folder_path):
     """
     if not os.path.exists(folder_path):
         os.mkdir(folder_path)
+    weights_folder = os.path.join(folder_path, "checkpoints")
+    os.mkdir(weights_folder)
     return {"folder_path": folder_path,
             "params_path": os.path.join(folder_path, "hyper_params.pkl"),
             "text_params_path": os.path.join(folder_path,
                                              "hyper_params_repr.txt"),
             "model_path": os.path.join(folder_path, "model.tf"),
+            # "dill_path": os.path.join(folder_path, "model_dill.dll"),
+            "weights_path": os.path.join(weights_folder, "weights"),
             "history_path": os.path.join(folder_path, "train_history.pkl")}
 
 def generate_hyper_params(
@@ -184,6 +189,20 @@ def load_hyper_params(paths_dict):
     with open(paths_dict["params_path"], 'rb') as f:
         params = pickle.load(f)
     return params
+
+def load_model(path, from_weights=True):
+    if isinstance(path, dict):
+        if from_weights:
+            path = path["weights_path"]
+        else:
+            path = path["model_path"]
+    else:
+        tf = not path[-4:] == ".dll"
+    if tf:
+        return tf.keras.models.load_model(path)
+    with open(path, "rb") as f:
+        return dill.load(f)
+            
 
 # =====================================================================
 #                            Data formatting
@@ -344,6 +363,93 @@ def _beam_conn_update_layer():
                 tfgnn.keras.layers.NextStateFromConcat(dense(beam_edge_next_dim))
             )})
     return beam_conn_edge_update
+
+example_params = {
+    "node_dim": 8,
+    "beam_node_dim": 8,
+    "edge_dim": 4,
+    "beam_edge_dim": 4,
+    # Node setup
+    "n_node_layers": 3,
+    "n_node_hidden_depth": 64,
+    # Dimensions for message passing.
+    "message_heads": 8,
+    "message_channels": 4,
+    "beam_message_heads": 8,
+    "beam_message_channels": 4,
+    # edge_readout_dim=16,
+    # edge_readout_hidden_layers=2,
+    # Dimension for the logits.
+    "final_hidden_layers": 0,
+    "final_layer_nodes": 16,
+    "num_classes": 4,
+    # Classificatino only layer after regression readout
+    "class_readout_dim": 16,
+    # Number of message passing steps.
+    "num_message_passing": 2,
+    # Other hyperparameters.
+    "regularisation": 8e-5,
+    "dropout_rate": 0.1
+}
+
+example_message_passing = [
+    Layers.PFOUpdate(),
+    Layers.NeighbourUpdate(final_step=False),
+    Layers.BeamCollection(),
+    Layers.BeamConnectionUpdate(final_step=False)
+]
+
+example_constructor = [
+    Layers.Setup(),
+    Layers.InitialState(pfo_hidden=(64, 3),
+                        neighbours_hidden=None,
+                        beam_connections_hidden=None),
+    # Layer is an output if given positional argument
+    Layers.ReadoutClassifyNode("pion_id", which_nodes="pfo"),
+    Layers.ReadoutClassifyNode("photon_id", which_nodes="pfo"),
+    Layers.BeamCollection(next_state="concat"),
+    # Loop constructor creates a sub loop
+    Layers.LoopConstructor(example_message_passing,
+                           loops=2),
+    Layers.ReadoutClassifyEdge("pi0_id", which_edges="neighbours"),
+    Layers.ReadoutNode(which_nodes="beam"),
+    Layers.Dense(depth=16, n_layers=1),
+    Layers.Dense("pion_count", depth=1),
+    Layers.Dense("pi0_count", depth=1),
+    Layers.Dense(depth=16, n_layers=1),
+    Layers.Dense("reco_classification", depth=4),
+    Layers.Dense("classifier", depth=4)
+]
+
+example_outputs = ["classifier",
+                   "pion_count", "pi0_count",
+                   "pion_id", "photon_id", "pi0_id",
+                   "reco_classification"]
+
+def construct_model(hyper_params, constructor, parameters, outputs, model_type="GATv2"):
+    hyper_params.update({"model_type": model_type,
+               "model_parameters": parameters,
+               "model_constructor": repr(constructor),
+               "model_outputs": outputs})
+    layer_funcs=[]
+    output_index=[]
+    outputs=[]
+    layer_funcs, which_outputs = Layers.parse_constructor(constructor)
+    which_outputs = [outputs.index(o) if o in ouputs else o for o in which_outputs]
+    model_out = outputs.copy()
+    input_graph_spec = get_spec_from_hyper_params(hyper_params)
+    input_graph = tf.keras.layers.Input(type_spec=input_graph_spec)
+    graph = input_graph
+    for func, output_ind in zip(layer_funcs, which_outputs):
+        if output_ind is None:
+            graph = func(graph)
+        else:
+            model_out[output_ind] = func(graph)
+    return tf.keras.Model(inputs=[input_graph], outputs=model_out)
+
+
+def load_model_from_hyper_params(hyper_params, constructor, parameters, outputs, model_type="GATv2"):
+    pass
 
 def build_evt_classifer_model_data_with_momentum(
     graph_tensor_spec,
@@ -622,7 +728,8 @@ def compile_and_train(
         hyper_params,
         batched_train,
         batched_val,
-        print_summary=True):
+        print_summary=True,
+        partial_train=False):
     model.compile(
         tf.keras.optimizers.Adam(learning_rate=hyper_params["learning_rate"]),
         loss=hyper_params["loss"],
@@ -640,7 +747,14 @@ def compile_and_train(
     #   have full (i.e. fitting) functionality
     # model.export(hyper_params["model_path"])
     # Saving not currently working - need to use strings as dftype formatting?
-    model.save(hyper_params["model_path"], save_format="tf", overwrite=False)
+    if not partial_train:
+        # with open(hyper_params["dill_path"], "wb") as f:
+        #     dill.dump(model, f)
+        model.save_weights(hyper_params["weights_path"])
+        model.save(hyper_params["model_path"], save_format="tf", overwrite=False)
+    else:
+        partial_weights_path = hyper_params["weights_path"] + "_partial"
+        model.save_weights(partial_weights_path)
     # with open(hyper_params["history_path"], "wb") as f:
     #     pickle.dump(history, f)
     return history
