@@ -415,8 +415,8 @@ def gatv2_message(
     else:
         dropout == 0.0
     regulariser = None
-    if regularisation in kwargs.keys():
-        if regularisation is not None:
+    if "regularisation" in kwargs.keys():
+        if kwargs["regularisation"] is not None:
             regulariser = tf.keras.regularizers.l2(kwargs["regularisation"])
     return tfgnn.models.gat_v2.GATv2Conv(
         num_heads = heads,
