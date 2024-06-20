@@ -454,7 +454,7 @@ def construct_model(hyper_params, constructor, parameters, outputs, model_type="
         if output_ind is None:
             graph = func(graph)
         else:
-            model_out[output_ind] = func(graph)
+            model_out[model_out.index(output_ind)] = func(graph)
     return tf.keras.Model(inputs=[input_graph], outputs=model_out)
 
 
