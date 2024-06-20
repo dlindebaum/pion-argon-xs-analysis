@@ -4,7 +4,7 @@
 
 import os
 import pickle
-import dill
+import json
 import copy
 import numpy as np
 import awkward as ak
@@ -77,15 +77,21 @@ def make_model_paths(folder_path):
     if not os.path.exists(folder_path):
         os.mkdir(folder_path)
     weights_folder = os.path.join(folder_path, "checkpoints")
-    os.mkdir(weights_folder)
+    if not os.path.exists(weights_folder):
+        os.mkdir(weights_folder)
     return {"folder_path": folder_path,
-            "params_path": os.path.join(folder_path, "hyper_params.pkl"),
-            "text_params_path": os.path.join(folder_path,
-                                             "hyper_params_repr.txt"),
-            "model_path": os.path.join(folder_path, "model.tf"),
-            # "dill_path": os.path.join(folder_path, "model_dill.dll"),
-            "weights_path": os.path.join(weights_folder, "weights"),
-            "history_path": os.path.join(folder_path, "train_history.pkl")}
+            "params_path": os.path.join(
+                folder_path, "hyper_params.pkl"),
+            "text_params_path": os.path.join(
+                folder_path, "hyper_params_repr.txt"),
+            "model_path": os.path.join(
+                folder_path, "model.tf"),
+            "model_params_path": os.path.join(
+                folder_path, "model_params.txt"),
+            "weights_path": os.path.join(
+                weights_folder, "weights"),
+            "history_path": os.path.join(
+                folder_path, "train_history.pkl")}
 
 def generate_hyper_params(
         folder_path,
@@ -191,17 +197,18 @@ def load_hyper_params(paths_dict):
     return params
 
 def load_model(path, from_weights=True):
-    if isinstance(path, dict):
-        if from_weights:
-            path = path["weights_path"]
-        else:
-            path = path["model_path"]
-    else:
-        tf = not path[-4:] == ".dll"
-    if tf:
-        return tf.keras.models.load_model(path)
-    with open(path, "rb") as f:
-        return dill.load(f)
+    pass
+    # if isinstance(path, dict):
+    #     if from_weights:
+    #         path = path["weights_path"]
+    #     else:
+    #         path = path["model_path"]
+    # else:
+    #     tf = not path[-4:] == ".dll"
+    # if tf:
+    #     return tf.keras.models.load_model(path)
+    # with open(path, "rb") as f:
+    #     return dill.load(f)
             
 
 # =====================================================================
@@ -427,14 +434,17 @@ example_outputs = ["classifier",
                    "reco_classification"]
 
 def construct_model(hyper_params, constructor, parameters, outputs, model_type="GATv2"):
-    hyper_params.update({"model_type": model_type,
-               "model_parameters": parameters,
-               "model_constructor": repr(constructor),
-               "model_outputs": outputs})
+    model_params_dict = {
+        "model_type": model_type,
+        "model_parameters": parameters,
+        "model_constructor": [repr(c) for c in constructor],
+        "model_outputs": outputs}
+    with open(hyper_params["model_params_path"], "w") as f:
+        json.dump(model_params_dict, f, indent=4)
     layer_funcs=[]
     output_index=[]
     outputs=[]
-    layer_funcs, which_outputs = Layers.parse_constructor(constructor)
+    layer_funcs, which_outputs = Layers.parse_constructor(constructor, parameters)
     which_outputs = [outputs.index(o) if o in ouputs else o for o in which_outputs]
     model_out = outputs.copy()
     input_graph_spec = get_spec_from_hyper_params(hyper_params)
@@ -748,15 +758,13 @@ def compile_and_train(
     # model.export(hyper_params["model_path"])
     # Saving not currently working - need to use strings as dftype formatting?
     if not partial_train:
-        # with open(hyper_params["dill_path"], "wb") as f:
-        #     dill.dump(model, f)
         model.save_weights(hyper_params["weights_path"])
         model.save(hyper_params["model_path"], save_format="tf", overwrite=False)
     else:
         partial_weights_path = hyper_params["weights_path"] + "_partial"
         model.save_weights(partial_weights_path)
-    # with open(hyper_params["history_path"], "wb") as f:
-    #     pickle.dump(history, f)
+    with open(hyper_params["history_path"], "wb") as f:
+        pickle.dump(history, f)
     return history
 
 # =====================================================================
