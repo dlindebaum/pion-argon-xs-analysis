@@ -170,7 +170,7 @@ class ReadoutNode(LayerConstructor):
         return
     
     def _func(self, **kwargs):
-        return tfgnn.keras.layers.Readout(node_set_name=which_nodes)(graph)
+        return tfgnn.keras.layers.Readout(node_set_name=kwargs["which_nodes"])
 
 class ReadoutClassifyNode(LayerConstructor):
     def __init__(
@@ -210,7 +210,7 @@ class ReadoutEdge(LayerConstructor):
         return
     
     def _func(self, **kwargs):
-        return tfgnn.keras.layers.Readout(edge_set_name=which_edges)(graph)
+        return tfgnn.keras.layers.Readout(edge_set_name=kwargs["which_edges"])
 
 class ReadoutClassifyEdge(LayerConstructor):
     def __init__(
