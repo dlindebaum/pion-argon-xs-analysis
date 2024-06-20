@@ -388,7 +388,7 @@ def dense_core(number, activation="relu", regularisation=None, **kwargs):
 
 def generic_dense_layer(number, activation="relu", dropout_rate=0., regularisation=None, **kwargs):
     """A Dense layer with regularization (L2 and Dropout)."""
-    if dropout == 0.:
+    if dropout_rate == 0.:
         return dense_core(number, activation="relu", regularisation=None, **kwargs)
     return tf.keras.Sequential([
         dense_core(number, activation="relu", regularisation=None, **kwargs),
