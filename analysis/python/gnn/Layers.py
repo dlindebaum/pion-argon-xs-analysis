@@ -423,8 +423,8 @@ def gatv2_message(
         edge_dropout = dropout,
         attention_activation = 'leaky_relu',
         heads_merge_type = 'concat',
-        activation = 'relu', 
-        kernel_initializer = regulariser,
+        activation = 'relu',
+        kernel_initializer = None,
         kernel_regularizer = regulariser)
 
 def multi_dense_layers(depth=None, n_layers=None, **kwargs):
