@@ -282,7 +282,7 @@ class BeamCollection(NodeUpdate):
             "gatv2_channels": "beam_message_channels",
             "node"          : "beam", 
             "edges"         : "beam_connections"}
-        return super().__init__(*args, *kwargs)
+        return super().__init__(*args, **kwargs)
 
 class PFOUpdate(NodeUpdate):
     def __init__(self, *args, **kwargs):
@@ -292,7 +292,7 @@ class PFOUpdate(NodeUpdate):
             "gatv2_channels": "message_channels",
             "node"          : "pfo", 
             "edges"         : "neighbours"}
-        return super().__init__(*args, *kwargs)
+        return super().__init__(*args, **kwargs)
 
 class EdgeUpdate(LayerConstructor):
     def __init__(
@@ -335,14 +335,14 @@ class NeighbourUpdate(EdgeUpdate):
         self.kwarg_dict = {
             "final_dim": "edge_dim",
             "edge"     : "neighbours"}
-        return super().__init__(*args, *kwargs)
+        return super().__init__(*args, **kwargs)
 
 class BeamConnectionUpdate(EdgeUpdate):
     def __init__(self, *args, **kwargs):
         self.kwarg_dict = {
             "final_dim": "beam_edge_dim",
             "edge"     : "beam_connections"}
-        return super().__init__(*args, *kwargs)
+        return super().__init__(*args, **kwargs)
 
 class Dense(LayerConstructor):
     def __init__(
