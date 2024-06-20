@@ -445,7 +445,7 @@ def construct_model(hyper_params, constructor, parameters, outputs, model_type="
     output_index=[]
     outputs=[]
     layer_funcs, which_outputs = Layers.parse_constructor(constructor, parameters)
-    which_outputs = [outputs.index(o) if o in ouputs else o for o in which_outputs]
+    which_outputs = [outputs.index(o) if o in outputs else o for o in which_outputs]
     model_out = outputs.copy()
     input_graph_spec = get_spec_from_hyper_params(hyper_params)
     input_graph = tf.keras.layers.Input(type_spec=input_graph_spec)
