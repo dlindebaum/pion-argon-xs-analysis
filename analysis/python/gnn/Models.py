@@ -443,7 +443,6 @@ def construct_model(hyper_params, constructor, parameters, outputs, model_type="
         json.dump(model_params_dict, f, indent=4)
     layer_funcs=[]
     output_index=[]
-    outputs=[]
     layer_funcs, which_outputs = Layers.parse_constructor(constructor, parameters)
     which_outputs = [outputs.index(o) if o in outputs else o for o in which_outputs]
     model_out = outputs.copy()
@@ -454,7 +453,7 @@ def construct_model(hyper_params, constructor, parameters, outputs, model_type="
         if output_ind is None:
             graph = func(graph)
         else:
-            model_out[model_out.index(output_ind)] = func(graph)
+            model_out[output_ind] = func(graph)
     return tf.keras.Model(inputs=[input_graph], outputs=model_out)
 
 
