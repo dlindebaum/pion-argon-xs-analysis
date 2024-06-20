@@ -175,7 +175,7 @@ class ReadoutNode(LayerConstructor):
 class ReadoutClassifyNode(LayerConstructor):
     def __init__(
             self, *output_name,
-            n_outputs=None, # If None, copy data without applying dense layer
+            n_outputs=1,
             hidden=None,
             which_nodes="pfo",
             which_feature=tfgnn.HIDDEN_STATE,
@@ -193,10 +193,7 @@ class ReadoutClassifyNode(LayerConstructor):
         return
     
     def _func(self, **kwargs):
-        return classifer_and_readout(
-            "node_sets_fn",
-            which_data = kwargs["which_nodes"],
-            **kwargs)
+        return node_classifer_and_readout(**kwargs)
 
 class ReadoutEdge(LayerConstructor):
     def __init__(
@@ -233,10 +230,7 @@ class ReadoutClassifyEdge(LayerConstructor):
         return
     
     def _func(self, **kwargs):
-        return classifer_and_readout(
-            "edge_sets_fn",
-            which_data = kwargs["which_edges"],
-            **kwargs)
+        return edge_classifer_and_readout(**kwargs)
 
 class NodeUpdate(LayerConstructor):
     def __init__(
@@ -518,83 +512,83 @@ def map_to_initial_state_layer(
         node_sets_fn = get_initial_node_state_func(**kwargs),
         edge_sets_fn = get_initial_edge_state_func(**kwargs))
 
-# def node_classifer_and_readout(
-#         hidden=None,
-#         which_feature=tfgnn.HIDDEN_STATE,
-#         which_nodes="pfo",
-#         n_outputs=1,
-#         **kwargs):
-#     def classifier_layer(node_set, node_set_name):
-#       if node_set_name == which_nodes:
-#         data = node_set[which_feature]
-#         if hidden is not None:
-#             (depth, count) = hidden
-#             data = multi_dense_layers(
-#                 depth=depth, n_layers=count, **kwargs)(data)
-#         # No args, so no dropout etc. on classifer layer
-#         return generic_dense_layer(n_outputs)(data)
-#       return None
-#     classifier = tfgnn.keras.layers.MapFeatures(node_sets_fn=classifier_layer)
-#     def readout(graph):
-#       updated = classifier(graph)
-#       return tf.RaggedTensor.from_row_lengths(
-#          values=updated.node_sets[which_nodes].features[tfgnn.HIDDEN_STATE],
-#          row_lengths=updated.node_sets[which_nodes].sizes
-#         ).with_row_splits_dtype(tf.int64)
-#     return readout
-
-# def edge_classifer_and_readout(
-#         hidden=None,
-#         which_feature=tfgnn.HIDDEN_STATE,
-#         which_edges="neighbours",
-#         n_outputs=1,
-#         **kwargs):
-#     def classifier_layer(edge_set, edge_set_name):
-#       if edge_set_name == which_edges:
-#         data = edge_set[which_feature]
-#         if hidden is not None:
-#             (depth, count) = hidden
-#             data = multi_dense_layers(
-#                 depth=depth, n_layers=count, **kwargs)(data)
-#         # No args, so no dropout etc. on classifer layer
-#         return generic_dense_layer(n_outputs)(data)
-#       return None
-#     classifier = tfgnn.keras.layers.MapFeatures(edge_sets_fn=classifier_layer)
-#     def readout(graph):
-#       updated = classifier(graph)
-#       return tf.RaggedTensor.from_row_lengths(
-#          values=updated.node_sets[which_nodes].features[tfgnn.HIDDEN_STATE],
-#          row_lengths=updated.node_sets[which_nodes].sizes
-#         ).with_row_splits_dtype(tf.int64)
-#     return readout
-
-def classifer_and_readout(
-        map_func_kwarg,
+def node_classifer_and_readout(
         hidden=None,
         which_feature=tfgnn.HIDDEN_STATE,
-        which_data=None,
+        which_nodes="pfo",
         n_outputs=1,
         **kwargs):
-    def classifier_layer(data_set, data_set_name):
-        if data_set_name == which_data:
-            data = data_set[which_feature]
-            if hidden is not None:
-                (depth, count) = hidden
-                data = multi_dense_layers(
-                    depth=depth, n_layers=count, **kwargs)(data)
-            # No args, so no dropout etc. on classifer layer
-            return generic_dense_layer(n_outputs)(data)
-        return None
-    map_kwargs = {map_func_kwarg: classifier_layer}
-    classifier = tfgnn.keras.layers.MapFeatures(**map_kwargs)
+    def classifier_layer(node_set, node_set_name):
+      if node_set_name == which_nodes:
+        data = node_set[which_feature]
+        if hidden is not None:
+            (depth, count) = hidden,
+            data = multi_dense_layers(
+                depth=depth, n_layers=count, **kwargs)(data)
+        # No args, so no dropout etc. on classifer layer
+        return generic_dense_layer(n_outputs)(data)
+      return None
+    classifier = tfgnn.keras.layers.MapFeatures(node_sets_fn=classifier_layer)
     def readout(graph):
-        updated = classifier(graph)
-        return tf.RaggedTensor.from_row_lengths(
-                values=updated.node_sets[
-                    which_nodes].features[tfgnn.HIDDEN_STATE],
-                row_lengths=updated.node_sets[which_nodes].sizes
-            ).with_row_splits_dtype(tf.int64)
+      updated = classifier(graph)
+      return tf.RaggedTensor.from_row_lengths(
+         values=updated.node_sets[which_nodes].features[tfgnn.HIDDEN_STATE],
+         row_lengths=updated.node_sets[which_nodes].sizes
+        ).with_row_splits_dtype(tf.int64)
     return readout
+
+def edge_classifer_and_readout(
+        hidden=None,
+        which_feature=tfgnn.HIDDEN_STATE,
+        which_edges="neighbours",
+        n_outputs=1,
+        **kwargs):
+    def classifier_layer(edge_set, edge_set_name):
+      if edge_set_name == which_edges:
+        data = edge_set[which_feature]
+        if hidden is not None:
+            (depth, count) = hidden
+            data = multi_dense_layers(
+                depth=depth, n_layers=count, **kwargs)(data)
+        # No args, so no dropout etc. on classifer layer
+        return generic_dense_layer(n_outputs)(data)
+      return None
+    classifier = tfgnn.keras.layers.MapFeatures(edge_sets_fn=classifier_layer)
+    def readout(graph):
+      updated = classifier(graph)
+      return tf.RaggedTensor.from_row_lengths(
+         values=updated.node_sets[which_nodes].features[tfgnn.HIDDEN_STATE],
+         row_lengths=updated.node_sets[which_nodes].sizes
+        ).with_row_splits_dtype(tf.int64)
+    return readout
+
+# def classifer_and_readout(
+#         map_func_kwarg,
+#         hidden=None,
+#         which_feature=tfgnn.HIDDEN_STATE,
+#         which_data=None,
+#         n_outputs=1,
+#         **kwargs):
+#     def classifier_layer(data_set, data_set_name):
+#         if data_set_name == which_data:
+#             data = data_set[which_feature]
+#             if hidden is not None:
+#                 (depth, count) = hidden
+#                 data = multi_dense_layers(
+#                     depth=depth, n_layers=count, **kwargs)(data)
+#             # No args, so no dropout etc. on classifer layer
+#             return generic_dense_layer(n_outputs)(data)
+#         return None
+#     map_kwargs = {map_func_kwarg: classifier_layer}
+#     classifier = tfgnn.keras.layers.MapFeatures(**map_kwargs)
+#     def readout(graph):
+#         updated = classifier(graph)
+#         return tf.RaggedTensor.from_row_lengths(
+#                 values=updated.node_sets[
+#                     which_data].features[tfgnn.HIDDEN_STATE],
+#                 row_lengths=updated.node_sets[which_nodes].sizes
+#             ).with_row_splits_dtype(tf.int64)
+#     return readout
 
 def convolution_message_passer():
     return tfgnn.keras.layers.SimpleConv(
