@@ -83,7 +83,7 @@ class LayerConstructor():
                              + f"Must be one of {known_messages}")
         self.message_type = message_type.lower()
         self.additional_args = kwargs
-        self.repr_kwargs = self.additional_args
+        self.repr_kwargs = self.additional_args.copy()
         return
     
     def _remove_default_kwargs_from_repr(self, default_kwargs):
@@ -100,12 +100,14 @@ class LayerConstructor():
             repr_string += "final_step=False, "
         for key, val in self.additional_args.items():
             repr_string += f"{key}={val}, "
+        if repr_string[-2:] == ", ":
+            repr_string = repr_string[:-2]
         repr_string += ")"
         return repr_string
 
     def get_func(self, parameters):
-        kwargs = parameters.update(self.additional_args)
-        return self._func(**kwargs)
+        parameters.update(self.additional_args)
+        return self._func(**parameters)
 
     def _func(self, **kwargs):
         pass
@@ -359,8 +361,6 @@ class Dense(LayerConstructor):
         kwargs.update({"depth": depth,
                        "n_layers": n_layers})
         super().__init__(*output_name, **kwargs)
-        self._remove_default_kwargs_from_repr({
-            "n_layers": 1})
         return
 
     def _func(self, **kwargs):
