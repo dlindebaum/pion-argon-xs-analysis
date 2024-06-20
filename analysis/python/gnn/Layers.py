@@ -146,7 +146,7 @@ class InitialState(LayerConstructor):
         kwargs.update({"pfo_hidden": pfo_hidden,
                        "neighbours_hidden": neighbours_hidden,
                        "beam_connections_hidden": beam_connections_hidden})
-        super().__init__(*args, **kwargs)
+        super().__init__(*output_name, **kwargs)
         self._remove_default_kwargs_from_repr({
             "pfo_hidden": None,
             "neighbours_hidden": None,
@@ -162,7 +162,7 @@ class ReadoutNode(LayerConstructor):
             which_nodes="beam",
             **kwargs):
         kwargs.update({"which_nodes":which_nodes})
-        super().__init__(*args, **kwargs)
+        super().__init__(*output_name, **kwargs)
         self._remove_default_kwargs_from_repr({
             "which_nodes": "beam"})
         return
@@ -182,7 +182,7 @@ class ReadoutClassifyNode(LayerConstructor):
                        "hidden": hidden,
                        "which_nodes":which_nodes,
                        "which_feature": which_feature})
-        super().__init__(*args, **kwargs)
+        super().__init__(*output_name, **kwargs)
         self._remove_default_kwargs_from_repr({
             "n_outputs": 1,
             "hidden": None,
@@ -202,7 +202,7 @@ class ReadoutEdge(LayerConstructor):
             which_edges="neighbours",
             **kwargs):
         kwargs.update({"which_edges":which_edges})
-        super().__init__(*args, **kwargs)
+        super().__init__(*output_name, **kwargs)
         self._remove_default_kwargs_from_repr({
             "which_edges": "neighbours"})
         return
@@ -222,7 +222,7 @@ class ReadoutClassifyEdge(LayerConstructor):
                        "hidden": hidden,
                        "which_edges":which_edges,
                        "which_feature": which_feature})
-        super().__init__(*args, **kwargs)
+        super().__init__(*output_name, **kwargs)
         self._remove_default_kwargs_from_repr({
             "n_outputs": 1,
             "hidden": None,
@@ -251,7 +251,7 @@ class NodeUpdate(LayerConstructor):
             raise ValueError(f"Unknown next state: {next_state}. "
                              + f"Must be one of {known_next_states}")
         kwargs.update({"next_state": next_state})
-        super().__init__(*args, **kwargs)
+        super().__init__(*output_name, **kwargs)
         self._remove_default_kwargs_from_repr({
             "next_state": "residual"})
         return
@@ -313,7 +313,7 @@ class EdgeUpdate(LayerConstructor):
             raise ValueError(f"Unknown next state: {next_state}. "
                              + f"Must be one of {known_next_states}")
         kwargs.update({"next_state": next_state})
-        super().__init__(*args, **kwargs)
+        super().__init__(*output_name, **kwargs)
         self._remove_default_kwargs_from_repr({
             "next_state": "residual"})
         return
@@ -358,7 +358,7 @@ class Dense(LayerConstructor):
             raise TypeError("depth kwarg must be specified.")
         kwargs.update({"depth": depth,
                        "n_layers": n_layers})
-        super().__init__(*args, **kwargs)
+        super().__init__(*output_name, **kwargs)
         self._remove_default_kwargs_from_repr({
             "n_layers": 1})
         return
