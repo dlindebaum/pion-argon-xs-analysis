@@ -557,8 +557,8 @@ def edge_classifer_and_readout(
     def readout(graph):
       updated = classifier(graph)
       return tf.RaggedTensor.from_row_lengths(
-         values=updated.node_sets[which_nodes].features[tfgnn.HIDDEN_STATE],
-         row_lengths=updated.node_sets[which_nodes].sizes
+         values=updated.edge_sets[which_edges].features[tfgnn.HIDDEN_STATE],
+         row_lengths=updated.edge_sets[which_edges].sizes
         ).with_row_splits_dtype(tf.int64)
     return readout
 
