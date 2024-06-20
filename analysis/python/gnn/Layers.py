@@ -410,7 +410,10 @@ def gatv2_message(
         heads, channels,
         use_bias=True,
         **kwargs):
-    dropout = kwargs["dropout_rate"] if dropout_rate in kwargs.keys() else 0.0
+    if "dropout_rate" in kwargs.keys():
+        dropout = kwargs["dropout_rate"]
+    else:
+        dropout == 0.0
     regulariser = None
     if regularisation in kwargs.keys():
         if regularisation is not None:
