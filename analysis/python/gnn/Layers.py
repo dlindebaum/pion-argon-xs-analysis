@@ -378,7 +378,7 @@ class Dense(LayerConstructor):
 
 def dense_core(number, activation="relu", regularisation=None, **kwargs):
     layer_kwargs = {"activation": activation}
-    if regulariser is not None:
+    if regularisation is not None:
         regulariser = tf.keras.regularizers.l2(regularisation)
         layer_kwargs.update({"kernel_regularizer": regulariser,
                              "bias_regularizer": regulariser})
