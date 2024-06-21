@@ -763,7 +763,7 @@ def compile_and_train(
         partial_weights_path = hyper_params["weights_path"] + "_partial"
         model.save_weights(partial_weights_path)
     with open(hyper_params["history_path"], "wb") as f:
-        pickle.dump(history, f)
+        pickle.dump(history.history, f)
     return history
 
 # =====================================================================
@@ -958,7 +958,7 @@ def plot_confusion_extra_loss(
         path_params["schema_path"], path_params["test_path"],
         pred_index=loss_index, other_truth=extra_loss)
     pred_index = np.where(
-        preds == np.max(preds, axis=1)[:, np.newaxis])[1]
+        preds == (np.max(preds, axis=1)[:, np.newaxis]))[1]
     labels = _parse_classification_labels(classification_labels,
                                           pred_index, truth_index)
     _ = create_summary_text(
@@ -988,7 +988,7 @@ def plot_confusion_main_vs_reco_loss(
         model,
         path_params["schema_path"], path_params["test_path"])
     pred_index = np.where(
-        preds == np.max(preds, axis=1)[:, np.newaxis])[1]
+        preds == (np.max(preds, axis=1)[:, np.newaxis]))[1]
     labels = _parse_classification_labels(classification_labels,
                                           pred_index, truth_index)
     _ = create_summary_text(
@@ -1022,7 +1022,7 @@ def evaluate_model(
     predictions, truth_index = get_predicitions(
         model, schema_path, test_path)
     pred_index = np.where(
-        predictions == np.max(predictions, axis=1)[:, np.newaxis])[1]
+        predictions == (np.max(predictions, axis=1)[:, np.newaxis]))[1]
     labels = _parse_classification_labels(classification_labels,
                                           pred_index, truth_index)
     _ = create_summary_text(
@@ -1042,25 +1042,37 @@ def region_dist(
         selected_index, true_index,
         predictions, labels,
         plot_config,
-        expand_bins=True):
+        expand_bins=True,
+        min_bin_size=None):
     if predictions.size == 0:
         return
-    bins = plot_config.get_bins(predictions[:, selected_index], array=True)
+    if expand_bins:
+        bin_data = predictions.flatten()
+    else:
+        bin_data = predictions[:, selected_index]
+    bins = plot_config.get_bins(bin_data, array=True)
+    if min_bin_size is not None:
+        if bins.size <= min_bin_size:
+            bins = np.linspace(bins[0], bins[-1], min_bin_size)
     for i in range(predictions.shape[-1]):
         data = predictions[:, i]
-        if expand_bins:
-            this_bins = plot_config.expand_bins(bins, data)
-        else:
-            this_bins = bins
+        this_bins = bins
+        # if expand_bins:
+        #     this_bins = plot_config.expand_bins(bins, data)
+        # else:
+        #     this_bins = bins
         kwargs = plot_config.gen_kwargs(
                 type="hist", index=i, label=labels[i],
                 bins=this_bins)
-        if i == true_index:
-            kwargs["ls"] = ":"
-        elif i == selected_index:
+        if i == selected_index:
             kwargs["lw"] = 4
+            # kwargs["ls"] = ":"
+        elif i == true_index:
+            kwargs["lw"] = 3
+            # kwargs["ls"] = "--"
         else:
-            kwargs["ls"] = "--"
+            kwargs["lw"] = 2
+            # kwargs["ls"] = "--"
         axis.hist(data, **kwargs)
     return
 
@@ -1086,7 +1098,7 @@ def per_region_dists(
                                           pred_index, truth_index)
     n_regions = predictions.shape[-1]
     region_masks = _get_region_masks(pred_index, truth_index, n_regions)
-    _, axes = plot_config.setup_figure(n_regions, n_regions, figsize=(24, 20))
+    _, axes = plot_config.setup_figure(n_regions+1, n_regions+1, figsize=(32, 24))
     for reco_i in range(n_regions):
         for true_i in range(n_regions):
             ax = axes[3-true_i, reco_i]
@@ -1096,13 +1108,72 @@ def per_region_dists(
                 reco_i, true_i,
                 these_preds, labels,
                 plot_config,
-                expand_bins=expand_bins)
+                expand_bins=expand_bins,
+                min_bin_size=20)
             plot_config.format_axis(
                 ax, xlabel="GNN output",
                 ylabel=f"Count ({region_masks[reco_i, true_i].sum()} total)")
             ax.legend()
+        ax = axes[-1, reco_i]
+        all_true_mask = region_masks[reco_i, 0]
+        for i in range(1, n_regions):
+            all_true_mask = np.logical_or(all_true_mask, region_masks[reco_i, i])
+        these_preds = predictions[all_true_mask]
+        region_dist(
+                ax,
+                reco_i, -1,
+                these_preds, labels,
+                plot_config,
+                expand_bins=expand_bins,
+                min_bin_size=20)
+        plot_config.format_axis(
+                ax, xlabel="GNN output",
+                ylabel=f"Count ({region_masks[reco_i, :].sum()} total)")
+        ax.legend()
+    for true_i in range(n_regions):
+        ax = axes[3-true_i, -1]
+        all_reco_mask = region_masks[0, true_i]
+        for i in range(1, n_regions):
+            all_reco_mask = np.logical_or(all_reco_mask, region_masks[i, true_i])
+        these_preds = predictions[all_reco_mask]
+        # these_preds = predictions[np.sum(region_masks, axis=0)[true_i]]
+        region_dist(
+                ax,
+                -1, true_i,
+                these_preds, labels,
+                plot_config,
+                expand_bins=expand_bins,
+                min_bin_size=20)
+        plot_config.format_axis(
+                ax, xlabel="GNN output",
+                ylabel=f"Count ({region_masks[:, true_i].sum()} total)")
+        ax.legend()
     return plot_config.end_plot()
-    
+
+def total_score_dist(
+        model,
+        schema_path,
+        test_path,
+        plot_config,
+        classification_labels=None,
+        expand_bins=True):
+    predictions, truth_index = get_predicitions(
+        model, schema_path, test_path)
+    pred_index = np.where(
+        predictions == np.max(predictions, axis=1)[:, np.newaxis])[1]
+    labels = _parse_classification_labels(classification_labels,
+                                          pred_index, truth_index)
+    bins = plot_config.get_bins(predictions.flatten(), array=True)
+    plot_config.setup_figure()
+    for i in range(predictions.shape[-1]):
+        data = predictions[:, i]
+        plt.hist(data, **plot_config.gen_kwargs(
+            type="hist", index=i, label=labels[i],
+            bins=bins))
+    plot_config.format_axis(
+                xlabel="GNN output",
+                ylabel="Count")
+    return plot_config.end_plot()  
 
 def simple_plot_history(history, init_point=0):
     for k, hist in history.history.items():
