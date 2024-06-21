@@ -165,8 +165,6 @@ class ReadoutNode(LayerConstructor):
             **kwargs):
         kwargs.update({"which_nodes":which_nodes})
         super().__init__(*output_name, **kwargs)
-        self._remove_default_kwargs_from_repr({
-            "which_nodes": "beam"})
         return
     
     def _func(self, **kwargs):
@@ -188,7 +186,6 @@ class ReadoutClassifyNode(LayerConstructor):
         self._remove_default_kwargs_from_repr({
             "n_outputs": 1,
             "hidden": None,
-            "which_nodes": "pfo",
             "which_feature": tfgnn.HIDDEN_STATE})
         return
     
@@ -202,8 +199,6 @@ class ReadoutEdge(LayerConstructor):
             **kwargs):
         kwargs.update({"which_edges":which_edges})
         super().__init__(*output_name, **kwargs)
-        self._remove_default_kwargs_from_repr({
-            "which_edges": "neighbours"})
         return
     
     def _func(self, **kwargs):
@@ -225,7 +220,6 @@ class ReadoutClassifyEdge(LayerConstructor):
         self._remove_default_kwargs_from_repr({
             "n_outputs": 1,
             "hidden": None,
-            "which_edges": "neighbours",
             "which_feature": tfgnn.HIDDEN_STATE})
         return
     
