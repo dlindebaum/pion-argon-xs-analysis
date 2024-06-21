@@ -112,11 +112,9 @@ class LayerConstructor():
     def _func(self, **kwargs):
         pass
 
-    # def load_from_repr(self, repr_string):
-    #     pass
-
 class LoopConstructor():
-    def __init__(self, loop_constructor, loops=1):
+    def __init__(self, loop_constructor, loops=1, final_step=True):
+        self.do_final_loop_step = final_step
         self.looped = True
         self.constructor_repr = repr(loop_constructor)
         self.loops = loops
