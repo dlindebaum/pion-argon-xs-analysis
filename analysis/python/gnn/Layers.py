@@ -95,11 +95,11 @@ class LayerConstructor():
     def __repr__(self):
         repr_string = f"{type(self).__name__}("
         if self.output_name is not None:
-            repr_string += f"{self.output_name}, "
+            repr_string += f"{repr(self.output_name)}, "
         if not self.do_final_loop_step:
             repr_string += "final_step=False, "
-        for key, val in self.additional_args.items():
-            repr_string += f"{key}={val}, "
+        for key, val in self.repr_kwargs.items():
+            repr_string += f"{key}={repr(val)}, "
         if repr_string[-2:] == ", ":
             repr_string = repr_string[:-2]
         repr_string += ")"
@@ -112,8 +112,8 @@ class LayerConstructor():
     def _func(self, **kwargs):
         pass
 
-    def load_from_repr(self, repr_string):
-        pass
+    # def load_from_repr(self, repr_string):
+    #     pass
 
 class LoopConstructor():
     def __init__(self, loop_constructor, loops=1):
