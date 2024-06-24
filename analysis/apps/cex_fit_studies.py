@@ -85,7 +85,7 @@ def NormalisationTest(directory : str, data_config : dict, model : cross_section
         expected_mus = {}
     
         scales = {k : 1 for k in ['absorption', 'quasielastic', 'charge_exchange', 'double_charge_exchange', 'pion_production']}
-        for i in [0.8, 0.9, 1, 1.1, 1.2]:
+        for i in [0.5, 0.8, 0.9, 1, 1.1, 1.2, 1.5]:
             print(rule.Rule(f"process : {target} | normalisation : {i}"))
             if i == 1:
                 config = data_config
@@ -321,26 +321,28 @@ def PlotShapeExamples(energy_slices : cross_section.Slices, book : Plots.PlotBoo
 def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.ndarray, pdf : Plots.PlotBook = Plots.PlotBook.null, single_bin : bool = False, ylim = None):
     x = data.index.values
 
+    xt = np.arange(min(x), max(x)+0.1, 0.1)
+
     # Plot the fit value for each scale factor 
     Plots.plt.figure()
     for i in range(4):
         Plots.Plot(x, data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], newFigure = False, label = f"${process_map[i]}$", marker = "o", ylabel = "$\mu^{fit}_{s}$", color = list(region_colours.values())[i], linestyle = "")
     Plots.plt.legend(title = "$s$")
-    Plots.plt.xticks(ticks = x, labels = x)
+    Plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
     Plots.plt.xlabel(xlabel)
     pdf.Save()
 
     # same as above, in separate plots
     for i in Plots.MultiPlot(4):
         Plots.Plot(x, data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], newFigure = False, marker = "o", xlabel = xlabel, ylabel = f"$\mu^{{fit}}_{{{process_map[i]}}}$", color = list(region_colours.values())[i], linestyle = "")
-        Plots.plt.xticks(ticks = x, labels = x)
+        Plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
     pdf.Save()
 
     # plot true process residual
     for n in Plots.MultiPlot(4):
         Plots.Plot(x, data[f"true_counts_{n}"] * data[f"fe_total_{n}"], yerr = data[f"true_counts_{n}"] * data[f"fe_err_total_{n}"], title = f"$N_{{{process_map[n]}}}^{{pred}}$", xlabel = xlabel, ylabel = "residual", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
         Plots.plt.axhline(0, color = "black", linestyle = "--")
-        Plots.plt.xticks(ticks = x, labels = x)
+        Plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
     pdf.Save()
 
     # plot true process fractional error
@@ -349,7 +351,7 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
         Plots.Plot(x, data[f"fe_total_{n}"], yerr = data[f"fe_err_total_{n}"], xlabel = xlabel, ylabel = f"$f_{{{process_map[n]}}}$", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
         Plots.plt.axhline(0, color = "black", linestyle = "--")
         Plots.plt.ylim(1.5 * np.min(data.filter(regex = "fe_total_").values), 1.5 * np.max(data.filter(regex = "fe_total_").values))
-        Plots.plt.xticks(ticks = x, labels = x)
+        Plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
         if ylim: Plots.plt.ylim(ylim)
     pdf.Save()
 
@@ -360,8 +362,21 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
         Plots.plt.axhline(0, color = "black", linestyle = "--")
         Plots.plt.ylim(1.5 * np.min(data.filter(regex = "fe_total_").values), 1.5 * np.max(data.filter(regex = "fe_total_").values))
     Plots.plt.legend(title = "$s$")
-    Plots.plt.xticks(ticks = x, labels = x)
+    Plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
     if ylim: Plots.plt.ylim(ylim)
+    pdf.Save()
+
+    Plots.plt.figure()
+    for i in Plots.MultiPlot(4):
+        Plots.Plot(data[f"mu_exp_{i}"], data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], linestyle = "", marker = "o", xlabel = "$\mu^{exp}_{process_map[i]}$", ylabel = "$\mu^{fit}_{s}$", label = f"${process_map[i]}$", color = list(region_colours.values())[i], newFigure = False)
+        yl = Plots.plt.gca().get_ylim()
+        xl = Plots.plt.gca().get_xlim()
+
+        Plots.plt.axline([0, 0], [1, 1], linestyle = "--", color = "k", label = "$y = x$")
+        Plots.plt.xlim(xl)
+        Plots.plt.ylim(yl)
+        Plots.plt.legend(title = "$s$")
+
     pdf.Save()
 
     if single_bin is False:
@@ -389,7 +404,7 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
     return
 
 
-def ProcessResults(template_counts : int, results : dict, true_counts : dict, model : cross_section.pyhf.Model, single_bin : bool):
+def ProcessResults(template_counts : int, results : dict, true_counts : dict, expected_mu : dict, model : cross_section.pyhf.Model, single_bin : bool):
     true_counts_all = {}
     for t in true_counts:
         true_counts_all[t] = {f"true_counts_{i}" : np.sum(v) for i, v in enumerate(true_counts[t].values())}
@@ -398,9 +413,11 @@ def ProcessResults(template_counts : int, results : dict, true_counts : dict, mo
 
     mu = {}
     mu_err = {}
+    mu_exp = {}
     for k in results:
-        mu[k] = (results[k].bestfit[0:4] / scale_factors[k])
-        mu_err[k] = (results[k].uncertainty[0:4] / scale_factors[k])
+        mu[k] = results[k].bestfit[0:4] / scale_factors[k]
+        mu_err[k] = results[k].uncertainty[0:4] / scale_factors[k]
+        mu_exp[k] = expected_mu[k] / scale_factors[k]
 
     fe, fe_err = CountsFractionalError(results, true_counts, model, single_bin)
     tc_arr = np.swapaxes(np.array([np.array(list(v.values())) for v in true_counts.values()]), 0, 1)
@@ -419,8 +436,9 @@ def ProcessResults(template_counts : int, results : dict, true_counts : dict, mo
         pd.DataFrame(true_counts_all),
         pd.DataFrame(mu, index = [f"mu_{i}" for i in range(4)]),
         pd.DataFrame(mu_err, index = [f"mu_err_{i}" for i in range(4)]),
+        pd.DataFrame(mu_exp, index = [f"mu_exp_{i}" for i in range(4)], columns = list(scale_factors.keys())),
         pd.DataFrame(fe_total, index = [f"fe_total_{i}" for i in range(4)], columns = list(scale_factors.keys())),
-        pd.DataFrame(fe_err_total, index = [f"fe_err_total_{i}" for i in range(4)], columns = list(scale_factors.keys()))
+        pd.DataFrame(fe_err_total, index = [f"fe_err_total_{i}" for i in range(4)], columns = list(scale_factors.keys())),
         ])
     data_energy = {"values" : list(true_counts.keys()), "fe" : fe, "fe_err" : fe_err} # can't store this in pandas dataframes
     return data.T, data_energy
@@ -670,7 +688,7 @@ def CalculateResultsFromFile(workdirs, test_name, model_name, template_counts, m
     for d, files in zip(workdirs, results_files):
         for f in files:
             fit_result = cross_section.LoadObject(d + f"{test_name}_test_{model_name}/" + files[f])
-            r = ProcessResults(template_counts, fit_result["results"], fit_result["true_counts"], model, single_bin)
+            r = ProcessResults(template_counts, fit_result["results"], fit_result["true_counts"], fit_result["expected_mus"], model, single_bin)
             results_total[f].append(r[0])
             results_bins[f].append(r[1])
 
@@ -680,7 +698,7 @@ def CalculateResultsFromFile(workdirs, test_name, model_name, template_counts, m
         else:
             results_total[k], results_bins[k] = results_total[k][0], results_bins[k][0]
 
-    nominal = results_total['absorption'].loc[1]
+    nominal = results_total['charge_exchange'].loc[1]
     for p in results_total:
         results_total[p].loc[1] = nominal
     return results_total, results_bins

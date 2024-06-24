@@ -595,7 +595,7 @@ class NormalisationSystematic(MCMethod):
                     Plots.Plot(mod_sim.KE, gxs, newFigure = False, label = f"true, $\mathcal{{N}} = {n}$", title = f"process : {cross_section.remove_(p)}", ylabel = "$\sigma$ (mb)", xlabel = "$KE$ (MeV)")
                     Plots.Plot(args.energy_slices.pos[:-1] - args.energy_slices.width/2, results["cv"][r][n][p][0], yerr = results["cv"][r][n][p][1], xerr = args.energy_slices.width/2, marker = "x", linestyle = "", label = f"measured, $\mathcal{{N}} = {n}$", newFigure = False)
                     Plots.plt.xlim(args.energy_slices.min_pos - args.energy_slices.width, args.energy_slices.max_pos + args.energy_slices.width)
-                    Plots.plt.ylim(0, 1.5 * max(results["cv"][r][n][p][0]))
+                    # Plots.plt.ylim(0, 1.5 * max(results["cv"][r][n][p][0]))
                 if p == "single_pion_production":
                     gxs = getattr(xs_sim, "double_charge_exchange") + getattr(xs_sim, "quasielastic")
                 else:
@@ -1026,7 +1026,7 @@ def main(args : cross_section.argparse.Namespace):
 
             if can_regen(outdir):
                 if not cross_section.os.path.isfile(f"{outdir}test_results.dill"):    
-                    results = norm_sys.Evaluate([0.8, 1.2], 3)
+                    results = norm_sys.Evaluate([0.5, 1.5], 1)
                     cross_section.SaveObject(f"{outdir}test_results.dill", results)
 
                 results = cross_section.LoadObject(f"{outdir}test_results.dill")
