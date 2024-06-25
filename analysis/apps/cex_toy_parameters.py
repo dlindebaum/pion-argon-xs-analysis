@@ -385,6 +385,7 @@ def BeamProfileStudy(quantities : dict, args : argparse.Namespace, true_beam_mas
 def main(args : argparse.Namespace):
     cross_section.PlotStyler.SetPlotStyle(True)
     out = args.out + "toy_parameters/"
+    cross_section.os.makedirs(out, exist_ok = True)
 
     args.batches = None
     args.events = None

@@ -34,6 +34,7 @@ x_label = {
     "MichelScoreCut" : "Michel score",
     "MedianDEdXCut" : "Median $dE/dX$ (MeV/cm)",
     "BeamScraperCut" : "$r_{inst}$",
+    "TrackLengthSelection" : "l (cm)"
 }
 y_scale = {
     "track_score_all" : "log",
@@ -53,6 +54,7 @@ y_scale = {
     "MichelScoreCut" : "log",
     "MedianDEdXCut" : "log",
     "BeamScraperCut" : "linear",
+    "TrackLengthSelection" : "linear"
 }
 x_range = {
     "track_score_all" : None,
@@ -72,6 +74,8 @@ x_range = {
     "MichelScoreCut" : [0, 1],
     "MedianDEdXCut" : [1.5, 3],
     "BeamScraperCut" : [0, 5],
+    "TrackLengthSelection" : [0, 400],
+
 }
 nbins = {
     "track_score_all" : 50,
@@ -91,6 +95,7 @@ nbins = {
     "MichelScoreCut" : 50,
     "MedianDEdXCut" : 50,
     "BeamScraperCut" : 50,
+    "TrackLengthSelection" : 50
 }
 ncols = {
     "track_score_all" : 2,
@@ -110,6 +115,7 @@ ncols = {
     "MichelScoreCut" : 2,
     "MedianDEdXCut" : 2,
     "BeamScraperCut" : 2,
+    "TrackLengthSelection" : 2
 }
 truncate = {
     "track_score_all" : True,
@@ -129,6 +135,8 @@ truncate = {
     "MichelScoreCut" : False,
     "MedianDEdXCut" : False,
     "BeamScraperCut" : False,
+    "BeamScraperCut" : False,
+    "TrackLengthSelection" : False
 }
 
 

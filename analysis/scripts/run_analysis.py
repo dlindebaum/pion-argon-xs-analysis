@@ -577,6 +577,7 @@ if __name__ == "__main__":
     parser.add_argument("-C", "--create_config", type = str, help = "Create a template configuration with the default selection")
     ApplicationArguments.Config(parser)
     ApplicationArguments.Output(parser, "analysis/")
+    ApplicationArguments.Regen(parser)
     parser.add_argument("--skip", type = str, nargs = "+", default = [], choices = analysis_options)
     parser.add_argument("--run", type = str, nargs = "+", default = [], choices = analysis_options)
     parser.add_argument("--force", action = "store_true")
