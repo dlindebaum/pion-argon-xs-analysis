@@ -850,7 +850,7 @@ def can_regen(dir : str):
     if cross_section.os.path.exists(dir) and (args.regen is False):
         if len(cross_section.ls_recursive(dir)) > 0:
             for f in cross_section.ls_recursive(dir):
-                if ("sys.dill" in f):
+                if ("results.dill" in f):
                     return False
             return True
         else:
@@ -884,10 +884,10 @@ def main(args : cross_section.argparse.Namespace):
             if can_regen(outdir):
                 result = mc_stat.RunExperiment()
                 sys = mc_stat.CalculateSysError(result)
-                cross_section.SaveObject(f"{outdir}result.dill", result)
+                cross_section.SaveObject(f"{outdir}results.dill", result)
                 SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
-                result = cross_section.LoadObject(f"{outdir}result.dill")
+                result = cross_section.LoadObject(f"{outdir}results.dill")
                 sys = cross_section.LoadObject(f"{outdir}sys.dill")
 
             with Plots.PlotBook(f"{outdir}plots.pdf") as book:
@@ -902,10 +902,10 @@ def main(args : cross_section.argparse.Namespace):
                 sc.CreateNewAIs(outdir)
                 result = sc.RunAnalysis(outdir)
                 sys = sc.CalculateSysErrorAsym(args.cv, result)
-                cross_section.SaveObject(f"{outdir}result.dill", result)
+                cross_section.SaveObject(f"{outdir}results.dill", result)
                 SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
-                result = cross_section.LoadObject(f"{outdir}result.dill")
+                result = cross_section.LoadObject(f"{outdir}results.dill")
                 sys = cross_section.LoadObject(f"{outdir}sys.dill")["systematic"]
 
             with Plots.PlotBook(f"{outdir}plots.pdf") as book:
@@ -922,10 +922,10 @@ def main(args : cross_section.argparse.Namespace):
                 result = upl.RunAnalysis(outdir)
                 sys = upl.CalculateSysErrorAsym(args.cv, result)
 
-                cross_section.SaveObject(f"{outdir}result.dill", result)
+                cross_section.SaveObject(f"{outdir}results.dill", result)
                 SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
-                result = cross_section.LoadObject(f"{outdir}result.dill")
+                result = cross_section.LoadObject(f"{outdir}results.dill")
                 sys = cross_section.LoadObject(f"{outdir}sys.dill")
 
             with Plots.PlotBook(f"{outdir}plots.pdf") as book:
@@ -942,10 +942,10 @@ def main(args : cross_section.argparse.Namespace):
                 result = brw.RunAnalysis(outdir)
                 sys = brw.CalculateSysErrorAsym(args.cv, result)
 
-                cross_section.SaveObject(f"{outdir}result.dill", result)
+                cross_section.SaveObject(f"{outdir}results.dill", result)
                 SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
-                result = cross_section.LoadObject(f"{outdir}result.dill")
+                result = cross_section.LoadObject(f"{outdir}results.dill")
                 sys = cross_section.LoadObject(f"{outdir}sys.dill")["systematic"]
 
             with Plots.PlotBook(f"{outdir}plots.pdf") as book:
@@ -966,13 +966,13 @@ def main(args : cross_section.argparse.Namespace):
             pd.DataFrame(table, index = [0]).style.hide(axis = "index").to_latex(outdir + "fit_params.tex")
 
             if can_regen(outdir):
-                result = trk.Evaluate(1, analysis_input_data = analysis_input_nominal, resolution = trk.resolution)
+                result = trk.Evaluate(args.n_throws, analysis_input_data = analysis_input_nominal, resolution = trk.resolution)
                 with Plots.PlotBook(f"{outdir}cov_mat") as book:
                     sys = trk.CalculateSysCov(result, book)
-                cross_section.SaveObject(f"{outdir}result.dill", result)
+                cross_section.SaveObject(f"{outdir}results.dill", result)
                 SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
-                result = cross_section.LoadObject(f"{outdir}result.dill")
+                result = cross_section.LoadObject(f"{outdir}results.dill")
                 sys = cross_section.LoadObject(f"{outdir}sys.dill")["systematic"]
 
             tables = trk.Tables(args.cv, sys, "Track length")
@@ -985,13 +985,13 @@ def main(args : cross_section.argparse.Namespace):
             bm = BeamMomentumResolutionSystematic(args, model, args.toy_data_config)
 
             if can_regen(outdir):
-                result = bm.Evaluate(1, analysis_input_data = analysis_input_nominal, resolution = resolution)
+                result = bm.Evaluate(args.n_throws, analysis_input_data = analysis_input_nominal, resolution = resolution)
                 with Plots.PlotBook(f"{outdir}cov_mat") as book:
                     sys = bm.CalculateSysCov(result, book)
                 cross_section.SaveObject(f"{outdir}results.dill", result)
                 SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
-                result = cross_section.LoadObject(f"{outdir}result.dill")
+                result = cross_section.LoadObject(f"{outdir}results.dill")
                 sys = cross_section.LoadObject(f"{outdir}sys.dill")["systematic"]
 
             tables = bm.Tables(args.cv, sys, "Beam momentum")
@@ -1004,12 +1004,11 @@ def main(args : cross_section.argparse.Namespace):
             ts = TheoryShape(args, model, args.toy_data_config)
 
             if can_regen(outdir):
-                result = ts.Evaluate(1, analysis_input_data = analysis_input_nominal)
+                result = ts.Evaluate(args.n_throws, analysis_input_data = analysis_input_nominal)
                 print(f"saving: {outdir}results.dill")
                 cross_section.SaveObject(f"{outdir}results.dill", result)
             else:
-                result = cross_section.LoadObject(f"{outdir}result.dill")
-                # sys = cross_section.LoadObject(f"{outdir}sys.dill")["systematic"]
+                result = cross_section.LoadObject(f"{outdir}results.dill")
 
             if len(result) > 1:
                 with Plots.PlotBook(f"{outdir}cov_mat") as book:
@@ -1031,7 +1030,7 @@ def main(args : cross_section.argparse.Namespace):
 
             if can_regen(outdir):
                 if not cross_section.os.path.isfile(f"{outdir}test_results.dill"):    
-                    results = norm_sys.Evaluate([0.8, 1.2], 1)
+                    results = norm_sys.Evaluate([0.8, 1.2], args.fit_inaccuracy_repeats)
                     cross_section.SaveObject(f"{outdir}test_results.dill", results)
 
                 results = cross_section.LoadObject(f"{outdir}test_results.dill")
@@ -1089,6 +1088,8 @@ if __name__ == "__main__":
 
     parser.add_argument("--regen", "-r", dest = "regen", action = "store_true", help = "fully rerun systematic tests if results already exist")
 
+    parser.add_argument("--toy_throws", dest = "n_throws", type = int, default = 50, help = "number of throws for systematics using the toy (exclusing fit inaccuracy)")
+    parser.add_argument("--fit_inaccuracy_repeats", dest = "fit_inaccuracy_repeats", type = int, default = 5, help = "number of repeats for fit inaccuracy systematic")
 
     parser.add_argument("--plot", "-p", dest = "plot", action = "store_true", default = None, help = "plot systematics with central value measurement")
 
