@@ -883,13 +883,15 @@ def main(args : cross_section.argparse.Namespace):
             mc_stat = NuisanceParameters(args)
             if can_regen(outdir):
                 result = mc_stat.RunExperiment()
-                sys = mc_stat.CalculateSysError(result)
+                # sys = mc_stat.CalculateSysError(result)
                 cross_section.SaveObject(f"{outdir}results.dill", result)
-                SaveSystematicError(sys, None, f"{outdir}sys.dill")
+                # SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
                 result = cross_section.LoadObject(f"{outdir}results.dill")
-                sys = cross_section.LoadObject(f"{outdir}sys.dill")
+                # sys = cross_section.LoadObject(f"{outdir}sys.dill")
 
+            sys = mc_stat.CalculateSysError(result)
+            SaveSystematicError(sys, None, f"{outdir}sys.dill")
             with Plots.PlotBook(f"{outdir}plots.pdf") as book:
                 mc_stat.PlotXSMCStat(result, book)
             tables = mc_stat.MCStatTables(result)
@@ -901,13 +903,15 @@ def main(args : cross_section.argparse.Namespace):
             if can_regen(outdir):
                 sc.CreateNewAIs(outdir)
                 result = sc.RunAnalysis(outdir)
-                sys = sc.CalculateSysErrorAsym(args.cv, result)
+                # sys = sc.CalculateSysErrorAsym(args.cv, result)
                 cross_section.SaveObject(f"{outdir}results.dill", result)
-                SaveSystematicError(sys, None, f"{outdir}sys.dill")
+                # SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
                 result = cross_section.LoadObject(f"{outdir}results.dill")
-                sys = cross_section.LoadObject(f"{outdir}sys.dill")["systematic"]
+                # sys = cross_section.LoadObject(f"{outdir}sys.dill")["systematic"]
 
+            sys = sc.CalculateSysErrorAsym(args.cv, result)
+            SaveSystematicError(sys, None, f"{outdir}sys.dill")
             with Plots.PlotBook(f"{outdir}plots.pdf") as book:
                 sc.PlotResults(args.cv, result, book)
             tables = sc.DataAnalysisTables(args.cv, sys, "Shower energy")
@@ -920,14 +924,16 @@ def main(args : cross_section.argparse.Namespace):
             if can_regen(outdir):
                 upl.CreateNewAIs(outdir)
                 result = upl.RunAnalysis(outdir)
-                sys = upl.CalculateSysErrorAsym(args.cv, result)
+                # sys = upl.CalculateSysErrorAsym(args.cv, result)
 
                 cross_section.SaveObject(f"{outdir}results.dill", result)
-                SaveSystematicError(sys, None, f"{outdir}sys.dill")
+                # SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
                 result = cross_section.LoadObject(f"{outdir}results.dill")
-                sys = cross_section.LoadObject(f"{outdir}sys.dill")
+                # sys = cross_section.LoadObject(f"{outdir}sys.dill")
 
+            sys = upl.CalculateSysErrorAsym(args.cv, result)
+            SaveSystematicError(sys, None, f"{outdir}sys.dill")
             with Plots.PlotBook(f"{outdir}plots.pdf") as book:
                 upl.PlotResults(args.cv, result, book)
             tables = upl.DataAnalysisTables(args.cv, sys, "Upstream")
@@ -940,14 +946,16 @@ def main(args : cross_section.argparse.Namespace):
             if can_regen(outdir):
                 brw.CreateNewAIs(outdir)
                 result = brw.RunAnalysis(outdir)
-                sys = brw.CalculateSysErrorAsym(args.cv, result)
+                # sys = brw.CalculateSysErrorAsym(args.cv, result)
 
                 cross_section.SaveObject(f"{outdir}results.dill", result)
-                SaveSystematicError(sys, None, f"{outdir}sys.dill")
+                # SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
                 result = cross_section.LoadObject(f"{outdir}results.dill")
-                sys = cross_section.LoadObject(f"{outdir}sys.dill")["systematic"]
+                # sys = cross_section.LoadObject(f"{outdir}sys.dill")["systematic"]
 
+            sys = brw.CalculateSysErrorAsym(args.cv, result)
+            SaveSystematicError(sys, None, f"{outdir}sys.dill")
             with Plots.PlotBook(f"{outdir}plots.pdf") as book:
                 brw.PlotResults(args.cv, result, book)
             tables = brw.DataAnalysisTables(args.cv, sys, "Reweight")
@@ -967,16 +975,20 @@ def main(args : cross_section.argparse.Namespace):
 
             if can_regen(outdir):
                 result = trk.Evaluate(args.n_throws, analysis_input_data = analysis_input_nominal, resolution = trk.resolution)
-                with Plots.PlotBook(f"{outdir}cov_mat") as book:
-                    sys = trk.CalculateSysCov(result, book)
                 cross_section.SaveObject(f"{outdir}results.dill", result)
-                SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
                 result = cross_section.LoadObject(f"{outdir}results.dill")
-                sys = cross_section.LoadObject(f"{outdir}sys.dill")["systematic"]
 
-            tables = trk.Tables(args.cv, sys, "Track length")
-            SaveTables(tables, outdir, 3)
+            if len(result) > 1:
+                with Plots.PlotBook(f"{outdir}cov_mat") as book:
+                    sys = trk.CalculateSysCov(result, book)
+                SaveSystematicError(sys, None, f"{outdir}sys.dill")
+
+                tables = trk.Tables(args.cv, sys, "Track length")
+                SaveTables(tables, outdir, 3)
+            else:
+                print("only one experiment was ran, run more experiments to produce the systematic errors.")
+
 
         if can_run("beam_res"):
             outdir = out + "beam_res/"
@@ -986,16 +998,19 @@ def main(args : cross_section.argparse.Namespace):
 
             if can_regen(outdir):
                 result = bm.Evaluate(args.n_throws, analysis_input_data = analysis_input_nominal, resolution = resolution)
-                with Plots.PlotBook(f"{outdir}cov_mat") as book:
-                    sys = bm.CalculateSysCov(result, book)
                 cross_section.SaveObject(f"{outdir}results.dill", result)
-                SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
                 result = cross_section.LoadObject(f"{outdir}results.dill")
-                sys = cross_section.LoadObject(f"{outdir}sys.dill")["systematic"]
 
-            tables = bm.Tables(args.cv, sys, "Beam momentum")
-            SaveTables(tables, outdir, 3)
+            if len(result) > 1:
+                with Plots.PlotBook(f"{outdir}cov_mat") as book:
+                    sys = bm.CalculateSysCov(result, book)
+                SaveSystematicError(sys, None, f"{outdir}sys.dill")
+
+                tables = bm.Tables(args.cv, sys, "Beam momentum")
+                SaveTables(tables, outdir, 3)
+            else:
+                print("only one experiment was ran, run more experiments to produce the systematic errors.")
 
         if can_run("theory"):
             outdir = out + "theory/"
@@ -1034,23 +1049,27 @@ def main(args : cross_section.argparse.Namespace):
                     cross_section.SaveObject(f"{outdir}test_results.dill", results)
 
                 results = cross_section.LoadObject(f"{outdir}test_results.dill")
+            else:
+                results = cross_section.LoadObject(f"{outdir}test_results.dill")
+
+            if len(result) > 1:
                 NormalisationSystematic.AverageResults(results)
                 sys_err = NormalisationSystematic.CalculateSysErr(results)
                 frac_err = NormalisationSystematic.CalculateFractionalError(sys_err, xs_nominal)
                 SaveSystematicError(sys_err, frac_err, f"{outdir}sys.dill")
+                sys = cross_section.LoadObject(f"{outdir}sys.dill")
+
+                with Plots.PlotBook(f"{outdir}plots", True) as book:
+                    #! use styler properly
+                    cross_section.PlotStyler.SetPlotStyle(dark = False, extend_colors = True)
+                    NormalisationSystematic.PlotNormalisationTestResults(results, args, xs_nominal, book)
+                    cross_section.PlotStyler.SetPlotStyle(dark = True, extend_colors = False)
+
+                tables = norm_sys.CreateTables(args.cv, sys)
+                SaveTables(tables, outdir, 2)
             else:
-                results = cross_section.LoadObject(f"{outdir}test_results.dill")
-                NormalisationSystematic.AverageResults(results)
-            sys = cross_section.LoadObject(f"{outdir}sys.dill")
+                print("only one experiment was ran, run more experiments to produce the systematic errors.")
 
-            with Plots.PlotBook(f"{outdir}plots", True) as book:
-                #! use styler properly
-                cross_section.PlotStyler.SetPlotStyle(dark = False, extend_colors = True)
-                NormalisationSystematic.PlotNormalisationTestResults(results, args, xs_nominal, book)
-                cross_section.PlotStyler.SetPlotStyle(dark = True, extend_colors = False)
-
-            tables = norm_sys.CreateTables(args.cv, sys)
-            SaveTables(tables, outdir, 2)
 
     if args.plot:
         outdir = out + "combined/"
