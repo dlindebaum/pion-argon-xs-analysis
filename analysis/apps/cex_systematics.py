@@ -823,7 +823,7 @@ def PlotSysHist(systematic_table : dict[pd.DataFrame], book : Plots.PlotBook = P
 def FinalPlots(cv, systematics_table : dict[pd.DataFrame], energy_slices, book : Plots.PlotBook = Plots.PlotBook.null, alt_xs : bool = False):
     goodness_of_fit = {}
     if alt_xs:
-        xs_alt = cross_section.GeantCrossSections(cross_section.os.environ["PYTHONPATH"] + "/data/g4_xs_pi_KE_100.root", energy_range = [energy_slices.min_pos - energy_slices.width, energy_slices.max_pos])
+        xs_alt = cross_section.GeantCrossSections(cross_section.GEANT_XS, energy_range = [energy_slices.min_pos - energy_slices.width, energy_slices.max_pos])
     goodness_of_fit_alt = {}
     for p in cv:
         xs = {
@@ -834,7 +834,7 @@ def FinalPlots(cv, systematics_table : dict[pd.DataFrame], energy_slices, book :
         goodness_of_fit[p] = cross_section.HypTestXS(cv[p][0], systematics_table[p].loc["Total systematic uncertainty (mb)"], p, energy_slices)
         if alt_xs:
             xs_alt.Plot(p, "red", label = "Geant4 v10.6, $\pi^{\pm}$:$2^{nd}$ $KE > 100 MeV$")
-            goodness_of_fit_alt[p] = cross_section.HypTestXS(cv[p][0], systematics_table[p].loc["Total systematic uncertainty (mb)"], p, energy_slices, cross_section.os.environ["PYTHONPATH"] + "/data/g4_xs_pi_KE_100.root")
+            goodness_of_fit_alt[p] = cross_section.HypTestXS(cv[p][0], systematics_table[p].loc["Total systematic uncertainty (mb)"], p, energy_slices, cross_section.GEANT_XS)
         book.Save()
     return pd.DataFrame(goodness_of_fit), pd.DataFrame(goodness_of_fit_alt)
 
@@ -1045,17 +1045,17 @@ def main(args : cross_section.argparse.Namespace):
             xs_nominal = norm_sys.Analyse(analysis_input_nominal, None)
 
             if can_regen(outdir):
-                if not cross_section.os.path.isfile(f"{outdir}test_results.dill"):    
-                    results = norm_sys.Evaluate([0.8, 1.2], args.fit_inaccuracy_repeats)
-                    cross_section.SaveObject(f"{outdir}test_results.dill", results)
+                if not cross_section.os.path.isfile(f"{outdir}results.dill"):    
+                    result = norm_sys.Evaluate([0.8, 1.2], args.fit_inaccuracy_repeats)
+                    cross_section.SaveObject(f"{outdir}results.dill", result)
 
-                results = cross_section.LoadObject(f"{outdir}test_results.dill")
+                result = cross_section.LoadObject(f"{outdir}results.dill")
             else:
-                results = cross_section.LoadObject(f"{outdir}test_results.dill")
+                result = cross_section.LoadObject(f"{outdir}results.dill")
 
             if len(result) > 1:
-                NormalisationSystematic.AverageResults(results)
-                sys_err = NormalisationSystematic.CalculateSysErr(results)
+                NormalisationSystematic.AverageResults(result)
+                sys_err = NormalisationSystematic.CalculateSysErr(result)
                 frac_err = NormalisationSystematic.CalculateFractionalError(sys_err, xs_nominal)
                 SaveSystematicError(sys_err, frac_err, f"{outdir}sys.dill")
                 sys = cross_section.LoadObject(f"{outdir}sys.dill")
@@ -1063,7 +1063,7 @@ def main(args : cross_section.argparse.Namespace):
                 with Plots.PlotBook(f"{outdir}plots", True) as book:
                     #! use styler properly
                     cross_section.PlotStyler.SetPlotStyle(dark = False, extend_colors = True)
-                    NormalisationSystematic.PlotNormalisationTestResults(results, args, xs_nominal, book)
+                    NormalisationSystematic.PlotNormalisationTestResults(result, args, xs_nominal, book)
                     cross_section.PlotStyler.SetPlotStyle(dark = True, extend_colors = False)
 
                 tables = norm_sys.CreateTables(args.cv, sys)

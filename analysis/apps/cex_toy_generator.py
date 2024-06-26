@@ -25,7 +25,7 @@ from scipy.stats import gaussian_kde
 
 from python.analysis.Master import timer, LoadConfiguration, ReadHDF5, LoadObject
 from python.analysis import Fitting, Utils
-from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle
+from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle, GEANT_XS
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # supress annoying pandas warnings
 
@@ -86,7 +86,7 @@ def P_int(sigma : np.array, l : float) -> np.array:
     return 1 - np.exp(-1E-27 * sigma * 6.02214076e23 * BetheBloch.rho * l / BetheBloch.A)
 
 
-def ModifyGeantXS(path = os.environ.get('PYTHONPATH', '').split(os.pathsep)[0] + "/data/g4_xs.root", scale_factors : dict = None, modified_PDFs : dict[np.array] = None):
+def ModifyGeantXS(path = GEANT_XS, scale_factors : dict = None, modified_PDFs : dict[np.array] = None):
     xs_sim = GeantCrossSections(file = path)
 
     if modified_PDFs is not None:
@@ -120,7 +120,7 @@ def ModifyGeantXS(path = os.environ.get('PYTHONPATH', '').split(os.pathsep)[0] +
     return xs_sim
 
 
-def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split(os.pathsep)[0] + "/data/g4_xs.root", scale_factors : dict = None, modified_PDFs : dict[np.array] = None) -> dict:
+def GenerateStackedPDFs(l : float, path = GEANT_XS, scale_factors : dict = None, modified_PDFs : dict[np.array] = None) -> dict:
     """ Creates a PDF of the inclusive cross section and a stacked PDF of the exclusive process,
         such that rejection sampling can be used to allocate an exclusive process for a given inclusive process.
 
