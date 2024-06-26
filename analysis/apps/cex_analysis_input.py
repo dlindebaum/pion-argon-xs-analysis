@@ -185,7 +185,7 @@ def CreateAnalysisInputMCTrueBeam(mc : cross_section.Data, args : cross_section.
     n_pi0 = cross_section.EventSelection.SelectionTools.GetPFOCounts(args_c["selection_masks"]["mc"]["pi0"][mc.filename])
     reco_regions = RegionIdentification.TrueRegions(n_pi0, n_pi)
 
-    n_pi_true, n_pi0_true = GetTruePionCounts(mc_true_beam, 0)
+    n_pi_true, n_pi0_true = GetTruePionCounts(mc_true_beam, args_c["pi_KE_lim"])
     true_regions = RegionIdentification.TrueRegions(n_pi0_true, n_pi_true)
 
     return cross_section.AnalysisInput.CreateAnalysisInputNtuple(mc_true_beam, args_c["upstream_loss_correction_params"]["value"], reco_regions, true_regions, [args["beam_reweight"]["params"][k]["value"] for k in args_c["beam_reweight"]["params"]], args_c["beam_reweight"]["strength"], upstream_loss_func = args_c["upstream_loss_response"])

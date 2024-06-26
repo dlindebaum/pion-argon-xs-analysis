@@ -993,7 +993,8 @@ def main(args : cross_section.argparse.Namespace):
         if can_run("beam_res"):
             outdir = out + "beam_res/"
             cross_section.os.makedirs(outdir, exist_ok = True)
-            resolution = 2.5/100
+            # resolution = 2.5/100
+            resolution = 1.2/100
             bm = BeamMomentumResolutionSystematic(args, model, args.toy_data_config)
 
             if can_regen(outdir):

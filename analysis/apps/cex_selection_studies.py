@@ -40,7 +40,7 @@ y_scale = {
     "track_score_all" : "log",
     "TrackScoreCut" : "linear",
     "NHitsCut" : "linear",
-    "PiPlusSelection" : "linear",
+    "PiPlusSelection" : "log",
     "BeamParticleDistanceCut" : "linear",
     "BeamParticleIPCut" : "linear",
     "Chi2ProtonSelection" : "linear",
@@ -588,6 +588,7 @@ def MakePFOSelectionPlots(output_mc : dict, output_data : dict, outDir : str, no
             if p in x_label:
                 Plots.PlotTagged(output_mc[p]["value"], output_mc[p]["tags"], data2 = output_data[p]["value"] if output_data else None, norm = norm, y_scale = y_scale[p], x_label = x_label[p], bins = nbins[p], ncols = ncols[p], x_range = x_range[p], truncate = truncate[p])
                 Plots.DrawMultiCutPosition(output_mc[p]["cuts"], face = output_mc[p]["op"], arrow_length = CalculateArrowLength(output_mc[p]["value"], x_range[p]), arrow_loc = 0.5, color = "C6")
+                Plots.plt.ylim(bottom = 0)
                 pdf.Save()
                 if f"{p}_completeness" in output_mc:
                     Plots.PlotHist2DImshowMarginal(ak.ravel(output_mc[p]["value"]), ak.ravel(output_mc[f"{p}_completeness"]["value"]), ylabel = "Completeness", xlabel = x_label[p], x_range = x_range[p], bins = nbins[p], norm = "column", c_scale = "linear")
@@ -610,7 +611,7 @@ def MakePFOSelectionPlotsConsdensed(output_mc : dict, output_mc_loose : dict, ou
                 
                 for c, mc in zip(["C6", "magenta"], [output_mc, output_mc_loose]):
                     Plots.DrawMultiCutPosition(mc[p]["cuts"], face = mc[p]["op"], arrow_length = CalculateArrowLength(mc[p]["value"], x_range[p]), arrow_loc = 0.5, color = c)
-                
+                Plots.plt.ylim(bottom = 0)                
                 pdf.Save()
                 if f"{p}_completeness" in output_mc:
                     Plots.PlotHist2DImshowMarginal(ak.ravel(mc[p]["value"]), ak.ravel(mc[f"{p}_completeness"]["value"]), ylabel = "Completeness", xlabel = x_label[p], x_range = x_range[p], bins = nbins[p], norm = "column", c_scale = "linear")
