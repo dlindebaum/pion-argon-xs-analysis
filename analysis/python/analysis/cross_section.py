@@ -425,13 +425,14 @@ class Sample(str, Enum):
 
 
 def ApplicationProcessing(samples : list[Sample], outdir : str, args : argparse.Namespace, func : callable, merge : bool, outname : str = "output"):
-    if args.regen or os.path.isfile(f"{outdir}{outname}.dill"):
-        print("Loading existing outputs")
-        outputs = LoadObject(f"{outdir}{outname}.dill")
-    else:
+    
+    if (args.regen is True) or (os.path.isfile(f"{outdir}{outname}.dill") is False):
         print("Processing Ntuples")
         outputs = {s : RunProcess(args.ntuple_files[s], s == Sample.DATA, args, func, merge) for s in samples}
         SaveObject(f"{outdir}{outname}.dill", outputs)
+    else:
+        print("Loading existing outputs")
+        outputs = LoadObject(f"{outdir}{outname}.dill")
     return outputs
 
 
