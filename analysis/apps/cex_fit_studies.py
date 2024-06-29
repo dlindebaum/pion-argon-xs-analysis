@@ -238,7 +238,7 @@ def PullStudy(template : cross_section.AnalysisInput, model : cross_section.pyhf
 
 
 def PullStudyFast(toys : cross_section.Toy, n_template : int, n_data : int, args, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, n : int) -> dict:
-    out = {"expected" : None, "scale" : pd.Series(n_template / n_data), "bestfit" : None, "uncertainty" : None}
+    out = {"expected" : None, "scale" : None, "bestfit" : None, "uncertainty" : None}
 
     @cross_section.timer
     def Pull():
@@ -260,21 +260,29 @@ def PullStudyFast(toys : cross_section.Toy, n_template : int, n_data : int, args
 
         output["bestfit"] = {list(data.exclusive_process.keys())[j] : result.bestfit[j] for j in range(len(template.exclusive_process))}
         output["uncertainty"] = {list(data.exclusive_process.keys())[j] : result.uncertainty[j] for j in range(len(template.exclusive_process))}
-
+        output["scale"] = {k : sum(v) / sum(data.exclusive_process[k]) for k,v in template.exclusive_process.items()}
         return output
 
     expected = []
     bestfit = []
     uncertainty = []
+    scales = []
     for i in range(n):
-        o = Pull()
-        expected.append(o["expected"])
-        bestfit.append(o["bestfit"])
-        uncertainty.append(o["uncertainty"])
+        while True:
+            try:
+                o = Pull()
+                expected.append(o["expected"])
+                bestfit.append(o["bestfit"])
+                uncertainty.append(o["uncertainty"])
+                scales.append(o["scale"])
+                break
+            except ValueError:
+                print("minimum was invalid, trying again")
 
     out["expected"] = pd.DataFrame(expected)
     out["bestfit"] = pd.DataFrame(bestfit)
     out["uncertainty"] = pd.DataFrame(uncertainty)
+    out["scale"] = pd.DataFrame(scales)
     return out
 
 def PlotShapeExamples(energy_slices : cross_section.Slices, book : Plots.PlotBook = Plots.PlotBook.null):
@@ -794,7 +802,7 @@ def main(args : cross_section.argparse.Namespace):
                     with Plots.PlotBook(outdir + f"pull_test_{m}/pulls.pdf", True) as book:
                         pull_results = ReadHDF5(outdir + f"pull_test_{m}/" + "pull_results.hdf5")
 
-                        pulls = (pull_results["bestfit"] - (pull_results["expected"] / pull_results["scale"][0])) / pull_results["uncertainty"]
+                        pulls = (pull_results["bestfit"] - (pull_results["expected"] / pull_results["scale"])) / pull_results["uncertainty"]
 
                         means = {}
                         stds = {}

@@ -610,7 +610,11 @@ def MakePFOSelectionPlotsConsdensed(output_mc : dict, output_mc_loose : dict, ou
                 Plots.PlotTagged(output_mc_loose[p]["value"], output_mc_loose[p]["tags"], data2 = output_data_loose[p]["value"] if output_data_loose else None, norm = norm, y_scale = y_scale[p], x_label = x_label[p], bins = nbins[p], ncols = ncols[p], x_range = x_range[p], truncate = truncate[p])
                 
                 for c, mc in zip(["C6", "magenta"], [output_mc, output_mc_loose]):
-                    Plots.DrawMultiCutPosition(mc[p]["cuts"], face = mc[p]["op"], arrow_length = CalculateArrowLength(mc[p]["value"], x_range[p]), arrow_loc = 0.5, color = c)
+                    if p == "PiPlusSelection":
+                        sf = 0.5
+                    else:
+                        sf = 1
+                    Plots.DrawMultiCutPosition(mc[p]["cuts"], face = mc[p]["op"], arrow_length = sf * CalculateArrowLength(mc[p]["value"], x_range[p]), arrow_loc = 0.5, color = c)
                 Plots.plt.ylim(bottom = 0)                
                 pdf.Save()
                 if f"{p}_completeness" in output_mc:
@@ -618,7 +622,7 @@ def MakePFOSelectionPlotsConsdensed(output_mc : dict, output_mc_loose : dict, ou
 
                     for c, mc in zip(["C6", "magenta"], [output_mc, output_mc_loose]):
                         Plots.DrawMultiCutPosition(mc[p]["cuts"], face = mc[p]["op"], arrow_length = CalculateArrowLength(mc[p]["value"], x_range[p]), arrow_loc = 0.1, color = c)
-                
+
                     pdf.Save()
 
         for mc in [output_mc, output_mc_loose]:

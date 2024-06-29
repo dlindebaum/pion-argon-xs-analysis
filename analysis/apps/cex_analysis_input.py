@@ -105,22 +105,22 @@ def RegionSelection(events : cross_section.Data, args : cross_section.argparse.N
         events_copy = events.Filter(returnCopy = True)
         
         if "fiducial" in selection_masks and (len(selection_masks["fiducial"]) > 0):
-            mask = SelectionTools.CombineMasks(selection_masks["fiducial"][events.filename])
+            mask = SelectionTools.CombineMasks(selection_masks["fiducial"][events_copy.filename])
             events_copy.Filter([mask], [mask])
 
-        is_pip = events_copy.trueParticles.pdg[:, 0] == 211
+        # is_pip = events_copy.trueParticles.pdg[:, 0] == 211
 
-        mask = SelectionTools.CombineMasks(selection_masks["beam"][events.filename])
+        mask = SelectionTools.CombineMasks(selection_masks["beam"][events_copy.filename])
 
         n_pi_true, n_pi0_true = GetTruePionCounts(events_copy, args_c["pi_KE_lim"])
         n_pi_true = n_pi_true[mask]
         n_pi0_true = n_pi0_true[mask]
-        is_pip = is_pip[mask]
+        # is_pip = is_pip[mask]
         true_regions = RegionIdentification.TrueRegions(n_pi0_true, n_pi_true)
         for k in true_regions:
-            true_regions[k] = true_regions[k] & (is_pip)
+            true_regions[k] = true_regions[k]# & (is_pip)
         for k in reco_regions:
-            reco_regions[k] = reco_regions[k] & (is_pip)
+            reco_regions[k] = reco_regions[k]# & (is_pip)
         return reco_regions, true_regions
     else:
         return reco_regions

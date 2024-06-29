@@ -828,13 +828,13 @@ def FinalPlots(cv, systematics_table : dict[pd.DataFrame], energy_slices, book :
     for p in cv:
         xs = {
             "ProtoDUNE SP: Data Stat + Sys Error" : cv[p],
-            "" : [cv[p][0], systematics_table[p].loc["Total systematic uncertainty (mb)"]]
+            "" : [cv[p][0], systematics_table[p].loc["Total uncertainty (mb)"]]
         }
-        cross_section.PlotXSComparison(xs, energy_slices, p, simulation_label = "Geant4 v10.6", colors = {k : f"C0" for k in xs}, chi2 = False)
-        goodness_of_fit[p] = cross_section.HypTestXS(cv[p][0], systematics_table[p].loc["Total systematic uncertainty (mb)"], p, energy_slices)
+        cross_section.PlotXSComparison(xs, energy_slices, p, simulation_label = "Geant4 v10.6", colors = {k : f"C0" for k in xs}, chi2 = True)
+        goodness_of_fit[p] = cross_section.HypTestXS(cv[p][0], systematics_table[p].loc["Total uncertainty (mb)"], p, energy_slices)
         if alt_xs:
             xs_alt.Plot(p, "red", label = "Geant4 v10.6, $\pi^{\pm}$:$2^{nd}$ $KE > 100 MeV$")
-            goodness_of_fit_alt[p] = cross_section.HypTestXS(cv[p][0], systematics_table[p].loc["Total systematic uncertainty (mb)"], p, energy_slices, cross_section.GEANT_XS)
+            goodness_of_fit_alt[p] = cross_section.HypTestXS(cv[p][0], systematics_table[p].loc["Total uncertainty (mb)"], p, energy_slices, cross_section.GEANT_XS)
         book.Save()
     return pd.DataFrame(goodness_of_fit), pd.DataFrame(goodness_of_fit_alt)
 

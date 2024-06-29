@@ -41,6 +41,7 @@ selection_map = {
     "BeamParticleDistanceCut" : "$d$",
     "BeamParticleIPCut" : "$b$",
     "PiPlusSelection" : "Median $dE/dX$",
+    "TrackLengthSelection" : "$l$",
 
     "NPhotonCandidateSelection" : "Number of photons",
     "Pi0MassSelection" : "$m_{\gamma\gamma}$",
@@ -69,6 +70,7 @@ units_map = {
     "BeamParticleDistanceCut" : "cm",
     "BeamParticleIPCut" : "cm",
     "PiPlusSelection" : "MeV/cm",
+    "TrackLengthSelection" : "cm",
 
     "NPhotonCandidateSelection" : "",
     "Pi0MassSelection" : "MeV",

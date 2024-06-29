@@ -1025,7 +1025,7 @@ def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label:
         if yerr is not None:
             plt.stairs(y+yerr, edges, baseline=y-yerr, fill = True, alpha = 0.25, color = color)
     elif style == "scatter":
-        plt.errorbar(x, y, yerr, xerr, marker = marker, linestyle = linestyle, label = label, color = color, markersize = markersize, alpha = alpha, capsize = capsize, zorder = zorder, rasterized = True)
+        plt.errorbar(x, y, yerr, xerr, marker = marker, linestyle = linestyle, label = label, color = color, markersize = markersize, alpha = alpha, capsize = capsize, zorder = zorder, rasterized = rasterized)
     else:
         raise Exception(f"{style} not a valid style")
 
