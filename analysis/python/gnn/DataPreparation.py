@@ -997,15 +997,19 @@ def make_context_truth_info(
 
 def get_event_index(
         event_index,
-        property):
+        prop,
+        prop_order=None):
     """
     Returns the value of the property at the supplied event index as a
     tf.Tensor to be used to create a graph.
 
-    Property must be a numpy array or NormalisableProperty created by
+    `prop` must be a numpy array or NormalisableProperty created by
     one of the `DataPreparation.make_evt_classifications()`,
     `DataPreparation.make_evt_kinematics()`, or
     `DataPreparation.make_evt_geometries()` functions.
+
+    Requires a prop_order if a NormalisableProperty is passed to ensure
+    the values are loaded in a known order.
 
     This is a dumb function, it shouldn't be so generic.
     It relies on the type to tell what response is desired.
@@ -1017,8 +1021,11 @@ def get_event_index(
     ----------
     event_index : int
         Index of the event to fetch.
-    property : np.ndarray or DataPerpataion.NormalisableProperty
+    prop : np.ndarray or DataPerpataion.NormalisableProperty
         Property to convert to a tensor
+    prop_order : list[str], optional
+        Order of properties to read out. List of strings found in the
+        NormalisableProperty instance. Default is None.
 
     Returns
     -------
@@ -1027,22 +1034,62 @@ def get_event_index(
         event graph.
     
     """
-    if isinstance(property, np.ndarray):
+    if isinstance(prop, np.ndarray):
         # This is a context value
         # We need and outer dimension to be one, so return an array
         return tf.convert_to_tensor(
-            property[event_index:event_index+1])
+            prop[event_index:event_index+1])
     # If these are node/edge properties (as a NormalisableProperty
-    elif isinstance(property, NormalisableProperty):
+    elif isinstance(prop, NormalisableProperty):
+        if prop_order is None:
+            raise ValueError("prop_order must be specified for "
+                             +"NormalisableProperty")
         np_from_ak = lambda data: ak.to_numpy(data[event_index])
         return tf.convert_to_tensor(
-            np.array([np_from_ak(data)
-                    for data in property.use_val.values()]).T,
-            dtype=np.float32)
+            np.array([np_from_ak(prop.unnormed[which])
+                      for which in prop_order]).T,
+                     dtype=np.float32)
     # Else an ak.Array, we don't keep outer dimension
     return tf.convert_to_tensor(
-        property[event_index])
+        prop[event_index])
     
+def get_property_normalisations(prop, prop_order):
+    """
+    Returns the means and standard deviation to normalise the
+    properties.
+    
+    Will indicate mean 0. and standard deviation 1. for properties
+    which should not be normalised (such that normalisation returns the
+    input). This applies to label type properties, i.e. where only two
+    unique values are present (i.e. 1 and 0).
+
+    Also includes a list of strings referencing the properties inside
+    the NormalisableProperty to ensure the normalisations are correctly
+    mapped.
+
+    Parameters
+    ----------
+    prop : DataPerpataion.NormalisableProperty
+        Class containing the data with normalisation parameters.
+    
+    Returns
+    -------
+    means : tf.Tensor
+        Tensor containing the mean of each property in `prop`.
+    stds : tf.Tensor
+        Tensor containing the standard deviation of each property in
+        `prop`.
+    prop_order : str[list]
+        The order the noirmalisation are given.
+    """
+    norm_params = prop.norm_params
+    means = np.array([norm_params[which]["mean"]
+                      for which in prop_order],
+                     dtype=np.float32)
+    stds =  np.array([norm_params[which]["std"]
+                      for which in prop_order],
+                     dtype=np.float32)
+    return means, stds, prop_order
 
 def create_filepath_dictionary(folder_path):
     """
@@ -1070,7 +1117,8 @@ def create_filepath_dictionary(folder_path):
         "train_path": os.path.join(folder_path, "train_data.tfrecords"),
         "val_path": os.path.join(folder_path, "val_data.tfrecords"),
         "test_path": os.path.join(folder_path, "test_data.tfrecords"),
-        "dict_path": os.path.join(folder_path, "params_dict.dill")}
+        "dict_path": os.path.join(folder_path, "params_dict.dill"),
+        "norm_path": os.path.join(folder_path, "norm_params.pkl")}
 
 def create_parameter_dictionary(
         folder_path,
@@ -1258,18 +1306,29 @@ def create_parameter_dictionary(
         make_evt_kinematics(params["events"], params["kinematics"],
                             params["kinematic_definitions"],
                             params["norm_kinematics"])})
+    kine_mean, kine_std = get_property_normalisations(
+        params["kinematic_values"], params["kinematics"])
+    norms_dict = {"pfo_mean": kine_mean, "pfo_std": kine_std}
     params.update({
         "geometric_values":
         make_evt_geometries(params["events"], params["geometries"],
                             params["geometric_definitions"],
                             params["directed_pairs"],
                             params["norm_geometries"])})
+    geom_mean, geom_std = get_property_normalisations(
+        params["geometric_values"], params["geometries"])
+    norms_dict.update({"neighbours_mean": geom_mean,
+                       "neighbours_std": geom_std})
     if params["beam_node"]:
         params.update({
             "beam_values":
             make_beam_props(params["events"], params["beam_connections"],
                             params["beam_definitions"],
                             params["norm_beam"])})
+        conn_mean, conn_std = get_property_normalisations(
+        params["beam_values"], params["beam_connections"])
+        norms_dict.update({"beam_connections_mean": conn_mean,
+                           "beam_connections_std": conn_std})
     else:
         params.update({"beam_values": None})
     if params["use_momenta"]:
@@ -1282,6 +1341,8 @@ def create_parameter_dictionary(
     params.update(create_filepath_dictionary(folder_path))
     with open(params["dict_path"], "wb") as f:
         dill.dump(params, f)
+    with open(params["norm_path"], "wb") as f:
+        pickle.dump(norms_dict, f)
     return params
 
 def generate_event_graph(event_index, param_dict):
@@ -1305,9 +1366,11 @@ def generate_event_graph(event_index, param_dict):
     class_tensor = get_event_index(
         event_index, param_dict["classification_values"])
     kine_tensor = get_event_index(
-        event_index, param_dict["kinematic_values"])
+        event_index, param_dict["kinematic_values"],
+        prop_order=param_dict["kinematicss"])
     geom_tensor = get_event_index(
-        event_index, param_dict["geometric_values"])
+        event_index, param_dict["geometric_values"],
+        prop_order=param_dict["geometries"])
     
     context_values = {"classification": class_tensor}
 
@@ -1350,7 +1413,8 @@ def generate_event_graph(event_index, param_dict):
                 event_index, param_dict["momentum_values"])})
     if param_dict["beam_node"]:
         beam_conn_tensor = get_event_index(
-            event_index, param_dict["beam_values"])
+            event_index, param_dict["beam_values"],
+            prop_order=param_dict["beam_connections"])
         n_beam_conns = beam_conn_tensor.shape[0]
         beam_conn_features = {tfgnn.HIDDEN_STATE: beam_conn_tensor}
         if param_dict["truth_info"]:
@@ -1432,6 +1496,7 @@ def generate_graph_schema(params_dict):
             "momentum": tf.TensorSpec(
                 (None, len(params_dict["momenta"])),
                 tf.float32)})
+    
     edge_features = {
                 tfgnn.HIDDEN_STATE: tf.TensorSpec(
                     (None, len(params_dict["geometries"])),
@@ -1459,6 +1524,7 @@ def generate_graph_schema(params_dict):
             edge_features.update({key: tf.TensorSpec(
                 shape=(None, 1),
                 dtype=tf.float32)})
+    
     nodes_spec = {
         "pfo": tfgnn.NodeSetSpec.from_field_specs(
             features_spec=pfo_features,
@@ -1470,6 +1536,7 @@ def generate_graph_schema(params_dict):
             adjacency_spec=(
                 tfgnn.AdjacencySpec.from_incident_node_sets(
                     "pfo", "pfo")))}
+    
     if params_dict["beam_node"]:
         nodes_spec.update({
             "beam": tfgnn.NodeSetSpec.from_field_specs(
