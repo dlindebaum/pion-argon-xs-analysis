@@ -14,6 +14,8 @@ from python.gnn import DataPreparation
 from apps.cex_toy_parameters import PlotCorrelationMatrix as plot_confusion_matrix
 # from python.analysis import Plots
 
+__version__ = "1.0.0"
+
 def parse_constructor(constructor: list, parameters: dict):
     """
     Take a list of constructors (classes which build layers in this
