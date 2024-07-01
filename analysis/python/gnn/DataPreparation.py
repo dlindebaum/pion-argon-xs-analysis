@@ -444,11 +444,17 @@ class NormalisableProperty():
         result = {}
         for (name, data) in self.unnormed.items():
             flat_data = ak.ravel(data)
-            result.update({
-                name: {"mean": np.mean(flat_data),
-                       "std": np.std(flat_data),
-                       "label": len(set(flat_data)) == 2}
-                })
+            if len(set(flat_data)) == 2:
+                # Label type property (0/1), don't norm
+                result.update({
+                    name: {"mean": 0.,
+                           "std": 1.,
+                           "label": True}})
+            else:
+                result.update({
+                    name: {"mean": np.mean(flat_data),
+                           "std": np.std(flat_data),
+                           "label": False}})
         return result
     
     def normalise(self, unnormed):
