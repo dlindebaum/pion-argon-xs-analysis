@@ -6,6 +6,7 @@ import os
 import pickle
 import json
 import copy
+import warnings
 import numpy as np
 import awkward as ak
 import tensorflow as tf
@@ -433,14 +434,16 @@ example_outputs = ["classifier",
                    "pion_id", "photon_id", "pi0_id",
                    "reco_classification"]
 
-def construct_model(hyper_params, constructor, parameters, outputs, model_type="GATv2"):
-    model_params_dict = {
-        "model_type": model_type,
-        "model_parameters": parameters,
-        "model_constructor": [repr(c) for c in constructor],
-        "model_outputs": outputs}
-    with open(hyper_params["model_params_path"], "w") as f:
-        json.dump(model_params_dict, f, indent=4)
+def construct_model(hyper_params, constructor, parameters, outputs, model_type="GATv2", save=True):
+    if save:
+        model_params_dict = {
+            "model_type": model_type,
+            "model_parameters": parameters,
+            "model_constructor": [repr(c) for c in constructor],
+            "model_outputs": outputs,
+            "layers_version": Layers.__version__}
+        with open(hyper_params["model_params_path"], "w") as f:
+            json.dump(model_params_dict, f, indent=4)
     layer_funcs=[]
     output_index=[]
     layer_funcs, which_outputs = Layers.parse_constructor(constructor, parameters)
@@ -456,9 +459,101 @@ def construct_model(hyper_params, constructor, parameters, outputs, model_type="
             model_out[output_ind] = func(graph)
     return tf.keras.Model(inputs=[input_graph], outputs=model_out)
 
+def _parse_string_kwargs(string, kwarg_types=None):
+    kwargs = {}
+    data = [s.strip() for s in string.split(",") if len(s) > 0]
+    for i, d in enumerate(data):
+        if "=" in d:
+            key, val = d.split("=")
+        else:
+            key = list(kwarg_types.keys())[i]
+            val = d
+        kwargs[key] = kwarg_types[key](val)
+    return kwargs
 
-def load_model_from_hyper_params(hyper_params, constructor, parameters, outputs, model_type="GATv2"):
-    pass
+def load_layer(layer_repr):
+    if layer_repr[:16] == "LoopConstructor(":
+        # If loop constructor, first argument is a list of layers
+        constructors = []
+        this_constructor = ""
+        curr_depth = 0
+        curr_ind = 17
+        while curr_depth >= 0:
+            char = layer_repr[curr_ind]
+            curr_ind += 1
+            if char == "[" or char == "(":
+                curr_depth += 1
+            elif char == "]" or char == ")":
+                curr_depth -= 1
+                if curr_depth == -1:
+                    continue
+            elif curr_depth == 0:
+                if char == ",":
+                    constructors.append(this_constructor)
+                    this_constructor = ""
+                    continue
+                elif char == " ":
+                    continue
+            this_constructor += char
+        constructors = [load_layer(c) for c in constructors]
+        extra_args = layer_repr[curr_ind:-1]
+        expected_kwargs = {"loops": int, "final_step": bool}
+        loop_kwargs = _parse_string_kwargs(extra_args, expected_kwargs)
+        return Layers.LoopConstructor(constructors, **loop_kwargs)
+    else:
+        return eval("Layers." + layer_repr)
+
+def _split_ver_patch(version):
+    maj, mini, patch = version.split(".")
+    return ".".join(maj, mini), path
+
+def _check_version(version_model, version_module):
+    ver1, patch1 = _split_ver_patch(version_model)
+    ver2, patch2 = _split_ver_patch(version_module)
+    if ver1 != ver2:
+        raise ValueError(
+            f"Model constructed with Layers version {version_model}, "
+            + f"but trying to load with version {version_module}")
+    if patch1 != patch2:
+        warnings.warn(f"Layer versions {version_model} (model), "
+                      + f"{version_module} (current module) do not "
+                      + "match, may be unexpected behaviour.")
+    return
+
+def load_model_from_file(model_folder):
+    paths_dict = make_model_paths(model_folder)
+    with open(paths_dict["model_params_path"], "r") as f:
+        model_properties = json.load(f)
+    load_version = model_properties["layers_version"]
+    _check_version(load_version, Layers.__version__)
+    params = model_properties["model_parameters"]
+    outputs = model_properties["model_outputs"]
+    model_type = model_properties["model_type"]
+    constructor = [load_layer(rep) for rep in model_properties["model_constructor"]]
+    try:
+        with open(paths_dict["params_path"], 'rb') as f:
+            hyper_params = pickle.load(f)
+    except EOFError:
+        print("Pickle file seems to have been overwritten (multiple trains?)."
+              + " Loading from text...")
+        with open(paths_dict["text_params_path"], "r") as f:
+            hyper_params = eval(f.read().replace('\n', ''))
+            # Bad saving practive means the path items we want are strings like
+            #   "'string'", so the leading/trailing '-s must be removed
+            for key, val in hyper_params.items():
+                if "path" in key or "folder" in key:
+                    hyper_params[key] = val[1:-1]
+    model = construct_model(
+        hyper_params,
+        constructor,
+        params,
+        outputs,
+        model_type=model_type,
+        save=False)
+    model.load_weights(hyper_params["weights_path"])
+    return model
+
+    
 
 def build_evt_classifer_model_data_with_momentum(
     graph_tensor_spec,
