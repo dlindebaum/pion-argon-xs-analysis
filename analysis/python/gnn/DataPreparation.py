@@ -4,6 +4,7 @@
 
 import os
 import warnings
+import json
 import dill # dill over pickle to allo wsaving local functions
 import numpy as np
 import awkward as ak
@@ -1089,7 +1090,7 @@ def get_property_normalisations(prop, prop_order):
     stds =  np.array([norm_params[which]["std"]
                       for which in prop_order],
                      dtype=np.float32)
-    return means, stds, prop_order
+    return means, stds
 
 def create_filepath_dictionary(folder_path):
     """
@@ -1118,7 +1119,7 @@ def create_filepath_dictionary(folder_path):
         "val_path": os.path.join(folder_path, "val_data.tfrecords"),
         "test_path": os.path.join(folder_path, "test_data.tfrecords"),
         "dict_path": os.path.join(folder_path, "params_dict.dill"),
-        "norm_path": os.path.join(folder_path, "norm_params.pkl")}
+        "norm_path": os.path.join(folder_path, "norm_params.json")}
 
 def create_parameter_dictionary(
         folder_path,
@@ -1342,7 +1343,7 @@ def create_parameter_dictionary(
     with open(params["dict_path"], "wb") as f:
         dill.dump(params, f)
     with open(params["norm_path"], "wb") as f:
-        pickle.dump(norms_dict, f)
+        json.dump(norms_dict, f, indent=4)
     return params
 
 def generate_event_graph(event_index, param_dict):
