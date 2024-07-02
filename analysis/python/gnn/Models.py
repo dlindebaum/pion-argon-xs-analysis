@@ -503,18 +503,18 @@ def load_layer(layer_repr):
     else:
         return eval("Layers." + layer_repr)
 
-def _split_ver_patch(version):
-    maj, mini, patch = version.split(".")
-    return ".".join(maj, mini), path
+def _split_ver_(version):
+    major, minor, patch = version.split(".")
+    return major, ".".join(minor, patch)
 
 def _check_version(version_model, version_module):
-    ver1, patch1 = _split_ver_patch(version_model)
-    ver2, patch2 = _split_ver_patch(version_module)
-    if ver1 != ver2:
+    maj1, min1 = _split_ver_patch(version_model)
+    maj2, min2 = _split_ver_patch(version_module)
+    if maj1 != maj2:
         raise ValueError(
             f"Model constructed with Layers version {version_model}, "
             + f"but trying to load with version {version_module}")
-    if patch1 != patch2:
+    if min1 != min2:
         warnings.warn(f"Layer versions {version_model} (model), "
                       + f"{version_module} (current module) do not "
                       + "match, may be unexpected behaviour.")
