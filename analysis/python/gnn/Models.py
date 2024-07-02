@@ -434,6 +434,15 @@ example_outputs = ["classifier",
                    "pion_id", "photon_id", "pi0_id",
                    "reco_classification"]
 
+def create_normaliser_from_data(data_path_params):
+    if isinstance(data_path_params, str):
+        norms_path = data_path_params
+    else:
+        norms_path = data_path_params["norm_path"]
+    with open(dict_path, "rb") as f:
+        norms_dict = pickle.load(f)
+    return Layers.NormaliseHiddenFeatures(**norms_dict)
+
 def construct_model(hyper_params, constructor, parameters, outputs, model_type="GATv2", save=True):
     if save:
         model_params_dict = {
