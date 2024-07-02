@@ -4,6 +4,7 @@
 
 import os
 import pickle
+import warnings
 import copy
 import numpy as np
 import awkward as ak
@@ -14,7 +15,7 @@ from python.gnn import DataPreparation
 from apps.cex_toy_parameters import PlotCorrelationMatrix as plot_confusion_matrix
 # from python.analysis import Plots
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 def parse_constructor(constructor: list, parameters: dict):
     """
@@ -137,6 +138,59 @@ class Setup(LayerConstructor):
         def layer(graph):
             return graph.merge_batch_to_components()
         return layer
+
+class NormaliseHiddenFeatures(LayerConstructor):
+    def __init__(
+            self, *output_name,
+            pfo_mean=None, pfo_std=None,
+            neighbours_mean=None, neighbours_std=None,
+            beam_connections_mean=None, beam_connections_std=None,
+            **kwargs):
+        kwargs.update({"pfo_mean": pfo_mean,
+                       "pfo_std": pfo_std,
+                       "neighbours_mean": neighbours_mean,
+                       "neighbours_std": neighbours_std,
+                       "beam_connections_mean": beam_connections_mean,
+                       "beam_connections_std": beam_connections_std})
+        required_args = ["pfo_mean", "pfo_std",
+                         "neighbours_mean", "neighbours_std"]
+        for req in required_args:
+            if kwargs[req] is None:
+                raise ValueError(f"{req} must be supplied for normalisation")
+        if kwargs["beam_connections_mean"] is None:
+            warnings.warn("Beam connection normalisation not applied, "
+                          "only valid for graphs without a beam node")
+        kwargs.update({"norms_dict": norms_dict})
+        super().__init__(*output_name, **kwargs)
+        return
+
+    def _func(self, **kwargs):
+        norms = kwargs["norms_dict"]
+        def pfo_normaliser(node_set, node_set_name):
+            feats = node_set.get_features_dict()
+            if node_set_name == "pfo":
+                data = feats[tfgnn.HIDDEN_STATE]
+                data = ((data - norms["pfo_mean"])
+                        / norms["pfo_std"])
+                feats[tfgnn.HIDDEN_STATE] = data
+            return feats
+        def edge_normaliser(edge_set, edge_set_name):
+            feats = edge_set.get_features_dict()
+            if edge_set_name == "neighbours":
+                data = feats[tfgnn.HIDDEN_STATE]
+                data = ((data - norms["neighbours_mean"])
+                        / norms["neighbours_std"])
+                feats[tfgnn.HIDDEN_STATE] = data
+            elif edge_set_name == "beam_connections":
+                # This is only reached if beam connections exits
+                data = feats[tfgnn.HIDDEN_STATE]
+                data = ((data - norms["beam_connections_mean"])
+                        / norms["beam_connections_std"])
+                feats[tfgnn.HIDDEN_STATE] = data
+            return feats
+        return tfgnn.keras.layers.MapFeatures(
+            node_sets_fn = pfo_normaliser,
+            edge_sets_fn = edge_normaliser)
 
 class InitialState(LayerConstructor):
     def __init__(
