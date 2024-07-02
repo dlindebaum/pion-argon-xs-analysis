@@ -1343,7 +1343,8 @@ def create_parameter_dictionary(
     with open(params["dict_path"], "wb") as f:
         dill.dump(params, f)
     with open(params["norm_path"], "w") as f:
-        json.dump(norms_dict, f, indent=4)
+        json_norms = {key: list(val) for key, val in norms_dict.items()}
+        json.dump(json_norms, f, indent=4)
     return params
 
 def generate_event_graph(event_index, param_dict):

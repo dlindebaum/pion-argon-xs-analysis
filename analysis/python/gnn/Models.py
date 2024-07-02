@@ -440,7 +440,8 @@ def create_normaliser_from_data(data_path_params):
     else:
         norms_path = data_path_params["norm_path"]
     with open(dict_path, "r") as f:
-        norms_dict = json.load(f)
+        json_dict = json.load(f)
+        norms_dict = {k: np.array(v) for k, v in json_dict.items()}
     return Layers.NormaliseHiddenFeatures(**norms_dict)
 
 def construct_model(hyper_params, constructor, parameters, outputs, model_type="GATv2", save=True):
