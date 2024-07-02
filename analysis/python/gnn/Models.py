@@ -439,7 +439,7 @@ def create_normaliser_from_data(data_path_params):
         norms_path = data_path_params
     else:
         norms_path = data_path_params["norm_path"]
-    with open(dict_path, "rb") as f:
+    with open(dict_path, "r") as f:
         norms_dict = json.load(f)
     return Layers.NormaliseHiddenFeatures(**norms_dict)
 

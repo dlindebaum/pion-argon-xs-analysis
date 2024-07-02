@@ -1342,7 +1342,7 @@ def create_parameter_dictionary(
     params.update(create_filepath_dictionary(folder_path))
     with open(params["dict_path"], "wb") as f:
         dill.dump(params, f)
-    with open(params["norm_path"], "wb") as f:
+    with open(params["norm_path"], "w") as f:
         json.dump(norms_dict, f, indent=4)
     return params
 
