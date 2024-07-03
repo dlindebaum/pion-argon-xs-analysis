@@ -439,13 +439,16 @@ def create_normaliser_from_data(data_path_params):
         norms_path = data_path_params
     else:
         norms_path = data_path_params["norm_path"]
-    with open(dict_path, "r") as f:
+    with open(norms_path, "r") as f:
         json_dict = json.load(f)
-        norms_dict = DataPreparation._norms_json_formatter(
-            json_dict, invert=True)
+    norms_dict = DataPreparation._norms_json_formatter(
+        json_dict, invert=True)
     return Layers.NormaliseHiddenFeatures(**norms_dict)
 
-def construct_model(hyper_params, constructor, parameters, outputs, model_type="GATv2", save=True):
+def construct_model(
+        hyper_params,
+        constructor, parameters, outputs,
+        model_type="GATv2", save=True):
     if save:
         model_params_dict = {
             "model_type": model_type,
@@ -497,6 +500,7 @@ def load_layer(layer_repr):
             elif char == "]" or char == ")":
                 curr_depth -= 1
                 if curr_depth == -1:
+                    constructors.append(this_constructor)
                     continue
             elif curr_depth == 0:
                 if char == ",":
@@ -514,9 +518,9 @@ def load_layer(layer_repr):
     else:
         return eval("Layers." + layer_repr)
 
-def _split_ver_(version):
+def _split_ver_patch(version):
     major, minor, patch = version.split(".")
-    return major, ".".join(minor, patch)
+    return major, ".".join([minor, patch])
 
 def _check_version(version_model, version_module):
     maj1, min1 = _split_ver_patch(version_model)
@@ -531,7 +535,35 @@ def _check_version(version_model, version_module):
                       + "match, may be unexpected behaviour.")
     return
 
-def load_model_from_file(model_folder):
+def load_model_from_file(model_folder, new_norm=None):
+    """
+    Loads a model contained in the supplied folder.
+
+    This is done by reconstructing the model from the model_params.txt
+    file within the folder, and then reloading the corresponding
+    weights from the checkpoints/weights data.
+
+    The normalisation layer may be substituted by passing new_norm as a
+    string path to normalisation parameters json, dictionary of data
+    path parameters, or an already constructed NormaliseHiddenFeatures
+    layer.
+
+    Parameters
+    ----------
+    model_folder : str
+        Path to folder containing the model data.
+    new_norm : str, dict, or NormaliseHiddenFeatures, optional
+        If passed, any existing NormaliseHiddenFeatures layers with a
+        new NormaliseHiddenFeatures layer with the supplied parameters.
+        Parameters are supplied string path to normalisation parameters
+        json, a dictionary of data path parameters including
+        "norm_path", or an already constructed NormaliseHiddenFeatures
+        layer. Default is None.
+    
+    Returns
+    tf.keras.Model
+        Copy of the model which was saved.
+    """
     paths_dict = make_model_paths(model_folder)
     with open(paths_dict["model_params_path"], "r") as f:
         model_properties = json.load(f)
@@ -541,6 +573,14 @@ def load_model_from_file(model_folder):
     outputs = model_properties["model_outputs"]
     model_type = model_properties["model_type"]
     constructor = [load_layer(rep) for rep in model_properties["model_constructor"]]
+    if new_norm is not None:
+        if isinstance(new_norm, Layers.NormaliseHiddenFeatures):
+            new_layer = new_norm
+        else:
+            new_layer = create_normaliser_from_data(new_norm)
+        for i, layer in enumerate(constructor):
+            if isinstance(layer, Layers.NormaliseHiddenFeatures):
+                constructor[i] = new_layer
     try:
         with open(paths_dict["params_path"], 'rb') as f:
             hyper_params = pickle.load(f)
