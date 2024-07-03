@@ -1375,7 +1375,7 @@ def generate_event_graph(event_index, param_dict):
         event_index, param_dict["classification_values"])
     kine_tensor = get_event_index(
         event_index, param_dict["kinematic_values"],
-        prop_order=param_dict["kinematicss"])
+        prop_order=param_dict["kinematics"])
     geom_tensor = get_event_index(
         event_index, param_dict["geometric_values"],
         prop_order=param_dict["geometries"])
