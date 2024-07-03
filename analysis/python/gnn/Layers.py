@@ -15,7 +15,7 @@ from python.gnn import DataPreparation
 from apps.cex_toy_parameters import PlotCorrelationMatrix as plot_confusion_matrix
 # from python.analysis import Plots
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 def parse_constructor(constructor: list, parameters: dict):
     """
@@ -102,11 +102,14 @@ class LayerConstructor():
         if not self.do_final_loop_step:
             repr_string += "final_step=False, "
         for key, val in self.repr_kwargs.items():
-            repr_string += f"{key}={repr(val)}, "
+            repr_string += f"{key}={self._kwarg_repr(val)}, "
         if repr_string[-2:] == ", ":
             repr_string = repr_string[:-2]
         repr_string += ")"
         return repr_string
+
+    def _kwarg_repr(self, val):
+        return repr(val)
 
     def get_func(self, parameters):
         parameters.update(self.additional_args)
@@ -160,32 +163,44 @@ class NormaliseHiddenFeatures(LayerConstructor):
         if kwargs["beam_connections_mean"] is None:
             warnings.warn("Beam connection normalisation not applied, "
                           "only valid for graphs without a beam node")
-        kwargs.update({"norms_dict": norms_dict})
         super().__init__(*output_name, **kwargs)
         return
 
+    def _kwarg_repr(self, val):
+        if isinstance(val, np.ndarray):
+            # Add np. to get np.array
+            res = "np." + repr(val)
+            # Get rid of extra \n as most excess spaces
+            res = res.replace(r"\n", "")
+            res = [s.strip() for s in res.split(",")]
+            res = ", ".join(res)
+            # Add np. to dtype (for i.e. np.float32)
+            res = "dtype=np.".join(res.split("dtype="))
+        else:
+            res = repr(val)
+        return res
+
     def _func(self, **kwargs):
-        norms = kwargs["norms_dict"]
         def pfo_normaliser(node_set, node_set_name):
             feats = node_set.get_features_dict()
             if node_set_name == "pfo":
                 data = feats[tfgnn.HIDDEN_STATE]
-                data = ((data - norms["pfo_mean"])
-                        / norms["pfo_std"])
+                data = ((data - kwargs["pfo_mean"])
+                        / kwargs["pfo_std"])
                 feats[tfgnn.HIDDEN_STATE] = data
             return feats
         def edge_normaliser(edge_set, edge_set_name):
             feats = edge_set.get_features_dict()
             if edge_set_name == "neighbours":
                 data = feats[tfgnn.HIDDEN_STATE]
-                data = ((data - norms["neighbours_mean"])
-                        / norms["neighbours_std"])
+                data = ((data - kwargs["neighbours_mean"])
+                        / kwargs["neighbours_std"])
                 feats[tfgnn.HIDDEN_STATE] = data
             elif edge_set_name == "beam_connections":
                 # This is only reached if beam connections exits
                 data = feats[tfgnn.HIDDEN_STATE]
-                data = ((data - norms["beam_connections_mean"])
-                        / norms["beam_connections_std"])
+                data = ((data - kwargs["beam_connections_mean"])
+                        / kwargs["beam_connections_std"])
                 feats[tfgnn.HIDDEN_STATE] = data
             return feats
         return tfgnn.keras.layers.MapFeatures(
