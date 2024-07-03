@@ -15,7 +15,7 @@ from python.gnn import DataPreparation
 from apps.cex_toy_parameters import PlotCorrelationMatrix as plot_confusion_matrix
 # from python.analysis import Plots
 
-__version__ = "1.1.1"
+__version__ = "1.1.2"
 
 def parse_constructor(constructor: list, parameters: dict):
     """
@@ -112,8 +112,9 @@ class LayerConstructor():
         return repr(val)
 
     def get_func(self, parameters):
-        parameters.update(self.additional_args)
-        return self._func(**parameters)
+        params = parameters.copy()
+        params.update(self.additional_args)
+        return self._func(**params)
 
     def _func(self, **kwargs):
         pass
