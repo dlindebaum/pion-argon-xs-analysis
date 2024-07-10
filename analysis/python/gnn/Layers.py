@@ -10,12 +10,13 @@ import numpy as np
 import awkward as ak
 import tensorflow as tf
 import tensorflow_gnn as tfgnn
+from tensorflow_gnn.graph import pool_ops
 import matplotlib.pyplot as plt
 from python.gnn import DataPreparation
 from apps.cex_toy_parameters import PlotCorrelationMatrix as plot_confusion_matrix
 # from python.analysis import Plots
 
-__version__ = "1.1.2"
+__version__ = "1.2.0"
 
 def parse_constructor(constructor: list, parameters: dict):
     """
@@ -70,8 +71,130 @@ def parse_constructor(constructor: list, parameters: dict):
             outputs.append(layer.output_name)
     return functions, outputs
 
+class StdGraphPieceReducer(pool_ops.GraphPieceReducer):
+    """
+    Implements standard deviation pooling from one graph piece
+    Will return sqrt(eps) if no inputs
+    """
+
+    def __init__(self, *args, eps=1e-5, **kwargs):
+        self.eps = eps
+        super().__init__(*args, **kwargs)
+
+    def unsorted_segment_op(self,
+                            values,
+                            segment_ids,
+                            num_segments):
+        """Implements subclass API."""
+        squares = tf.math.square(values)
+        x2_mean = tf.math.unsorted_segment_mean(squares, segment_ids, num_segments)
+        x_mean2 = tf.math.square(tf.math.unsorted_segment_mean(values, segment_ids, num_segments))
+        var = tf.math.subtract(x2_mean, x_mean2)
+        relu_var = (tf.math.abs(var) + var) / 2 # eqution for ReLU activation
+        # From PNA paper [arXiv:2004.05718], use relu to avoid -ve from
+        # numerical errors and add an epsilon for differentiability
+        # print(np.min(relu_var))
+        return tf.math.sqrt(relu_var + self.eps)
+
+class PrincipleNeighbourAggregator(tfgnn.keras.layers.AnyToAnyConvolutionBase):
+    def __init__(
+            self,
+            units,
+            activation="relu", dropout_rate=0., regularisation=None,
+            receiver_tag = None,
+            receiver_feature = tfgnn.HIDDEN_STATE,
+            sender_node_feature = tfgnn.HIDDEN_STATE,
+            sender_edge_feature = None,
+            aggregators = ["mean", "min", "max", "std"],
+            # scalar_alphas = [0., 1., -1.],
+            **kwargs):
+        # Min an max treated differently to ensure non-inifite results
+        #   when no neighbours:
+        # Use the pool_to_receiver with reduce_type=f"{min/max}_no_inf"
+        #   to return zero for no inputs.
+        self.aggregator_defs = {
+            "mean": pool_ops.MeanGraphPieceReducer().reduce,
+            "std" : StdGraphPieceReducer().reduce}
+        self.inbuilt_aggs = ["min", "max"]
+        self.aggregators = aggregators
+        self.message_units = units
+        # self.scalar_alphas = scalar_alphas
+
+        super().__init__(
+            receiver_tag = receiver_tag,
+            receiver_feature = receiver_feature,
+            sender_node_feature = sender_node_feature,
+            sender_edge_feature = sender_edge_feature,
+            extra_receiver_ops = {agg: self.aggregator_defs[agg]
+                                  for agg in self.aggregators
+                                  if agg not in self.inbuilt_aggs},
+            **kwargs)
+        # generic_dense_layer defined in this module
+        self._message_fn = generic_dense_layer(
+            units, activation=activation,
+            dropout_rate=dropout_rate, regularisation=regularisation)
+
+    def scalar(self, counts, alpha):
+        """
+        Implements calculation of a scaler for each neighbourhood
+        based on the scalar calculation method suggested by Corso et al.
+        in [arXiv:2004.05718].
+
+        For a neighbourhood of size d, calculate the scalar S as:
+        S(d) = (log(d + 1)/delta)^alpha
+        With delta as the E[log(d+1)] over the training set.
+        """
+        log_counts = tf.math.log(counts + 1)
+
+        # Not sure what dimension this should be for edge cases,
+        # expect only 1 input dim.
+        average_count = tf.math.reduce_mean(log_counts, axis=0)
+        scalars = tf.math.pow(log_counts/average_count, alpha)
+        # Expand dims to allow broadcasting onto featureful final dimension
+        return tf.expand_dims(scalars, axis=-1)
+
+    def get_config(self):
+        return dict(
+            units=self.message_units,
+            aggregators=self.aggregators,
+            # scalar_alphas=self.scalar_alphas,
+            **super().get_config())
+
+    def convolve(
+            # Call arguements from AnyToAnyConvolutionBase parent
+            self, *,
+            sender_node_input, sender_edge_input, receiver_input,
+            broadcast_from_sender_node, broadcast_from_receiver, 
+            pool_to_receiver,
+            extra_receiver_ops,
+            training):
+        inputs = []
+        if sender_node_input is not None:
+            inputs.append(broadcast_from_sender_node(sender_node_input))
+        if sender_edge_input is not None:
+            inputs.append(sender_edge_input)
+        if receiver_input is not None:
+            inputs.append(broadcast_from_receiver(receiver_input))
+        messages = self._message_fn(tf.concat(inputs, axis=-1))
+        aggrs = []
+        for agg in self.aggregators:
+            if agg in self.inbuilt_aggs:
+                # Use inbuilt method for min/max to avoid infinite
+                #  values when no inputs present
+                aggrs.append(pool_to_receiver(messages, reduce_type=f"{agg}_no_inf"))
+            else:
+                # With not inputs: mean is 0, std is sqrt(1e-5) (default)
+                aggrs.append(extra_receiver_ops[agg](messages))
+        return tf.concat(aggrs, axis=-1)
+        # counts = pool_to_receiver(messages, reduce_type="_count")
+        # scalars = [self.scalar(counts, a) for a in self.scalar_alphas]
+        # # tfgnn automatically adds in the initial state when using 
+        # #   tfgnn.NextStateFromConcat
+        # return tf.concat([aggrs * s for s in scalars], axis=-1)
+        
+
 class LayerConstructor():
-    def __init__(self, *output_name, message_type="GATv2", final_step=True, **kwargs):
+    def __init__(self, *output_name, final_step=True, **kwargs):
         self.do_final_loop_step = final_step
         if len(output_name) == 0:
             self.output_name=None
@@ -80,11 +203,6 @@ class LayerConstructor():
         else:
             raise TypeError(
                 f"{type(self).__name__} takes at most 1 positional argument")
-        known_messages = ["conv", "gatv2"]
-        if message_type.lower() not in known_messages:
-            raise ValueError(f"Unknown message type: {message_type}. "
-                             + f"Must be one of {known_messages}")
-        self.message_type = message_type.lower()
         self.additional_args = kwargs
         self.repr_kwargs = self.additional_args.copy()
         return
@@ -299,6 +417,7 @@ class ReadoutClassifyEdge(LayerConstructor):
 class NodeUpdate(LayerConstructor):
     def __init__(
             self, *output_name,
+            message_type="GATv2",
             next_state="residual",
             **kwargs):
         if not hasattr(self, "kwarg_dict"):
@@ -306,11 +425,17 @@ class NodeUpdate(LayerConstructor):
                 "Class should have a kwarg_dict indicating which "
                 + "kwargs to pick out for dimensions. This is an "
                 + "improperly initialised class.")
+        known_messages = ["conv", "gatv2", "pna"]
+        if message_type.lower() not in known_messages:
+            raise ValueError(f"Unknown message type: {message_type}. "
+                             + f"Must be one of {known_messages}")
+        self.message_type = message_type.lower()
         known_next_states = ["residual", "concat"]
         if next_state.lower() not in known_next_states:
             raise ValueError(f"Unknown next state: {next_state}. "
                              + f"Must be one of {known_next_states}")
-        kwargs.update({"next_state": next_state})
+        kwargs.update({"next_state": next_state,
+                       "message_type": message_type})
         super().__init__(*output_name, **kwargs)
         self._remove_default_kwargs_from_repr({
             "next_state": "residual"})
@@ -318,7 +443,8 @@ class NodeUpdate(LayerConstructor):
     
     def _func(self, **kwargs):
         final_dim_key = self.kwarg_dict["final_dim"]
-        if kwargs["next_state"] == "concat":
+        # No residual state for PNA
+        if kwargs["next_state"] == "concat" or self.message_type == "pna":
             next_state_func = tfgnn.keras.layers.NextStateFromConcat(
                 generic_dense_layer(kwargs[final_dim_key], **kwargs))
         else: # "next_state" == "residual"
@@ -328,6 +454,15 @@ class NodeUpdate(LayerConstructor):
             message_func = gatv2_message(
                 kwargs[self.kwarg_dict["gatv2_heads"]],
                 kwargs[self.kwarg_dict["gatv2_channels"]],
+                **kwargs)
+        elif self.message_type == "pna":
+            # PNA tpye doesn't use a standard residual type block,
+            #   instead include the initial state in the features sent
+            #   to the final layer
+            # Currently using the "residual like" by default
+            #   (as in the PNA paper)
+            message_func = pna_message(
+                kwargs[self.kwarg_dict["conv_dim"]],
                 **kwargs)
         else: # self.message_type == "conv"
             message_func = convolution_message(
@@ -342,6 +477,7 @@ class BeamCollection(NodeUpdate):
     def __init__(self, *args, **kwargs):
         self.kwarg_dict = {
             "final_dim"     : "beam_node_dim",
+            "conv_dim"      : "beam_message_dim",
             "gatv2_heads"   : "beam_message_heads",
             "gatv2_channels": "beam_message_channels",
             "node"          : "beam", 
@@ -352,6 +488,7 @@ class PFOUpdate(NodeUpdate):
     def __init__(self, *args, **kwargs):
         self.kwarg_dict = {
             "final_dim"     : "node_dim",
+            "conv_dim"      : "message_dim",
             "gatv2_heads"   : "message_heads",
             "gatv2_channels": "message_channels",
             "node"          : "pfo", 
@@ -413,12 +550,16 @@ class Dense(LayerConstructor):
             self, *output_name,
             depth=None,
             n_layers=1,
+            dropout_rate=0.0,
             **kwargs):
         if depth is None:
             raise TypeError("depth kwarg must be specified.")
         kwargs.update({"depth": depth,
-                       "n_layers": n_layers})
+                       "n_layers": n_layers,
+                       "dropout_rate": dropout_rate})
         super().__init__(*output_name, **kwargs)
+        self._remove_default_kwargs_from_repr({
+            "dropout_rate": 0.0})
         return
 
     def _func(self, **kwargs):
@@ -447,9 +588,9 @@ def dense_core(number, activation="relu", regularisation=None, **kwargs):
 def generic_dense_layer(number, activation="relu", dropout_rate=0., regularisation=None, **kwargs):
     """A Dense layer with regularization (L2 and Dropout)."""
     if dropout_rate == 0.:
-        return dense_core(number, activation="relu", regularisation=None, **kwargs)
+        return dense_core(number, activation=activation, regularisation=regularisation, **kwargs)
     return tf.keras.Sequential([
-        dense_core(number, activation="relu", regularisation=None, **kwargs),
+        dense_core(number, activation=activation, regularisation=regularisation, **kwargs),
         tf.keras.layers.Dropout(dropout_rate)])
 
 def convolution_message(message_dim, message_reduction="sum", **kwargs):
@@ -467,15 +608,13 @@ def convolution_message(message_dim, message_reduction="sum", **kwargs):
 def gatv2_message(
         heads, channels,
         use_bias=True,
+        dropout=0.0,
+        regularisation=None,
         **kwargs):
-    if "dropout_rate" in kwargs.keys():
-        dropout = kwargs["dropout_rate"]
+    if regularisation is not None:
+        regulariser = tf.keras.regularizers.l2(regularisation)
     else:
-        dropout == 0.0
-    regulariser = None
-    if "regularisation" in kwargs.keys():
-        if kwargs["regularisation"] is not None:
-            regulariser = tf.keras.regularizers.l2(kwargs["regularisation"])
+        regulariser = None
     return tfgnn.models.gat_v2.GATv2Conv(
         num_heads = heads,
         per_head_channels = channels,
@@ -490,6 +629,42 @@ def gatv2_message(
         activation = 'relu',
         kernel_initializer = None,
         kernel_regularizer = regulariser)
+
+def pna_message(
+        units,
+        aggregators = ["mean", "min", "max", "std"],
+        activation = "relu",
+        dropout_rate = 0.0,
+        regularisation = None,
+        **kwargs):
+    # # if "dropout_rate" in kwargs.keys():
+    # #     dropout = kwargs["dropout_rate"]
+    # # else:
+    # #     dropout = 0.0
+    # # regulariser = None
+    # # if "regularisation" in kwargs.keys():
+    # #     if kwargs["regularisation"] is not None:
+    # #         regulariser = tf.keras.regularizers.l2(kwargs["regularisation"])
+    # # Can't keep excess arugments here
+    # pna_kwargs = {
+    # #     "dropout": dropout,
+    # #     "regulariser": regulariser,
+    #     "aggregators": ["mean", "min", "max", "std"]}
+    # keep_args = ["activation", "aggregators",
+    #              "regularisation", "dropout_rate"]
+    # for arg in keep_args:
+    #     if arg in kwargs.keys():
+    #         pna_kwargs.update({arg: kwargs[arg]})
+    return PrincipleNeighbourAggregator(
+        units,
+        receiver_tag = tfgnn.SOURCE,
+        receiver_feature = tfgnn.HIDDEN_STATE,
+        sender_node_feature = tfgnn.HIDDEN_STATE,
+        sender_edge_feature = tfgnn.HIDDEN_STATE,
+        aggregators = aggregators,
+        activation = activation,
+        dropout_rate = dropout_rate,
+        regularisation = regularisation)
 
 def multi_dense_layers(depth=None, n_layers=None, **kwargs):
     if depth is None:
@@ -626,79 +801,6 @@ def edge_classifer_and_readout(
         ).with_row_splits_dtype(tf.int64)
     return readout
 
-# def classifer_and_readout(
-#         map_func_kwarg,
-#         hidden=None,
-#         which_feature=tfgnn.HIDDEN_STATE,
-#         which_data=None,
-#         n_outputs=1,
-#         **kwargs):
-#     def classifier_layer(data_set, data_set_name):
-#         if data_set_name == which_data:
-#             data = data_set[which_feature]
-#             if hidden is not None:
-#                 (depth, count) = hidden
-#                 data = multi_dense_layers(
-#                     depth=depth, n_layers=count, **kwargs)(data)
-#             # No args, so no dropout etc. on classifer layer
-#             return generic_dense_layer(n_outputs)(data)
-#         return None
-#     map_kwargs = {map_func_kwarg: classifier_layer}
-#     classifier = tfgnn.keras.layers.MapFeatures(**map_kwargs)
-#     def readout(graph):
-#         updated = classifier(graph)
-#         return tf.RaggedTensor.from_row_lengths(
-#                 values=updated.node_sets[
-#                     which_data].features[tfgnn.HIDDEN_STATE],
-#                 row_lengths=updated.node_sets[which_nodes].sizes
-#             ).with_row_splits_dtype(tf.int64)
-#     return readout
-
-def convolution_message_passer():
-    return tfgnn.keras.layers.SimpleConv(
-        sender_edge_feature=tfgnn.HIDDEN_STATE,
-        message_fn=dense(beam_message_dim),
-        reduce_type="sum",
-        receiver_tag=tfgnn.SOURCE)
-
-def gatv2_message_passer():
-    return tfgnn.models.gat_v2.GATv2Conv(
-        num_heads = beam_message_heads,
-        per_head_channels = beam_message_channels,
-        receiver_tag = tfgnn.SOURCE,
-        receiver_feature = tfgnn.HIDDEN_STATE,
-        sender_node_feature = tfgnn.HIDDEN_STATE,
-        sender_edge_feature = tfgnn.HIDDEN_STATE,
-        use_bias = False,
-        edge_dropout = dropout_rate,
-        attention_activation = 'leaky_relu',
-        heads_merge_type = 'concat',
-        activation = 'relu')
-
-# def beam_collection_layer(
-#         message_dimension,
-#         final_dimension,
-#         dropout=0.1,
-#         regulariser=8e-5):
-#     """Update the beam node with beam connection PFO data."""
-#     beam_collection_update = tfgnn.keras.layers.GraphUpdate(
-#         node_sets={
-#             "beam": tfgnn.keras.layers.NodeSetUpdate(
-#                 {"beam_connections": tfgnn.keras.layers.SimpleConv(
-#                     sender_edge_feature=tfgnn.HIDDEN_STATE,
-#                     message_fn=generic_dense_layer(
-#                         message_dimension,
-#                         dropout=dropout, regulariser=regulariser),
-#                     reduce_type="sum",
-#                     receiver_tag=tfgnn.SOURCE)},
-#                 tfgnn.keras.layers.NextStateFromConcat(
-#                     generic_dense_layer(
-#                         final_dimension,
-#                         dropout=dropout, regulariser=regulariser))
-#             )
-#         })
-#     return beam_collection_update
-
 # def pfo_update_layer(
 #         message_dimension,
 #         final_dimension,
@@ -754,23 +856,3 @@ def gatv2_message_passer():
 #             )
 #         })
 #     return pfo_node_update
-
-# def _neighbour_update_layer(
-#         final_dims,
-#         dropout=0.1,
-#         regulariser=8e-5):
-#     """Update neighbour edges using connected PFO data"""
-#     neighbours_edge_update = tfgnn.keras.layers.GraphUpdate(
-#         edge_sets={
-#             "neighbours": tfgnn.keras.layers.EdgeSetUpdate(
-#                tfgnn.keras.layers.NextStateFromConcat(generic_dense_layer(final_dims))
-#             )})
-#     return neighbours_edge_update
-
-# def _beam_conn_update_layer():
-#     beam_conn_edge_update = tfgnn.keras.layers.GraphUpdate(
-#         edge_sets={
-#             "beam_connections": tfgnn.keras.layers.EdgeSetUpdate(
-#                 tfgnn.keras.layers.NextStateFromConcat(dense(beam_edge_next_dim))
-#             )})
-#     return beam_conn_edge_update
