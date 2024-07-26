@@ -350,7 +350,7 @@ def check_run(args : argparse.Namespace, step : str):
 def main(args):
     os.makedirs(args.out, exist_ok = True)
     if args.create_config:
-        SaveConfiguration(template_config(), args.out + args.create_config)
+        SaveConfiguration(template_config(), os.path.join(args.out, args.create_config))
         print(f"template configuration saved as {args.out + args.create_config}")
         exit()
     else:
