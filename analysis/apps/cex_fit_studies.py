@@ -376,7 +376,7 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
 
     Plots.plt.figure()
     for i in Plots.MultiPlot(4):
-        Plots.Plot(data[f"mu_exp_{i}"], data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], linestyle = "", marker = "o", xlabel = "$\mu^{exp}_{process_map[i]}$", ylabel = "$\mu^{fit}_{s}$", label = f"${process_map[i]}$", color = list(region_colours.values())[i], newFigure = False)
+        Plots.Plot(data[f"mu_exp_{i}"], data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], linestyle = "", marker = "o", xlabel = f"$\mu^{{exp}}_{process_map[i]}$", ylabel = "$\mu^{fit}_{s}$", label = f"${process_map[i]}$", color = list(region_colours.values())[i], newFigure = False)
         yl = Plots.plt.gca().get_ylim()
         xl = Plots.plt.gca().get_xlim()
 
@@ -669,11 +669,11 @@ def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : n
 
 def PlotTotalChannel(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, book : Plots.PlotBook = Plots.PlotBook.null):
     for j, c in Plots.IterMultiPlot(templates_energy):
-        Plots.Plot(energy_slices.pos_overflow, sum(c), xlabel = f"$n_{{{j}}}$ (MeV)", ylabel = "counts", style = "bar", newFigure = False)
+        Plots.Plot(energy_slices.pos_overflow, sum(c), xlabel = f"$n_{{{j}}}$ (MeV)", ylabel = "Counts", style = "bar", newFigure = False)
     book.Save()
 
     if tempalates_mean_track_score is not None:
-        Plots.Plot(cross_section.bin_centers(mean_track_score_bins), sum(tempalates_mean_track_score), xlabel = f"$n_{{ts}}$", ylabel = "counts", style = "bar")
+        Plots.Plot(cross_section.bin_centers(mean_track_score_bins), sum(tempalates_mean_track_score), xlabel = f"$n_{{ts}}$", ylabel = "Counts", style = "bar")
         book.Save()
     book.close()
     return
@@ -715,7 +715,7 @@ def CalculateResultsFromFile(workdirs, test_name, model_name, template_counts, m
 
 @cross_section.timer
 def main(args : cross_section.argparse.Namespace):
-    cross_section.PlotStyler.SetPlotStyle(extend_colors = True, dark = True, font_scale = 1.5)
+    cross_section.PlotStyler.SetPlotStyle(extend_colors = True, dark = True, font_scale = 1.4)
     toys = cross_section.Toy(file = args.template)
     args.template = cross_section.AnalysisInput.CreateAnalysisInputToy(toys)
 
@@ -803,10 +803,19 @@ def main(args : cross_section.argparse.Namespace):
                         pull_results = ReadHDF5(outdir + f"pull_test_{m}/" + "pull_results.hdf5")
 
                         pulls = (pull_results["bestfit"] - (pull_results["expected"] / pull_results["scale"])) / pull_results["uncertainty"]
+                        res = (pull_results["scale"] * pull_results["bestfit"]) - pull_results["expected"]
+                        fe = ((pull_results["scale"] * pull_results["bestfit"]) - pull_results["expected"]) / pull_results["expected"]
+                        fe_err = (pull_results["scale"] * pull_results["uncertainty"]) / pull_results["expected"]
 
+                        mean_res = {}
+                        mean_fe = {}
+                        mean_fe_err = {}
                         means = {}
                         stds = {}
                         for _, k in Plots.IterMultiPlot(pulls.columns):
+                            mean_res[folder[k]] = f"{np.mean(res[k]):.3g}"
+                            mean_fe[folder[k]] = f"{np.mean(fe[k]):.3g}"
+                            mean_fe_err[folder[k]] = f"{np.mean(fe_err[k]):.3g}"
                             mean = np.mean(pulls[k])
                             std = np.std(pulls[k])
                             sem = std / np.sqrt(len(pulls[k]))
@@ -814,16 +823,21 @@ def main(args : cross_section.argparse.Namespace):
                             print(folder[k])
                             means[folder[k]] = f"{mean:.{p}g} $\pm$ {sem:.1g}"
                             stds[folder[k]] = f"{std:.3g}"
-                            Plots.PlotHist(pulls[k], bins = 10, title = f"$\mu_{{{tags[k].name_simple}}}$ | mean : {mean:.3g} $\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = False)
+                            # Plots.PlotHist(pulls[k], bins = 10, title = f"$\mu_{{{tags[k].name_simple}}}$ | mean : {mean:.3g} $\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = False)
+                            Plots.PlotHist(pulls[k], bins = 10, xlabel = "$\\theta$", newFigure = False)
+
                         book.Save()
                         for k in pulls.columns:
                             mean = np.mean(pulls[k])
                             std = np.std(pulls[k])
                             sem = std / np.sqrt(len(pulls[k]))
-                            Plots.PlotHist(pulls[k], bins = 10, title = f"$\mu_{{{tags[k].name_simple}}}$ | mean : {mean:.3g} $\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = True)
+                            Plots.plt.figure(figsize = (6.4, 5))
+                            # Plots.PlotHist(pulls[k], bins = 10, title = f"$\mu_{{{tags[k].name_simple}}}$ | mean : {mean:.3g} $\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = True)
+                            Plots.PlotHist(pulls[k], bins = 10, xlabel = "$\\theta$", newFigure = False)
+                            # Plots.plt.ylabel(Plots.plt.gca().yaxis.get_label_text(), loc = "bottom")
                             book.Save()
 
-                        table = pd.DataFrame({"mean" : means, "st.dev" : stds}).T
+                        table = pd.DataFrame({"mean" : means, "st.dev" : stds, "mean residual" : mean_res, "mean fractional error" : mean_fe, "mean_fractional_error_error" : mean_fe_err}).T
                         table.style.to_latex(outdir + f"pull_test_{m}/pulls.tex")
 
 

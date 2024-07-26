@@ -45,7 +45,7 @@ y_scale = {
     "BeamParticleIPCut" : "linear",
     "Chi2ProtonSelection" : "linear",
     "PiBeamSelection" : None,
-    "APA3Cut" : "linear",
+    "APA3Cut" : "log",
     "TrueFiducialCut" : "linear",
     "PandoraTagCut" : None,
     "DxyCut" : "log",

@@ -830,7 +830,7 @@ def FinalPlots(cv, systematics_table : dict[pd.DataFrame], energy_slices, book :
             "ProtoDUNE SP: Data Stat + Sys Error" : cv[p],
             "" : [cv[p][0], systematics_table[p].loc["Total uncertainty (mb)"]]
         }
-        cross_section.PlotXSComparison(xs, energy_slices, p, simulation_label = "Geant4 v10.6", colors = {k : f"C0" for k in xs}, chi2 = True)
+        cross_section.PlotXSComparison(xs, energy_slices, p, simulation_label = "Geant4 v10.6", colors = {k : f"C0" for k in xs}, chi2 = False)
         goodness_of_fit[p] = cross_section.HypTestXS(cv[p][0], systematics_table[p].loc["Total uncertainty (mb)"], p, energy_slices)
         if alt_xs:
             xs_alt.Plot(p, "red", label = "Geant4 v10.6, $\pi^{\pm}$:$2^{nd}$ $KE > 100 MeV$")
@@ -1055,6 +1055,7 @@ def main(args : cross_section.argparse.Namespace):
 
             if len(result) > 1:
                 NormalisationSystematic.AverageResults(result)
+                print(result)
                 sys_err = NormalisationSystematic.CalculateSysErr(result)
                 frac_err = NormalisationSystematic.CalculateFractionalError(sys_err, xs_nominal)
                 SaveSystematicError(sys_err, frac_err, f"{outdir}sys.dill")
@@ -1078,9 +1079,10 @@ def main(args : cross_section.argparse.Namespace):
         tables = CreateSystematicTable(out, args.cv, args)
         SaveSystematicTables(tables, outdir)
 
-        with Plots.PlotBook(outdir + "plots.pdf") as book:
+        with Plots.PlotBook(outdir + "systematic_plots.pdf") as book:
             with Plots.matplotlib.rc_context({"axes.prop_cycle" : Plots.plt.cycler("color", Plots.matplotlib.cm.get_cmap("tab20").colors)}):
                 PlotSysHist(tables, book)
+        with Plots.PlotBook(outdir + "final_plots.pdf", watermark = "DUNE: Work in Progress") as book:
             table, table_alt = FinalPlots(args.cv["pdsp"], tables, args.energy_slices, book, alt_xs = False)
 
         tags = cross_section.Tags.ExclusiveProcessTags(None)

@@ -350,8 +350,6 @@ def main(args : argparse.Namespace):
             copy_table(f, f"{out}/shower_correction/", bf_cols = cols)
 
 
-    copy_table(f"{path}/toy_parameters/reco_regions/pe.tex", f"{out}/reco_regions/")
-
     for f in Utils.ls_recursive(f"{path}/toy_parameters/smearing/"):
         if (".tex" in f):
             copy_table(f, f"{out}/smearing/{f.split('/')[-2]}/", bf_cols = False)

@@ -27,7 +27,7 @@ from python.analysis.Master import SaveConfiguration, LoadConfiguration
 
 def template_config():
     template = {
-        "NTUPLE_FILE":{
+        "NTUPLE_FILES":{
             "mc" : [
                 {
                     "file": "ABSOLUTE file path",
@@ -571,7 +571,7 @@ def main(args):
 
 if __name__ == "__main__":
 
-    analysis_options = ["normalisation", "beam_quality", "beam_scraper", "selection", "photon_correction", "reweight", "upstream_correction", "toy_parameters", "analysis_input", "analyse"]
+    analysis_options = ["normalisation", "beam_quality", "beam_scraper", "photon_correction", "selection", "reweight", "upstream_correction", "toy_parameters", "analysis_input", "analyse"]
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-C", "--create_config", type = str, help = "Create a template configuration with the default selection")

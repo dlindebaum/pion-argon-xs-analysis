@@ -229,12 +229,14 @@ def create_bins_df(value : pd.Series, n_entries, v_range : list = None) -> np.nd
 def CalculateCentralValues(df : pd.date_range, bins : np.ndarray, book : Plots.PlotBook) -> dict:
     central_values = {}
 
-    central_values["student_t"] = Fitting.ExtractCentralValues_df(df, "reco_shower_energy", "fractional_error", [-1, 1], [Fitting.student_t], bins, 20)
-    book.Save()
-    central_values["gaussian"] = Fitting.ExtractCentralValues_df(df, "reco_shower_energy", "fractional_error", [-1, 1], [Fitting.gaussian], bins, 20)
-    book.Save()
-    central_values["mean"] = [calculate_mean(df, "fractional_error", [-1, 1], bins), calculate_sem(df, "fractional_error", [-1, 1], bins)]
-    book.Save()
+    with cross_section.PlotStyler().Update(font_scale = 1.3):
+        for k, v in {"student_t" : Fitting.student_t, "gaussian" : Fitting.gaussian}.items():
+            central_values[k] = Fitting.ExtractCentralValues_df(df, "reco_shower_energy", "fractional_error", [-1, 1], [v], bins, 20, bin_label = "$E^{reco}$", bin_units = "(MeV)")
+            book.Save()
+        # central_values["gaussian"] = Fitting.ExtractCentralValues_df(df, "reco_shower_energy", "fractional_error", [-1, 1], [Fitting.gaussian], bins, 20)
+        # book.Save()
+        central_values["mean"] = [calculate_mean(df, "fractional_error", [-1, 1], bins), calculate_sem(df, "fractional_error", [-1, 1], bins)]
+        book.Save()
     return central_values
 
 

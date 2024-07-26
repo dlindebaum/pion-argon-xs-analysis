@@ -50,7 +50,9 @@ def main(args : argparse.Namespace):
                 for k in r[i][j]:
                     merged[i][j][k].extend(r[i][j][k])
 
-    SaveObject(args.directory + "results.dill", results)
+    merged["true_cv"] = results[0]["true_cv"] # shpuld be identical for all outputs
+
+    SaveObject(args.directory + "results.dill", merged)
     return
 
 if __name__ == "__main__":

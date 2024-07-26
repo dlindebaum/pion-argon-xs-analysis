@@ -72,7 +72,7 @@ def CentralValueEstimation(bins : np.ndarray, KE_reco_inst : np.ndarray, KE_true
     else:
         df = pd.DataFrame({"KE_inst" : KE_reco_inst, "true_ffKE" : KE_true_ff})
         df["residual"] = df.KE_inst - df.true_ffKE
-        cv = cross_section.Fitting.ExtractCentralValues_df(df, "KE_inst", "residual", [-250, 250], [cv_function], bins, 50, rms_err = False, weights = weights)
+        cv = cross_section.Fitting.ExtractCentralValues_df(df, "KE_inst", "residual", [-250, 250], [cv_function], bins, 50, rms_err = False, weights = weights, bin_units = "(MeV)", bin_label = "$KE^{reco}_{inst}$")
     return cv
 
 
@@ -107,11 +107,12 @@ def main(args : argparse.Namespace):
 
     with Plots.PlotBook(outdir + "cex_upstream_loss_plots.pdf") as pdf:
         reco_KE_inst = cross_section.KE(output_mc["p_inst"], cross_section.Particle.from_pdgid(211).mass)
-        cv = CentralValueEstimation(bins, reco_KE_inst, output_mc["KE_ff"], cv_method[args.upstream_loss_cv_function], output_mc["weights"])
+        with cross_section.PlotStyler().Update(font_scale = 1.3):
+            cv = CentralValueEstimation(bins, reco_KE_inst, output_mc["KE_ff"], cv_method[args.upstream_loss_cv_function], output_mc["weights"])
         pdf.Save()
 
         Plots.plt.figure()
-        params = cross_section.Fitting.Fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$(MeV)", ylabel = "$\mu(KE^{reco}_{inst} - KE^{true}_{init})$(MeV)", loc = "upper center")
+        params = cross_section.Fitting.Fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\mu(\Delta E_{upstream})$ (MeV)", loc = "upper center")
         pdf.Save()
 
         params_dict = {

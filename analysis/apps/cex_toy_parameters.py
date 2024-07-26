@@ -125,7 +125,7 @@ def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_q
     tables = {}
     for f in fit_functions:
         Plots.plt.figure()
-        params[f.__name__], errors[f.__name__] = cross_section.Fitting.Fit(centers, counts, np.sqrt(counts), f, plot = True, xlabel = label, ylabel = "counts", plot_style = "hist")
+        params[f.__name__], errors[f.__name__] = cross_section.Fitting.Fit(centers, counts, np.sqrt(counts), f, plot = True, xlabel = label, ylabel = "Counts", plot_style = "hist", plot_range = residual_range)
         tables[f.__name__] = CreateFitTable(params[f.__name__], errors[f.__name__])
         
         plot_book.Save()
@@ -351,7 +351,7 @@ def FitBeamProfile(KE_init : np.array, func : cross_section.Fitting.FitFunction,
 
     Plots.plt.figure()
     print(f"{book.open=}")
-    params, error = cross_section.Fitting.Fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = book.is_open, plot_style = "hist", xlabel = "$KE^{true}_{init}$ (MeV)")
+    params, error = cross_section.Fitting.Fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = book.is_open, plot_style = "hist", xlabel = "$KE^{true}_{ff}$ (MeV)", ylabel = "Counts")
     book.Save()
 
     table = CreateFitTable(params, error)
@@ -393,9 +393,9 @@ def main(args : argparse.Namespace):
 
     bins = {r : np.linspace(min(args.toy_parameters["plot_ranges"][r]), max(args.toy_parameters["plot_ranges"][r]), 50) for r in args.toy_parameters["plot_ranges"]}
     labels = {
-        "KE_init" : "$KE^{res, MC}_{init}$ (MeV)",
-        "KE_int" : "$KE^{res, MC}_{int}$ (MeV)",
-        "z_int" : "$l^{res, MC}$ (cm)"
+        "KE_init" : "$KE^{res,MC}_{init}$ (MeV)",
+        "KE_int" : "$KE^{res,MC}_{int}$ (MeV)",
+        "z_int" : "$l^{res,MC}$ (cm)"
     }
 
     # output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)

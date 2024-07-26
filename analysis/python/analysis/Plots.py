@@ -20,12 +20,6 @@ from scipy.stats import iqr
 from python.analysis import vector, Tags, Utils
 from python.analysis.SelectionTools import np_to_ak_indicies
 
-preliminary = False
-
-def PlotPreliminaryLabel():
-    plt.text(0.5, 0.5, 'PRELIMINARY', transform=plt.gca().transAxes, fontsize=40, color='gray', alpha=0.5, ha='center', va='center', rotation=30)
-    return
-
 
 class PlotConfig():
 
@@ -858,8 +852,9 @@ def _adjust_text_colour(value, colour, norm, offset=0.2, max_reduction=0.7):
 
 
 class PlotBook:
-    def __init__(self, name : str, open : bool = True) -> None:
+    def __init__(self, name : str, open : bool = True, watermark : str = None) -> None:
         self.name = name
+        self.watermark = watermark
         if ".pdf" not in self.name: self.name += ".pdf" 
         if open: self.open()
         self.is_open = True
@@ -871,12 +866,16 @@ class PlotBook:
         self.close()
         self.is_open = False
 
+    def PlotWatermark(self):
+        plt.text(0.5, 0.5, self.watermark, transform=plt.gca().transAxes, fontsize=38, color='gray', alpha=0.5, ha='center', va='center', rotation=30, zorder = np.inf)
+        return
+
     def Save(self):
         global preliminary
         if hasattr(self, "pdf"):
             try:
-                if preliminary is True:
-                    PlotPreliminaryLabel()
+                if self.watermark is not None:
+                    self.PlotWatermark()
                 self.pdf.savefig(bbox_inches='tight')
             except AttributeError:
                 pass
@@ -959,7 +958,7 @@ def FigureDimensions(x : int, orientation : str = "horizontal") -> tuple[int]:
     return dim
 
 
-def MultiPlot(n : int, xlim : tuple = None, ylim : tuple = None):
+def MultiPlot(n : int, xlim : tuple = None, ylim : tuple = None, orientation = "horizontal"):
     """ Generator for subplots.
 
     Args:
@@ -968,7 +967,7 @@ def MultiPlot(n : int, xlim : tuple = None, ylim : tuple = None):
     Yields:
         Iterator[int]: ith plot
     """
-    dim = FigureDimensions(n)
+    dim = FigureDimensions(n, orientation)
     plt.subplots(figsize = [6.4 * dim[1], 4.8 * dim[0]])
     for i in range(n):
         plt.subplot(dim[0], dim[1], i + 1)

@@ -264,6 +264,7 @@ def PlotDataBkgSub(hist_data : dict[np.ndarray], hist_data_err : dict[np.ndarray
         for i in N_ex_MC:
             cross_section.PlotXSHists(energy_slices, N_ex_MC[i], title = f"$N_{{int, {process_labels[i]}}}$", label = mc_label, color = "C1", scale = scale)
             cross_section.PlotXSHists(energy_slices, hist_data["int_ex"][i], hist_data_err["int_ex"][i], newFigure = False, label = data_label, color = "k")
+            Plots.plt.legend(loc = "upper left")
             book.Save()
     else:
         for i in hist_data:
@@ -319,6 +320,8 @@ def ApplyEfficiency(energy_slices : cross_section.Slices, efficiencies, unfoldin
                 err = hist_unfolded_efficiency_corrected[k]["stat_err"]
             cross_section.PlotXSHists(energy_slices, hist_unfolded_efficiency_corrected[k]["unfolded"], err, False, color = "C4", label = "Data unfolded, efficiency corrected", newFigure = True)
             cross_section.PlotXSHists(energy_slices, true[k], None, False, norm, color = "C1", label = "true, scaled to Data", newFigure = False, title = labels[k])
+            Plots.plt.ylim(top = 1.1 * max(Plots.plt.gca().get_ylim()))
+            Plots.plt.legend(loc = "upper left")
             book.Save()
     return hist_unfolded_efficiency_corrected
 
@@ -328,6 +331,7 @@ def PlotEfficiency(energy_slices : cross_section.Slices, efficiencies : dict, bo
         x = energy_slices.pos_overflow - energy_slices.width/2
         for k, v in efficiencies.items():
             Plots.Plot(x, v[0], yerr = v[1], ylabel = "Efficiency", xlabel = f"$KE$ (MeV)", marker = "x", newFigure = True, title = k)
+            Plots.plt.title(k, pad = 15)
             Plots.plt.ylim(0, 1)
             book.Save()
     return
@@ -552,6 +556,8 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
                     "MC" : {tags[k].name_simple : np.sum(v) for k, v in templates[k].regions.items()},
                     "Data" : {tags[k].name_simple : np.sum(v) for k, v in samples[k].regions.items()}
                 }
+                region_counts["MC"]["uncategorised"] = np.sum(~cross_section.SelectionTools.CombineMasks(templates[k].regions, "or"))
+                region_counts["Data"]["uncategorised"] = np.sum(~cross_section.SelectionTools.CombineMasks(samples[k].regions, "or"))
                 pd.DataFrame(region_counts).style.to_latex(outdir + "regions.tex")
             Plots.plt.close("all")
 
@@ -578,7 +584,7 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
             process = {args.signal_process : None}
 
         for p in process:
-            with Plots.PlotBook(outdir + f"plots_{p}.pdf", plot) as book:
+            with Plots.PlotBook(outdir + f"plots_{p}.pdf", plot) as book, cross_section.PlotStyler(extend_colors = False, dark = True).Update(font_scale = 1.1):
                 if p != "all":
                     if k == "pdsp":
                         true_hists = mc_cheat.CreateHistograms(args.energy_slices, p, False, ~mc_cheat.inclusive_process)
@@ -631,7 +637,6 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
 
 def main(args):
     cross_section.PlotStyler.SetPlotStyle(extend_colors = False, dark = True)
-    Plots.preliminary = False
     args.out = args.out + "measurement/"
 
     xs = Analyse(args, True)

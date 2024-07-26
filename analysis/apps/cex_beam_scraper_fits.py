@@ -114,11 +114,11 @@ def GetScraperFits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : 
         print(f"{(max(y), np.nanmedian(data), np.nanstd(data))=}")
 
         next(plot)
-        popt, perr, metrics = Fitting.Fit(cross_section.bin_centers(bin_edges), y, yerr, Fitting.gaussian, method = "dogbox", return_chi_sqr = True)#, plot = True, plot_style = "scatter", xlabel = "$KE^{reco}_{inst} - KE^{true}_{init}$ (MeV)", title = bin_label, plot_range = residual_range)
+        popt, perr, metrics = Fitting.Fit(cross_section.bin_centers(bin_edges), y, yerr, Fitting.gaussian, method = "dogbox", return_chi_sqr = True)#, plot = True, plot_style = "scatter", xlabel = "$\Delta E_{upstream}$ (MeV)", title = bin_label, plot_range = residual_range)
         heights, _ = Plots.PlotHist(np.array(data[~np.isnan(data)]), newFigure = False, bins = fit_bins, range = residual_range, label = "observed")
         x_interp = np.linspace(min(np.array(data[~np.isnan(data)])), max(np.array(data[~np.isnan(data)])), 10 * fit_bins)
         y_interp = Fitting.gaussian.func(x_interp, max(heights), popt[1], popt[2])
-        Plots.Plot(x_interp, y_interp, color = "black", label = "fit", title = bin_label, xlabel = "$KE^{reco}_{inst} - KE^{true}_{init}$ (MeV)", newFigure = False)
+        Plots.Plot(x_interp, y_interp, color = "black", label = "fit", title = bin_label, xlabel = "$\Delta E_{upstream}$ (MeV)", newFigure = False)
         plt.axvline(popt[1] + 3 * abs(popt[2]), color = "black", linestyle = "--", label = "$\mu + 3\sigma$")
         plt.xlim(*residual_range)
 
@@ -206,10 +206,10 @@ def main(args : argparse.Namespace):
 
     with Plots.PlotBook(outdir + "beam_scraper_fits.pdf") as pdf:
         Plots.Plot(args.beam_scraper_energy_range, args.beam_scraper_energy_range, color = "red")
-        Plots.PlotHist2D(output_mc["beam_inst_KE"], output_mc["true_ffKE"], xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$KE^{true}_{init}$ (MeV)", x_range = args.beam_scraper_energy_range, y_range = args.beam_scraper_energy_range, newFigure = False)
+        Plots.PlotHist2D(output_mc["beam_inst_KE"], output_mc["true_ffKE"], xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$KE^{true}_{ff}$ (MeV)", x_range = args.beam_scraper_energy_range, y_range = args.beam_scraper_energy_range, newFigure = False)
         pdf.Save()
 
-        Plots.PlotHist2D(output_mc["beam_inst_KE"], output_mc["delta_KE_upstream"], xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$KE^{reco}_{inst} - KE^{true}_{init}$ (MeV)", x_range = args.beam_scraper_energy_range, y_range = residual_range)
+        Plots.PlotHist2D(output_mc["beam_inst_KE"], output_mc["delta_KE_upstream"], xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\Delta E_{upstream}$ (MeV)", x_range = args.beam_scraper_energy_range, y_range = residual_range)
         for i in args.beam_scraper_energy_bins: plt.axvline(i, color = "red")
         pdf.Save()
 

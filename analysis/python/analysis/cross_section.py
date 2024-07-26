@@ -508,7 +508,7 @@ def HypTestXS(cv, error, process, energy_slice, file = GEANT_XS):
     return {"w_chi2" : w_chi_sqr, "p" : p}
 
 def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", chi2 : bool = True, newFigure : bool = True, cv_only : bool = False, marker_size : float = 6):
-    xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos])
+    xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos + energy_slice.width])
 
     if colors is None:
         colors = {k : f"C{i}" for i, k in enumerate(xs)}
@@ -535,7 +535,7 @@ def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, 
     Plots.plt.ylim(0)
     if max(Plots.plt.gca().get_ylim()) > np.nanmax(sim_curve_interp(xs_sim.KE).astype(float)) * 2:
         Plots.plt.ylim(0, max(sim_curve_interp(xs_sim.KE)) * 2)
-    Plots.plt.xlim(energy_slice.min_pos, energy_slice.max_pos)
+    Plots.plt.xlim(energy_slice.min_pos - (0.2 * energy_slice.width), energy_slice.max_pos + (0.2 * energy_slice.width))
     return chi_sqrs
 
 
@@ -2353,8 +2353,9 @@ class Unfold:
             label = "Data unfolded"
 
         PlotXSHists(energy_slices, obs, obs_err, True, 1/sum(obs), label = "Data reco", ylabel = "Fractional counts", color = "k")
-        PlotXSHists(energy_slices, true, None, True, 1/sum(true), label = "MC true", ylabel = "Fractional counts", color = "C1", newFigure = False)
+        PlotXSHists(energy_slices, true, None, True, 1/sum(true), label = "MC true (initial prior)", ylabel = "Fractional counts", color = "C1", newFigure = False)
         PlotXSHists(energy_slices, results["unfolded"], results["stat_err"], True, 1 / sum(results["unfolded"]), label =  label, color = "C4", ylabel = "Fractional counts", newFigure = False, title = title)
+        Plots.plt.legend(loc = "upper left")
         book.Save() 
         if "unfolding_matrix" in results:
             Unfold.PlotMatrix(results["unfolding_matrix"], energy_slices, title = "Unfolded matrix: " + label, c_label = "$P(C_{j}|E_{i})$", text = True, text_colour = "red")
