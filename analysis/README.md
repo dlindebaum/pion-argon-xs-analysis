@@ -67,16 +67,28 @@ open the file and note the first three entries in the json file:
 `null` entries refer to an empty entry in the config, the others have descriptions describing what the entry refers to an possible values. For now populate the information as follows:
 
 ```json
-  "NTUPLE_FILE":{
-    "mc" : "<MC file path>",
-    "data" : null,
-    "type" : "PDSPAnalyser"
+  "NTUPLE_FILES": {
+    "mc": [
+      {
+        "file": "<MC file path>",
+        "type": "PDSPAnalyser",
+        "pmom": 2
+      }
+    ],
+    "data": [
+      {
+        "file": "<Data file path>",
+        "type": "PDSPAnalyser",
+        "pmom": 1
+      }
+    ]
   },
   "norm" : 1,
-  "pmom" : 2,
 ```
 
-"mc" should be set to the file path of the 2GeV MC file called `PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03.root` on the machine you are working on. for this ntuple file the "type" is PDSPAnalyser, no data is used, so "norm" is arbitrarily set to 1. For this specific MC file, "pmom" must be 2.
+"mc" should be set to the file path of the 2GeV MC file called `PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03.root` on the machine you are working on. for this ntuple file the "type" is PDSPAnalyser, no data is used, so "norm" is arbitrarily set to 1. For this specific MC file, "pmom" must be 2. If this must be set, it should be the expected beam energy in GeV.
+
+To run without data files, the `"data"` entry should be completely excluded.
 
 Save and close the file, now run the analysis (or most of it)
 
@@ -89,10 +101,10 @@ where `-o` sets the output path of the various results.
 when running you will see this message:
 
 ```bash
-no data file was specified, 'beam_reweight', 'toy_parameters' and 'analyse' will not run
+no data file was specified, 'normalisation', 'beam_reweight', 'toy_parameters' and 'analyse' will not run
 ```
 
-this is because without a data file, the full analysis can't be run. When the script finishes you should see multiple folders which are the outputs of the various applications:
+This is because without a data file, the full analysis can't be run. When the script finishes you should see multiple folders which are the outputs of the various applications:
 
 ```bash
 ls *
