@@ -13,8 +13,6 @@ import tensorflow_gnn as tfgnn
 from tensorflow_gnn.graph import pool_ops
 import matplotlib.pyplot as plt
 from python.gnn import DataPreparation
-from apps.cex_toy_parameters import PlotCorrelationMatrix as plot_confusion_matrix
-# from python.analysis import Plots
 
 __version__ = "1.2.0"
 

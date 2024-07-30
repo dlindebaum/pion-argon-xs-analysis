@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 from python.gnn import DataPreparation, Layers
 # from python.gnn.model_plots import *
-from apps.cex_toy_parameters import PlotCorrelationMatrix as plot_confusion_matrix
+from python.analysis.Plots import PlotConfusionMatrix as plot_confusion_matrix
 # from python.analysis import Plots
 
 # =====================================================================
