@@ -41,16 +41,8 @@ def Median(x : ak.Array):
 def ValidRecoEnergyCut(events : Master.Data) -> ak.Array:
     return events.recoParticles.shower_energy != -999
 
-def ValidRecoTrackPositionCut(events : Master.Data) -> ak.Array:
-    return np.logical_and(
-        np.logical_and(
-            events.recoParticles.track_start_pos.x != -999,
-            events.recoParticles.track_start_pos.y != -999
-        ),
-        events.recoParticles.track_start_pos.z != 999
-    )
 
-def ValidRecoShowerPositionCut(events : Master.Data) -> ak.Array:
+def ValidRecoPositionCut(events : Master.Data) -> ak.Array:
     return np.logical_and(
         np.logical_and(
             events.recoParticles.shower_start_pos.x != -999,
@@ -76,19 +68,19 @@ def ValidCNNScoreCut(events : Master.Data, return_property : bool = False) -> ak
 
 def GoodShowerSelection(events : Master.Data, return_table = False):
     selections = [
-        ValidRecoShowerPositionCut,
+        ValidRecoPositionCut,
         ValidRecoMomentumCut,
         ValidRecoEnergyCut,
     ]
     return CombineSelections(events, selections, 1, return_table = return_table)
 
 
-def EMScoreCut(events : Master.Data, cut = 0.5, return_property : bool = False) -> ak.Array:
-    return CreateMask(cut, ">", events.recoParticles.em_score, return_property)
+def EMScoreCut(events : Master.Data, cut = 0.5, return_property : bool = False) -> ak.Array: #TODO Remove
+    return CreateMask(cut, "<", events.recoParticles.track_score, return_property)
 
 
-def NHitsCut(events : Master.Data, cut = 80, return_property : bool = False) -> ak.Array:
-    return CreateMask(cut, ">", events.recoParticles.n_hits, return_property)
+def NHitsCut(events : Master.Data, cut = 80, op = ">", return_property : bool = False) -> ak.Array:
+    return CreateMask(cut, op, events.recoParticles.n_hits, return_property)
 
 
 def BeamParticleDistanceCut(events : Master.Data, cut = [3, 90], op = [">", "<"], return_property : bool = False) -> ak.Array:
@@ -102,8 +94,8 @@ def BeamParticleIPCut(events : Master.Data, cut = 20, op = "<", return_property 
     return CreateMask(cut, op, ip, return_property)
 
 
-def TrackScoreCut(events : Master.Data, cut = 0.5, return_property : bool = False):
-    return CreateMask(cut, ">", events.recoParticles.track_score, return_property)
+def TrackScoreCut(events : Master.Data, cut = 0.5, op = ">", return_property : bool = False):
+    return CreateMask(cut, op, events.recoParticles.track_score, return_property)
 
 
 def BeamDaughterCut(events : Master.Data):
@@ -212,72 +204,6 @@ def DaughterProtonSelection(
 #######################################################################
 #######################################################################
 
-def add_event_offset(vals):
-    """
-    Generates event uniqueness by bitshifting integer values to leave
-    room for, and set the first n bits to reference the event number.
-
-    If insufficient bits are present in the data type, the code will
-    attempt to increase the size of the integer to hold the new bits.
-
-    Parameters
-    ----------
-    vals : ak.Array
-        Awkward array of some integer values.
-    
-    Returns
-    -------
-    ak.Array
-        Awkward array of same shape of vals, where the index of the
-        outer layer is refernce as the lowest n bits of the new values.
-    """
-    n_events = ak.num(vals, axis=0)
-    n_extra_bits = len(bin(n_events)) - 2
-    n_mother_bits = len(bin(ak.max(vals))) - 2
-    offset_vals = vals
-    if (n_extra_bits + n_mother_bits) > 31:
-        offset_vals = ak.values_astype(offset_vals, np.int64)
-    if (n_extra_bits + n_mother_bits) > 63:
-        offset_vals = ak.values_astype(offset_vals, np.int128)
-    if (n_extra_bits + n_mother_bits) > 127:
-        raise ValueError("Overflow - numbers too large")
-    return (offset_vals << n_extra_bits) + np.arange(n_events)
-
-def get_ak_intersection(vals, tests):
-    """
-    Find the full intersection of values in `vals` which appear in
-    `tests` as a mask of the same size as `vals`.
-    
-    Note the search is event exclusive. Couple to add_event_offset to
-    perform an event-exclusive search.
-
-    Parameters
-    ----------
-    vals : ak.Array
-        Values to be tested.
-    tests : ak.Array
-        Values for which `vals` returns a True result in the final
-        mask.
-
-    Returns
-    -------
-    ak.Array
-        Boolean array as a mask containing True where `vals` is in
-        `tests`.
-    """
-    n_vals_per_event = ak.num(vals, axis=1)
-    vals_offset = ak.flatten(add_event_offset(vals)).to_numpy()
-    tests_offset = ak.flatten(add_event_offset(tests)).to_numpy()
-    mask = np.isin(vals_offset, tests_offset, kind="sort")
-    return ak.unflatten(mask, n_vals_per_event)
-
-def get_pi0_photons(events, mc=False, beam_only=True):
-    beam_pi0s = events.trueParticles.mother == 1 if beam_only else True
-    true_pi0s = events.trueParticles.number[np.logical_and(
-        beam_pi0s, events.trueParticles.pdg == 111)]
-    particles = events.trueParticles if mc else events.trueParticlesBT
-    photon_mothers = particles.mother[events.trueParticlesBT.pdg == 22]
-    return get_ak_intersection(photon_mothers, true_pi0s)
 
 def get_impact_parameter(direction, start_pos, beam_vertex):
     """
@@ -325,7 +251,7 @@ def find_beam_impact_parameters(events : Master.Data):
         directions, starts, beam_vertex)
 
 
-def find_beam_separations(events: Master.Data):
+def find_beam_separations(events):
     """
     Finds the separations of each start position of each reconstructed
     PFO in `events` and the reconstructed beam vertex.
@@ -346,7 +272,7 @@ def find_beam_separations(events: Master.Data):
     return vector.dist(starts, beam_vertex)
 
 
-def get_mother_pdgs(events, bt=False):
+def get_mother_pdgs(events):
     """
     DEPRECATED: use events.trueParticles(BT).motherPdg
 
@@ -378,13 +304,9 @@ def get_mother_pdgs(events, bt=False):
     # This loops through every event and assigned the pdg code of the
     # mother. Assigns 211 (pi+) to daughters of the beam, and 0 to
     # everything which is not found
-    if bt:
-        particles = events.trueParticlesBT
-    else:
-        particles = events.trueParticles
-    mother_ids = particles.mother
-    truth_ids = particles.number
-    truth_pdgs = particles.pdg
+    mother_ids = events.trueParticles.mother
+    truth_ids = events.trueParticles.number
+    truth_pdgs = events.trueParticles.pdg
     mother_pdgs = mother_ids.to_list()
     # ts = time.time()
     for i in range(ak.num(mother_ids, axis=0)):
@@ -393,7 +315,7 @@ def get_mother_pdgs(events, bt=False):
             truth_pdgs[i][d] for d in range(ak.count(truth_ids[i]))}
         true_pdg_lookup.update({0: 0, 1: 211})
         # I have no idea why the hell I did this
-        #   Presumably the beam particle gets a strange pdg code??
+        # # Presumably the beam particle gets a strange pdg code??
         for j in range(ak.count(mother_ids[i])):
             try:
                 mother_pdgs[i][j] = true_pdg_lookup[mother_ids[i][j]]
