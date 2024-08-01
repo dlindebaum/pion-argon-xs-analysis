@@ -668,6 +668,13 @@ def split_pfo_option(func):
         return props.get_subset(track_mask), props.get_subset(shower_mask)
     return decorated
 
+def make_evt_ids(events):
+    to_numpy = lambda arr : np.array(arr)[:, np.newaxis].astype(np.int32)
+    run_num = to_numpy(events.run)
+    subrun_num = to_numpy(events.subRun)
+    event_num = to_numpy(events.eventNum)
+    return np.concatenate([run_num, subrun_num, event_num], axis=1)
+
 def make_evt_kinematics(
         events,
         kinematics,
@@ -1302,6 +1309,7 @@ def create_parameter_dictionary(
         "classification_values":
         make_evt_classifications(params["events"], params["classifications"],
                                  params["classification_definitions"])})
+    params.update({"id_values": make_evt_ids(params["events"])})
     params.update({
         "kinematic_values":
         make_evt_kinematics(params["events"], params["kinematics"],
@@ -1373,6 +1381,8 @@ def generate_event_graph(event_index, param_dict):
     """
     class_tensor = get_event_index(
         event_index, param_dict["classification_values"])
+    id_tensor = get_event_index(
+        event_index, param_dict["id_values"])
     kine_tensor = get_event_index(
         event_index, param_dict["kinematic_values"],
         prop_order=param_dict["kinematics"])
@@ -1380,7 +1390,8 @@ def generate_event_graph(event_index, param_dict):
         event_index, param_dict["geometric_values"],
         prop_order=param_dict["geometries"])
     
-    context_values = {"classification": class_tensor}
+    context_values = {"classification": class_tensor,
+                      "id": id_tensor}
 
     pairs = param_dict["directed_pairs"]
     n_nodes = kine_tensor.shape[0]
@@ -1512,7 +1523,10 @@ def generate_graph_schema(params_dict):
     context_features = {
             "classification": tf.TensorSpec(
                 shape=(1, len(params_dict["classifications"])),
-                dtype=tf.float32)}
+                dtype=tf.float32),
+            "id": tf.TensorSpec(
+                shape=(1, params_dict["id_values"].shape[1]),
+                dtype=params_dict["id_values"].dtype)}
     if params_dict["truth_info"]:
         for key in params_dict["truth_context"].keys():
             if key == "reco_class":
