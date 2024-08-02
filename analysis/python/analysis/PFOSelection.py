@@ -204,6 +204,72 @@ def DaughterProtonSelection(
 #######################################################################
 #######################################################################
 
+def add_event_offset(vals):
+    """
+    Generates event uniqueness by bitshifting integer values to leave
+    room for, and set the first n bits to reference the event number.
+
+    If insufficient bits are present in the data type, the code will
+    attempt to increase the size of the integer to hold the new bits.
+
+    Parameters
+    ----------
+    vals : ak.Array
+        Awkward array of some integer values.
+    
+    Returns
+    -------
+    ak.Array
+        Awkward array of same shape of vals, where the index of the
+        outer layer is refernce as the lowest n bits of the new values.
+    """
+    n_events = ak.num(vals, axis=0)
+    n_extra_bits = len(bin(n_events)) - 2
+    n_mother_bits = len(bin(ak.max(vals))) - 2
+    offset_vals = vals
+    if (n_extra_bits + n_mother_bits) > 31:
+        offset_vals = ak.values_astype(offset_vals, np.int64)
+    if (n_extra_bits + n_mother_bits) > 63:
+        offset_vals = ak.values_astype(offset_vals, np.int128)
+    if (n_extra_bits + n_mother_bits) > 127:
+        raise ValueError("Overflow - numbers too large")
+    return (offset_vals << n_extra_bits) + np.arange(n_events)
+
+def get_ak_intersection(vals, tests):
+    """
+    Find the full intersection of values in `vals` which appear in
+    `tests` as a mask of the same size as `vals`.
+    
+    Note the search is event exclusive. Couple to add_event_offset to
+    perform an event-exclusive search.
+
+    Parameters
+    ----------
+    vals : ak.Array
+        Values to be tested.
+    tests : ak.Array
+        Values for which `vals` returns a True result in the final
+        mask.
+
+    Returns
+    -------
+    ak.Array
+        Boolean array as a mask containing True where `vals` is in
+        `tests`.
+    """
+    n_vals_per_event = ak.num(vals, axis=1)
+    vals_offset = ak.flatten(add_event_offset(vals)).to_numpy()
+    tests_offset = ak.flatten(add_event_offset(tests)).to_numpy()
+    mask = np.isin(vals_offset, tests_offset, kind="sort")
+    return ak.unflatten(mask, n_vals_per_event)
+
+def get_pi0_photons(events, mc=False, beam_only=True):
+    beam_pi0s = events.trueParticles.mother == 1 if beam_only else True
+    true_pi0s = events.trueParticles.number[np.logical_and(
+        beam_pi0s, events.trueParticles.pdg == 111)]
+    particles = events.trueParticles if mc else events.trueParticlesBT
+    photon_mothers = particles.mother[events.trueParticlesBT.pdg == 22]
+    return get_ak_intersection(photon_mothers, true_pi0s)
 
 def get_impact_parameter(direction, start_pos, beam_vertex):
     """
