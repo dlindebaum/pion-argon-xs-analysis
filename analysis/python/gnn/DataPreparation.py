@@ -1597,8 +1597,11 @@ def _write_graph_data(path, init_index, end_index, params_dict):
     Writes out the graphs between `init_index` and `end_index` to
     `path`.
     """
+    evt_range = range(init_index, end_index)
+    if len(evt_range) == 0:
+        return
     with tf.io.TFRecordWriter(path) as writer:
-        for i in range(init_index, end_index):
+        for i in evt_range:
             this_graph = generate_event_graph(i, params_dict)
             this_as_example = tfgnn.write_example(this_graph)
             writer.write(this_as_example.SerializeToString())
