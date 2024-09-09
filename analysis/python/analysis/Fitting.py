@@ -444,13 +444,21 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
             label = "observed uncertainty"
             widths = (x[1] - x[0])/2
             # Plots.PlotHist(x - widths, x - widths, weights = y_obs, color = "#d62728", label = "observed", newFigure = False, range = plot_range)
-            Plots.Plot(x, y_obs, style = "bar", linestyle = "", color = "#d62728", xlabel = xlabel, label = label, newFigure = False)
+            Plots.Plot(x, y_obs, style = "bar", linestyle = "", color = "#d62728", xlabel = xlabel, label = "observed", newFigure = False)
+
+            # automatically calculate cap size to match bin width
+            w = x[1] - x[0] # bin width
+            ax = Plots.plt.gca()
+            t = ax.transData.transform # tranform units to distance on page
+            ppd = 72 / ax.figure.dpi # points per distance (same point used in font sizes)
+            capsize =  0.5 * (ppd * (t([w, 0]) - t([0, 0])))[0] # factor of 0.5 because cap size is in units of half-pints 
         else:
             marker = "x"
             colour = "#d62728"
             label = "observed"
+            capsize = 3
 
-        Plots.Plot(x, y_obs, yerr = y_err, marker = marker, linestyle = "", color = colour, xlabel = xlabel, label = label, newFigure = False, capsize = 3)
+        Plots.Plot(x, y_obs, yerr = y_err, marker = marker, linestyle = "", color = colour, xlabel = xlabel, label = label, newFigure = False, capsize = capsize)
         if ylim:
             plt.ylim(*sorted(ylim))
         # if plot_range:
@@ -556,7 +564,8 @@ def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : st
 
             Plots.Plot(x_interp, y_pred_interp, marker = "", color = "black", newFigure = False, label = "fit")
             plt.axvline(mean, color = "black", linestyle = "--", label = "central value")
-        Plots.PlotHist(binned_data[variable], bins = hist_bins, newFigure = False, title = f"{bin_label} : {[data_bins[i], data_bins[i+1]]} {bin_units}", range = [min(v_range), max(v_range)], weights = binned_weights)
+        # Plots.PlotHist(binned_data[variable], bins = hist_bins, newFigure = False, title = f"{bin_label} : {[data_bins[i], data_bins[i+1]]} {bin_units}", range = [min(v_range), max(v_range)], weights = binned_weights, color = "C0")
+        Plots.Plot(x, y, yerr = np.sqrt(y), newFigure = False, color = "C0", style = "bar", title = f"{bin_label} : {[data_bins[i], data_bins[i+1]]} {bin_units}")
 
         plt.axvline(np.mean(binned_data[variable]), linestyle = "--", color = "C1", label = "mean")
 

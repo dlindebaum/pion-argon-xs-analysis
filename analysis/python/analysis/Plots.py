@@ -1002,7 +1002,15 @@ def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label:
 
     if style == "bar":
         width = min(x[1:] - x[:-1]) # until I figure out how to do varaible widths
-        plt.bar(x, y, width, xerr = xerr, yerr = yerr, linestyle = linestyle, label = label, color = color, alpha = alpha, capsize = capsize, zorder = zorder)
+        plt.bar(x, y, width, xerr = xerr, linestyle = linestyle, label = label, color = color, alpha = alpha, zorder = zorder)
+        
+        # automatically calculate cap size to match bin width
+        ax = plt.gca()
+        t = ax.transData.transform # tranform units to distance on page
+        ppd = 72 / ax.figure.dpi # points per distance (same point used in font sizes)
+        capsize =  0.5 * (ppd * (t([width, 0]) - t([0, 0])))[0] # factor of 0.5 because cap size is in units of half-pints
+        plt.errorbar(x, y, yerr = yerr, linestyle = "", color = "k", alpha = alpha, capsize = capsize, zorder = zorder)
+
     elif style == "step":
         if (xerr is not None): warnings.warn("x error bars are not supported with style 'step'")
         

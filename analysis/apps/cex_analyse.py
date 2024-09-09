@@ -166,7 +166,7 @@ def PlotBkgRegions(energy_slices : cross_section.Slices, data : cross_section.An
     for r in N_int_regions:
         cross_section.PlotXSHists(energy_slices, N_int_regions[r], xlabel = "$KE$ (MeV)", label = f"$N^{{Data}}_{{{tags[r].name_simple}}}$", title = cross_section.remove_(r).capitalize(), color = "k")
         for b, be, bl in zip(bkg[r], bkg_err[r], bkg_label[r]):
-            cross_section.PlotXSHists(energy_slices, b, be, label = f"$N^{{bkg}}_{{{tags[bl].name_simple}}}$", newFigure = False, color = tags[bl].colour)
+            cross_section.PlotXSHists(energy_slices, b, be, label = f"$N^{{Bkg}}_{{{tags[bl].name_simple}}}$", newFigure = False, color = tags[bl].colour)
         Plots.plt.legend(fontsize = 12, ncols = 1, loc = "upper left")
         book.Save()
     return
@@ -319,7 +319,7 @@ def ApplyEfficiency(energy_slices : cross_section.Slices, efficiencies, unfoldin
             else:
                 err = hist_unfolded_efficiency_corrected[k]["stat_err"]
             cross_section.PlotXSHists(energy_slices, hist_unfolded_efficiency_corrected[k]["unfolded"], err, False, color = "C4", label = "Data unfolded, efficiency corrected", newFigure = True)
-            cross_section.PlotXSHists(energy_slices, true[k], None, False, norm, color = "C1", label = "true, scaled to Data", newFigure = False, title = labels[k])
+            cross_section.PlotXSHists(energy_slices, true[k], None, False, norm, color = "C1", label = "true, scaled to data", newFigure = False, title = labels[k])
             Plots.plt.ylim(top = 1.1 * max(Plots.plt.gca().get_ylim()))
             Plots.plt.legend(loc = "upper left")
             book.Save()
@@ -600,7 +600,7 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
                     mc_label = "toy template"
                 elif k == "pdsp":
                     data_label = "Data"
-                    mc_label = "MC (scaled to Data)"
+                    mc_label = "MC (scaled to data)"
 
                 PlotDataBkgSub(histograms_reco_obs, histograms_reco_obs_err, templates[k], args.fit["regions"], p if p != "all" else "charge_exchange", args.energy_slices, scale, None, data_label, mc_label, book)
                 if args.fit["regions"]:
