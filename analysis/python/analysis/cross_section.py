@@ -359,7 +359,7 @@ def CalculateBatches(args):
         n_data = []
 
     if len(n_data) == 0:
-        print("no data file was specified, 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
+        print("no data file was specified, 'normalisation', 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
 
     n_mc = [file_len(file["file"]) for file in args.ntuple_files["mc"]] # must have MC
 

@@ -350,7 +350,7 @@ def check_run(args : argparse.Namespace, step : str):
 def main(args):
     os.makedirs(args.out, exist_ok = True)
     if args.create_config:
-        SaveConfiguration(template_config(), args.out + args.create_config)
+        SaveConfiguration(template_config(), os.path.join(args.out, args.create_config))
         print(f"template configuration saved as {args.out + args.create_config}")
         exit()
     else:
@@ -360,15 +360,15 @@ def main(args):
             n_data = [file_len(file["file"]) for file in args.ntuple_files["data"]]
         else:
             n_data = []
-
-        if len(n_data) == 0:
-            print("no data file was specified, 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
+        no_data = len(n_data) == 0
+        if no_data:
+            print("no data file was specified, 'normalisation', 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
 
         processing_args = CalculateBatches(args)
         args = update_args(processing_args)
 
         #* normalisation 
-        can_run_norm = (args.norm is None) or ("beam_norm" not in os.listdir(args.out))
+        can_run_norm = (not no_data) and ((args.norm is None) or ("beam_norm" not in os.listdir(args.out)))
         if can_run_norm or check_run(args, "normalisation"):
             print("calculate beam normalisation")
             cex_normalisation.main(args)
@@ -479,7 +479,7 @@ def main(args):
         if args.stop == "selection": return
 
         #* beam reweight
-        can_run_rw = ("params" not in args.beam_reweight) and (len(n_data) > 0)
+        can_run_rw = ("params" not in args.beam_reweight) and (not no_data)
         if can_run_rw or check_run(args, "reweight"):
             print("run beam reweight")
             cex_beam_reweight.main(args)

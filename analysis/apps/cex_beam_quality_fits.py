@@ -198,6 +198,10 @@ def main(args):
 
     fit_values = {s : Fits(args, outputs[s], outdir, s) for s in outputs}
 
+    if "data" not in outputs.keys():
+        outputs["data"] = None
+        fit_values["data"] = None
+    
     MakePlots(outputs["mc"], fit_values["mc"], outputs["data"], fit_values["data"], outdir, args.beam_quality_truncate)
 
     return

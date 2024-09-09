@@ -349,13 +349,23 @@ def main(args):
         bins = np.linspace(min(energy_range), max(energy_range), 11)
         linear_correction = linear_fit(df, bins, energy_range, book)
         LinearFitPerformance(df, linear_correction, book)
+        #* linear correction
+        energy_range = args.shower_correction["energy_range"]
+        bins = np.linspace(min(energy_range), max(energy_range), 11)
+        linear_correction = linear_fit(df, bins, energy_range, book)
+        LinearFitPerformance(df, linear_correction, book)
 
+        #* response correction
+        bins = np.array(create_bins_df(df.reco_shower_energy, int(len(df.reco_shower_energy)//11), energy_range), dtype = int)
         #* response correction
         bins = np.array(create_bins_df(df.reco_shower_energy, int(len(df.reco_shower_energy)//11), energy_range), dtype = int)
 
         central_values = CalculateCentralValues(df, bins, book)
         response_params = ResponseFits(central_values, bins, book)
+        central_values = CalculateCentralValues(df, bins, book)
+        response_params = ResponseFits(central_values, bins, book)
 
+        tab = MethodComparison(df, linear_correction, response_params, bins, energy_range, book)
         tab = MethodComparison(df, linear_correction, response_params, bins, energy_range, book)
     
     tab.T.style.format(precision = 3).to_latex(out + "table.tex")
