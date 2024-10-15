@@ -193,12 +193,13 @@ def generate_hyper_params(
     return hyper_params
 
 def load_hyper_params(paths_dict):
+    """Load a hyper parameters dictionary"""
     with open(paths_dict["params_path"], 'rb') as f:
         params = pickle.load(f)
     return params
 
-def load_model(path, from_weights=True):
-    pass
+# def load_model(path, from_weights=True):
+#     pass
     # if isinstance(path, dict):
     #     if from_weights:
     #         path = path["weights_path"]
@@ -216,6 +217,7 @@ def load_model(path, from_weights=True):
 #                            Data formatting
 
 def format_data(train, val, batch_size=32, shuffle_size=128):
+    """Prepare training/validation datasets for training"""
     if shuffle_size is not None:
         train = train.shuffle(buffer_size=shuffle_size)
     train_batched = train.ragged_batch(batch_size=batch_size).repeat()
@@ -223,6 +225,23 @@ def format_data(train, val, batch_size=32, shuffle_size=128):
     return train_batched, val_batched
 
 def load_data_from_hyper_params(hyper_params):
+    """
+    Load the training and validation sets in hyper_params, and format
+    for training
+    
+    Parameters
+    ----------
+    hyper_params : dict
+        Hyper parameters, including the schema, training, and
+        validation paths, training batch formatting and any
+        additional losses.
+    
+    Returns
+    tf.Dataset
+        Training dataset.
+    tf.Dataset
+        Validation dataset.
+    """
     if ((hyper_params["data_folder"] is None)
         or (hyper_params["training_batch"] is None)):
         raise ValueError("Hyper-parameters do not contain data details")
@@ -237,6 +256,7 @@ def load_data_from_hyper_params(hyper_params):
                        hyper_params["training_shuffle"])
 
 def get_spec_from_hyper_params(hyper_params):
+    """Load the graph element spec dictated by the hyper parameters"""
     if ((hyper_params["data_folder"] is None)
         or (hyper_params["training_batch"] is None)):
         raise ValueError("Hyper-parameters do not contain data details")
@@ -244,7 +264,13 @@ def get_spec_from_hyper_params(hyper_params):
         hyper_params["data_folder"])
     train_ds = DataPreparation.load_record(
         data_paths["schema_path"],
-        data_paths["train_path"])
+        "") # tf doesn't try to load the train_ds as an actual file
+        #   until you ask for an element. Thus passing nothing here
+        #    works to handling removal of extra losses.
+        # A proper method would required poping "classification", and
+        #    any other extra losses out of the schema itself
+    # raw_schema = tfgnn.create_graph_spec_from_schema_pb(
+    #     tfgnn.read_schema(data_paths["schema_path"]))
     return train_ds.element_spec[0]
 
 
@@ -295,82 +321,6 @@ class CategoricalCrossentropyUnclassWeight(
 
 # =====================================================================
 #                               Model creation
-
-def _generic_dense_layer(number, activation="relu", dropout=0.1, regulariser=8e-5):
-    """A Dense layer with regularization (L2 and Dropout)."""
-    regularizer = tf.keras.regularizers.l2(regulariser)
-    return tf.keras.Sequential([
-        tf.keras.layers.Dense(
-            units,
-            activation=activation,
-            kernel_regularizer=regularizer,
-            bias_regularizer=regularizer),
-        tf.keras.layers.Dropout(dropout)
-    ])
-
-def _beam_collection_layer(
-        message_dimension,
-        final_dimension,
-        dropout=0.1,
-        regulariser=8e-5):
-    """Update the beam node with beam connection PFO data."""
-    beam_collection_update = tfgnn.keras.layers.GraphUpdate(
-        node_sets={
-            "beam": tfgnn.keras.layers.NodeSetUpdate(
-                {"beam_connections": tfgnn.keras.layers.SimpleConv(
-                    sender_edge_feature=tfgnn.HIDDEN_STATE,
-                    message_fn=_generic_dense_layer(
-                        message_dimension,
-                        dropout=dropout, regulariser=regulariser),
-                    reduce_type="sum",
-                    receiver_tag=tfgnn.SOURCE)},
-                tfgnn.keras.layers.NextStateFromConcat(
-                    _generic_dense_layer(
-                        final_dimension,
-                        dropout=dropout, regulariser=regulariser))
-            )
-        })
-    return beam_collection_update
-
-def _pfo_update_layer(
-        message_dimension,
-        final_dimension,
-        dropout=0.1,
-        regulariser=8e-5):
-    """Update to PFOs with neighbouring PFO data"""
-    pfo_node_update = tfgnn.keras.layers.GraphUpdate(
-        node_sets={
-            "pfo": tfgnn.keras.layers.NodeSetUpdate(
-                {"neighbours": tfgnn.keras.layers.SimpleConv(
-                    sender_edge_feature=tfgnn.HIDDEN_STATE,
-                    message_fn=_generic_dense_layer(
-                        message_dimension,
-                        dropout=dropout, regulariser=regulariser),
-                    reduce_type="sum",
-                    receiver_tag=tfgnn.TARGET)},
-                tfgnn.keras.layers.NextStateFromConcat(
-                    _generic_dense_layer(
-                        final_dimension,
-                        dropout=dropout, regulariser=regulariser))
-            )
-        })
-    return pfo_node_update
-
-def _neighbour_update_layer():
-    neighbours_edge_update = tfgnn.keras.layers.GraphUpdate(
-        edge_sets={
-            "neighbours": tfgnn.keras.layers.EdgeSetUpdate(
-               tfgnn.keras.layers.NextStateFromConcat(dense(edge_next_dim))
-            )})
-    return neighbours_edge_update
-
-def _beam_conn_update_layer():
-    beam_conn_edge_update = tfgnn.keras.layers.GraphUpdate(
-        edge_sets={
-            "beam_connections": tfgnn.keras.layers.EdgeSetUpdate(
-                tfgnn.keras.layers.NextStateFromConcat(dense(beam_edge_next_dim))
-            )})
-    return beam_conn_edge_update
 
 example_params = {
     "node_dim": 8,
@@ -435,6 +385,7 @@ example_outputs = ["classifier",
                    "reco_classification"]
 
 def create_normaliser_from_data(data_path_params):
+    """Load the corresponding normalisation as a normalising layer"""
     if isinstance(data_path_params, str):
         norms_path = data_path_params
     else:
@@ -449,6 +400,43 @@ def construct_model(
         hyper_params,
         constructor, parameters, outputs,
         model_type="GATv2", save=True):
+    """
+    Constructs a GNN model using a list of Layers in `constructor`,
+    formatted to be compatible with the hyper parameters, with global
+    parameters in `parameters`, to generate the outputs indexed in
+    `outputs`.
+
+    The Layers in constructor should be instances of a class in
+    `Layers` referencing the `LayerConstructor` or `LoopConstructor`
+    base classes.
+    `outputs` shold be a list referencing the any strings given as
+    first arguments to any Layers in `constructor`, allows mapping the
+    output from any layer in the constructor to any desired output.
+
+    Parameters
+    ----------
+    hyper_params : dict
+        Dictionary containing hyper parameters.
+    constructor : list
+        List of Layers defining the model.
+    parameters : dict
+        Dictionary of global layer parameters. These will be passed as
+        kwargs to all input layers of the Model (unless sepcified in
+        the Layer initialisation).
+    outputs : list
+        List of strings referencing any identification strings in the
+        Layers to control the output specifications.
+    model_type : str, optional
+        Type of the model to be constructed. Default is "GATv2".
+    save : bool, optional
+        Whether to save the model parameters to a file. Default is
+        True.
+
+    Returns
+    -------
+    tf.keras.Model
+        The constructed TensorFlow Keras model.
+    """
     if save:
         model_params_dict = {
             "model_type": model_type,
@@ -535,7 +523,29 @@ def _check_version(version_model, version_module):
                       + "match, may be unexpected behaviour.")
     return
 
-def load_model_from_file(model_folder, new_norm=None):
+def add_id_output_to_loaded_model(model):
+    """
+    Append the event ID information of a graph to the end of the a
+    model's output.
+
+    Parameters
+    ----------
+    model : tf.keras.Model
+        A loaded model.
+    
+    Returns
+    tf.keras.Model
+        Model with the final output as the event ID information.
+    """
+    input = model.input
+    id_out = input.merge_batch_to_components().context.features["id"]
+    model_outs = model(input)
+    if not isinstance(model, list):
+        model_outs = [model_outs]
+    return tf.keras.Model(inputs=[input], outputs=model(input) + [id_out])
+
+
+def load_model_from_file(model_folder, new_norm=None, new_data_folder=None):
     """
     Loads a model contained in the supplied folder.
 
@@ -559,8 +569,14 @@ def load_model_from_file(model_folder, new_norm=None):
         json, a dictionary of data path parameters including
         "norm_path", or an already constructed NormaliseHiddenFeatures
         layer. Default is None.
-    
+    new_data_folder : str, optional
+        If passed, change the input spec of the graph to the spec of
+        the data found in the supplied data folder. This is intended to
+        be used to swap to a data type graph structure, which does not
+        include any truth information. Default is None.
+
     Returns
+    -------
     tf.keras.Model
         Copy of the model which was saved.
     """
@@ -589,11 +605,17 @@ def load_model_from_file(model_folder, new_norm=None):
               + " Loading from text...")
         with open(paths_dict["text_params_path"], "r") as f:
             hyper_params = eval(f.read().replace('\n', ''))
-            # Bad saving practive means the path items we want are strings like
-            #   "'string'", so the leading/trailing '-s must be removed
+            # Bad saving practice means the path items we want are
+            #   strings like "'string'", so the leading/trailing
+            #   "'"-s must be removed.
             for key, val in hyper_params.items():
                 if "path" in key or "folder" in key:
                     hyper_params[key] = val[1:-1]
+    # This is used by the model to get the input graph spec, so editing
+    #   this allows the model to accept graphs without the excess truth
+    #   data. This part doesn't have any loaded weights.
+    if new_data_folder is not None:
+        hyper_params["data_folder"] = new_data_folder
     model = construct_model(
         hyper_params,
         constructor,
@@ -614,6 +636,36 @@ def compile_and_train(
         batched_val,
         print_summary=True,
         partial_train=False):
+    """
+Compiles and trains a TensorFlow Keras model based on the provided
+hyper parameters and datasets.
+
+Parameters
+----------
+model : tf.keras.Model
+    The TensorFlow Keras model to be compiled and trained.
+hyper_params : dict
+    Dictionary containing hyper-parameters for compiling and training
+    the model, as generated by `Models.generate_hyper_params`.
+batched_train : tf.data.Dataset
+    Batched training dataset.
+batched_val : tf.data.Dataset
+    Batched validation dataset.
+print_summary : bool, optional
+    Whether to print the model summary. Default is True.
+partial_train : bool, optional
+    If True, save the weights as "_partial" at the end of training.
+    This can be used as a training checkpoint to load later.  Intent is
+    to allow changing loss weightings partly through the process.
+    Default is False.
+
+Returns
+-------
+history : tf.keras.callbacks.History
+    A record of training loss values and metrics values at successive
+    epochs, as well as validation loss values and validation metrics
+    values.
+"""
     model.compile(
         tf.keras.optimizers.Adam(learning_rate=hyper_params["learning_rate"]),
         loss=hyper_params["loss"],
@@ -646,15 +698,19 @@ def compile_and_train(
 #    Plotting functions for evaluation imported from gnn.model_plots
 
 def convert_labels_to_truth(labels):
+    """Convert 1-hot true classification vector to a channel number"""
     size = labels.take(1).get_single_element().shape[0]
     index = np.arange(size)
     if size == 1:
         index += 1
     return np.array([lab @ index for lab in labels.as_numpy_iterator()])
 
-def _parse_classification_labels(labels, pred, truth):
+def _parse_classification_labels(labels, pred, truth=None):
+    """If labels is passed as None, create defaul label names"""
     if labels is None:
-        n_indicies = int(max(np.max(pred), np.max(truth)) + 1)
+        n_indicies = int(np.max(pred) + 1)
+        if truth is not None:
+            n_indicies = max(n_indicies, int(np.max(truth) + 1))
         labels = [f"class index {i}" for i in range(n_indicies)]
     return labels
 
@@ -663,6 +719,7 @@ def create_summary_text(
         truth_index,
         classification_labels=None,
         print_results=False):
+    """Create a string summarising the performance of the network"""
     correct_mask = pred_index == truth_index
     labels = _parse_classification_labels(
         classification_labels, pred_index, truth_index)
@@ -703,23 +760,104 @@ def plot_summary_information(pred_index, truth_index, plot_config):
     plot_config.format_axis(xlabel="Classification index", ylabel="Count")
     plot_config.end_plot()
 
+def _type_concatenate(arrs):
+    """Perform concatenation appropriate to the data type"""
+    if isinstance(arrs[0], tf.RaggedTensor):
+        return tf.concat(arrs, axis=0)
+    elif isinstance(arrs[0], ak.Array):
+        return ak.concatenate(arrs, axis=0)
+    return np.concatenate(arrs, axis=0)
+
 # CAREFUL with the following plotting functions, they have a bunch of
 #   stupid special cases which are nicely centrally unified
-def get_predicitions(
+def get_predictions(
         model,
         schema_path, test_path,
-        pred_index=0, other_truth=None
-    ):
+        pred_index=0, other_truth=None,
+        return_truth=True):
+    """
+    Load the predictions of the passed model, along with some truth.
+
+    Note: only valid for MC type data (including true labels).
+    For data without true labels (or to simulate not ture labels), use
+    the `get_data_predictions` function.
+
+    Parameters
+    ----------
+    model : tf.keras.Model
+        Model to generate predictions.
+    schema_path : str or list
+        Path to the schema to describing the graph data. If passed as a
+        list, each graph in the list will be loaded, and the results
+        concatenated together.
+    test_path : str or list
+        Path to the graph data record. If passed as a list, it must
+        have the same length as schema path. The results from each
+        graph will be found and concatenated together.
+    pred_index : int, optional
+        Which graph prediction to return. Refers to the output given by
+        the model structure. Default is 0 (this should always be the
+        main classification prediction).
+    other_truth : str, optional
+        If passed, istead of the classification loss, return a
+        different loss parameter available in the graph structure. Loss
+        must reference a loss available in
+        `DataPreparation._make_decode_func`. If this isn't a
+        classification type loss, the result will be returned as an
+        awkward array. Default is None.
+    return_truth : bool, optional
+        If True, return the loss truth component, else return only the
+        prediction. Default is True.
+
+    Returns
+    -------
+    np.ndarray
+        Prediction of the model at `pred_index`.
+    np.ndarray or ak.Array
+        Truth value defined by `other_truth`, else the main
+        classification loss.
+    """
     if other_truth is not None:
         other_truth = [other_truth]
+    if isinstance(test_path, list):
+        if ((not isinstance(schema_path, list))
+            or (not len(schema_path) == len(test_path))):
+            raise TypeError(
+                "If test_path is a list, "
+                "schema_path must be an equal length list")
+        results = []
+        for s_path, t_path in zip(schema_path, test_path):
+            results.append(_get_predictions_core(
+                model, s_path, t_path,
+                pred_index=pred_index, other_truth=other_truth,
+                return_truth=return_truth))
+        if not return_truth:
+            return _type_concatenate(results)
+        else:
+            preds = _type_concatenate([r[0] for r in results])
+            truths = _type_concatenate([r[1] for r in results])
+            return preds, truths
+    else:
+        return _get_predictions_core(
+            model, schema_path, test_path,
+            pred_index=pred_index, other_truth=other_truth,
+            return_truth=return_truth)
+
+def _get_predictions_core(
+        model,
+        schema_path, test_path,
+        pred_index=0, other_truth=None,
+        return_truth=True):
     test_record = DataPreparation.load_record(schema_path, test_path,
                                               extra_losses=other_truth)
     test_data = test_record.map(lambda data, label : data)
-    test_data = test_data.batch(batch_size=32)
-    predictions = model.predict(test_data, batch_size=32)
+    test_data = test_data.batch(batch_size=512)
+    predictions = model.predict(test_data, batch_size=512)
     if isinstance(predictions, list):
         # First predicition is always the classification
         predictions = predictions[pred_index]
+    if not return_truth:
+        return predictions
     if other_truth is None:
         test_label = test_record.map(lambda data, label : label)
         truth = convert_labels_to_truth(test_label)
@@ -730,6 +868,96 @@ def get_predicitions(
         truth = test_record.map(lambda data, label : label[-1])
         truth = ak.Array([t.numpy() for t in truth])
     return predictions, truth
+
+def get_data_predictions(
+        model,
+        schema_path, test_path,
+        start_ind=None, n_graphs=None,
+        which_pred=0):
+    """
+    Load the predictions of the passed model, along with the event IDs.
+
+    Note: this does not return any truth information, for that use
+    `get_predictions`. This function will however work, even if truth
+    information is present.
+
+    Parameters
+    ----------
+    model : tf.keras.Model
+        Model to generate predictions.
+    schema_path : str or list
+        Path to the schema to describing the graph data. If passed as a
+        list, each graph in the list will be loaded, and the results
+        concatenated together.
+    test_path : str or list
+        Path to the graph data record. If passed as a list, it must
+        have the same length as schema path. The results from each
+        graph will be found and concatenated together.
+    start_ind : int, optional
+        Which graph in the record to start reading from. If None, read
+        from the first file. Default is None.
+    n_graphs : int, optional
+        How many graphs to read from the data file. If None, read until
+        the end of the file. Default is None.
+    which_pred : int, optional
+        Which prediction index to return. Corresponds to the list of
+        GNN model outputs. Default is 0 (corresponding to the main
+        classifier output).
+        
+    Returns
+    -------
+    np.ndarray
+        Prediction of the model at `pred_index`.
+    np.ndarray
+        Array of unique identifiers of the events. The should be
+        checked with the expected IDs when relating to ntuples.
+    """
+    id_model = add_id_output_to_loaded_model(model)
+    if isinstance(test_path, list):
+        if ((not isinstance(schema_path, list))
+            or (not len(schema_path) == len(test_path))):
+            raise TypeError(
+                "If test_path is a list, "
+                "schema_path must be an equal length list")
+        results = []
+        for s_path, t_path in zip(schema_path, test_path):
+            results.append(_get_data_predictions_core(
+                id_model, s_path, t_path,
+                start_ind=start_ind, n_graphs=n_graphs,
+                which_pred=which_pred))
+        preds = np.concatenate([r[0] for r in results], axis=0)
+        ids = np.concatenate([r[1] for r in results], axis=0)
+    else:
+        preds, ids = _get_data_predictions_core(
+            id_model, schema_path, test_path,
+            start_ind=start_ind, n_graphs=n_graphs,
+            which_pred=which_pred)
+    return preds, ids
+
+def _get_data_predictions_core(
+        id_model,
+        schema_path, test_path,
+        start_ind=None, n_graphs=None,
+        which_pred=0):
+    test_data = DataPreparation.load_record(
+        schema_path, test_path,
+        no_label=True,
+        start_ind=start_ind, n_graphs=n_graphs)
+    # test_data = test_data.map(lambda data, label : data)
+    test_data = test_data.batch(batch_size=512)
+    predictions = id_model.predict(test_data)
+    return predictions[which_pred], predictions[-1]
+
+def _get_paths_from_params(path_params, which_data="test"):
+    """Extract the schema and data paths from (list of) path params"""
+    if isinstance(path_params, list):
+        schema = [p["schema_path"] for p in path_params]
+        data = [p[f"{which_data}_path"] for p in path_params]
+    else:
+        schema = path_params["schema_path"]
+        data = path_params[f"{which_data}_path"]
+    return schema, data
+
 
 def _hist_plot(plot_config, sig, bkg, bins=None, label=None, norm=False):
     title = "Normalised" if norm else "Unnormalised"
@@ -767,7 +995,7 @@ def _sig_bkg_hist_plotter(sig_preds, bkg_preds, sig_label, plot_config):
     return
 
 def plot_binary_event_classification_dist(model, path_params, plot_config):
-    preds, truths = get_predicitions(
+    preds, truths = get_predictions(
         model, path_params["schema_path"], path_params["test_path"])
     bkg_preds = preds[:, 0][truths==0.]
     sig_preds = preds[:, 0][truths==1.]
@@ -776,14 +1004,14 @@ def plot_binary_event_classification_dist(model, path_params, plot_config):
 def plot_binary_extra_loss_dist(
         model,
         extra_loss, loss_index,
-        path_params, plot_config
-    ):
-    preds, truths = get_predicitions(
-        model,
-        path_params["schema_path"], path_params["test_path"],
+        path_params, plot_config,
+        which_data="test"):
+    schema, data = _get_paths_from_params(path_params, which_data=which_data)
+    preds, truths = get_predictions(
+        model, schema, data,
         pred_index=loss_index, other_truth=extra_loss)
     if isinstance(preds, tf.RaggedTensor):
-        preds = np.hstack(tf.squeeze(preds, axis=-1))
+        preds = preds.merge_dims(0, -1).numpy()
     else:
         preds = ak.ravel(preds)
     truths = ak.ravel(truths)
@@ -795,14 +1023,14 @@ def plot_regression_extra_loss_dist(
         model,
         extra_loss, loss_index,
         path_params, plot_config,
-        logits=False, mask=None
-    ):
-    preds, truths = get_predicitions(
-        model,
-        path_params["schema_path"], path_params["test_path"],
+        logits=False, mask=None,
+        which_data="test"):
+    schema, data = _get_paths_from_params(path_params, which_data=which_data)
+    preds, truths = get_predictions(
+        model, schema, data,
         pred_index=loss_index, other_truth=extra_loss)
     if isinstance(preds, tf.RaggedTensor):
-        preds = np.hstack(tf.squeeze(preds, axis=-1))
+        preds = preds.merge_dims(0, -1).numpy()
     else:
         preds = ak.ravel(preds)
     truths = ak.ravel(truths)
@@ -826,14 +1054,13 @@ def plot_confusion_extra_loss(
         extra_loss, loss_index,
         path_params,
         classification_labels=None,
-        plot_config=None
-    ):
-    preds, truth_index = get_predicitions(
-        model,
-        path_params["schema_path"], path_params["test_path"],
+        plot_config=None,
+        which_data="test"):
+    schema, data = _get_paths_from_params(path_params, which_data=which_data)
+    preds, truth_index = get_predictions(
+        model, schema, data,
         pred_index=loss_index, other_truth=extra_loss)
-    pred_index = np.where(
-        preds == (np.max(preds, axis=1)[:, np.newaxis]))[1]
+    pred_index = np.argmax(preds, axis=1)
     labels = _parse_classification_labels(classification_labels,
                                           pred_index, truth_index)
     _ = create_summary_text(
@@ -843,7 +1070,8 @@ def plot_confusion_extra_loss(
     confustion_mat = create_confusion_matrix(pred_index, truth_index)
     plot_confusion_matrix(
         confustion_mat,
-        labels, labels)
+        labels, labels,
+        x_label="reco region", y_label="true process")
     if plot_config is not None:
         plot_summary_information(pred_index, truth_index, plot_config)
     return pred_index, truth_index
@@ -853,17 +1081,16 @@ def plot_confusion_main_vs_reco_loss(
         extra_loss, loss_index,
         path_params,
         classification_labels=None,
-        plot_config=None
-    ):
-    _, truth_index = get_predicitions(
-        model,
-        path_params["schema_path"], path_params["test_path"],
+        plot_config=None,
+        which_data="test"):
+    schema, data = _get_paths_from_params(path_params, which_data=which_data)
+    _, truth_index = get_predictions(
+        model, schema, data,
         pred_index=loss_index, other_truth=extra_loss)
-    preds, _ = get_predicitions(
+    preds, _ = get_predictions(
         model,
         path_params["schema_path"], path_params["test_path"])
-    pred_index = np.where(
-        preds == (np.max(preds, axis=1)[:, np.newaxis]))[1]
+    pred_index = np.argmax(preds, axis=1)
     labels = _parse_classification_labels(classification_labels,
                                           pred_index, truth_index)
     _ = create_summary_text(
@@ -873,11 +1100,11 @@ def plot_confusion_main_vs_reco_loss(
     confustion_mat = create_confusion_matrix(pred_index, truth_index)
     plot_confusion_matrix(
         confustion_mat,
-        labels, labels)
+        labels, labels,
+        x_label="reco region", y_label="true process")
     if plot_config is not None:
         plot_summary_information(pred_index, truth_index, plot_config)
     return pred_index, truth_index
-
 
 def create_confusion_matrix(predictions, truth):
     n_inds = int(1 + max(np.max(truth), np.max(predictions)))
@@ -890,14 +1117,14 @@ def create_confusion_matrix(predictions, truth):
 
 def evaluate_model(
         model,
-        schema_path,
-        test_path,
+        path_params,
         classification_labels=None,
-        plot_config=None):
-    predictions, truth_index = get_predicitions(
-        model, schema_path, test_path)
-    pred_index = np.where(
-        predictions == (np.max(predictions, axis=1)[:, np.newaxis]))[1]
+        plot_config=None,
+        which_data="test"):
+    schema, data = _get_paths_from_params(path_params, which_data=which_data)
+    predictions, truth_index = get_predictions(
+        model, schema, data)
+    pred_index = np.argmax(predictions, axis=1)
     labels = _parse_classification_labels(classification_labels,
                                           pred_index, truth_index)
     _ = create_summary_text(
@@ -907,7 +1134,8 @@ def evaluate_model(
     confustion_mat = create_confusion_matrix(pred_index, truth_index)
     plot_confusion_matrix(
         confustion_mat,
-        labels, labels)
+        labels, labels,
+        x_label="reco region", y_label="true process")
     if plot_config is not None:
         plot_summary_information(pred_index, truth_index, plot_config)
     return pred_index, truth_index
@@ -960,15 +1188,15 @@ def _get_region_masks(pred, truth, n):
 
 def per_region_dists(
         model,
-        schema_path,
-        test_path,
+        path_params,
         plot_config,
         classification_labels=None,
-        expand_bins=True):
-    predictions, truth_index = get_predicitions(
-        model, schema_path, test_path)
-    pred_index = np.where(
-        predictions == np.max(predictions, axis=1)[:, np.newaxis])[1]
+        expand_bins=True,
+        which_data="test"):
+    schema, data = _get_paths_from_params(path_params, which_data=which_data)
+    predictions, truth_index = get_predictions(
+        model, schema, data)
+    pred_index = np.argmax(predictions, axis=1)
     labels = _parse_classification_labels(classification_labels,
                                           pred_index, truth_index)
     n_regions = predictions.shape[-1]
@@ -1027,17 +1255,17 @@ def per_region_dists(
 
 def total_score_dist(
         model,
-        schema_path,
-        test_path,
+        path_params,
         plot_config,
         classification_labels=None,
-        expand_bins=True):
-    predictions, truth_index = get_predicitions(
-        model, schema_path, test_path)
-    pred_index = np.where(
-        predictions == np.max(predictions, axis=1)[:, np.newaxis])[1]
+        expand_bins=True,
+        which_data="test"):
+    schema, data = _get_paths_from_params(path_params, which_data=which_data)
+    predictions, _ = get_data_predictions(
+        model, schema, data)
+    pred_index = np.argmax(predictions, axis=1)
     labels = _parse_classification_labels(classification_labels,
-                                          pred_index, truth_index)
+                                          pred_index, None)
     bins = plot_config.get_bins(predictions.flatten(), array=True)
     plot_config.setup_figure()
     for i in range(predictions.shape[-1]):
