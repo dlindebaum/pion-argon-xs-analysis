@@ -14,7 +14,7 @@ from tensorflow_gnn.graph import pool_ops
 import matplotlib.pyplot as plt
 from python.gnn import DataPreparation
 
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 
 def parse_constructor(constructor: list, parameters: dict):
     """
@@ -257,6 +257,12 @@ class Setup(LayerConstructor):
     def _func(self, **kwargs):
         def layer(graph):
             return graph.merge_batch_to_components()
+        return layer
+
+class EventID(LayerConstructor):
+    def _func(self, **kwargs):
+        def layer(graph):
+            return graph.context.features["id"]
         return layer
 
 class NormaliseHiddenFeatures(LayerConstructor):
