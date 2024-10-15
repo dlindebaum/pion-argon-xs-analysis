@@ -45,7 +45,11 @@ def normalize(vec : ak.Record) -> ak.Record:
         ak.Record: norm of vector
     """
     m = magnitude(vec)
-    m = ak.where(m == 0., 1., m)
+    try:
+        m = ak.where(m == 0., 1., m)
+    except:
+        m = ak.Array([m])
+        m = ak.where(m == 0., 1., m)
     return vector( vec.x / m, vec.y / m, vec.z / m )
 
 

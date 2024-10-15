@@ -467,7 +467,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         text += "\n$\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2g}, p : " + f"{p_value:.1g}"
         legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = loc, title = Utils.remove_(func.__name__))
         legend.set_zorder(12)
-        for l in legend.legendHandles:
+        for l in legend.legend_handles:
             l.set_visible(False)
 
     if return_chi_sqr == True:
@@ -568,7 +568,7 @@ def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : st
                 text += f"\np{j}: ${best_popt[j]:.2f}\pm${best_perr[j]:.2f}"
             text += f"\nks : {k_best:.2f}, p : {p_best:.2f}"
             legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], title = best_f.__name__.replace("_", " "))
-            for l in legend.legendHandles:
+            for l in legend.legend_handles:
                 l.set_visible(False)
 
         cv.append(mean)

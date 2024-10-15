@@ -1397,7 +1397,7 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
     fractions = counts / np.sum(counts, axis = 1)[:, np.newaxis]
     if newFigure: plt.figure()
     c_norm = counts/np.sum(counts, axis = 0)
-    plt.imshow(c_norm, cmap = cmap, origin = "lower")
+    plt.imshow(c_norm, cmap = cmap, origin = "lower", vmin=0., vmax=1.)
     plt.colorbar(label = "Column normalised counts", shrink = 0.8)
 
     y_counts = np.sum(counts, axis = 1)

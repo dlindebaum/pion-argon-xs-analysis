@@ -376,15 +376,72 @@ def CalculateBatches(args):
         processing_args["threads"] = args.cpus
     return processing_args
 
+def BatchlessFormatArgs(file, args):
+    """
+    Dummy arguments which would be accepted by a function passed to
+    Proccessing.multiprocess, but with no batching (i.e. start at 0,
+    use all events)
 
-def RunProcess(ntuple_files : list[str], is_data : bool, args : argparse.Namespace, func : callable, merge : bool = True) -> list:
+    Expected use:
+    ```
+    output = func(*BatchlessFormatArgs(file, func_args))
+    ```
+    Replacing:
+    ```
+    output = Processing.mutliprocess(func, [file], args.batches, args.events, func_args, args.threads)
+    ```
+
+    Parameters
+    ----------
+    file : str
+        File path of the ntuple to be run on.
+    args : dict
+        Dictionary of arguments accessible by the function
+    
+    Returns
+    -------
+    i, file, n_events, start, selected_events, args
+    i : int
+        Dummy. 0.
+    file : str
+        Input file
+    n_events : int
+        Dummy. Numer of events in file.
+    start : int
+        Dummy. 0.
+    selected_events : NoneType
+        Dummy. None.
+    args : dict
+        Input args.
+    """
+    # get number of events, use shower merging ntuple type to supress false warnings
+    # Same method as Processing.CalculateBatches
+    total_events = ak.count(
+        Data(file, nTuple_type = Ntuple_Type.SHOWER_MERGING).eventNum)
+    print(f"{total_events=}")
+    print(f"Running batchless, setting batches to {total_events}")
+    return 0, file, total_events, 0, None, args
+
+def RunProcess(
+        ntuple_files : list[dict],
+        is_data : bool,
+        args : argparse.Namespace,
+        func : callable,
+        merge : bool = True,
+        batchless : bool = False) -> list:
     output = []
     for i in ntuple_files:
         func_args = vars(args)
         func_args["data"] = is_data
         func_args["nTuple_type"] = i["type"]
         func_args["pmom"] = i["pmom"]
-        output.extend(Processing.mutliprocess(func, [i["file"]], args.batches, args.events, func_args, args.threads))
+        if "graph" in i.keys():
+            func_args["graph"] = i["graph"]
+        if not batchless:
+            output.extend(Processing.mutliprocess(func, [i["file"]], args.batches, args.events, func_args, args.threads))
+        else:
+            output.append(timer(func)(
+                *BatchlessFormatArgs(i["file"], func_args)))
     if merge:
         output = MergeOutputs(output)
     return output
@@ -424,11 +481,21 @@ class Sample(str, Enum):
     DATA = "data"
 
 
-def ApplicationProcessing(samples : list[Sample], outdir : str, args : argparse.Namespace, func : callable, merge : bool, outname : str = "output"):
-    
+def ApplicationProcessing(
+        samples : list[Sample],
+        outdir : str,
+        args : argparse.Namespace,
+        func : callable,
+        merge : bool,
+        outname : str = "output",
+        batchless: bool = False):
+
     if (args.regen is True) or (os.path.isfile(f"{outdir}{outname}.dill") is False):
         print("Processing Ntuples")
-        outputs = {s : RunProcess(args.ntuple_files[s], s == Sample.DATA, args, func, merge) for s in samples}
+        outputs = {
+            s : RunProcess(args.ntuple_files[s], s == Sample.DATA,
+                           args, func, merge, batchless=batchless)
+            for s in samples}
         SaveObject(f"{outdir}{outname}.dill", outputs)
     else:
         print("Loading existing outputs")
@@ -834,6 +901,7 @@ class ApplicationArguments:
         for head, value in config.items():
             if head == "NTUPLE_FILES":
                 args.ntuple_files = value
+                args.has_data = "data" in value.keys()
             elif head == "REGION_IDENTIFICATION":
                 args.region_identification = RegionIdentification.regions[value["type"]] 
             elif head == "BEAM_PARTICLE_SELECTION":
@@ -901,6 +969,15 @@ class ApplicationArguments:
                 args.analysis_input = {k : v for k, v in value.items()}
             elif head == "UNFOLDING":
                 args.unfolding = {k : v for k, v in value.items()}
+            elif head == "GNN_DATA":
+                # args.gnn_model_path = str(path)
+                args.gnn_model_path = value["model_path"]
+                if "predictions" in value.keys():
+                    # args.gnn_predictions = {"mc": [np.array(shape=(N, 4)), ...],
+                    #                         "data": [np.array(shape=(N, 4)), ...]}
+                    args.gnn_predictions = {
+                        k : [LoadObject(pred) for pred in v]
+                        for k, v in value["predictions"].items()}
             else:
                 setattr(args, head, value) # allow for generic configurations in the json file
         if hasattr(args, "beam_selection"):

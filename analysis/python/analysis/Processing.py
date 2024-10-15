@@ -105,6 +105,7 @@ def GenerateFunctionArguments(files : list, nBatches : int, nEvents : int, args 
         start.append([0] + list(np.cumsum(b[:-1])))
         batches.append(b)
 
+    # [file, n_events, start, selected_events]
     inputs = [[], [], [], []]
 
     for i in range(len(files)): # create the function argument lists
