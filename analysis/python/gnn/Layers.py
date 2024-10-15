@@ -14,7 +14,7 @@ from tensorflow_gnn.graph import pool_ops
 import matplotlib.pyplot as plt
 from python.gnn import DataPreparation
 
-__version__ = "1.3.0"
+__version__ = "1.3.1"
 
 def parse_constructor(constructor: list, parameters: dict):
     """
@@ -271,6 +271,7 @@ class NormaliseHiddenFeatures(LayerConstructor):
             pfo_mean=None, pfo_std=None,
             neighbours_mean=None, neighbours_std=None,
             beam_connections_mean=None, beam_connections_std=None,
+            use_err_func=False,
             **kwargs):
         kwargs.update({"pfo_mean": pfo_mean,
                        "pfo_std": pfo_std,
@@ -286,6 +287,10 @@ class NormaliseHiddenFeatures(LayerConstructor):
         if kwargs["beam_connections_mean"] is None:
             warnings.warn("Beam connection normalisation not applied, "
                           "only valid for graphs without a beam node")
+        if use_err_func:
+            self.mapper = lambda val: tf.math.erf(val)
+        else:
+            self.mapper = lambda val: val
         super().__init__(*output_name, **kwargs)
         return
 
@@ -310,7 +315,7 @@ class NormaliseHiddenFeatures(LayerConstructor):
                 data = feats[tfgnn.HIDDEN_STATE]
                 data = ((data - kwargs["pfo_mean"])
                         / kwargs["pfo_std"])
-                feats[tfgnn.HIDDEN_STATE] = data
+                feats[tfgnn.HIDDEN_STATE] = self.mapper(data)
             return feats
         def edge_normaliser(edge_set, edge_set_name):
             feats = edge_set.get_features_dict()
@@ -318,13 +323,13 @@ class NormaliseHiddenFeatures(LayerConstructor):
                 data = feats[tfgnn.HIDDEN_STATE]
                 data = ((data - kwargs["neighbours_mean"])
                         / kwargs["neighbours_std"])
-                feats[tfgnn.HIDDEN_STATE] = data
+                feats[tfgnn.HIDDEN_STATE] = self.mapper(data)
             elif edge_set_name == "beam_connections":
                 # This is only reached if beam connections exits
                 data = feats[tfgnn.HIDDEN_STATE]
                 data = ((data - kwargs["beam_connections_mean"])
                         / kwargs["beam_connections_std"])
-                feats[tfgnn.HIDDEN_STATE] = data
+                feats[tfgnn.HIDDEN_STATE] = self.mapper(data)
             return feats
         return tfgnn.keras.layers.MapFeatures(
             node_sets_fn = pfo_normaliser,
@@ -765,7 +770,7 @@ def node_classifer_and_readout(
       if node_set_name == which_nodes:
         data = node_set[which_feature]
         if hidden is not None:
-            (depth, count) = hidden,
+            (depth, count) = hidden
             data = multi_dense_layers(
                 depth=depth, n_layers=count, **kwargs)(data)
         # No args, so no dropout etc. on classifer layer
