@@ -13,6 +13,7 @@ import awkward as ak
 import numpy as np
 
 from python.analysis import SelectionTools
+from python.gnn import Models
 
 criteria = namedtuple("criteria", ["op", "value"])
 
@@ -42,6 +43,19 @@ def CreateRegionIdentification(region_defs : dict[list], n_loose_pi : ak.Array, 
         ">=": operator.ge
     }
 
+    regions = {}
+    for n, p_c in region_defs.items():
+        defs = [ak.all([ops[vars(c)[i].op](counts[i], vars(c)[i].value) for i in counts], 0) for c in p_c]
+        regions[n] = ak.any(defs, 0)
+
+    if removed:
+        regions["uncategorised"] = ~SelectionTools.CombineMasks(regions, "or")
+
+    return regions
+
+def CreateRegionIdentificationGNN(model_path, data_paths, events):
+    
+    
     regions = {}
     for n, p_c in region_defs.items():
         defs = [ak.all([ops[vars(c)[i].op](counts[i], vars(c)[i].value) for i in counts], 0) for c in p_c]
