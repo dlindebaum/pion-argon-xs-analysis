@@ -18,6 +18,7 @@ class BDTPropertyGenerator():
             "dEdx_med": self.get_dEdX_med(),
             "dEdx_sum": self.get_dEdX_sum(),
             "dEdx_var": self.get_dEdX_var(),
+            "d3Edx3_var": self.get_d3EdX3_var(),
             "dEdx_end25%": self.get_dEdX_end(end_frac=0.25),
             "dEdx_start75%": self.get_dEdX_start(end_frac=0.25),
             "dEdx_start10%": self.get_dEdX_start(end_frac=0.9),
@@ -112,6 +113,12 @@ class BDTPropertyGenerator():
 
     def get_dEdX_var(self):
         def calc(events):
+            return ak.fill_none(
+                ak.var(events.recoParticles.track_dEdX, axis=-1), 0., axis=-1)
+        return calc
+
+    def get_d3EdX3_var(self):
+        def calc(events):
             x = events.recoParticles.residual_range
             e = events.recoParticles.track_dEdX
             dxs = x[...,1:] - x[...,:-1]
@@ -131,7 +138,16 @@ class BDTPropertyGenerator():
         return results
 
     def gen_features(self, events):
-        return self._iter_over_dict(self.prop_defs, events)
+        # Sometimes dEdX has obscene results (single spike 1e22),
+        # leading to numebrs > float 32. Clip to ensure we stay in
+        # float32 range (not that much of a problem for BDT, which
+        # does cuts)
+        results_f64 = self._iter_over_dict(self.prop_defs, events)
+        results_f32 = np.clip(results_f64,
+                              np.finfo(np.float32).min,
+                              np.finfo(np.float32).max,
+                              dtype=np.float32)
+        return results_f32
 
     def gen_truths(self, events):
         return self._iter_over_dict(self.truth_defs, events)
