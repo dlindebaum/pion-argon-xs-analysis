@@ -653,6 +653,10 @@ def classifiy_true_pfos(evts, mc_pfos=False):
     return pfos
 
 def split_pfo_option(func):
+    """
+    Decorate a function to split the results between tracks and
+    showers.
+    """
     def decorated(*args, split_pfos=None, data_type="reco", **kwargs):
         props = func(*args, **kwargs)
         if split_pfos is None:
@@ -669,6 +673,19 @@ def split_pfo_option(func):
     return decorated
 
 def make_evt_ids(events):
+    """
+    Generate an array containing information to uniqul idenitfy
+    events.
+
+    Parameters
+    ----------
+    events : Data
+        Events from which to gather IDs.
+    
+    Returns
+    np.ndarray
+        (N, 3) array of IDs.    
+    """
     to_numpy = lambda arr : np.array(arr)[:, np.newaxis].astype(np.int32)
     run_num = to_numpy(events.run)
     subrun_num = to_numpy(events.subRun)
@@ -1480,6 +1497,13 @@ def load_params_dict(dict_path):
         params = dill.load(f)
     return params
 
+def load_param_events(path):
+    if isinstance(path, dict):
+        path = path["dict_path"]
+    with open(path, "rb") as f:
+        load_params = dill.load(f)
+    return load_params["events"]
+
 
 # =====================================================================
 #            Functions to create and load TensorFlow records
@@ -1742,7 +1766,10 @@ def _get_data_only(data, label):
     """Function to grab only data when used in `Dataset.map()`"""
     return data
 
-def load_record(schema_path, record_path, no_label=False, extra_losses=None):
+def load_record(
+        schema_path, record_path,
+        no_label=False, extra_losses=None,
+        start_ind=None, n_graphs=None):
     """
     Load the specified records as TensorFlow Datasets using the schema
     in `schema_path`.
@@ -1771,6 +1798,11 @@ def load_record(schema_path, record_path, no_label=False, extra_losses=None):
         classification information to facilitate additional losses in
         the network. See Examples below for available information.
         Currently, only context information works.
+    start_ind, int, optional
+        If passed, which graph to start reading from. Default is None.
+    n_graphs : int, optional
+        If passed, number of graphs to read, else reads all graphs.
+        Default is None
     
     Returns
     -------
@@ -1802,13 +1834,19 @@ def load_record(schema_path, record_path, no_label=False, extra_losses=None):
     `beam_related`, `beam_relevant`]
     """
     decode_func = _make_decode_func(schema_path, extra_losses=extra_losses)
+    def _load_dataset(path):
+        raw = tf.data.TFRecordDataset([path])
+        if start_ind is not None:
+            raw = raw.skip(start_ind)
+        if n_graphs is not None:
+            raw = raw.take(n_graphs)
+        return raw.map(decode_func)
     if isinstance(record_path, str):
-        datasets = tf.data.TFRecordDataset([record_path]).map(decode_func)
+        datasets = _load_dataset(record_path)
         if no_label:
             datasets = datasets.map(_get_data_only)
     else: # we iterate through record paths to get multiple datasets
-        datasets = tuple(tf.data.TFRecordDataset([path]).map(decode_func)
-                         for path in record_path)
+        datasets = tuple(_load_dataset(path) for path in record_path)
         if not isinstance(no_label, bool):
             # Only remove label if the no_label is true at the index
             datasets = tuple(ds.map(_get_data_only)
@@ -1821,6 +1859,7 @@ def load_record(schema_path, record_path, no_label=False, extra_losses=None):
 
 # =====================================================================
 #                           Displaying graphs
+# W.I.P.
 
 def get_odd_circle_coords(n_points, r=1):
     extra_node = n_points%2 == 0
