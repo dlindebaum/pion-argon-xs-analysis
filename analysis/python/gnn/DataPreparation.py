@@ -26,7 +26,7 @@ def _sing_pion_def(regions):
 def _mutli_pion_def(regions):
     return regions["pion_production"]
 def _all_pion_def(regions):
-    return np.logical_and(regions["single_pion_production"],
+    return np.logical_or(regions["single_pion_production"],
                           regions["pion_production"])
 def _all_bkg_def(regions):
     return np.logical_not(regions["charge_exchange"])
@@ -1722,13 +1722,17 @@ def _make_decode_func(schema_path, extra_losses=None):
     else:
         def append_extra_losses(graph, label):
             labels = [label]
-            context_values = ["mc_pions", "mc_photons", "mc_pi0s", "bt_pions",
-                              "bt_photons", "bt_pi0s", "reco_class"]
+            context_values = [
+                "mc_pions", "mc_photons", "mc_pi0s",
+                "bt_pions", "bt_photons", "bt_pi0s", "reco_class"]
             pfo_values = [
                 "beam_daughter", "beam_granddaughter", "pi0_granddaughter",
                 "beam_related", "beam_relevant", "pion", "photon",
                 "beam_pion", "beam_photon"]
             neighbour_values = ["true_pi0", "beam_pi0"]
+            beam_conn_values = [
+                "true_daughter", "true_granddaughter", "pi0_granddaughter",
+                "beam_related", "beam_relevant"]
             new_context = graph.context.get_features_dict()
             # new_nodes = graph.
             # new_edges = graph.
@@ -1746,6 +1750,9 @@ def _make_decode_func(schema_path, extra_losses=None):
                     info = graph.edge_sets["neighbours"].features[loss]
                     # info = tfgnn.keras.layers.Readout(
                     #     edge_set_name="neighbours", feature_name=loss)(graph)
+                    labels.append(info)
+                elif loss in beam_conn_values:
+                    info = graph.edge_sets["beam_connections"].features[loss]
                     labels.append(info)
                 else:
                     raise ValueError(f"Unknown loss: {loss}")
