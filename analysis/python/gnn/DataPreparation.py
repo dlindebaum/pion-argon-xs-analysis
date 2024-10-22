@@ -29,7 +29,7 @@ def _all_pion_def(regions):
     return np.logical_or(regions["single_pion_production"],
                           regions["pion_production"])
 def _all_bkg_def(regions):
-    return np.logical_not(regions["charge_exchange"])
+    return np.logical_or(regions["charge_exchange"])
 default_classification_definitions = {
     "absorption": _abs_def,
     "charge_exchange": _cex_def,
@@ -1497,12 +1497,23 @@ def load_params_dict(dict_path):
         params = dill.load(f)
     return params
 
-def load_param_events(path):
+def load_param_events(path, new_ntuples_folder=None, depth=-2):
     if isinstance(path, dict):
         path = path["dict_path"]
     with open(path, "rb") as f:
         load_params = dill.load(f)
-    return load_params["events"]
+    if new_ntuples_folder is None:
+        return load_params["events"]
+    else:
+        evts = load_params["events"]
+        old_path = evts.io.filename
+        if new_ntuples_folder[-1] == "/":
+            new_ntuples_folder = new_ntuples_folder[:-1]
+        new_path = "/".join(
+            [new_ntuples_folder] + old_path.split("/")[depth:])
+        evts.io.filename = new_path
+        evts.filename = new_path
+        return evts
 
 
 # =====================================================================
