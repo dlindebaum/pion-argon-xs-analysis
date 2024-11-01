@@ -792,7 +792,7 @@ class DistGenCorr():
             raise ValueError("This instance does not contain data truth.")
         if case == "identity":
             shaped = 1
-        elif p_case == "truth_array":
+        elif case == "truth_array":
             shaped = self._reshape_to_bins(param)
         else: # "number", "joint_array", or "bins_array"
             shaped = param
@@ -1653,13 +1653,14 @@ def make_pulls(
         pull_results,
         plot_config=None,
         return_errors=False,
-        save_name=None):
+        save_name=None,
+        labels=["Abs.", "CEx.", "1 pi", "Multi."]):
     # Dumb function, shouldn't be so much repeat in return_errors part
     test_stat = (pull_results[1] - pull_results[0]) / pull_results[2]
     if plot_config is not None:
         fig, axes = plot_config.setup_figure(2, 2, figsize=(20, 12))
     pull_fits = []
-    for i, lab in enumerate(["Abs.", "CEx.", "1 pi", "Multi."]):
+    for i, lab in enumerate(labels):
         mu, sig = scistats.norm.fit(test_stat[i])
         pull_fits.append([mu, sig])
         if plot_config is not None:
@@ -1681,7 +1682,7 @@ def make_pulls(
         if plot_config is not None:
             fig, axes = plot_config.setup_figure(2, 2, figsize=(20, 12))
         fit_errs = []
-        for i, lab in enumerate(["Abs.", "CEx.", "1 pi", "Multi."]):
+        for i, lab in enumerate(labels):
             frac_errs = (pull_results[1][i]/pull_results[0][i])-1
             mu_unc, sig_unc = scistats.norm.fit(pull_results[2][i])
             mu_frac, sig_frac = scistats.norm.fit(frac_errs)
@@ -1708,7 +1709,7 @@ def make_pulls(
         if plot_config is not None:
             plot_config.end_plot(add_ending(save_name, "frac_err"))
             fig, axes = plot_config.setup_figure(2, 2, figsize=(20, 12))
-        for i, lab in enumerate(["Abs.", "CEx.", "1 pi", "Multi."]):
+        for i, lab in enumerate(labels):
             mu_unc, sig_unc = fit_errs[i][0]
             if plot_config is not None:
                 ax = axes[1-(i//2), i%2]
@@ -1743,14 +1744,14 @@ def pull_study(
         if np.any(good_mask):
             print("Plotting full predictions:")
             make_pulls(
-                pulls, plot_config=plot_config,
+                pulls, plot_config=plot_config, labels=generator.labels,
                 return_errors=return_errors, save_name=save_name)
             print("Plotting prediction with no 0s:")
             pulls = pulls[:, :, good_mask]
         else:
             print("No good fits found, so using all fits.")
     return make_pulls(
-        pulls, plot_config=plot_config,
+        pulls, plot_config=plot_config, labels=generator.labels,
         return_errors=return_errors, save_name=save_name)
 
 def _sqrt_func(x, a, b, c):
@@ -1761,13 +1762,13 @@ def plot_and_fit_range(
         fits, errs=None,
         fit_sqrt=True, main_ax=None,
         plot_config=None, title=None,
-        save_name=None):
+        save_name=None, labels=["Abs.", "CEx.", "1 pi", "Multi."]):
     if plot_config is None:
         plot_config = Plots.PlotConfig()
     fig, axes = plot_config.setup_figure()
     if title is not None:
         fig.suptitle(title)
-    for i, line in enumerate(["Abs.", "CEx.", "1 pi", "Multi."]):
+    for i, line in enumerate(labels):
         plt.plot(x, fits[:, i, 0],
                 **plot_config.gen_kwargs(index=i, label=f"{line}"))
         lab = f"Pull \u03C3/{np.sqrt(n_pulls):.1f}" if i==0 else None
@@ -1793,7 +1794,7 @@ def plot_and_fit_range(
         fig, axes = plot_config.setup_figure()
         if title is not None:
             fig.suptitle(title)
-        for i, line in enumerate(["Abs.", "CEx.", "1 pi", "Multi."]):
+        for i, line in enumerate(labels):
             plt.plot(x, errs[:, i, 0, 0],
                     **plot_config.gen_kwargs(index=i, label=f"{line}"))
             plt.fill_between(
@@ -1806,7 +1807,7 @@ def plot_and_fit_range(
         fig, axes = plot_config.setup_figure()
         if title is not None:
             fig.suptitle(title)
-        for i, line in enumerate(["Abs.", "CEx.", "1 pi", "Multi."]):
+        for i, line in enumerate(labels):
             plt.plot(x, errs[:, i, 2, 0],
                     **plot_config.gen_kwargs(index=i, label=f"{line}"))
             plt.fill_between(
@@ -1819,7 +1820,7 @@ def plot_and_fit_range(
         fig, axes = plot_config.setup_figure()
         if title is not None:
             fig.suptitle(title)
-        for i, line in enumerate(["Abs.", "CEx.", "1 pi", "Multi."]):
+        for i, line in enumerate(labels):
             plt.plot(x, errs[:, i, 1, 0],
                     **plot_config.gen_kwargs(index=i, label=f"{line}"))
             plt.fill_between(
@@ -1832,7 +1833,7 @@ def plot_and_fit_range(
         fig, axes = plot_config.setup_figure()
         if title is not None:
             fig.suptitle(title)
-        for i, line in enumerate(["Abs.", "CEx.", "1 pi", "Multi."]):
+        for i, line in enumerate(labels):
             plt.plot(x, errs[:, i, 1, 0],
                     **plot_config.gen_kwargs(index=i, label=f"{line}"))
             lab = f"Frac err. \u03C3/{np.sqrt(n_pulls):.1f}" if i==0 else None
@@ -1874,7 +1875,7 @@ def robustness_test(
         fit, err = make_pulls(
             pulls[:, :, np.logical_not(bad_pull_mask)],
             plot_config=pull_conf, return_errors=True,
-            save_name=save_name)
+            save_name=save_name, labels=generator.labels)
         fits.append(fit)
         errs.append(err)
     fits = np.array(fits)
@@ -1882,7 +1883,8 @@ def robustness_test(
     plot_and_fit_range(
         changing_params, param_name, n_pulls, fits, errs,
         title=title, fit_sqrt=fit_sqrt,
-        plot_config=plot_config, save_name=save_name)
+        plot_config=plot_config, save_name=save_name,
+        labels=generator.labels)
     if plot_missing:
         plot_config.setup_figure(title=title)
         plt.plot(
@@ -1973,13 +1975,13 @@ def make_rand_inverse_update(
 
 def gen_process_updater(
         baseline_val, process_index, which_info,
-        which_process="sample", reference=True,
+        n_regions=4, which_process="sample", reference=True,
         distribute_counts=True, distribute_weights=False):
     '''Which process: "sample", "weight", "inverse"'''
     if which_info not in  ["template", "data"]:
         raise Exception(f"Unknown information {which_info}")
-    baseline = np.full(4, baseline_val)
-    process = np.zeros(4)
+    baseline = np.full(n_regions, baseline_val)
+    process = np.zeros(n_regions)
     process[process_index]= 1.
     if which_process == "sample":
         func = make_rand_sample_update(
