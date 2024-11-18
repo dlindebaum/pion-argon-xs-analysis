@@ -7,6 +7,19 @@ import numpy as np
 import pandas as pd
 
 
+region_definitions = {
+    "split_pion_pred"}
+
+def create_regions(pi0_counts, pi_charged_counts):
+    regions_dict = {
+        "absorption": np.logical_and(pi0_counts==0, pi_charged_counts==0),
+        "charge_exchange": np.logical_and(pi0_counts==1, pi_charged_counts==0),
+        "pion_prod_0_pi0": np.logical_and(pi0_counts==0, pi_charged_counts>=1),
+        "pion_prod_1_pi0": np.logical_and(pi0_counts==1, pi_charged_counts>=1),
+        "pion_prod_>1_pi0": pi0_counts>=2
+    }
+
+
 #######################################################################
 #######################################################################
 ##########                   EVENT TAGGING                   ##########

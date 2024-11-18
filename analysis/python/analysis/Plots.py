@@ -47,6 +47,7 @@ class PlotConfig():
         self.LEGEND_SIZE_DOUBLE = 11
         self.TITLE_SIZE = 28
         self.TITLE_SIZE_DOUBLE = 22
+        self.TITLE = None
         self.AX_ALPHA = 0.5
         self.TEXT_SIZE = 18
         self.DPI = 300
@@ -119,6 +120,8 @@ class PlotConfig():
 
         if title is not None:
             plt.title(title, fontdict={"fontsize": self.TITLE_SIZE})
+        elif self.TITLE is not None:
+            plt.title(self.TITLE, fontdict={"fontsize": self.TITLE_SIZE})
 
         if not isinstance(axs, np.ndarray):
             axs = np.array([axs])

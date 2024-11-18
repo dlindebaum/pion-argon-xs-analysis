@@ -15,7 +15,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from rich import print
-from python.analysis import Master, BeamParticleSelection, vector, Plots, cross_section, Fitting
+from python.analysis import (
+    Master, BeamParticleSelection, vector, Plots, cross_section, Fitting, Processing)
 
 def Fit_Vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
     """ Gaussian fit to each component in the vector.
@@ -116,7 +117,7 @@ def MakePlots(output_mc : dict[ak.Array], mc_fits : dict, output_data : dict[ak.
     return
 
 
-def Fits(args : cross_section.argparse.Namespace, output : dict, out : str, sample_name : str):
+def Fits(args : argparse.Namespace, output : dict, out : str, sample_name : str):
     start_pos = output["start_pos"]
     beam_dir = output["beam_dir"]
     mu, sigma, mu_err, sigma_err = Fit_Vector(start_pos, 100)
@@ -195,7 +196,7 @@ def main(args):
     outdir = args.out + "beam_quality/"
     os.makedirs(outdir, exist_ok = True)
 
-    outputs = cross_section.ApplicationProcessing(list(args.ntuple_files.keys()), outdir, args, run, True)
+    outputs = Processing.ApplicationProcessing(list(args.ntuple_files.keys()), outdir, args, run, True)
 
     fit_values = {s : Fits(args, outputs[s], outdir, s) for s in outputs}
 

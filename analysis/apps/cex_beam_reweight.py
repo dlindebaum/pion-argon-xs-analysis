@@ -7,12 +7,13 @@ Author: Shyam Bhuller
 Description: reweighting parameters for beam momentum.
 """
 import os
+import argparse
 
 import numpy as np
 
 from rich import print
 
-from python.analysis import cross_section, Plots, SelectionTools
+from python.analysis import cross_section, Plots, SelectionTools, Processing
 
 
 def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.array = np.array([0.75, 1.25]), book : Plots.PlotBook = Plots.PlotBook.null):
@@ -34,14 +35,29 @@ def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.arra
     book.Save()
 
     results = {}
-    for f in [cross_section.Fitting.gaussian, cross_section.Fitting.student_t, cross_section.Fitting.poly2d, cross_section.Fitting.crystal_ball, cross_section.Fitting.double_crystal_ball, cross_section.Fitting.double_gaussian]:
+    for f in [
+            cross_section.Fitting.gaussian,
+            cross_section.Fitting.student_t,
+            cross_section.Fitting.poly2d,
+            cross_section.Fitting.crystal_ball,
+            cross_section.Fitting.double_crystal_ball,
+            cross_section.Fitting.double_gaussian]:
         Plots.plt.figure()
-        results[f.__name__] = cross_section.Fitting.Fit(ratio_plot.x[ratio > 0], ratio[ratio > 0], ratio_err[ratio > 0], f, plot = True, xlabel = "$P_{inst}^{reco}$(MeV)", ylabel = "$r$")
+        results[f.__name__] = cross_section.Fitting.Fit(
+            ratio_plot.x[ratio > 0], ratio[ratio > 0], ratio_err[ratio > 0],
+            f, plot = True, xlabel = "$P_{inst}^{reco}$(MeV)", ylabel = "$r$")
         book.Save()
     return results
 
 
-def ReWeightResults(sideband_mc : dict, sideband_data : dict, args : cross_section.argparse.Namespace, bins : int, reweight_results : dict, reweight_func : str, book : Plots.PlotBook = Plots.PlotBook.null):
+def ReWeightResults(
+        sideband_mc : dict,
+        sideband_data : dict,
+        args : argparse.Namespace,
+        bins : int,
+        reweight_results : dict,
+        reweight_func : str,
+        book : Plots.PlotBook = Plots.PlotBook.null):
     weights = cross_section.RatioWeights(np.array(sideband_mc["p_inst"]), reweight_func, reweight_results[reweight_func][0], args.beam_reweight["strength"])
 
     plot_range = [args.beam_momentum * 0.75, args.beam_momentum * 1.25]
@@ -70,7 +86,7 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
 
     sample = "data" if args["data"] else "mc"
 
-    selections = args["selection_masks"][sample]
+    selections = args["beam_selection_masks"][sample]
 
     if "fiducial" in selections:
         if len(selections["fiducial"]) > 0:
@@ -135,7 +151,7 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
 
 
 @cross_section.timer
-def main(args : cross_section.argparse.Namespace):
+def main(args : argparse.Namespace):
     cross_section.PlotStyler.SetPlotStyle(extend_colors = True, dpi = 100)
     out = args.out + "beam_reweight/"
     os.makedirs(out, exist_ok = True)
@@ -144,7 +160,7 @@ def main(args : cross_section.argparse.Namespace):
     args.events = None
     args.threads = 1
 
-    outputs = cross_section.ApplicationProcessing(list(args.ntuple_files.keys()), out, args, run, True)
+    outputs = Processing.ApplicationProcessing(list(args.ntuple_files.keys()), out, args, run, True)
 
     for o in outputs:
         for t in outputs[o]["table"]:
@@ -177,7 +193,7 @@ def main(args : cross_section.argparse.Namespace):
     return
 
 if __name__ == "__main__":
-    args = cross_section.argparse.ArgumentParser("Calculates reweighting parameters for beam momentum.")
+    args = argparse.ArgumentParser("Calculates reweighting parameters for beam momentum.")
     cross_section.ApplicationArguments.Config(args, True)
     cross_section.ApplicationArguments.Output(args)
     cross_section.ApplicationArguments.Regen(args)

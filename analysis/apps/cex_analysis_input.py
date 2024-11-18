@@ -7,142 +7,41 @@ Author: Shyam Bhuller
 
 Description: Create analysis input files from Ntuples.
 """
+import argparse
 import awkward as ak
 import numpy as np
+import warnings
 
-from python.analysis import cross_section, SelectionTools, RegionIdentification, PFOSelection
+from python.analysis import (
+    Master, cross_section, SelectionTools, RegionIdentification,
+    PFOSelection, Processing, EnergyTools, Utils)
+from python.gnn.DataPreparation import make_evt_ids
+from python.analysis.AnalysisInputs import AnalysisInput, AnalysisInputGNN
+from apps.cex_beam_selection_studies import BeamPionSelection
+from apps.cex_region_selection_studies import RegionSelection
+from apps.cex_gnn_predictions import get_gnn_results, get_truth_regions
 
 from rich import print
 
-
-def args_to_dict(args : cross_section.argparse.Namespace | dict) -> dict:
-    if type(args) == cross_section.argparse.Namespace:
-        args_c = vars(args)
-    else:
-        args_c = args
-
-    return args_c
-
-
-@cross_section.timer
-def BeamPionSelection(events : cross_section.Data, args : cross_section.argparse.Namespace | dict, is_mc : bool) -> cross_section.Data:
-    """ Apply beam pion selection to ntuples.
-
-    Args:
-        events (cross_section.Data): analysis ntuple
-        args (cross_section.argparse.Namespace): analysis configuration
-        is_mc (bool): is the ntuple mc or data?
-
-    Returns:
-        cross_section.Data: selected events.
-    """
-
-    args_c = args_to_dict(args)
-
-    events_copy = events.Filter(returnCopy = True)
-    if is_mc:
-        selection_args = "mc_arguments"
-        sample = "mc"
-    else:
-        selection_args = "data_arguments"
-        sample = "data"
-
-    if "selection_masks" in args:
-        masks = args_c["selection_masks"][sample]
-        if ("fiducial" in masks) and (len(masks["fiducial"]) > 0):
-            mask = SelectionTools.CombineMasks(masks["fiducial"][events.filename])
-            events_copy.Filter([mask], [mask])
-        mask = SelectionTools.CombineMasks(masks["beam"][events.filename])
-        events_copy.Filter([mask], [mask])
-    else:
-        for s in args_c["beam_selection"]["selections"]:
-            mask = args_c["beam_selection"]["selections"][s](events_copy, **args_c["beam_selection"][selection_args][s])
-            events_copy.Filter([mask], [mask])
-            print(events_copy.cutTable.get_table())
-
-    if "valid_pfo_selection" in args_c:
-        if args_c["valid_pfo_selection"] is True:
-            if "selection_masks" in args:
-                events_copy.Filter([args_c["selection_masks"][sample]['null_pfo'][events.filename]['ValidPFOSelection']]) # apply PFO preselection here
-            else:
-                events_copy.Filter(PFOSelection.GoodShowerSelection(events))
-    return events_copy
-
-
-@cross_section.timer
-def RegionSelection(events : cross_section.Data, args : cross_section.argparse.Namespace | dict, is_mc : bool, region_type : str = None, removed : bool = False) -> dict[np.ndarray]:
-    """ Get reco and true regions (if possible) for ntuple.
-
-    Args:
-        events (Master.Data): events after beam pion selection
-        args (argparse.Namespace): application arguements
-        is_mc (bool): if ntuple is MC or Data.
-
-    Returns:
-        tuple[dict, dict]: regions
-    """
-
-    args_c = args_to_dict(args)
-
-    if is_mc:
-        key = "mc"
-    else:
-        key = "data"
-
-    selection_masks = args_c["selection_masks"][key]
-
-    counts = {}
-    for obj in selection_masks:
-        if obj in ["beam", "null_pfo", "fiducial"]: continue
-        counts[f"n_{obj}"] = SelectionTools.GetPFOCounts(selection_masks[obj][events.filename])
-    if region_type is None:
-        region_def = args_c["region_identification"]
-    else:
-        region_def = RegionIdentification.regions[region_type]
-    reco_regions = RegionIdentification.CreateRegionIdentification(region_def, **counts, removed = removed)
-
-
-    if is_mc:
-        events_copy = events.Filter(returnCopy = True)
-        
-        if "fiducial" in selection_masks and (len(selection_masks["fiducial"]) > 0):
-            mask = SelectionTools.CombineMasks(selection_masks["fiducial"][events_copy.filename])
-            events_copy.Filter([mask], [mask])
-
-        # is_pip = events_copy.trueParticles.pdg[:, 0] == 211
-
-        mask = SelectionTools.CombineMasks(selection_masks["beam"][events_copy.filename])
-
-        n_pi_true, n_pi0_true = GetTruePionCounts(events_copy, args_c["pi_KE_lim"])
-        n_pi_true = n_pi_true[mask]
-        n_pi0_true = n_pi0_true[mask]
-        # is_pip = is_pip[mask]
-        true_regions = RegionIdentification.TrueRegions(n_pi0_true, n_pi_true)
-        for k in true_regions:
-            true_regions[k] = true_regions[k]# & (is_pip)
-        for k in reco_regions:
-            reco_regions[k] = reco_regions[k]# & (is_pip)
-        return reco_regions, true_regions
-    else:
-        return reco_regions
-
-
-def CreateAnalysisInput(sample : cross_section.Data, args : cross_section.argparse.Namespace | dict, is_mc : bool) -> cross_section.AnalysisInput:
+def CreateAnalysisInput(
+        sample : Master.Data,
+        args : argparse.Namespace | dict,
+        is_mc : bool) -> AnalysisInput:
     """ Create analysis input from ntuple sample
 
     Args:
-        sample (cross_section.Data): sample
-        args (cross_section.argparse.Namespace): analysis configurations
+        sample (Master.Data): sample
+        args (argparse.Namespace): analysis configurations
         is_mc (bool): is the sample mc?
 
     Returns:
-        cross_section.AnalysisInput: analysis input.
+        AnalysisInputs.AnalysisInput: analysis input.
     """
-    args_c = args_to_dict(args)
+    args_c = Utils.args_to_dict(args)
 
     if type(sample) == cross_section.Toy:
-        ai = cross_section.AnalysisInput.CreateAnalysisInputToy(sample)
-    elif type(sample) == cross_section.Data:
+        ai = AnalysisInput.CreateAnalysisInputToy(sample)
+    elif type(sample) == Master.Data:
         sample_selected = BeamPionSelection(sample, args_c, is_mc)
         if is_mc:
             reco_regions, true_regions = RegionSelection(sample, args_c, True)
@@ -151,16 +50,73 @@ def CreateAnalysisInput(sample : cross_section.Data, args : cross_section.argpar
             reco_regions = RegionSelection(sample, args_c, False)
             true_regions = None
             reweight_params = None
-        ai = cross_section.AnalysisInput.CreateAnalysisInputNtuple(sample_selected, args_c["upstream_loss_correction_params"]["value"], reco_regions, true_regions, reweight_params, args_c["beam_reweight"]["strength"], args_c["fiducial_volume"], args_c["upstream_loss_response"])
+        ai = AnalysisInput.CreateAnalysisInputNtuple(
+            sample_selected,
+            args_c["upstream_loss_correction_params"]["value"],
+            reco_regions,
+            true_regions,
+            reweight_params,
+            args_c["beam_reweight"]["strength"],
+            args_c["fiducial_volume"],
+            args_c["upstream_loss_response"])
     else:
         raise Exception(f"object type {type(sample)} not a valid sample")
     return ai
 
 
-def GetTruePionCounts(events : cross_section.Data, ke_lim : float = 0):
+def CreateGNNAnalysisInput(
+        sample : Master.Data,
+        args : argparse.Namespace | dict,
+        is_mc : bool) -> AnalysisInput:
+    """ Create analysis input from ntuple sample
+
+    Args:
+        sample (Master.Data): sample
+        args (argparse.Namespace): analysis configurations
+        is_mc (bool): is the sample mc?
+
+    Returns:
+        AnalysisInputs.AnalysisInput: analysis input.
+    """
+    args_c = Utils.args_to_dict(args)
+
+    if args_c["train_sample"]:
+        return None
+
+    if type(sample) == cross_section.Toy:
+        raise NotImplementedError("Not implemented GNN toys")
+    elif type(sample) == Master.Data:
+        sample_selected = BeamPionSelection(sample, args_c, is_mc)
+        gnn_predictions, ids = get_gnn_results(sample, args_c, is_mc)
+        # Redundant, checked by get_gnn_results, but very bad if wrong
+        if not np.all(make_evt_ids(sample_selected) == ids):
+            raise Exception("Cannot match predictions to event IDs, "
+                            + f"file: {sample_selected.filename}")
+        if is_mc:
+            true_regions = get_truth_regions(sample, args_c)
+            reweight_params = [args_c["beam_reweight"]["params"][k]["value"] for k in args_c["beam_reweight"]["params"]]
+        else:
+            true_regions = None
+            reweight_params = None
+        ai = AnalysisInputGNN.CreateAnalysisInputNtuple(
+            sample_selected,
+            args_c["upstream_loss_correction_params"]["value"],
+            gnn_predictions,
+            args_c["gnn_region_labels"],
+            true_regions,
+            reweight_params,
+            args_c["beam_reweight"]["strength"],
+            args_c["fiducial_volume"],
+            args_c["upstream_loss_response"])
+    else:
+        raise Exception(f"object type {type(sample)} not a valid sample")
+    return ai
+
+
+def GetTruePionCounts(events : Master.Data, ke_lim : float = 0):
     n_pi_true = (events.trueParticles.number != 1) & (abs(events.trueParticles.pdg) == 211) & (events.trueParticles.mother == 1)
 
-    ke = cross_section.KE(cross_section.vector.magnitude(events.trueParticles.momentum), cross_section.Particle.from_pdgid(211).mass)
+    ke = EnergyTools.KE(cross_section.vector.magnitude(events.trueParticles.momentum), cross_section.Particle.from_pdgid(211).mass)
 
     n_pi_true = ak.sum(n_pi_true & (ke > ke_lim), axis = -1)
     n_pi0_true = events.trueParticles.nPi0
@@ -168,8 +124,10 @@ def GetTruePionCounts(events : cross_section.Data, ke_lim : float = 0):
     return n_pi_true, n_pi0_true
 
 
-def CreateAnalysisInputMCTrueBeam(mc : cross_section.Data, args : cross_section.argparse.Namespace | dict):
-    args_c = args_to_dict(args)
+def CreateAnalysisInputMCTrueBeam(
+        mc : Master.Data,
+        args : argparse.Namespace | dict):
+    args_c = Utils.args_to_dict(args)
 
     is_pip = mc.trueParticles.pdg[:, 0] == 211
     masks = [is_pip]
@@ -189,16 +147,32 @@ def CreateAnalysisInputMCTrueBeam(mc : cross_section.Data, args : cross_section.
     n_pi_true, n_pi0_true = GetTruePionCounts(mc_true_beam, args_c["pi_KE_lim"])
     true_regions = RegionIdentification.TrueRegions(n_pi0_true, n_pi_true)
 
-    return cross_section.AnalysisInput.CreateAnalysisInputNtuple(mc_true_beam, args_c["upstream_loss_correction_params"]["value"], reco_regions, true_regions, [args["beam_reweight"]["params"][k]["value"] for k in args_c["beam_reweight"]["params"]], args_c["beam_reweight"]["strength"], upstream_loss_func = args_c["upstream_loss_response"])
+    return AnalysisInput.CreateAnalysisInputNtuple(
+        mc_true_beam,
+        args_c["upstream_loss_correction_params"]["value"],
+        reco_regions,
+        true_regions,
+        [args_c["beam_reweight"]["params"][k]["value"]
+         for k in args_c["beam_reweight"]["params"]],
+        args_c["beam_reweight"]["strength"],
+        upstream_loss_func = args_c["upstream_loss_response"])
 
 def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
-    events = cross_section.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
-
-    analysis_input_s = CreateAnalysisInput(events, args, not args["data"])
-    if args["data"] == False:
-        analysis_input_cheated = CreateAnalysisInputMCTrueBeam(events, args) # truth beam (reco regions won't work)
+    events = Master.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
+    if args["gnn_do_predict"]:
+        analysis_input_s = CreateGNNAnalysisInput(events, args, not args["data"])    
+        if args["data"] == False:
+            # analysis_input_cheated = CreateAnalysisInputMCTrueBeam(events, args) # truth beam (reco regions won't work)
+            warnings.warn("Not generated true beam graphs, does not have cheat beam information")
+            analysis_input_cheated = None
+        else:
+            analysis_input_cheated = None
     else:
-        analysis_input_cheated = None
+        analysis_input_s = CreateAnalysisInput(events, args, not args["data"])
+        if args["data"] == False:
+            analysis_input_cheated = CreateAnalysisInputMCTrueBeam(events, args) # truth beam (reco regions won't work)
+        else:
+            analysis_input_cheated = None
     return {"selected" : analysis_input_s, "cheated" : analysis_input_cheated}
 
 
@@ -210,15 +184,21 @@ def main(args):
     args.events = None
     args.threads = 1
 
-    output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run, False)
-    output_data = cross_section.RunProcess(args.ntuple_files["data"], True, args, run, False)
+    output_mc = Processing.RunProcess(args.ntuple_files["mc"], False, args, run, False)
+    output_data = Processing.RunProcess(args.ntuple_files["data"], True, args, run, False)
 
-    ai_mc_selected = cross_section.AnalysisInput.Concatenate([mc["selected"] for mc in output_mc])
-    ai_mc_cheated = cross_section.AnalysisInput.Concatenate([mc["cheated"] for mc in output_mc])
+    if args.gnn_do_predict:
+        ai_type = AnalysisInputGNN
+    else:
+        ai_type= AnalysisInput
+    ai_mc_selected = ai_type.Concatenate([mc["selected"] for mc in output_mc])
+    cheat_out = [mc["cheated"] for mc in output_mc if mc["cheated"] is not None]
+    if len(cheat_out) != 0:
+        ai_mc_cheated = ai_type.Concatenate(cheat_out)
+        ai_mc_cheated.ToFile(f"{out}analysis_input_mc_cheated.dill")
+    
+    ai_data_selected = ai_type.Concatenate([data["selected"] for data in output_data])
 
-    ai_data_selected = cross_section.AnalysisInput.Concatenate([data["selected"] for data in output_data])
-
-    ai_mc_cheated.ToFile(f"{out}analysis_input_mc_cheated.dill")
     ai_mc_selected.ToFile(f"{out}analysis_input_mc_selected.dill")
     ai_data_selected.ToFile(f"{out}analysis_input_data_selected.dill")
     return
@@ -226,7 +206,7 @@ def main(args):
 
 if __name__ == "__main__":
 
-    parser = cross_section.argparse.ArgumentParser("Create analysis input files from Ntuples.")
+    parser = argparse.ArgumentParser("Create analysis input files from Ntuples.")
     cross_section.ApplicationArguments.Config(parser)
     cross_section.ApplicationArguments.Output(parser)
 

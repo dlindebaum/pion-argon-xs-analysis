@@ -17,7 +17,9 @@ import scipy.stats as stats
 
 from alive_progress import alive_bar
 
-from python.analysis import cross_section, Master, Plots, Tags, SelectionTools, RegionIdentification
+from python.analysis import (
+    cross_section, Master, Plots, Tags, SelectionTools,
+    RegionIdentification, Processing, EnergyTools)
 
 from apps.cex_analysis_input import RegionSelection, BeamPionSelection
 
@@ -36,10 +38,10 @@ def ComputeQuantities(mc : Master.Data, args : dict) -> dict[dict, dict]:
         dict[dict, dict]: dictionary of quantities, one for reco and truth.
     """
     with alive_bar(title = "computng reco quantities") as bar:
-        reco_upstream_loss = cross_section.UpstreamEnergyLoss(cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass), args["upstream_loss_correction_params"]["value"], args["upstream_loss_response"])
+        reco_upstream_loss = EnergyTools.UpstreamEnergyLoss(EnergyTools.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass), args["upstream_loss_correction_params"]["value"], args["upstream_loss_response"])
         
-        reco_KE_ff = cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass) - reco_upstream_loss
-        reco_KE_int = reco_KE_ff - cross_section.RecoDepositedEnergy(mc, reco_KE_ff, "bb")
+        reco_KE_ff = EnergyTools.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass) - reco_upstream_loss
+        reco_KE_int = reco_KE_ff - EnergyTools.RecoDepositedEnergy(mc, reco_KE_ff, "bb")
         reco_track_length = mc.recoParticles.beam_track_length
 
     with alive_bar(title = "computng true quantities") as bar:
@@ -398,8 +400,8 @@ def main(args : argparse.Namespace):
         "z_int" : "$l^{res,MC}$ (cm)"
     }
 
-    # output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
-    output_mc = cross_section.ApplicationProcessing(["mc"], out, args, run, True)["mc"]
+    # output_mc = Processing.RunProcess(args.ntuple_files["mc"], False, args, run)
+    output_mc = Processing.ApplicationProcessing(["mc"], out, args, run, True)["mc"]
 
     print(f"{output_mc=}")
 

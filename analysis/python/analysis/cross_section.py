@@ -12,7 +12,6 @@ import os
 
 from collections import namedtuple
 from dataclasses import dataclass
-from enum import Enum
 
 import awkward as ak
 import cabinetry
@@ -26,9 +25,14 @@ from particle import Particle
 from scipy.interpolate import interp1d, UnivariateSpline
 from scipy.stats import chi2
 
-from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, RegionIdentification, Processing
-from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer, IO
+from python.analysis import (
+    BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, EnergyTools,
+    Fitting, Plots, vector, Tags, RegionIdentification, Processing, Slicing)
+from python.analysis.Master import (
+    LoadConfiguration, LoadObject, SaveObject, SaveConfiguration,
+    ReadHDF5, Data, Ntuple_Type, timer, IO)
 from python.analysis.Utils import *
+from python.analysis.AnalysisInputs import AnalysisInput, AnalysisInputGNN
 
 GEANT_XS = os.environ["PYTHONPATH"] + "/data/g4_xs_pi_KE_100.root"
 
@@ -317,192 +321,6 @@ class PlotStyler:
             Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", Plots.matplotlib.cm.get_cmap("tab20").colors)})
         return
 
-
-def SetPlotStyle(extend_colors : bool = False, custom_colors : list = None, dpi : int = 300, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):
-    Plots.plt.style.use("default") # first load the default to reset any previous changes made by other styles
-    Plots.plt.style.use('ggplot')
-    Plots.plt.rcParams.update({'patch.linewidth': 1})
-    Plots.plt.rcParams.update({'font.size': font_scale * 10})
-    Plots.plt.rcParams.update({"axes.titlecolor" : "#555555"})
-    Plots.plt.rcParams.update({"axes.titlesize" : font_scale * 12})
-    Plots.plt.rcParams['figure.dpi'] = dpi
-    Plots.plt.rcParams['legend.fontsize'] = "small"
-    Plots.plt.rcParams["font.family"] = font_style
-
-    Plots.plt.rc('text.latex', preamble=r"\\usepackage{amsmath}")
-    if custom_colors:
-        Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", custom_colors)})
-    if dark:
-        l_2 = [
-        Plots.matplotlib.cm.get_cmap("tab20c").colors[0],
-        Plots.matplotlib.cm.get_cmap("tab20c").colors[8],
-        Plots.matplotlib.cm.get_cmap("tab20b").colors[13],
-        Plots.matplotlib.cm.get_cmap("tab20b").colors[0],
-        Plots.matplotlib.cm.get_cmap("tab20b").colors[17],
-        Plots.matplotlib.cm.get_cmap("tab20b").colors[4],
-        Plots.matplotlib.cm.get_cmap("tab20c").colors[12],
-        Plots.matplotlib.cm.get_cmap("tab20c").colors[16],
-        ]
-        Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", l_2)})
-    if extend_colors:
-        Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", Plots.matplotlib.cm.get_cmap("tab20").colors)})
-
-
-def file_len(file : str):
-    return len(IO(file).Get(["EventID", "event"]))
-
-
-def CalculateBatches(args):
-    if "data" in args.ntuple_files:
-        n_data = [file_len(file["file"]) for file in args.ntuple_files["data"]]
-    else:
-        n_data = []
-
-    if len(n_data) == 0:
-        print("no data file was specified, 'normalisation', 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
-
-    n_mc = [file_len(file["file"]) for file in args.ntuple_files["mc"]] # must have MC
-
-    processing_args = {"events" : None, "batches" : None, "threads" : None}
-
-    # pass multiprocessing args
-    if max([*n_data, *n_mc]) >= 7E5:
-        processing_args["events"] = None
-        processing_args["batches"] = int(2 * max([*n_data, *n_mc]) // 7E5)
-        processing_args["threads"] = args.cpus
-    else:
-        processing_args["events"] = None
-        processing_args["batches"] = None
-        processing_args["threads"] = args.cpus
-    return processing_args
-
-def BatchlessFormatArgs(file, args):
-    """
-    Dummy arguments which would be accepted by a function passed to
-    Proccessing.multiprocess, but with no batching (i.e. start at 0,
-    use all events)
-
-    Expected use:
-    ```
-    output = func(*BatchlessFormatArgs(file, func_args))
-    ```
-    Replacing:
-    ```
-    output = Processing.mutliprocess(func, [file], args.batches, args.events, func_args, args.threads)
-    ```
-
-    Parameters
-    ----------
-    file : str
-        File path of the ntuple to be run on.
-    args : dict
-        Dictionary of arguments accessible by the function
-    
-    Returns
-    -------
-    i, file, n_events, start, selected_events, args
-    i : int
-        Dummy. 0.
-    file : str
-        Input file
-    n_events : int
-        Dummy. Numer of events in file.
-    start : int
-        Dummy. 0.
-    selected_events : NoneType
-        Dummy. None.
-    args : dict
-        Input args.
-    """
-    # get number of events, use shower merging ntuple type to supress false warnings
-    # Same method as Processing.CalculateBatches
-    total_events = ak.count(
-        Data(file, nTuple_type = Ntuple_Type.SHOWER_MERGING).eventNum)
-    print(f"{total_events=}")
-    print(f"Running batchless, setting batches to {total_events}")
-    return 0, file, total_events, 0, None, args
-
-def RunProcess(
-        ntuple_files : list[dict],
-        is_data : bool,
-        args : argparse.Namespace,
-        func : callable,
-        merge : bool = True,
-        batchless : bool = False) -> list:
-    output = []
-    for i in ntuple_files:
-        func_args = vars(args)
-        func_args["data"] = is_data
-        func_args["nTuple_type"] = i["type"]
-        func_args["pmom"] = i["pmom"]
-        if "graph" in i.keys():
-            func_args["graph"] = i["graph"]
-        if not batchless:
-            output.extend(Processing.mutliprocess(func, [i["file"]], args.batches, args.events, func_args, args.threads))
-        else:
-            output.append(timer(func)(
-                *BatchlessFormatArgs(i["file"], func_args)))
-    if merge:
-        output = MergeOutputs(output)
-    return output
-
-
-def MergeOutputs(outputs : list[dict]) -> dict:
-    def search(collection : dict, output : dict):
-        for k, v in collection.items():
-            if type(v) is dict:
-                if k not in output:
-                    output[k] = {}
-                search(v, output[k])
-            else:
-                if k not in output:
-                    output[k] = v
-                else:
-                    if type(v) == ak.Array:
-                        output[k] = ak.concatenate([output[k], v])
-                    elif type(v) == Tags.Tags:
-                        output[k] = Tags.MergeTags([output[k], v])
-                    elif type(v) == list:
-                        output[k].extend(v)
-                    else:
-                        if type(output[k]) != list:
-                            output[k] = [output[k], v]
-                        else:
-                            output[k].append(v)
-
-    merged_output = {}
-    for o in outputs:
-        search(o, merged_output)
-    return merged_output
-
-
-class Sample(str, Enum):
-    MC = "mc"
-    DATA = "data"
-
-
-def ApplicationProcessing(
-        samples : list[Sample],
-        outdir : str,
-        args : argparse.Namespace,
-        func : callable,
-        merge : bool,
-        outname : str = "output",
-        batchless: bool = False):
-
-    if (args.regen is True) or (os.path.isfile(f"{outdir}{outname}.dill") is False):
-        print("Processing Ntuples")
-        outputs = {
-            s : RunProcess(args.ntuple_files[s], s == Sample.DATA,
-                           args, func, merge, batchless=batchless)
-            for s in samples}
-        SaveObject(f"{outdir}{outname}.dill", outputs)
-    else:
-        print("Loading existing outputs")
-        outputs = LoadObject(f"{outdir}{outname}.dill")
-    return outputs
-
-
 def CountInRegions(true_regions : dict, reco_regions : dict, selection_efficincy : np.ndarray = None) -> np.ndarray:
     """ Computes the counts of each combination of reco and true regions.
 
@@ -524,31 +342,10 @@ def CountInRegions(true_regions : dict, reco_regions : dict, selection_efficincy
         counts.append(true_counts)
     return counts
 
-
-def KE(p, m):
-    return (p**2 + m**2)**0.5 - m
-
-def IsScraper(mc : Data, beam_scraper_args : dict) -> ak.Array:
-    beam_inst_KE = KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
-    true_ffKE = mc.trueParticles.beam_KE_front_face
-
-    delta_KE_upstream = beam_inst_KE - true_ffKE
-
-    scraper_ids = {}
-    for k, v in beam_scraper_args.items():
-        scraper_ids[k] = (beam_inst_KE > min(v["bins"])) & (beam_inst_KE < max(v["bins"]))
-        threshold = v["mu_e_res"] + 3 * abs(v["sigma_e_res"])
-        
-        scraper_ids[k] = scraper_ids[k] & (delta_KE_upstream > threshold)
-    scraper_ids = SelectionTools.CombineMasks(scraper_ids, operator = "or")
-    return scraper_ids
-
-
 def RatioWeights(beam_inst_P : np.ndarray, func : str, params : list, truncate : int = 10):
     weights = 1/getattr(Fitting, func)(beam_inst_P, *params)
     weights = np.where(weights > truncate, truncate, weights)
     return weights
-
 
 def PlotXSHists(energy_slices, hist_counts : np.ndarray, hist_counts_err : np.ndarray = None, overflow : bool = True, scale : float = 1, xlabel : str = "$KE$ (MeV)", ylabel : str = "Counts", label : str = None, color : str = None, newFigure : bool = True, title : str = None):
     if hist_counts_err is None:
@@ -604,195 +401,6 @@ def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, 
         Plots.plt.ylim(0, max(sim_curve_interp(xs_sim.KE)) * 2)
     Plots.plt.xlim(energy_slice.min_pos - (0.2 * energy_slice.width), energy_slice.max_pos + (0.2 * energy_slice.width))
     return chi_sqrs
-
-
-class EnergyCorrection:
-    @staticmethod
-    def LinearCorrection(x, p0):
-        return x / p0
-
-    class ResponseFit(Fitting.FitFunction):
-        n_params = 3
-
-        @staticmethod
-        def func(x, p0, p1, p2):
-            return p0 * np.log(x - p1) + p2
-
-        @staticmethod
-        def p0(x, y):
-            return None
-
-    @staticmethod
-    def ResponseCorrection(x, p0, p1, p2):
-        return x / (EnergyCorrection.ResponseFit.func(x, p0, p1, p2) + 1)
-
-    shower_energy_correction = {
-        "linear" : LinearCorrection,
-        "response": ResponseCorrection,
-        None : None
-    }
-
-
-class BetheBloch:
-    rho = 1.39 # [g/cm3] density of LAr
-    K = 0.307075 # [MeV cm2 / mol]
-    Z = 18 # LAr atomic number
-    A = 39.948 # [g/mol] LAr atomic mass
-    I = 188E-6 # [MeV] mean excitation energy
-    me = Particle.from_pdgid(11).mass # [MeV] electron mass
-
-    # density correction parameters
-    C = 5.2146
-    y0 = 0.2
-    y1 = 3
-    a = 0.19559
-    k = 3
-
-    @staticmethod
-    def densityCorrection(beta : float | ak.Array, gamma : float | ak.Array) -> float | ak.Array:
-        """ Correction to account for th fact a particles electric field flattens and spreads as the energy increases.
-
-        Args:
-            beta (float | ak.Array): velocity
-            gamma (float | ak.Array): relativistic factor
-
-        Returns:
-            (float | ak.Array): density correction value
-        """
-        y = np.log10(beta * gamma)
-
-        delta_0 = 2 * np.log(10) * y - BetheBloch.C
-        delta_1 = delta_0 + BetheBloch.a * (BetheBloch.y1 - y)**BetheBloch.k
-
-        if hasattr(y, "__iter__"):
-            delta = ak.where(y >= BetheBloch.y1, delta_0, 0) 
-            delta = ak.where((BetheBloch.y0 <= y) & (y < BetheBloch.y1), delta_1, delta)
-        else:
-            if y >= BetheBloch.y1:
-                delta = delta_0
-            elif y < BetheBloch.y0:
-                delta = 0
-            else:
-                delta = delta_1
-
-        return delta
-
-    @staticmethod
-    def meandEdX(KE : float | ak.Array, particle : Particle) -> float | ak.Array:
-        """ Calculate the mean dEdX for a particle with given kinetic energy.
-
-        Args:
-            KE (float | ak.Array): particle kinetic energy
-            particle (Particle): particle type
-
-        Returns:
-            float | ak.Array: mean dEdX
-        """
-        gamma = (KE / particle.mass) + 1
-        beta = (1 - (1/gamma)**2)**0.5
-
-        w_max = 2 * BetheBloch.me * (beta * gamma)**2 / (1 + (2 * BetheBloch.me * (gamma/particle.mass)) + (BetheBloch.me/particle.mass)**2)
-        N = np.divide((BetheBloch.rho * BetheBloch.K * BetheBloch.Z * (particle.charge)**2), (BetheBloch.A * (beta**2)))
-        A = 0.5 * np.log(2 * BetheBloch.me * (gamma**2) * (beta**2) * w_max / ((BetheBloch.I) **2))
-        B = beta**2
-        C = 0.5 * BetheBloch.densityCorrection(beta, gamma)
-
-        dEdX = N * (A - B - C)
-
-        dEdX = np.nan_to_num(dEdX)
-        if hasattr(KE, "__iter__"):
-            dEdX = ak.where(dEdX < 0, 0, dEdX) # handle when np.log is -infinity i.e. when KE = 0
-        else:
-            if dEdX < 0: dEdX = 0
-        return dEdX
-
-    @staticmethod
-    def interp_KE_to_mean_dEdX(inital_KE : float, stepsize : float, particle : Particle = Particle.from_pdgid(211)) -> interp1d:
-        """ Calculate the mean dEdX profile for a given initial kinetic energy and position step size.
-            Then produce a function to map kinetic energy to dEdX given the outputs, and allow for interpolation.
-
-        Args:
-            inital_KE (float): Initial kinetic energy
-            stepsize (float): position step size (cm)
-
-        Returns:
-            interp1d: interpolated map of KE and dEdX
-        """
-        e = inital_KE
-        KE = []
-        dEdX = []
-        while e >= 0:
-            KE.append(e)
-            dEdX.append(BetheBloch.meandEdX(e, particle))
-            e = e - stepsize * dEdX[-1]
-            if dEdX[-1] <= 0: break # sometines bethebloch produces an unphysical value when KE is too small, so stop
-        KE.append(0)
-        dEdX.append(np.inf)
-        return interp1d(KE, dEdX, fill_value = 0, bounds_error = False) # if outside the interpolation range, return 0
-
-    @staticmethod
-    def interp_range_to_KE(KE_init : float, precision = 0.05) -> interp1d:
-        """ Create an interpolation object for the range of a particle and its kinetic energy
-
-        Args:
-            KE_init (float): kinetic energy
-            precision (float, optional): position step. Defaults to 0.05.
-
-        Returns:
-            interp1d: interpolated map of range and KE
-        """
-        KE = [KE_init]
-        track_length = [0]
-        count = 0
-        while KE[-1] > 0:
-            KE.append(KE[-1] - precision * BetheBloch.meandEdX(KE[-1], Particle.from_pdgid(-13)))
-            count += 1
-            track_length.append(count * precision)
-        track_length = np.array(track_length)
-
-        return interp1d(max(track_length) - track_length, KE, fill_value = 0, bounds_error = False)
-
-
-    @staticmethod
-    def InteractingKE(KE_init : ak.Array, track_length : ak.Array, n : int) -> ak.Array:
-        """ Compute the interacting energy from the particles initial kinetic energy and track length.
-
-        Args:
-            KE_init (ak.Array): initial kinetic energies
-            track_length (ak.Array): track lengths
-            n (int): number of iterations, higher results in more accurate values but takes exponentially longer.
-
-        Returns:
-            ak.Array: interacting KEs
-        """
-        interpolated_energy_loss = BetheBloch.interp_KE_to_mean_dEdX(2*max(KE_init), 1) # precompute the energy loss and create a function to interpolate between them
-        steps = track_length/n
-
-        KE_int = KE_init
-        for i in range(n):
-            KE_int = KE_int - interpolated_energy_loss(KE_int)*steps
-        KE_int = ak.where(KE_int < 0, 0, KE_int)
-        return KE_int
-
-    @staticmethod
-    def RangeFromKE(KE_init : np.ndarray, particle : Particle, precision : float = 1) -> ak.Array:
-        """ Compute the range of particles from the  initial kinetic energy.
-
-        Args:
-            KE_init (np.ndarray): initial kinetic energies
-            particle (Particle): particle type
-            precision (float, optional): position step. Defaults to 1.
-
-        Returns:
-            ak.Array: ranges
-        """
-        interpolated_energy_loss = BetheBloch.interp_KE_to_mean_dEdX(2*max(KE_init), precision/2, particle) # precompute the energy loss and create a function to interpolate between them
-        KE = np.array(KE_init)
-        n = np.zeros(len(KE_init))
-        while any(KE > 0):
-            KE = KE - precision * interpolated_energy_loss(KE)
-            n = n + (KE > 0)
-        return n * precision
 
 
 class ApplicationArguments:
@@ -903,7 +511,9 @@ class ApplicationArguments:
                 args.ntuple_files = value
                 args.has_data = "data" in value.keys()
             elif head == "REGION_IDENTIFICATION":
-                args.region_identification = RegionIdentification.regions[value["type"]] 
+                args.gnn_do_predict = value["type"] in ["gnn"]
+                # args.gnn_event_by_event = value["type"] == "gnn_per_event"
+                args.region_identification = RegionIdentification.regions[value["type"]]
             elif head == "BEAM_PARTICLE_SELECTION":
                 args.beam_selection = ApplicationArguments.__CreateSelection(value, BeamParticleSelection)
             elif head == "HAS_FINAL_STATE_PFO_SELECTION":
@@ -947,10 +557,14 @@ class ApplicationArguments:
                     args.beam_reweight["params"] = LoadConfiguration(value["params"])
                 args.beam_reweight["strength"] = value["strength"]
 
-            elif head == "SELECTION_MASKS":
-                args.selection_masks = {}
+            elif head == "BEAM_SELECTION_MASKS":
+                args.beam_selection_masks = {}
                 for k, v in value.items():
-                    args.selection_masks[k] = {i : LoadObject(j) for i, j in v.items()}
+                    args.beam_selection_masks[k] = {i : LoadObject(j) for i, j in v.items()}
+            elif head == "REGION_SELECTION_MASKS":
+                args.region_selection_masks = {}
+                for k, v in value.items():
+                    args.region_selection_masks[k] = {i : LoadObject(j) for i, j in v.items()}
             elif head == "TOY_PARAMETERS":
                 args.toy_parameters = {}
                 for k, v in value.items():
@@ -964,20 +578,26 @@ class ApplicationArguments:
                     args.fit[k] = v
             elif head == "ESLICE":
                 if value["width"] is not None:
-                    args.energy_slices = Slices(value["width"], value["min"] - value["width"], value["max"], reversed = True) # min - width to allocate an underflow bin (not used in the measurement)
+                    args.energy_slices = Slicing.Slices(
+                        value["width"],
+                        # min - width to allocate an underflow bin
+                        #   (not used in the measurement)
+                        value["min"] - value["width"],
+                        value["max"], reversed = True)
             elif head == "ANALYSIS_INPUTS":
                 args.analysis_input = {k : v for k, v in value.items()}
             elif head == "UNFOLDING":
                 args.unfolding = {k : v for k, v in value.items()}
-            elif head == "GNN_DATA":
+            elif head == "GNN_MODEL":
                 # args.gnn_model_path = str(path)
                 args.gnn_model_path = value["model_path"]
-                if "predictions" in value.keys():
-                    # args.gnn_predictions = {"mc": [np.array(shape=(N, 4)), ...],
-                    #                         "data": [np.array(shape=(N, 4)), ...]}
-                    args.gnn_predictions = {
-                        k : [LoadObject(pred) for pred in v]
-                        for k, v in value["predictions"].items()}
+                args.gnn_region_labels = value["region_labels"]
+            elif head == "GNN_PREDICTIONS":
+                args.gnn_results = {}
+                for info, save_map in value.items():
+                    args.gnn_results[info] = {
+                        which_pred : LoadObject(path)
+                            for which_pred, path in save_map.items()}
             else:
                 setattr(args, head, value) # allow for generic configurations in the json file
         if hasattr(args, "beam_selection"):
@@ -998,7 +618,7 @@ class ApplicationArguments:
     @staticmethod
     def AddEnergyCorrection(args):
         if hasattr(args, "shower_correction") and (args.shower_correction["correction_params"] != None):
-            method = EnergyCorrection.shower_energy_correction[args.shower_correction["correction"]]
+            method = EnergyTools.EnergyCorrection.shower_energy_correction[args.shower_correction["correction"]]
             params = LoadConfiguration(args.shower_correction["correction_params"])
         else:
             method = None
@@ -1032,177 +652,6 @@ class ApplicationArguments:
             else:
                 continue
         return args
-
-
-def UpstreamEnergyLoss(KE_inst : ak.Array, params : np.ndarray, function : Fitting.FitFunction = Fitting.poly2d) -> ak.Array:
-    """ compute the upstream loss based on a repsonse function and it's fit parameters.
-
-    Args:
-        KE_inst (ak.Array): kinetic energy measured by the beam instrumentation
-        function (Fitting.FitFunction): repsonse function, defaults to Fitting.poly2d. 
-        params (np.ndarray): function paramters
-
-    Returns:
-        ak.Array: upstream energy loss
-    """
-    return function.func(KE_inst, **params)
-
-@timer
-def RecoDepositedEnergy(events : Data, ff_KE : ak.Array, method : str) -> ak.Array:
-    """ Calcuales the energy deposited by the beam particle in the TPC, either using calorimetric information or the bethe bloch formula (spatial information).
-
-    Args:
-        events (Data): events to look at
-        ff_KE (ak.Array): front facing kinetic energy
-        method (str): method to calcualte the deposited energy, either "calo" or "bb"
-
-    Returns:
-        ak.Array: depotisted energy
-    """
-    reco_pitch = vector.dist(events.recoParticles.beam_calo_pos[:, :-1], events.recoParticles.beam_calo_pos[:, 1:]) # distance between reconstructed calorimetry points
-    
-    if method == "calo":
-        dE = ak.sum(events.recoParticles.beam_dEdX[:, :-1] * reco_pitch, -1)
-    elif method == "bb":
-        KE_int_bb = BetheBloch.InteractingKE(ff_KE, events.recoParticles.beam_track_length, 50)
-        dE = ff_KE - KE_int_bb
-    else:
-        raise Exception(f"{method} not a valid method, pick 'calo' or 'bb'")
-    return dE
-
-
-class Slices:
-    """ Describes slices of a variable, equivilant to a list of bin edges but has more functionality. 
-
-    Slice : a Single slice, has properies number (integer) and "position" in the parameter space of the value you want to slice up. 
-    """
-    Slice = namedtuple("Slice", "num pos")
-    def __init__(self, width, _min, _max, reversed : bool = False):
-        self.width = width
-        self.min = _min
-        self.max = _max
-        self.reversed = reversed
-        
-        self.max_num = max(self.num)
-        self.min_num = min(self.num)
-        self.max_pos = max(self.pos)
-        self.min_pos = min(self.pos)
-
-
-    def __conversion__(self, x):
-        """ convert a value to its slice number.
-
-        Args:
-            x: value, array of float
-
-        Returns:
-            slice: slice number/s
-        """
-        if self.reversed:
-            numerator = self.max - x
-        else:
-            numerator = x
-        c = np.floor(numerator // self.width)
-        if hasattr(c, "__iter__"):
-            return ak.values_astype(c, int)
-        else:
-            return int(c)
-
-
-    def __create_slice__(self, i) -> Slice:
-        """ using the slice number, create the Slice object.
-
-        Args:
-            i (int): slice number/s
-
-        Returns:
-            Slice: slice
-        """
-        if self.reversed:
-            p = self.max - i * self.width
-        else:
-            p = i * self.width
-        return self.Slice(i, p)
-
-
-    def __call__(self, x):
-        """ get the slice number for a set of values
-
-        Args:
-            x: values
-
-        Returns:
-            array or int: slice numbers
-        """
-        return self.__create_slice__(self.__conversion__(x))
-
-
-    def __getitem__(self, i : int) -> Slice:
-        """ Creates slices from slice numbers.
-
-        Args:
-            i (int): slice number
-
-        Raises:
-            StopIteration
-
-        Returns:
-            Slice: ith slice
-        """
-        if i * self.width > (self.max - self.min):
-            raise StopIteration
-        else:
-            if self.reversed:
-                return self.__create_slice__(i + self.__conversion__(self.max))
-            else:
-                return self.__create_slice__(i + self.__conversion__(self.min))
-
-    @property
-    def num(self) -> np.ndarray:
-        """ Return all slice numbers.
-
-        Returns:
-            np.ndarray: slice numbers
-        """
-        return np.array([ s.num for s in self], dtype = int)
-
-    @property
-    def pos(self) -> np.ndarray:
-        """ Return all slice positions.
-
-        Returns:
-            np.ndarray: slice positions
-        """
-        return np.array([ s.pos for s in self])
-
-    @property
-    def pos_overflow(self):
-        return np.insert(self.pos, 0, self.max_pos + self.width)
-
-    @property
-    def pos_bins(self):
-        return np.sort(self.pos_overflow)
-
-
-    def pos_to_num(self, pos):
-        """ Convert slice positions to numbers
-
-        Args:
-            pos: positions
-
-        Returns:
-            array or int: slice numbers
-        """
-        slice_num = self.__conversion__(pos)
-        if hasattr(pos, "__iter__"):
-            slice_num = ak.where(slice_num > max(self.num), max(self.num), slice_num)
-            slice_num = ak.where(slice_num < 0, min(self.num), slice_num)
-        else:
-            if pos > max(self.pos): 
-                slice_num = max(self.num) # above range go into overflow bin
-            if pos < 0:
-                slice_num = min(self.num) # below range go into the underflow bin
-        return slice_num
 
 
 class GeantCrossSections:
@@ -1296,338 +745,6 @@ class GeantCrossSections:
         else:
             sigma = getattr(self, process)
         return interp1d(self.KE, sigma, fill_value = "extrapolate")
-
-
-class ThinSlice:
-    """ Methods for implementing the thin slice measurement method.
-    """
-    @staticmethod
-    def CountingExperiment(endPos : ak.Array, channel : ak.Array, slices : Slices) -> tuple[ak.Array, ak.Array]:
-        """ Creates the interacting and incident histograms.
-
-        Args:
-            endPos (ak.Array): end position of particle or "interaction vertex"
-            channel (ak.Array): mask which selects particles which interact in the channel you are interested in
-            slices (Slices): spatial slices
-
-        Returns:
-            tuple[ak.Array, ak.Array]: n_interact and n_incident histograms
-        """
-        end_slice_pos = slices.pos_to_num(endPos)
-        slice_nums = slices.num
-
-        n_interact = np.histogram(end_slice_pos[channel], slice_nums)[0]
-
-        total_interact = np.histogram(end_slice_pos, slice_nums)[0]
-        n_incident = np.cumsum(total_interact[::-1])[::-1]
-        return n_interact, n_incident
-
-    @staticmethod
-    def MeanSliceEnergy(energy : ak.Array, endPos : ak.Array, slices : Slices) -> tuple[ak.Array, ak.Array]:
-        """ Compute the average energy in a spatial slice.
-
-        Args:
-            energy (ak.Array): particle energies over its lifetime in the tpc
-            endPos (ak.Array): end position of particle or "interaction vertex"
-            slices (Slices): spatial slices
-
-        Returns:
-            tuple[ak.Array, ak.Array]: means slice energy, error in the mean slice energy
-        """
-        beam_traj_slice = slices.pos_to_num(endPos)
-        slice_nums = slices.num
-        
-        counts = np.histogram(ak.ravel(beam_traj_slice), slice_nums)[0] # histogram of positions will give the counts
-
-        weights = ak.ravel(np.nan_to_num(energy, 0))
-
-        sum_energy = np.histogram(ak.ravel(beam_traj_slice), slice_nums, weights = weights)[0] # total energy in each bin if you weight by energy
-        sum_energy_sqr = np.histogram(ak.ravel(beam_traj_slice), slice_nums, weights = weights**2)[0] # same as above
-
-        mean_energy = sum_energy / counts
-
-        std_energy = np.divide(sum_energy_sqr, counts) - mean_energy**2
-        error_mean_energy = np.sqrt(np.divide(std_energy, counts))
-
-        return mean_energy, error_mean_energy
-
-    @staticmethod 
-    def TotalCrossSection(n_incident : np.ndarray, n_interact : np.ndarray, slice_width : float) -> tuple[np.ndarray, np.ndarray]:
-        """ Returns cross section in mb.
-
-        Args:
-            n_incident (np.ndarray): incident histogram
-            n_interact (np.ndarray): interacting histogram
-            slice_width (float): spatial width of thin slice
-
-        Returns:
-            tuple[np.ndarray, np.ndarray]: cross section, statistical uncertainty
-        """
-        xs = np.log(n_incident / (n_incident - n_interact)) # calculate a dimensionless cross section
-
-        v_incident = n_incident # poisson uncertainty
-        v_interact = n_interact*(1- (n_interact/n_incident)) # binomial uncertainty
-
-        xs_e = (1/n_incident) * (1/(n_incident - n_interact)) * (n_interact**2 * v_incident + n_incident**2 * v_interact)**0.5
-
-        NA = 6.02214076e23
-        factor = 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * slice_width)
-
-        return factor * xs, abs(factor * xs_e)
-
-
-    def CrossSection(n_int_exclusive : np.ndarray, n_int_inclusive : np.ndarray, n_inc_inclusive : np.ndarray, slice_width : float) -> tuple[np.ndarray, np.ndarray]:
-        """ Cross section of exclusive process.
-
-        Args:
-            n_int_exclusive (np.ndarray): exclusive interactions
-            n_int_inclusive (np.ndarray): interactions
-            n_inc_inclusive (np.ndarray): incident counts
-            slice_width (float): slice width
-
-        Returns:
-            tuple[np.ndarray, np.ndarray]: cross section and error
-        """
-        NA = 6.02214076e23
-        factor = 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * slice_width)
-
-        n_interact_ratio = nandiv(n_int_exclusive, n_int_inclusive)
-        n_survived_inclusive = n_inc_inclusive - n_int_inclusive
-
-        var_inc_inclusive = n_inc_inclusive # poisson variance
-        var_int_inclusive = n_int_inclusive * (1 - nandiv(n_int_inclusive, n_inc_inclusive)) # binomial uncertainty
-        var_int_exclusive = n_int_exclusive * (1 - nandiv(n_int_exclusive, n_inc_inclusive)) # binomial uncertainty
-
-        xs = factor * n_interact_ratio * np.log(nandiv(n_inc_inclusive, n_inc_inclusive - n_int_inclusive))
-
-        diff_n_int_exclusive = nandiv(xs, n_int_exclusive)
-        diff_n_inc_inclusive = factor * n_interact_ratio * (nandiv(1, n_inc_inclusive) - nandiv(1, n_survived_inclusive))
-        diff_n_int_inclusive = factor * n_interact_ratio * nandiv(1, n_survived_inclusive) - nandiv(xs, n_int_inclusive)
-
-        xs_err = ((diff_n_int_exclusive**2 * var_int_exclusive) + (diff_n_inc_inclusive**2 * var_inc_inclusive) + (diff_n_int_inclusive**2 * var_int_inclusive))**0.5
-        return xs, xs_err
-
-
-class EnergySlice:
-    """ Methods for implementing the energy slice measurement method.
-    """
-    @staticmethod
-    def TrunacteSlices(slice_array : ak.Array, energy_slices : Slices) -> ak.Array:
-        """ Method for truncating slice numbers due to the fact energy slices should be in reverse order vs kinetic energy.
-
-        Args:
-            slice_array (ak.Array): slices to truncate
-            energy_slices (Slices): energy slices
-
-        Returns:
-            ak.Array: truncated slices
-        """
-        # set minimum to -1 (underflow i.e. energy > plim)
-        slice_array = ak.where(slice_array < 0, -1, slice_array)
-        # set maxslice (overflow i.e. energy < dE)
-        slice_array = ak.where(slice_array > energy_slices.max_num, energy_slices.max_num, slice_array)
-        return slice_array
-
-
-    @staticmethod
-    def NIncident(n_initial : np.ndarray, n_end : np.ndarray) -> np.ndarray:
-        """ Calculate number of incident particles
-
-        Args:
-            n_initial (np.ndarray): initial particle counts
-            n_end (np.ndarray): interaction counts
-
-        Returns:
-            np.ndarray: incident counts
-        """
-        n_survived_all = np.cumsum(n_initial - n_end)
-        n_incident = n_survived_all + n_end
-        return n_incident
-
-    @staticmethod
-    def SliceNumbers(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak.Array, energy_slices : Slices) -> tuple[np.ndarray, np.ndarray]:
-        """ Convert energies from physical units to slice numbers.
-
-        Args:
-            int_energy (ak.Array): interaction energy
-            init_energy (ak.Array): initial energy
-            outside_tpc (ak.Array): mask of particles which interact outside the fiducial volume
-            energy_slices (Slices): energy slices
-
-        Returns:
-            tuple[np.ndarray, np.ndarray]: initial slice numbers and interacitng slice numbers
-        """
-        init_slice = energy_slices(init_energy).num + 1 # equivilant to ceil
-        int_slice = energy_slices(int_energy).num
-
-        init_slice = EnergySlice.TrunacteSlices(init_slice, energy_slices)
-        int_slice = EnergySlice.TrunacteSlices(int_slice, energy_slices)
-
-        # removes instances where the particle incident energy and interacting energy are in the same slice (Yinrui calls this an incomplete slice)
-        # i.e. this happens if the particle interacting in its first slice, must be an artifact of the energy slicing but not sure why.
-        bad_slices = (int_slice < init_slice) | outside_tpc
-        init_slice = ak.where(bad_slices, -1, init_slice)
-        int_slice = ak.where(bad_slices, -1, int_slice)
-        return init_slice, int_slice
-
-    @staticmethod
-    def CountingExperiment(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak.Array, process : ak.Array, energy_slices : Slices, interact_only : bool = False, weights : np.ndarray = None) -> tuple[np.ndarray]:
-        """ Creates the interacting and incident histograms.
-
-        Args:
-            int_energy (ak.Array): interacting enrgy
-            init_energy (ak.Array): initial energy
-            outside_tpc (ak.Array): mask of particles which interact outside the fiducial volume
-            process (ak.Array): mask of events for exclusive interactions
-            energy_slices (Slices): energy slices
-            interact_only (bool, optional): only return exclusive interaction histogram. Defaults to False.
-            weights (np.ndarray, optional): event weights. Defaults to None.
-
-        Returns:
-            np.ndarray | tuple[np.ndarray]: exclusive interaction histogram and/or initial histogram, incident histogram and interaction histogram 
-        """
-        init_slice, int_slice = EnergySlice.SliceNumbers(int_energy, init_energy, outside_tpc, energy_slices)
-
-        slice_bins = np.arange(-1 - 0.5, energy_slices.max_num + 1.5)
-
-        exclusive_weights = weights[process] if weights is not None else None
-
-        n_interact_exclusive = np.histogram(np.array(int_slice[process]), slice_bins, weights = exclusive_weights)[0]
-        if interact_only == False:
-            n_initial = np.histogram(np.array(init_slice), slice_bins, weights = weights)[0]
-            n_interact_inelastic = np.histogram(np.array(int_slice), slice_bins, weights = weights)[0]
-
-            n_incident = EnergySlice.NIncident(n_initial, n_interact_inelastic)
-
-            return n_initial, n_interact_inelastic, n_interact_exclusive, n_incident
-        else:
-            return n_interact_exclusive
-
-    @staticmethod
-    def CountingExperimentOld(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices) -> tuple[np.ndarray, np.ndarray]:
-        """ (Legacy) Creates the interacting and incident histograms.
-
-        Args:
-            int_energy (ak.Array): interacting enrgy
-            ff_energy (ak.Array): front facing energy
-            outside_tpc (ak.Array): mask which selects particles decaying outside the tpc
-            channel (ak.Array): mask which selects particles which interact in the channel you are interested in
-            energy_slices (Slices): energy slices
-
-        Returns:
-            tuple[np.ndarray, np.ndarray]: n_interact and n_incident histograms
-        """
-        true_init_slice = energy_slices(ff_energy).num + 1 # equivilant to ceil
-        true_int_slice = energy_slices(int_energy).num
-
-        true_init_slice = EnergySlice.TrunacteSlices(true_init_slice, energy_slices)
-        true_int_slice = EnergySlice.TrunacteSlices(true_int_slice, energy_slices)
-
-        # just in case we encounter an instance where E_int > E_ini (unphysical)
-        bad_slices = true_int_slice < true_init_slice
-        true_init_slice = ak.where(bad_slices < 0, -1, true_init_slice)
-        true_int_slice = ak.where(bad_slices, -1, true_int_slice)
-
-        n_incident = np.zeros(energy_slices.max_num + 1)
-        n_interact = np.zeros(energy_slices.max_num + 1)
-
-        true_int_slice_in_tpc = true_int_slice[~outside_tpc]
-        true_init_slice_in_tpc = true_init_slice[~outside_tpc]
-
-        #! slowest but most explict version
-        # n_incident = np.zeros(max_slice + 1)
-        # for i in range(len(n_incident)):
-        #     for p in range(len(true_int_slice_in_tpc)):
-        #         if (true_init_slice_in_tpc[p] <= i) and (true_int_slice_in_tpc[p] >= i):
-        #             n_incident[i] += 1
-        #! faster, order log(n) because it skips checking for empty entries
-        # true_init_slice_in_tpc = ak.where(true_init_slice_in_tpc == -1, 0, true_init_slice_in_tpc) #! done because -n index in python means you add to the last nth bin
-        # for p in range(len(true_int_slice_in_tpc)):
-        #     n_incident[true_init_slice_in_tpc[p] : true_int_slice_in_tpc[p] + 1] += 1
-        # print(n_incident)
-
-        #! fastest, vectorised version of the first but c++ loops are faster. 
-        n_incident = np.array([ak.sum(ak.where((true_init_slice_in_tpc <= i) & (true_int_slice_in_tpc > i), 1, 0)) for i in range(energy_slices.max_num + 1)])
-    
-        n_interact = np.histogram(np.array(true_int_slice_in_tpc[channel[~outside_tpc]]), range(-1, energy_slices.max_num + 1))[0]
-        n_interact = np.roll(n_interact, -1) # shift the underflow bin to the location of the overflow bin in n_incident i.e. merge them.
-        return n_interact, n_incident + n_interact
-
-    @staticmethod
-    def Slice_dEdX(energy_slices : Slices, particle : Particle) -> np.ndarray:
-        """ Computes the mean dEdX between energy slices.
-
-        Args:
-            energy_slices (Slices): energy slices
-            particle (Particle): particle
-
-        Returns:
-            np.ndarray: mean dEdX
-        """
-        return BetheBloch.meandEdX(energy_slices.pos - energy_slices.width/2, particle)
-
-    @staticmethod
-    def TotalCrossSection(n_interact : np.ndarray, n_incident : np.ndarray, dEdX : np.ndarray, dE : float) -> tuple[np.ndarray, np.ndarray]:
-        """ Compute cross section using ThinSlice.CrossSection, by passing an effective spatial slice width.
-
-        Args:
-            n_interact (np.ndarray): interacting histogram
-            n_incident (np.ndarray): incident histogram
-            dEdX (np.ndarray): mean slice dEdX
-            dE (float): energy slice width
-
-        Returns:
-            tuple[np.ndarray, np.ndarray]: Cross section and statistical uncertainty.
-        """
-        return ThinSlice.TotalCrossSection(n_incident, n_interact, dE/dEdX)
-
-    @staticmethod
-    def CrossSection(n_int_ex : np.ndarray, n_int : np.ndarray, n_inc : np.ndarray, dEdX : np.ndarray, dE : float, n_int_ex_err : np.ndarray = None, n_int_err : np.ndarray = None, n_inc_err : np.ndarray = None) -> tuple[np.ndarray, np.ndarray]:
-        """ Compute exclusive cross sections. If interactions errors are not provided, staticial uncertainties are used (poisson for incident, binomial for interactions).
-
-        Args:
-            n_int_ex (np.ndarray): exclusive interactions
-            n_int (np.ndarray): interactions
-            n_inc (np.ndarray): incident counts
-            dEdX (np.ndarray): slice dEdX
-            dE (float): energy slice width
-            n_int_ex_err (np.ndarray, optional): exclusive interaction errors. Defaults to None.
-            n_int_err (np.ndarray, optional): interaction errors. Defaults to None.
-            n_inc_err (np.ndarray, optional): incident count errors. Defaults to None.
-
-        Returns:
-            tuple[np.ndarray, np.ndarray]: _description_
-        """
-        NA = 6.02214076e23
-        factor = np.array(dEdX) * 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * dE)
-
-        n_interact_ratio = nandiv(n_int_ex, n_int)
-        n_survived = n_inc - n_int
-
-        if n_inc_err is not None:
-            var_inc_inclusive = n_inc_err**2
-        else:
-            var_inc_inclusive = n_inc # poisson variance
-    
-        if n_int_err is not None:
-            var_int = n_int_err**2
-        else:
-            var_int = n_int * (1 - nandiv(n_int, n_inc)) # binomial uncertainty
-    
-        if n_int_ex_err is not None:
-            var_int_ex = n_int_ex_err**2
-        else:
-            var_int_ex = n_int_ex * (1 - nandiv(n_int_ex, n_inc)) # binomial uncertainty
-
-
-        xs = factor * n_interact_ratio * nanlog(nandiv(n_inc, n_inc - n_int))
-
-        diff_n_int_ex = nandiv(xs, n_int_ex)
-        diff_n_inc = factor * n_interact_ratio * (nandiv(1, n_inc) - nandiv(1, n_survived))
-        diff_n_int = factor * n_interact_ratio * nandiv(1, n_survived) - nandiv(xs, n_int)
-
-        xs_err = ((diff_n_int_ex**2 * var_int_ex) + (diff_n_inc**2 * var_inc_inclusive) + (diff_n_int**2 * var_int))**0.5
-        return np.array(xs, dtype = float), np.array(xs_err, dtype = float)
 
 
 class Toy:
@@ -1737,11 +854,16 @@ class Toy:
         return
 
 
-    def NInteract(self, energy_slice : Slices, process : np.ndarray, mask : np.ndarray = None, weights : np.ndarray = None) -> np.ndarray:
+    def NInteract(
+            self,
+            energy_slice : Slicing.Slices,
+            process : np.ndarray,
+            mask : np.ndarray = None,
+            weights : np.ndarray = None) -> np.ndarray:
         """ Exclusive interaction histogram using energy slice method.
 
         Args:
-            energy_slice (Slices): energy slices
+            energy_slice (Slicing.Slices): energy slices
             process (np.ndarray): exclusive process mask
             mask (np.ndarray, optional): additional mask to apply. Defaults to None.
             weights (np.ndarray, optional): event weights. Defaults to None.
@@ -1751,290 +873,15 @@ class Toy:
         """
         if mask is None: mask = np.ones(len(self.df), dtype = bool)
         w = weights if weights is None else weights[mask]
-        n_interact = EnergySlice.CountingExperiment(self.df.KE_int_smeared[mask].values, self.df.KE_init_smeared[mask].values, self.outside_tpc_smeared[mask].values, process[mask].values, energy_slice, interact_only = True, weights = w)
+        n_interact = Slicing.EnergySlice.CountingExperiment(
+            self.df.KE_int_smeared[mask].values,
+            self.df.KE_init_smeared[mask].values,
+            self.outside_tpc_smeared[mask].values,
+            process[mask].values,
+            energy_slice,
+            interact_only = True,
+            weights = w)
         return n_interact
-
-
-@dataclass
-class AnalysisInput:
-    # masks
-    regions : dict[np.ndarray]
-    inclusive_process : dict[np.ndarray]
-    exclusive_process : dict[np.ndarray]
-    outside_tpc_reco : np.ndarray
-    outside_tpc_true : np.ndarray
-    # observables
-    track_length_reco : np.ndarray
-    KE_int_reco : np.ndarray
-    KE_init_reco : np.ndarray
-    KE_ff_reco : np.ndarray
-    mean_track_score : np.ndarray
-    track_length_true : np.ndarray
-    KE_int_true : np.ndarray
-    KE_init_true : np.ndarray
-    KE_ff_true : np.ndarray
-    # extras
-    weights : np.ndarray = None
-
-    @property
-    def region_labels(self):
-        return list(self.regions.keys())
-
-    @property
-    def process_labels(self):
-        return list(self.exclusive_process.keys())
-
-    def __len__(self):
-        for o in ["outside_tpc_reco", "outside_tpc_true", "track_length_reco", "KE_int_reco", "KE_init_reco", "mean_track_score", "track_length_true", "KE_int_true", "KE_init_true", "weights"]:
-            if getattr(self, o) is not None:
-                return len(getattr(self, o))
-        return
-
-    def ToFile(self, file : str):
-        """ Save to dill file.
-
-        Args:
-            file (str): file path.
-        """
-        SaveObject(file, self)
-        return
-
-    @staticmethod
-    def FromFile(file : str) -> "AnalysisInput": #* seems a bit extra but why not
-        """ Load analysis input from dill file.
-
-        Args:
-            file (str): file path.
-
-        Returns:
-            AnalysisInput: analysis input.
-        """
-        obj = LoadObject(file)
-        if type(obj) == AnalysisInput:
-            return obj
-        else:
-            raise Exception("not an analysis input file")
-
-
-    def NInteract(self, energy_slice : Slices, process: np.ndarray, mask : np.ndarray = None, reco : bool = True, weights : np.ndarray = None) -> np.ndarray:
-        """ Calculate exclusive interaction histogram using the energy slice method.
-
-        Args:
-            energy_slice (Slices): energy slices
-            process (np.ndarray): exclusive process mask
-            mask (np.ndarray, optional): additional mask. Defaults to None.
-            reco (bool, optional): use reco KE?. Defaults to True.
-            weights (np.ndarray, optional): event weights. Defaults to None.
-
-        Returns:
-            np.ndarray: exclusive interaction histogram.
-        """
-        if mask is None: mask = np.ones(len(self.KE_int_reco), dtype = bool)
-        if reco is True:
-            KE_int = self.KE_int_reco
-            KE_init = self.KE_init_reco
-            outside_tpc = self.outside_tpc_reco
-        else:
-            KE_int = self.KE_int_true
-            KE_init = self.KE_init_true
-            outside_tpc = self.outside_tpc_true
-        n_interact = EnergySlice.CountingExperiment(KE_int[mask], KE_init[mask], outside_tpc[mask], process[mask], energy_slice, interact_only = True, weights = weights[mask] if weights is not None else weights)
-        return n_interact
-
-    @staticmethod
-    def CreateAnalysisInputToy(toy : Toy) -> "AnalysisInput":
-        """ Create analysis input from a toy sample.
-
-        Args:
-            toy (Toy): toy sample
-
-        Returns:
-            AnalysisInput: analysis input object.
-        """
-        inclusive_events = np.array((toy.df.inclusive_process != "decay").values)
-
-        regions = {k : np.array(v.values) for k, v in toy.reco_regions.items()}
-        process = {k : np.array(v.values) for k, v in toy.truth_regions.items()}
-
-        return AnalysisInput(
-            regions,
-            inclusive_events,
-            process,
-            np.array(toy.outside_tpc_smeared.values),
-            np.array(toy.outside_tpc.values),
-            np.array(toy.df.z_int_smeared.values),
-            np.array(toy.df.KE_int_smeared.values),
-            np.array(toy.df.KE_init_smeared.values),
-            np.array(toy.df.KE_init_smeared.values),
-            np.array(toy.df.mean_track_score.values),
-            np.array(toy.df.z_int.values),
-            np.array(toy.df.KE_int.values),
-            np.array(toy.df.KE_init.values),
-            np.array(toy.df.KE_init.values),
-            None
-            )
-
-    @staticmethod
-    def CreateAnalysisInputNtuple(events : Data, upstream_energy_loss_params : dict, reco_regions : dict[np.ndarray], true_regions : dict[np.ndarray] = None, mc_reweight_params : dict = None, mc_reweight_stength : float = 3, fiducial_volume : list[float] = [0, 700], upstream_loss_func : callable = Fitting.poly2d) -> "AnalysisInput":
-        """ Create analysis input from an ntuple sample.
-
-        Args:
-            events (Data): ntuple sample
-            upstream_energy_loss_params (dict): upstream energy loss correction
-            reco_regions (dict[np.ndarray]): reco region masks
-            true_regions (dict[np.ndarray], optional): true process masks. Defaults to None.
-            mc_reweight_params (dict, optional): mc reweight parameters. Defaults to None.
-
-        Returns:
-            AnalysisInput: analysis input.
-        """
-        if mc_reweight_params is not None:
-            weights = RatioWeights(events.recoParticles.beam_inst_P, "gaussian", mc_reweight_params, mc_reweight_stength)
-        else:
-            weights = None
-
-        reco_KE_inst = KE(events.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass)
-        reco_upstream_loss = UpstreamEnergyLoss(reco_KE_inst, upstream_energy_loss_params, upstream_loss_func)
-        reco_KE_ff = reco_KE_inst - reco_upstream_loss
-
-        if min(fiducial_volume) > 0:
-            reco_KE_init = BetheBloch.InteractingKE(reco_KE_ff, min(fiducial_volume) * np.ones_like(reco_KE_ff), 25) # initial kinetic energy in the fiducial volume
-        else:
-            reco_KE_init = reco_KE_ff
-
-        reco_KE_int = reco_KE_ff - RecoDepositedEnergy(events, reco_KE_ff, "bb") # interacting kinetic energy
-        reco_track_length = events.recoParticles.beam_track_length
-        outside_tpc_reco = (events.recoParticles.beam_endPos_SCE.z < min(fiducial_volume)) | (events.recoParticles.beam_endPos_SCE.z > max(fiducial_volume))
-
-
-        if true_regions is not None:
-            true_KE_ff = events.trueParticles.beam_KE_front_face
-
-            if min(fiducial_volume) > 0:
-                true_KE_init = BetheBloch.InteractingKE(true_KE_ff, min(fiducial_volume) * np.ones_like(true_KE_ff), 25) # initial kinetic energy in the fiducial volume
-            else:
-                true_KE_init = true_KE_ff
-
-
-            true_KE_int = events.trueParticles.beam_traj_KE[:, -2]
-            true_track_length = events.trueParticles.beam_track_length
-            outside_tpc_true = (events.trueParticles.beam_traj_pos.z[:, -1] < min(fiducial_volume)) | (events.trueParticles.beam_traj_pos.z[:, -1] > max(fiducial_volume))
-            inelastic = events.trueParticles.true_beam_endProcess == "pi+Inelastic"
-
-        else:
-            true_KE_int = None
-            true_KE_init = None
-            true_KE_ff = None
-            true_track_length = None
-            outside_tpc_true = None
-            inelastic = None
-
-        mean_track_score = ak.fill_none(ak.mean(events.recoParticles.track_score, axis = -1), -0.05) # fill null values in case empty events are supplied
-
-        return AnalysisInput(
-            reco_regions,
-            inelastic,
-            true_regions,
-            outside_tpc_reco,
-            outside_tpc_true,
-            reco_track_length,
-            reco_KE_int,
-            reco_KE_init,
-            reco_KE_ff,
-            mean_track_score,
-            true_track_length,
-            true_KE_int,
-            true_KE_init,
-            true_KE_ff,
-            weights,
-            )
-
-
-    @staticmethod
-    def Concatenate(ais : list["AnalysisInput"]):
-        fields = MergeOutputs([vars(a) for a in ais])
-        return AnalysisInput(**fields)
-
-
-    def CreateTrainTestSamples(self, seed : int, train_fraction : float = None) -> dict:
-        """ Split analysis input into two samples
-
-        Args:
-            seed (int): seed for random permutation
-            train_fraction (float, optional): fraction of events to assign to train, if None, sample is split 50/50. Defaults to None.
-
-        Returns:
-            dict: train and test samples.
-        """
-        rng = np.random.default_rng(seed)
-        sample = rng.permutation(len(self.KE_init_reco))
-
-        if train_fraction is None:
-            fraction = len(sample) // 2
-        else:
-            fraction = round(train_fraction * len(sample))
-
-        train_indices = sample[:fraction]
-        test_indices = sample[fraction:]
-
-        train = {}
-        test = {}
-        for attr in vars(self):
-            value = getattr(self, attr)
-            if hasattr(value, "__iter__"):
-                if type(value) is dict:
-                    tmp_dict_train = {}
-                    tmp_dict_test = {}
-                    for k, v in value.items():
-                        tmp_dict_train[k] = v[train_indices]
-                        tmp_dict_test[k] = v[test_indices]
-                    train[attr] = tmp_dict_train
-                    test[attr] = tmp_dict_test
-                else:
-                    train[attr] = value[train_indices]
-                    test[attr] = value[test_indices]
-
-        return {"train" : AnalysisInput(**train), "test" : AnalysisInput(**test)}
-
-
-    def CreateHistograms(self, energy_slice : Slices, exclusive_process : str, reco : bool, mask : np.ndarray = None) -> dict[np.ndarray]:
-        """ Calculate Histogrames required for the cross section measurement using energy slicing. Note exclusive interaction histogram is without background subtraction.
-
-        Args:
-            energy_slice (Slices): energy slices
-            exclusive_process (str): exclusive process
-            reco (bool): use reco information?
-            mask (np.ndarray, optional): additional mask. Defaults to None.
-
-        Returns:
-            dict[np.ndarray]: histograms
-        """
-        KE_int = self.KE_int_true if reco is False else self.KE_int_reco
-        KE_init = self.KE_init_true if reco is False else self.KE_init_reco
-
-        if mask is None: mask = np.zeros_like(self.outside_tpc_reco, dtype = bool)
-
-        if self.outside_tpc_true is None:
-            outside_tpc = self.outside_tpc_reco | mask
-        else:
-            outside_tpc = self.outside_tpc_true | mask
-
-        if self.exclusive_process is not None:
-            channel_mask = self.exclusive_process[exclusive_process]
-        else:
-            channel_mask = self.regions[exclusive_process]
-
-        #! keep just in case
-        # if efficiency is True:
-        #     KE_int = KE_int[toy.df.beam_selection_mask]
-        #     KE_init = KE_init[toy.df.beam_selection_mask]
-        #     outside_tpc = outside_tpc[toy.df.beam_selection_mask]
-        #     channel_mask = channel_mask[toy.df.beam_selection_mask]
-
-        n_initial, n_interact_inelastic, n_interact_exclusive, n_incident = EnergySlice.CountingExperiment(KE_int, KE_init, outside_tpc, channel_mask, energy_slice, weights = self.weights)
-
-        output = {"init" : n_initial, "int" : n_interact_inelastic, "int_ex" : n_interact_exclusive, "inc" : n_incident}
-        return output
 
 
 class RegionFit:
@@ -2082,7 +929,13 @@ class RegionFit:
         print(f"   auxdata: {model.config.auxdata}")
 
     @staticmethod
-    def GenerateObservations(fit_input : AnalysisInput, energy_slices : Slices, mean_track_score_bins : np.ndarray, model : pyhf.Model, verbose : bool = True, single_bin : bool = False) -> np.ndarray:
+    def GenerateObservations(
+            fit_input : AnalysisInput,
+            energy_slices : Slicing.Slices,
+            mean_track_score_bins : np.ndarray,
+            model : pyhf.Model,
+            verbose : bool = True,
+            single_bin : bool = False) -> np.ndarray:
         data = RegionFit.CreateObservedInputData(fit_input, energy_slices, mean_track_score_bins, single_bin)
         if verbose is True: print(f"{model.config.suggested_init()=}")
         observations = np.concatenate(data + [model.config.auxdata])
@@ -2120,7 +973,12 @@ class RegionFit:
         return counts_matrix
 
     @staticmethod
-    def CreateKEIntTemplates(analysis_input : AnalysisInput, energy_slices : Slices, single_bin : bool = False, pad : bool = False, reco : bool = True) -> list[np.ndarray]:
+    def CreateKEIntTemplates(
+            analysis_input : AnalysisInput,
+            energy_slices : Slicing.Slices,
+            single_bin : bool = False,
+            pad : bool = False,
+            reco : bool = True) -> list[np.ndarray]:
         model_input_data = []
         for c in analysis_input.regions:
             tmp = []
@@ -2142,7 +1000,15 @@ class RegionFit:
         return np.array(templates)
 
     @staticmethod
-    def CreateModel(template : AnalysisInput, energy_slice : Slices, mean_track_score_bins : np.ndarray, return_templates : bool = False, weights : np.ndarray = None, mc_stat_unc : bool = True, pad : bool = True, single_bin : bool = False) -> pyhf.Model:
+    def CreateModel(
+            template : AnalysisInput,
+            energy_slice : Slicing.Slices,
+            mean_track_score_bins : np.ndarray,
+            return_templates : bool = False,
+            weights : np.ndarray = None,
+            mc_stat_unc : bool = True,
+            pad : bool = True,
+            single_bin : bool = False) -> pyhf.Model:
         templates_energy = RegionFit.CreateKEIntTemplates(template, energy_slice, single_bin, pad)
         if mean_track_score_bins is not None:
             templates_mean_track_score = RegionFit.CreateMeanTrackScoreTemplates(template, mean_track_score_bins, weights)
@@ -2156,7 +1022,11 @@ class RegionFit:
             return model
 
     @staticmethod
-    def CreateObservedInputData(fit_input : AnalysisInput, slices : Slices, mean_track_score_bins : np.ndarray = None, single_bin : bool = False) -> np.ndarray:
+    def CreateObservedInputData(
+            fit_input : AnalysisInput,
+            slices : Slicing.Slices,
+            mean_track_score_bins : np.ndarray = None,
+            single_bin : bool = False) -> np.ndarray:
         observed_binned = []
         if fit_input.inclusive_process is None:
             mask = np.ones_like(fit_input.KE_int_reco, dtype = bool)
@@ -2280,7 +1150,14 @@ class Unfold:
         return response, response_err
 
     @staticmethod #? move to Plots?
-    def PlotMatrix(matrix : np.ndarray, energy_slices : Slices, title : str = None, c_label : str = None, text : bool = False, text_colour = "k", cmap = "plasma"):
+    def PlotMatrix(
+            matrix : np.ndarray,
+            energy_slices : Slicing.Slices,
+            title : str = None,
+            c_label : str = None,
+            text : bool = False,
+            text_colour = "k",
+            cmap = "plasma"):
         """ Plot numpy matrix.
 
         Args:
@@ -2307,13 +1184,19 @@ class Unfold:
         return
 
     @staticmethod
-    def CalculateResponseMatrices(template : AnalysisInput, process : str, energy_slice : Slices, regions : bool = False, book : Plots.PlotBook = None, efficiencies : dict[np.ndarray] = None) -> dict[np.ndarray]:
+    def CalculateResponseMatrices(
+            template : AnalysisInput,
+            process : str,
+            energy_slice : Slicing.Slices,
+            regions : bool = False,
+            book : Plots.PlotBook = None,
+            efficiencies : dict[np.ndarray] = None) -> dict[np.ndarray]:
         """ Calculate response matrix of energy histograms from analysis input.
 
         Args:
             template (AnalysisInput): template analysis input
             process (str): exclusive process
-            energy_slice (Slices): energy slices
+            energy_slice (Slicing.Slices): energy slices
             book (Plots.PlotBook, optional): plot book. Defaults to None.
             efficiencies (dict[np.ndarray], optional): selection efficiencies. Defaults to None.
 
@@ -2324,8 +1207,12 @@ class Unfold:
 
         outside_tpc_mask = template.outside_tpc_reco | template.outside_tpc_true
 
-        true_slices = EnergySlice.SliceNumbers(template.KE_int_true, template.KE_init_true, outside_tpc_mask, energy_slice)
-        reco_slices = EnergySlice.SliceNumbers(template.KE_int_reco, template.KE_init_reco, outside_tpc_mask, energy_slice)
+        true_slices = Slicing.EnergySlice.SliceNumbers(
+            template.KE_int_true, template.KE_init_true,
+            outside_tpc_mask, energy_slice)
+        reco_slices = Slicing.EnergySlice.SliceNumbers(
+            template.KE_int_reco, template.KE_init_reco,
+            outside_tpc_mask, energy_slice)
 
         if regions:
             channel = {i : (template.exclusive_process[i])[~outside_tpc_mask] for i in template.regions}
@@ -2413,7 +1300,14 @@ class Unfold:
         return results
 
     @staticmethod
-    def PlotUnfoldingResults(obs : np.ndarray, obs_err : np.ndarray, true : np.ndarray, results : dict, energy_slices : Slices, title : str, book : Plots.PlotBook = Plots.PlotBook.null):
+    def PlotUnfoldingResults(
+            obs : np.ndarray,
+            obs_err : np.ndarray,
+            true : np.ndarray,
+            results : dict,
+            energy_slices : Slicing.Slices,
+            title : str,
+            book : Plots.PlotBook = Plots.PlotBook.null):
         """ Plot unfolded histogram in comparison to observed and true.
 
         Args:

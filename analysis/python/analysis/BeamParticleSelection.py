@@ -82,7 +82,9 @@ def TrueFiducialCut(events, is_mc : bool, cut : int = [30, 220], op = [">", "<"]
 
 
 def PiBeamSelection(events: Data, use_beam_inst : bool = False, return_property : bool = False) -> ak.Array:
-    """ Legacy Pi+ beam particle selection.
+    """
+    Legacy Pi+ beam particle selection.
+    Used during the normalisation calculation (apps.cex_normalisation)
 
     Args:
         events (Data): events to study.

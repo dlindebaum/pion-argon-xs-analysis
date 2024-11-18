@@ -7,14 +7,14 @@ Author: Shyam Bhuller
 Description: app to calculate systematic uncertainties for cross section measurement
 """
 from abc import ABC, abstractmethod
-
+import argparse
 import pandas as pd
 import numpy as np
 
 from rich import print
 from rich.rule import Rule
 
-from python.analysis import cross_section, Plots
+from python.analysis import cross_section, Plots, Processing, EnergyTools
 from python.analysis.Master import DictToHDF5
 from python.analysis.Utils import dill_copy, quadsum, round_value_to_error
 from apps import cex_toy_generator, cex_analyse, cex_fit_studies, cex_analysis_input
@@ -37,7 +37,11 @@ def SaveTables(tables : pd.DataFrame, outdir : str, precision : int):
 
 
 class MCMethod(ABC):
-    def __init__(self, args : cross_section.argparse.Namespace, model : cross_section.pyhf.Model, data_config : dict) -> None:
+    def __init__(
+            self,
+            args : argparse.Namespace,
+            model : cross_section.pyhf.Model,
+            data_config : dict) -> None:
         self.args = cross_section.dill_copy(args)
         self.model = model
         self.data_config = data_config
@@ -139,7 +143,7 @@ class MCMethod(ABC):
 
 
 class DataAnalysis(ABC):
-    def __init__(self, args : cross_section.argparse.Namespace) -> None:
+    def __init__(self, args : argparse.Namespace) -> None:
         self.args = dill_copy(args)
         pass
 
@@ -230,7 +234,7 @@ class DataAnalysis(ABC):
 
 
 class NuisanceParameters:
-    def __init__(self, args : cross_section.argparse.Namespace) -> None:
+    def __init__(self, args : argparse.Namespace) -> None:
         self.args = dill_copy(args)
         pass
 
@@ -339,7 +343,7 @@ class BeamReweightSystematic(DataAnalysis):
 class ShowerEnergyCorrectionSystematic(DataAnalysis):
     name = "shower_energy_correction_1_sigma"
 
-    def __init__(self, args: cross_section.argparse.Namespace) -> None:
+    def __init__(self, args: argparse.Namespace) -> None:
         super().__init__(args)
         self.args.batches = None
         self.args.events = None
@@ -389,7 +393,7 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
 
         merged_output = []
         for s in split_output:
-            o = cross_section.MergeOutputs(split_output[s])
+            o = Processing.MergeOutputs(split_output[s])
             if type(o["name"]) == list:
                 o["name"] = o["name"][0] 
             merged_output.append(o)
@@ -399,14 +403,14 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
     def CreateAltPi0Selections(self):
 
         self.args.cpus = 1
-        processing_args = cross_section.CalculateBatches(self.args)
+        processing_args = Processing.CalculateEventBatches(self.args)
         for k, v in processing_args.items():
             setattr(self.args, k, v)
 
         print("running MC")
-        output_mc = self.__merge(cross_section.RunProcess(self.args.ntuple_files["mc"], False, self.args, self.__run, False))
+        output_mc = self.__merge(Processing.RunProcess(self.args.ntuple_files["mc"], False, self.args, self.__run, False))
         print("running Data")
-        output_data = self.__merge(cross_section.RunProcess(self.args.ntuple_files["data"], True, self.args, self.__run, False))
+        output_data = self.__merge(Processing.RunProcess(self.args.ntuple_files["data"], True, self.args, self.__run, False))
         return {"mc" : output_mc, "data" : output_data}
 
 
@@ -434,7 +438,11 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
 class BeamMomentumResolutionSystematic(MCMethod):
     name = "beam_momentum_resolution"
 
-    def __init__(self, args: cross_section.argparse.Namespace, model: cross_section.pyhf.Model, data_config: dict) -> None:
+    def __init__(
+            self,
+            args: argparse.Namespace,
+            model: cross_section.pyhf.Model,
+            data_config: dict) -> None:
         super().__init__(args, model, data_config)
         self.P_reco_original = np.sqrt((self.args.toy_template.KE_init_reco + cross_section.Particle.from_pdgid(211).mass)**2 - (cross_section.Particle.from_pdgid(211).mass)**2)
 
@@ -442,8 +450,8 @@ class BeamMomentumResolutionSystematic(MCMethod):
     def RunExperiment(self, analysis_input_data : cross_section.AnalysisInput, resolution : float) -> tuple[dict, dict]:
         P_reco_smeared = self.P_reco_original * (1 + np.random.normal(0, resolution, len(self.P_reco_original)))
 
-        KE_init_reco = cross_section.KE(P_reco_smeared, cross_section.Particle.from_pdgid(211).mass)
-        KE_int_reco = cross_section.BetheBloch.InteractingKE(KE_init_reco, self.args.toy_template.track_length_reco, 10)
+        KE_init_reco = EnergyTools.KE(P_reco_smeared, cross_section.Particle.from_pdgid(211).mass)
+        KE_int_reco = EnergyTools.BetheBloch.InteractingKE(KE_init_reco, self.args.toy_template.track_length_reco, 10)
 
         self.args.toy_template.KE_ff_reco = KE_init_reco
         self.args.toy_template.KE_init_reco = KE_init_reco
@@ -458,7 +466,11 @@ class BeamMomentumResolutionSystematic(MCMethod):
 class TrackLengthResolutionSystematic(MCMethod):
     name = "track_length_resolution"
 
-    def __init__(self, args: cross_section.argparse.Namespace, model: cross_section.pyhf.Model, data_config: dict) -> None:
+    def __init__(
+            self,
+            args: argparse.Namespace,
+            model: cross_section.pyhf.Model,
+            data_config: dict) -> None:
         super().__init__(args, model, data_config)
         self.track_length_original = self.args.toy_template.track_length_reco
 
@@ -466,7 +478,7 @@ class TrackLengthResolutionSystematic(MCMethod):
     def RunExperiment(self, analysis_input_data : cross_section.AnalysisInput, resolution : float) -> tuple[dict, dict]:
         track_length_smeared = self.track_length_original * (1 + np.random.normal(0, resolution, len(self.track_length_original)))
 
-        KE_int_reco = cross_section.BetheBloch.InteractingKE(self.args.toy_template.KE_init_reco, track_length_smeared, 10)
+        KE_int_reco = EnergyTools.BetheBloch.InteractingKE(self.args.toy_template.KE_init_reco, track_length_smeared, 10)
         self.args.toy_template.KE_int_reco = KE_int_reco
 
         if self.args.fit["single_bin"] == False:
@@ -502,7 +514,11 @@ class TrackLengthResolutionSystematic(MCMethod):
 
 
 class TheoryShape(MCMethod):
-    def __init__(self, args: cross_section.argparse.Namespace, model: cross_section.pyhf.Model, data_config: dict) -> None:
+    def __init__(
+            self,
+            args: argparse.Namespace,
+            model: cross_section.pyhf.Model,
+            data_config: dict) -> None:
         super().__init__(args, model, data_config)
 
 
@@ -573,7 +589,11 @@ class NormalisationSystematic(MCMethod):
         return {"cv" : cvs, "true_cv" : true_cvs}
 
     @staticmethod
-    def PlotNormalisationTestResults(results : dict, args : cross_section.argparse.Namespace, xs_nominal : dict, book : Plots.PlotBook = Plots.PlotBook.null):
+    def PlotNormalisationTestResults(
+            results : dict,
+            args : argparse.Namespace,
+            xs_nominal : dict,
+            book : Plots.PlotBook = Plots.PlotBook.null):
         xs_sim = cross_section.GeantCrossSections()
         scale_factors = {"absorption" : 1, "charge_exchange" : 1, "pion_production" : 1, "double_charge_exchange" : 1, "quasielastic" : 1}
         for r in results["cv"]:
@@ -702,7 +722,10 @@ class NormalisationSystematic(MCMethod):
         return tables
 
 
-def CreateSystematicTable(out : str, data_only : dict, args : cross_section.argparse.Namespace) -> dict[pd.DataFrame]:
+def CreateSystematicTable(
+        out : str,
+        data_only : dict,
+        args : argparse.Namespace) -> dict[pd.DataFrame]:
     sys_err = {}
     for f in cross_section.ls_recursive(out):
         if "sys.dill" in f:
@@ -859,7 +882,7 @@ def can_regen(dir : str):
         return True
 
 @cross_section.timer
-def main(args : cross_section.argparse.Namespace):
+def main(args : argparse.Namespace):
     cross_section.PlotStyler.SetPlotStyle(dark = True)
     out = args.out + "systematics/"
     cross_section.os.makedirs(out, exist_ok = True)
@@ -1096,7 +1119,7 @@ def main(args : cross_section.argparse.Namespace):
 
 if __name__ == "__main__":
 
-    parser = cross_section.argparse.ArgumentParser("Estimate Systematics for the cross section analysis")
+    parser = argparse.ArgumentParser("Estimate Systematics for the cross section analysis")
     cross_section.ApplicationArguments.Config(parser)
     cross_section.ApplicationArguments.Output(parser, "systematic/")
 

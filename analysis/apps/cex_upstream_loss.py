@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+ #!/usr/bin/env python3
 """
 Created on: 26/09/2023 11:55
 
@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from apps.cex_analysis_input import BeamPionSelection
-from python.analysis import cross_section, Master, Plots
+from python.analysis import cross_section, Master, Plots, Processing, EnergyTools
 from rich import print
 
 cv_method = {
@@ -97,7 +97,7 @@ def main(args : argparse.Namespace):
     args.events = None
     args.threads = 1
 
-    output_mc = cross_section.ApplicationProcessing(["mc"], outdir, args, run, True)["mc"]
+    output_mc = Processing.ApplicationProcessing(["mc"], outdir, args, run, True)["mc"]
 
     if all(v is None for v in output_mc["weights"]):
         output_mc["weights"] = None
@@ -106,7 +106,7 @@ def main(args : argparse.Namespace):
     x = (bins[1:] + bins[:-1]) / 2
 
     with Plots.PlotBook(outdir + "cex_upstream_loss_plots.pdf") as pdf:
-        reco_KE_inst = cross_section.KE(output_mc["p_inst"], cross_section.Particle.from_pdgid(211).mass)
+        reco_KE_inst = EnergyTools.KE(output_mc["p_inst"], cross_section.Particle.from_pdgid(211).mass)
         with cross_section.PlotStyler().Update(font_scale = 1.3):
             cv = CentralValueEstimation(bins, reco_KE_inst, output_mc["KE_ff"], cv_method[args.upstream_loss_cv_function], output_mc["weights"])
         pdf.Save()
@@ -120,7 +120,11 @@ def main(args : argparse.Namespace):
             "error" : {f"p{i}" : params[1][i] for i in range(len(params[1]))}
         }
 
-        reco_KE_ff =  reco_KE_inst - cross_section.UpstreamEnergyLoss(reco_KE_inst, params_dict["value"], args.upstream_loss_response)
+        reco_KE_ff = (
+            reco_KE_inst
+            - EnergyTools.UpstreamEnergyLoss(
+                reco_KE_inst, params_dict["value"],
+                args.upstream_loss_response))
 
         Plots.PlotHistComparison([reco_KE_ff, output_mc["KE_ff"]], labels = ["$KE^{reco}_{init}$", "$KE^{true}_{init}$"], x_range = [bins[0], bins[-1]], xlabel = "Kinetic energy (MeV)", weights = [output_mc["weights"], output_mc["weights"]])
         pdf.Save()

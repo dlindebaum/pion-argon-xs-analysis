@@ -206,6 +206,23 @@ class crystal_ball(FitFunction):
     def var(p0, p1, p2, p3, p4):
         return p2
 
+class poly2d_old(FitFunction):
+    n_params = 3
+
+    def __new__(cls, x, p0, p1, p2) -> np.array:
+        return cls.func(x, p0, p1, p2)
+
+    @staticmethod
+    def func(x, p0, p1, p2):
+        return p0 + (p1 * x) + p2 * (x**2)
+
+    @staticmethod
+    def p0(x, y):
+        return None
+
+    @staticmethod
+    def bounds(x, y):
+        return ([-np.inf, -np.inf, -np.inf], [np.inf]*3)
 
 class poly2d(FitFunction):
     n_params = 3
@@ -215,7 +232,8 @@ class poly2d(FitFunction):
 
     @staticmethod
     def func(x, p0, p1, p2):
-        return p0 + (p1 * x) + p2 * (x**2)
+        return p2 * ((x - p1)**2) + p0
+        # return p0 + (p1 * x) + p2 * (x**2)
 
     @staticmethod
     def p0(x, y):
@@ -246,7 +264,7 @@ class exp(FitFunction):
 
 
 
-class poly3d(FitFunction):
+class poly3d_old(FitFunction):
     n_params = 4
 
     def __new__(cls, x, p0, p1, p2, p3) -> np.array:
@@ -255,6 +273,24 @@ class poly3d(FitFunction):
     @staticmethod
     def func(x, p0, p1, p2, p3):
         return p0 + (p1 * x) + (p2 * (x**2)) + (p3 * (x**3))
+
+    @staticmethod
+    def p0(x, y):
+        return None
+
+    @staticmethod
+    def bounds(x, y):
+        return ([-np.inf]*4, [np.inf]*4)
+
+class poly3d(FitFunction):
+    n_params = 4
+
+    def __new__(cls, x, p0, p1, p2, p3) -> np.array:
+        return cls.func(x, p0, p1, p2, p3)
+
+    @staticmethod
+    def func(x, p0, p1, p2, p3):
+        return p3 * ((x - p1)**3) + p2 * (x - p1) + p0
 
     @staticmethod
     def p0(x, y):

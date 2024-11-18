@@ -17,6 +17,8 @@ from python.gnn import Models
 
 criteria = namedtuple("criteria", ["op", "value"])
 
+gnn_selections = ["gnn"]
+
 @dataclass
 class process_criteria:
     loose_pi : criteria
@@ -136,8 +138,10 @@ regions = {
             process_criteria(criteria(">=", 0), criteria(">=", 0), criteria(">", 1), criteria(">=", 0), criteria(">=", 0)),
             process_criteria(criteria(">=", 0), criteria(">=", 0), criteria(">=", 0), criteria(">=", 0), criteria(">", 1)),
             process_criteria(criteria(">=", 0), criteria(">=", 0), criteria("==", 1), criteria(">=", 0), criteria("==", 1)),
-        ],
-    }
+        ]
+    },
+    "gnn_per_event" : "NOT IMPLEMENTED",
+    "gnn" : "gnn"
 }
 
 def TrueRegions(pi0_counts, pi_charged_counts):

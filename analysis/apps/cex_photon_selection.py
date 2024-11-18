@@ -17,7 +17,9 @@ from rich import print
 
 from scipy.optimize import curve_fit
 
-from python.analysis import Master, Processing, cross_section, EventSelection, Tags, SelectionTools, Plots, Fitting
+from python.analysis import (
+    Master, Processing, cross_section, EventSelection, Tags,
+    SelectionTools, Plots, Fitting, EnergyTools)
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # hide pesky pandas warnings (performance is actually ok)
 
@@ -173,7 +175,8 @@ def LinearFitPerformance(df : pd.DataFrame, linear_correction : float, book : Pl
     Args:
         linear_correction (float): correction from fit
     """
-    corrected_energy = cross_section.EnergyCorrection.LinearCorrection(df.reco_shower_energy, linear_correction)
+    corrected_energy = EnergyTools.EnergyCorrection.LinearCorrection(
+        df.reco_shower_energy, linear_correction)
 
     fe = (df.reco_shower_energy / df.true_energy) - 1
     fec = (corrected_energy / df.true_energy) - 1
@@ -247,7 +250,13 @@ def ResponseFits(central_values : dict, bins : np.ndarray, book : Plots.PlotBook
     for _, cv in Plots.IterMultiPlot(central_values):
         print(cv)
         print(central_values[cv][1])
-        popt, perr = Fitting.Fit(x, central_values[cv][0], central_values[cv][1], cross_section.EnergyCorrection.ResponseFit, method = "lm", plot = True, xlabel = "Reco shower energy (MeV)", ylabel = "Fractional error", maxfev = int(1E6))
+        popt, perr = Fitting.Fit(
+            x, central_values[cv][0], central_values[cv][1],
+            EnergyTools.EnergyCorrection.ResponseFit,
+            method = "lm", plot = True,
+            xlabel = "Reco shower energy (MeV)",
+            ylabel = "Fractional error",
+            maxfev = int(1E6))
         Plots.plt.ylim(-1, 1)
         Plots.plt.title(cv)
         response_params[cv] = {"value" : popt, "error" : perr}
@@ -258,7 +267,13 @@ def ResponseFits(central_values : dict, bins : np.ndarray, book : Plots.PlotBook
 
     for cv in central_values:
         Plots.plt.figure()
-        popt, _ = Fitting.Fit(x, central_values[cv][0], central_values[cv][1], cross_section.EnergyCorrection.ResponseFit, method = "lm", plot = True, xlabel = "Reco shower energy (MeV)", ylabel = "Fractional error", maxfev = int(1E6))
+        popt, _ = Fitting.Fit(
+            x, central_values[cv][0], central_values[cv][1],
+            EnergyTools.EnergyCorrection.ResponseFit,
+            method = "lm", plot = True,
+            xlabel = "Reco shower energy (MeV)",
+            ylabel = "Fractional error",
+            maxfev = int(1E6))
         Plots.plt.ylim(-1, 1)
         book.Save()
     return response_params
@@ -268,7 +283,8 @@ def MethodComparison(df : pd.DataFrame, linear_correction : float, response_para
     energies = {"uncorrected" : df.reco_shower_energy, "linear" : df.reco_shower_energy / linear_correction}
 
     for p in response_params:
-        energies[p] = cross_section.EnergyCorrection.ResponseCorrection(df.reco_shower_energy, *response_params[p]["value"])
+        energies[p] = EnergyTools.EnergyCorrection.ResponseCorrection(
+            df.reco_shower_energy, *response_params[p]["value"])
 
     energies = {"uncorrected" : energies["uncorrected"], "gaussian" : energies["gaussian"]}
 
@@ -320,7 +336,7 @@ def main(args):
     out = args.out + "shower_energy_correction/"
 
     if (not os.path.isfile(out + "photon_energies.hdf5")) or args.regen:
-        output = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
+        output = Processing.RunProcess(args.ntuple_files["mc"], False, args, run)
 
         output_photons = pd.DataFrame({i : output[i] for i in output if "shower_pairs" not in i and "tags" not in i})
         output_pairs = pd.DataFrame({i : output[i] for i in output if "shower_pairs" in i and "tags" not in i})

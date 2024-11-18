@@ -1714,6 +1714,20 @@ def _get_reco_class(context):
         int((n_pions + n_pi0s) >= 2)])
     return conds
 
+_context_truths = [
+    "mc_pions", "mc_photons", "mc_pi0s",
+    "bt_pions", "bt_photons", "bt_pi0s", "reco_class"]
+_pfo_truths = [
+    "beam_daughter", "beam_granddaughter", "pi0_granddaughter",
+    "beam_related", "beam_relevant", "pion", "photon",
+    "beam_pion", "beam_photon"]
+_neighbour_truths = ["true_pi0", "beam_pi0"]
+_beam_conn_truths = [
+    "true_daughter", "true_granddaughter", "pi0_granddaughter",
+    "beam_related", "beam_relevant"]
+known_truths = (_context_truths + _pfo_truths
+                + _neighbour_truths + _beam_conn_truths)
+
 def _make_decode_func(schema_path, extra_losses=None):
     """Create a decoding function to parse records"""
     graph_spec = tfgnn.create_graph_spec_from_schema_pb(

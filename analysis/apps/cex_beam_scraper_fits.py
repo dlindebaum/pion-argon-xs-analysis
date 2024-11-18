@@ -16,7 +16,8 @@ import numpy as np
 from particle import Particle
 from rich import print
 
-from python.analysis import Master, cross_section, Plots, Fitting, Processing
+from python.analysis import (
+    Master, cross_section, Plots, Fitting, Processing, EnergyTools)
 
 
 def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
@@ -26,7 +27,7 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
         mask = args["beam_selection"]["selections"][s](mc, **args["beam_selection"]["mc_arguments"][s])
         mc.Filter([mask], [mask])
 
-    beam_inst_KE = cross_section.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
+    beam_inst_KE = EnergyTools.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
     true_ffKE = mc.trueParticles.beam_KE_front_face
 
     beam_inst_x = mc.recoParticles.beam_inst_pos.x
@@ -48,7 +49,7 @@ def GetTrueFFKE(KE_tpc : ak.Array, length_to_ff : ak.Array) -> ak.Array:
     Returns:
         ak.Array: true kinetic energy at the front face of the TPC
     """
-    dEdX = cross_section.BetheBloch.meandEdX(KE_tpc, Particle.from_pdgid(211))
+    dEdX = EnergyTools.BetheBloch.meandEdX(KE_tpc, Particle.from_pdgid(211))
     return KE_tpc + dEdX * length_to_ff
 
 
@@ -199,7 +200,7 @@ def main(args : argparse.Namespace):
     outdir = args.out + "beam_scraper/"
     os.makedirs(outdir, exist_ok = True)
 
-    output_mc = cross_section.ApplicationProcessing(["mc"], outdir, args, run, True)["mc"]
+    output_mc = Processing.ApplicationProcessing(["mc"], outdir, args, run, True)["mc"]
 
     residual_range = [-300, 300] # range of residual for plots
     bins = 50

@@ -7,12 +7,200 @@ Description: Generic tools to use when making selections on Data.
 """
 from functools import wraps
 
+import os
 import operator
 import awkward as ak
 import numpy as np
 import pandas as pd
+from rich import print as rprint
+from python.analysis.Master import Data, SaveObject
+from python.analysis import Tags
 
-from python.analysis.Master import Data
+def CalculateArrowLength(value, x_range):
+    if x_range is None:
+        l = ak.max(value)
+    else:
+        l = max(x_range)
+    return 0.1 * l
+
+def MakeOutput(value : ak.Array, tags : Tags.Tags, cuts : list = [], op : list = [], fs_tags : Tags.Tags = None) -> dict:
+    """ Output dictionary for multiprocessing class, if we want to be fancy this can be a dataclass instead.
+        Generally the data stored in this dictionary should be before any cuts are applied, for plotting purposes.
+
+    Args:
+        value (ak.Array): value which is being studied
+        tags (Tags.Tags): tags which categorise the value
+        cuts (list, optional): cut values used on this data. Defaults to [].
+        cuts (list, optional): operation of cut. Defaults to [].
+        fs_tags (Tags.Tags, optional): final state tags to the data. Defaults to None.
+
+    Returns:
+        dict: dictionary of data.
+    """
+    return {"value" : value, "tags" : tags, "cuts" : cuts, "op" : op, "fs_tags" : fs_tags}
+
+
+def MergeOutputs(outputs : list) -> dict:
+    """ Merge multiprocessing output into a single dictionary.
+
+    Args:
+        outputs (list): outputs from multiprocessing job.
+
+    Returns:
+        dict: merged output
+    """
+    merged_output = {}
+
+    for output in outputs:
+        for selection in output:
+            if selection == "name":
+                if selection not in merged_output:
+                    merged_output[selection] = [output[selection]]
+                else:
+                    merged_output[selection].append(output[selection])
+                continue
+            if selection not in merged_output:
+                merged_output[selection] = {}
+            if output[selection] is None:
+                continue
+            for o in output[selection]:
+                if o not in merged_output[selection]:
+                    if o == "masks":
+                        merged_output[selection][o] = [output[selection][o]] # need to treat mask merging more carefully
+                    else:
+                        merged_output[selection][o] = output[selection][o]
+                    continue                    
+                if output[selection][o] is None: continue
+                if selection == "regions":
+                    for m in output[selection][o]:
+                        merged_output[selection][o][m] = ak.concatenate([merged_output[selection][o][m], output[selection][o][m]])
+                else:
+                    if o == "table":
+                        tmp = merged_output[selection][o] + output[selection][o]
+                        tmp.Name = merged_output[selection][o].Name
+                        merged_output[selection][o] = tmp
+                    elif o == "masks":
+                        merged_output[selection][o].append(output[selection][o]) # need to treat mask merging more carefully
+                    else:
+                        for c in output[selection][o]:
+                            if output[selection][o][c]["value"] is not None:
+                                if c in ["PiBeamSelection"]:
+                                    for i in merged_output[selection][o][c]["value"]:
+                                        merged_output[selection][o][c]["value"][i] = merged_output[selection][o][c]["value"][i] + output[selection][o][c]["value"][i] 
+                                else:
+                                    merged_output[selection][o][c]["value"] = ak.concatenate([merged_output[selection][o][c]["value"], output[selection][o][c]["value"]]) 
+
+                            if output[selection][o][c]["tags"] is not None:
+                                for t in merged_output[selection][o][c]["tags"]:
+                                    merged_output[selection][o][c]["tags"][t].mask = ak.concatenate([merged_output[selection][o][c]["tags"][t].mask, output[selection][o][c]["tags"][t].mask])
+
+                            if output[selection][o][c]["fs_tags"] is not None:
+                                for t in merged_output[selection][o][c]["fs_tags"]:
+                                    merged_output[selection][o][c]["fs_tags"][t].mask = ak.concatenate([merged_output[selection][o][c]["fs_tags"][t].mask, output[selection][o][c]["fs_tags"][t].mask])
+
+    rprint("merged_output")
+    rprint(merged_output)
+    return merged_output
+
+def MergeSelectionMasks(output):
+    files = output["name"]
+
+    masks ={}
+    for k, v in output.items():
+        if (k not in ["name", "regions"]) and (len(v) > 0):
+            masks[k] = v["masks"]
+
+    unique_files = np.unique(files)
+
+    merged_masks = {}
+
+    for i, file in enumerate(unique_files):
+        merged_masks[file] = {} 
+        for k, v in masks.items():
+            merged_v = []
+            for j, f in zip(v, files):
+                if f == file:
+                    merged_v.append(j)
+            merged_masks[file][k] = merged_v
+
+    for f in merged_masks:
+        selection_masks = {}
+        for t in merged_masks[f]:
+            m = {}
+            for i in merged_masks[f][t]:
+                for k, v in i.items():
+                    if k not in m:
+                        m[k] = v
+                    else:
+                        m[k] = ak.concatenate([m[k], v])
+            selection_masks[t] = m
+        merged_masks[f] = selection_masks
+
+    sorted_masks = {}
+    for f in merged_masks:
+        for k, v in merged_masks[f].items():
+            if k not in sorted_masks:
+                sorted_masks[k] = [v]
+            else:
+                sorted_masks[k].append(v)
+
+    for k in output:
+        if (k not in ["name", "regions"]) and (k in sorted_masks):
+            output[k]["masks"] = sorted_masks[k]
+    output["name"] = list(merged_masks.keys())
+
+    return output
+
+def MakeTables(output : dict, out : str, sample : str):
+    """ Create cutflow tables.
+
+    Args:
+        output (dict): output data
+        out (str): output name
+        sample (str): sample name i.e. mc or data
+    """
+    for s in output:
+        print(f"{s=}")
+        if "table" in output[s]:
+            outdir = out + s + "/"
+            os.makedirs(outdir, exist_ok = True)
+            df = output[s]["table"]
+            df = df.rename(columns = {i : i.replace(" remaining", "") for i in df})
+            print(df)
+            purity = pd.concat([df["Name"], df.iloc[:, df.columns.to_list().index("Name") + 1:].div(df.iloc[:, df.columns.to_list().index("Name") + 1], axis = 0)], axis = 1)
+            efficiency = pd.concat([df["Name"], df.iloc[:, df.columns.to_list().index("Name") + 1:].div(df.iloc[0, df.columns.to_list().index("Name") + 1:], axis = 1)], axis = 1)
+
+            df.to_hdf(outdir + s + "_counts.hdf5", key='df')
+            purity.to_hdf(outdir + s + "_purity.hdf5", key='df')
+            efficiency.to_hdf(outdir + s + "_efficiency.hdf5", key='df')
+            
+            df.style.hide(axis = "index").to_latex(outdir + s + "_counts.tex")
+            purity.style.hide(axis = "index").to_latex(outdir + s + "_purity.tex")
+            efficiency.style.hide(axis = "index").to_latex(outdir + s + "_efficiency.tex")
+    return
+
+
+def SaveMasks(output : dict, out : str):
+    """ Save selection masks to dill file
+
+    Args:
+        output (dict): masks
+        out (str): output file directory
+    """
+    os.makedirs(out, exist_ok = True)
+
+    files = output["name"]
+
+    masks = {}
+    for k, v in output.items():
+        if (k not in ["name", "regions"]) and (len(v) > 0):
+            masks[k] = {}
+            for f, i in zip(files, v["masks"]):
+                masks[k][f] = i
+    
+    for k in masks:
+        SaveObject(out + f"{k}_selection_masks.dill", masks[k])
+    return
 
 def CombineMasks(masks : dict, operator : str = "and") -> ak.Array:
     mask = None

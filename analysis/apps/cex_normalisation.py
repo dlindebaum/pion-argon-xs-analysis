@@ -14,7 +14,8 @@ import awkward as ak
 
 from rich import print
 
-from python.analysis import Master, Plots, cross_section, BeamParticleSelection, Tags
+from python.analysis import (
+    Master, Plots, cross_section, BeamParticleSelection, Tags, Processing)
 
 
 def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
@@ -33,7 +34,7 @@ def main(args):
     outdir = args.out + "beam_norm/"
     os.makedirs(outdir, exist_ok = True)
     
-    outputs = cross_section.ApplicationProcessing(list(args.ntuple_files.keys()), outdir, args, run, True)
+    outputs = Processing.ApplicationProcessing(list(args.ntuple_files.keys()), outdir, args, run, True)
 
     n_data = ak.sum(outputs["data"]["mask"])
     n_mc = ak.sum(outputs["mc"]["mask"])

@@ -5,9 +5,19 @@ Author: Shyam Bhuller
 
 Description: random functions which are sometimes useful
 """
+import argparse
 import numpy as np
 import os
 import dill
+
+
+def args_to_dict(args : argparse.Namespace | dict) -> dict:
+    if type(args) == argparse.Namespace:
+        args_c = vars(args)
+    else:
+        args_c = args
+
+    return args_c
 
 def dill_copy(obj : any):
     return dill.loads(dill.dumps(obj))

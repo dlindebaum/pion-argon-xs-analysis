@@ -7,6 +7,7 @@ Author: Shyam Bhuller
 Description: app which performs cross checks for the region fit using toys.
 """
 import os
+import argparse
 
 import itertools
 import numpy as np
@@ -17,7 +18,7 @@ from rich import print, rule
 from scipy.ndimage import gaussian_filter1d
 
 
-from python.analysis import cross_section, Plots
+from python.analysis import cross_section, Plots, Slicing
 from python.analysis.Master import DictToHDF5, ReadHDF5
 from apps import cex_toy_generator
 
@@ -61,7 +62,7 @@ def CreateConfigNormalisation(scales : dict, data_config : dict) -> dict:
     return cfg
 
 
-def ModifiedConfigTest(config : dict, energy_slice : cross_section.Slices, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, mean_track_score_bins : np.array = None, single_bin : np.array = False) -> tuple[dict]:
+def ModifiedConfigTest(config : dict, energy_slice : Slicing.Slices, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, mean_track_score_bins : np.array = None, single_bin : np.array = False) -> tuple[dict]:
     toy_alt_pdf = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.run(config)))
     
     obs = cross_section.RegionFit.GenerateObservations(toy_alt_pdf, energy_slice, mean_track_score_bins, model, False, single_bin)
@@ -76,7 +77,7 @@ def ModifiedConfigTest(config : dict, energy_slice : cross_section.Slices, model
     return fit_result, true_process_counts, expected_mus
 
 
-def NormalisationTest(directory : str, data_config : dict, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, energy_slice : cross_section.Slices, mean_track_score_bins : np.ndarray, single_bin : bool):
+def NormalisationTest(directory : str, data_config : dict, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, energy_slice : Slicing.Slices, mean_track_score_bins : np.ndarray, single_bin : bool):
     for target in folder:
         print(target)
 
@@ -168,7 +169,7 @@ def SmoothStep(x : np.ndarray, high : float, low : float, split : float, smooth_
         return gaussian_filter1d(step, smooth_amount)
 
 
-def ShapeTestNew(directory : str, data_config : dict, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, mean_track_score_bins : np.array, xs_sim : cross_section.GeantCrossSections, energy_slices : cross_section.Slices, single_bin):
+def ShapeTestNew(directory : str, data_config : dict, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, mean_track_score_bins : np.array, xs_sim : cross_section.GeantCrossSections, energy_slices : Slicing.Slices, single_bin):
     n = [0.8, 1, 1.2]
     alpha = [500, 1000]
     x0 = [500, 1000, 1500]
@@ -208,7 +209,7 @@ def ShapeTestNew(directory : str, data_config : dict, model : cross_section.pyhf
     return
 
 
-def PullStudy(template : cross_section.AnalysisInput, model : cross_section.pyhf.Model, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, data_config : dict, n : int, single_bin) -> dict:
+def PullStudy(template : cross_section.AnalysisInput, model : cross_section.pyhf.Model, energy_slices : Slicing.Slices, mean_track_score_bins : np.ndarray, data_config : dict, n : int, single_bin) -> dict:
     out = {"expected" : None, "scale" : pd.Series(len(template) / data_config["events"]), "bestfit" : None, "uncertainty" : None}
 
     cfg = {k : v for k, v in data_config.items()}
@@ -237,7 +238,7 @@ def PullStudy(template : cross_section.AnalysisInput, model : cross_section.pyhf
     return out
 
 
-def PullStudyFast(toys : cross_section.Toy, n_template : int, n_data : int, args, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, n : int) -> dict:
+def PullStudyFast(toys : cross_section.Toy, n_template : int, n_data : int, args, energy_slices : Slicing.Slices, mean_track_score_bins : np.ndarray, n : int) -> dict:
     out = {"expected" : None, "scale" : None, "bestfit" : None, "uncertainty" : None}
 
     @cross_section.timer
@@ -285,7 +286,7 @@ def PullStudyFast(toys : cross_section.Toy, n_template : int, n_data : int, args
     out["scale"] = pd.DataFrame(scales)
     return out
 
-def PlotShapeExamples(energy_slices : cross_section.Slices, book : Plots.PlotBook = Plots.PlotBook.null):
+def PlotShapeExamples(energy_slices : Slicing.Slices, book : Plots.PlotBook = Plots.PlotBook.null):
     norms = [0.8, 1.2]
     split = 1000
     smooth_amount = 500
@@ -648,7 +649,7 @@ def Summary(directory : str, test_name : str, model_name : str, model : cross_se
     return ymax
 
 
-def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, template : cross_section.AnalysisInput, book : Plots.PlotBook = Plots.PlotBook.null):
+def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : Slicing.Slices, mean_track_score_bins : np.ndarray, template : cross_section.AnalysisInput, book : Plots.PlotBook = Plots.PlotBook.null):
     tags = cross_section.Tags.ExclusiveProcessTags(template.exclusive_process)
     for j, c in Plots.IterMultiPlot(templates_energy):
         for i, s in enumerate(c):
@@ -667,7 +668,7 @@ def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : n
     return
 
 
-def PlotTotalChannel(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, book : Plots.PlotBook = Plots.PlotBook.null):
+def PlotTotalChannel(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : Slicing.Slices, mean_track_score_bins : np.ndarray, book : Plots.PlotBook = Plots.PlotBook.null):
     for j, c in Plots.IterMultiPlot(templates_energy):
         Plots.Plot(energy_slices.pos_overflow, sum(c), xlabel = f"$n_{{{j}}}$ (MeV)", ylabel = "Counts", style = "bar", newFigure = False)
     book.Save()
@@ -714,7 +715,7 @@ def CalculateResultsFromFile(workdirs, test_name, model_name, template_counts, m
 
 
 @cross_section.timer
-def main(args : cross_section.argparse.Namespace):
+def main(args : argparse.Namespace):
     cross_section.PlotStyler.SetPlotStyle(extend_colors = True, dark = True, font_scale = 1.4)
     toys = cross_section.Toy(file = args.template)
     args.template = cross_section.AnalysisInput.CreateAnalysisInputToy(toys)
@@ -862,7 +863,7 @@ def main(args : cross_section.argparse.Namespace):
 
 
 if __name__ == "__main__":
-    parser = cross_section.argparse.ArgumentParser("app which performs cross checks for the region fit using toys.")
+    parser = argparse.ArgumentParser("app which performs cross checks for the region fit using toys.")
     
     cross_section.ApplicationArguments.Config(parser, True)
 

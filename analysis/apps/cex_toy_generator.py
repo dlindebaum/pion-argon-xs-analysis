@@ -17,6 +17,7 @@ from math import ceil
 import numpy as np
 import pandas as pd
 
+from particle import Particle
 from alive_progress import alive_it
 from pathos.pools import ProcessPool
 from rich import print
@@ -25,7 +26,8 @@ from scipy.stats import gaussian_kde
 
 from python.analysis.Master import timer, LoadConfiguration, ReadHDF5, LoadObject
 from python.analysis import Fitting, Utils
-from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle, GEANT_XS
+from python.analysis.EnergyTools import BetheBloch
+from python.analysis.cross_section import ApplicationArguments, GeantCrossSections, GEANT_XS
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # supress annoying pandas warnings
 

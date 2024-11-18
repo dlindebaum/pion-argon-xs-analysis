@@ -7,13 +7,18 @@ Author: Shyam Bhuller
 Description: 
 """
 from rich import print
+import argparse
+import os
 
 from apps import (
     cex_normalisation,
     cex_beam_quality_fits, 
     cex_beam_scraper_fits,
     cex_photon_selection,
-    cex_selection_studies, 
+    cex_beam_selection_studies,
+    cex_region_selection_studies,
+    # cex_selection_studies, 
+    cex_gnn_predictions,
     cex_beam_reweight, 
     cex_upstream_loss,
     cex_toy_parameters,
@@ -21,7 +26,8 @@ from apps import (
     cex_analyse
     )
 
-from python.analysis.cross_section import ApplicationArguments, argparse, os, CalculateBatches, file_len
+from python.analysis.cross_section import ApplicationArguments
+from python.analysis.Processing import CalculateEventBatches, file_len
 from python.analysis.Master import SaveConfiguration, LoadConfiguration
 
 
@@ -343,9 +349,48 @@ def update_args(processing_args : dict = {}):
     return new_args
 
 
-def check_run(args : argparse.Namespace, step : str):
-    return ((step in args.run) or (args.force is True)) and (step not in args.skip)
+def check_run(args : argparse.Namespace, step : str, can_run : bool):
+    run_req = step in args.run if len(args.run) > 0 else True
+    return (run_req
+            and (can_run or (args.force is True))
+            and (step not in args.skip))
 
+def check_run_dict(args, no_data):
+    can_run = {
+        "normalisation": (
+            (not no_data)
+            and ((args.norm is None)
+                    or ("beam_norm" not in os.listdir(args.out)))),
+        "beam_quality":
+            (not hasattr(args, "mc_beam_quality_fit"))
+            or ((not no_data)
+                and (not hasattr(args, "data_beam_quality_fit"))),
+        "beam_scraper": not hasattr(args, "mc_beam_scraper_fit"),
+        "photon_correction": 
+            hasattr(args, "shower_correction")
+            and (not args.gnn_do_predict)
+            and (args.shower_correction["correction_params"] is None),
+        "beam_selection": not hasattr(args, "beam_selection_masks"),
+        "region_selection": 
+            (not args.gnn_do_predict)
+            and (not hasattr(args, "region_selection_masks")),
+        # "selection": not hasattr(args, "selection_masks"),
+        "gnn_prediction":
+            args.gnn_do_predict
+            and (not hasattr(args, "gnn_results")),
+        "reweight": 
+            ("params" not in args.beam_reweight) and (not no_data),
+        "upstream_correction":
+            not hasattr(args, "upstream_loss_correction_params"),
+        "toy_parameters":
+            hasattr(args, "toy_parameters")
+            and hasattr(args, "beam_reweight")
+            and ("toy_parameters" not in os.listdir(args.out)),
+        "analysis_input":
+            (not hasattr(args, "analysis_input"))
+            and (not no_data),
+        "analyse": True}
+    return {k: check_run(args, k, v) for k, v in can_run.items()}
 
 def main(args):
     os.makedirs(args.out, exist_ok = True)
@@ -364,12 +409,18 @@ def main(args):
         if no_data:
             print("no data file was specified, 'normalisation', 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
 
-        processing_args = CalculateBatches(args)
+        processing_args = CalculateEventBatches(args)
         args = update_args(processing_args)
 
+        do_runs = check_run_dict(args, no_data)
+        stop_text = (f" (stopping after running {args.stop}):"
+                     if args.stop is not None else ":")
+        print("Apps to run" + stop_text)
+        print(do_runs)
+
         #* normalisation 
-        can_run_norm = (not no_data) and ((args.norm is None) or ("beam_norm" not in os.listdir(args.out)))
-        if can_run_norm or check_run(args, "normalisation"):
+        # can_run_norm = (not no_data) and ((args.norm is None) or ("beam_norm" not in os.listdir(args.out)))
+        if do_runs["normalisation"]:
             print("calculate beam normalisation")
             cex_normalisation.main(args)
             output_path = args.out + "beam_norm/"
@@ -380,8 +431,8 @@ def main(args):
         if args.stop == "normalisation": return
 
         #* beam quality
-        can_run_bq = (not hasattr(args, "mc_beam_quality_fit")) or ((len(n_data) > 0) and (not hasattr(args, "data_beam_quality_fit")))
-        if can_run_bq or check_run(args, "beam_quality"):
+        # can_run_bq = (not hasattr(args, "mc_beam_quality_fit")) or ((len(n_data) > 0) and (not hasattr(args, "data_beam_quality_fit")))
+        if do_runs["beam_quality"]:
             print("run beam quality fit")
             cex_beam_quality_fits.main(args)
             output_path = args.out + "beam_quality/"
@@ -401,8 +452,8 @@ def main(args):
         if args.stop == "beam_quality": return
 
         #* beam scraper
-        can_run_bs = not hasattr(args, "mc_beam_scraper_fit")
-        if can_run_bs or check_run(args, "beam_scraper"):
+        # can_run_bs = not hasattr(args, "mc_beam_scraper_fit")
+        if do_runs["beam_scraper"]:
             print("run beam scraper fit")
             cex_beam_scraper_fits.main(args)
             output_path = args.out + "beam_scraper/"
@@ -421,9 +472,9 @@ def main(args):
             args = update_args(processing_args) # reload config to continue
         if args.stop == "beam_scraper": return
 
-        #* photon energy correction
-        can_run_pec = hasattr(args, "shower_correction") and (args.shower_correction["correction_params"] is None)
-        if can_run_pec or check_run(args, "photon_correction"):
+        # * photon energy correction
+        # Separate to prevent force
+        if do_runs["photon_correction"] and (not args.gnn_do_predict):
             print("run shower correction")
             args.events = None
             args.batches = None
@@ -445,42 +496,126 @@ def main(args):
             args = update_args(processing_args) # reload config to continue
         if args.stop == "photon_correction": return
 
-        #* selection studies
-        can_run_ss = not hasattr(args, "selection_masks")
-        if can_run_ss or check_run(args, "selection"):
-            print("run selection")
+        #* beam selection studies
+        if do_runs["beam_selection"]:
+            print("run beam selection")
             args.mc_only = len(n_data) == 0
             args.nbins = 50
-            cex_selection_studies.main(args)
+            cex_beam_selection_studies.main(args)
 
             output_path = args.out
             print("outputs: " + output_path)
             target_files = {
-            "mc" : "masks_mc",
-            "data" : "masks_data"
+                "mc" : "masks_mc",
+                "data" : "masks_data"
             }
             mask_map = {
                 "beam" : 'beam_selection_masks.dill',
-                "null_pfo" : 'null_pfo_selection_masks.dill',
-                "photon" : 'photon_selection_masks.dill',
-                "pi0" : 'pi0_selection_masks.dill',
-                "pi" : 'pi_selection_masks.dill',
-                "loose_pi"  : "loose_pi_selection_masks.dill",
-                "loose_photon" : "loose_photon_selection_masks.dill",
-                "fiducial" : "fiducial_selection_masks.dill"
+                "fiducial" : "fiducial_selection_masks.dill",
+                "null_pfo" : 'null_pfo_selection_masks.dill'
             }
             new_config_entry = {}
             files = os.listdir(output_path)
             for k, v in target_files.items():
                 if v in files:
                     new_config_entry[k] = {i : os.path.abspath(output_path + v + "/" + j) for i, j in mask_map.items() if os.path.isfile(output_path + v + "/" + j)}
-            update_config(args.config, {"SELECTION_MASKS" : new_config_entry})
+            update_config(args.config, {"BEAM_SELECTION_MASKS" : new_config_entry})
             args = update_args(processing_args) # reload config to continue
-        if args.stop == "selection": return
+        if args.stop == "beam_selection": return
+
+        if args.gnn_do_predict:
+            #* GNN predictions, separate to prevent force changing it
+            if do_runs["gnn_prediction"]:
+                print("run GNN prediction")
+                args.mc_only = len(n_data) == 0
+                args.nbins = 50
+                cex_gnn_predictions.main(args)
+
+                output_path = args.out
+                print("outputs: " + output_path)
+                target_files = {
+                    "mc" : "predictions_mc",
+                    "data" : "predictions_data"
+                }
+                mask_map = {
+                    "predictions" : 'gnn_predictions.dill',
+                    "ids" : 'gnn_ids.dill',
+                    "truth_regions" : 'gnn_truth_regions.dill'
+                }
+                new_config_entry = {}
+                files = os.listdir(output_path)
+                for k, v in target_files.items():
+                    if v in files:
+                        new_config_entry[k] = {i : os.path.abspath(output_path + v + "/" + j) for i, j in mask_map.items() if os.path.isfile(output_path + v + "/" + j)}
+                update_config(args.config, {"GNN_PREDICTIONS" : new_config_entry})
+                args = update_args(processing_args) # reload config to continue
+        else:
+            #* region selection studies
+            if do_runs["region_selection"]:
+                print("run region selection")
+                args.mc_only = len(n_data) == 0
+                args.nbins = 50
+                cex_region_selection_studies.main(args)
+
+                output_path = args.out
+                print("outputs: " + output_path)
+                target_files = {
+                "mc" : "masks_mc",
+                "data" : "masks_data"
+                }
+                mask_map = {
+                    "photon" : 'photon_selection_masks.dill',
+                    "pi0" : 'pi0_selection_masks.dill',
+                    "pi" : 'pi_selection_masks.dill',
+                    "loose_pi"  : "loose_pi_selection_masks.dill",
+                    "loose_photon" : "loose_photon_selection_masks.dill"
+                }
+                new_config_entry = {}
+                files = os.listdir(output_path)
+                for k, v in target_files.items():
+                    if v in files:
+                        new_config_entry[k] = {i : os.path.abspath(output_path + v + "/" + j) for i, j in mask_map.items() if os.path.isfile(output_path + v + "/" + j)}
+                update_config(args.config, {"REGION_SELECTION_MASKS" : new_config_entry})
+                args = update_args(processing_args) # reload config to continue
+        if args.stop == "gnn_prediction": return
+        if args.stop == "region_selection": return
+
+        # #* selection studies
+        # # can_run_ss = not hasattr(args, "selection_masks")
+        # if do_runs["selection"]:
+        #     print("run selection")
+        #     args.mc_only = len(n_data) == 0
+        #     args.nbins = 50
+        #     cex_selection_studies.main(args)
+
+        #     output_path = args.out
+        #     print("outputs: " + output_path)
+        #     target_files = {
+        #     "mc" : "masks_mc",
+        #     "data" : "masks_data"
+        #     }
+        #     mask_map = {
+        #         "beam" : 'beam_selection_masks.dill',
+        #         "null_pfo" : 'null_pfo_selection_masks.dill',
+        #         "photon" : 'photon_selection_masks.dill',
+        #         "pi0" : 'pi0_selection_masks.dill',
+        #         "pi" : 'pi_selection_masks.dill',
+        #         "loose_pi"  : "loose_pi_selection_masks.dill",
+        #         "loose_photon" : "loose_photon_selection_masks.dill",
+        #         "fiducial" : "fiducial_selection_masks.dill"
+        #     }
+        #     new_config_entry = {}
+        #     files = os.listdir(output_path)
+        #     for k, v in target_files.items():
+        #         if v in files:
+        #             new_config_entry[k] = {i : os.path.abspath(output_path + v + "/" + j) for i, j in mask_map.items() if os.path.isfile(output_path + v + "/" + j)}
+        #     update_config(args.config, {"SELECTION_MASKS" : new_config_entry})
+        #     args = update_args(processing_args) # reload config to continue
+        # if args.stop == "selection": return
 
         #* beam reweight
-        can_run_rw = ("params" not in args.beam_reweight) and (not no_data)
-        if can_run_rw or check_run(args, "reweight"):
+        # can_run_rw = ("params" not in args.beam_reweight) and (not no_data)
+        if do_runs["reweight"]:
             print("run beam reweight")
             cex_beam_reweight.main(args)
             output_path = args.out + "beam_reweight/"
@@ -499,8 +634,8 @@ def main(args):
         if args.stop == "reweight": return
 
         #* upstream correction
-        can_run_uc = not hasattr(args, "upstream_loss_correction_params")
-        if can_run_uc or check_run(args, "upstream_correction"):
+        # can_run_uc = not hasattr(args, "upstream_loss_correction_params")
+        if do_runs["upstream_correction"]:
             print("run upstream correction")
             args.no_reweight = (not hasattr(args, "beam_reweight")) or ("params" not in args.beam_reweight) 
             cex_upstream_loss.main(args)
@@ -523,8 +658,8 @@ def main(args):
         if args.stop == "upstream_correction": return
 
         #* toy parameters
-        can_run_tp = hasattr(args, "toy_parameters") and hasattr(args, "beam_reweight") and ("toy_parameters" not in os.listdir(args.out))
-        if can_run_tp or check_run(args, "toy_parameters"):
+        # can_run_tp = hasattr(args, "toy_parameters") and hasattr(args, "beam_reweight") and ("toy_parameters" not in os.listdir(args.out))
+        if do_runs["toy_parameters"]:
             print("run toy parameters")
             cex_toy_parameters.main(args)
             # special case where the main config is not updated, rather the results from this would be used in the toy configurations
@@ -536,8 +671,8 @@ def main(args):
         if args.stop == "toy_parameters": return
 
         #* analysis input
-        can_run_ai = (not hasattr(args, "analysis_input")) and (len(n_data) > 0)
-        if can_run_ai or check_run(args, "analysis_input"):
+        # can_run_ai = (not hasattr(args, "analysis_input")) and (len(n_data) > 0)
+        if do_runs["analysis_input"]:
             print("run analysis input")
             cex_analysis_input.main(args)
 
@@ -558,7 +693,7 @@ def main(args):
         if args.stop == "analysis_input": return
 
         # if all other prerequisites were met, this should run
-        if check_run(args, "analyse"):
+        if do_runs["analyse"]:
             print("analyse")
             args.toy_template = None
             args.all = False
@@ -571,7 +706,19 @@ def main(args):
 
 if __name__ == "__main__":
 
-    analysis_options = ["normalisation", "beam_quality", "beam_scraper", "photon_correction", "selection", "reweight", "upstream_correction", "toy_parameters", "analysis_input", "analyse"]
+    analysis_options = [
+        "normalisation",
+        "beam_quality",
+        "beam_scraper",
+        "photon_correction",
+        "beam_selection",
+        "region_selection",
+        "gnn_prediction",
+        "reweight",
+        "upstream_correction",
+        "toy_parameters",
+        "analysis_input",
+        "analyse"]
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-C", "--create_config", type = str, help = "Create a template configuration with the default selection")
