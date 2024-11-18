@@ -170,6 +170,7 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
                 break # only apply cuts before beam quality
             else:
                 print(f"{s=}")
+                print(args["beam_selection"][func_args][s])
                 mask = args["beam_selection"]["selections"][s](events, **args["beam_selection"][func_args][s])
                 events.Filter([mask], [mask])
     else:
@@ -185,7 +186,7 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
 
         mask = BeamParticleSelection.HasFinalStatePFOsCut(events)
         events.Filter([mask], [mask])
-
+    print(ak.count(events.run))
     #* fit gaussians to the start positions
     start_pos, end_pos = BeamParticleSelection.GetTruncatedPos(events, args["beam_quality_truncate"])
     beam_dir = vector.normalize(vector.sub(end_pos, start_pos))

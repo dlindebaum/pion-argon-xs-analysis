@@ -606,8 +606,12 @@ class ApplicationArguments:
             ApplicationArguments.AddEnergyCorrection(args)
         if hasattr(args, "beam_selection"):
             if "PiBeamSelection" in args.beam_selection["mc_arguments"]:
-                args.beam_selection["data_arguments"]["PiBeamSelection"]["use_beam_inst"] = True # make sure to set the correct settings for data.
-                args.beam_selection["mc_arguments"]["PiBeamSelection"]["use_beam_inst"] = False # make sure to set the correct settings for data.
+                args.beam_selection["data_arguments"]["PiBeamSelection"]["use_beam_inst"] = (
+                    args.beam_selection["data_arguments"]["PiBeamSelection"].pop("use_beam_inst_data"))
+                args.beam_selection["mc_arguments"]["PiBeamSelection"]["use_beam_inst"] = (
+                    args.beam_selection["mc_arguments"]["PiBeamSelection"].pop("use_beam_inst_mc"))
+                del args.beam_selection["data_arguments"]["PiBeamSelection"]["use_beam_inst_mc"]
+                del args.beam_selection["mc_arguments"]["PiBeamSelection"]["use_beam_inst_data"]
             if "TrueFiducialCut" in args.beam_selection["mc_arguments"]:            
                 args.beam_selection["data_arguments"]["TrueFiducialCut"]["is_mc"] = False
                 args.beam_selection["mc_arguments"]["TrueFiducialCut"]["is_mc"] = True

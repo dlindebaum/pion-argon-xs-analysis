@@ -111,7 +111,8 @@ def template_config():
         "BEAM_PARTICLE_SELECTION":{
             "PiBeamSelection":{
                 "enable" : True,
-                "use_beam_inst" : False
+                "use_beam_inst_mc" : False,
+                "use_beam_inst_data" : True
             },
             "PandoraTagCut":{
                 "enable" : True,
