@@ -384,7 +384,7 @@ example_outputs = ["classifier",
                    "pion_id", "photon_id", "pi0_id",
                    "reco_classification"]
 
-def create_normaliser_from_data(data_path_params):
+def create_normaliser_from_data(data_path_params, erf=False):
     """Load the corresponding normalisation as a normalising layer"""
     if isinstance(data_path_params, str):
         norms_path = data_path_params
@@ -394,7 +394,7 @@ def create_normaliser_from_data(data_path_params):
         json_dict = json.load(f)
     norms_dict = DataPreparation._norms_json_formatter(
         json_dict, invert=True)
-    return Layers.NormaliseHiddenFeatures(**norms_dict)
+    return Layers.NormaliseHiddenFeatures(**norms_dict, use_err_func=erf)
 
 def construct_model(
         hyper_params,
@@ -623,7 +623,7 @@ def load_model_from_file(model_folder, new_norm=None, new_data_folder=None):
         outputs,
         model_type=model_type,
         save=False)
-    model.load_weights(hyper_params["weights_path"])
+    model.load_weights(paths_dict["weights_path"])
     return model
 
 # =====================================================================
@@ -767,6 +767,168 @@ def _type_concatenate(arrs):
     elif isinstance(arrs[0], ak.Array):
         return ak.concatenate(arrs, axis=0)
     return np.concatenate(arrs, axis=0)
+
+# def pred_decorator(func, has_truth=False):
+#     if has_truth:
+#         def decorated(pred, truth):
+#             return func(pred)
+#         return decorated
+#     else:
+#         return func
+
+# def gen_model_pred_map(index, added_id, has_truth):
+#     if (index < 0) and added_id:
+#         index -= 1
+#         warnings.warn('Offset negative requested index to account for '
+#                       + 'additional ID output. If this is undesired, '
+#                       + 'add 1, or explicitly request "id"')
+#     @pred_decorator(has_truth=has_truth)
+#     def map_func(predictions):
+#         return predictions[index]
+#     return map_func
+
+# def gen_id_pred_map(has_truth):
+#     @pred_decorator(has_truth=has_truth)
+#     def map_func(predictions):
+#         return predictions[-1]
+#     return map_func
+
+# def gen_truth_map(index):
+#     def map_func(preds, truth):
+#         return truth[index]
+#     return map_func
+
+# def contains_truth_request(signature):
+#     return any([sig in DataPreparation.known_truths + ["classification"]])
+
+def record_mapper(has_truth, truth_out_indicies):
+    if has_truth:
+        def map_func(data, truth):
+            return data, [truth[ind] if ind is not None else None
+                          for ind in truth_out_indicies]
+    else:
+        def map_func(data):
+            return data, truth_out_indicies
+
+def get_predictions_signature(
+        signature, model,
+        schema_path, test_path,
+        start_ind=None, n_graphs=None):
+    """
+    Get model outputs as specified by a signature list.
+
+    Allowed signatures are:
+     - int: These are treated as an index of which model prediction to
+       get. Note 0 is the main classifier. Also note, if using negative
+       integers with "id" also appearing in the signature, this will be
+       offset by -1 to account for the additional id output.
+     - "id": Get the array of event IDs for confirming a match.
+     - "classification": Classification label used during training
+     - str: If not "id" or "classification", must be one of
+       DataPreparation.known_truths.
+
+    Parameters
+    ----------
+    signature : list[str|int]
+        List indicating what outputs should be provided, allowed
+        signatures hinted above.
+    model : tf.keras.Model
+        Model for which to generate predictions (could be passed as
+        None if no prediction requests in the signature).
+    schema_path : str
+        Path to find the schema for grpah loading.
+    test_path : str
+        Path to the graphs to be loaded.
+    start_ind : int, optional
+        Index of graph to begin loading from, or the first graph if
+        None. Default is None
+    n_graphs : int, optional
+        Number of graphs to load, or all remaing graphs in file if
+        None/larger than total graphs present. Default is None.
+    """
+    has_truth = False
+    add_id = "id" in signature
+    pred_indicies = []
+    truth_indicies = []
+    extra_losses = []
+    curr_truth_index = 1
+    for val in signature:
+        if val in DataPreparation.known_truths:
+            has_truth=True
+            pred_indicies.append(None)
+            truth_indicies.append(curr_truth_index)
+            curr_truth_index += 1
+            extra_losses.append(val)
+        elif val == "classification":
+            has_truth=True
+            pred_indicies.append(None)
+            truth_indicies.append(0)
+        elif val == "id":
+            pred_indicies.append(-1)
+            truth_indicies.append(None)
+        elif val < 0:
+            pred_indicies.append(val - int(add_id))
+            truth_indicies.append(None)
+        else:
+            pred_indicies.append(val)
+            truth_indicies.append(None)
+    if add_id:
+        pred_model = add_id_output_to_loaded_model(model)
+    else:
+        pred_model = model
+    test_data = DataPreparation.load_record(
+        schema_path, test_path,
+        no_label = (not has_truth),
+        extra_losses = extra_losses,
+        start_ind=start_ind, n_graphs=n_graphs)
+    graphs, output = test_record.map(
+        record_mapper(has_truth, truth_indicies))
+    if all([ind is None for ind in pred_indicies]):
+        # Return output before prediction if no predictions present
+        return output
+    graphs = graphs.batch(batch_size=512)
+    preds = pred_model.predict(graphs, batch_size=512)
+    for output_ind, pred_ind in enumerate(pred_indicies):
+        if pred_ind is not None:
+            output[output_ind] = preds[pred_ind]
+    return pred_ind
+
+
+    # # These two lines are inefficient, requires looking through the
+    # # list 3 times. But it is much simpler to understand compared to
+    # # tracking mutable objects.
+    # add_id = "id" in signature
+    # get_truth = contains_truth_request
+    # curr_truth_index = 1  # Start at one, since 0 is always class label
+    # map_funcs = []
+    # extra_losses = []
+    # for val in signature:
+    #     if val in DataPreparation.known_truths:
+    #         map_funcs.append(gen_truth_map(curr_truth_index))
+    #         curr_truth_index += 1
+    #         extra_losses.append(val)
+    #     elif val == "classification":
+    #         map_funcs.append(gen_truth_map(0))
+    #     elif val == "id":
+    #         gen_id_pred_map(get_truth)
+    #     else:
+    #         try:
+    #             map_funcs.append(gen_model_pred_map(val, add_id, get_truth))
+    #         except:
+    #             raise ValueError(f"Unknown signature type: {val}")
+    # if add_id:
+    #     pred_model = add_id_output_to_loaded_model(model)
+    # else:
+    #     pred_model = model
+    # test_data = DataPreparation.load_record(
+    #     schema_path, test_path,
+    #     no_label = (not get_truth),
+    #     extra_losses = extra_losses,
+    #     start_ind=start_ind, n_graphs=n_graphs)
+    # test_data = test_record.map(lambda data, label : data)
+    # test_data = test_data.batch(batch_size=512)
+    # predictions = model.predict(test_data, batch_size=512)
+    # pass
 
 # CAREFUL with the following plotting functions, they have a bunch of
 #   stupid special cases which are nicely centrally unified
@@ -1140,6 +1302,45 @@ def evaluate_model(
         plot_summary_information(pred_index, truth_index, plot_config)
     return pred_index, truth_index
 
+def template_dists(
+        model,
+        path_params,
+        plot_config,
+        classification_labels=None,
+        expand_bins=True,
+        which_data="test"):
+    schema, data = _get_paths_from_params(path_params, which_data=which_data)
+    predictions, truth_index = get_predictions(
+        model, schema, data)
+    return template_dists_from_preds(
+        predictions, truth_index, plot_config,
+        classification_labels=classification_labels)
+
+def template_dists_from_preds(
+        predictions,
+        truth_indicies,
+        plot_config,
+        classification_labels=None):
+    labels = _parse_classification_labels(
+        classification_labels, np.argmax(predictions, axis=1), truth_indicies)
+    n_regions = predictions.shape[-1]
+    fig_dims = int(np.ceil(n_regions**0.5))
+    _, axes = plot_config.setup_figure(fig_dims, fig_dims)
+    for i, temp in enumerate(labels):
+        ax = axes[fig_dims-1-(i//2), i%fig_dims]
+        ax.set_title(f"{temp} template")
+        temp_preds = predictions[truth_indicies == i]
+        for j, lab in enumerate(labels):
+            lw = 3 + 2*(temp == lab)
+            bins = plot_config.get_bins(temp_preds[:, j])
+            ax.hist(
+                temp_preds[:, j],
+                **plot_config.gen_kwargs(
+                    type="hist", index=j, bins=bins, label=lab, lw=lw))
+        plot_config.format_axis(ax, xlabel="GNN score", ylabel = "Count")
+        ax.legend()
+    return plot_config.end_plot()
+
 def region_dist(
         axis,
         selected_index, true_index,
@@ -1263,6 +1464,17 @@ def total_score_dist(
     schema, data = _get_paths_from_params(path_params, which_data=which_data)
     predictions, _ = get_data_predictions(
         model, schema, data)
+    return total_score_dist_from_preds(
+        predictions,
+        plot_config,
+        classification_labels=classification_labels,
+        expand_bins=expand_bins)
+
+def total_score_dist_from_preds(
+        predictions,
+        plot_config,
+        classification_labels=None,
+        expand_bins=True):
     pred_index = np.argmax(predictions, axis=1)
     labels = _parse_classification_labels(classification_labels,
                                           pred_index, None)
@@ -1276,7 +1488,7 @@ def total_score_dist(
     plot_config.format_axis(
                 xlabel="GNN output",
                 ylabel="Count")
-    return plot_config.end_plot()  
+    return plot_config.end_plot()
 
 def simple_plot_history(history, init_point=0):
     for k, hist in history.history.items():
