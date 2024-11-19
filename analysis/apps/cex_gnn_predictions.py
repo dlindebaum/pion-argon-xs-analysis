@@ -41,24 +41,34 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
         new_norm=args["graph_norm"])
     # If training sample, still grab IDs, but enforce no predictions
     if args["train_sample"]:
-        schemas = [graph_path_params["schema_path"],
-                   graph_path_params["schema_path"]]
-        graph_files = [graph_path_params["train_path"],
-                       graph_path_params["val_path"]]
-    else:
-        schemas = graph_path_params["schema_path"]
-        graph_files = graph_path_params["test_path"]
-    gnn_scores, loaded_evt_ids = Models.get_data_predictions(
-        gnn_model, schemas, graph_files)
-    if args["train_sample"]:
         gnn_scores = None # Enforce no predictions on train sample
+        try:
+            _, loaded_evt_ids = Models.get_data_predictions(
+                gnn_model,
+                [graph_path_params["schema_path"],
+                 graph_path_params["schema_path"]],
+                [graph_path_params["train_path"],
+                 graph_path_params["val_path"]])
+        # except FileNotFoundError:
+        except NotFoundError:
+            warnings.warn("Was specified as train sample, but can't find "
+                          + f"train and val data for file {events.filename}\n"
+                          + "Skipping...")
+            loaded_evt_ids = evt_ids
+    else:
+        gnn_scores, loaded_evt_ids = Models.get_data_predictions(
+        gnn_model,
+        graph_path_params["schema_path"],
+        graph_path_params["test_path"])
     # Confirm graphs match, and ordering is the same
     assert np.all(evt_ids == loaded_evt_ids)
     output["predictions"] = gnn_scores
     output["ids"] = loaded_evt_ids
     if is_mc and (not args["train_sample"]):
         _, trained_regions = Models.get_predictions(
-            gnn_model, schemas, graph_files)
+            gnn_model,
+            graph_path_params["schema_path"],
+            graph_path_params["test_path"])
         output["truth_regions"] = trained_regions
     return output
 
