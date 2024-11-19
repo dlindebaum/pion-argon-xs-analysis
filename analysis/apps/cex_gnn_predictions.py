@@ -8,6 +8,7 @@ Description: Selection studies for the charge exchange analysis.
 """
 import argparse
 import os
+import warnings
 
 from rich import print as rprint
 from python.analysis import (
@@ -15,6 +16,7 @@ from python.analysis import (
 from python.gnn import Models, DataPreparation
 import python.analysis.SelectionTools as st
 import apps.cex_beam_selection_studies as beam_selection
+from tensorflow.python.framework.errors_impl import NotFoundError
 
 import awkward as ak
 import numpy as np
@@ -49,7 +51,6 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
                  graph_path_params["schema_path"]],
                 [graph_path_params["train_path"],
                  graph_path_params["val_path"]])
-        # except FileNotFoundError:
         except NotFoundError:
             warnings.warn("Was specified as train sample, but can't find "
                           + f"train and val data for file {events.filename}\n"
@@ -61,6 +62,7 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
         graph_path_params["schema_path"],
         graph_path_params["test_path"])
     # Confirm graphs match, and ordering is the same
+    assert evt_ids.shape == loaded_evt_ids.shape
     assert np.all(evt_ids == loaded_evt_ids)
     output["predictions"] = gnn_scores
     output["ids"] = loaded_evt_ids
