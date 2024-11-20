@@ -14,9 +14,7 @@ from iminuit import cost, Minuit
 # import awkward as ak
 # import pandas as pd
 import matplotlib.pyplot as plt
-# import matplotlib.colors as plt_colours
-# import matplotlib as mpl
-# from mpl_toolkits.mplot3d import Axes3D
+import matplotlib as mpl
 from python.analysis import Plots
 # from python.analysis import EventSelection, Plots, vector, PairSelection, Master, PFOSelection, cross_section, CutOptimization
 # from python.analysis import SelectionEvaluation as seval
@@ -205,6 +203,11 @@ class FitterCorr(FitterBase):
         return self.plt_cfg.end_plot()
 
 class DummyDist():
+    """
+    Class which looks like a scipy.stats.rv_discrete isntance, but
+    instead of drawing a sample upon .rvs(), simply returns the initial
+    data.
+    """
     def __init__(self, data):
         self.data = data
         return
@@ -212,6 +215,11 @@ class DummyDist():
         return self.data
 
 class ReferenceDummy():
+    """
+    Class which looks like a scipy.stats.rv_discrete isntance, but
+    instead of drawing a sample upon .rvs(), simply returns current
+    information stored in the referenced generator.
+    """
     def __init__(self, generator, which, multiplier):
         self.gen = generator
         self.multiplier = multiplier
@@ -225,6 +233,10 @@ class ReferenceDummy():
         return self.multiplier * getattr(self.gen, self.which_attr)
 
 class ReferenceBinom():
+    """
+    Class which behaves like a fixed scipy.stats.binom instance, but
+    references a generator to grab the N upon each call.
+    """
     def __init__(self, generator, which, p):
         self.gen = generator
         self.p = p
@@ -238,6 +250,10 @@ class ReferenceBinom():
         return scistats.binom.rvs(getattr(self.gen, self.which_attr), self.p)
 
 class DummyMixer():
+    """
+    Class which looks like it mixes data, but in fact always returns
+    unmixed information.
+    """
     def __init__(self, template, data):
         self.template = template
         self.data = data
@@ -245,6 +261,10 @@ class DummyMixer():
         return self.template, self.data
 
 class BinomMixer():
+    """
+    Class which performs a binomial mixing between a template and data
+    sample.
+    """
     def __init__(self, joint, template_frac):
         self.joint = joint
         self.t_sampler = scistats.binom(self.joint, template_frac)
@@ -477,9 +497,71 @@ class DistGenCorr():
             self,
             template_preds, template_truth,
             data_preds, data_truth=None,
+            template_weights=None, data_weights=None,
             template_extra=None, data_extra=None,
             bins=6, fix_bin_range=None, extra_bins=5,
             labels=["Abs.", "CEx.", "1 pi", "Multi."]):
+        """
+        Creates a DistGenCorr instance.
+
+        This object allows for sampling a set of templates and data for
+        use in a MINUIT fit. It allows various changes to be made to
+        method of sampling, including:
+         - Fixed fractional sampling.
+         - Random binomial sampling.
+         - Fixed or gamma distributed weighting.
+         - Migration of fraction of events to neighbouring bins based
+           on a gradient.
+         - Mixing which events occur in the template vs. data sample.
+        
+        Parameters
+        ----------
+        template_preds : array-like
+            GNN predictions for events in the template sample. Should
+            have shape `(T, S)`, where `T` is the number of template
+            events, and `S` is the number of scores. The `S` must be
+            consistent between `template_preds`, `data_preds`, and
+            `labels`.
+        template_truth : array-like
+            Array containing `T` integers between [0, `S`) where `S` is
+            the number of GNN predictions. The integer specifies which
+            true underlying process caused the event (from Monte
+            -Carlo). See `template_preds` for `T`, `S` definitions.
+        data_preds : array-like
+            GNN predictions for events in the data sample. Should have
+            shape `(D, S)`, where `D` is the number of data events, and
+            `S` is the number of scores. The `S` must be consistent
+            between `template_preds`, `data_preds`, and `labels`.
+        data_truth : array-like, optional
+            Array containing `D` integers between [0, `S`) where `S` is
+            the number of GNN predictions. The integer specifies which
+            true underlying process caused the event (from Monte
+            -Carlo). See `data_preds` for `D`, `S` definitions. If not
+            known (e.g. in experimental data), some features such as
+            mixing, and return truth counts will be disabled for data
+            sampling. Default is None.
+        template_weights : array-like, optional
+            Event-by-event (`T` total) weights to be applied to
+            template events. This differs from weighting which may be
+            applied later which is bin-by-bin. If None, no weightings
+            (i.e. weighting of 1) applied. Default is None.
+        data_weights : array-like, optional
+            Event-by-event (`D` total) weights to be applied to
+            data events. This differs from weighting which may be
+            applied later which is bin-by-bin. If None, no weightings
+            (i.e. weighting of 1) applied. Default is None.
+        template_extra : array-like, optional
+        data_extra : array-like, optional
+        bins : int, or list[array-like], optional
+        fix_bin_range : tuple[float, float], optional
+        extra_bins : int, or list[array-like], optional
+        labels : list[str]
+            List of `S` strings giving names to the processes behind
+            each of the `S` score predictions from the GNN. The `S`
+            must be consistent between `template_preds`, `data_preds`,
+            and `labels`. Default is
+            `["Abs.", "CEx.", "1 pi", "Multi."]`.
+        """
         self.correlated = True
         self.labels = labels
         self.n_scores = len(self.labels)
@@ -494,6 +576,8 @@ class DistGenCorr():
         self.has_data_truth = data_truth is not None
         self.has_extra_dim = ((template_extra is not None)
                               or (data_extra is not None))
+        self.weighted_template = template_weights is not None
+        self.weighted_data = template_weights is not None
         if self.has_extra_dim:
             extra_info = np.concatenate(
                 [info for info in [template_extra, data_extra]
@@ -504,31 +588,35 @@ class DistGenCorr():
             if template_extra is not None:
                 temp_extra_n_bins = self.extra_n_bins
                 digitized_temp = np.digitize(
-                    template_extra, self.extra_bin_edges[1:])
+                    template_extra, self.extra_bin_edges[1:-1])
             else:
                 temp_extra_n_bins = 1
                 digitized_temp = np.zeros(template_preds.shape[0])
             if data_extra is not None:
                 data_extra_n_bins = self.extra_n_bins
                 digitized_data = np.digitize(
-                    data_extra, self.extra_bin_edges[1:])
+                    data_extra, self.extra_bin_edges[1:-1])
             else:
                 data_extra_n_bins = 1
                 digitized_data = np.zeros(data_preds.shape[0])
             self.templates = self._make_region_hists_extra(
                 template_preds, template_truth,
-                digitized_temp, temp_extra_n_bins)
+                digitized_temp, temp_extra_n_bins,
+                weights=template_weights)
             self.data_hist = self._make_region_hists_extra(
                 data_preds, data_truth,#=None if not self.has_data_truth
-                digitized_data, data_extra_n_bins)
+                digitized_data, data_extra_n_bins,
+                weights=data_weights)
         else:
             self.templates = self._make_region_hists(
-                template_preds, template_truth)
+                template_preds, template_truth, weights=template_weights)
             if self.has_data_truth:
-                self.data_hist = self._make_region_hists(data_preds, data_truth)
+                self.data_hist = self._make_region_hists(
+                    data_preds, data_truth, weights=data_weights)
             else:
                 self.data_hist = np.histogramdd(
-                    data_preds, bins=self.bin_edges)[0].astype(int)
+                    data_preds, bins=self.bin_edges,
+                    weights=data_weights)[0].astype(int)
         self._calc_sampling_axes()
         self.set_template_sample_params()
         self.set_data_sample_params()
@@ -543,32 +631,46 @@ class DistGenCorr():
         res[mask] = scistats.gamma.rvs(scales[mask])
         return res
 
-    def _make_region_hists(self, preds, truth):
+    def _make_region_hists(self, preds, truth, weights=None):
         hists = []
         for i, _ in enumerate(self.labels):
+            if weights is not None:
+                use_weights=weights[truth == i]
+            else:
+                use_weights=None
             hists.append(np.histogramdd(
-                preds[truth == i, :],
-                bins=self.bin_edges)[0].astype(int))
+                preds[truth == i, :], bins=self.bin_edges,
+                weights=use_weights)[0].astype(int))
         return np.array(hists)
 
     def _make_region_hists_extra(
             self,
             preds, truth,
             extra_digitized,
-            n_extra_bins):
+            n_extra_bins,
+            weights=None):
         extra_dimmed = []
         for extra_ind in range(self.extra_n_bins):
             extra_mask = extra_digitized == extra_ind
             if truth is not None:
                 filt_pred = preds[extra_mask]
                 filt_true = truth[extra_mask]
+                if weights is not None:
+                    filt_weights=weights[extra_mask]
+                else:
+                    filt_weights=None
                 extra_dimmed.append(
-                    self._make_region_hists(filt_pred, filt_true))
+                    self._make_region_hists(
+                        filt_pred, filt_true, weights=filt_weights))
             else:
+                if weights is not None:
+                    filt_weights=weights[extra_mask]
+                else:
+                    filt_weights=None
                 extra_dimmed.append(
                     np.histogramdd(
-                        preds[extra_mask],
-                        bins=self.bin_edges)[0].astype(int))
+                        preds[extra_mask], bins=self.bin_edges,
+                        weights=filt_weights)[0].astype(int))
         return np.array(extra_dimmed)
 
     def _get_param_case(self, value):
@@ -1305,7 +1407,11 @@ class DistGenCorr():
         sample = self.temp_smearer(
             self.temp_weighter(
                 self.temp_counter.rvs()))
-        res = sample.sum(axis=int(not split_extra)*(0,) + (int(self.has_extra_dim),))
+        res = sample.sum(axis=(int(not split_extra)*self.ex_dim_sum_ax
+                               + (int(self.has_extra_dim),)))
+        sample.sum(
+            axis=(int(not split_extra)*self.ex_dim_sum_ax
+                  + self.ds_sum_ax))
         if not (return_truth or return_extra):
             return res
         rets = ()
@@ -1375,208 +1481,221 @@ class DistGenUncorr(DistGenCorr):
             return temps, truth
         return temps
 
-class DistGenCorrExtra(DistGenCorr):
-    all_smear = AllSmearer
-    region_smear = RegionSmearer
-    def __init__(
-            self,
-            template_preds, template_truth,
-            data_preds, data_truth=None,
-            template_extra=None, data_extra=None,
-            bins=6, extra_bins=5, labels=["Abs.", "CEx.", "1 pi", "Multi."]):
-        self.correlated = True
-        self.labels = labels
-        self.n_scores = len(self.labels)
-        self.bin_edges = np.histogramdd(
-            np.concatenate([template_preds, data_preds], axis=0),
-            bins=bins)[1]
-        self.n_bins = self.bin_edges[0].size - 1
-        self.extra_bin_edges = np.histogram(
-            np.concatenate([template_extra, data_extra], axis=0),
-            bins=extra_bins)[1]
-        self.extra_n_bins = self.extra_bin_edges[0].size - 1
-        digitized_temp = np.digitize(template_extra, self.extra_bin_edges[:-1])
-        self.templates = self._make_region_hists(
-            template_preds, template_truth)
-        self.has_data_truth = data_truth is not None
-        if self.has_data_truth:
-            self.data_hist = self._make_region_hists(data_preds, data_truth)
-        else:
-            self.data_hist = np.histogramdd(data_preds, bins=self.bin_edges)[0]
-        self.set_template_sample_params()
-        self.set_data_sample_params()
-        self._mixed=False
-        return
-
-    def _make_region_hists_extra(self, preds, truth, extra_digitized):
-        extra_dimmed = []
-        for extra_ind in range(self.extra_n_bins):
-            extra_mask = extra_digitized == extra_ind
-            filt_pred = preds[extra_mask]
-            filt_true = truth[extra_mask]
-            extra_dimmed.append(
-                self._make_region_hists(filt_pred, filt_true))
-        return hists
-        # hists = np.array(extra_dimmed)
-        # return np.swapaxes(hists, 0, -1)
-        
-    def generate_counter(
-            self,
-            which_info,
-            p_draw=1.,
-            extra_dim_factors=None,
-            distribute_counts=True,
-            reference=False
-        ):
-        """
-        Define the method of pulling counts from a correlated histogram
-        of binned GNN scores.
-
-        This results should be passed to `set_data_sample_params` or
-        `set_template_sample_params` as the `count_drawer`.
-
-        Parameters
-        ----------
-        which_info : {"data", "template"}
-            Which information to base the sampler from.
-
-        p_used : float or np.ndarray, optional
-            Binomial probability that any given event is included. If
-            passed as an array with 4 elements, each element defines
-            the selection probability for events in the corresponding
-            true region. If not passed, all elements are selected.
-            Default is None.
-        
-        extra_dim_factors : np.ndarray, optional
-            Factors to be applied to the extra dimension of information
-            added during the creation of the instance. The draw
-            probabilities generated the standard way are multiplied by
-            the corresponding factor in this array for each bin in the
-            extra dimension. If None, each extra dimension bin is
-            treated equally. Default is None.
-
-        distribute_counts : bool, optional
-            If true, counts are binomially distributed with N as the
-            raw data/template counts in that bin, and p as the
-            corresponding value set in p_draw. Default is True.
-        
-        reference : bool, optional
-            If True, reference the in this instance each time when
-            generating the samples. This is slightly slower, but allows
-            for mixing which information forms the templates/data
-            between samples. If False, a snapshot of the state at the
-            time of this function call is used. Default is False.
-        
-        Returns
-        -------
-        scipy.stats.rv_discrete or DummyDist
-            Object with the `rvs` method which generates a random
-            sample of the information as specified by the arguments of
-            this function.
-        """
-        return self._generate_counter_extra(
-            which_info,
-            p_draw=p_draw,
-            extra_dim=extra_dim_factors,
-            distribute_counts=distribute_counts,
-            reference=reference)
-
-    def generate_weighter(
-            self,
-            which_info,
-            expect_weights,
-            extra_dim_factors=None,
-            distribute_weights=False):
-        """
-        Define the method of weighting bin counts from a correlated
-        histogram of binned GNN scores.
-
-        This results should be passed to `set_data_sample_params` or
-        `set_template_sample_params` as the `weighting_func`.
-
-        Parameters
-        ----------
-        which_info : {"data", "template"}
-            Which information to base the sampler from. Note: only used
-            for validating the weight shape.
-
-        region_weight_expect : float or np.ndarray, optional
-            Weight applied to each event, if an array containing four
-            elements indicating the weight given to each sample, given
-            it is from the corresponding true region. Default is 1.
-        
-        extra_dim_factors : np.ndarray, optional
-            Factors to be applied to the extra dimension of information
-            added during the creation of the instance. The weights
-            generated the standard way are multiplied by the
-            corresponding factor in this array for each bin in the
-            extra dimension. If None, each extra dimension bin is
-            treated equally. Default is None.
-
-        distribute_weights : bool, optional
-            If True, weights are distributed around the expected region
-            weight by a chi-squared distribution with 3 d.o.f. Default
-            is False.
-        
-        Returns
-        -------
-        callable
-            Function which takes an array of counts and returns
-            counts weighted as specified by the arguments of this
-            generator function.
-        """
-        return self._generate_weighter_extra(
-            which_info,
-            expect_weights,
-            extra_dim=extra_dim_factors,
-            distribute_weights=distribute_weights)
-    
-    def generate_smearer(self, *args, **kwargs):
-        raise NotImplementedError(
-            "Smearing not implemented for extra dimension type generators.")
-    
-    def set_data_sample_params(
-            self,
-            count_drawer=None,
-            weighting_func=None):
-        return super().set_data_sample_params(
-            count_drawer=count_drawer,
-            weighting_func=weighting_func,
-            smearer=None)
-    
-    def sample_data(self, return_truth=False, return_extra=False):
-        sample = self.data_weighter(self.data_counter.rvs())
+    def sample_template_like_data(self, return_truth=False):
+        sample = self.temp_weighter(self.temp_counter.rvs())
         if return_truth:
-            if not self.has_data_truth:
-                raise Exception(
-                    "Requested truth, but no data truth in instance.")
-            truth_counts = sample.sum(
+            truth = sample.sum(
                 axis=tuple(range(1, 1+len(self.labels))))
-            return sample.sum(axis=0), truth_counts
-        elif self.has_data_truth:
-            return sample.sum(axis=0)
-        else:
-            return sample
-
-    def set_template_sample_params(
-            self,
-            count_drawer=None,
-            weighting_func=None):
-        return super().set_template_sample_params(
-            count_drawer=count_drawer,
-            weighting_func=weighting_func,
-            smearer=None)
-    
-    def sample_template(self, return_truth=False):
-        sample = self.temp_smearer(
-            self.temp_weighter(
-                self.temp_counter.rvs()))
+        sample = sample.sum(axis=int(self.has_extra_dim))
+        dists = {lab: sample.sum(axis=self._other_axes(ax))
+                 for ax, lab in enumerate(self.labels)}
+        dists = self.temp_smearer(dists)
         if return_truth:
-            truth_counts = sample.sum(
-                axis=tuple(range(1, 1+len(self.labels))))
-            return self._arr_to_list(sample), truth_counts
-        else:
-            return self._arr_to_list(sample)
+            return dists, truth
+        return dists
+
+# class DistGenCorrExtra(DistGenCorr):
+#     all_smear = AllSmearer
+#     region_smear = RegionSmearer
+#     def __init__(
+#             self,
+#             template_preds, template_truth,
+#             data_preds, data_truth=None,
+#             template_extra=None, data_extra=None,
+#             bins=6, extra_bins=5, labels=["Abs.", "CEx.", "1 pi", "Multi."]):
+#         self.correlated = True
+#         self.labels = labels
+#         self.n_scores = len(self.labels)
+#         self.bin_edges = np.histogramdd(
+#             np.concatenate([template_preds, data_preds], axis=0),
+#             bins=bins)[1]
+#         self.n_bins = self.bin_edges[0].size - 1
+#         self.extra_bin_edges = np.histogram(
+#             np.concatenate([template_extra, data_extra], axis=0),
+#             bins=extra_bins)[1]
+#         self.extra_n_bins = self.extra_bin_edges[0].size - 1
+#         digitized_temp = np.digitize(template_extra, self.extra_bin_edges[1:-1])
+#         self.templates = self._make_region_hists(
+#             template_preds, template_truth)
+#         self.has_data_truth = data_truth is not None
+#         if self.has_data_truth:
+#             self.data_hist = self._make_region_hists(data_preds, data_truth)
+#         else:
+#             self.data_hist = np.histogramdd(data_preds, bins=self.bin_edges)[0]
+#         self.set_template_sample_params()
+#         self.set_data_sample_params()
+#         self._mixed=False
+#         return
+
+#     def _make_region_hists_extra(self, preds, truth, extra_digitized):
+#         extra_dimmed = []
+#         for extra_ind in range(self.extra_n_bins):
+#             extra_mask = extra_digitized == extra_ind
+#             filt_pred = preds[extra_mask]
+#             filt_true = truth[extra_mask]
+#             extra_dimmed.append(
+#                 self._make_region_hists(filt_pred, filt_true))
+#         return hists
+#         # hists = np.array(extra_dimmed)
+#         # return np.swapaxes(hists, 0, -1)
+        
+#     def generate_counter(
+#             self,
+#             which_info,
+#             p_draw=1.,
+#             extra_dim_factors=None,
+#             distribute_counts=True,
+#             reference=False
+#         ):
+#         """
+#         Define the method of pulling counts from a correlated histogram
+#         of binned GNN scores.
+
+#         This results should be passed to `set_data_sample_params` or
+#         `set_template_sample_params` as the `count_drawer`.
+
+#         Parameters
+#         ----------
+#         which_info : {"data", "template"}
+#             Which information to base the sampler from.
+
+#         p_used : float or np.ndarray, optional
+#             Binomial probability that any given event is included. If
+#             passed as an array with 4 elements, each element defines
+#             the selection probability for events in the corresponding
+#             true region. If not passed, all elements are selected.
+#             Default is None.
+        
+#         extra_dim_factors : np.ndarray, optional
+#             Factors to be applied to the extra dimension of information
+#             added during the creation of the instance. The draw
+#             probabilities generated the standard way are multiplied by
+#             the corresponding factor in this array for each bin in the
+#             extra dimension. If None, each extra dimension bin is
+#             treated equally. Default is None.
+
+#         distribute_counts : bool, optional
+#             If true, counts are binomially distributed with N as the
+#             raw data/template counts in that bin, and p as the
+#             corresponding value set in p_draw. Default is True.
+        
+#         reference : bool, optional
+#             If True, reference the in this instance each time when
+#             generating the samples. This is slightly slower, but allows
+#             for mixing which information forms the templates/data
+#             between samples. If False, a snapshot of the state at the
+#             time of this function call is used. Default is False.
+        
+#         Returns
+#         -------
+#         scipy.stats.rv_discrete or DummyDist
+#             Object with the `rvs` method which generates a random
+#             sample of the information as specified by the arguments of
+#             this function.
+#         """
+#         return self._generate_counter_extra(
+#             which_info,
+#             p_draw=p_draw,
+#             extra_dim=extra_dim_factors,
+#             distribute_counts=distribute_counts,
+#             reference=reference)
+
+#     def generate_weighter(
+#             self,
+#             which_info,
+#             expect_weights,
+#             extra_dim_factors=None,
+#             distribute_weights=False):
+#         """
+#         Define the method of weighting bin counts from a correlated
+#         histogram of binned GNN scores.
+
+#         This results should be passed to `set_data_sample_params` or
+#         `set_template_sample_params` as the `weighting_func`.
+
+#         Parameters
+#         ----------
+#         which_info : {"data", "template"}
+#             Which information to base the sampler from. Note: only used
+#             for validating the weight shape.
+
+#         region_weight_expect : float or np.ndarray, optional
+#             Weight applied to each event, if an array containing four
+#             elements indicating the weight given to each sample, given
+#             it is from the corresponding true region. Default is 1.
+        
+#         extra_dim_factors : np.ndarray, optional
+#             Factors to be applied to the extra dimension of information
+#             added during the creation of the instance. The weights
+#             generated the standard way are multiplied by the
+#             corresponding factor in this array for each bin in the
+#             extra dimension. If None, each extra dimension bin is
+#             treated equally. Default is None.
+
+#         distribute_weights : bool, optional
+#             If True, weights are distributed around the expected region
+#             weight by a chi-squared distribution with 3 d.o.f. Default
+#             is False.
+        
+#         Returns
+#         -------
+#         callable
+#             Function which takes an array of counts and returns
+#             counts weighted as specified by the arguments of this
+#             generator function.
+#         """
+#         return self._generate_weighter_extra(
+#             which_info,
+#             expect_weights,
+#             extra_dim=extra_dim_factors,
+#             distribute_weights=distribute_weights)
+    
+#     def generate_smearer(self, *args, **kwargs):
+#         raise NotImplementedError(
+#             "Smearing not implemented for extra dimension type generators.")
+    
+#     def set_data_sample_params(
+#             self,
+#             count_drawer=None,
+#             weighting_func=None):
+#         return super().set_data_sample_params(
+#             count_drawer=count_drawer,
+#             weighting_func=weighting_func,
+#             smearer=None)
+    
+#     def sample_data(self, return_truth=False, return_extra=False):
+#         sample = self.data_weighter(self.data_counter.rvs())
+#         if return_truth:
+#             if not self.has_data_truth:
+#                 raise Exception(
+#                     "Requested truth, but no data truth in instance.")
+#             truth_counts = sample.sum(
+#                 axis=tuple(range(1, 1+len(self.labels))))
+#             return sample.sum(axis=0), truth_counts
+#         elif self.has_data_truth:
+#             return sample.sum(axis=0)
+#         else:
+#             return sample
+
+#     def set_template_sample_params(
+#             self,
+#             count_drawer=None,
+#             weighting_func=None):
+#         return super().set_template_sample_params(
+#             count_drawer=count_drawer,
+#             weighting_func=weighting_func,
+#             smearer=None)
+    
+#     def sample_template(self, return_truth=False):
+#         sample = self.temp_smearer(
+#             self.temp_weighter(
+#                 self.temp_counter.rvs()))
+#         if return_truth:
+#             truth_counts = sample.sum(
+#                 axis=tuple(range(1, 1+len(self.labels))))
+#             return self._arr_to_list(sample), truth_counts
+#         else:
+#             return self._arr_to_list(sample)
 
 def generator_fit(
         generator,
@@ -1623,7 +1742,7 @@ def generator_fit(
         print(f"Initial count prediction:\t{init_preds}"
               + "\t(using uniform prior from generator)")
         if generator.has_data_truth:
-            print(f"True data counts:\t\t{d_truth}")
+            print(f"True data process counts:\t\t{d_truth}")
         print(f"Fitted data counts:\t\t{np.array(fitter.values)}")
         print(f"Fitted data errors:\t\t{np.array(fitter.errors)}")
     if pull_out:
@@ -1633,6 +1752,116 @@ def generator_fit(
             np.array(fitter.errors)])[..., np.newaxis]
     else:
         return fitter
+
+def generator_fit_extra_dim(
+        generator,
+        all_data=True,
+        init_preds=None,
+        printout=True,
+        pull_out=False,
+        mix_template_frac=None,
+        **kwargs):
+    if not generator.has_extra_dim:
+        raise AttributeError("Generator must contain extra dimension")
+    if pull_out and not generator.has_data_truth:
+        raise Exception("generator does not contain truth information")
+    if mix_template_frac is not None:
+        generator.mix_files(template_frac=mix_template_frac, distribute=True)
+    if generator.has_data_truth:
+        d_hist, d_truth = generator.sample_data(
+            return_extra=True, split_extra=(not all_data))
+    else:
+        d_hist = generator.sample_data(
+            return_truth=False, split_extra=(not all_data))
+    temp_samp = generator.sample_template(
+        return_truth=False, split_extra=True)
+    n_scores = generator.n_scores
+    def bin_names(lab):
+        return [lab
+                + f" {generator.extra_bin_edges[i]}-"
+                + f"{generator.extra_bin_edges[i+1]}"
+                for i in range(generator.extra_n_bins)]
+    names = [n for lab in generator.labels for n in bin_names(lab)]
+    if all_data:
+        templates = [t for e_ts in temp_samp for t in e_ts]
+        if generator.correlated:
+            n_data = d_hist.sum()
+            cost_func = cost.Template(
+                d_hist, #n
+                generator.bin_edges, # xe = bin edge locations
+                templates, # templates
+                name=names)
+        else:
+            raise NotImplementedError("Not implemented for uncorrelated")
+            n_data = d_hist[generator.labels[0]].sum()
+            score_costs = []
+            for i, lab in enumerate(generator.labels):
+                score_costs.append(cost.Template(
+                    d_hist[lab], #n
+                    generator.bin_edges[i], # xe = bin edge locations
+                    templates[lab], # templates
+                    name=generator.labels,
+                    **kwargs))
+            cost_func = sum(score_costs)
+    else:
+        def gen_temps(temp_arr):
+            res = [np.zeros_like(temp_arr) for _ in range(temp_arr.shape[0])]
+            for i, arr in enumerate(temp_arr):
+                res[i][i] = arr
+            return res
+        templates = [t for e_ts in temp_samp for t in gen_temps(e_ts)]
+        if generator.correlated:
+            n_data = d_hist.sum()
+            cost_func = cost.Template(
+                d_hist, #n
+                # xe = bin edge locations
+                [generator.extra_bin_edges] + list(generator.bin_edges),
+                templates, # templates
+                name=names)
+        else:
+            raise NotImplementedError("Not implemented for uncorrelated")
+            n_data = d_hist[generator.labels[0]].sum()
+            score_costs = []
+            for i, lab in enumerate(generator.labels):
+                score_costs.append(cost.Template(
+                    d_hist[lab], #n
+                    generator.bin_edges[i], # xe = bin edge locations
+                    templates[lab], # templates
+                    name=generator.labels,
+                    **kwargs))
+            cost_func = sum(score_costs)
+    if init_preds is None:
+        tot_bins = n_scores*generator.extra_n_bins
+        init_preds = np.full(tot_bins, n_data/tot_bins)
+        pred_text = "\t(using uniform prior from generator)"
+    else:
+        pred_text  = "\t(supplied initial predictions)"
+    fitter = Minuit(cost_func, *tuple(init_preds))
+    fitter.limits = (0, n_data)
+    fitter.migrad()
+    fitter.hesse()
+    if printout:
+        print(f"Initial count prediction:\t{init_preds}" + pred_text)
+        if generator.has_data_truth:
+            print(f"True data process counts:\t{d_truth.sum(axis=0)}")
+            print(f"True data extra counts:\t{d_truth.sum(axis=1)}")
+        arr_res = extra_dim_pred_to_array(fitter.values, generator)
+        print(f"Fitted data process counts:\t{arr_res.sum(axis=0)}")
+        print(f"Fitted data extra counts:\t{arr_res.sum(axis=1)}")
+        if generator.has_data_truth:
+            print(f"True data counts:\t{d_truth.T.flatten()}")
+        print(f"Fitted data counts:\t\t{np.array(fitter.values)}")
+        print(f"Fitted data errors:\t\t{np.array(fitter.errors)}")
+    if pull_out:
+        return np.array([
+            d_truth,
+            np.array(fitter.values),
+            np.array(fitter.errors)])[..., np.newaxis]
+    else:
+        return fitter
+
+def extra_dim_pred_to_array(results, generator):
+    return np.reshape(results, (generator.n_scores, -1)).T
 
 def generate_pulls(n, generator, **kwargs):
     fit_vals = []
@@ -2020,450 +2249,91 @@ def gen_exclusive_extra_dims_updated(
         return generator
     return apply_test
 
-# def gen_data_process(baseline_val, process_index, which_process="sample"):
-#     '''Which process: "sample", "weight", "inverse"'''
-#     baseline = np.full(4, baseline_val)
-#     process = np.zeros(4)
-#     process[process_index]= 1.
-#     if which_process == "sample":
-#         func = temp_rand_sample_update
-#     elif which_process == "weight":
-#         func = temp_fixed_weight_update
-#     elif which_process == "inverse":
-#         func = temp_rand_sample_inverse_weight_update
-#     else:
-#         raise ValueError('which_process must be one of "sample", "weight", '
-#                          f'or "inverse". Received {which_process}')
-#     def temp_sample_process(generator, p_temp):
-#         return func(generator, baseline*(1 + process*(p_temp-1)))
-#     return temp_sample_process
+def temp_data_diff_2d_extra_binned(
+        generator, ylabel,
+        plot_config=None, ylim=None, relative=False):
+    """
+    Generate a 2D histogram plot comparing template and data
+    distributions along the extra binning dimension of the supplied
+    generator.
 
-# class DataGenUncorr():
-#     def __init__(
-#             self,
-#             template_preds, tempalte_truth,
-#             data_preds, data_truth=None,
-#             n_bins=10, labels=["Abs.", "CEx.", "1 pi", "Multi."]):
-#         # Handling data
-#         self.bin_edges = {}
-#         self.n_temp = template_preds.shape[0]
-#         self.n_data = data_preds.shape[0]
-#         self.data_locs = {}
-#         data_inds = np.arange(data_preds.shape[0])
-#         self.template_locs = {}
-#         template_inds = np.argmax(template_pred, axis=1)
-#         for i, lab in enumerate(labels):
-#             # Setup bin edges for the investigate GNN output (lab)
-#             self.bin_edges[lab] = np.histogram(
-#                 np.concatenate(template_preds[:, i], data_preds[:, i]),
-#                 bins=n_bins)[1]
-#             # Get the locations each data bin pulls from
-#             self.data_locs[lab] = [
-#                 data_inds[m] for m in
-#                 self._get_reference_locations(
-#                     data_preds[:, i], self.bin_edges[lab])]
-#             # Get the location each template bin pulls from
-#             #   (for each true region)
-#             template_masks = self._get_reference_locations(
-#                 template_preds[:, i], self.bin_edges[lab])
-#             these_temps = {}
-#             for j, temp in enumerate(labels):
-#                 these_temps[temp] = [
-#                     template_inds[np.logical_and(
-#                         m, true_region_masks[j])]
-#                     for m in template_masks]
-#         # Handling truth
-#         self.has_data_truth = data_truth is not None
-#         if self.has_data_truth:
-#             self.data_truth_locs = {}
-#         self.temp_truth_locs = {}
-#         for i, true in enumerate(labels):
-#             if self.has_data_truth:
-#                 self.data_truth_locs[true] = data_inds[data_truth == i]
-#             self.temp_truth_locs[true] = template_inds[template_truth == i]
+    Parameters
+    ----------
+    generator : Fitter.DistGenCorr or inherited class
+        Generator object containing the template and data. Must also
+        include an extra dimension, which will become the y axis of the
+        plots.
+    ylabel : str
+        Label for the y-axis of the plot (what the extra dimension
+        holds).
+    plot_config : Plots.PlotConfig, optional
+        Plot configuration instance. If None, load a default instance.
+    ylim : tuple [float, float], optional
+        Limits for the y-axis.
+    small_range : bool, optional
+        If True, bins with entries in only one the template or data are
+        ignored, removing +/-1 instances. If False, such bins are
+        included, which can lead to smaller variation over the range of
+        interest. Default is True.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The figure object containing the generated plots.
+    """
+    if not generator.has_extra_dim:
+        raise AttributeError("generator must have extra dimension")
+    if plot_config is None:
+        plot_config = Plots.PlotConfig()
+        plot_config.SHOW_PLOT = True
+        plot_config.SAVE_FOLDER = None
+    temp_dist = generator.sample_template_like_data(split_extra=True)
+    data_dist = generator.sample_data(split_extra=True)
+    if generator.correlated:
+        get_sample = lambda dist, ind : dist.sum(
+            axis=tuple(k+1 for k in range(generator.n_scores) if k != ind))
+    else:
+        get_sample = lambda dist, ind : dist[..., ind]
+    fig, axes = plot_config.setup_figure(2, 2, figsize=(20, 12))
+    for i, lab in enumerate(generator.labels):
+        bins = (generator.bin_edges[i], generator.extra_bin_edges)
+        pos_x = np.repeat(bins[0][:-1][:, np.newaxis],
+                          len(bins[1])-1, axis=1).flatten()
+        pos_y = np.repeat(bins[1][:-1][np.newaxis, :],
+                          len(bins[0])-1, axis=0).flatten()
+        # Transpose to by the extra dimension on y axis
+        temp_norm_weights = (
+            get_sample(temp_dist, i)
+            /get_sample(temp_dist, i).sum(axis=1, keepdims=True)).T
+        data_norm_weights = (
+            get_sample(data_dist, i)
+            /get_sample(data_dist, i).sum(axis=1, keepdims=True)).T
+        if relative:
+            weights = ((np.nan_to_num(data_norm_weights)
+                        - np.nan_to_num(temp_norm_weights))
+                       /(np.nan_to_num(data_norm_weights)
+                         + np.nan_to_num(temp_norm_weights)))
+        else:
+            weights = data_norm_weights-temp_norm_weights
             
-#     def _get_reference_masks(self, data, bin_edges):
-#         # Final bin catches all upper values
-#         which_bins = np.digitize(data, bin_edges[:-1])
-#         return [which_bins == i for i in range(bin_edges.size - 1)]
-    
-#     def template_drawing(
-#             self,
-#             p_used=None,
-#             region_weight_expect=np.array([1., 1., 1., 1.]),
-#             distribute_weights=False):
-#         """
-#         Define the method of generating templates which the is used
-#         when calling `get_templates`.
-
-#         Parameters
-#         ----------
-#         p_used : int or np.ndarry, optional
-#             Binomial probability that any given event is included. If
-#             passed as an array with 4 elements, each element defines
-#             the selection probability for events in teh corresponding
-#             region. If not passed, all elements are selected. Default
-#             is None.
-
-#         region_weight_expect : np.ndarray, optional
-#             Array with 4 elements indicating the weight given to each
-#             sample, given it is from the corresponding region. Default
-#             is `np.array([1., 1., 1., 1.])`.
-
-#         distribute_weights : bool, optional
-#             If true, weights are distributed around the expected region
-#             weight by a chi-squared distribution with 3 d.o.f. Default
-#             is False.
-#         """
-#         if region_weight_expect is not None:
-#             weights = scistats.chi2(
-#                 np.full(self.n_temps)[np.newaxis, :],
-#                 scale=region_weights[:, np.newaxis])
-            
-#     def get_templates(self):
-#         pass
-
-#     def get_data(self):
-#         pass
-
-# class FitterBaseOld():
-#     def __init__(
-#             self,
-#             model,
-#             template_path, template_schema,
-#             data_path, data_schema,
-#             bins=3):
-#         template_preds, template_truth = Models.get_predicitions(
-#             model, template_schema, template_path)
-#         data_preds, data_truth = Models.get_predicitions(
-#             model, data_schema, data_path)
-        
-#         self.n_dims = template_preds.shape[-1]
-#         self.bins = bins
-#         eps = 1e-5
-#         bin_edges = np.zeros((self.bins + 1, self.n_dims))
-#         for i in range(self.n_dims):
-#             bin_min = min(np.min(template_preds[:, i]),
-#                           np.min(data_preds[:, i]))
-#             bin_max = max(np.max(template_preds[:, i]),
-#                           np.max(data_preds[:, i]))
-#             bin_edges[:, i] = np.linspace(bin_min, bin_max+eps,
-#                                           num=self.bins+1)
-#         self.bin_edges = bin_edges
-
-#         self.template_hists = self.gen_template_hists(template_preds,
-#                                                       template_truth)
-#         self.template_probs = self.convert_hists_to_probs(self.template_hists)
-#         self.data = self.get_data_predictions(data_preds, data_truth)
-#         self.n_data = np.sum(self.data)
-#         self.init_pred = self.gen_initial_pred(data_preds)
-#         return
-    
-#     def gen_template_hists(self, template_preds, template_truth):
-#         template_hists = np.zeros((self.bins,)*self.n_dims + (self.n_dims,),
-#                                   dtype=np.int32)
-#         pred_index = np.argmax(template_preds, axis=1)
-#         region_masks = Models._get_region_masks(
-#             pred_index, template_truth, self.n_dims)
-#         true_reg_masks = np.apply_along_axis(np.any, 0, region_masks)
-#         for i in range(self.n_dims):
-#             template_hists[..., i] = self.get_multinomial_hist(
-#                 template_preds[true_reg_masks[i]])
-#         return template_hists
-
-#     def get_data_predictions(self, data_preds, data_truth=None):
-#         self.has_data_truth = data_truth is not None
-#         if self.has_data_truth:
-#             pred_index = np.argmax(data_preds, axis=1)
-#             region_masks = Models._get_region_masks(
-#                 pred_index, data_truth, self.n_dims)
-#             true_reg_masks = np.apply_along_axis(np.any, 0, region_masks)
-#             self.true_data_counts = np.sum(true_reg_masks, axis=-1)
-#         data_hist = self.get_multinomial_hist(data_preds)
-#         return data_hist
-
-#     def gen_initial_pred(self, data_preds):
-#         pred_index = np.where(
-#             data_preds == np.max(data_preds, axis=1)[:, np.newaxis])[1]
-#         return np.histogram(pred_index, bins=np.arange(self.n_dims+1))[0]
-
-#     def get_multinomial_hist(self, preds):
-#         return np.histogramdd(
-#             preds, bins=[self.bin_edges[:, i] for i in range(self.n_dims)])[0]
-#         # bin_pos = np.zeros(preds.shape[0])
-#         # for i in range(self.n_dims):
-#         #     bin_pos += (self.bins ** i) * np.digitize(
-#         #         preds[:, i], self.bin_edges[:, i])
-#         # hist_flat = np.histogram(
-#         #     bin_pos,
-#         #     np.arange((self.bins ** self.n_dims)+1))[0]
-#         # result = np.zeros((self.bins,)*self.n_dims, dtype=np.int32)
-#         # for i, count in enumerate(hist_flat):
-#         #     ind_list = [i%self.bins]
-#         #     ind = ((i//dim) % self.bins for dim in range(self.n_dims))
-#         #     result[ind] = count
-#         # return np.reshape(hist_flat, (self.bins,)*self.n_dims)
-    
-#     def convert_hists_to_probs(self, hists):
-#         # Current method for dealing with 0-count bins
-#         # Worth eploring other methods
-#         adjusted_hists = hists + 1
-#         return adjusted_hists/np.sum(adjusted_hists,
-#                                      axis=tuple(range(self.n_dims)),
-#                                      keepdims=True)
-    
-#     def convert_probs_to_hist(self, x, templates):
-#         pred_hist = np.zeros_like(self.data)
-#         for i in range(self.n_dims):
-#             pred_hist += (x[i]/x.sum()) * templates[..., i]
-#         return pred_hist
-
-#     def reshape_forward(self, arr):
-#         new_shape = (self.bins ** self.n_dims,) + arr.shape[self.n_dims:]
-#         return np.reshape(arr, new_shape)
-
-#     def reshape_backwards(self, arr):
-#         new_shape = (self.bins,)*self.n_dims + arr.shape[1:]
-#         return np.reshape(arr, new_shape)
-
-#     def get_likelihood_bad(self, pred_hist):
-#         L = scistats.multinomial.pmf(self.reshape_forward(self.data),
-#                                      self.n_data,
-#                                      self.reshape_forward(pred_hist))
-#         return - 2 * np.log(L).sum()
-
-#     def get_likelihood(self, data, counts):
-#         pass
-
-#     def bad_fit_func(self, x):
-#         expected_hist = self.convert_probs_to_hist(x, self.template_hists)
-#         expected_probs = self.convert_hists_to_probs(expected_hist)
-#         return self.get_likelihood_bad(expected_probs)
-    
-#     def bad_fit_func_constraint(self):
-#         # Constraint ensures we predict the proportion
-#         #   of each event (i.e. sum(x) = 1)
-#         def eq_func(x):
-#             return x.sum() - 1.
-#         return {
-#             "type":"eq",
-#             "fun": eq_func}
-    
-#     def fit(self):
-#         which_fit_func = self.bad_fit_func
-#         which_constraints = self.bad_fit_func_constraint()
-#         print("Initial prediction (GNN classification counts):")
-#         print(self.init_pred)
-#         self.fit_result = opt.minimize(
-#             which_fit_func, self.init_pred/self.n_data,
-#             bounds=opt.Bounds(0, 1), constraints=which_constraints)
-#         print("\nFit results")
-#         print(self.fit_result.x)
-#         print("\nFitted counts")
-#         print(self.fit_result.x * self.n_data)
-#         if self.has_data_truth:
-#             print("\nTrue counts:")
-#             print(self.true_data_counts)
-#         print("\nFitted likelihood:")
-#         print(which_fit_func(self.fit_result.x))
-#         if self.has_data_truth:
-#             print("Likelihood from true counts:")
-#             print(which_fit_func(
-#                 self.true_data_counts/self.n_data))
-#         return self.fit_result
-
-# class MultinomiallFitter(FitterBase):
-#     def gen_template_hists(self, template_preds, template_truth):
-#         template_hists = np.zeros((self.bins,)*self.n_dims + (self.n_dims,),
-#                                   dtype=np.int32)
-#         pred_index = np.argmax(template_preds, axis=1)
-#         region_masks = Models._get_region_masks(
-#             pred_index, template_truth, self.n_dims)
-#         true_reg_masks = np.apply_along_axis(np.any, 0, region_masks)
-#         for i in range(self.n_dims):
-#             template_hists[..., i] = self.get_multinomial_hist(
-#                 template_preds[true_reg_masks[i]])
-#         return template_hists
-
-#     def get_data_predictions(self, data_preds, data_truth=None):
-#         self.has_data_truth = data_truth is not None
-#         if self.has_data_truth:
-#             pred_index = np.argmax(data_preds, axis=1)
-#             region_masks = Models._get_region_masks(
-#                 pred_index, data_truth, self.n_dims)
-#             true_reg_masks = np.apply_along_axis(np.any, 0, region_masks)
-#             self.true_data_counts = np.sum(true_reg_masks, axis=-1)
-#         data_hist = self.get_multinomial_hist(data_preds)
-#         return data_hist
-
-#     def gen_initial_pred(self, data_preds):
-#         pred_index = np.where(
-#             data_preds == np.max(data_preds, axis=1)[:, np.newaxis])[1]
-#         return np.histogram(pred_index, bins=np.arange(self.n_dims+1))[0]
-
-#     def get_multinomial_hist(self, preds):
-#         return np.histogramdd(
-#             preds, bins=[self.bin_edges[:, i] for i in range(self.n_dims)])[0]
-#         # bin_pos = np.zeros(preds.shape[0])
-#         # for i in range(self.n_dims):
-#         #     bin_pos += (self.bins ** i) * np.digitize(
-#         #         preds[:, i], self.bin_edges[:, i])
-#         # hist_flat = np.histogram(
-#         #     bin_pos,
-#         #     np.arange((self.bins ** self.n_dims)+1))[0]
-#         # result = np.zeros((self.bins,)*self.n_dims, dtype=np.int32)
-#         # for i, count in enumerate(hist_flat):
-#         #     ind_list = [i%self.bins]
-#         #     ind = ((i//dim) % self.bins for dim in range(self.n_dims))
-#         #     result[ind] = count
-#         # return np.reshape(hist_flat, (self.bins,)*self.n_dims)
-    
-#     def convert_hists_to_probs(self, hists):
-#         # Current method for dealing with 0-count bins
-#         # Worth eploring other methods
-#         adjusted_hists = hists + 1
-#         return adjusted_hists/np.sum(adjusted_hists,
-#                                      axis=tuple(range(self.n_dims)),
-#                                      keepdims=True)
-    
-#     def convert_probs_to_hist(self, x, templates):
-#         pred_hist = np.zeros_like(self.data)
-#         for i in range(self.n_dims):
-#             pred_hist += (x[i]/x.sum()) * templates[..., i]
-#         return pred_hist
-
-#     def reshape_forward(self, arr):
-#         new_shape = (self.bins ** self.n_dims,) + arr.shape[self.n_dims:]
-#         return np.reshape(arr, new_shape)
-
-#     def reshape_backwards(self, arr):
-#         new_shape = (self.bins,)*self.n_dims + arr.shape[1:]
-#         return np.reshape(arr, new_shape)
-
-#     def get_likelihood_bad(self, pred_hist):
-#         L = scistats.multinomial.pmf(self.reshape_forward(self.data),
-#                                      self.n_data,
-#                                      self.reshape_forward(pred_hist))
-#         return - 2 * np.log(L).sum()
-
-#     def get_likelihood(self, data, counts):
-#         pass
-
-#     def bad_fit_func(self, x):
-#         expected_hist = self.convert_probs_to_hist(x, self.template_hists)
-#         expected_probs = self.convert_hists_to_probs(expected_hist)
-#         return self.get_likelihood_bad(expected_probs)
-    
-#     def bad_fit_func_constraint(self):
-#         # Constraint ensures we predict the proportion
-#         #   of each event (i.e. sum(x) = 1)
-#         def eq_func(x):
-#             return x.sum() - 1.
-#         return {
-#             "type":"eq",
-#             "fun": eq_func}
-    
-#     def fit(self):
-#         which_fit_func = self.bad_fit_func
-#         which_constraints = self.bad_fit_func_constraint()
-#         print("Initial prediction (GNN classification counts):")
-#         print(self.init_pred)
-#         self.fit_result = opt.minimize(
-#             which_fit_func, self.init_pred/self.n_data,
-#             bounds=opt.Bounds(0, 1), constraints=which_constraints)
-#         print("\nFit results")
-#         print(self.fit_result.x)
-#         print("\nFitted counts")
-#         print(self.fit_result.x * self.n_data)
-#         if self.has_data_truth:
-#             print("\nTrue counts:")
-#             print(self.true_data_counts)
-#         print("\nFitted likelihood:")
-#         print(which_fit_func(self.fit_result.x))
-#         if self.has_data_truth:
-#             print("Likelihood from true counts:")
-#             print(which_fit_func(
-#                 self.true_data_counts/self.n_data))
-#         return self.fit_result
-
-# n_bins=10
-# classification_labels=["Abs.", "CEx.", "1 pi", "Multi."]
-# predictions, truth_index = Models.get_predicitions(
-#     loaded_model, which_path_params["schema_path"], which_path_params["test_path"])
-# # pred_index = np.where(
-# #     predictions == np.max(predictions, axis=1)[:, np.newaxis])[1]
-# pred_index = np.argmax(predictions, axis=1)
-# labels = Models._parse_classification_labels(classification_labels,
-#                                       pred_index, truth_index)
-# n_events = predictions.shape[0]
-# n_regions = predictions.shape[-1]
-# region_masks = Models._get_region_masks(pred_index, truth_index, n_regions)
-# # bins = np.linspace(np.min(predictions), np.max(predictions)+1e-2, 31)
-# # true_counts = region_masks.sum(axis=(0, -1))
-# # print("True counts:")
-# # print(true_counts)
-
-# classification_labels=["Abs.", "CEx.", "1 pi", "Multi."]
-# val_predictions, val_truth_index = Models.get_predicitions(
-#     loaded_model, which_path_params["schema_path"], which_path_params["val_path"])
-# val_pred_index = np.where(
-#     val_predictions == np.max(val_predictions, axis=1)[:, np.newaxis])[1]
-# val_region_masks = Models._get_region_masks(val_pred_index, val_truth_index, n_regions)
-
-
-# bins = np.linspace(min(np.min(predictions), np.min(val_predictions)), max(np.max(predictions), np.max(val_predictions))+1e-2, n_bins+1)
-# true_counts = val_region_masks.sum(axis=(0, -1))
-# print("True counts:")
-# print(true_counts)
-# def get_hists(preds, bins, n_regions=n_regions, density=False):
-#     result = np.zeros((bins.size-1, n_regions))
-#     for i in range(n_regions):
-#         result[:, i] = np.histogram(preds[:, i], bins, density=density)[0]
-#     if density:
-#         result *= (bins[1] - bins[0])
-#         result = np.clip(result, 1/preds.shape[0], None)
-#     return result
-
-# hists = {"full": get_hists(val_predictions, bins)}
-# for true_i in range(n_regions):
-#     all_reco_mask = region_masks[0, true_i]
-#     for i in range(1, n_regions):
-#         all_reco_mask = np.logical_or(all_reco_mask, region_masks[i, true_i])
-#     hists[classification_labels[true_i]] = get_hists(predictions[all_reco_mask], bins, density=True)
-
-# def get_likelihood(true_counts, expected_rates):
-#     L = poisson.pmf(true_counts, expected_rates)
-#     return - 2 * np.log(L).sum()
-
-# def make_expected_hist(x):
-#     absorb = x[0]
-#     cex = x[1]
-#     sing = x[2]
-#     multi = x[3]
-#     return  (absorb * hists["Abs."]
-#              + cex * hists["CEx."]
-#              + sing * hists["1 pi"]
-#              + multi * hists["Multi."])
-        
-# def fit(x):
-#     # expected_hist = np.clip(make_expected_hist(x), sys.float_info.min, None)
-#     expected_hist = make_expected_hist(x)
-#     return get_likelihood(hists["full"], expected_hist)
-
-# init_pred = val_region_masks.sum(axis=(1, -1))
-# print("\nInitial prediction (GNN classification counts):")
-# print(init_pred)
-# result = opt.minimize(fit, init_pred, bounds = [(0, n_events)] * 4)
-# print("\nFitted counts")
-# print(result.x)
-
-# print("\nFitted likelihood:")
-# print(fit(result.x))
-# print("Lieklihood from true counts:")
-# print(fit(true_counts))
-
-# plt_conf.setup_figure()
-# plt.hist(np.repeat(bins[:-1, np.newaxis], n_regions, axis=1), bins=bins, weights=hists["full"], lw=3, ls = "--", histtype="step", label="True dists")
-# plt.hist(np.repeat(bins[:-1, np.newaxis], n_regions, axis=1), bins=bins, weights=make_expected_hist(result.x), lw=4, histtype="step", label="Fitted dists")
-# plt_conf.format_axis(xlabel="Score", ylabel = "Count")
-# plt_conf.end_plot()
+        max_weight = np.max(np.abs(np.nan_to_num(weights)))
+        # Makes no bin appear were neither have entries
+        weights[np.logical_and(data_norm_weights==0,
+                               temp_norm_weights==0)] = np.nan
+        weights = weights.flatten()
+        ax = axes[1-(i//2), i%2]
+        _, _, _, mappable = ax.hist2d(
+            pos_x, pos_y, weights=weights, bins=bins,
+            cmap=mpl.colormaps["RdBu_r"],
+            vmin=-max_weight, vmax=max_weight)
+        if relative:
+            clab = "Relative data excess"
+            # Equation:
+            # c_d - c_t / (c_d + c_t)
+            # Where c_d is data count, c_t is template count
+        else:
+            clab = "Data excess"
+        plt.colorbar(mappable, ax=ax, label="Data excess")
+        plot_config.format_axis(
+            ax, xlabel=f"{lab} score", ylabel = ylabel, ylim=ylim)
+    return plot_config.end_plot()
