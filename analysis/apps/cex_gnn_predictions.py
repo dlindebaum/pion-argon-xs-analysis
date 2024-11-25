@@ -62,7 +62,12 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
         graph_path_params["schema_path"],
         graph_path_params["test_path"])
     # Confirm graphs match, and ordering is the same
-    assert evt_ids.shape == loaded_evt_ids.shape
+    try:
+        assert evt_ids.shape == loaded_evt_ids.shape
+    except:
+        raise AssertionError(
+            f"Event ID shapes do not match: {evt_ids.shape} from "
+            + f"graphs, {loaded_evt_ids.shape} from events.")
     assert np.all(evt_ids == loaded_evt_ids)
     output["predictions"] = gnn_scores
     output["ids"] = loaded_evt_ids
@@ -205,7 +210,7 @@ def get_truth_regions(events, args):
         warnings.warn(
             "Predicting using GNN, beware this causes hanging combined "
             + "with multi-processing (manual interruption required)")
-        graph_path_params, norm_path = _get_graph_info(events, args, sample)
+        graph_path_params, norm_path = _get_graph_info(events, args, "mc")
         gnn_model = Models.load_model_from_file(
             args["gnn_model_path"],
             new_data_folder=graph_path_params["folder_path"],
