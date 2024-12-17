@@ -67,7 +67,7 @@ def CreateAnalysisInput(
 def CreateGNNAnalysisInput(
         sample : Master.Data,
         args : argparse.Namespace | dict,
-        is_mc : bool) -> AnalysisInput:
+        is_mc : bool, force_gen=False) -> AnalysisInput:
     """ Create analysis input from ntuple sample
 
     Args:
@@ -80,21 +80,23 @@ def CreateGNNAnalysisInput(
     """
     args_c = Utils.args_to_dict(args)
 
-    if args_c["train_sample"]:
+    if args_c["train_sample"] and (not force_gen):
         return None
 
     if type(sample) == cross_section.Toy:
         raise NotImplementedError("Not implemented GNN toys")
     elif type(sample) == Master.Data:
         sample_selected = BeamPionSelection(sample, args_c, is_mc)
-        gnn_predictions, ids = get_gnn_results(sample, args_c, is_mc)
-        # Redundant, checked by get_gnn_results, but very bad if wrong
+        gnn_predictions, ids = get_gnn_results(
+            sample_selected, args_c, is_mc, force_gen=force_gen)
         if not np.all(make_evt_ids(sample_selected) == ids):
             raise Exception("Cannot match predictions to event IDs, "
                             + f"file: {sample_selected.filename}")
         if is_mc:
-            true_regions = get_truth_regions(sample, args_c)
-            reweight_params = [args_c["beam_reweight"]["params"][k]["value"] for k in args_c["beam_reweight"]["params"]]
+            true_regions = get_truth_regions(
+                sample_selected, args_c, force_gen=force_gen)
+            reweight_params = [args_c["beam_reweight"]["params"][k]["value"]
+                               for k in args_c["beam_reweight"]["params"]]
         else:
             true_regions = None
             reweight_params = None
@@ -156,6 +158,19 @@ def CreateAnalysisInputMCTrueBeam(
          for k in args_c["beam_reweight"]["params"]],
         args_c["beam_reweight"]["strength"],
         upstream_loss_func = args_c["upstream_loss_response"])
+
+def load_analysis_input(args, is_mc):
+    sample = "mc" if is_mc else "data"
+    args_c = Utils.args_to_dict(args)
+    if "analysis_input" in args_c.keys():
+        ai = Master.LoadObject(args_c["analysis_input"][sample])
+    elif args["gnn_do_predict"]:
+        raise NotImplementedError("Not implemented loading with pre-running cex_analysis_input")
+        ai = CreateGNNAnalysisInput(events, args, not args["data"])
+    else:
+        raise NotImplementedError("Not implemented loading with pre-running cex_analysis_input")
+        ai = CreateAnalysisInput(events, args, not args["data"])
+    return ai
 
 def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
     events = Master.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
