@@ -37,10 +37,14 @@ def MergeOutputs(outputs : list[dict]) -> dict:
                 else:
                     if type(v) == ak.Array:
                         output[k] = ak.concatenate([output[k], v])
+                    elif type(v) == np.ndarray:
+                        output[k] = np.concatenate([output[k], v])
                     elif type(v) == Tags.Tags:
                         output[k] = Tags.MergeTags([output[k], v])
                     elif type(v) == list:
                         output[k].extend(v)
+                    elif v is None:
+                        continue
                     else:
                         if type(output[k]) != list:
                             output[k] = [output[k], v]
@@ -277,6 +281,21 @@ def mutliprocess(func, files : list, nBatches : int, nEvents : int, args : dict,
     batch_numbers = list(range(len(inputs[0])))
     return pool.map(func, batch_numbers, *inputs)
 
+def format_args_per_ntuple(ntuple_dict, args, is_data):
+    func_args = vars(args)
+    func_args["data"] = is_data
+    func_args["nTuple_type"] = ntuple_dict["type"]
+    func_args["pmom"] = ntuple_dict["pmom"]
+    if "graph" in ntuple_dict.keys():
+        func_args["graph"] = ntuple_dict["graph"]
+    func_args["graph_norm"] = (
+        ntuple_dict["graph_norm"] if "graph_norm" in ntuple_dict.keys()
+                                  else None)
+    func_args["train_sample"] = (
+        ntuple_dict["train_sample"] if "train_sample" in ntuple_dict.keys()
+                                    else False)
+    return func_args
+
 def RunProcess(
         ntuple_files : list[dict],
         is_data : bool,
@@ -286,16 +305,17 @@ def RunProcess(
         batchless : bool = False) -> list:
     output = []
     for i in ntuple_files:
-        func_args = vars(args)
-        func_args["data"] = is_data
-        func_args["nTuple_type"] = i["type"]
-        func_args["pmom"] = i["pmom"]
-        if "graph" in i.keys():
-            func_args["graph"] = i["graph"]
-        func_args["graph_norm"] = (
-            i["graph_norm"] if "graph_norm" in i.keys() else None)
-        func_args["train_sample"] = (
-            i["train_sample"] if "train_sample" in i.keys() else False)
+        func_args = format_args_per_ntuple(i, args, is_data)
+        # func_args = vars(args)
+        # func_args["data"] = is_data
+        # func_args["nTuple_type"] = i["type"]
+        # func_args["pmom"] = i["pmom"]
+        # if "graph" in i.keys():
+        #     func_args["graph"] = i["graph"]
+        # func_args["graph_norm"] = (
+        #     i["graph_norm"] if "graph_norm" in i.keys() else None)
+        # func_args["train_sample"] = (
+        #     i["train_sample"] if "train_sample" in i.keys() else False)
         if not batchless:
             output.extend(mutliprocess(func, [i["file"]], args.batches, args.events, func_args, args.threads))
         else:
