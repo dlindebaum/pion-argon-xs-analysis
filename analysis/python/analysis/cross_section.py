@@ -577,7 +577,9 @@ class ApplicationArguments:
                 for k, v in value.items():
                     args.fit[k] = v
             elif head == "ESLICE":
-                if value["width"] is not None:
+                if ("edges" in value.keys()) and (value["edges"] is not None):
+                    args.energy_slices = Slicing.Slices(value["edges"])
+                elif value["width"] is not None:
                     args.energy_slices = Slicing.Slices(
                         value["width"],
                         # min - width to allocate an underflow bin
