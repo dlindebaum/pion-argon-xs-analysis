@@ -9,6 +9,7 @@ import copy
 
 import awkward as ak
 import numpy as np
+import warnings
 
 from dataclasses import dataclass
 from particle import Particle
@@ -520,10 +521,16 @@ class AnalysisInputGNN(AnalysisInputBase):
 
     @property
     def gnn_scores(self):
-        return np.array(list(self.classification_info.values)).T
+        return np.array(list(self.classification_info.values())).T
 
+    @property
     def gnn_preds(self):
         return np.argmax(self.gnn_scores, axis=1)
+
+    @property
+    def regions(self):
+        warnings.warn('Getting GNN predictions as "regions"')
+        return self.gnn_preds
 
     @classmethod
     def CreateAnalysisInputToy(cls, toy) -> "AnalysisInput":
@@ -595,7 +602,7 @@ class AnalysisInputGNN(AnalysisInputBase):
         Returns:
             AnalysisInput: analysis input.
         """
-        class_dict = {lab : ak.Array(gnn_predictions[:, i])
+        class_dict = {lab : gnn_predictions[:, i]
                       for i, lab in enumerate(prediction_labels)}
 
         if mc_reweight_params is not None:
@@ -680,7 +687,7 @@ class AnalysisInputGNN(AnalysisInputBase):
     def CreateHistograms(
             self,
             energy_slice : Slicing.Slices,
-            exclusive_process : str,
+            # exclusive_process : str,
             reco : bool,
             mask : np.ndarray = None) -> dict[np.ndarray]:
         """
@@ -690,7 +697,6 @@ class AnalysisInputGNN(AnalysisInputBase):
 
         Args:
             energy_slice (Slicing.Slices): energy slices
-            exclusive_process (str): exclusive process
             reco (bool): use reco information?
             mask (np.ndarray, optional): additional mask. Defaults to
                 None.
@@ -709,10 +715,10 @@ class AnalysisInputGNN(AnalysisInputBase):
         else:
             outside_tpc = self.outside_tpc_true | mask
 
-        if self.exclusive_process is not None:
-            channel_mask = self.exclusive_process[exclusive_process]
-        else:
-            channel_mask = self.regions[exclusive_process]
+        # if self.exclusive_process is not None:
+        #     channel_mask = self.exclusive_process[exclusive_process]
+        # else:
+        #     channel_mask = self.regions[exclusive_process]
 
         #! keep just in case
         # if efficiency is True:
@@ -722,11 +728,27 @@ class AnalysisInputGNN(AnalysisInputBase):
         #     channel_mask = channel_mask[toy.df.beam_selection_mask]
 
         n_initial, n_interact_inelastic, interact_inds, n_incident = (
-            Slicing.EnergySlice.CountingExperiment(
-                KE_int, KE_init, outside_tpc, channel_mask,
+            Slicing.EnergySlice.CountingExperimentUnclassified(
+                KE_int, KE_init, outside_tpc,
                 energy_slice, weights = self.weights))
 
         output = {
             "init" : n_initial, "int" : n_interact_inelastic,
             "int_evt_indicies" : interact_inds, "inc" : n_incident}
         return output
+
+
+def FromFile(file : str) -> "AnalysisInput": #* seems a bit extra but why not
+    """ Load analysis input from dill file.
+
+    Args:
+        file (str): file path.
+
+    Returns:
+        AnalysisInput: analysis input.
+    """
+    obj = LoadObject(file)
+    if type(obj) == AnalysisInput:
+        return obj
+    else:
+        raise Exception("not an analysis input file")
