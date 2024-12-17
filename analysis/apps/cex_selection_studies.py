@@ -10,7 +10,9 @@ import argparse
 import os
 
 from rich import print as rprint
-from python.analysis import Master, BeamParticleSelection, EventSelection, PFOSelection, Plots, shower_merging, Processing, Tags, cross_section
+from python.analysis import (
+    Master, BeamParticleSelection, EventSelection, PFOSelection, Plots,
+    shower_merging, Processing, Tags, cross_section, EnergyTools)
 
 import awkward as ak
 import numpy as np
@@ -230,7 +232,7 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, func
 
         if (a == "BeamScraperCut") and (beam_instrumentation == False):
             if beam_instrumentation == False:
-                scraper_id = cross_section.IsScraper(events, args[a]["fits"])
+                scraper_id = EnergyTools.IsScraper(events, args[a]["fits"])
                 output[a + "_scraper_tag"] = MakeOutput(None, Tags.BeamScraperTag(scraper_id), None, None)
 
         events.Filter([mask], [mask])
@@ -387,6 +389,12 @@ def AnalysePi0Selection(events : Master.Data, data : bool, functions : dict, arg
     return output, df
 
 
+def make_truth_regions(evts, is_data):
+    return (EventSelection.create_regions(
+            evts.trueParticles.nPi0,
+            evts.trueParticles.nPiPlus + evts.trueParticles.nPiMinus)
+        if  (not is_data) else None)
+
 def AnalyseRegions(events : Master.Data, photon_mask : ak.Array, is_data : bool, correction : callable = None, correction_params : dict = None) -> tuple[dict, dict]:
     """ Create masks which desribe the truth and reco regions for various exlusive cross sections.
 
@@ -400,14 +408,17 @@ def AnalyseRegions(events : Master.Data, photon_mask : ak.Array, is_data : bool,
     Returns:
         tuple[dict, dict]: truth and reco regions
     """
-    truth_regions = EventSelection.create_regions(events.trueParticles.nPi0, events.trueParticles.nPiPlus + events.trueParticles.nPiMinus) if is_data == False else None
+    truth_regions = make_truth_regions(events, is_data)
 
     if correction_params is None:
         params = None
     else:
         params = cross_section.LoadConfiguration(correction_params)
 
-    reco_pi0_counts = EventSelection.count_pi0_candidates(events, exactly_two_photons = True, photon_mask = photon_mask, correction = cross_section.EnergyCorrection.shower_energy_correction[correction], correction_params = params)
+    reco_pi0_counts = EventSelection.count_pi0_candidates(
+        events, exactly_two_photons = True, photon_mask = photon_mask,
+        correction = EnergyTools.EnergyCorrection.shower_energy_correction[correction],
+        correction_params = params)
     reco_pi_plus_counts_mom_cut = EventSelection.count_charged_pi_candidates(events, energy_cut = None)
     reco_regions = EventSelection.create_regions(reco_pi0_counts, reco_pi_plus_counts_mom_cut)
     return truth_regions, reco_regions
@@ -514,14 +525,14 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
             pi0_masks = CreatePFOMasks(events, args["pi0_selection"], selection_args, {"photon_mask" : photon_selection_mask})
             output["pi0"] = {"data" : output_pi0, "table" : table_pi0, "masks" : pi0_masks}
 
-        print("regions")
-        truth_regions, reco_regions = AnalyseRegions(events, photon_selection_mask, args["data"], args["shower_correction"]["correction"], args["shower_correction"]["correction_params"])
+    print("regions")
+    truth_regions, reco_regions = AnalyseRegions(events, photon_selection_mask, args["data"], args["shower_correction"]["correction"], args["shower_correction"]["correction_params"])
 
-        regions  = {
-            "truth_regions"       : truth_regions,
-            "reco_regions"        : reco_regions
-        }
-        output["regions"] = regions
+    regions  = {
+        "truth_regions"       : truth_regions,
+        "reco_regions"        : reco_regions
+    }
+    output["regions"] = regions
     return output
 
 
@@ -870,13 +881,13 @@ def main(args):
     outdir = args.out + "selection/"
     cross_section.os.makedirs(outdir, exist_ok = True)
 
-    output_mc = MergeSelectionMasks(MergeOutputs(cross_section.ApplicationProcessing(["mc"], outdir, args, run, False, "output_mc")["mc"]))
+    output_mc = MergeSelectionMasks(MergeOutputs(Processing.ApplicationProcessing(["mc"], outdir, args, run, False, "output_mc")["mc"]))
 
     output_data = None
     if "data" in args.ntuple_files:
         if len(args.ntuple_files["data"]) > 0:
             if args.mc_only is False:
-                output_data = MergeSelectionMasks(MergeOutputs(cross_section.ApplicationProcessing(["data"], outdir, args, run, False, "output_data")["data"]))
+                output_data = MergeSelectionMasks(MergeOutputs(Processing.ApplicationProcessing(["data"], outdir, args, run, False, "output_data")["data"]))
 
     # tables
     MakeTables(output_mc, args.out + "tables_mc/", "mc")
