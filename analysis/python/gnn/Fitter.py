@@ -499,6 +499,7 @@ class DistGenCorr():
             data_preds, data_truth=None,
             template_weights=None, data_weights=None,
             template_extra=None, data_extra=None,
+            template_splitting=None,
             bins=6, fix_bin_range=None, extra_bins=5,
             labels=["Abs.", "CEx.", "1 pi", "Multi."]):
         """
@@ -552,6 +553,12 @@ class DistGenCorr():
             (i.e. weighting of 1) applied. Default is None.
         template_extra : array-like, optional
         data_extra : array-like, optional
+        template_splitting : array-like, optional
+            Array of integers defining splitting of the full template
+            distribution into smaller sets of templates. Splitting the
+            template into `N` parts, contents must be integers in the
+            range 0 to (N-1). In total, `N*len(labels)` templates will
+            be constructed. Default is None.
         bins : int, or list[array-like], optional
         fix_bin_range : tuple[float, float], optional
         extra_bins : int, or list[array-like], optional
@@ -578,6 +585,12 @@ class DistGenCorr():
                               or (data_extra is not None))
         self.weighted_template = template_weights is not None
         self.weighted_data = template_weights is not None
+        self.split_temp = template_splitting is not None
+        temp_exta_info = []
+        temp_extra_bins = []
+        data_extra_info = []
+        data_extra_bins = []
+
         if self.has_extra_dim:
             extra_info = np.concatenate(
                 [info for info in [template_extra, data_extra]
@@ -586,37 +599,34 @@ class DistGenCorr():
                 extra_info, bins=extra_bins)[1]
             self.extra_n_bins = self.extra_bin_edges.size - 1
             if template_extra is not None:
-                temp_extra_n_bins = self.extra_n_bins
-                digitized_temp = np.digitize(
-                    template_extra, self.extra_bin_edges[1:-1])
-            else:
-                temp_extra_n_bins = 1
-                digitized_temp = np.zeros(template_preds.shape[0])
+                temp_exta_info.append(template_extra[:, np.newaxis])
+                temp_extra_bins.append(self.extra_bin_edges)
             if data_extra is not None:
-                data_extra_n_bins = self.extra_n_bins
-                digitized_data = np.digitize(
-                    data_extra, self.extra_bin_edges[1:-1])
-            else:
-                data_extra_n_bins = 1
-                digitized_data = np.zeros(data_preds.shape[0])
-            self.templates = self._make_region_hists_extra(
-                template_preds, template_truth,
-                digitized_temp, temp_extra_n_bins,
-                weights=template_weights)
-            self.data_hist = self._make_region_hists_extra(
-                data_preds, data_truth,#=None if not self.has_data_truth
-                digitized_data, data_extra_n_bins,
-                weights=data_weights)
+                data_extra_info.append(data_extra[:, np.newaxis])
+                data_extra_bins.append(self.extra_bin_edges)
+        truth_binning = np.arange(self.n_scores+1) - 0.5
+        temp_exta_info.append(template_truth[:, np.newaxis])
+        temp_extra_bins.append(truth_binning)
+        if self.has_data_truth:
+            data_extra_info.append(data_truth[:, np.newaxis])
+            data_extra_bins.append(truth_binning)
+        if self.split_temp:
+            self.n_split_bins = np.max(template_splitting)+1
+            self.split_temp_bins = np.arange(
+                self.n_split_bins+1) - 0.5
+            temp_exta_info.append(template_splitting[:, np.newaxis])
+            temp_extra_bins.append(self.split_temp_bins)
+            self.n_templates = self.n_scores * self.n_split_bins
         else:
-            self.templates = self._make_region_hists(
-                template_preds, template_truth, weights=template_weights)
-            if self.has_data_truth:
-                self.data_hist = self._make_region_hists(
-                    data_preds, data_truth, weights=data_weights)
-            else:
-                self.data_hist = np.histogramdd(
-                    data_preds, bins=self.bin_edges,
-                    weights=data_weights)[0].astype(int)
+            self.n_templates = self.n_scores
+        self.templates = self._make_region_hists(
+            template_preds,
+            temp_exta_info, temp_extra_bins,
+            weights=template_weights)
+        self.data_hist = self._make_region_hists(
+            data_preds,
+            data_extra_info, data_extra_bins,
+            weights=data_weights)
         self._calc_sampling_axes()
         self.set_template_sample_params()
         self.set_data_sample_params()
@@ -631,7 +641,22 @@ class DistGenCorr():
         res[mask] = scistats.gamma.rvs(scales[mask])
         return res
 
-    def _make_region_hists(self, preds, truth, weights=None):
+    def _make_region_hists(
+            self,
+            preds,
+            extra_dims=[], extra_bins=[],
+            weights=None):
+        if len(extra_dims) != len(extra_bins):
+            raise ValueError(
+                "extra_dims and extra_bins must have the same size")
+        preds_with_info = np.concatenate(
+            list(extra_dims) + [preds], axis=1)
+        full_bins = extra_bins + self.bin_edges
+        return np.histogramdd(
+            preds_with_info, bins=full_bins,
+            weights=weights)[0].astype(int)
+
+    def _make_region_hists_old(self, preds, truth, weights=None):
         hists = []
         for i, _ in enumerate(self.labels):
             if weights is not None:
@@ -660,7 +685,7 @@ class DistGenCorr():
                 else:
                     filt_weights=None
                 extra_dimmed.append(
-                    self._make_region_hists(
+                    self._make_region_hists_old(
                         filt_pred, filt_true, weights=filt_weights))
             else:
                 if weights is not None:
@@ -1300,6 +1325,8 @@ class DistGenCorr():
         self.s_extra_sum_axs = tuple(range(
             1+int(self.has_extra_dim),
             1+int(self.has_extra_dim)+len(self.labels)))
+        self.split_temp_ax = (int(self.split_temp)
+                              * (1 + int(self.has_extra_dim),))
         return
 
     def sample_data(
@@ -1382,10 +1409,13 @@ class DistGenCorr():
             if not self.has_extra_dim:
                 raise ValueError("Cannot split extras if instance "
                                  + "doesn't contain extra dimension")
-            res = self._arr_to_list(
-                np.swapaxes(sample, 0, 1))
+            # Put the extra dim behind truth dimensions
+            sample = np.swapaxes(sample, 0, 1 + int(self.split_temp))
         else:
-            res = self._arr_to_list(sample.sum(axis=self.ex_dim_sum_ax))
+            sample = sample.sum(axis=self.ex_dim_sum_ax)
+        if self.split_temp:
+            sample = sample.reshape(self.n_templates, *sample.shape[2:])
+        res = self._arr_to_list(sample)
         if not (return_truth or return_extra):
             return res
         # This should be editied. Want at most 1 extra array.
@@ -1408,10 +1438,11 @@ class DistGenCorr():
             self.temp_weighter(
                 self.temp_counter.rvs()))
         res = sample.sum(axis=(int(not split_extra)*self.ex_dim_sum_ax
-                               + (int(self.has_extra_dim),)))
-        sample.sum(
-            axis=(int(not split_extra)*self.ex_dim_sum_ax
-                  + self.ds_sum_ax))
+                               + (int(self.has_extra_dim),)
+                               + self.split_temp_ax))
+        # sample.sum(
+        #     axis=(int(not split_extra)*self.ex_dim_sum_ax
+        #           + self.ds_sum_ax))
         if not (return_truth or return_extra):
             return res
         rets = ()
@@ -1713,14 +1744,21 @@ def generator_fit(
     else:
         d_hist = generator.sample_data(return_truth=False)
     templates = generator.sample_template(return_truth=False)
-    n_scores = generator.n_scores
+    n_temps = generator.n_templates
+    names = generator.labels
+    if generator.split_temp:
+        def bin_names(lab):
+            return [lab + f" bin {i}"
+                    for i in range(generator.n_split_bins)]
+        names = [n for lab in names for n in bin_names(lab)]
     if generator.correlated:
         n_data = d_hist.sum()
         cost_func = cost.Template(
             d_hist, #n
             generator.bin_edges, # xe = bin edge locations
             templates, # templates
-            name=generator.labels)
+            name=names,
+            **kwargs)
     else:
         n_data = d_hist[generator.labels[0]].sum()
         score_costs = []
@@ -1729,11 +1767,11 @@ def generator_fit(
                 d_hist[lab], #n
                 generator.bin_edges[i], # xe = bin edge locations
                 templates[lab], # templates
-                name=generator.labels,
+                name=names,
                 **kwargs))
         cost_func = sum(score_costs)
     if init_preds is None:
-        init_preds = np.full(n_scores, n_data/n_scores)
+        init_preds = np.full(n_temps, n_data/n_temps)
     fitter = Minuit(cost_func, *tuple(init_preds))
     fitter.limits = (0, n_data)
     fitter.migrad()
@@ -1881,17 +1919,23 @@ def add_ending(save_name, ending):
 def make_pulls(
         pull_results,
         plot_config=None,
+        calc_coverage=True,
         return_errors=False,
         save_name=None,
         labels=["Abs.", "CEx.", "1 pi", "Multi."]):
     # Dumb function, shouldn't be so much repeat in return_errors part
+    results = {"pull_fits":[]}
+    if calc_coverage:
+        covered_mask = np.logical_and(
+            pull_results[0] >= (pull_results[1] - pull_results[2]),
+            pull_results[0] <= (pull_results[1] + pull_results[2]))
+        results["coverage"] = np.sum(covered_mask, axis=-1)/covered_mask.shape[-1]
     test_stat = (pull_results[1] - pull_results[0]) / pull_results[2]
     if plot_config is not None:
         fig, axes = plot_config.setup_figure(2, 2, figsize=(20, 12))
-    pull_fits = []
     for i, lab in enumerate(labels):
         mu, sig = scistats.norm.fit(test_stat[i])
-        pull_fits.append([mu, sig])
+        results["pull_fits"].append([mu, sig])
         if plot_config is not None:
             ax = axes[1-(i//2), i%2]
             ax.set_title(f"{lab} pulls")
@@ -1908,22 +1952,24 @@ def make_pulls(
     if plot_config is not None:
         plot_config.end_plot(add_ending(save_name, "pulls"))
     if return_errors:
+        results["fit_errs"] = []
         if plot_config is not None:
             fig, axes = plot_config.setup_figure(2, 2, figsize=(20, 12))
-        fit_errs = []
         for i, lab in enumerate(labels):
             frac_errs = (pull_results[1][i]/pull_results[0][i])-1
             mu_unc, sig_unc = scistats.norm.fit(pull_results[2][i])
             mu_frac, sig_frac = scistats.norm.fit(frac_errs)
             mu_unc_f, sig_unc_f = scistats.norm.fit(
                 pull_results[2][i]/pull_results[0][i])
-            fit_errs.append([
+            results["fit_errs"].append([
                 [mu_unc, sig_unc],
                 [mu_frac, sig_frac],
                 [mu_unc_f, sig_unc_f]])
             if plot_config is not None:
                 ax = axes[1-(i//2), i%2]
                 ax.set_title(f"{lab} errors")
+                # "auto" bins (F-D rule) fails for some reason
+                # "doane" works
                 _, bins, _ = ax.hist(frac_errs, **plot_config.gen_kwargs(
                     type="hist", bins="doane", density=True, label="Data"))
                 ax.plot(
@@ -1956,29 +2002,34 @@ def make_pulls(
                 ax.legend()
         if plot_config is not None:
             plot_config.end_plot(add_ending(save_name, "fit_uncert"))
-        return pull_fits, fit_errs
-    return pull_fits
+    return results
 
 def pull_study(
         n, generator,
         plot_config=None,
         return_errors=False,
         save_name=None,
+        verbose=True,
         **kwargs):
+    if verbose:
+        vprint = lambda text : print(text)
+    else:
+        vprint = lambda text : None
     pulls = generate_pulls(n, generator, **kwargs)
     if np.any(pulls[1, :, :] > 1):
-        print(f"Found {np.sum(np.any(pulls[1, :, :] < 1, axis=0))}"
-              + " samples with a region prediction <1.")
+        vprint(f"Found {np.sum(np.any(pulls[1, :, :] < 1, axis=0))}"
+               + " samples with a region prediction <1.")
         good_mask = np.all(pulls[1, :, :] > 1, axis=0)
         if np.any(good_mask):
-            print("Plotting full predictions:")
+            vprint("Plotting full predictions:")
             make_pulls(
                 pulls, plot_config=plot_config, labels=generator.labels,
-                return_errors=return_errors, save_name=save_name)
-            print("Plotting prediction with no 0s:")
+                return_errors=return_errors, save_name=save_name,
+                calc_coverage=False)
+            vprint("Plotting prediction with no 0s:")
             pulls = pulls[:, :, good_mask]
         else:
-            print("No good fits found, so using all fits.")
+            vprint("No good fits found, so using all fits.")
     return make_pulls(
         pulls, plot_config=plot_config, labels=generator.labels,
         return_errors=return_errors, save_name=save_name)
@@ -2091,6 +2142,8 @@ def robustness_test(
         **kwargs):
     if plot_config is None:
         plot_config = Plots.PlotConfig()
+        plot_config.SHOW_PLOT = True
+        plot_config.SAVE_FOLDER = None
     pull_conf = plot_config if plot_pulls else None
     bad_fracs = []
     fits = []
@@ -2101,12 +2154,12 @@ def robustness_test(
         pulls = generate_pulls(n_pulls, generator, **kwargs)
         bad_pull_mask = np.any(pulls[1, :, :] < 1, axis=0)
         bad_fracs.append(np.sum(bad_pull_mask)/n_pulls)
-        fit, err = make_pulls(
+        pull_res = make_pulls(
             pulls[:, :, np.logical_not(bad_pull_mask)],
             plot_config=pull_conf, return_errors=True,
             save_name=save_name, labels=generator.labels)
-        fits.append(fit)
-        errs.append(err)
+        fits.append(pull_res["pull_fits"])
+        errs.append(pull_res["fit_errs"])
     fits = np.array(fits)
     errs = np.array(errs)
     plot_and_fit_range(
