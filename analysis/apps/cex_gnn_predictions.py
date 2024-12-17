@@ -173,13 +173,60 @@ def _get_graph_info(events, args, sample):
     graph_path_params = DataPreparation.create_filepath_dictionary(graph_path)
     return graph_path_params, norm_path
 
+def all_existing_records(graph_path_params):
+    possible_paths = ["train_path", "val_path", "test_path"]
+    paths = [graph_path_params[p] for p in possible_paths
+             if os.path.exists(graph_path_params[p])]
+    if len(paths) == 1:
+        return paths[0]
+    return paths
+
 @Master.timer
-def get_gnn_results(events, args, is_mc):
+def get_gnn_results(events, args, is_mc, force_gen=False):
+    """
+    Gets the GNN results from a set of filtered events.
+
+    If pre-calculated GNN results exist under `"GNN_PREDICTIONS"` in
+    the configuration file, these will be loaded and return (not that
+    it only tests for the existence of `"GNN_PREDICTIONS"`, not that
+    sensible values are contained).
+
+    Otherwise, graphs are loaded and predicted upon using the
+    parameters specified in the configuration. By default this only
+    considers the test records. Note that this does not save the
+    information.
+
+    If run with `force_gen` as True, it will automatically try to
+    predict. In addition, it will use all possible graph records,
+    rather than just the test records. Intended use is to grab training
+    MC data sample if required.
+
+    Parameters
+    ----------
+    events : Master.Data
+        Filtered events (should match those of the graphs). Note,
+        strivtly not necessary if loading predictions.
+    args : argparse.namespace or dict
+        Configuration arguments
+    is_mc : bool
+        Whether or not the supplied events are treated as MC or not.
+    force_gen : bool, optional
+        Whether or not to force inference using all available records.
+        Default is False.
+    
+    Returns
+    -------
+    predictions : np.array
+        Array of GNN classification predictions per event.
+    ids : np.array
+        Array of event ids which generated the graphs per event.
+    """
     sample = "mc" if is_mc else "data"
     args_c = Utils.args_to_dict(args)
-    if "gnn_results" in args_c.keys():
-        predictions = args_c["gnn_results"][sample]["predictions"][events.filename]
-        ids = args_c["gnn_results"][sample]["ids"][events.filename]
+    if ("gnn_results" in args_c.keys()) and (not force_gen):
+        sample_stored = args_c["gnn_results"][sample]
+        predictions = sample_stored["predictions"][events.filename]
+        ids = sample_stored["ids"][events.filename]
     else:
         warnings.warn(
             "Predicting using GNN, beware this causes hanging combined "
@@ -190,18 +237,25 @@ def get_gnn_results(events, args, is_mc):
             args["gnn_model_path"],
             new_data_folder=graph_path_params["folder_path"],
             new_norm=norm_path)
+        if force_gen:
+            records = all_existing_records(graph_path_params)
+            try:
+                schemas = [graph_path_params["schema_path"]]*len(records)
+            except TypeError:
+                schemas = graph_path_params["schema_path"]
+        else:
+            records = graph_path_params["test_path"]
+            schemas = graph_path_params["schema_path"]
         predictions, ids = Models.get_data_predictions(
-            gnn_model,
-            graph_path_params["schema_path"],
-            graph_path_params["test_path"])
+            gnn_model, schemas, records)
         # Confirm graphs match, and ordering is the same
         assert np.all(evt_ids == ids)
     return predictions, ids
 
 @Master.timer
-def get_truth_regions(events, args):
+def get_truth_regions(events, args, force_gen=False):
     args_c = Utils.args_to_dict(args)
-    if "gnn_results" in args_c.keys():
+    if ("gnn_results" in args_c.keys()) and (not force_gen):
         if not ("truth_regions" in args_c["gnn_results"]["mc"].keys()):
             raise Exception("Can't find 'truth_regions' in the stored "
                             + "information.")
@@ -215,10 +269,17 @@ def get_truth_regions(events, args):
             args["gnn_model_path"],
             new_data_folder=graph_path_params["folder_path"],
             new_norm=norm_path)
+        if force_gen:
+            records = all_existing_records(graph_path_params)
+            try:
+                schemas = [graph_path_params["schema_path"]]*len(records)
+            except TypeError:
+                schemas = graph_path_params["schema_path"]
+        else:
+            records = graph_path_params["test_path"]
+            schemas = graph_path_params["schema_path"]
         _, truth_regions = Models.get_predictions(
-            gnn_model,
-            graph_path_params["schema_path"],
-            graph_path_params["test_path"])
+            gnn_model, schemas, records)
     return truth_regions
 
 @Master.timer
