@@ -262,6 +262,10 @@ def PlotDataBkgSub(hist_data : dict[np.ndarray], hist_data_err : dict[np.ndarray
             Plots.plt.legend(loc = "upper left")
             book.Save()
         for i in N_ex_MC:
+            print(i)
+            print(f'data : {sum(hist_data["int_ex"][i])}')
+            print(f'mc : {scale * sum(N_ex_MC[i])}')
+            print(sum(hist_data["int_ex"][i]) / (scale * sum(N_ex_MC[i])))
             cross_section.PlotXSHists(energy_slices, N_ex_MC[i], title = f"$N_{{int, {process_labels[i]}}}$", label = mc_label, color = "C1", scale = scale)
             cross_section.PlotXSHists(energy_slices, hist_data["int_ex"][i], hist_data_err["int_ex"][i], newFigure = False, label = data_label, color = "k")
             Plots.plt.legend(loc = "upper left")
@@ -489,6 +493,7 @@ def LoadToy(file):
 
 def PlotRegions(mc : cross_section.AnalysisInput, book : Plots.PlotBook):
     counts = cross_section.CountInRegions(mc.exclusive_process, mc.regions)
+    print(counts)
     Plots.PlotConfusionMatrix(counts, list(mc.exclusive_process.keys()), list(mc.regions.keys()), y_label = "True process", x_label = "Reco region")
     book.Save()
     return

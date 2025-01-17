@@ -24,7 +24,7 @@ import uproot
 from cabinetry.fit.results_containers import FitResults
 from particle import Particle
 from scipy.interpolate import interp1d, UnivariateSpline
-from scipy.stats import chi2
+from scipy.stats import chi2, ks_2samp
 
 from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, RegionIdentification, Processing
 from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer, IO
@@ -36,7 +36,7 @@ GEANT_XS = os.environ["PYTHONPATH"] + "/data/g4_xs_pi_KE_100.root"
 
 from pyunfold.callbacks import setup_callbacks_regularizer, Logger
 from pyunfold.mix import Mixer
-from pyunfold.teststat import get_ts
+from pyunfold.teststat import get_ts, KS
 from pyunfold.priors import setup_prior
 from pyunfold.utils import cast_to_array
 
@@ -425,7 +425,6 @@ class Sample(str, Enum):
 
 
 def ApplicationProcessing(samples : list[Sample], outdir : str, args : argparse.Namespace, func : callable, merge : bool, outname : str = "output"):
-    
     if (args.regen is True) or (os.path.isfile(f"{outdir}{outname}.dill") is False):
         print("Processing Ntuples")
         outputs = {s : RunProcess(args.ntuple_files[s], s == Sample.DATA, args, func, merge) for s in samples}
@@ -2352,8 +2351,20 @@ class Unfold:
         else:
             label = "Data unfolded"
 
-        PlotXSHists(energy_slices, obs, obs_err, True, 1/sum(obs), label = "Data reco", ylabel = "Fractional counts", color = "k")
+        print(title)
+        # print(f"original: {weighted_chi_sqr(obs/sum(obs), true/sum(true), np.sqrt(true/sum(true)))}")
+        # print(f"unfolded: {weighted_chi_sqr(results['unfolded']/sum(results['unfolded']), true/sum(true), np.sqrt(true/sum(true)))}")
+        # print(f"original: {weighted_chi_sqr(obs/sum(obs), true/sum(true), obs_err/sum(obs))}")
+        # print(f"unfolded: {weighted_chi_sqr(results['unfolded']/sum(results['unfolded']), true/sum(true), results['stat_err']/sum(results['unfolded']))}")
+        # print(f"original: {ks_2samp(obs, true)}")
+        # print(f"unfolded: {ks_2samp(results['unfolded'], true)}")
+        ks = KS(num_causes = len(obs))
+        print(f"original: {ks.calc(obs, true)}")
+        print(f"unfolded: {ks.calc(results['unfolded'], true)}")
+
+
         PlotXSHists(energy_slices, true, None, True, 1/sum(true), label = "MC true (initial prior)", ylabel = "Fractional counts", color = "C1", newFigure = False)
+        PlotXSHists(energy_slices, obs, obs_err, True, 1/sum(obs), label = "Data reco", ylabel = "Fractional counts", color = "k")
         PlotXSHists(energy_slices, results["unfolded"], results["stat_err"], True, 1 / sum(results["unfolded"]), label =  label, color = "C4", ylabel = "Fractional counts", newFigure = False, title = title)
         Plots.plt.legend(loc = "upper left")
         book.Save() 

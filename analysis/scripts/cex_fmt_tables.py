@@ -94,7 +94,7 @@ signal ={
     "pi" : "$\pi^{\pm}$",
     "loose_photon" : "$\gamma$:beam $\pi^0$",
     "photon" : "$\gamma$:beam $\pi^0$",
-    "pi0" : "2 $\gamma$'s, same $\pi^{0}$",
+    "pi0" : "2 $\gamma$s, same $\pi^{0}$",
     "null_pfo": None
 }
 
@@ -145,6 +145,12 @@ def selection_names_criteria(df : pd.DataFrame, name : str):
     return fancy_names
 
 
+def eff_err(p, n):
+    p_err = (p * (1 - p) / n)**0.5
+    p_err = pd.Series([Utils.quadsum(p_err[:i+1]) for i in range(len(p_err))])
+    return p_err
+
+
 def CreateTables(path : str, selection_name : str, signal : str = None):
     tables_mc = {}
     tables_data = {}
@@ -159,6 +165,9 @@ def CreateTables(path : str, selection_name : str, signal : str = None):
     tables_mc[col_map["purity"]] = 100 * tables_mc[col_map["purity"]]
     tables_mc[col_map["efficiency"]] = 100 * tables_mc[col_map["efficiency"]]
 
+    # tables_mc["Purity error (%)"]     = 100 * tables_mc["Purity error (%)"]
+    # tables_mc["Efficiency error (%)"] = 100 * tables_mc["Efficiency error (%)"]
+
     if "Remaining PFOs" in tables_mc[col_map["counts"]]:
         counts_col = "Remaining PFOs"
     else:
@@ -167,10 +176,20 @@ def CreateTables(path : str, selection_name : str, signal : str = None):
     total_counts = pd.concat(objs = {k : v[col_map["counts"]][counts_col] for k, v in {"Data" : tables_data, "MC" : tables_mc}.items()}, axis = 1)
     total_counts = total_counts.set_index(names)
 
+
     if signal is not None:
         signal_tables = pd.concat({t : tables_mc[t][signal] for t in tables_mc}, axis = 1)
 
         signal_tables = signal_tables.set_index(names)
+
+        purity_error = 100 * eff_err(signal_tables["Purity (\\%)"].values/100, tables_mc["Counts"].filter(regex = "Remaining*").values)
+        purity_error.index = names
+        signal_tables["Purity error (\\%)"] = purity_error
+
+        efficiency_error = 100 * eff_err(signal_tables["Efficiency (\\%)"].values/100, signal_tables["Counts"][0])
+        efficiency_error.index = names
+        signal_tables["Efficiency error (\\%)"] = efficiency_error
+
     else:
         signal_tables = None
 
@@ -324,7 +343,7 @@ def main(args : argparse.Namespace):
         outp = f"{out}{f}/"
         os.makedirs(outp, exist_ok = True)
         if fmt_tables[f][0] is not None:
-            fmt_tables[f][0].style.format(precision = 1).to_latex(f"{outp}/signal_table.tex")
+            fmt_tables[f][0].style.format(precision = 3).to_latex(f"{outp}/signal_table.tex")
             FormatTable(f"{outp}/signal_table.tex")
         fmt_tables[f][1].style.format(precision = 1).to_latex(f"{outp}/total_counts.tex")
         FormatTable(f"{outp}/total_counts.tex") 

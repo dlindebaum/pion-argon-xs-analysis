@@ -812,6 +812,14 @@ def main(args : cross_section.argparse.Namespace):
                         mean_fe_err = {}
                         means = {}
                         stds = {}
+
+                        for c in pulls.columns:
+                            Plots.plt.figure()
+                            y, edges = np.histogram(pulls[c], bins = 10)
+                            x = (edges[1:] + edges[:-1]) / 2
+                            popt, perr = cross_section.Fitting.Fit(x, y, np.sqrt(y), cross_section.Fitting.gaussian, plot = True, plot_style = "hist", method = "trf", xlabel = "$\\theta$", ylabel = "Number of entries")
+                            book.Save()
+
                         for _, k in Plots.IterMultiPlot(pulls.columns):
                             mean_res[folder[k]] = f"{np.mean(res[k]):.3g}"
                             mean_fe[folder[k]] = f"{np.mean(fe[k]):.3g}"

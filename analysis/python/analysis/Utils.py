@@ -53,7 +53,11 @@ def ls_recursive(path : os.PathLike):
 
 
 def sf(x):
-    return -int(np.ceil(np.log10(abs(x))))+1
+    try:
+        v = -int(np.ceil(np.log10(abs(x))))+1
+    except (OverflowError, ValueError):
+        v = 0
+    return v
 
 
 def round_value_to_error(v, e) -> str:

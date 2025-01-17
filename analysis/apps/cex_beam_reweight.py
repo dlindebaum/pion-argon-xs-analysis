@@ -173,6 +173,34 @@ def main(args : cross_section.argparse.Namespace):
             reweight_params = {f"p{i}" : {"value" : results[r][0][i], "error" : results[r][1][i]} for i in range(getattr(cross_section.Fitting, r).n_params)}
             cross_section.SaveConfiguration(reweight_params, out + r + ".json")
         Plots.plt.close("all")
+
+    reweight_params = cross_section.LoadConfiguration(out + "gaussian" + ".json")
+
+
+    chi2_table = {}
+    test_range = [1700, 2300]
+    for s, b in zip(["sideband", "analysis"], [25, 50]):
+        print(s)
+        mc_mom = np.array(output_mc[s]["p_inst"])
+        data_mom = np.array(output_data[s]["p_inst"])
+
+        mc_weights = cross_section.RatioWeights(mc_mom, "gaussian", [reweight_params[k]["value"] for k in reweight_params], 100)
+        mc_weights_truncated = cross_section.RatioWeights(mc_mom, "gaussian", [reweight_params[k]["value"] for k in reweight_params], args.beam_reweight["strength"])
+
+        mc_counts, bins = np.histogram(mc_mom, b, test_range)
+        data_counts, _ = np.histogram(data_mom, bins, test_range)
+
+        mc_weight_counts, bins = np.histogram(mc_mom, bins, test_range, weights = mc_weights)
+        mc_weight_counts_truncated, bins = np.histogram(mc_mom, bins, test_range, weights = mc_weights_truncated)
+
+        chi2_table[s] = {}
+        for k, v in zip(["unweighted", "weighted", f"weighted $w < {args.beam_reweight['strength']}$"], [mc_counts, mc_weight_counts, mc_weight_counts_truncated]):
+            chi2_table[s][k] = (b - 1) * cross_section.weighted_chi_sqr(data_counts.astype(float), v.astype(float), v.astype(float))
+
+    table = cross_section.pd.DataFrame(chi2_table)
+    table.to_hdf(out + "chi2_reweight.hdf5", key = "df")
+    table.to_latex(out + "chi2_reweight.tex")
+
     return
 
 if __name__ == "__main__":

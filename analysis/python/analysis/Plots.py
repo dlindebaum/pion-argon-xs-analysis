@@ -1254,7 +1254,7 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
             mc = np.clip(mc, min(x_range), max(x_range))
 
     plt.subplot(211) # MC histogram
-    if x_range is None: x_range = [ak.min([mc, data]), ak.max([mc, data])]
+    if x_range is None: x_range = [ak.min([ak.ravel(mc), data]), ak.max([ak.ravel(mc), data])]
 
     if is_tagged:
         h_mc = []
@@ -1405,6 +1405,10 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
     fractions = counts / np.sum(counts, axis = 1)[:, np.newaxis]
     if newFigure: plt.figure()
     c_norm = counts/np.sum(counts, axis = 0)
+    
+    fractions_err = (fractions * (1 - fractions) / np.sum(counts, axis = 1)[:, np.newaxis])**0.5
+    c_norm_err = (c_norm * (1 - c_norm) / np.sum(counts, axis = 0))**0.5
+
     plt.imshow(c_norm, cmap = cmap, origin = "lower")
     plt.colorbar(label = "Column normalised counts", shrink = 0.8)
 
@@ -1434,7 +1438,7 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
         plt.title("Key: (counts, efficiency(%), purity(%))")
 
     for (i, j), z in np.ndenumerate(counts):
-        plt.gca().text(j, i, f"{z},\n{fractions[i][j]*100:.2g}%,\n{c_norm[i][j]*100:.2g}%", ha='center', va='center', fontsize = 8)
+        plt.gca().text(j, i, f"{z},\n{Utils.round_value_to_error(fractions[i][j]*100, fractions_err[i][j]*100)}%,\n{Utils.round_value_to_error(c_norm[i][j]*100, c_norm_err[i][j]*100)}%", ha='center', va='center', fontsize = 7)
     plt.grid(False)
     plt.tight_layout()
 

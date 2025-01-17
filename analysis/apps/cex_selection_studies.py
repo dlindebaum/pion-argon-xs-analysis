@@ -206,6 +206,7 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, func
     cut_table = Master.CutTable.CutHandler(events, tags = Tags.GenerateTrueBeamParticleTags(events) if beam_instrumentation is False else None)
 
     output["no_selection"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, None, EventSelection.GenerateTrueFinalStateTags(events))
+    output["no_selection_endz"] = MakeOutput(events.recoParticles.beam_endPos_SCE.z, Tags.GenerateTrueBeamParticleTags(events), None, None)
 
     masks = {k : functions[k](events, **v) for k, v in args.items()}
 
@@ -218,6 +219,8 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, func
     output["PiBeamSelection"] = MakeOutput(counts, Tags.GenerateTrueBeamParticleTags(events), None, None)
     events.Filter([mask], [mask])
     output["PiBeamSelection"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
+
+    output["PiBeamSelection_endz"] = MakeOutput(events.recoParticles.beam_endPos_SCE.z, Tags.GenerateTrueBeamParticleTags(events), None, None)
 
     for a in args:
         if a in ["PiBeamSelection", "TrueFiducialCut"]: continue
@@ -235,7 +238,9 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, func
 
         events.Filter([mask], [mask])
         output[a]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
-        
+
+    output["selection_endz"] = MakeOutput(events.recoParticles.beam_endPos_SCE.z, Tags.GenerateTrueBeamParticleTags(events), None, None)
+
     #* true particle population
     output["final_tags"] = MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, None, EventSelection.GenerateTrueFinalStateTags(events))
 
@@ -536,6 +541,12 @@ def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, n
     """
     norm = False if output_data is None else norm
     with Plots.PlotBook(outDir + f"{book_name}.pdf") as pdf:
+
+        for p in ["PiBeamSelection_endz", "no_selection_endz", "selection_endz"]:
+            if p in output_mc:
+                Plots.PlotTagged(output_mc[p]["value"], output_mc[p]["tags"], data2 = output_data[p]["value"] if output_data else None, norm = norm, y_scale = "linear", x_label = x_label["APA3Cut"], bins = nbins["APA3Cut"], ncols = ncols["APA3Cut"], x_range = [30, 230], truncate = truncate["APA3Cut"])
+                # Plots.DrawMultiCutPosition(output_mc[p]["cuts"], face = output_mc[p]["op"], arrow_length = CalculateArrowLength(output_mc[p]["value"], x_range[p]), arrow_loc = 0.7, color = "k")
+                pdf.Save()
 
         for p in output_mc:
             if p in x_label:

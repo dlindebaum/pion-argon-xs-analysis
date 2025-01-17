@@ -245,6 +245,25 @@ class exp(FitFunction):
         return ([-np.inf]*3, [np.inf]*3)
 
 
+class exp_alt(FitFunction):
+    n_params = 3
+
+    def __new__(cls, x, p0, p1, p2) -> np.array:
+        return cls.func(x, p0, p1, p2)
+
+    @staticmethod
+    def func(x, p0, p1, p2):
+        return p0 + np.exp(p2 * (x + p1))
+
+    @staticmethod
+    def p0(x, y):
+        return [0, 1, 1E-5]
+
+    @staticmethod
+    def bounds(x, y):
+        return ([-np.inf]*3, [np.inf]*3)
+
+
 
 class poly3d(FitFunction):
     n_params = 4
@@ -421,6 +440,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         y_err = y_err[mask]
 
     popt, pcov = curve_fit(func.func, x, y_obs, sigma = y_err, maxfev = maxfev, p0 = func.p0(x, y_obs), bounds = func.bounds(x, y_obs), method = method, absolute_sigma = True)
+    print(pcov)
     perr = np.sqrt(np.diag(pcov))
 
     y_pred = func.func(x, *popt) # y values predicted from the fit
@@ -433,15 +453,15 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         x_interp = np.linspace(min(x), max(x), 1000)
         Plots.Plot(x_interp, func.func(x_interp, *popt), newFigure = False, x_scale = "linear", ylabel = ylabel, color = "#1f77b4", zorder = 11, label = "fit", title = title)
         
-        p_min = popt - perr
-        p_max = popt + perr
+        p_min = popt - perr #(perr * chisqr/ndf)
+        p_max = popt + perr #(perr * chisqr/ndf)
 
         plt.fill_between(x_interp, func.func(x_interp, *p_max), func.func(x_interp, *p_min), color = "#7f7f7f", alpha = 0.5, zorder = 10, label = "$1\sigma$ error region")
 
         if plot_style == "hist":
             marker = ""
             colour = "black"
-            label = "observed uncertainty"
+            label = "observed\nuncertainty"
             widths = (x[1] - x[0])/2
             # Plots.PlotHist(x - widths, x - widths, weights = y_obs, color = "#d62728", label = "observed", newFigure = False, range = plot_range)
             Plots.Plot(x, y_obs, style = "bar", linestyle = "", color = "#d62728", xlabel = xlabel, label = "observed", newFigure = False)
@@ -458,7 +478,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
             label = "observed"
             capsize = 3
 
-        Plots.Plot(x, y_obs, yerr = y_err, marker = marker, linestyle = "", color = colour, xlabel = xlabel, label = label, newFigure = False, capsize = capsize)
+        Plots.Plot(x, y_obs, yerr = y_err, marker = marker, linestyle = "", color = colour, xlabel = xlabel, label = label, newFigure = False, capsize = capsize / 2)
         if ylim:
             plt.ylim(*sorted(ylim))
         # if plot_range:
@@ -557,6 +577,7 @@ def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : st
             mean = best_f.mu(*best_popt)
             if rms_err:
                 mean_error = np.sqrt(abs(best_f.var(*best_popt))/len(binned_data[variable]))
+                mean_error = np.sqrt(abs(best_f.var(*best_popt)))/2
             else:
                 mean_error = mean - best_f.mu(*(best_popt + best_perr))
             y_pred = best_f.func(x, *best_popt)
