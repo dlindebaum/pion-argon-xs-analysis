@@ -29,7 +29,7 @@ def _all_pion_def(regions):
     return np.logical_or(regions["single_pion_production"],
                           regions["pion_production"])
 def _all_bkg_def(regions):
-    return np.logical_or(regions["charge_exchange"])
+    return np.logical_not(regions["charge_exchange"])
 default_classification_definitions = {
     "absorption": _abs_def,
     "charge_exchange": _cex_def,

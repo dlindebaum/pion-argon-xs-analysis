@@ -623,7 +623,7 @@ def load_model_from_file(model_folder, new_norm=None, new_data_folder=None):
         outputs,
         model_type=model_type,
         save=False)
-    model.load_weights(hyper_params["weights_path"])
+    model.load_weights(paths_dict["weights_path"])
     return model
 
 # =====================================================================
