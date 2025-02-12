@@ -550,13 +550,18 @@ class ApplicationArguments:
                 args.upstream_loss_response = getattr(Fitting, value["response"])
                 args.upstream_loss_bins = value["bins"]
                 if "correction_params" in value:
-                    args.upstream_loss_correction_params = LoadConfiguration(value["correction_params"])
+                    if value["correction_params"] is not None:
+                        args.upstream_loss_correction_params = LoadConfiguration(value["correction_params"])
             elif head == "BEAM_REWEIGHT":
                 args.beam_reweight = {}
                 if value["params"] is not None:
                     args.beam_reweight["params"] = LoadConfiguration(value["params"])
                 args.beam_reweight["strength"] = value["strength"]
-
+            elif head == "FIDUCIAL_VOLUME":
+                args.fiducial_volume = {
+                    "start": min(value),
+                    "end": max(value),
+                    "list": [min(value), max(value)]}
             elif head == "BEAM_SELECTION_MASKS":
                 args.beam_selection_masks = {}
                 for k, v in value.items():
@@ -565,6 +570,8 @@ class ApplicationArguments:
                 args.region_selection_masks = {}
                 for k, v in value.items():
                     args.region_selection_masks[k] = {i : LoadObject(j) for i, j in v.items()}
+            elif head == "MC_EFFICIENCIES":
+                args.mc_efficiencies = {i : LoadObject(j) for i, j in value.items()}
             elif head == "TOY_PARAMETERS":
                 args.toy_parameters = {}
                 for k, v in value.items():
@@ -589,6 +596,10 @@ class ApplicationArguments:
             elif head == "ANALYSIS_INPUTS":
                 args.analysis_input = {k : v for k, v in value.items()}
             elif head == "UNFOLDING":
+                if "purity_bin" in value.keys():
+                    args.uf_purity_bin = value.pop("purity_bin")
+                else:
+                    args.uf_purity_bin = False
                 args.unfolding = {k : v for k, v in value.items()}
             elif head == "GNN_MODEL":
                 # args.gnn_model_path = str(path)
@@ -602,6 +613,8 @@ class ApplicationArguments:
                             for which_pred, path in save_map.items()}
             else:
                 setattr(args, head, value) # allow for generic configurations in the json file
+        args.multi_dim_bins = Slicing.MultiDimBins(
+            args.energy_slices.bin_edges_with_overflow, True, args.uf_purity_bin)
         if hasattr(args, "beam_selection"):
             ApplicationArguments.DataMCSelectionArgs(args)
         if hasattr(args, "pi0_selection"):
@@ -614,9 +627,16 @@ class ApplicationArguments:
                     args.beam_selection["mc_arguments"]["PiBeamSelection"].pop("use_beam_inst_mc"))
                 del args.beam_selection["data_arguments"]["PiBeamSelection"]["use_beam_inst_mc"]
                 del args.beam_selection["mc_arguments"]["PiBeamSelection"]["use_beam_inst_data"]
-            if "TrueFiducialCut" in args.beam_selection["mc_arguments"]:            
-                args.beam_selection["data_arguments"]["TrueFiducialCut"]["is_mc"] = False
-                args.beam_selection["mc_arguments"]["TrueFiducialCut"]["is_mc"] = True
+            if hasattr(args, "fiducial_volume"):
+                fiducial_args = {
+                    "cut": args.fiducial_volume["start"],
+                    "op": ">"}
+                args.beam_selection["selections"].update({
+                    "FiducialStart": BeamParticleSelection.FiducialStart})
+                args.beam_selection["data_arguments"].update(
+                    {"FiducialStart": fiducial_args})
+                args.beam_selection["mc_arguments"].update(
+                    {"FiducialStart": fiducial_args})
 
         return args
 

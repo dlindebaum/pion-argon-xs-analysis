@@ -1721,6 +1721,57 @@ class RatioPlot():
     def subplot(n):
         plt.subplot(int(f"21{n}"))
 
+def multi_dim_2d_plot(
+        info, e_bins_overflow, multi_dim_binner,
+        plt_conf=None, title=None, pdf=None, **plt_kwargs):
+    if plt_conf is None:
+        plt_conf = PlotConfig()
+        plt_conf.SHOW_PLOT = True
+        plt_conf.SAVE_FOLDER = None
+    weights_indexer = np.concatenate( # Put the inte and end energies on the same axis.
+        [multi_dim_binner.slice_by_hist(slice(None), slice(None), 0),
+         multi_dim_binner.slice_by_hist(slice(None), slice(None), 1)],
+        axis=-1).T.flatten()
+    weights_flat = info[weights_indexer]
+    x_pos = np.arange(multi_dim_binner.n_bins_end)[:, np.newaxis]# + int(multi_dim_binner.reversed)
+    y_pos = np.arange(multi_dim_binner.n_bins_init)[np.newaxis, :]# + int(multi_dim_binner.reversed)
+    x_flat = (x_pos * np.ones_like(y_pos)).flatten()
+    y_flat = (y_pos * np.ones_like(x_pos)).flatten()
+
+    bins_clip = np.clip(
+        e_bins_overflow,
+        np.min(e_bins_overflow[1:-1])-100,
+        np.max(e_bins_overflow[1:-1])+100)
+    init_slicer = (slice(1, None) if multi_dim_binner.reversed
+                     else slice(None, -1))
+    bins_clip_x = np.concatenate([
+        bins_clip[init_slicer], bins_clip[init_slicer]+2000], axis=0)
+    # x_2d += x_2d//multi_dim_binner.n_bins_init
+    x_2d = bins_clip_x[x_flat]
+    y_2d = bins_clip[init_slicer][y_flat]
+    # Adds an extra set of x values to separate out the inital in ending energies
+    y_extra = bins_clip
+    x_extra = np.full_like(bins_clip, np.max(bins_clip))
+    x_2d = np.concatenate([x_2d, x_extra], axis=0)
+    y_2d = np.concatenate([y_2d, y_extra], axis=0)
+    use_weights = np.concatenate([weights_flat, np.full_like(bins_clip, np.nan)], axis=0)
+    # use_weights = weights_flat
+    # bins_2d = [bins_clip_x_edge[bins_2d[0]], bins_clip[bins_2d[1]]]
+    full_bins_x = np.concatenate([
+        bins_clip, bins_clip+2000], axis=0)
+    bins_2d = [np.sort(full_bins_x[np.arange(multi_dim_binner.n_bins_end+2)]),
+               np.sort(bins_clip[np.arange(multi_dim_binner.n_bins_init+1)])]
+    # print(use_weights)
+    plt_conf.setup_figure(figsize=(12, 7), title=title)
+    plt.hist2d(x_2d, y_2d, bins=bins_2d, weights=use_weights, **plt_kwargs)
+    plt.colorbar()
+    plt_conf.format_axis(
+        xlabel="Inte./MeV                              (End+2000)/MeV",
+        ylabel="Init./MeV", ylog=False)
+    # warnings.warn("Not ending plot to allow PDF to save it")
+    if pdf is not None:
+        pdf.Save()
+    return plt_conf.end_plot()
 
 def simple_sig_bkg_hist(
     prop_name, units, property, sig_mask,

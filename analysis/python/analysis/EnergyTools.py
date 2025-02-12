@@ -262,3 +262,81 @@ def RecoDepositedEnergy(events : Data, ff_KE : ak.Array, method : str) -> ak.Arr
     else:
         raise Exception(f"{method} not a valid method, pick 'calo' or 'bb'")
     return dE
+
+def RecoDepositedEnergyFiducial(events : Data, ff_KE : ak.Array, fid_end : float) -> ak.Array:
+    """ Calcuales the energy deposited by the beam particle in the TPC, either using calorimetric information or the bethe bloch formula (spatial information).
+
+    Args:
+        events (Data): events to look at
+        ff_KE (ak.Array): front facing kinetic energy
+        fid_end (float): Fiducial z end position in cm
+
+    Returns:
+        ak.Array: depotisted energy,
+        ak.Array: Track lengths
+    """
+    valid_mask = events.recoParticles.beam_calo_pos.z < fid_end
+    valid_points = events.recoParticles.beam_calo_pos[valid_mask]
+    track_lens = ak.sum(vector.dist(valid_points[..., 1:], valid_points[..., :-1]), axis=-1)
+    # invalids = events.recoParticles.beam_calo_pos.z >= fid_end
+    # assert vector.dist(valid_points[..., -1], events.recoParticles.beam_calo_pos[invalids][..., 0]) < 5
+
+    # reco_pitch = vector.dist(events.recoParticles.beam_calo_pos[:, :-1], events.recoParticles.beam_calo_pos[:, 1:]) # distance between reconstructed calorimetry points
+    KE_int_bb = BetheBloch.InteractingKE(ff_KE, track_lens, 50)
+    dE = ff_KE - KE_int_bb
+    return dE
+
+def TrueInitialEnergyFiducial(events, fiducial_start):
+    index_before_tpc = ak.argmax(
+        events.trueParticles.beam_traj_pos.z > fiducial_start,
+        axis=-1, keepdims = True) - 1
+    index_before_tpc = ak.where(index_before_tpc < 0, 0, index_before_tpc)
+    not_in_tpc = ak.sum(
+        events.trueParticles.beam_traj_pos.z > fiducial_start,
+        axis=-1, keepdims = True) == 0
+    # Force to match interacting = initial energy, which means the
+    #   event will be removed
+    # In other words the last recorded pre-interaction energy before
+    #   the TPC was entered.
+    index_before_tpc = ak.where(not_in_tpc, -2, index_before_tpc)
+    return ak.flatten(events.trueParticles.beam_traj_KE[index_before_tpc])
+
+def TrueInitialEnergyFiducialInterpolate(events, fiducial_start):
+    hit_counts = ak.count(
+        events.trueParticles.beam_traj_pos.z,
+        axis=-1, keepdims=True) - 1
+    ind_before_fiducial = ak.sum(
+        events.trueParticles.beam_traj_pos.z <= fiducial_start,
+        axis=-1, keepdims=True) - 1
+    ind_after_fiducial = ak.where(
+        ind_before_fiducial == hit_counts,
+        0, ind_before_fiducial + 1)
+    before_tpc_energy = events.trueParticles.beam_traj_KE[ind_before_fiducial]
+    beam_z = events.trueParticles.beam_traj_pos.z
+    extra_lengths = (
+        ((fiducial_start-beam_z[ind_before_fiducial])
+         /(beam_z[ind_after_fiducial]-beam_z[ind_before_fiducial]))
+        * vector.dist(events.trueParticles.beam_traj_pos[ind_after_fiducial],
+                      events.trueParticles.beam_traj_pos[ind_before_fiducial])
+    )
+    fid_start_energy = ak.where(
+        ind_before_fiducial[..., 0] > 0,
+        EnergyTools.BetheBloch.InteractingKE(
+            before_tpc_energy[..., 0], extra_lengths[..., 0], n=5),
+        before_tpc_energy[..., 0])
+    return ak.where(ind_before_fiducial[..., 0] == hit_counts[..., 0],
+                                 events.trueParticles.beam_traj_KE[..., -2],
+                                 fid_start_energy)
+
+def TrueEndEnergyFiducial(events, fiducial_end):
+    index_before_tpc_end = ak.sum(
+        events.trueParticles.beam_traj_pos.z < fiducial_end,
+        axis=-1, keepdims = True) - 1
+    neg_ind_before_end = index_before_tpc_end - ak.count(
+        events.trueParticles.beam_traj_pos.z, axis=-1)
+    in_tpc_interaction = neg_ind_before_end == -1
+    neg_ind_before_end = ak.where(
+        in_tpc_interaction, -2, neg_ind_before_end)
+    return (
+        ak.flatten(events.trueParticles.beam_traj_KE[neg_ind_before_end]),
+        ak.flatten(in_tpc_interaction))

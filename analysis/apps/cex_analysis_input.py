@@ -57,7 +57,7 @@ def CreateAnalysisInput(
             true_regions,
             reweight_params,
             args_c["beam_reweight"]["strength"],
-            args_c["fiducial_volume"],
+            args_c["fiducial_volume"]["list"],
             args_c["upstream_loss_response"])
     else:
         raise Exception(f"object type {type(sample)} not a valid sample")
@@ -108,7 +108,7 @@ def CreateGNNAnalysisInput(
             true_regions,
             reweight_params,
             args_c["beam_reweight"]["strength"],
-            args_c["fiducial_volume"],
+            args_c["fiducial_volume"]["list"],
             args_c["upstream_loss_response"])
     else:
         raise Exception(f"object type {type(sample)} not a valid sample")

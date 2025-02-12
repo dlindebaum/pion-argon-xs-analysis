@@ -10,9 +10,11 @@ import argparse
 import os
 
 from rich import print as rprint
+from particle import Particle
 from python.analysis import (
     Master, BeamParticleSelection, EventSelection, PFOSelection, Plots,
-    shower_merging, Processing, Tags, cross_section, EnergyTools, Utils)
+    shower_merging, Processing, Tags, cross_section, EnergyTools, Utils,
+    Slicing)
 import python.analysis.SelectionTools as st
 
 import awkward as ak
@@ -30,6 +32,7 @@ x_label = {
     "PiBeamSelection" : "True particle ID",
     "APA3Cut" : "Beam end position $z$ (cm)",
     "TrueFiducialCut" : "True beam end position $z$ (cm)",
+    "FiducialStart" : "True beam end position $z$ (cm)",
     "PandoraTagCut" : "Pandora tag",
     "DxyCut" : "$\delta_{xy}$",
     "DzCut" : "$\delta_{z}$",
@@ -50,6 +53,7 @@ y_scale = {
     "PiBeamSelection" : None,
     "APA3Cut" : "log",
     "TrueFiducialCut" : "linear",
+    "FiducialStart" : "linear",
     "PandoraTagCut" : None,
     "DxyCut" : "log",
     "DzCut" : "log",
@@ -71,6 +75,7 @@ x_range = {
     "PandoraTagCut" : None,
     "APA3Cut" : [0, 700],
     "TrueFiducialCut" : [0, 700],
+    "FiducialStart" : [0, 220],
     "DxyCut" : [0, 5],
     "DzCut" : [-5, 5],
     "CosThetaCut" : [0.9, 1],
@@ -91,6 +96,7 @@ nbins = {
     "PiBeamSelection" : 50,
     "APA3Cut" : 50,
     "TrueFiducialCut" : 50,
+    "FiducialStart" : 50,
     "PandoraTagCut" : 50,
     "DxyCut" : 50,
     "DzCut" : 50,
@@ -111,6 +117,7 @@ ncols = {
     "PiBeamSelection" : 2,
     "APA3Cut" : 2,
     "TrueFiducialCut" : 2,
+    "FiducialStart" : 2,
     "PandoraTagCut" : 2,
     "DxyCut" : 2,
     "DzCut" : 2,
@@ -131,6 +138,7 @@ truncate = {
     "PiBeamSelection" : False,
     "APA3Cut" : False,
     "TrueFiducialCut" : False,
+    "FiducialStart" : False,
     "PandoraTagCut" : False,
     "DxyCut" : False,
     "DzCut" : False,
@@ -142,15 +150,112 @@ truncate = {
     "TrackLengthSelection" : False
 }
 
+def loop_through_masks(
+        counts, binner, mask_dict,
+        init_e, end_e, in_tpc, true_beam=None):
+    curr_mask = ak.ones_like(
+        init_e, dtype=bool)
+        # list(mask_dict.values())[0], dtype=bool)
+    for m_name, mask in mask_dict.items():
+        curr_mask = np.logical_and(curr_mask, mask)
+        if true_beam is not None:
+            true_arg = (true_beam[curr_mask],)
+        else:
+            true_arg = ()
+        new_counts = binner.energies_to_multi_dim_hist(
+            init_e[curr_mask], end_e[curr_mask], in_tpc[curr_mask],
+            *true_arg)
+        counts.update({m_name: new_counts})
+    return counts, curr_mask
+
+def get_multi_dim_counts_reco(
+        init_energies, end_energies, in_tpc,
+        multi_dim_bins, args, outputs):
+    fid_masks = outputs["fiducial"]
+    beam_masks = outputs["beam"]
+    pfo_masks = outputs["null_pfo"]
+    if fid_masks is not None:
+        fid_mask = ak.ones_like(
+            list(fid_masks["masks"].values())[0], dtype=bool)
+        for m in fid_masks["masks"].values():
+            fid_mask = np.logical_and(fid_mask, m)
+        fid_lab = "Fiducial"
+    else:
+        fid_mask = ak.ones_like(
+            list(beam_masks["masks"].values())[0], dtype=bool)
+        fid_lab = "NoSelection"
+    fid_counts = multi_dim_bins.energies_to_multi_dim_hist(
+        init_energies[fid_mask], end_energies[fid_mask],
+        in_tpc[fid_mask])
+    counts = {fid_lab: fid_counts}
+    counts, beam_mask = loop_through_masks(
+        counts, multi_dim_bins, beam_masks["masks"],
+        init_energies[fid_mask], end_energies[fid_mask],
+        in_tpc[fid_mask])
+    # counts, _ = loop_through_masks(
+    #     counts, multi_dim_bins, pfo_masks["masks"],
+    #     init_energies[fid_mask][beam_mask], end_energies[fid_mask][beam_mask],
+    #     in_tpc[fid_mask][beam_mask])
+    # curr_mask = ak.ones_like(
+    #     list(beam_masks["masks"].values())[0], dtype=bool)
+    # for m_name, mask in beam_masks["masks"].items():
+    #     curr_mask = np.logical_and(curr_mask, mask)
+    #     new_counts = multi_dim_bins.energies_to_multi_dim_hist(
+    #         init_energies[fid_mask][curr_mask],
+    #         end_energies[fid_mask][curr_mask],
+    #         in_tpc[fid_mask][curr_mask])
+    #     counts.update({m_name: new_counts})
+    # beam_mask = curr_mask
+    # curr_mask = ak.ones_like(
+    #     list(pfo_masks["masks"].values())[0], dtype=bool)
+    # for m_name, mask in pfo_masks["masks"].items():
+    #     curr_mask = np.logical_and(curr_mask, mask)
+    #     new_counts = multi_dim_bins.energies_to_multi_dim_hist(
+    #         init_energies[fid_mask][beam_mask][curr_mask],
+    #         end_energies[fid_mask][beam_mask][curr_mask],
+    #         in_tpc[fid_mask][beam_mask][curr_mask])
+    #     counts.update({m_name: new_counts})
+    return counts
+
+def get_multi_dim_counts_truth(
+        init_energies, end_energies, in_tpc, true_pion_mask,
+        multi_dim_bins, args, outputs, fiducial_truth_mask):
+    pre_cut_lab = "FiducialTruth"
+    pre_cut_counts = multi_dim_bins.energies_to_multi_dim_hist(
+        init_energies[fiducial_truth_mask],
+        end_energies[fiducial_truth_mask],
+        in_tpc[fiducial_truth_mask],
+        true_pion_mask[fiducial_truth_mask])
+    counts = {pre_cut_lab: pre_cut_counts}
+    fid_masks = outputs["fiducial"]
+    beam_masks = outputs["beam"]
+    pfo_masks = outputs["null_pfo"]
+    counts, fid_mask = loop_through_masks(
+        counts, multi_dim_bins, fid_masks["masks"],
+        init_energies, end_energies,
+        in_tpc, true_pion_mask)
+    counts, beam_mask = loop_through_masks(
+        counts, multi_dim_bins, beam_masks["masks"],
+        init_energies[fid_mask], end_energies[fid_mask],
+        in_tpc[fid_mask], true_pion_mask[fid_mask])
+    # counts, _ = loop_through_masks(
+    #     counts, multi_dim_bins, pfo_masks["masks"],
+    #     init_energies[fid_mask][beam_mask], end_energies[fid_mask][beam_mask],
+    #     in_tpc[fid_mask][beam_mask], true_pion_mask[fid_mask][beam_mask])
+    return counts
 
 def AnalyseBeamFiducialCut(events : Master.Data, beam_instrumentation : bool, functions : dict, args : dict):
     output = {}
     masks = {}
     cut_table = Master.CutTable.CutHandler(events, tags = Tags.GenerateTrueBeamParticleTags(events) if beam_instrumentation is False else None)
     output["no_selection"] = st.MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, None, EventSelection.GenerateTrueFinalStateTags(events))
-    if "TrueFiducialCut" in args:
-        masks = {k : functions[k](events, **v) for k, v in args.items() if k in ["APA3Cut", "TrueFiducialCut"]}
-        for a in ["APA3Cut", "TrueFiducialCut"]:
+    fiducial_cuts = ["TrueFiducialCut", "FiducialStart", "APA3Cut"]
+    masks = {k : functions[k](events, **v) for k, v in args.items() if k in fiducial_cuts}
+    if len(masks) != 0:
+    # if "TrueFiducialCut" in args:
+    #     masks = {k : functions[k](events, **v) for k, v in args.items() if k in ["APA3Cut", "TrueFiducialCut"]}
+        # for a in ["APA3Cut", "TrueFiducialCut"]:
+        for a in masks.keys():
             mask, property = functions[a](events, **args[a], return_property = True)
             cut_table.add_mask(mask, a)
             cut_values = args[a]["cut"] if "cut" in args[a] else None
@@ -184,8 +289,8 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, func
     cut_table = Master.CutTable.CutHandler(events, tags = Tags.GenerateTrueBeamParticleTags(events) if beam_instrumentation is False else None)
 
     output["no_selection"] = st.MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, None, EventSelection.GenerateTrueFinalStateTags(events))
-
-    masks = {k : functions[k](events, **v) for k, v in args.items()}
+    fiducial_cuts = ["TrueFiducialCut", "FiducialStart"]
+    masks = {k : functions[k](events, **v) for k, v in args.items() if k not in fiducial_cuts}
 
     #* pi+ beam selection
     mask = BeamParticleSelection.PiBeamSelection(events, **args["PiBeamSelection"])
@@ -198,8 +303,11 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, func
     output["PiBeamSelection"]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
 
     for a in args:
-        if a in ["PiBeamSelection", "TrueFiducialCut"]: continue
-        if ("TrueFiducialCut" in args) and (a == "APA3Cut"): continue # should have applied fiducial cuts first
+        if a in ["PiBeamSelection"] + fiducial_cuts: continue
+        if ("TrueFiducialCut" in args) and (a == "APA3Cut"):
+            # should have applied fiducial cuts first
+            del masks["APA3Cut"]
+            continue 
         mask, property = functions[a](events, **args[a], return_property = True)
         cut_table.add_mask(mask, a)
         cut_values = args[a]["cut"] if "cut" in args[a] else None
@@ -213,12 +321,20 @@ def AnalyseBeamSelection(events : Master.Data, beam_instrumentation : bool, func
 
         events.Filter([mask], [mask])
         output[a]["fs_tags"] = EventSelection.GenerateTrueFinalStateTags(events)
-        
+
     #* true particle population
     output["final_tags"] = st.MakeOutput(None, Tags.GenerateTrueBeamParticleTags(events), None, None, EventSelection.GenerateTrueFinalStateTags(events))
 
     df = cut_table.get_table(init_data_name = "no selection", pfos = False, percent_remain = False, relative_percent = False, ave_per_event = False)
     return output, df, masks
+
+def AnalyseSelectionEfficiency(efficiency_counts):
+    init_name, init_count = list(efficiency_counts.items())[0]
+    valid_starts = ["FiducialTruth", "Fiducial", "NoSelection"]
+    if "FiducialTruth" in efficiency_counts.keys():
+        assert init_name == "FiducialTruth", f"Must have fiducial truth cut first, found {init_name}"
+    assert init_name in valid_starts, f"Invalid start count: {init_name}"
+    return {name : count/init_count for name, count in efficiency_counts.items()}
 
 def run(i, file, n_events, start, selected_events, args) -> dict:
     events = Master.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
@@ -227,18 +343,43 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
         "name" : file,
         "fiducial" : None,
         "beam" : None,
-        "null_pfo" : None
+        "null_pfo" : None,
+        "efficiencies": None
     }
 
     if args["data"] == True:
         selection_args = "data_arguments"
     else:
         selection_args = "mc_arguments"
+        truth_multi_bins = Slicing.MultiDimBins(
+            args["energy_slices"].bin_edges_with_overflow, True, True)
+        truth_init_e = EnergyTools.TrueInitialEnergyFiducial(
+            events, args["fiducial_volume"]["start"])
+        truth_end_e, truth_in_tpc = EnergyTools.TrueEndEnergyFiducial(
+            events, args["fiducial_volume"]["end"])
+        true_pion_mask = events.trueParticles.pdg[..., 0] == 211
+        truth_fiducial_mask = BeamParticleSelection.TrueFiducialCut(
+            events, True, cut=args["fiducial_volume"]["start"], op=">")
+
+    reco_multi_bins = Slicing.MultiDimBins(
+        args["energy_slices"].bin_edges_with_overflow, True, False)
+    reco_init_e = EnergyTools.BetheBloch.InteractingKE(
+                EnergyTools.KE(events.recoParticles.beam_inst_P,
+                               Particle.from_pdgid(211).mass),
+                (args["fiducial_volume"]["start"]
+                 * np.ones_like(events.recoParticles.beam_inst_P)),
+                25)
+    reco_end_e = reco_init_e - EnergyTools.RecoDepositedEnergyFiducial(
+            events, reco_init_e, args["fiducial_volume"]["end"])
+    reco_in_tpc = (events.recoParticles.beam_endPos_SCE.z
+                   < args["fiducial_volume"]["end"])
 
     if "beam_selection" in args:
         print("beam particle selection")
 
-        if "TrueFiducialCut" in args["beam_selection"]["selections"]:
+        if (
+                ("TrueFiducialCut" in args["beam_selection"]["selections"])
+                or ("FiducialStart" in args["beam_selection"]["selections"])):
             output_fd, table_fd, fd_masks = AnalyseBeamFiducialCut(events, args["data"], args["beam_selection"]["selections"], args["beam_selection"][selection_args])
             output["fiducial"] = {"data" : output_fd, "table" : table_fd, "masks" : fd_masks}
 
@@ -252,6 +393,25 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
         good_PFO_cut_table.add_mask(good_PFO_mask, "GoodShowerSelection")
         events.Filter([good_PFO_mask])
         output["null_pfo"] = {"table" : good_PFO_cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, events = False), "masks" : {"ValidPFOSelection" : good_PFO_mask}}
+    # print({name: len(mask) for name, mask in output["fiducial"]["masks"].items()})
+    # print({name: len(mask) for name, mask in output["beam"]["masks"].items()})
+    # print({name: len(mask) for name, mask in output["null_pfo"]["masks"].items()})
+    # selection_masks = output["beam"]["masks"].copy()
+    # selection_masks.update(output["null_pfo"]["masks"])
+    reco_efficiency_counts = get_multi_dim_counts_reco(
+        reco_init_e, reco_end_e, reco_in_tpc,
+        reco_multi_bins, args, output)
+    efficiencies = {"reco": {
+        "count": reco_efficiency_counts,
+        "efficiency": AnalyseSelectionEfficiency(reco_efficiency_counts)}}
+    if not args["data"]:
+        truth_efficiency_counts = get_multi_dim_counts_truth(
+            truth_init_e, truth_end_e, truth_in_tpc, true_pion_mask,
+            truth_multi_bins, args, output, truth_fiducial_mask)
+        efficiencies.update({"truth": {
+            "count": truth_efficiency_counts,
+            "efficiency": AnalyseSelectionEfficiency(truth_efficiency_counts)}})
+    output["efficiencies"] = efficiencies
     return output
 
 @Master.timer
@@ -356,6 +516,68 @@ def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, n
     Plots.plt.close("all")
     return
 
+def MakeEfficiencyPlots(output_mc : dict, output_data : dict, outDir : str, args, book_name = "sel_efficiency"):
+    """ Beam particle selection plots.
+
+    Args:
+        output_mc (dict): mc to plot
+        output_data (dict): data to plot
+        outDir (str): output directory
+        norm (float): plot normalisation
+    """
+    overflow_bins = args.energy_slices.bin_edges_with_overflow
+    truth_multi_binner = Slicing.MultiDimBins(
+        overflow_bins, True, True)
+    reco_multi_binner = Slicing.MultiDimBins(
+        overflow_bins, True, False)
+    count_max = max([np.max(v) for v in output_mc["truth"]["count"].values()])
+    with Plots.PlotBook(outDir + f"{book_name}.pdf") as pdf:
+        Plots.multi_dim_2d_plot(
+            output_mc["truth"]["count"]["FiducialTruth"], overflow_bins, truth_multi_binner,
+            title="Truth fiducial MC truth count", norm="log",
+            vmax=count_max, vmin=1, pdf=pdf)
+        # pdf.Save()
+        Plots.multi_dim_2d_plot(
+            output_mc["truth"]["efficiency"]["FiducialTruth"], overflow_bins, truth_multi_binner,
+            title="Truth fiducial MC truth efficiency", norm="linear",
+            vmax=2, vmin=0, pdf=pdf, cmap="coolwarm")
+        # pdf.Save()
+        for p in output_mc["reco"]["count"]:
+            if "Fiducial" not in p:
+                Plots.multi_dim_2d_plot(
+                    output_mc["truth"]["count"][p], overflow_bins, truth_multi_binner,
+                    title=p + " MC truth count", norm="log",
+                    vmax=count_max, vmin=1, pdf=pdf)
+                # pdf.Save()
+                Plots.multi_dim_2d_plot(
+                    output_mc["truth"]["efficiency"][p], overflow_bins, truth_multi_binner,
+                    title=p + " MC truth efficiency", norm="linear",
+                    vmax=2, vmin=0, pdf=pdf, cmap="coolwarm")
+                # pdf.Save()
+            Plots.multi_dim_2d_plot(
+                output_mc["reco"]["count"][p], overflow_bins, reco_multi_binner,
+                title=p + " MC reco count", norm="log",
+                vmax=count_max, vmin=1, pdf=pdf)
+            # pdf.Save()
+            Plots.multi_dim_2d_plot(
+                output_mc["reco"]["efficiency"][p], overflow_bins, reco_multi_binner,
+                title=p + " MC reco efficiency", norm="linear",
+                vmax=1, vmin=0, pdf=pdf)
+            # pdf.Save()
+            if output_data is not None:
+                Plots.multi_dim_2d_plot(
+                    output_data["reco"]["count"][p], overflow_bins, reco_multi_binner,
+                    title=p + " data reco count", norm="log",
+                    vmax=count_max, vmin=1, pdf=pdf)
+                # pdf.Save()
+                Plots.multi_dim_2d_plot(
+                    output_data["reco"]["efficiency"][p], overflow_bins, reco_multi_binner,
+                    title=p + " data reco efficiency", norm="linear",
+                    vmax=1, vmin=0, pdf=pdf)
+                # pdf.Save()
+    Plots.plt.close("all")
+    return
+
 @Master.timer
 def main(args):
     shower_merging.SetPlotStyle(extend_colors = True)
@@ -378,6 +600,8 @@ def main(args):
     st.SaveMasks(output_mc, args.out + "masks_mc/")
     if output_data is not None: st.SaveMasks(output_data, args.out + "masks_data/")
 
+    st.SaveEfficiencies(output_mc, args.out + "efficiency_mc/")
+
     # output directories
     os.makedirs(outdir + "plots/", exist_ok = True)
 
@@ -387,6 +611,8 @@ def main(args):
 
     if output_mc["beam"]: #* this is assuming you apply the same cuts as Data and MC (which is implictly assumed for now)
         MakeBeamSelectionPlots(output_mc["beam"]["data"], output_data["beam"]["data"] if output_data else None, outdir + "plots/", norm = args.norm, book_name = "beam")
+    
+    MakeEfficiencyPlots(output_mc["efficiencies"], output_data["efficiencies"] if output_data else None, outdir + "plots/", args, book_name = "sel_efficiency")
     return
 
 

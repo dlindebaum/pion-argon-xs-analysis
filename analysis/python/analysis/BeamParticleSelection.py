@@ -80,6 +80,8 @@ def TrueFiducialCut(events, is_mc : bool, cut : int = [30, 220], op = [">", "<"]
         else:
             return ak.ones_like(events.eventNum, dtype = bool)
 
+def FiducialStart(events, cut : int = 0, op = ">", return_property : bool = False):
+    return CreateMask(cut, op, events.recoParticles.beam_endPos_SCE.z, return_property)
 
 def PiBeamSelection(events: Data, use_beam_inst : bool = False, return_property : bool = False) -> ak.Array:
     """
@@ -254,6 +256,24 @@ def MichelScoreCut(events: Data, cut : float = 0.55, op = "<", return_property :
     score = ak.where(events.recoParticles.beam_nHits != 0, events.recoParticles.beam_michelScore / events.recoParticles.beam_nHits, -999)
     return CreateMask(cut, op, score, return_property)
 
+def MichelScoreCutChargeWeight(
+        events: Data, cut : float = 0.55, op = "<",
+        return_property : bool = False) -> ak.Array:
+    """ Cut on michel score to remove muon like beam particles.
+    Uses the charge weighted version.
+
+    Args:
+        events (Data): events to study.
+
+    Returns:
+        ak.Array: boolean mask.
+    """
+    score = ak.where(
+        events.recoParticles.beam_nHits != 0,
+        (events.recoParticles.beam_michelScore_by_charge
+         / events.recoParticles.beam_nHits),
+        -999)
+    return CreateMask(cut, op, score, return_property)
 
 def MedianDEdXCut(events: Data, cut : float = 2.4, op = "<", truncate : float = None, return_property : bool = False) -> ak.Array:
     """ cut on median dEdX to exlude proton background.

@@ -60,9 +60,15 @@ class Slices:
         if self.reversed:
             self.underflow_ind = self.bin_edges.size
             self.overflow_ind = 0
+            self.bin_edges_with_overflow = np.array(
+                [np.inf] + list(self.bin_edges) + [-np.inf])
+            self.bin_edges_overflow_ordered = self.bin_edges_with_overflow[::-1]
         else:
             self.underflow_ind = 0
             self.overflow_ind = self.bin_edges.size
+            self.bin_edges_with_overflow = np.array(
+                [-np.inf] + list(self.bin_edges) + [np.inf])
+            self.bin_edges_overflow_ordered = self.bin_edges_with_overflow
         self.num = np.arange(self.bin_edges.size+1)
         self.num_edges = np.arange(self.bin_edges.size+2)
         self.pos = self.bin_edges
@@ -87,6 +93,126 @@ class Slices:
     def get_num_with_overflow(self, x):
         return np.digitize(x, self.bin_edges)    
     
+class MultiDimBins():
+    def __init__(self, overflow_bin_edges, has_tpc, has_beam):
+        self.has_tpc = has_tpc
+        self.has_beam = has_beam
+        self.e_bin_edges = overflow_bin_edges
+        self.digit_edges = overflow_bin_edges[1:-1]
+        bin_order = np.argsort(overflow_bin_edges)
+        if np.all(bin_order == np.arange(overflow_bin_edges.size)):
+            self.reversed = False
+        elif np.all(bin_order == (np.arange(overflow_bin_edges.size)[::-1])):
+            self.reversed = True
+        else:
+            raise Exception("overflow_bin_edges are not all monotonically in-/de-creasing")
+        self.n_bins_init = overflow_bin_edges.size - 1
+        self.n_bins_end = self.n_bins_init * (1 + int(self.has_tpc))
+        self.n_bins = self.n_bins_init * self.n_bins_end + int(self.has_beam)
+        self.multi_bin_edges  = np.arange(self.n_bins+1)
+    
+    def energies_to_multi_dim_inds(self, init_es, end_es, in_tpc=None, has_beam=None):
+        if self.has_tpc == (in_tpc is None):
+            not_txt = " not" if in_tpc is None else ""
+            raise Exception(f"in_tpc is {self.has_tpc}, but in_tpc has"
+                             + not_txt + " been supplied")
+        if self.has_beam == (has_beam is None):
+            not_txt = " not" if has_beam is None else ""
+            raise Exception(f"has_beam is {self.has_beam}, but has_beam has"
+                             + not_txt + " been supplied")
+        init_e_ind = np.digitize(init_es, self.digit_edges)
+        end_e_ind = np.digitize(end_es, self.digit_edges)
+        if self.has_tpc:
+            end_e_ind = end_e_ind + self.n_bins_init - (self.n_bins_init * in_tpc)
+        multi_dim_ind = (init_e_ind*self.n_bins_end) + end_e_ind
+        if self.has_beam:
+            multi_dim_ind = ak.where(has_beam, multi_dim_ind, self.n_bins - 1)
+        return ak.to_numpy(multi_dim_ind)
+    
+    def energies_to_multi_dim_hist(self, init_es, end_es, in_tpc=None, has_beam=None):
+        return np.histogram(
+            self.energies_to_multi_dim_inds(init_es, end_es, in_tpc=in_tpc, has_beam=has_beam),
+            bins=self.multi_bin_edges)[0]
+
+    def extract_hist_inds(self, multi_dim_ind):
+        return multi_dim_ind // self.n_bins_end, multi_dim_ind % self.n_bins_init
+
+    def multi_dim_to_hists(self, multi_dim_hist, return_non_pi_count=False, valid_slices=True):
+        if return_non_pi_count and (not self.has_beam):
+            raise Exception("Requested non pi beam counts, but no bin information present")
+        if self.has_beam:
+            non_pi_counts = multi_dim_hist[-1]
+            multi_dim_hist = multi_dim_hist[:-1]
+        if valid_slices:
+            ind_arr = np.arange(self.n_bins_init * self.n_bins_end)
+            init_inds = ind_arr // self.n_bins_end
+            # init not ends below, since we check both missing and interacting are valid
+            end_inds = ind_arr % self.n_bins_init
+            if self.reversed:
+                valid_mask = end_inds > init_inds
+            else:
+                valid_mask = end_inds < init_inds
+            multi_dim_hist = np.where(valid_mask, multi_dim_hist, 0)
+        shaped_hist = multi_dim_hist.reshape((self.n_bins_init, self.n_bins_end))
+        init_hist = shaped_hist.sum(axis=1)
+        ending_hist = shaped_hist.sum(axis=0)
+        inte_hist = ending_hist[:self.n_bins_init]
+        # Second half of ending hist is the events leaving the TPC
+        # Total ends is thus the sum of both halfs
+        end_hist = inte_hist + ending_hist[self.n_bins_init:]
+        if return_non_pi_count:
+            return init_hist, end_hist, inte_hist, non_pi_counts
+        return init_hist, end_hist, inte_hist
+
+    def slice_by_hist(self, init_slice, end_slice, tpc_slice=None):
+        """
+        Generates a numpy array to pick out the selected slices.
+        This is equivalent to slicing and array with dimensions
+        ```(n_bins_init, n_bins_init, 2)```
+        If has_tpc is False, the final dimension is ignored.
+        has_beam is never considered.
+        The first dimension is the initial energy., sliced by
+        init_slice.
+        The second dimension is the interating energy, sliced
+        by end_slice.
+        The third dimension is 0 for the true interactions, and
+        1 for ends which have not interacted, sliced by
+        tpc_slice.
+
+        Each parameter must be either an integer, slice instance,
+        or numpy array of integers (i.e. any of the normal ways
+        of slicing a numpy array).
+        """
+        if self.has_tpc == (tpc_slice is None):
+            not_txt = " not" if tpc_slice is None else ""
+            raise Exception(f"in_tpc is {self.has_tpc}, but which_end_slice has"
+                            + not_txt + " been supplied")
+        init_ax = np.arange(self.n_bins_init) * self.n_bins_end
+        init_sliced = np.asarray(init_ax[init_slice])
+        end_ax = np.arange(self.n_bins_init)
+        end_sliced = np.asarray(end_ax[end_slice])
+        final_slices = (np.expand_dims(init_sliced, axis=(-1,) * len(end_sliced.shape))
+                        + end_sliced)
+        if self.has_tpc:
+            tpc_ax = np.arange(2) * self.n_bins_init
+            tpc_sliced = np.asarray(tpc_ax[tpc_slice])
+            final_slices = (np.expand_dims(final_slices, axis=(-1,) * len(tpc_sliced.shape))
+                            + tpc_sliced)
+        return final_slices
+
+    def reverse_order_slice(self):
+        inv_slice = slice(None, None, -1)
+        if self.has_tpc:
+            rev_slicer = np.concatenate(
+                [self.slice_by_hist(inv_slice, inv_slice, 0),
+                 self.slice_by_hist(inv_slice, inv_slice, 1)],
+                axis=-1).flatten()
+        else:
+            rev_slicer = self.slice_by_hist(inv_slice, inv_slice)
+        if self.has_beam:
+            rev_slicer = np.concatenate([
+                rev_slicer, np.array([self.n_bins - 1])], axis=0)
+        return rev_slicer
 
 # class Slices:
 #     """

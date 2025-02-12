@@ -618,26 +618,34 @@ class AnalysisInputGNN(AnalysisInputBase):
             reco_KE_inst, upstream_energy_loss_params, upstream_loss_func)
         reco_KE_ff = reco_KE_inst - reco_upstream_loss
 
-        if min(fiducial_volume) > 0:
+        assert fiducial_volume[1] > fiducial_volume[0]
+        assert np.all(events.recoParticles.beam_endPos_SCE.z > fiducial_volume[0])
+
+        if fiducial_volume[0] > 0:
             reco_KE_init = etools.BetheBloch.InteractingKE(
                 reco_KE_ff,
-                min(fiducial_volume) * np.ones_like(reco_KE_ff),
+                fiducial_volume[0] * np.ones_like(reco_KE_ff),
                 25) # initial kinetic energy in the fiducial volume
         else:
             reco_KE_init = reco_KE_ff
 
-        reco_KE_int = reco_KE_ff - etools.RecoDepositedEnergy(
-            events, reco_KE_ff, "bb") # interacting kinetic energy
-        reco_track_length = events.recoParticles.beam_track_length
-        outside_tpc_reco = (
-            (events.recoParticles.beam_endPos_SCE.z < min(fiducial_volume))
-            | (events.recoParticles.beam_endPos_SCE.z > max(fiducial_volume)))
-
+        reco_KE_int = reco_KE_ff - etools.RecoDepositedEnergyFiducial(
+            events, reco_KE_ff, fiducial_volume[1])
+        outside_tpc_reco = events.recoParticles.beam_endPos_SCE.z >= fiducial_volume[1]
+        # Calculate only length of track inside fiducial volume
+        inside_tpc_reco = np.logical_and(
+            events.recoParticles.beam_calo_pos.z > fiducial_volume[0],
+            events.recoParticles.beam_calo_pos.z < fiducial_volume[1])
+        reco_track_length = ak.sum(vector.dist(
+            events.recoParticles.beam_calo_pos[inside_tpc_reco][..., :-1],
+            events.recoParticles.beam_calo_pos[inside_tpc_reco][..., 1:]), -1)
+        del inside_tpc_reco
 
         if true_regions is not None:
             true_KE_ff = events.trueParticles.beam_KE_front_face
+            # assert np.all(events.trueParticles.beam_traj_pos.z[..., -1] > fiducial_volume[0])
 
-            if min(fiducial_volume) > 0:
+            if fiducial_volume[0] > 0:
                 true_KE_init = etools.BetheBloch.InteractingKE(
                     true_KE_ff,
                     min(fiducial_volume) * np.ones_like(true_KE_ff),
@@ -645,12 +653,20 @@ class AnalysisInputGNN(AnalysisInputBase):
             else:
                 true_KE_init = true_KE_ff
 
-
-            true_KE_int = events.trueParticles.beam_traj_KE[:, -2]
-            true_track_length = events.trueParticles.beam_track_length
-            outside_tpc_true = (
-                (events.trueParticles.beam_traj_pos.z[:, -1] < min(fiducial_volume))
-                | (events.trueParticles.beam_traj_pos.z[:, -1] > max(fiducial_volume)))
+            outside_tpc_true = events.trueParticles.beam_traj_pos.z[:, -1] >= fiducial_volume[1]
+            true_KE_int = ak.where(
+                outside_tpc_true,
+                events.trueParticles.beam_traj_KE[ # Outside TPC (take last recorded energy)
+                    events.trueParticles.beam_traj_pos.z < fiducial_volume[1]][..., -1],
+                events.trueParticles.beam_traj_KE[:, -2]) # Not outside TPC
+            # Calculate only length of track inside fiducial volume
+            inside_tpc_points = np.logical_and(
+                events.trueParticles.beam_traj_pos.z > fiducial_volume[0],
+                events.trueParticles.beam_traj_pos.z < fiducial_volume[1])
+            true_track_length = ak.sum(vector.dist(
+                events.trueParticles.beam_traj_pos[inside_tpc_points][..., :-1],
+                events.trueParticles.beam_traj_pos[inside_tpc_points][..., 1:]), -1)
+            del inside_tpc_points
             inelastic = (
                 events.trueParticles.true_beam_endProcess == "pi+Inelastic")
 

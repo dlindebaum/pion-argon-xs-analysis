@@ -172,11 +172,11 @@ def BeamScraperPlots(beam_inst_KE_bins : list, output_mc : dict[ak.Array], scrap
         Plots.Plot(output_mc["beam_inst_x"][e][is_scraper], output_mc["beam_inst_y"][e][is_scraper], newFigure = False, linestyle = "", marker = "o", markersize = 2, color = "C6", alpha = 0.5, label = "scraper", rasterized = True)
 
         mu_x = ak.mean(output_mc["beam_inst_x"][e])
-        mu_y = ak.mean(output_mc["beam_inst_y"])
+        mu_y = ak.mean(output_mc["beam_inst_y"][e])
         print(bin_label)
         print(mu_x, mu_y)
         sigma_x = ak.std(output_mc["beam_inst_x"][e])
-        sigma_y = ak.std(output_mc["beam_inst_y"])
+        sigma_y = ak.std(output_mc["beam_inst_y"][e])
 
         output[bin_edges] = {"mu_x_inst" : mu_x, "mu_y_inst" : mu_y, "sigma_x_inst" : sigma_x, "sigma_y_inst" : sigma_y}
 
