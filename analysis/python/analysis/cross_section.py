@@ -33,6 +33,7 @@ from python.analysis.Master import (
     ReadHDF5, Data, Ntuple_Type, timer, IO)
 from python.analysis.Utils import *
 from python.analysis.AnalysisInputs import AnalysisInput, AnalysisInputGNN
+from apps.cex_gnn_analyse import known_gnn_theory_procs, known_upstream_methods
 
 GEANT_XS = os.environ["PYTHONPATH"] + "/data/g4_xs_pi_KE_100.root"
 
@@ -372,7 +373,10 @@ def HypTestXS(cv, error, process, energy_slice, file = GEANT_XS):
     return {"w_chi2" : w_chi_sqr, "p" : p}
 
 def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", chi2 : bool = True, newFigure : bool = True, cv_only : bool = False, marker_size : float = 6):
-    xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos + energy_slice.width])
+    ave_slice_width = (np.max(energy_slice.bin_edges) - np.min(energy_slice.bin_edges))/energy_slice.n_slices
+    xs_sim = GeantCrossSections(
+        energy_range = [energy_slice.min_pos - ave_slice_width,
+                        energy_slice.max_pos + ave_slice_width])
 
     if colors is None:
         colors = {k : f"C{i}" for i, k in enumerate(xs)}
@@ -593,6 +597,32 @@ class ApplicationArguments:
                         #   (not used in the measurement)
                         value["min"] - value["width"],
                         value["max"], reversed = True)
+            elif head == "SYSTEMATICS":
+                sys_dict = {}
+                standard_syst = ["track_length", "beam_momentum",
+                                 "GNN_theory", "beam_reweight",
+                                 "purity"]
+                other_syst = ["GNN_model", "upstream_energy"]
+                for k in value.keys():
+                    if k not in (standard_syst + other_syst):
+                        raise NotImplementedError(f"Unknown systematic {k}")
+                for sys in standard_syst:
+                    if sys in value.keys():
+                        if value[sys] is not None:
+                            sys_dict.update({sys: value[sys]})
+                if "GNN_model" in value.keys():
+                    if value["GNN_model"] is not None:
+                        # known_gnn_theory_procs imported from apps.cex_gnn_analyse
+                        if value["GNN_model"] not in known_gnn_theory_procs.keys():
+                            raise NotImplementedError(f"Unknown process {value['GNN_model']}")
+                        sys_dict.update({"GNN_model": value["GNN_model"]})
+                if "upstream_energy" in value.keys():
+                    if value["upstream_energy"] is not None:
+                        # known_upstream_methods imported from apps.cex_gnn_analyse
+                        if value["upstream_energy"] not in known_upstream_methods:
+                            raise NotImplementedError(f"Unknown sys method {value['upstream_energy']}")
+                        sys_dict.update({"upstream_energy": value["upstream_energy"]})
+                args.systematics = sys_dict
             elif head == "ANALYSIS_INPUTS":
                 args.analysis_input = {k : v for k, v in value.items()}
             elif head == "UNFOLDING":

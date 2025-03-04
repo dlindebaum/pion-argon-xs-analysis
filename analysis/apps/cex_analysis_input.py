@@ -20,6 +20,7 @@ from python.analysis.AnalysisInputs import AnalysisInput, AnalysisInputGNN
 from apps.cex_beam_selection_studies import BeamPionSelection
 from apps.cex_region_selection_studies import RegionSelection
 from apps.cex_gnn_predictions import get_gnn_results, get_truth_regions
+from apps.cex_gnn_analyse import known_gnn_theory_procs
 
 from rich import print
 
@@ -67,7 +68,8 @@ def CreateAnalysisInput(
 def CreateGNNAnalysisInput(
         sample : Master.Data,
         args : argparse.Namespace | dict,
-        is_mc : bool, force_gen=False) -> AnalysisInput:
+        is_mc : bool, force_gen=False,
+        fake_preds=False) -> AnalysisInput:
     """ Create analysis input from ntuple sample
 
     Args:
@@ -80,23 +82,33 @@ def CreateGNNAnalysisInput(
     """
     args_c = Utils.args_to_dict(args)
 
-    if args_c["train_sample"] and (not force_gen):
+    if (args_c["train_sample"] and (not force_gen) and (not fake_preds)):
         return None
-
     if type(sample) == cross_section.Toy:
         raise NotImplementedError("Not implemented GNN toys")
     elif type(sample) == Master.Data:
         sample_selected = BeamPionSelection(sample, args_c, is_mc)
-        gnn_predictions, ids = get_gnn_results(
-            sample_selected, args_c, is_mc, force_gen=force_gen)
-        if not np.all(make_evt_ids(sample_selected) == ids):
-            raise Exception("Cannot match predictions to event IDs, "
-                            + f"file: {sample_selected.filename}")
+        if not fake_preds:
+            gnn_predictions, ids = get_gnn_results(
+                sample_selected, args_c, is_mc, force_gen=force_gen)
+            if not np.all(make_evt_ids(sample_selected) == ids):
+                raise Exception("Cannot match predictions to event IDs, "
+                                + f"file: {sample_selected.filename}")
+        else:
+            gnn_predictions = np.array(
+                [[np.nan] * len(args_c["gnn_region_labels"])])
+        gnn_model_sys = None
         if is_mc:
-            true_regions = get_truth_regions(
-                sample_selected, args_c, force_gen=force_gen)
+            if not fake_preds:
+                true_regions = get_truth_regions(
+                    sample_selected, args_c, force_gen=force_gen)
+            else:
+                true_regions = np.array([np.nan])
             reweight_params = [args_c["beam_reweight"]["params"][k]["value"]
                                for k in args_c["beam_reweight"]["params"]]
+            if "GNN_model" in args["systematics"].keys():
+                gnn_model_sys = known_gnn_theory_procs[
+                    args["systematics"]["GNN_model"]](sample_selected)
         else:
             true_regions = None
             reweight_params = None
@@ -109,7 +121,8 @@ def CreateGNNAnalysisInput(
             reweight_params,
             args_c["beam_reweight"]["strength"],
             args_c["fiducial_volume"]["list"],
-            args_c["upstream_loss_response"])
+            args_c["upstream_loss_response"],
+            gnn_model_sys=gnn_model_sys)
     else:
         raise Exception(f"object type {type(sample)} not a valid sample")
     return ai
@@ -180,15 +193,22 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
             # analysis_input_cheated = CreateAnalysisInputMCTrueBeam(events, args) # truth beam (reco regions won't work)
             warnings.warn("Not generated true beam graphs, does not have cheat beam information")
             analysis_input_cheated = None
+            if args["train_sample"]:
+                ai_with_train = CreateGNNAnalysisInput(
+                    events, args, not args["data"], fake_preds=True)
+            else:
+                ai_with_train = analysis_input_s
         else:
             analysis_input_cheated = None
+            ai_with_train = None
     else:
         analysis_input_s = CreateAnalysisInput(events, args, not args["data"])
         if args["data"] == False:
             analysis_input_cheated = CreateAnalysisInputMCTrueBeam(events, args) # truth beam (reco regions won't work)
         else:
             analysis_input_cheated = None
-    return {"selected" : analysis_input_s, "cheated" : analysis_input_cheated}
+        ai_with_train = None
+    return {"selected" : analysis_input_s, "cheated" : analysis_input_cheated, "trained": ai_with_train}
 
 
 def main(args):
@@ -207,6 +227,7 @@ def main(args):
     else:
         ai_type= AnalysisInput
     ai_mc_selected = ai_type.Concatenate([mc["selected"] for mc in output_mc])
+    ai_mc_with_train = ai_type.Concatenate([mc["trained"] for mc in output_mc])
     cheat_out = [mc["cheated"] for mc in output_mc if mc["cheated"] is not None]
     if len(cheat_out) != 0:
         ai_mc_cheated = ai_type.Concatenate(cheat_out)
@@ -215,6 +236,7 @@ def main(args):
     ai_data_selected = ai_type.Concatenate([data["selected"] for data in output_data])
 
     ai_mc_selected.ToFile(f"{out}analysis_input_mc_selected.dill")
+    ai_mc_with_train.ToFile(f"{out}analysis_input_mc_with_train.dill")
     ai_data_selected.ToFile(f"{out}analysis_input_data_selected.dill")
     return
 

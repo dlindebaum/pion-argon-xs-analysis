@@ -14,15 +14,16 @@ import numpy as np
 import pandas as pd
 
 from apps.cex_analysis_input import BeamPionSelection
-from python.analysis import cross_section, Master, Plots, Processing, EnergyTools
+from apps.cex_gnn_analyse import get_finite_clipped_edges
+from python.analysis import cross_section, Master, Plots, Processing, EnergyTools, Fitting
 from rich import print
 
 cv_method = {
     "None" : None,
-    "gaussian" : cross_section.Fitting.gaussian,
-    "double_gaussian" : cross_section.Fitting.double_gaussian,
-    "student_t" : cross_section.Fitting.student_t,
-    "crystal_ball" : cross_section.Fitting.crystal_ball,
+    "gaussian" : Fitting.gaussian,
+    "double_gaussian" : Fitting.double_gaussian,
+    "student_t" : Fitting.student_t,
+    "crystal_ball" : Fitting.crystal_ball,
 }
 
 
@@ -54,7 +55,7 @@ def NumericalCV(bins : np.array, KE_reco_inst : np.array, KE_true_ff : np.array)
     return mean_residual_energy, mean_error_residual_energy
 
 
-def CentralValueEstimation(bins : np.ndarray, KE_reco_inst : np.ndarray, KE_true_ff : np.ndarray, cv_function : cross_section.Fitting.FitFunction = None, weights : np.ndarray = None) -> tuple[np.array, np.array]:
+def CentralValueEstimation(bins : np.ndarray, KE_reco_inst : np.ndarray, KE_true_ff : np.ndarray, cv_function : Fitting.FitFunction = None, weights : np.ndarray = None) -> tuple[np.array, np.array]:
     """ Estiamte upstream loss using a reponse function to correct the reco KE at the instrumentaiton to get the KE at the front face of the TPC.
         estiamtes the central value of residuals in bins of KE_reco_inst using a fitting function.
 
@@ -72,9 +73,33 @@ def CentralValueEstimation(bins : np.ndarray, KE_reco_inst : np.ndarray, KE_true
     else:
         df = pd.DataFrame({"KE_inst" : KE_reco_inst, "true_ffKE" : KE_true_ff})
         df["residual"] = df.KE_inst - df.true_ffKE
-        cv = cross_section.Fitting.ExtractCentralValues_df(df, "KE_inst", "residual", [-250, 250], [cv_function], bins, 50, rms_err = False, weights = weights, bin_units = "(MeV)", bin_label = "$KE^{reco}_{inst}$")
+        cv = Fitting.ExtractCentralValues_df(df, "KE_inst", "residual", [-250, 250], [cv_function], bins, 50, rms_err = False, weights = weights, bin_units = "(MeV)", bin_label = "$KE^{reco}_{inst}$")
     return cv
 
+def ErrSysEstimation(
+        bins : np.ndarray,
+        KE_reco_corrected : np.ndarray,
+        KE_true_ff : np.ndarray,
+        weights : np.ndarray = None) -> tuple[np.array, np.array]:
+    """ Estiamte upstream loss using a reponse function to correct the reco KE at the instrumentaiton to get the KE at the front face of the TPC.
+        estiamtes the central value of residuals in bins of KE_reco_inst using a fitting function.
+
+    Args:
+        bins (np.array): reco KE bins
+        KE_reco_corrected (np.array): reco KE post upstream correction
+        KE_true_ff (np.array): true front facing KE
+        cv_function (Fitting.FitFunction, optional): function to fit residuals to in order to get the central value. Defaults to None.
+
+    Returns:
+        tuple[np.array, np.array]: central values in each bin, error in central values
+    """
+    df = pd.DataFrame({"KE_corrected" : KE_reco_corrected, "true_ffKE" : KE_true_ff})
+    df["residual"] = df.KE_corrected - df.true_ffKE
+    stds, counts = Fitting.ExtractGaussErr_df(
+        df, "KE_corrected", "residual", [-250, 250], bins, 50,
+        rms_err = False, weights = weights, bin_units = "(MeV)",
+        bin_label = "$KE^{reco}_{inst}$")
+    return stds, counts
 
 def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
     mc = Master.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
@@ -112,7 +137,7 @@ def main(args : argparse.Namespace):
         pdf.Save()
 
         Plots.plt.figure()
-        params = cross_section.Fitting.Fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\mu(\Delta E_{upstream})$ (MeV)", loc = "upper center")
+        params = Fitting.Fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\mu(\Delta E_{upstream})$ (MeV)", loc = "upper center")
         pdf.Save()
 
         params_dict = {
@@ -128,6 +153,19 @@ def main(args : argparse.Namespace):
 
         Plots.PlotHistComparison([reco_KE_ff, output_mc["KE_ff"]], labels = ["$KE^{reco}_{init}$", "$KE^{true}_{init}$"], x_range = [bins[0], bins[-1]], xlabel = "Kinetic energy (MeV)", weights = [output_mc["weights"], output_mc["weights"]])
         pdf.Save()
+
+        ana_bins = get_finite_clipped_edges(args.energy_slices.bin_edges_with_overflow)
+        if args.energy_slices.reversed:
+            slicer = slice(None, None, -1)
+        else:
+            slicer = slice(None)
+        ana_bins = ana_bins[slicer]
+        stds, counts = ErrSysEstimation(
+            ana_bins, reco_KE_ff, output_mc["KE_ff"], output_mc["weights"])
+        pdf.Save()
+        params_dict.update({
+            "ana_bin_stds" : stds[slicer],
+            "ana_bin_counts" : counts[slicer]})
     Plots.plt.close("all")
     print(f"fitted parameters : {params_dict}")
     cross_section.SaveConfiguration(params_dict, outdir + "fit_parameters.json")

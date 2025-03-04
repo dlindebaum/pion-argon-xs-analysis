@@ -23,7 +23,8 @@ from apps import (
     cex_upstream_loss,
     cex_toy_parameters,
     cex_analysis_input,
-    cex_analyse
+    cex_analyse,
+    cex_gnn_analyse
     )
 
 from python.analysis.cross_section import ApplicationArguments
@@ -38,14 +39,19 @@ def template_config():
                 {
                     "file": "ABSOLUTE file path",
                     "type": "PDSPAnalyser or shower_merging",
-                    "pmom": "momentum byte of the beam, may need a value different to 1 if MC was not generated properly"
+                    "pmom": "momentum byte of the beam, may need a value different to 1 if MC was not generated properly",
+                    "train_sample": "Boolean, was this used to train the GNN, or may be used for MC statistics?",
+                    "graph": "Path to folder containing the (beam selected) GNN graphs",
+                    "graph_norm": "Path to JSON containing the graph feature normalisations."
                 }
             ],
             "data" : [
                 {
                     "file": "ABSOLUTE file path",
                     "type": "PDSPAnalyser or shower_merging",
-                    "pmom": 1
+                    "pmom": 1,
+                    "graph": "Path to folder containing the (beam selected) GNN graphs",
+                    "graph_norm": "Path to JSON containing the graph feature normalisations."
                 }
             ]
         },
@@ -96,11 +102,13 @@ def template_config():
             "regions": True
         },
         "ESLICE":{
+            "edges": "List. If present, manually define bin edges, else use below.",
             "width" : None,
             "min" : None,
             "max" : None
         },
         "UNFOLDING":{
+            "purity_bin": True,
             "method" : 1,
             "ts_stop" : 0.0001,
             "max_iter" : 6,
@@ -304,7 +312,15 @@ def template_config():
         "P_inst_range" : "plot range",
         "KE_inst_range" : "plot range",
         "KE_init_range" : "plot range",
-        "KE_int_range" : "plot range"
+        "KE_int_range" : "plot range",
+        "GNN_MODEL": {
+            "model_path": "Path to GNN model.",
+            "region_labels": [
+                "Abs.",
+                "CEx.",
+                "Pion"
+            ]
+        }
     }
     return template
 
@@ -521,6 +537,15 @@ def main(args):
                 if v in files:
                     new_config_entry[k] = {i : os.path.abspath(output_path + v + "/" + j) for i, j in mask_map.items() if os.path.isfile(output_path + v + "/" + j)}
             update_config(args.config, {"BEAM_SELECTION_MASKS" : new_config_entry})
+            mc_eff_map = {
+                "reco" : "reco_eff_from_selection.dill",
+                "truth" : "truth_eff_from_selection.dill",
+                "process" : "process_eff_from_selection.dill"
+            }
+            mc_eff_paths = {name : os.path.abspath(output_path + "efficiency_mc/" + path)
+                            for name, path in mc_eff_map.items()
+                            if os.path.isfile(output_path + "efficiency_mc/" + path)}
+            update_config(args.config, {"MC_EFFICIENCIES" : mc_eff_paths})
             args = update_args(processing_args) # reload config to continue
         if args.stop == "beam_selection": return
 
@@ -680,10 +705,10 @@ def main(args):
             output_path = args.out + "analysis_input/"
             print("outputs: " + output_path)
             target_files = {
-            "mc_cheated" : "analysis_input_mc_cheated.dill",
-            "mc" : "analysis_input_mc_selected.dill",
-            "data" : "analysis_input_data_selected.dill"
-            }
+                "mc_cheated" : "analysis_input_mc_cheated.dill",
+                "mc" : "analysis_input_mc_selected.dill",
+                "data" : "analysis_input_data_selected.dill",
+                "mc_with_train" : "analysis_input_mc_with_train.dill"}
             new_config_entry = {}
             files = os.listdir(output_path)
             for k, v in target_files.items():
@@ -699,7 +724,10 @@ def main(args):
             args.toy_template = None
             args.all = False
             args.pdsp = True # run with PDSP samples (no toys yet)
-            cex_analyse.main(args)
+            if args.gnn_do_predict:
+                cex_gnn_analyse.main(args)
+            else:
+                cex_analyse.main(args)
         if args.stop == "analyse": return
 
     return

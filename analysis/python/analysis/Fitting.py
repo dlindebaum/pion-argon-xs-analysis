@@ -237,11 +237,12 @@ class poly2d(FitFunction):
 
     @staticmethod
     def p0(x, y):
-        return None
+        min_ind = np.argmin(y)
+        return [y[min_ind], x[min_ind], 1]
 
     @staticmethod
     def bounds(x, y):
-        return ([-np.inf, -np.inf, -np.inf], [np.inf]*3)
+        return ([-np.inf]*3, [np.inf]*3)
 
 
 class exp(FitFunction):
@@ -512,7 +513,20 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         return popt, perr
 
 
-def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : str, v_range : list, funcs, data_bins : list, hist_bins : int, log : bool = False, rms_err : bool = False, weights : np.ndarray = None, outer_legend : bool = False, bin_label : str = "bin", bin_units : str = ""):
+def ExtractCentralValues_df(
+        df : pd.DataFrame,
+        bin_variable : str,
+        variable : str,
+        v_range : list,
+        funcs,
+        data_bins : list,
+        hist_bins : int,
+        log : bool = False,
+        rms_err : bool = False,
+        weights : np.ndarray = None,
+        outer_legend : bool = False,
+        bin_label : str = "bin",
+        bin_units : str = ""):
     """ Estimate a central value in each reco energy bin based on some FitFunction or collection of FitFunctions.
 
     Args:
@@ -615,3 +629,123 @@ def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : st
     plt.gcf().supxlabel(variable.replace("_", " ").capitalize())
     plt.tight_layout()
     return np.array(cv), np.array(cv_err)
+
+def ExtractGaussErr_df(
+        df : pd.DataFrame,
+        bin_variable : str,
+        variable : str,
+        v_range : list,
+        data_bins : list,
+        hist_bins : int,
+        log : bool = False,
+        rms_err : bool = False,
+        weights : np.ndarray = None,
+        outer_legend : bool = False,
+        bin_label : str = "bin",
+        bin_units : str = ""):
+    """ Estimate a central value in each reco energy bin based on some FitFunction or collection of FitFunctions.
+
+    Args:
+        bin_variable (str): variable to bin in
+        variable (str): variable to fit to
+        v_range (list): variable range
+        funcs (FitFunction): functions to try fit
+        reco_bins (list): reco energy bins
+        hist_bins (int): number of bins for variable histograms
+        log (bool, optional): verbose printout. Defaults to False.
+    """
+    def print_log(x):
+        if log: print(x)
+
+    stds = []
+    counts = []
+    fig_handles = None
+    fig_labels = None
+    for i in Plots.MultiPlot(len(data_bins) - 1, orientation = "vertical"):
+        if i == len(data_bins): continue
+        print_log(i)
+        mask = (df[bin_variable] > data_bins[i]) & (df[bin_variable] < data_bins[i+1])
+        binned_data = df[mask]
+        if weights is None:
+            binned_weights = None
+            n_in_bin = np.sum(mask)
+        else:
+            binned_weights = np.array(weights)[mask]
+            n_in_bin = np.sum(binned_weights)
+        
+        y, edges = np.histogram(binned_data[variable], bins = hist_bins, range = [min(v_range), max(v_range)], weights = binned_weights)
+        x = (edges[1:] + edges[:-1]) / 2
+        x_interp = np.linspace(min(x), max(x), hist_bins*5)
+
+        best_f = None
+        best_popt = None
+        best_perr = None
+        k_best = None
+        p_best = None
+
+        for f in [gaussian]:
+            popt = None
+            pcov = None
+            perr = None
+            try:
+                popt, pcov = curve_fit(f, x, y, p0 = f.p0(x, y), method = "dogbox", bounds = f.bounds(x, y), maxfev = 500000)
+                perr = np.sqrt(np.diag(pcov))
+                print_log(popt)
+                print_log(perr)
+                print_log(pcov)
+            except Exception as e:
+                print_log("could not fit, reason:")
+                print_log(e)
+                pass
+            y_pred = f.func(x, *popt) if popt is not None else None
+            if y_pred is not None:
+                k, p = ks_2samp(y[y > 0], y_pred[y > 0]) # ignore zero entries in bins to prevent overestimating the test statistic
+            else:
+                k = 1
+                p = 0
+
+            if p_best is None or p > p_best : # larger p value suggests a better fit
+                p_best = p
+                k_best = k
+                best_popt = popt
+                best_perr = perr
+                best_f = f
+
+        mean = None
+        mean_error = None
+        if best_popt is not None:
+            mean = best_f.mu(*best_popt)
+            if rms_err:
+                mean_error = np.sqrt(abs(best_f.var(*best_popt))/len(binned_data[variable]))
+            else:
+                mean_error = mean - best_f.mu(*(best_popt + best_perr))
+            y_pred = best_f.func(x, *best_popt)
+            y_pred_interp = best_f.func(x_interp, *best_popt)
+
+            Plots.Plot(x_interp, y_pred_interp, marker = "", color = "black", newFigure = False, label = "fit")
+            plt.axvline(mean, color = "black", linestyle = "--", label = "central value")
+        Plots.PlotHist(binned_data[variable], bins = hist_bins, newFigure = False, title = f"{bin_label} : {[data_bins[i], data_bins[i+1]]} {bin_units}", range = [min(v_range), max(v_range)], weights = binned_weights)
+
+        plt.axvline(np.mean(binned_data[variable]), linestyle = "--", color = "C1", label = "mean")
+
+        if not fig_handles: fig_handles, fig_labels = plt.gca().get_legend_handles_labels()
+
+        if best_popt is not None:
+            text = ""
+            for j in range(len(best_popt)):
+                text += f"\np{j}: ${best_popt[j]:.2f}\pm${best_perr[j]:.2f}"
+            text += f"\nks : {k_best:.2f}, p : {p_best:.2f}"
+            legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], title = best_f.__name__.replace("_", " "))
+            for l in legend.legend_handles:
+                l.set_visible(False)
+
+        std = best_popt[2]
+
+        stds.append(std)
+        counts.append(n_in_bin)
+    
+    if outer_legend:
+        plt.gcf().legend(fig_handles, fig_labels, loc = "lower right", ncols = 3)
+    plt.gcf().supxlabel(variable.replace("_", " ").capitalize())
+    plt.tight_layout()
+    return stds, counts

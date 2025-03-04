@@ -152,25 +152,31 @@ truncate = {
 
 def loop_through_masks(
         counts, binner, mask_dict,
-        init_e, end_e, in_tpc, true_beam=None):
+        init_e, end_e, in_tpc, true_beam=None,
+        proc_mask=slice(None)):
     curr_mask = ak.ones_like(
-        init_e, dtype=bool)
-        # list(mask_dict.values())[0], dtype=bool)
+        list(mask_dict.values())[0], dtype=bool)
     for m_name, mask in mask_dict.items():
         curr_mask = np.logical_and(curr_mask, mask)
         if true_beam is not None:
-            true_arg = (true_beam[curr_mask],)
+            true_arg = (true_beam[curr_mask[proc_mask]],)
         else:
             true_arg = ()
         new_counts = binner.energies_to_multi_dim_hist(
-            init_e[curr_mask], end_e[curr_mask], in_tpc[curr_mask],
-            *true_arg)
+            init_e[curr_mask[proc_mask]], end_e[curr_mask[proc_mask]],
+            in_tpc[curr_mask[proc_mask]], *true_arg)
         counts.update({m_name: new_counts})
     return counts, curr_mask
 
 def get_multi_dim_counts_reco(
         init_energies, end_energies, in_tpc,
-        multi_dim_bins, args, outputs):
+        multi_dim_bins, args, outputs,
+        proc_mask=None):
+    if proc_mask is None:
+        proc_mask = np.ones_like(init_energies, dtype=bool)
+    init_energies = init_energies[proc_mask]
+    end_energies = end_energies[proc_mask]
+    in_tpc = in_tpc[proc_mask]
     fid_masks = outputs["fiducial"]
     beam_masks = outputs["beam"]
     pfo_masks = outputs["null_pfo"]
@@ -185,13 +191,14 @@ def get_multi_dim_counts_reco(
             list(beam_masks["masks"].values())[0], dtype=bool)
         fid_lab = "NoSelection"
     fid_counts = multi_dim_bins.energies_to_multi_dim_hist(
-        init_energies[fid_mask], end_energies[fid_mask],
-        in_tpc[fid_mask])
+        init_energies[fid_mask[proc_mask]],
+        end_energies[fid_mask[proc_mask]], in_tpc[fid_mask[proc_mask]])
     counts = {fid_lab: fid_counts}
     counts, beam_mask = loop_through_masks(
         counts, multi_dim_bins, beam_masks["masks"],
-        init_energies[fid_mask], end_energies[fid_mask],
-        in_tpc[fid_mask])
+        init_energies[fid_mask[proc_mask]],
+        end_energies[fid_mask[proc_mask]],
+        in_tpc[fid_mask[proc_mask]], proc_mask=proc_mask[fid_mask])
     # counts, _ = loop_through_masks(
     #     counts, multi_dim_bins, pfo_masks["masks"],
     #     init_energies[fid_mask][beam_mask], end_energies[fid_mask][beam_mask],
@@ -219,7 +226,15 @@ def get_multi_dim_counts_reco(
 
 def get_multi_dim_counts_truth(
         init_energies, end_energies, in_tpc, true_pion_mask,
-        multi_dim_bins, args, outputs, fiducial_truth_mask):
+        multi_dim_bins, args, outputs, fiducial_truth_mask,
+        proc_mask=None):
+    if proc_mask is None:
+        proc_mask = np.ones_like(init_energies, dtype=bool)
+    init_energies = init_energies[proc_mask]
+    end_energies = end_energies[proc_mask]
+    in_tpc = in_tpc[proc_mask]
+    true_pion_mask = true_pion_mask[proc_mask]
+    fiducial_truth_mask = fiducial_truth_mask[proc_mask]
     pre_cut_lab = "FiducialTruth"
     pre_cut_counts = multi_dim_bins.energies_to_multi_dim_hist(
         init_energies[fiducial_truth_mask],
@@ -233,16 +248,56 @@ def get_multi_dim_counts_truth(
     counts, fid_mask = loop_through_masks(
         counts, multi_dim_bins, fid_masks["masks"],
         init_energies, end_energies,
-        in_tpc, true_pion_mask)
+        in_tpc, true_pion_mask, proc_mask=proc_mask)
     counts, beam_mask = loop_through_masks(
         counts, multi_dim_bins, beam_masks["masks"],
-        init_energies[fid_mask], end_energies[fid_mask],
-        in_tpc[fid_mask], true_pion_mask[fid_mask])
+        init_energies[fid_mask[proc_mask]],
+        end_energies[fid_mask[proc_mask]], in_tpc[fid_mask[proc_mask]],
+        true_pion_mask[fid_mask[proc_mask]],
+        proc_mask=proc_mask[fid_mask])
     # counts, _ = loop_through_masks(
     #     counts, multi_dim_bins, pfo_masks["masks"],
     #     init_energies[fid_mask][beam_mask], end_energies[fid_mask][beam_mask],
     #     in_tpc[fid_mask][beam_mask], true_pion_mask[fid_mask][beam_mask])
     return counts
+
+# def sum_dict_masks(dictionary):
+#     return {k: ak.sum(v) for k, v in dictionary.items()}
+
+# def get_process_counts(events, args_dict, true_pion_beam=True):
+#     assert len(args_dict["gnn_region_labels"]) == 3, "Not implemented for arbitrary regions"
+#     proc_masks = EventSelection.create_3_regions_from_evts(events)
+#     if true_pion_beam:
+#         true_pion_mask = events.trueParticles.pdg[..., 0] == 211
+#         proc_masks = {k: np.logical_and(true_pion_mask, v) for k, v in proc_masks.items()}
+#     return sum_dict_masks(proc_masks)
+
+# def get_proc_counts_reco(
+#         events, args, outputs):
+#     fid_masks = outputs["fiducial"]
+#     beam_masks = outputs["beam"]
+#     # pfo_masks = outputs["null_pfo"]
+#     proc_counts = get_process_counts(events, args, true_pion_beam=False)
+#     if fid_masks is not None:
+#         fid_mask = ak.ones_like(
+#             list(fid_masks["masks"].values())[0], dtype=bool)
+#         for m in fid_masks["masks"].values():
+#             fid_mask = np.logical_and(fid_mask, m)
+#         fid_lab = "Fiducial"
+#     else:
+#         fid_mask = ak.ones_like(
+#             list(beam_masks["masks"].values())[0], dtype=bool)
+#         fid_lab = "NoSelection"
+#     proc_counts = {k: v[fid_mask] for k, v in proc_counts.items()}
+#     fid_counts = sum_dict_masks(proc_counts)
+#     counts = {fid_lab: fid_counts}
+#     curr_mask = ak.ones_like(
+#         list(mask_dict.values())[0], dtype=bool)
+#     for m_name, mask in mask_dict.items():
+#         curr_mask = np.logical_and(curr_mask, mask)
+#         counts.update(sum_dict_masks({k: np.logical_and(curr_mask, v)
+#                                       for k, v in proc_counts.items()}))
+#     return counts
 
 def AnalyseBeamFiducialCut(events : Master.Data, beam_instrumentation : bool, functions : dict, args : dict):
     output = {}
@@ -360,6 +415,8 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
         true_pion_mask = events.trueParticles.pdg[..., 0] == 211
         truth_fiducial_mask = BeamParticleSelection.TrueFiducialCut(
             events, True, cut=args["fiducial_volume"]["start"], op=">")
+        assert len(args["gnn_region_labels"]) == 3, "Not implemented process efficiencies for arbitrary regions"
+        truth_masks = EventSelection.create_3_regions_from_evts(events)
 
     reco_multi_bins = Slicing.MultiDimBins(
         args["energy_slices"].bin_edges_with_overflow, True, False)
@@ -411,6 +468,25 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
         efficiencies.update({"truth": {
             "count": truth_efficiency_counts,
             "efficiency": AnalyseSelectionEfficiency(truth_efficiency_counts)}})
+        proc_info = {}
+        for p, m in truth_masks.items():
+            true_pure_proc_counts = get_multi_dim_counts_truth(
+                truth_init_e, truth_end_e, truth_in_tpc,
+                true_pion_mask, truth_multi_bins, args, output,
+                truth_fiducial_mask, proc_mask=m)
+            true_all_proc_counts = get_multi_dim_counts_truth(
+                truth_init_e, truth_end_e, truth_in_tpc,
+                ak.ones_like(true_pion_mask, dtype=bool),
+                truth_multi_bins, args, output, truth_fiducial_mask,
+                proc_mask=m)
+            reco_proc_counts = get_multi_dim_counts_reco(
+                reco_init_e, reco_end_e, reco_in_tpc,
+                reco_multi_bins, args, output, proc_mask=m)
+            proc_info.update({p: {
+                "truth_pure_count": true_pure_proc_counts,
+                "truth_all_count": true_all_proc_counts,
+                "reco_count": reco_proc_counts}})
+        efficiencies.update({"process": proc_info})
     output["efficiencies"] = efficiencies
     return output
 

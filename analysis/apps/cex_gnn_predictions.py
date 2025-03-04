@@ -68,7 +68,7 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
         raise AssertionError(
             f"Event ID shapes do not match: {evt_ids.shape} from "
             + f"graphs, {loaded_evt_ids.shape} from events.")
-    assert np.all(evt_ids == loaded_evt_ids)
+    assert np.all(evt_ids == loaded_evt_ids), "Unmatched event IDs"
     output["predictions"] = gnn_scores
     output["ids"] = loaded_evt_ids
     if is_mc and (not args["train_sample"]):

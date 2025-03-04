@@ -448,25 +448,25 @@ class DistGenCorr():
     _shape_to_info(param, is_data, extra_dim=None):
         Shapes the parameter to work as a drawing or weighting param.
     _generate_counter_extra(which_info, p_draw=1., extra_dim=None, di stribute_counts=True, reference=False):
-    Generates a counter with extra dimensions.
+        Generates a counter with extra dimensions.
     generate_counter(which_info, p_draw=1., distribute_counts=True, reference=False):
-    Generates a counter for pulling counts from a histogram.
+        Generates a counter for pulling counts from a histogram.
     _generate_weighter_extra(which_info, expect_weights, extra_dim=None, distribute_weights=False):
-    Generates a weighter with extra dimensions.
+        Generates a weighter with extra dimensions.
     generate_weighter(which_info, expect_weights, distribute_weights=False):
-    Generates a weighter for weighting bin counts.
+        Generates a weighter for weighting bin counts.
     _drop_none_and_get_axes(lst):
-    Drops None values and gets the corresponding axes.
+        Drops None values and gets the corresponding axes.
     _match_axis_list(vals, axis):
-    Matches values to the corresponding axes.
+        Matches values to the corresponding axes.
     _convert_axis_array_to_lists(vals, axis, extra_dim):
-    Converts an axis array to lists.
+        Converts an axis array to lists.
     _convert_list_axis_to_lists(vals, axis, extra_dim):
-    Converts a list of axis arrays to lists.
+        Converts a list of axis arrays to lists.
     _convert_truth_array_to_lists(vals, axis, extra_dim):
-    Converts a truth array to lists.
+        Converts a truth array to lists.
     _convert_list_truth_to_lists(vals, axis, extra_dim):
-    Converts a list of truth arrays to lists.
+        Converts a list of truth arrays to lists.
     _get_extra_dim(is_data, case):
         Gets the extra dimension based on the data and case.
     generate_smearer(which_info, bin_values, axis=None, is_gradient=True, iterations=1, no_loss=True):
@@ -581,12 +581,14 @@ class DistGenCorr():
         self.n_bins = self.bin_edges[0].size - 1
         self._mixed=False
         self.has_data_truth = data_truth is not None
-        self.has_extra_dim = ((template_extra is not None)
-                              or (data_extra is not None))
+        self.has_temp_extra = template_extra is not None
+        self.has_data_extra = data_extra is not None
+        self.has_extra_dim = (self.has_temp_extra
+                              or self.has_data_extra)
         self.weighted_template = template_weights is not None
         self.weighted_data = template_weights is not None
         self.split_temp = template_splitting is not None
-        temp_exta_info = []
+        temp_extra_info = []
         temp_extra_bins = []
         data_extra_info = []
         data_extra_bins = []
@@ -599,13 +601,13 @@ class DistGenCorr():
                 extra_info, bins=extra_bins)[1]
             self.extra_n_bins = self.extra_bin_edges.size - 1
             if template_extra is not None:
-                temp_exta_info.append(template_extra[:, np.newaxis])
+                temp_extra_info.append(template_extra[:, np.newaxis])
                 temp_extra_bins.append(self.extra_bin_edges)
             if data_extra is not None:
                 data_extra_info.append(data_extra[:, np.newaxis])
                 data_extra_bins.append(self.extra_bin_edges)
         truth_binning = np.arange(self.n_scores+1) - 0.5
-        temp_exta_info.append(template_truth[:, np.newaxis])
+        temp_extra_info.append(template_truth[:, np.newaxis])
         temp_extra_bins.append(truth_binning)
         if self.has_data_truth:
             data_extra_info.append(data_truth[:, np.newaxis])
@@ -614,14 +616,14 @@ class DistGenCorr():
             self.n_split_bins = np.max(template_splitting)+1
             self.split_temp_bins = np.arange(
                 self.n_split_bins+1) - 0.5
-            temp_exta_info.append(template_splitting[:, np.newaxis])
+            temp_extra_info.append(template_splitting[:, np.newaxis])
             temp_extra_bins.append(self.split_temp_bins)
             self.n_templates = self.n_scores * self.n_split_bins
         else:
             self.n_templates = self.n_scores
         self.templates = self._make_region_hists(
             template_preds,
-            temp_exta_info, temp_extra_bins,
+            temp_extra_info, temp_extra_bins,
             weights=template_weights)
         self.data_hist = self._make_region_hists(
             data_preds,
@@ -668,35 +670,35 @@ class DistGenCorr():
                 weights=use_weights)[0].astype(int))
         return np.array(hists)
 
-    def _make_region_hists_extra(
-            self,
-            preds, truth,
-            extra_digitized,
-            n_extra_bins,
-            weights=None):
-        extra_dimmed = []
-        for extra_ind in range(self.extra_n_bins):
-            extra_mask = extra_digitized == extra_ind
-            if truth is not None:
-                filt_pred = preds[extra_mask]
-                filt_true = truth[extra_mask]
-                if weights is not None:
-                    filt_weights=weights[extra_mask]
-                else:
-                    filt_weights=None
-                extra_dimmed.append(
-                    self._make_region_hists_old(
-                        filt_pred, filt_true, weights=filt_weights))
-            else:
-                if weights is not None:
-                    filt_weights=weights[extra_mask]
-                else:
-                    filt_weights=None
-                extra_dimmed.append(
-                    np.histogramdd(
-                        preds[extra_mask], bins=self.bin_edges,
-                        weights=filt_weights)[0].astype(int))
-        return np.array(extra_dimmed)
+    # def _make_region_hists_extra(
+    #         self,
+    #         preds, truth,
+    #         extra_digitized,
+    #         n_extra_bins,
+    #         weights=None):
+    #     extra_dimmed = []
+    #     for extra_ind in range(self.extra_n_bins):
+    #         extra_mask = extra_digitized == extra_ind
+    #         if truth is not None:
+    #             filt_pred = preds[extra_mask]
+    #             filt_true = truth[extra_mask]
+    #             if weights is not None:
+    #                 filt_weights=weights[extra_mask]
+    #             else:
+    #                 filt_weights=None
+    #             extra_dimmed.append(
+    #                 self._make_region_hists_old(
+    #                     filt_pred, filt_true, weights=filt_weights))
+    #         else:
+    #             if weights is not None:
+    #                 filt_weights=weights[extra_mask]
+    #             else:
+    #                 filt_weights=None
+    #             extra_dimmed.append(
+    #                 np.histogramdd(
+    #                     preds[extra_mask], bins=self.bin_edges,
+    #                     weights=filt_weights)[0].astype(int))
+    #     return np.array(extra_dimmed)
 
     def _get_param_case(self, value):
         is_arr = isinstance(value, np.ndarray)
@@ -1317,16 +1319,35 @@ class DistGenCorr():
         return
         
     def _calc_sampling_axes(self):
-        self.ex_dim_sum_ax = int(self.has_extra_dim)*(0,)
-        self.ds_sum_ax = int(self.has_data_truth)*(int(self.has_extra_dim),)
-        self.s_truth_sum_axs = tuple(range(
-            1+int(self.has_extra_dim),
-            1+int(self.has_extra_dim)+len(self.labels)))
-        self.s_extra_sum_axs = tuple(range(
-            1+int(self.has_extra_dim),
-            1+int(self.has_extra_dim)+len(self.labels)))
-        self.split_temp_ax = (int(self.split_temp)
-                              * (1 + int(self.has_extra_dim),))
+        self.data_sum_ax = {
+            "samp_extra": int(self.has_data_extra)*(0,),
+            "samp_truth": int(self.has_data_truth)*(int(self.has_data_extra),),
+            "truth": tuple(range(
+                1+int(self.has_data_extra),
+                1+int(self.has_data_extra)+len(self.labels))),
+            "extra": tuple(range(
+                1+int(self.has_data_extra),
+                1+int(self.has_data_extra)+len(self.labels)))}
+        self.temp_sum_ax = {
+            "samp": int(self.has_temp_extra)*(0,),
+            "truth": tuple(range(
+                1+int(self.has_temp_extra),
+                1+int(self.has_temp_extra)+len(self.labels))),
+            "extra": tuple(range(
+                1+int(self.has_temp_extra),
+                1+int(self.has_temp_extra)+len(self.labels))),
+            "split": (int(self.split_temp)
+                      * (1 + int(self.has_temp_extra),))}
+        # self.ex_dim_sum_ax = int(self.has_extra_dim)*(0,)
+        # self.ds_sum_ax = int(self.has_data_truth)*(int(self.has_extra_dim),)
+        # self.s_truth_sum_axs = tuple(range(
+        #     1+int(self.has_extra_dim),
+        #     1+int(self.has_extra_dim)+len(self.labels)))
+        # self.s_extra_sum_axs = tuple(range(
+        #     1+int(self.has_extra_dim),
+        #     1+int(self.has_extra_dim)+len(self.labels)))
+        # self.split_temp_ax = (int(self.split_temp)
+        #                       * (1 + int(self.has_extra_dim),))
         return
 
     def sample_data(
@@ -1337,8 +1358,8 @@ class DistGenCorr():
             self.data_weighter(
                 self.data_counter.rvs()))
         res = sample.sum(
-            axis=(int(not split_extra)*self.ex_dim_sum_ax
-                  + self.ds_sum_ax))
+            axis=(int(not split_extra)*self.data_sum_ax["samp_extra"]
+                  + self.data_sum_ax["samp_truth"]))
         if not (return_truth or return_extra):
             return res
         rets = ()
@@ -1346,10 +1367,10 @@ class DistGenCorr():
             if not self.has_data_truth:
                 raise Exception(
                     "Requested truth, but no data truth in instance.")
-            rets += (sample.sum(axis=(self.ex_dim_sum_ax
-                                      + self.s_truth_sum_axs)),)
+            rets += (sample.sum(axis=(self.data_sum_ax["samp_extra"]
+                                      + self.data_sum_ax["truth"])),)
         if return_extra:
-            rets += (sample.sum(axis=self.s_extra_sum_axs),)
+            rets += (sample.sum(axis=self.data_sum_ax["extra"]),)
         return (res, *rets)
 
     def set_template_sample_params(
@@ -1389,7 +1410,7 @@ class DistGenCorr():
         if smearer is None:
             self.temp_smearer = lambda counts: counts
         else:
-            if self.has_extra_dim:
+            if self.has_temp_extra:
                 raise NotImplementedError(
                     "Smearing not available with extra dimensions")
             self.temp_smearer = smearer
@@ -1406,13 +1427,13 @@ class DistGenCorr():
             self.temp_weighter(
                 self.temp_counter.rvs()))
         if split_extra:
-            if not self.has_extra_dim:
+            if not self.has_temp_extra:
                 raise ValueError("Cannot split extras if instance "
                                  + "doesn't contain extra dimension")
             # Put the extra dim behind truth dimensions
             sample = np.swapaxes(sample, 0, 1 + int(self.split_temp))
         else:
-            sample = sample.sum(axis=self.ex_dim_sum_ax)
+            sample = sample.sum(axis=self.temp_sum_ax["samp"])
         if self.split_temp:
             sample = sample.reshape(self.n_templates, *sample.shape[2:])
         res = self._arr_to_list(sample)
@@ -1424,10 +1445,10 @@ class DistGenCorr():
         # If both, then this is (self.n_scores, self.extra_n_bins)
         rets = ()
         if return_truth:
-            rets += (sample.sum(axis=(self.ex_dim_sum_ax
-                                      + self.s_truth_sum_axs)),)
+            rets += (sample.sum(axis=(self.temp_sum_ax["samp"]
+                                      + self.temp_sum_ax["truth"])),)
         if return_extra:
-            rets += (sample.sum(axis=self.s_extra_sum_axs),)
+            rets += (sample.sum(axis=self.temp_sum_ax["extra"]),)
         return (res, *rets)
     
     def sample_template_like_data(
@@ -1437,19 +1458,19 @@ class DistGenCorr():
         sample = self.temp_smearer(
             self.temp_weighter(
                 self.temp_counter.rvs()))
-        res = sample.sum(axis=(int(not split_extra)*self.ex_dim_sum_ax
-                               + (int(self.has_extra_dim),)
-                               + self.split_temp_ax))
+        res = sample.sum(axis=(int(not split_extra)*self.temp_sum_ax["samp"]
+                               + (int(self.has_temp_extra),)
+                               + self.temp_sum_ax["extra"]))
         # sample.sum(
-        #     axis=(int(not split_extra)*self.ex_dim_sum_ax
+        #     axis=(int(not split_extra)*self.temp_sum_ax["samp"]
         #           + self.ds_sum_ax))
         if not (return_truth or return_extra):
             return res
         rets = ()
         if return_truth:
-            rets += (sample.sum(axis=self.s_truth_sum_axs),)
+            rets += (sample.sum(axis=self.temp_sum_ax["truth"]),)
         if return_extra:
-            rets += (sample.sum(axis=self.s_extra_sum_axs),)
+            rets += (sample.sum(axis=self.temp_sum_ax["extra"]),)
         return (res, *rets)
 
 class DistGenUncorr(DistGenCorr):
@@ -1517,7 +1538,7 @@ class DistGenUncorr(DistGenCorr):
         if return_truth:
             truth = sample.sum(
                 axis=tuple(range(1, 1+len(self.labels))))
-        sample = sample.sum(axis=int(self.has_extra_dim))
+        sample = sample.sum(axis=int(self.has_temp_extra))
         dists = {lab: sample.sum(axis=self._other_axes(ax))
                  for ax, lab in enumerate(self.labels)}
         dists = self.temp_smearer(dists)
@@ -1736,7 +1757,8 @@ def generator_fit(
         mix_template_frac=None,
         **kwargs):
     if pull_out and not generator.has_data_truth:
-        raise Exception("generator does not contain truth information")
+        # raise Exception("generator does not contain truth information")
+        warnings.warn("No data truth, output shape now (2,n_labels,1), not (3,n_labels,1) (first entry removed)")
     if mix_template_frac is not None:
         generator.mix_files(template_frac=mix_template_frac, distribute=True)
     if generator.has_data_truth:
@@ -1784,10 +1806,10 @@ def generator_fit(
         print(f"Fitted data counts:\t\t{np.array(fitter.values)}")
         print(f"Fitted data errors:\t\t{np.array(fitter.errors)}")
     if pull_out:
-        return np.array([
-            d_truth,
-            np.array(fitter.values),
-            np.array(fitter.errors)])[..., np.newaxis]
+        results = [np.array(fitter.values), np.array(fitter.errors)]
+        if generator.has_data_truth:
+            results = [d_truth] + results
+        return np.array(results)[..., np.newaxis]
     else:
         return fitter
 

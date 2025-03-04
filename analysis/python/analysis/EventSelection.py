@@ -746,6 +746,16 @@ def create_regions_new(pi0_counts, pi_charged_counts):
     }
     return regions_dict
 
+def create_3_regions_from_evts(events):
+    pi0_counts = count_all_pi0s(events)
+    pion_counts = count_non_beam_charged_pi(events)
+    regions_dict = {
+        "absorption": np.logical_and(pi0_counts==0, pion_counts==0),
+        "charge_exchange": np.logical_and(pi0_counts==1, pion_counts==0),
+        "pion_production": np.logical_or(pion_counts >= 1, pi0_counts > 1)
+    }
+    return regions_dict
+
 
 #######################################################################
 #######################################################################

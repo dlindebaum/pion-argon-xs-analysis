@@ -39,44 +39,67 @@ def MakeOutput(value : ak.Array, tags : Tags.Tags, cuts : list = [], op : list =
     """
     return {"value" : value, "tags" : tags, "cuts" : cuts, "op" : op, "fs_tags" : fs_tags}
 
+def merge_efficiency_values(old_effs, new_effs):
+    update_effs = old_effs.copy()
+    required_info = ["count", "efficiency"]
+    k_list = list(new_effs.keys())
+    assert (k_list == required_info), \
+        "Invalid efficiency dictionary"
+    update_effs.update({"count": {
+        k: old_effs["count"][k] + new_effs["count"][k]
+        for k in new_effs["count"].keys()}})
+    init_counts = list(update_effs["count"].values())[0]
+    assert not np.nan in init_counts, "NaN in counts"
+    update_effs.update({
+        "efficiency": {k: update_effs["count"][k]/init_counts
+                        for k in update_effs["count"].keys()}})
+    new_init_counts = list(new_effs["count"].values())[0]
+    old_init_counts = list(old_effs["count"].values())[0]
+    weighted_eff = {k:
+        ((np.nan_to_num(new_effs["efficiency"][k])*new_init_counts
+            + np.nan_to_num(old_effs["efficiency"][k])*old_init_counts))/init_counts
+        for k in new_effs["efficiency"].keys()}
+    # print(np.array(list(update_effs["efficiency"].values())))
+    # print(np.array(list(weighted_eff.values())))
+    # not_close = np.where(np.logical_not(np.isclose(np.nan_to_num(np.array(list(update_effs["efficiency"].values())), nan=-1.),
+    #                np.nan_to_num(np.array(list(weighted_eff.values())), nan=-1.))))
+    # print(not_close[0].shape)
+    # print(not_close)
+    # print(np.array(list(update_effs["efficiency"].values()))[not_close])
+    # print(np.array(list(weighted_eff.values()))[not_close])
+    assert np.all(
+        np.isclose(np.nan_to_num(np.array(list(update_effs["efficiency"].values())), nan=-1.),
+                    np.nan_to_num(np.array(list(weighted_eff.values())), nan=-1.)))
+    return update_effs
+
+def merge_process_values(old_effs, new_effs):
+    update_effs = old_effs.copy()
+    required_info = ["truth_pure_count", "truth_all_count", "reco_count"]
+    k_list = list(list(new_effs.values())[0].keys())
+    assert (k_list == required_info), \
+        "Invalid processes dictionary"
+    return {k: {key1: {key2: old_effs[k][key1][key2] + new
+                       for key2, new in new1.items()}
+                for key1, new1 in new_effs[k].items()}
+            for k in new_effs.keys()}
+
 def merge_efficiencies(old_effs, new_effs):
     update_effs = old_effs.copy()
-    expect_info = ["reco", "truth"]
-    required_effs = ["count", "efficiency"]
-    if np.all([k in expect_info for k in new_effs.keys()]):
+    truth_info = ["reco", "truth", "process"]
+    reco_info = ["reco"]
+    found_keys = list(new_effs.keys())
+    if found_keys == truth_info:
         update_effs.update(
-            {k: merge_efficiencies(old_effs[k], v)
-             for k, v in new_effs.items()})
+            {k: merge_efficiency_values(old_effs[k], new_effs[k])
+                for k in ["reco", "truth"]})
+        update_effs.update(
+            {"process": merge_process_values(
+                old_effs["process"], new_effs["process"])})
+    elif found_keys == reco_info:
+        update_effs.update(
+            {"reco": merge_efficiency_values(old_effs["reco"], new_effs["reco"])})
     else:
-        k_list = list(new_effs.keys())
-        assert (len(k_list) == 2
-                and np.all([r in k_list for r in required_effs])), \
-            "Invalid efficiency dictionary"
-        update_effs.update({"count": {
-            k: old_effs["count"][k] + new_effs["count"][k]
-            for k in new_effs["count"].keys()}})
-        init_counts = list(update_effs["count"].values())[0]
-        assert not np.nan in init_counts, "NaN in counts"
-        update_effs.update({
-            "efficiency": {k: update_effs["count"][k]/init_counts
-                           for k in update_effs["count"].keys()}})
-        new_init_counts = list(new_effs["count"].values())[0]
-        old_init_counts = list(old_effs["count"].values())[0]
-        weighted_eff = {k:
-            ((np.nan_to_num(new_effs["efficiency"][k])*new_init_counts
-              + np.nan_to_num(old_effs["efficiency"][k])*old_init_counts))/init_counts
-            for k in new_effs["efficiency"].keys()}
-        # print(np.array(list(update_effs["efficiency"].values())))
-        # print(np.array(list(weighted_eff.values())))
-        # not_close = np.where(np.logical_not(np.isclose(np.nan_to_num(np.array(list(update_effs["efficiency"].values())), nan=-1.),
-        #                np.nan_to_num(np.array(list(weighted_eff.values())), nan=-1.))))
-        # print(not_close[0].shape)
-        # print(not_close)
-        # print(np.array(list(update_effs["efficiency"].values()))[not_close])
-        # print(np.array(list(weighted_eff.values()))[not_close])
-        assert np.all(
-            np.isclose(np.nan_to_num(np.array(list(update_effs["efficiency"].values())), nan=-1.),
-                       np.nan_to_num(np.array(list(weighted_eff.values())), nan=-1.)))
+        raise ValueError(f"Invalid efficiency dictionary keys: {found_keys}")
     return update_effs
 
 def MergeOutputs(outputs : list) -> dict:
@@ -234,11 +257,10 @@ def SaveEfficiencies(output : dict, out : str):
     """
     os.makedirs(out, exist_ok = True)
 
-    effs = output["efficiencies"]["truth"]
-    
-    for count_or_eff in effs.keys():
-        SaveObject(out + f"{count_or_eff}_from_selection.dill",
-                   effs[count_or_eff])
+    effs = output["efficiencies"]
+    for which_type in effs.keys():
+        SaveObject(out + f"{which_type}_eff_from_selection.dill",
+                   effs[which_type])
     return
 
 def SaveMasks(output : dict, out : str):

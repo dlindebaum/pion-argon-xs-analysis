@@ -531,6 +531,10 @@ class AnalysisInputGNN(AnalysisInputBase):
     def regions(self):
         warnings.warn('Getting GNN predictions as "regions"')
         return self.gnn_preds
+    
+    @property
+    def gnn_model_sys_param(self):
+        return self.mean_track_score
 
     @classmethod
     def CreateAnalysisInputToy(cls, toy) -> "AnalysisInput":
@@ -578,11 +582,12 @@ class AnalysisInputGNN(AnalysisInputBase):
             upstream_energy_loss_params : dict,
             gnn_predictions : np.ndarray,
             prediction_labels : list[str],
-            true_regions : dict[np.ndarray] = None,
+            true_regions : np.ndarray = None,
             mc_reweight_params : dict = None,
             mc_reweight_stength : float = 3,
             fiducial_volume : list[float] = [0, 700],
-            upstream_loss_func : callable = Fitting.poly2d) \
+            upstream_loss_func : callable = Fitting.poly2d,
+            gnn_model_sys : ak.Array = None) \
             -> "AnalysisInputGNN":
         """ Create analysis input from an ntuple sample.
 
@@ -678,9 +683,10 @@ class AnalysisInputGNN(AnalysisInputBase):
             outside_tpc_true = None
             inelastic = None
 
-        mean_track_score = ak.fill_none(
-            ak.mean(events.recoParticles.track_score, axis = -1),
-            -0.05) # fill null values in case empty events are supplied
+        mean_track_score = gnn_model_sys
+        # mean_track_score = ak.fill_none(
+        #     ak.mean(events.recoParticles.track_score, axis = -1),
+        #     -0.05) # fill null values in case empty events are supplied
 
         return cls(
             class_dict,
@@ -692,7 +698,7 @@ class AnalysisInputGNN(AnalysisInputBase):
             reco_KE_int,
             reco_KE_init,
             reco_KE_ff,
-            mean_track_score,
+            mean_track_score, # Overwriting 2mean_track_score
             true_track_length,
             true_KE_int,
             true_KE_init,
@@ -700,59 +706,101 @@ class AnalysisInputGNN(AnalysisInputBase):
             weights,
             )
 
-    def CreateHistograms(
+    def CreateHistogram(
             self,
             energy_slice : Slicing.Slices,
-            # exclusive_process : str,
             reco : bool,
-            mask : np.ndarray = None) -> dict[np.ndarray]:
+            true_beam_mask=None) -> dict[np.ndarray]:
         """
-        Calculate Histogrames required for the cross section
-        measurement using energy slicing. Note exclusive interaction
-        histogram is without background subtraction.
+        Get the flattened multi-dimensional histogram
+        for these events.
 
         Args:
             energy_slice (Slicing.Slices): energy slices
             reco (bool): use reco information?
-            mask (np.ndarray, optional): additional mask. Defaults to
-                None.
+            true_beam_mask (np.ndarray, optional): truth beam mask for purity, truth only.
 
         Returns:
-            dict[np.ndarray]: histograms
+            np.ndarray: histograms
+            Slicing.MultiDimBins: binner to create multi dim. histogram
         """
         KE_int = self.KE_int_true if reco is False else self.KE_int_reco
         KE_init = self.KE_init_true if reco is False else self.KE_init_reco
 
-        if mask is None: mask = np.zeros_like(
-            self.outside_tpc_reco, dtype = bool)
+        has_beam = (not reco) and (true_beam_mask is not None)
 
-        if self.outside_tpc_true is None:
-            outside_tpc = self.outside_tpc_reco | mask
+        mdim_binner = Slicing.MultiDimBins(
+            energy_slice.bin_edges_with_overflow, True, has_beam)
+
+        if reco:
+            fid_end_mask = np.logical_not(self.outside_tpc_reco)
         else:
-            outside_tpc = self.outside_tpc_true | mask
+            fid_end_mask = np.logical_not(self.outside_tpc_true)
+        assert fid_end_mask is not None, "Missing fiducial end data"
 
-        # if self.exclusive_process is not None:
-        #     channel_mask = self.exclusive_process[exclusive_process]
-        # else:
-        #     channel_mask = self.regions[exclusive_process]
+        # N.B., always use reco tpc mask, since efficiency corrects reco fifducial to 
+        if has_beam:
+            mdim_hist = mdim_binner.energies_to_multi_dim_hist(
+                KE_init, KE_int, fid_end_mask, true_beam_mask)
+        else:
+            mdim_hist = mdim_binner.energies_to_multi_dim_hist(
+                KE_init, KE_int, fid_end_mask)
+        return mdim_hist, mdim_binner
 
-        #! keep just in case
-        # if efficiency is True:
-        #     KE_int = KE_int[toy.df.beam_selection_mask]
-        #     KE_init = KE_init[toy.df.beam_selection_mask]
-        #     outside_tpc = outside_tpc[toy.df.beam_selection_mask]
-        #     channel_mask = channel_mask[toy.df.beam_selection_mask]
+    def CreateHistogramInds(
+            self,
+            energy_slice : Slicing.Slices,
+            reco : bool,
+            true_beam_mask=None) -> dict[np.ndarray]:
+        """
+        Get the flattened multi-dimensional histogram
+        for these events.
 
-        n_initial, n_interact_inelastic, interact_inds, n_incident = (
-            Slicing.EnergySlice.CountingExperimentUnclassified(
-                KE_int, KE_init, outside_tpc,
-                energy_slice, weights = self.weights))
+        Args:
+            energy_slice (Slicing.Slices): energy slices
+            reco (bool): use reco information?
+            true_beam_mask (np.ndarray, optional): truth beam mask for purity, truth only.
 
-        output = {
-            "init" : n_initial, "int" : n_interact_inelastic,
-            "int_evt_indicies" : interact_inds, "inc" : n_incident}
-        return output
+        Returns:
+            np.ndarray: histograms
+            Slicing.MultiDimBins: binner to create multi dim. histogram
+        """
+        KE_int = self.KE_int_true if reco is False else self.KE_int_reco
+        KE_init = self.KE_init_true if reco is False else self.KE_init_reco
 
+        has_beam = (not reco) and (true_beam_mask is not None)
+
+        mdim_binner = Slicing.MultiDimBins(
+            energy_slice.bin_edges_with_overflow, True, has_beam)
+
+        if reco:
+            fid_end_mask = np.logical_not(self.outside_tpc_reco)
+        else:
+            fid_end_mask = np.logical_not(self.outside_tpc_true)
+        assert fid_end_mask is not None, "Missing fiducial end data"
+
+        # N.B., always use reco tpc mask, since efficiency corrects reco fifducial to 
+        if has_beam:
+            mdim_inds = mdim_binner.energies_to_multi_dim_inds(
+                KE_init, KE_int, fid_end_mask, true_beam_mask)
+        else:
+            mdim_inds = mdim_binner.energies_to_multi_dim_inds(
+                KE_init, KE_int, fid_end_mask)
+        return mdim_inds, mdim_binner
+
+    def FetchInteractionInds(
+            self, energy_slice : Slicing.Slices) -> dict[np.ndarray]:
+        """
+        Get the indicies of interaction for sorting into templates
+        Ind -2 is non-interacting.
+        Ind -1 is under-/over-flow (depnding on slice ordering)
+        Ind n_slices is over-/under-flow (depending on slice ordering)
+        Only use indicies [0, n_slices - 1].
+        """
+        KE_int = self.KE_int_reco
+        bin_inds = Slicing.EnergySliceFiducial.InteractingIndicies(KE_int, energy_slice)
+        bin_inds = ak.where(self.outside_tpc_reco, -2, bin_inds)
+        return bin_inds
 
 def FromFile(file : str) -> "AnalysisInput": #* seems a bit extra but why not
     """ Load analysis input from dill file.
@@ -764,7 +812,7 @@ def FromFile(file : str) -> "AnalysisInput": #* seems a bit extra but why not
         AnalysisInput: analysis input.
     """
     obj = LoadObject(file)
-    if type(obj) == AnalysisInput:
+    if type(obj) in [AnalysisInput, AnalysisInputGNN]:
         return obj
     else:
         raise Exception("not an analysis input file")

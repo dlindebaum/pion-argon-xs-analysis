@@ -111,7 +111,11 @@ class MultiDimBins():
         self.n_bins = self.n_bins_init * self.n_bins_end + int(self.has_beam)
         self.multi_bin_edges  = np.arange(self.n_bins+1)
     
-    def energies_to_multi_dim_inds(self, init_es, end_es, in_tpc=None, has_beam=None):
+    def energies_to_multi_dim_inds(
+            self,
+            init_es, end_es,
+            in_tpc=None,
+            has_beam=None):
         if self.has_tpc == (in_tpc is None):
             not_txt = " not" if in_tpc is None else ""
             raise Exception(f"in_tpc is {self.has_tpc}, but in_tpc has"
@@ -129,10 +133,16 @@ class MultiDimBins():
             multi_dim_ind = ak.where(has_beam, multi_dim_ind, self.n_bins - 1)
         return ak.to_numpy(multi_dim_ind)
     
-    def energies_to_multi_dim_hist(self, init_es, end_es, in_tpc=None, has_beam=None):
+    def energies_to_multi_dim_hist(
+            self,
+            init_es, end_es,
+            in_tpc=None,
+            has_beam=None,
+            weights=None):
         return np.histogram(
-            self.energies_to_multi_dim_inds(init_es, end_es, in_tpc=in_tpc, has_beam=has_beam),
-            bins=self.multi_bin_edges)[0]
+            self.energies_to_multi_dim_inds(
+                init_es, end_es, in_tpc=in_tpc, has_beam=has_beam),
+            bins=self.multi_bin_edges, weights=weights)[0]
 
     def extract_hist_inds(self, multi_dim_ind):
         return multi_dim_ind // self.n_bins_end, multi_dim_ind % self.n_bins_init
@@ -199,6 +209,27 @@ class MultiDimBins():
             final_slices = (np.expand_dims(final_slices, axis=(-1,) * len(tpc_sliced.shape))
                             + tpc_sliced)
         return final_slices
+    
+    def slice_all(self):
+        slice_args = (slice(None), slice(None))
+        if self.has_tpc:
+            slice_args = slice_args + (slice(None),)
+        return self.slice_by_hist(*slice_args)
+
+    def corr_hist_to_flat_multi_dim_slicer(self):
+        axis_init = np.sort(np.array(
+            list(np.arange(self.n_bins_init)) * self.n_bins_end))
+        axis_inte = np.array(list(np.arange(self.n_bins_init))
+                             * (1+int(self.has_tpc))*self.n_bins_init)
+        ax_slicer = (axis_init, axis_inte)
+        if self.has_tpc:
+            base_arr = np.concatenate(
+                [np.zeros(self.n_bins_init, dtype=int),
+                 np.ones(self.n_bins_init, dtype=int)], axis=0)
+            axis_end = np.array(list(base_arr)
+                                * (self.n_bins_init))
+            ax_slicer = ax_slicer + (axis_end,)
+        return ax_slicer
 
     def reverse_order_slice(self):
         inv_slice = slice(None, None, -1)
@@ -821,6 +852,345 @@ class EnergySlice:
             tuple[np.ndarray, np.ndarray]: Cross section and statistical uncertainty.
         """
         return ThinSlice.TotalCrossSection(n_incident, n_interact, dE/dEdX)
+
+    @staticmethod
+    def CrossSection(
+            n_int_ex : np.ndarray,
+            n_int : np.ndarray,
+            n_inc : np.ndarray,
+            dEdX : np.ndarray,
+            dE : float,
+            n_int_ex_err : np.ndarray = None,
+            n_int_err : np.ndarray = None,
+            n_inc_err : np.ndarray = None) -> tuple[np.ndarray, np.ndarray]:
+        """ Compute exclusive cross sections. If interactions errors are not provided, staticial uncertainties are used (poisson for incident, binomial for interactions).
+
+        Args:
+            n_int_ex (np.ndarray): exclusive interactions
+            n_int (np.ndarray): interactions
+            n_inc (np.ndarray): incident counts
+            dEdX (np.ndarray): slice dEdX
+            dE (float): energy slice width
+            n_int_ex_err (np.ndarray, optional): exclusive interaction errors. Defaults to None.
+            n_int_err (np.ndarray, optional): interaction errors. Defaults to None.
+            n_inc_err (np.ndarray, optional): incident count errors. Defaults to None.
+
+        Returns:
+            tuple[np.ndarray, np.ndarray]: _description_
+        """
+        NA = 6.02214076e23
+        factor = (np.array(dEdX) * 10**27 * etools.BetheBloch.A
+                  / (etools.BetheBloch.rho * NA * dE))
+
+        n_interact_ratio = nandiv(n_int_ex, n_int)
+        n_survived = n_inc - n_int
+
+        if n_inc_err is not None:
+            var_inc_inclusive = n_inc_err**2
+        else:
+            var_inc_inclusive = n_inc # poisson variance
+    
+        if n_int_err is not None:
+            var_int = n_int_err**2
+        else:
+            var_int = n_int * (1 - nandiv(n_int, n_inc)) # binomial uncertainty
+    
+        if n_int_ex_err is not None:
+            var_int_ex = n_int_ex_err**2
+        else:
+            var_int_ex = n_int_ex * (1 - nandiv(n_int_ex, n_inc)) # binomial uncertainty
+
+
+        xs = factor * n_interact_ratio * nanlog(nandiv(n_inc, n_inc - n_int))
+
+        diff_n_int_ex = nandiv(xs, n_int_ex)
+        diff_n_inc = factor * n_interact_ratio * (nandiv(1, n_inc) - nandiv(1, n_survived))
+        diff_n_int = factor * n_interact_ratio * nandiv(1, n_survived) - nandiv(xs, n_int)
+
+        xs_err = ((diff_n_int_ex**2 * var_int_ex)
+                  + (diff_n_inc**2 * var_inc_inclusive)
+                  + (diff_n_int**2 * var_int))**0.5
+        return np.array(xs, dtype = float), np.array(xs_err, dtype = float)
+
+class EnergySliceFiducial:
+    """ Methods for implementing the energy slice measurement method.
+    """
+    @staticmethod
+    def NIncident(n_initial : np.ndarray, n_end : np.ndarray, e_slices=None) -> np.ndarray:
+        """ Calculate number of incident particles
+
+        Args:
+            n_initial (np.ndarray): initial particle counts
+            n_end (np.ndarray): interaction counts
+
+        Returns:
+            np.ndarray: incident counts
+        """
+        if e_slices is not None:
+            assert e_slices.reversed, "Require reversed (highest energy first) ordering"
+        n_survived_all = np.cumsum(n_initial - n_end)
+        n_incident = n_survived_all + n_end
+        return n_incident
+
+    # @staticmethod
+    # def GenerateHistograms(
+    #         int_energy : ak.Array,
+    #         init_energy : ak.Array,
+    #         outside_tpc : ak.Array,
+    #         multi_dim_binner : MultiDimBins,
+    #         weights : np.ndarray = None):
+    #     pass
+
+    @staticmethod
+    def InteractingIndicies(
+            int_energy : ak.Array,
+            energy_slices : Slices):
+        return np.digitize(int_energy, energy_slices.bin_edges) - 1
+
+    @staticmethod
+    def TotalCrossSection(
+            flat_multi_hist,
+            multi_dim_binner,
+            flat_multi_errs = None) -> tuple[np.ndarray, np.ndarray]:
+        assert multi_dim_binner.has_tpc, "Must have ending information"
+        dim_slicer = multi_dim_binner.slice_by_hist(slice(None), slice(None), slice(None))
+        corr_hist = flat_multi_hist[dim_slicer]
+        bin_orders = np.arange(multi_dim_binner.n_bins_init)
+        if multi_dim_binner.reversed:
+            bin_orders = bin_orders[::-1]
+        slice_ones = np.ones_like(dim_slicer)
+        init_orders = slice_ones * bin_orders[:, np.newaxis, np.newaxis]
+        end_orders = slice_ones * bin_orders[np.newaxis, :, np.newaxis]
+        end_type = slice_ones * np.arange(2)[np.newaxis, np.newaxis, :]
+        # [1:-1] removes over/underflow bins
+        m_shape = (-1, 1, 1, 1)
+        indexer = np.reshape(bin_orders[1:-1], (-1, 1, 1, 1))
+        # Low index means low energy
+        #                        init energy before bin, end energy after bin
+        inc_mask = np.logical_and(init_orders > indexer, end_orders <= indexer)
+        #                        init energy before bin, end energy in bin
+        all_end_mask = np.logical_and(init_orders > indexer, end_orders == indexer)
+        inte_mask = np.logical_and(all_end_mask, end_type==0)
+        end_mask = np.logical_and(all_end_mask, end_type==1)
+        sum_axes = (1,2,3)
+        inc_hists = np.sum(corr_hist * inc_mask, axis=sum_axes)
+        int_hists = np.sum(corr_hist * inte_mask, axis=sum_axes)
+        end_hists = np.sum(corr_hist * end_mask, axis=sum_axes)
+        all_end_hist = int_hists + end_hists
+        pass_hists = inc_hists - all_end_hist
+        hist_ratio = inc_hists/pass_hists
+        hist_log = np.log(hist_ratio)
+        inte_ratio = (int_hists/all_end_hist)
+        # Multiplier factor from bin widths
+        bins_no_overflow = multi_dim_binner.digit_edges
+        beam_particle = Particle.from_pdgid(211)
+        e_slice_widths = np.abs(bins_no_overflow[1:] - bins_no_overflow[:-1])
+        median_dEdX = etools.BetheBloch.meandEdX(
+            (bins_no_overflow[:-1] + bins_no_overflow[1:])/2,
+            beam_particle)
+        space_widths = e_slice_widths/median_dEdX
+        NA = 6.02214076e23
+        factor = (10**27 * etools.BetheBloch.A
+                / (etools.BetheBloch.rho * NA * space_widths))
+        xs = inte_ratio * factor * hist_log
+        if flat_multi_errs is None:
+            xs_err = None
+        else:
+            corr_vars = flat_multi_errs[dim_slicer]**2
+            # d xs / d H_int = inte_ratio * d log(H_int/H_pass) / d H_int
+            #                = inte_ratio * H_pass/H_int *(
+            #                     1/H_pass - H_int/(H_pass**2))
+            dxs_dinc = inte_ratio * ((1/inc_hists) - (1/pass_hists))
+            # d log(H_int/H_pass) / d H_end = 
+            #         H_pass/H_int * ( -1 * -1 * H_int/(H_pass**2))
+            dlog_dend = inte_ratio/pass_hists
+            # d (H_int/(H_int + H_end)) / d H_end =
+            #         - H_int/(H_int + H_end)**2
+            dxs_dend = dlog_dend - ((inte_ratio/all_end_hist) * hist_log)
+            # d (H_int/(H_int + H_end)) / d H_int =
+            #         1/(H_int + H_end) - H_int/(H_int + H_end)**2
+            dxs_dint = dlog_dend + (((1 - inte_ratio)/all_end_hist) * hist_log)
+            # D(xs)**2 = D(counts)**2 * (d xs / d counts)**2
+            # d xs / d counts = sum_{H} [(d xs / d H) * (d H / d counts)]
+            # (d H / d counts) is simply the mask of wther a count is
+            #   included or not, i.e. inc_mask etc. Since these are
+            #   1 or 0, (d H / d counts)**2 = (d H / d counts)
+            xs_vars = np.sum(
+                corr_vars * (((np.reshape(dxs_dinc, m_shape))*inc_mask
+                              + (np.reshape(dxs_dend, m_shape))*end_mask
+                              + (np.reshape(dxs_dint, m_shape))*inte_mask)**2),
+                axis=sum_axes)
+            xs_err = factor * np.sqrt(xs_vars)
+        return xs, xs_err
+
+    @staticmethod
+    def SliceNumbers(
+            int_energy : ak.Array,
+            init_energy : ak.Array,
+            outside_tpc : ak.Array,
+            energy_slices : Slices) -> tuple[np.ndarray, np.ndarray]:
+        """ Convert energies from physical units to slice numbers.
+
+        Args:
+            int_energy (ak.Array): interaction energy
+            init_energy (ak.Array): initial energy
+            outside_tpc (ak.Array): mask of particles which interact outside the fiducial volume
+            energy_slices (Slices): energy slices
+
+        Returns:
+            tuple[np.ndarray, np.ndarray]: initial slice numbers and interacitng slice numbers
+        """
+        init_slice = energy_slices.get_num_with_overflow(init_energy)
+        end_slice = energy_slices.get_num_with_overflow(int_energy)
+        end_type = 1 * outside_tpc
+        return init_slice, end_type, end_type
+
+    @staticmethod
+    def CountingExperiment(
+            int_energy : ak.Array,
+            init_energy : ak.Array,
+            outside_tpc : ak.Array,
+            process : ak.Array,
+            energy_slices : Slices,
+            interact_only : bool = False,
+            weights : np.ndarray = None) -> tuple[np.ndarray]:
+        """ Creates the interacting and incident histograms.
+
+        Args:
+            int_energy (ak.Array): interacting enrgy
+            init_energy (ak.Array): initial energy
+            outside_tpc (ak.Array): mask of particles which interact
+                outside the fiducial volume
+            process (ak.Array, optional): mask of events for exclusive
+                interactions. Ignored if return_int_binning is True.
+            energy_slices (Slices): energy slices
+            interact_only (bool, optional): only return exclusive
+                interaction histogram. Defaults to False.
+            weights (np.ndarray, optional): event weights. Defaults to
+                None.
+            return_int_binning (bool, optional): If true, replace the
+                exclusive interaction histogram with an array of bin
+                indicies for each event, indicating which interaction
+                bin the event falls into. Defaults to False.
+
+        Returns:
+            np.ndarray | tuple[np.ndarray]: exclusive interaction
+                histogram and/or initial histogram, incident histogram
+                and interaction histogram 
+        """
+        init_slice, int_slice = EnergySlice.SliceNumbers(
+            int_energy, init_energy, outside_tpc, energy_slices)
+
+        slice_bins = np.arange(-1 - 0.5, energy_slices.max_num + 1.5)
+
+        exclusive_weights = weights[process] if weights is not None else None
+        exclusive_return = np.histogram(
+            np.array(int_slice[process]), slice_bins,
+            weights = exclusive_weights)[0]
+        if interact_only == False:
+            n_initial = np.histogram(
+                np.array(init_slice), slice_bins, weights = weights)[0]
+            n_interact_inelastic = np.histogram(
+                np.array(int_slice), slice_bins, weights = weights)[0]
+
+            n_incident = EnergySlice.NIncident(n_initial, n_interact_inelastic)
+            return n_initial, n_interact_inelastic, exclusive_return, n_incident
+        else:
+            return exclusive_return
+
+    @staticmethod
+    def CountingExperimentUnclassified(
+            int_energy : ak.Array,
+            init_energy : ak.Array,
+            outside_tpc : ak.Array,
+            energy_slices : Slices,
+            weights : np.ndarray = None) -> tuple[np.ndarray]:
+        """ Creates the interacting and incident histograms.
+
+        Args:
+            int_energy (ak.Array): interacting enrgy
+            init_energy (ak.Array): initial energy
+            outside_tpc (ak.Array): mask of particles which interact
+                outside the fiducial volume
+            process (ak.Array, optional): mask of events for exclusive
+                interactions. Ignored if return_int_binning is True.
+            energy_slices (Slices): energy slices
+            interact_only (bool, optional): only return exclusive
+                interaction histogram. Defaults to False.
+            weights (np.ndarray, optional): event weights. Defaults to
+                None.
+            return_int_binning (bool, optional): If true, replace the
+                exclusive interaction histogram with an array of bin
+                indicies for each event, indicating which interaction
+                bin the event falls into. Defaults to False.
+
+        Returns:
+            np.ndarray | tuple[np.ndarray]: exclusive interaction
+                histogram and/or initial histogram, incident histogram
+                and interaction histogram 
+        """
+        init_slice, int_slice = EnergySlice.SliceNumbers(
+            int_energy, init_energy, outside_tpc, energy_slices)
+
+        assert energy_slices.reversed
+        # Includes the underflow and overflow bins and bad bin
+        slice_bins = np.arange(-1, energy_slices.underflow_ind + 2) - 0.5
+        # This sets -1 bin as bad bins
+        bin_indicies = np.digitize(np.array(int_slice), slice_bins[1:-1]) - 1
+        n_initial = np.histogram(
+            np.array(init_slice), slice_bins, weights = weights)[0]
+        n_interact_inelastic = np.histogram(
+            np.array(int_slice), slice_bins, weights = weights)[0]
+
+        n_incident = EnergySlice.NIncident(n_initial, n_interact_inelastic)
+        def overflow_hist_to_bad_bin(hist):
+            # Index 0 is bad events
+            # Index 1 is overflow events
+            # Index -1 is underflow events
+            # Puts all of these into the same index 0 bin
+            new_hist = hist[1:-1]# Keep one intial bin to be the bad bin
+            bad_count = np.sum(hist) - np.sum(new_hist)
+            new_hist[0] = bad_count
+            return new_hist
+        n_initial = overflow_hist_to_bad_bin(n_initial)
+        n_interact_inelastic = overflow_hist_to_bad_bin(n_interact_inelastic)
+        n_incident = overflow_hist_to_bad_bin(n_incident)
+        bad_index_mask = np.logical_or(
+            bin_indicies == -1,
+            np.logical_or(bin_indicies == 0,
+                          bin_indicies ==  energy_slices.underflow_ind))
+        bin_indicies = np.where(bad_index_mask, -1, bin_indicies - 1)
+        # Results now all match energy_slices.num_invalid_overflow
+        return n_initial, n_interact_inelastic, bin_indicies, n_incident
+
+    @staticmethod
+    def Slice_dEdX(energy_slices : Slices, particle : Particle) -> np.ndarray:
+        """ Computes the mean dEdX between energy slices.
+
+        Args:
+            energy_slices (Slices): energy slices
+            particle (Particle): particle
+
+        Returns:
+            np.ndarray: mean dEdX
+        """
+        return etools.BetheBloch.meandEdX(
+            energy_slices.pos - energy_slices.width/2, particle)
+
+    # @staticmethod
+    # def TotalCrossSection(n_interact : np.ndarray, n_incident : np.ndarray, dEdX : np.ndarray, dE : float) -> tuple[np.ndarray, np.ndarray]:
+    #     """ Compute cross section using ThinSlice.CrossSection, by passing an effective spatial slice width.
+
+    #     Args:
+    #         n_interact (np.ndarray): interacting histogram
+    #         n_incident (np.ndarray): incident histogram
+    #         dEdX (np.ndarray): mean slice dEdX
+    #         dE (float): energy slice width
+
+    #     Returns:
+    #         tuple[np.ndarray, np.ndarray]: Cross section and statistical uncertainty.
+    #     """
+    #     return ThinSlice.TotalCrossSection(n_incident, n_interact, dE/dEdX)
 
     @staticmethod
     def CrossSection(
