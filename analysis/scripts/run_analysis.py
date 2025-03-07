@@ -59,7 +59,14 @@ def template_config():
         "pi_KE_lim": -1,
         "fiducial_volume" : [0, 700],
         "REGION_IDENTIFICATION":{
-            "type" : "default"
+            "type" : "gnn"
+        },
+        "SYSTEMATICS": {
+            "track_length": None,
+            "beam_momentum": None,
+            "GNN_model": None,
+            "upstream_energy": None,
+            "purity": None
         },
         "BEAM_QUALITY_FITS": {
             "truncate" : None,
@@ -74,32 +81,13 @@ def template_config():
             "correction" : "response"
         },
         "BEAM_REWEIGHT": {
-            "strength" : 3,
+            "strength" : 2,
             "params": None
         },
         "UPSTREAM_ENERGY_LOSS":{
             "cv_function" : "gaussian",
             "response" : "poly2d",
             "bins" : None,
-        },
-        "TOY_PARAMETERS":{
-            "beam_profile" : "crystal_ball",
-            "smearing_residual_ranges" : {
-                "KE_init" : None,
-                "KE_int" : None,
-                "z_int" : None
-            },
-            "plot_ranges": {
-                "KE_init" : None,
-                "KE_int" : None,
-                "z_int" : None
-            }
-        },
-        "FIT":{
-            "mc_stat_unc" : True,
-            "mean_track_score" : None,
-            "single_bin" : True,
-            "regions": True
         },
         "ESLICE":{
             "edges": "List. If present, manually define bin edges, else use below.",
@@ -115,7 +103,6 @@ def template_config():
             "ts" : "ks",
             "covariance" : "poisson"
         },
-        "signal_process" : "charge_exchange",
         "BEAM_PARTICLE_SELECTION":{
             "PiBeamSelection":{
                 "enable" : True,
@@ -174,145 +161,11 @@ def template_config():
         "VALID_PFO_SELECTION":{
             "enable" : True
         },
-        "FINAL_STATE_PIPLUS_SELECTION": {
-            "Chi2ProtonSelection": {
-            "enable": True,
-            "cut": 61.2,
-            "op": ">"
-            },
-            "TrackScoreCut": {
-            "enable": True,
-            "cut": 0.5,
-            "op": ">"
-            },
-            "NHitsCut": {
-            "enable": True,
-            "cut": 20,
-            "op": ">"
-            },
-            "PiPlusSelection": {
-            "enable": True,
-            "cut": [
-                0.5,
-                2.8
-            ],
-            "op": [
-                ">",
-                "<"
-            ]
-            }
-        },
-        "FINAL_STATE_PHOTON_SELECTION": {
-            "Chi2ProtonSelection": {
-            "enable": True,
-            "cut": 61.2,
-            "op": ">"
-            },
-            "TrackScoreCut": {
-            "enable": True,
-            "cut": 0.45,
-            "op": "<"
-            },
-            "NHitsCut": {
-            "enable": True,
-            "cut": 80,
-            "op": ">"
-            },
-            "BeamParticleDistanceCut": {
-            "enable": True,
-            "cut": [
-                3,
-                90
-            ],
-            "op": [
-                ">",
-                "<"
-            ]
-            },
-            "BeamParticleIPCut": {
-            "enable": True,
-            "cut": 20,
-            "op": "<"
-            }
-        },
-        "FINAL_STATE_PI0_SELECTION": {
-            "NPhotonCandidateSelection": {
-            "enable": True,
-            "cut": 2,
-            "op": "=="
-            },
-            "Pi0MassSelection": {
-            "enable": True,
-            "cut": [
-                50,
-                250
-            ],
-            "op": [
-                ">",
-                "<"
-            ]
-            },
-            "Pi0OpeningAngleSelection": {
-            "enable": True,
-            "cut": [
-                10,
-                80
-            ],
-            "op": [
-                ">",
-                "<"
-            ]
-            }
-        },
-        "FINAL_STATE_LOOSE_PHOTON_SELECTION": {
-            "Chi2ProtonSelection": {
-            "enable": True,
-            "cut": 61.2,
-            "op": ">"
-            },
-            "TrackScoreCut": {
-            "enable": True,
-            "cut": 0.45,
-            "op": "<"
-            },
-            "NHitsCut": {
-            "enable": True,
-            "cut": 31,
-            "op": ">"
-            },
-            "BeamParticleDistanceCut": {
-            "enable": True,
-            "cut": 114,
-            "op": "<"
-            },
-            "BeamParticleIPCut": {
-            "enable": True,
-            "cut": 80,
-            "op": "<"
-            }
-        },
-        "FINAL_STATE_LOOSE_PION_SELECTION": {
-            "Chi2ProtonSelection": {
-            "enable": True,
-            "cut": 61.2,
-            "op": ">"
-            },
-            "TrackScoreCut": {
-            "enable": True,
-            "cut": 0.39,
-            "op": ">"
-            },
-            "PiPlusSelection": {
-            "enable": True,
-            "cut": 6.3,
-            "op": "<"
-            }
-        },
         "beam_momentum" : "nominal beam momentum in MeV", #! should be deprciated
-        "P_inst_range" : "plot range",
-        "KE_inst_range" : "plot range",
-        "KE_init_range" : "plot range",
-        "KE_int_range" : "plot range",
+        "P_inst_range" : ["plot range low", "plot range high"],
+        "KE_inst_range" : ["plot range low", "plot range high"],
+        "KE_init_range" : ["plot range low", "plot range high"],
+        "KE_int_range" : ["plot range low", "plot range high"],
         "GNN_MODEL": {
             "model_path": "Path to GNN model.",
             "region_labels": [

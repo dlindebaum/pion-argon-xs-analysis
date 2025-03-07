@@ -158,7 +158,7 @@ def main(args):
     args.events = None
     args.threads = None
     # Separate MC and data to ensure they get separate save files
-    predictions_mc = cross_section.ApplicationProcessing(
+    predictions_mc = Processing.ApplicationProcessing(
             ["mc"], # Which set of data to look at
             outdir, # Where to save outputs
             args, # Arguments from config
@@ -168,7 +168,7 @@ def main(args):
             batchless=True # Batching causes Model.predict to fail
         )["mc"] #Default return is a dict indexed by the first argument
     if (args.has_data and (not args.mc_only)):
-        predictions_data = cross_section.ApplicationProcessing(
+        predictions_data = Processing.ApplicationProcessing(
                 ["data"], # Which set of data to look at
                 outdir, # Where to save outputs
                 args, # Arguments from config
@@ -182,12 +182,12 @@ def main(args):
 
     # shower_merging.SetPlotStyle(extend_colors = True)
 
-    # output_mc = MergeSelectionMasks(MergeOutputs(cross_section.RunProcess(args.ntuple_files["mc"], False, args, run, False)))
+    # output_mc = MergeSelectionMasks(MergeOutputs(Processing.RunProcess(args.ntuple_files["mc"], False, args, run, False)))
     # output_data = None
     # if "data" in args.ntuple_files:
     #     if len(args.ntuple_files["data"]) > 0:
     #         if args.mc_only is False:
-    #             output_data = MergeSelectionMasks(MergeOutputs(cross_section.RunProcess(args.ntuple_files["data"], True, args, run, False)))
+    #             output_data = MergeSelectionMasks(MergeOutputs(Processing.RunProcess(args.ntuple_files["data"], True, args, run, False)))
 
     # # tables
     # MakeTables(output_mc, args.out + "tables_mc/", "mc")
