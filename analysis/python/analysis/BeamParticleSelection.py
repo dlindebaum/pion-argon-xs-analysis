@@ -286,7 +286,7 @@ def BeamScraperCut(events : Data, KE_range : int, fits : dict, cut : float = 1.5
         ak.Array: boolean mask
     """
 
-    key = str(KE_range)
+    key = str(KE_range - 1)
     mu_x = fits[key]["mu_x_inst"]
     mu_y = fits[key]["mu_y_inst"]
     sigma_x = fits[key]["sigma_x_inst"]

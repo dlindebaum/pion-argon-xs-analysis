@@ -1,4 +1,4 @@
-MY_DIR=`realpath $BASH_SOURCE | xargs dirname`
+MY_DIR=`(realpath $BASH_SOURCE | xargs dirname) || pwd`
 export MY_DIR
 export PYTHONPATH=$MY_DIR
 export PATH=$MY_DIR/apps:$PATH
