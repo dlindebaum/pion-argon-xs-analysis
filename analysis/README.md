@@ -182,7 +182,59 @@ run_analysis.py -c analysis_config.json -o . --skip <selection, photon_correctio
 
 check `--help` for the names of all the apps which can be skipped or forced to run.
 
+## Toy generator
+To generate toys, you need to have run `cex_toy_parameters.py`. Then create a new json file to create your toy sample. An example template for the toy configuration is
 
+```[json]
+{
+  "events": 1000000,
+  "step": 2,
+  "p_init": 2000,
+  "beam_profile": "<path_to_your_analysis_directory>/toy_parameters/beam_profile/beam_profile.json",
+  "beam_width": 60,
+  "smearing_params": {
+    "KE_init": "<path_to_your_analysis_directory>/toy_parameters/smearing/KE_init/double_crystal_ball.json",
+    "KE_int": "<path_to_your_analysis_directory>/toy_parameters/smearing/KE_int/double_crystal_ball.json",
+    "z_int": "<path_to_your_analysis_directory>/toy_parameters/smearing/z_int/double_crystal_ball.json"
+  },
+  "reco_region_fractions": "<path_to_your_analysis_directory>/toy_parameters/reco_regions/moderate_efficiency_reco_region_fractions.hdf5",
+  "beam_selection_efficiencies": "<path_to_your_analysis_directory>/toy_parameters/pi_beam_efficiency/beam_selection_efficiencies_true.hdf5",
+  "mean_track_score_kde": "<path_to_your_analysis_directory>/toy_parameters/meanTrackScoreKDE/kdes.dill",
+  "pdf_scale_factors": null,
+  "df_format": "f",
+  "modified_PDFs": null,
+  "verbose": true,
+  "seed": 1337,
+  "max_cpus": 21
+}
+```
+Note that the beam profile takes a file in the example, but this can also be replaced with either `uniform` or `gaussian` to generate a generic beam profile with those distribution shapes.
+
+to generate the toy run
+
+```
+cex_toy_generator.py -c <your_toy_config_file>
+```
+
+which will produce an HDF5 file with the generated toy sample. Note the toy sample is used for systematic studies, but can also be used to do the fit, background estimation and cross section measurement.
+
+## Running systematics
+
+Make sure to run all the steps in `run_analysis.py` and have a configuration for a toy template file and toy data sample (the difference being reduced stats). Then run the following 
+
+`cex_systematics.py -c <analysis configuration file> -o <analysis directory> --cv <dill file of your central value measurement>`
+
+where, similar to `run_analysis.py` you can provide the argument `run`, `skip` and `regen`, then give a list of all the systematics you wish to evaluate.
+
+An example would be (to evaluate the mc stat uncertainty.):
+
+`cex_systematics.py -c <analysis configuration file> -o <analysis directory> --cv <dill file of your central value measurement> --run mc_stat`
+
+**WARNING THIS WILL TAKE A LONG TIME IF YOU DO `--run all` SO BE CAUTIOUS**
+
+To make a plot of the central value + any systematics you did generate, run
+
+`cex_systematics.py -c <analysis configuration file> -o <analysis directory> --cv <dill file of your central value measurement> --plot`.
 
 ## Run shower merging analysis. (Legacy)
 Shower merging analysis workflow is as follows:

@@ -1110,7 +1110,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--regen", "-r", dest = "regen", action = "store_true", help = "fully rerun systematic tests if results already exist")
 
-    parser.add_argument("--toy_throws", dest = "n_throws", type = int, default = 50, help = "number of throws for systematics using the toy (exclusing fit inaccuracy)")
+    parser.add_argument("--toy_throws", dest = "n_throws", type = int, default = 50, help = "number of throws for systematics using the toy (excluding fit inaccuracy)")
     parser.add_argument("--fit_inaccuracy_repeats", dest = "fit_inaccuracy_repeats", type = int, default = 5, help = "number of repeats for fit inaccuracy systematic")
 
     parser.add_argument("--plot", "-p", dest = "plot", action = "store_true", default = None, help = "plot systematics with central value measurement")
