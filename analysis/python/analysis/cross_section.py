@@ -508,13 +508,18 @@ def HypTestXS(cv, error, process, energy_slice, file = GEANT_XS):
     return {"w_chi2" : w_chi_sqr, "p" : p}
 
 def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", chi2 : bool = True, newFigure : bool = True, cv_only : bool = False, marker_size : float = 6):
-    xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos + energy_slice.width])
+    if hasattr(energy_slice.width, "__iter__"):
+        width = energy_slice.width[:-1][::-1]
+        xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos - energy_slice.width[0], energy_slice.max_pos + energy_slice.width[-1]])
+    else:
+        width = energy_slice.width
+        xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos + energy_slice.width])
 
     if colors is None:
         colors = {k : f"C{i}" for i, k in enumerate(xs)}
 
     sim_curve_interp = xs_sim.GetInterpolatedCurve(process)
-    x = energy_slice.pos[:-1] - energy_slice.width/2
+    x = energy_slice.pos[:-1] - width/2
 
     if newFigure is True: Plots.plt.figure()
     chi_sqrs = {}
@@ -525,7 +530,7 @@ def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, 
             chi2_l = ", $\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}"
         else:
             chi2_l = ""
-        Plots.Plot(x, v[0], xerr = energy_slice.width / 2  if cv_only is False else None, yerr = v[1] if cv_only is False else None, label = k + chi2_l, color = colors[k], linestyle = "", marker = "x", newFigure = False, markersize = marker_size, capsize = marker_size/2)
+        Plots.Plot(x, v[0], xerr = width / 2  if cv_only is False else None, yerr = v[1] if cv_only is False else None, label = k + chi2_l, color = colors[k], linestyle = "", marker = "x", newFigure = False, markersize = marker_size, capsize = marker_size/2)
     
     if process == "single_pion_production":
         Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = simulation_label, title = "Single pion production" if title is None else title.capitalize(), newFigure = False, xlabel = "$KE (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)
@@ -535,7 +540,10 @@ def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, 
     Plots.plt.ylim(0)
     if max(Plots.plt.gca().get_ylim()) > np.nanmax(sim_curve_interp(xs_sim.KE).astype(float)) * 2:
         Plots.plt.ylim(0, max(sim_curve_interp(xs_sim.KE)) * 2)
-    Plots.plt.xlim(energy_slice.min_pos - (0.2 * energy_slice.width), energy_slice.max_pos + (0.2 * energy_slice.width))
+    if hasattr(width, "__iter__"):
+        Plots.plt.xlim(energy_slice.min_pos - (0.2 * width[0]), energy_slice.max_pos + (0.2 * width[-1]))
+    else:
+        Plots.plt.xlim(energy_slice.min_pos - (0.2 * width), energy_slice.max_pos + (0.2 * width))
     return chi_sqrs
 
 
@@ -1011,6 +1019,11 @@ class SlicesVar:
         else:
             raise Exception(f"edges: {edges}\n is not an ordered list (either ascending or descending), or slice widths are zero")
 
+        self.max_num = max(self.num)
+        self.min_num = min(self.num)
+        self.max_pos = max(self.pos)
+        self.min_pos = min(self.pos)
+
 
     def __conversion__(self, x):
         """ convert a value to its slice number.
@@ -1118,7 +1131,16 @@ class SlicesVar:
         Returns:
             np.ndarray: slice positions
         """
-        return np.array([ s.pos for s in self])
+        return np.array([s.pos for s in self])
+
+    @property
+    def width(self) -> np.ndarray:
+        """ Return widths of each slice.
+
+        Returns:
+            np.ndarray: slice widths
+        """
+        return self.pos_bins[1:] - self.pos_bins[:-1]
 
     @property
     def pos_overflow(self) -> np.ndarray:
@@ -1589,7 +1611,7 @@ class EnergySlice:
             return n_interact_exclusive
 
     @staticmethod
-    def CountingExperimentOld(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices) -> tuple[np.ndarray, np.ndarray]:
+    def CountingExperimentOld(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices | SlicesVar) -> tuple[np.ndarray, np.ndarray]:
         """ (Legacy) Creates the interacting and incident histograms.
 
         Args:
@@ -1639,7 +1661,7 @@ class EnergySlice:
         return n_interact, n_incident + n_interact
 
     @staticmethod
-    def Slice_dEdX(energy_slices : Slices, particle : Particle) -> np.ndarray:
+    def Slice_dEdX(energy_slices : Slices | SlicesVar, particle : Particle) -> np.ndarray:
         """ Computes the mean dEdX between energy slices.
 
         Args:

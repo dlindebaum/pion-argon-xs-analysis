@@ -153,19 +153,47 @@ def CreateConfigShapeTest(data_config, modified_PDFs : dict):
     return cfg
 
 
-def CreateModPDFDict(KE : np.array, name : str, xs : np.array) -> dict[np.array]:
-    return {
-        "KE" : KE,
-        name : xs
-    }
+def SmoothStep(x : np.ndarray, high : float, low : float, split : float, smooth_amount : float) -> np.ndarray:
+    """ Generate points for a smoothstep function.
 
+    Args:
+        x (np.ndarray): x values.
+        high (float): High value of the smoothstep.
+        low (float): Low value of the smoothstep.
+        split (float): Where the step occurs in x.
+        smooth_amount (float): Amount to smooth the step by 0 results in a step function.
 
-def SmoothStep(x : np.ndarray, high : float, low : float, split : float, smooth_amount : float):
+    Returns:
+        np.ndarray: y values of smooth step function.
+    """
     step = np.where(x >= split, high, low)
     if smooth_amount == 0:
         return step
     else:
         return gaussian_filter1d(step, smooth_amount)
+
+
+def CreateModifiedXS(xs_sim : cross_section.GeantCrossSections, process : str, high : float, low : float, split : float, smooth_amount : float) -> dict:
+    """ Create a modified cross section curve based on a smoothstep function.
+
+    Args:
+        xs_sim (cross_section.GeantCrossSections): GEANT cross sections.
+        process (str): Processes cross section to modify.
+        high (float): High value of the smoothstep.
+        low (float): Low value of the smoothstep.
+        split (float): Where the step occurs in x.
+        smooth_amount (float): Amount to smooth the step by 0 results in a step function.
+
+    Returns:
+        dict: dictionary with KE and modified cross section. 
+    """
+    if process == "single_pion_production":
+        xs_quasi = xs_sim.quasielastic * SmoothStep(xs_sim.KE, high, low, split, smooth_amount)
+        xs_dcex = xs_sim.double_charge_exchange * SmoothStep(xs_sim.KE, high, low, split, smooth_amount)
+        return {**{"KE" : xs_sim.KE, "quasielastic" : xs_quasi}, **{"KE" : xs_sim.KE, "double_charge_exchange" : xs_dcex}}
+    else:
+        xs = getattr(xs_sim, process) * SmoothStep(xs_sim.KE, high, low, split, smooth_amount)
+        return {"KE" : xs_sim.KE, process : xs}
 
 
 def ShapeTestNew(directory : str, data_config : dict, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, mean_track_score_bins : np.array, xs_sim : cross_section.GeantCrossSections, energy_slices : cross_section.Slices, single_bin):
@@ -195,14 +223,8 @@ def ShapeTestNew(directory : str, data_config : dict, model : cross_section.pyhf
             if i == "null":
                 config = data_config
             else:
-                if target == "single_pion_production":
-                    xs_quasi = getattr(xs_sim, "quasielastic") * SmoothStep(xs_sim.KE, i[0], i[1], i[3], i[2])
-                    xs_dcex = getattr(xs_sim, "double_charge_exchange") * SmoothStep(xs_sim.KE, i[0], i[1], i[3], i[2])
-                    mod_pdf = {**CreateModPDFDict(xs_sim.KE, "quasielastic", xs_quasi), **CreateModPDFDict(xs_sim.KE, "double_charge_exchange", xs_dcex)}
-                    config = CreateConfigShapeTest(data_config, mod_pdf)
-                else:
-                    xs = getattr(xs_sim, target) * SmoothStep(xs_sim.KE, i[0], i[1], i[3], i[2])
-                    config = CreateConfigShapeTest(data_config, CreateModPDFDict(xs_sim.KE, target, xs))
+                config = CreateConfigShapeTest(data_config, CreateModifiedXS(xs_sim, target, i[0], i[1], i[3], i[2]))
+
             results[i], true_counts[i], expected_mus[i] = ModifiedConfigTest(config, energy_slices, model, toy_template, mean_track_score_bins, single_bin)
         cross_section.SaveObject(f"{directory}fit_results_{folder[target]}.dill", {"results" : results, "true_counts" : true_counts, "expected_mus" : expected_mus})
     return
