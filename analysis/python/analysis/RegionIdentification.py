@@ -116,7 +116,7 @@ regions = {
             process_criteria(criteria(">=", 0), criteria(">=", 0), criteria("==", 0), criteria(">=", 0), criteria(">=", 0)),
         ],
         "other" : [
-            process_criteria(criteria(">=", 0), criteria(">=", 0), criteria(">=", 1), criteria(">=", 0), criteria("==", 0)),
+            process_criteria(criteria(">=", 0), criteria(">=", 0), criteria(">=", 1), criteria(">=", 0), criteria(">=", 0)),
         ],
     },
     "default" : {
