@@ -9,6 +9,24 @@ import numpy as np
 import os
 import dill
 
+from IPython.core.magic import register_line_magic
+from IPython import get_ipython
+
+@register_line_magic
+def init_notebook(line):
+    ipython = get_ipython()
+    ipython.run_line_magic("matplotlib", "inline") # %matplotlib inline
+    ipython.run_line_magic("load_ext", "autoreload") # %load_ext autoreload
+    ipython.run_line_magic("autoreload", "2") # %autoreload 2
+
+    #* magic to add python path to notebook environment
+    import sys
+    for pypath in sys.path:
+        if pypath.split("/")[-1] == "analysis": break
+    print(pypath)
+    ipython.run_line_magic("env", "PYTHONPATH $pypath") # %env PYTHONPATH $pypath
+    return line
+
 def dill_copy(obj : any):
     return dill.loads(dill.dumps(obj))
 
