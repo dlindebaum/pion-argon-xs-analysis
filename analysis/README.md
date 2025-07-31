@@ -1,4 +1,4 @@
-# analysis
+# Analysis
 Python code for ProtoDUNE analysis, requires python 3.10.0 or greater. Installing the requirements to run the code is as follows:
 
 Run this once.
@@ -41,7 +41,7 @@ cd analysis_demo
 To create a template configuration called `analysis_config.json`, run the following in your work area:
 
 ```bash
-run_analysis.py -C analysis_config.json
+run_analysis.py -C analysis_config.json -o .
 ```
 
 This configuration requires entry of basic information such as data file location and some configurations settings some apps cannot run without. To work off a minimal application with the basic information (except MC file location) settings check `config/cex_analysis_2GeV_config_minimal_MC.json`.
@@ -235,40 +235,3 @@ An example would be (to evaluate the mc stat uncertainty.):
 To make a plot of the central value + any systematics you did generate, run
 
 `cex_systematics.py -c <analysis configuration file> -o <analysis directory> --cv <dill file of your central value measurement> --plot`.
-
-## Run shower merging analysis. (Legacy)
-Shower merging analysis workflow is as follows:
-
----
-**sm_selection_studies.py**
- - input:
-     - <span style="color: maroon">Ntuple file (root)</span>
- - output:
-     - <span style="color: red">basic plots (png)</span>
-     - <span style="color: red">tables (tex) of selection efficiency</span>
-
-**sm_generate_geometric_quantities.py**
- - input:
-     - <span style="color: maroon">Ntuple file (root)</span>
- - output:
-     - <span style="color: magenta">geometric quantities file (csv)</span>
-
-**sm_analyse_geometric_quantities.py**
- - input:
-     - <span style="color: magenta">geometric quantities file (csv)</span>
- - output:
-    - <span style="color: red">plots of geometric quantities (png)</span>
-    - <span style="color: green">list of cuts (csv)</span>
-
-**sm_shower_merging.py**
- - input:
-     - <span style="color: maroon">Ntuple file (root)</span>
-     - <span style="color: green">list of cuts (csv)</span>
- - output: <span style="color: blue">shower pair quantities (hdf5)</span>
-
-**sm_plot_shower_quantities.py**
- - input:
-     - <span style="color: blue">shower pair quantities (hdf5)</span>
- - output:
-     - <span style="color: red">various plots of shower quantities (png)</span>
----

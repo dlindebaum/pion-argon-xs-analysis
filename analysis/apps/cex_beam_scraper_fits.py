@@ -195,19 +195,24 @@ def BeamScraperPlots(beam_inst_KE_bins : list, output_mc : dict[ak.Array], scrap
 
 @Master.timer
 def main(args : argparse.Namespace):
+
     cross_section.PlotStyler.SetPlotStyle(True)
     outdir = args.out + "beam_scraper/"
     os.makedirs(outdir, exist_ok = True)
 
     output_mc = cross_section.ApplicationProcessing(["mc"], outdir, args, run, True)["mc"]
 
-    residual_range = [-300, 300] # range of residual for plots
+    residual_range = [-300, 300] # range of residual for plotsdefine 
     bins = 50
 
     with Plots.PlotBook(outdir + "beam_scraper_fits.pdf") as pdf:
         Plots.Plot(args.beam_scraper_energy_range, args.beam_scraper_energy_range, color = "red")
         Plots.PlotHist2D(output_mc["beam_inst_KE"], output_mc["true_ffKE"], xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$KE^{true}_{ff}$ (MeV)", x_range = args.beam_scraper_energy_range, y_range = args.beam_scraper_energy_range, newFigure = False)
         pdf.Save()
+
+        if (args.beam_scraper_energy_bins is None):
+            print("Warning: 'energy_bins' for the beam scraper fit was not defined. Beam scraper fit will not be completed (Hint: check the pdf output to help figure out the best values for the energy bins)")
+            exit()
 
         Plots.PlotHist2D(output_mc["beam_inst_KE"], output_mc["delta_KE_upstream"], xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\Delta E_{upstream}$ (MeV)", x_range = args.beam_scraper_energy_range, y_range = residual_range)
         for i in args.beam_scraper_energy_bins: plt.axvline(i, color = "red")

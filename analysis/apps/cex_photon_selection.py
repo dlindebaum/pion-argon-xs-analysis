@@ -147,6 +147,9 @@ def linear_fit(df : pd.DataFrame, bins : np.ndarray, energy_range : list, book :
     x = (bins[1:] + bins[:-1]) / 2
     y = np.array([d.true_energy.mean() for d in binned_dataframe(df, bins, energy_range)])
 
+    if any(np.isnan(np.concatenate([x, y]))):
+        raise Exception(f"binned x and y values contain NaNs. Consider changing the binning range. \n {x, y=}")
+
     popt, pcov = curve_fit(LinearFit, x, y)
 
     print(popt, pcov**0.5)
@@ -340,20 +343,26 @@ def main(args):
     df["fractional_error"] = (df.reco_shower_energy / df.true_energy) - 1
 
     with Plots.PlotBook(out + "plots.pdf") as book:
-
         #* initial plots
         PhotonSelection(df, book)
 
         #* linear correction
-        energy_range = args.shower_correction["energy_range"]
-        bins = np.linspace(min(energy_range), max(energy_range), 11)
+        if args.shower_correction["energy_range"] is None:
+            print("Note: no energy range was defined for the shower correction, will use an auto-defined range instead")
+            energy_range = [
+                np.percentile(np.concatenate([df.true_energy, df.reco_shower_energy]), 0),
+                np.percentile(np.concatenate([df.true_energy, df.reco_shower_energy]), 100)
+                ]
+        else:
+            energy_range = sorted(args.shower_correction["energy_range"])
+
+        print(f"{energy_range=}")
+
+        bins = np.linspace(*energy_range, 11)
+        print(f"{bins=}")
         linear_correction = linear_fit(df, bins, energy_range, book)
         LinearFitPerformance(df, linear_correction, book)
-        #* linear correction
-        energy_range = args.shower_correction["energy_range"]
-        bins = np.linspace(min(energy_range), max(energy_range), 11)
-        linear_correction = linear_fit(df, bins, energy_range, book)
-        LinearFitPerformance(df, linear_correction, book)
+
 
         #* response correction
         bins = np.array(create_bins_df(df.reco_shower_energy, int(len(df.reco_shower_energy)//11), energy_range), dtype = int)
