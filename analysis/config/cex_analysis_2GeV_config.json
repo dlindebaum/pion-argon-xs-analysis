@@ -1,362 +1,397 @@
 {
-    "NTUPLE_FILES": {
-      "mc": [
-        {
-          "file": "/home/sb16165/Documents/pi0-analysis/analysis/work/ROOTFiles/PDSPAnalyser/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_ExtraStats_v09_82_01d00.root",
-          "type": "PDSPAnalyser",
-          "pmom": 1
-        },
-        {
-          "file": "/home/sb16165/Documents/pi0-analysis/analysis/work/ROOTFiles/PDSPAnalyser/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03.root",
-          "type": "PDSPAnalyser",
-          "pmom": 2
-        }
-      ],
-      "data": [
-        {
-          "file": "/home/sb16165/Documents/pi0-analysis/analysis/work/ROOTFiles/PDSPAnalyser/PDSPProd4_data_2GeV_reco2_ntuple_v09_42_03_01.root",
-          "type": "PDSPAnalyser",
-          "pmom": 1
-        }
-      ]
-    },
-    "norm": 2.497,
-    "pi_KE_lim": -1,
-    "fiducial_volume": [
-      30,
-      220
+  "NTUPLE_FILES": {
+    "mc": [
+      {
+        "file": "/home/bhuller/Projects/pi0-analysis/analysis/work/ROOTFiles/PDSPAnalyser/PDSPProd4a_MC_2GeV_sce_datadriven_ntuple_v09_81_00d01_set0.root",
+        "type": "PDSPAnalyser",
+        "pmom": 1
+      },
+      {
+        "file": "/home/bhuller/Projects/pi0-analysis/analysis/work/ROOTFiles/PDSPAnalyser/PDSPProd4a_MC_2GeV_sce_datadriven_ntuple_v09_81_00d01_set1.root",
+        "type": "PDSPAnalyser",
+        "pmom": 1
+      },
+      {
+        "file": "/home/bhuller/Projects/pi0-analysis/analysis/work/ROOTFiles/PDSPAnalyser/PDSPProd4a_MC_2GeV_sce_datadriven_ntuple_v09_81_00d01_set2.root",
+        "type": "PDSPAnalyser",
+        "pmom": 1
+      },
+      {
+        "file": "/home/bhuller/Projects/pi0-analysis/analysis/work/ROOTFiles/PDSPAnalyser/PDSPProd4a_MC_2GeV_sce_datadriven_ntuple_v09_81_00d01_set3.root",
+        "type": "PDSPAnalyser",
+        "pmom": 1
+      },
+      {
+        "file": "/home/bhuller/Projects/pi0-analysis/analysis/work/ROOTFiles/PDSPAnalyser/PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03.root",
+        "type": "PDSPAnalyser",
+        "pmom": 2
+      }
     ],
-    "REGION_IDENTIFICATION": {
-      "type": "moderate_efficiency"
-    },
-    "BEAM_QUALITY_FITS": {
-      "mc": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/beam_quality/mc_beam_quality_fit_values.json",
-      "data": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/beam_quality/data_beam_quality_fit_values.json",
-      "truncate": 30
-    },
-    "BEAM_SCRAPER_FITS": {
-      "mc": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/beam_scraper/mc_beam_scraper_fit_values.json",
-      "energy_range": null,
-      "energy_bins": [
-        1500,
-        1700,
-        1900,
-        2100,
-        2300
-      ]
-    },
-    "ENERGY_CORRECTION": {
-      "correction_params": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/shower_energy_correction/gaussian.json",
-      "energy_range": [
-        0,
-        1500
+    "data": [
+      {
+        "file": "/home/bhuller/Projects/pi0-analysis/analysis/work/ROOTFiles/PDSPAnalyser/PDSPProd4_data_2GeV_reco2_ntuple_v09_42_03_01.root",
+        "type": "PDSPAnalyser",
+        "pmom": 1
+      }
+    ]
+  },
+  "norm": 0.592,
+  "pi_KE_lim": 100,
+  "fiducial_volume": [
+    30,
+    220
+  ],
+  "REGION_IDENTIFICATION": {
+    "type": "moderate_efficiency"
+  },
+  "BEAM_QUALITY_FITS": {
+    "mc": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/beam_quality/mc_beam_quality_fit_values.json",
+    "data": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/beam_quality/data_beam_quality_fit_values.json",
+    "truncate": 30
+  },
+  "BEAM_SCRAPER_FITS": {
+    "mc": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/beam_scraper/mc_beam_scraper_fit_values.json",
+    "energy_range": null,
+    "energy_bins": [
+      1500,
+      1700,
+      1900,
+      2100,
+      2300
+    ]
+  },
+  "ENERGY_CORRECTION": {
+    "correction_params": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/shower_energy_correction/gaussian.json",
+    "energy_range": [
+      0,
+      1500
+    ],
+    "correction": "response"
+  },
+  "BEAM_REWEIGHT": {
+    "params": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/beam_reweight/gaussian.json",
+    "strength": 1.8
+  },
+  "UPSTREAM_ENERGY_LOSS": {
+    "correction_params": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/upstream_loss/fit_parameters.json",
+    "cv_function": "gaussian",
+    "response": "exp",
+    "bins": [
+      1500,
+      1700,
+      1800,
+      1850,
+      1900,
+      1950,
+      2000,
+      2050,
+      2100,
+      2200,
+      2400
+    ]
+  },
+  "TOY_PARAMETERS": {
+    "beam_profile": "crystal_ball",
+    "smearing_residual_ranges": {
+      "KE_init": [
+        -250,
+        250
       ],
-      "correction": "response"
-    },
-    "BEAM_REWEIGHT": {
-      "params": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/beam_reweight/gaussian.json",
-      "strength": 2.5
-    },
-    "UPSTREAM_ENERGY_LOSS": {
-      "correction_params": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/upstream_loss/fit_parameters.json",
-      "cv_function": "gaussian",
-      "response": "line",
-      "bins": [
-        1500,
-        1600,
-        1700,
-        1800,
-        1900,
-        2000,
-        2100,
-        2200
+      "KE_int": [
+        -250,
+        250
+      ],
+      "z_int": [
+        -25,
+        25
       ]
     },
-    "TOY_PARAMETERS": {
-      "beam_profile": "crystal_ball",
-      "smearing_residual_ranges": {
-        "KE_init": [
-          -100,
-          300
-        ],
-        "KE_int": [
-          -250,
-          250
-        ],
-        "z_int": [
-          -25,
-          25
-        ]
-      },
-      "plot_ranges": {
-        "KE_init": [
-          1200,
-          2400
-        ],
-        "KE_int": [
-          0,
-          2200
-        ],
-        "z_int": [
-          0,
-          700
-        ]
-      }
+    "plot_ranges": {
+      "KE_init": [
+        1200,
+        2400
+      ],
+      "KE_int": [
+        0,
+        2200
+      ],
+      "z_int": [
+        0,
+        700
+      ]
+    }
+  },
+  "FIT": {
+    "mc_stat_unc": true,
+    "mean_track_score": null,
+    "single_bin": true,
+    "regions": true,
+    "fix_np": false
+  },
+  "bkg_sub_mc_stat": true,
+  "ESLICE": {
+    "width": 150,
+    "min": 1400,
+    "max": 1900
+  },
+  "UNFOLDING": {
+    "method": 1,
+    "ts_stop": 0.001,
+    "max_iter": 100,
+    "ts": "ks",
+    "covariance": "poisson",
+    "reg": {
+      "k": 2,
+      "s": 10000.0,
+      "enable": false
     },
-    "FIT": {
-      "mc_stat_unc": false,
-      "mean_track_score": null,
-      "single_bin": true,
-      "regions": true,
-      "fix_np": false
+    "mc_stat_unc": true
+  },
+  "signal_process": "charge_exchange",
+  "BEAM_PARTICLE_SELECTION": {
+    "TrueFiducialCut": {
+      "enable": true,
+      "is_mc": false,
+      "cut": [
+        30,
+        220
+      ],
+      "op": [
+        ">",
+        "<"
+      ]
     },
-    "ESLICE": {
-      "width": 150,
-      "min": 1400,
-      "max": 1900
+    "PiBeamSelection": {
+      "enable": true,
+      "use_beam_inst": false
     },
-    "UNFOLDING": {
-      "method": 1,
-      "ts_stop": 0.005,
-      "max_iter": 100,
-      "ts": "ks",
-      "covariance": "poisson"
+    "PandoraTagCut": {
+      "enable": true,
+      "cut": 13,
+      "op": "=="
     },
-    "signal_process": "charge_exchange",
-    "BEAM_PARTICLE_SELECTION": {
-      "TrueFiducialCut": {
-        "enable": true,
-        "is_mc": false,
-        "cut": [
-          30,
-          220
-        ],
-        "op": [
-          ">",
-          "<"
-        ]
-      },
-      "PiBeamSelection": {
-        "enable": true,
-        "use_beam_inst": false
-      },
-      "PandoraTagCut": {
-        "enable": true,
-        "cut": 13,
-        "op": "=="
-      },
-      "CaloSizeCut": {
-        "enable": true
-      },
-      "HasFinalStatePFOsCut": {
-        "enable": true
-      },
-      "APA3Cut": {
-        "enable": true,
-        "cut": [
-          30,
-          220
-        ],
-        "op": [
-          ">",
-          "<"
-        ]
-      },
-      "DxyCut": {
-        "enable": true,
-        "cut": 3,
-        "op": "<"
-      },
-      "CosThetaCut": {
-        "enable": true,
-        "cut": 0.95,
-        "op": ">"
-      },
-      "MichelScoreCut": {
-        "enable": true,
-        "cut": 0.55,
-        "op": "<"
-      },
-      "MedianDEdXCut": {
-        "enable": true,
-        "cut": 2.4,
-        "op": "<",
-        "truncate": 30
-      },
-      "BeamScraperCut": {
-        "enable": true,
-        "KE_range": 1,
-        "cut": 1.5,
-        "op": "<"
-      }
-    },
-    "VALID_PFO_SELECTION": {
+    "CaloSizeCut": {
       "enable": true
     },
-    "FINAL_STATE_PIPLUS_SELECTION": {
-      "Chi2ProtonSelection": {
-        "enable": true,
-        "cut": 61.2,
-        "op": ">"
-      },
-      "TrackScoreCut": {
-        "enable": true,
-        "cut": 0.5,
-        "op": ">"
-      },
-      "NHitsCut": {
-        "enable": true,
-        "cut": 20,
-        "op": ">"
-      },
-      "PiPlusSelection": {
-        "enable": true,
-        "cut": [
-          0.5,
-          2.8
-        ],
-        "op": [
-          ">",
-          "<"
-        ]
-      }
+    "HasFinalStatePFOsCut": {
+      "enable": true
     },
-    "FINAL_STATE_PHOTON_SELECTION": {
-      "Chi2ProtonSelection": {
-        "enable": true,
-        "cut": 61.2,
-        "op": ">"
-      },
-      "TrackScoreCut": {
-        "enable": true,
-        "cut": 0.45,
-        "op": "<"
-      },
-      "NHitsCut": {
-        "enable": true,
-        "cut": 80,
-        "op": ">"
-      },
-      "BeamParticleIPCut": {
-        "enable": true,
-        "cut": 20,
-        "op": "<"
-      },
-      "BeamParticleDistanceCut": {
-        "enable": true,
-        "cut": [
-          3,
-          90
-        ],
-        "op": [
-          ">",
-          "<"
-        ]
-      }
+    "APA3Cut": {
+      "enable": true,
+      "cut": [
+        30,
+        220
+      ],
+      "op": [
+        ">",
+        "<"
+      ]
     },
-    "FINAL_STATE_PI0_SELECTION": {
-      "NPhotonCandidateSelection": {
-        "enable": true,
-        "cut": 2,
-        "op": "=="
-      },
-      "Pi0MassSelection": {
-        "enable": true,
-        "cut": 225,
-        "op": "<"
-      },
-      "Pi0OpeningAngleSelection": {
-        "enable": true,
-        "cut": 60,
-        "op": "<"
-      }
+    "DxyCut": {
+      "enable": true,
+      "cut": 3,
+      "op": "<"
     },
-    "FINAL_STATE_LOOSE_PHOTON_SELECTION": {
-      "Chi2ProtonSelection": {
-        "enable": true,
-        "cut": 61.2,
-        "op": ">"
-      },
-      "TrackScoreCut": {
-        "enable": true,
-        "cut": 0.45,
-        "op": "<"
-      },
-      "NHitsCut": {
-        "enable": true,
-        "cut": 31,
-        "op": ">"
-      },
-      "BeamParticleIPCut": {
-        "enable": true,
-        "cut": 80,
-        "op": "<"
-      },
-      "BeamParticleDistanceCut": {
-        "enable": true,
-        "cut": 114,
-        "op": "<"
-      }
+    "CosThetaCut": {
+      "enable": true,
+      "cut": 0.95,
+      "op": ">"
     },
-    "FINAL_STATE_LOOSE_PION_SELECTION": {
-      "Chi2ProtonSelection": {
-        "enable": true,
-        "cut": 61.2,
-        "op": ">"
-      },
-      "TrackScoreCut": {
-        "enable": true,
-        "cut": 0.39,
-        "op": ">"
-      },
-      "PiPlusSelection": {
-        "enable": true,
-        "cut": 6.3,
-        "op": "<"
-      }
+    "MichelScoreCut": {
+      "enable": true,
+      "cut": 0.55,
+      "op": "<"
     },
-    "beam_momentum": 2000,
-    "P_inst_range": [
-      1000,
-      2500
-    ],
-    "KE_inst_range": [
-      1500,
-      2500
-    ],
-    "KE_init_range": [
-      1500,
-      2200
-    ],
-    "KE_int_range": [
-      1000,
-      2200
-    ],
-    "SELECTION_MASKS": {
-      "mc": {
-        "beam": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/masks_mc/beam_selection_masks.dill",
-        "null_pfo": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/masks_mc/null_pfo_selection_masks.dill",
-        "photon": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/masks_mc/photon_selection_masks.dill",
-        "pi0": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/masks_mc/pi0_selection_masks.dill",
-        "pi": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/masks_mc/pi_selection_masks.dill",
-        "loose_pi": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/masks_mc/loose_pi_selection_masks.dill",
-        "loose_photon": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/masks_mc/loose_photon_selection_masks.dill",
-        "fiducial": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/masks_mc/fiducial_selection_masks.dill"
-      },
-      "data": {
-        "beam": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/masks_data/beam_selection_masks.dill",
-        "null_pfo": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/masks_data/null_pfo_selection_masks.dill",
-        "photon": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/masks_data/photon_selection_masks.dill",
-        "pi0": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/masks_data/pi0_selection_masks.dill",
-        "pi": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/masks_data/pi_selection_masks.dill",
-        "loose_pi": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/masks_data/loose_pi_selection_masks.dill",
-        "loose_photon": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/masks_data/loose_photon_selection_masks.dill",
-        "fiducial": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/masks_data/fiducial_selection_masks.dill"
-      }
+    "MedianDEdXCut": {
+      "enable": true,
+      "cut": 2.4,
+      "op": "<",
+      "truncate": 30
     },
-    "ANALYSIS_INPUTS": {
-      "mc_cheated": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/analysis_input/analysis_input_mc_cheated.dill",
-      "mc": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/analysis_input/analysis_input_mc_selected.dill",
-      "data": "/home/sb16165/Documents/pi0-analysis/analysis/work/2023/beam_selections/new_selection_true/analysis_input/analysis_input_data_selected.dill"
+    "BeamScraperCut": {
+      "enable": true,
+      "KE_range": 1,
+      "cut": 1.5,
+      "op": "<"
     }
+  },
+  "VALID_PFO_SELECTION": {
+    "enable": true
+  },
+  "FINAL_STATE_PIPLUS_SELECTION": {
+    "Chi2ProtonSelection": {
+      "enable": true,
+      "cut": 61.2,
+      "op": ">"
+    },
+    "TrackLengthSelection": {
+      "enable": true,
+      "cut": 27.1,
+      "op": ">"
+    },
+    "TrackScoreCut": {
+      "enable": true,
+      "cut": 0.5,
+      "op": ">"
+    },
+    "NHitsCut": {
+      "enable": true,
+      "cut": 20,
+      "op": ">"
+    },
+    "PiPlusSelection": {
+      "enable": true,
+      "cut": [
+        1.6,
+        2.8
+      ],
+      "op": [
+        ">",
+        "<"
+      ]
+    }
+  },
+  "FINAL_STATE_PHOTON_SELECTION": {
+    "Chi2ProtonSelection": {
+      "enable": true,
+      "cut": 61.2,
+      "op": ">"
+    },
+    "TrackScoreCut": {
+      "enable": true,
+      "cut": 0.45,
+      "op": "<"
+    },
+    "NHitsCut": {
+      "enable": true,
+      "cut": 80,
+      "op": ">"
+    },
+    "BeamParticleIPCut": {
+      "enable": true,
+      "cut": 20,
+      "op": "<"
+    },
+    "BeamParticleDistanceCut": {
+      "enable": true,
+      "cut": [
+        3,
+        90
+      ],
+      "op": [
+        ">",
+        "<"
+      ]
+    }
+  },
+  "FINAL_STATE_PI0_SELECTION": {
+    "NPhotonCandidateSelection": {
+      "enable": true,
+      "cut": 2,
+      "op": "=="
+    },
+    "Pi0MassSelection": {
+      "enable": true,
+      "cut": 225,
+      "op": "<"
+    },
+    "Pi0OpeningAngleSelection": {
+      "enable": true,
+      "cut": 60,
+      "op": "<"
+    }
+  },
+  "FINAL_STATE_LOOSE_PHOTON_SELECTION": {
+    "Chi2ProtonSelection": {
+      "enable": true,
+      "cut": 61.2,
+      "op": ">"
+    },
+    "TrackScoreCut": {
+      "enable": true,
+      "cut": 0.45,
+      "op": "<"
+    },
+    "NHitsCut": {
+      "enable": true,
+      "cut": 31,
+      "op": ">"
+    },
+    "BeamParticleIPCut": {
+      "enable": true,
+      "cut": 80,
+      "op": "<"
+    },
+    "BeamParticleDistanceCut": {
+      "enable": true,
+      "cut": 114,
+      "op": "<"
+    }
+  },
+  "FINAL_STATE_LOOSE_PION_SELECTION": {
+    "Chi2ProtonSelection": {
+      "enable": true,
+      "cut": 61.2,
+      "op": ">"
+    },
+    "TrackLengthSelection": {
+      "enable": true,
+      "cut": 27.1,
+      "op": ">"
+    },
+    "TrackScoreCut": {
+      "enable": true,
+      "cut": 0.39,
+      "op": ">"
+    },
+    "PiPlusSelection": {
+      "enable": true,
+      "cut": 4,
+      "op": "<"
+    }
+  },
+  "beam_momentum": 2000,
+  "P_inst_range": [
+    1000,
+    2500
+  ],
+  "KE_inst_range": [
+    1500,
+    2500
+  ],
+  "KE_init_range": [
+    1500,
+    2200
+  ],
+  "KE_int_range": [
+    1000,
+    2200
+  ],
+  "SELECTION_MASKS": {
+    "mc": {
+      "beam": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/selection_mod/masks_mc/beam_selection_masks.dill",
+      "null_pfo": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/selection_mod/masks_mc/null_pfo_selection_masks.dill",
+      "photon": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/selection_mod/masks_mc/photon_selection_masks.dill",
+      "pi0": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/selection_mod/masks_mc/pi0_selection_masks.dill",
+      "pi": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/selection_mod/masks_mc/pi_selection_masks.dill",
+      "loose_pi": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/selection_mod/masks_mc/loose_pi_selection_masks.dill",
+      "loose_photon": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/selection_mod/masks_mc/loose_photon_selection_masks.dill",
+      "fiducial": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/selection_mod/masks_mc/fiducial_selection_masks.dill"
+    },
+    "data": {
+      "beam": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/selection_mod/masks_data/beam_selection_masks.dill",
+      "null_pfo": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/selection_mod/masks_data/null_pfo_selection_masks.dill",
+      "photon": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/selection_mod/masks_data/photon_selection_masks.dill",
+      "pi0": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/selection_mod/masks_data/pi0_selection_masks.dill",
+      "pi": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/selection_mod/masks_data/pi_selection_masks.dill",
+      "loose_pi": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/selection_mod/masks_data/loose_pi_selection_masks.dill",
+      "loose_photon": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/selection_mod/masks_data/loose_photon_selection_masks.dill",
+      "fiducial": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/selection_mod/masks_data/fiducial_selection_masks.dill"
+    }
+  },
+  "ANALYSIS_INPUTS": {
+    "mc_cheated": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/analysis_input/analysis_input_mc_cheated.dill",
+    "mc": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/analysis_input/analysis_input_mc_selected.dill",
+    "data": "/home/bhuller/Projects/pi0-analysis/analysis/work/2023/analysis_final_KE_lim/analysis_input/analysis_input_data_selected.dill"
   }
+}
