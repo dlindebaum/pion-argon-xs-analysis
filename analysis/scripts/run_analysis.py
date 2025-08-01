@@ -87,8 +87,10 @@ def template_config():
             "mc_stat_unc" : True,
             "mean_track_score" : None,
             "single_bin" : True,
-            "regions": True
+            "regions": True,
+            "fix_np": False
         },
+        "bkg_sub_mc_stat": True,
         "ESLICE":{
             "width" : None,
             "min" : None,
@@ -99,7 +101,8 @@ def template_config():
             "ts_stop" : 0.0001,
             "max_iter" : 6,
             "ts" : "ks",
-            "covariance" : "poisson"
+            "covariance" : "poisson",
+            "mc_stat_unc": True
         },
         "signal_process" : "charge_exchange",
         "BEAM_PARTICLE_SELECTION":{

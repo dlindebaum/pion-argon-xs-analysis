@@ -7,7 +7,7 @@ Description: Library for code used in the cross section analysis. Refer to the R
 """
 import argparse
 import copy
-import glob
+import numbers
 import os
 
 from collections import namedtuple
@@ -869,6 +869,8 @@ class ApplicationArguments:
             elif head == "BEAM_SCRAPER_FITS":
                 args.beam_scraper_energy_range = value["energy_range"]
                 args.beam_scraper_energy_bins = value["energy_bins"]
+                if not hasattr(args.beam_scraper_energy_bins, "__iter__"):
+                    raise Exception("energy_bins must be a list of beam energy bin ranges in MeV")
                 if "mc" in value:
                     args.mc_beam_scraper_fit = LoadConfiguration(value["mc"])
             elif head == "ENERGY_CORRECTION":
@@ -878,6 +880,8 @@ class ApplicationArguments:
             elif head == "UPSTREAM_ENERGY_LOSS":
                 args.upstream_loss_cv_function = value["cv_function"]
                 args.upstream_loss_response = getattr(Fitting, value["response"])
+                if value["bins"] is None:
+                    raise Exception("Upstream energy loss KE bins need to be provided (in MeV)")
                 args.upstream_loss_bins = value["bins"]
                 if "correction_params" in value:
                     args.upstream_loss_correction_params = LoadConfiguration(value["correction_params"])
@@ -897,18 +901,37 @@ class ApplicationArguments:
                     if k == "beam_profile": 
                         args.toy_parameters[k] = getattr(Fitting, v)
                     else:
+                        for k1, v1 in v.items():
+                            if not ((hasattr(v1, "__iter__")) and (len(v1) == 2)):
+                                raise Exception(f"{k1} must be a list of two numbers.")
                         args.toy_parameters[k] = v
             elif head == "FIT":
                 args.fit = {}
                 for k, v in value.items():
                     args.fit[k] = v
             elif head == "ESLICE":
-                if value["width"] is not None:
-                    args.energy_slices = Slices(value["width"], value["min"] - value["width"], value["max"], reversed = True) # min - width to allocate an underflow bin (not used in the measurement)
+                for k, v in value.items():
+                    if not isinstance(v, numbers.Number):
+                        raise Exception(f"All SLICE paramters must be a number ({k}:{v}).")
+                # if value["width"] is not None:
+                args.energy_slices = Slices(value["width"], value["min"] - value["width"], value["max"], reversed = True) # min - width to allocate an underflow bin (not used in the measurement)
             elif head == "ANALYSIS_INPUTS":
                 args.analysis_input = {k : v for k, v in value.items()}
             elif head == "UNFOLDING":
                 args.unfolding = {k : v for k, v in value.items()}
+            elif head == "KINEMATIC_RANGES":
+                for k, v in value.items():
+                    if k == "beam_momentum":
+                        msg = "must be the nominal central value of the beam momentum distribution in MeV."
+                        cond = (type(v) == float) or (type(v) == int)
+                    else:
+                        msg = "must be a list of two elements"
+                        cond = (hasattr(v, "__iter__")) and (len(v) == 2)
+
+                    if not cond:
+                        raise Exception(f"{k} {msg}")
+                    else:
+                        setattr(args, k, v)
             else:
                 setattr(args, head, value) # allow for generic configurations in the json file
         if hasattr(args, "beam_selection"):
