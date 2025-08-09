@@ -6,6 +6,8 @@ Author: Shyam Bhuller
 Description: random functions which are sometimes useful in notebooks
 """
 
+import sys
+
 from IPython.core.magic import register_line_magic
 from IPython import get_ipython
 
@@ -17,9 +19,8 @@ def init_notebook(line):
     ipython.run_line_magic("autoreload", "2") # %autoreload 2
 
     #* magic to add python path to notebook environment
-    import sys
     for pypath in sys.path:
         if pypath.split("/")[-1] == "analysis": break
     print(pypath)
     ipython.run_line_magic("env", "PYTHONPATH $pypath") # %env PYTHONPATH $pypath
-    return line
+    return
