@@ -81,7 +81,7 @@ def extract_observables(mc, size=-1, beam_selection_mask=None, verbose=False):
     return track_data
 
 
-def clean_df(df, verbose=False):
+def clean_df(df, return_dropped=False, verbose=False):
     """
     Clean the dataframe by removing rows with missing entries.
     """
@@ -92,6 +92,7 @@ def clean_df(df, verbose=False):
             removed += 1
             rows_to_remove.append(i)
 
+    dropped_rows = df.iloc[rows_to_remove]
     df = df.drop(rows_to_remove, axis=0)
     df = df.reset_index(drop=True)
 
@@ -99,7 +100,19 @@ def clean_df(df, verbose=False):
         output = f"Removed {removed} rows with missing entries. "
         print(output)
 
-    return df
+    if return_dropped:
+        return df, dropped_rows
+    else:
+        return df
+
+
+def convert_to_binary(y):
+    for i in range(len(y)):
+        if y[i] == "pi+" or y[i] == "pi-":
+            y[i] = "1"
+        else:
+            y[i] = "0"
+    return y
 
 
 def split_data(df, test_size=0.2, random_state=42, verbose=False, binary_classification=False):
@@ -111,11 +124,7 @@ def split_data(df, test_size=0.2, random_state=42, verbose=False, binary_classif
 
     # transform to binary classification
     if binary_classification:
-        for i in range(len(y)):
-            if y[i] == "pi+" or y[i] == "pi-":
-                y[i] = "1"
-            else:
-                y[i] = "0"
+        y = convert_to_binary(y)
 
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=test_size, random_state=random_state)
 
@@ -168,12 +177,14 @@ def purity(y_pred, y_test, identified_particles : list, true_particles : list):
         return matched / total_identified
 
 
-def efficiency(y_pred, y_test, identified_particles : list, true_particles : list):
+def efficiency(y_pred, y_test, identified_particles : list, true_particles : list, dropped_particles : list = None):
     """
     Efficiency is the ratio of correctly identified particles to the total number of real particles (of a given particle type(s)).
     """
     matched = classify_X_as_Y(y_pred, y_test, identified_particles, true_particles)
     total_real = count_items_in_list(y_test, true_particles)
+    if dropped_particles is not None:
+        total_real += count_items_in_list(dropped_particles, true_particles)
     if total_real == 0:
         return 0
     else:
@@ -202,7 +213,7 @@ def plot_feature_importances(model, x_train):
     importances = model.feature_importances_
     importances = pd.Series(importances, index=x_train.columns)
 
-    fig, ax = plt.subplots(figsize=(10, 8))
+    fig, ax = plt.subplots(figsize=(8, 6))
     try:
         std = np.std([tree.feature_importances_ for tree in model.estimators_], axis=0)
         importances.plot.bar(yerr=std, ax=ax)
@@ -216,7 +227,7 @@ def plot_feature_importances(model, x_train):
     plt.show()
 
 
-def create_confusion_matrix(y_test, y_pred):
+def create_confusion_matrix(y_test, y_pred, dropped_particles=None):
     labels = sorted(list(set(y_test) | set(y_pred)))
 
     cm = confusion_matrix(y_test, y_pred, labels=labels)
@@ -227,7 +238,7 @@ def create_confusion_matrix(y_test, y_pred):
     for true_particle in range(len(labels)):
         for predicted_particle in range(len(labels)):
             purity_ = f"{purity(y_pred, y_test, [labels[predicted_particle]], [labels[true_particle]]):.3f}"
-            efficiency_ = f"{efficiency(y_pred, y_test, [labels[predicted_particle]], [labels[true_particle]]):.3f}"
+            efficiency_ = f"{efficiency(y_pred, y_test, [labels[predicted_particle]], [labels[true_particle]], dropped_particles):.3f}"
             purities.append(purity_)
             efficiencies.append(efficiency_)
 
@@ -254,7 +265,7 @@ def plot_confusion_matrix(cm, info, labels,):
     plt.show()
 
 
-def master_pion_selection(data=None, ntuple=None, size=-1, model=None, verbose=False, plot_importances=False, plot_cm=False, binary_classification=False):
+def master_pion_selection(data=None, ntuple=None, size=-1, model=None, verbose=False, plot_importances=False, plot_cm=False, binary_classification=False, consider_dropped_rows=False):
     """
     Master function to run the ML selection. Simplest case is to provide just the ntuple (i.e. mc data) and the rest is done automatically.
     ntuple and size only need to be specified if data is not provided.
@@ -279,9 +290,17 @@ def master_pion_selection(data=None, ntuple=None, size=-1, model=None, verbose=F
         data = extract_observables(ntuple, size)
         
     df = pd.DataFrame(data)
-    df = clean_df(df, verbose=verbose)
+    if consider_dropped_rows:
+        df, dropped_rows = clean_df(df, return_dropped=True, verbose=verbose)
+        dropped_particles = list(dropped_rows["particle"])
+    else:
+        df = clean_df(df, return_dropped=False, verbose=verbose)
+        dropped_particles = None
+        
     if binary_classification:
         x_train, x_test, y_train, y_test = split_data(df, verbose=verbose, binary_classification=True)
+        if dropped_particles is not None:
+            dropped_particles = convert_to_binary(dropped_particles)
     else:
         x_train, x_test, y_train, y_test = split_data(df, verbose=verbose, binary_classification=False)
     
@@ -308,7 +327,7 @@ def master_pion_selection(data=None, ntuple=None, size=-1, model=None, verbose=F
         pions = ["pi+", "pi-"]
 
     pion_purity = purity(y_pred, y_test, pions, pions)
-    pion_efficiency = efficiency(y_pred, y_test, pions, pions)
+    pion_efficiency = efficiency(y_pred, y_test, pions, pions, dropped_particles)
 
     if verbose:
         print(f"accuracy: {accuracy(y_pred, y_test):.3f}")
@@ -319,7 +338,7 @@ def master_pion_selection(data=None, ntuple=None, size=-1, model=None, verbose=F
         plot_feature_importances(model, x_train)
     
     if plot_cm:
-        cm, info, labels = create_confusion_matrix(y_test, y_pred)
+        cm, info, labels = create_confusion_matrix(y_test, y_pred, dropped_particles)
         plot_confusion_matrix(cm, info, labels)
 
     return model, pion_purity, pion_efficiency
