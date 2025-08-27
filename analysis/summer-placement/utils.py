@@ -10,9 +10,16 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
 from sklearn.neural_network import MLPClassifier
+from python.analysis.Tags import GenerateTrueParticleTagsPiPlus
 import os
 import pickle
 from datetime import datetime
+
+
+def find_particle_from_tags(tags, event, track):
+    for k, v in tags.items():
+        if v.mask[event][track]:
+            return k
 
 
 def extract_observables(mc, size=-1, beam_selection_mask=None, verbose=False):
@@ -28,6 +35,7 @@ def extract_observables(mc, size=-1, beam_selection_mask=None, verbose=False):
         num_events = size
 
     track_data = []
+    tags = GenerateTrueParticleTagsPiPlus(mc)
 
     skipped_tracks = 0
     rejected_events = 0
@@ -55,13 +63,15 @@ def extract_observables(mc, size=-1, beam_selection_mask=None, verbose=False):
                     "track_length": mc.recoParticles.track_len[event][track],
                     "track_score": mc.recoParticles.track_score[event][track],
 
-                    # true particle information
-                    "pdg": mc.trueParticlesBT.pdg[event][track],
-                    "particle": Particle.from_pdgid(mc.trueParticlesBT.pdg[event][track]).name,
+                    #"mother_count": mc.recoParticles.mother[event][track],
+
+                    "particle": find_particle_from_tags(tags, event, track),
 
                     # vertexinformation
                     "track_vertex_michel": mc.recoParticles.track_vertex_michel[event][track],
                     "track_vertex_nhits": mc.recoParticles.track_vertex_nhits[event][track],
+
+                    #"distance_from_front": mc.recoParticles.shower_start_pos.z,
 
                     "hit_density": mc.recoParticles.n_hits_collection[event][track] / mc.recoParticles.track_len[event][track],
                     "angle_to_beam": np.dot(np.array(list(mc.recoParticles.beam_startPos[event].to_list().values())) - np.array(list(mc.recoParticles.beam_endPos[event].to_list().values())), np.array(list(mc.recoParticles.track_start_dir[event][track].to_list().values())))
@@ -106,9 +116,12 @@ def clean_df(df, return_dropped=False, verbose=False):
         return df
 
 
-def convert_to_binary(y):
+def convert_to_binary(y, particle_type="$\pi^{\pm}$"):
+    """
+    Convert the particle type to a binary classification.
+    """
     for i in range(len(y)):
-        if y[i] == "pi+" or y[i] == "pi-":
+        if y[i] == "$\pi^{\pm}$":
             y[i] = "1"
         else:
             y[i] = "0"
@@ -119,12 +132,12 @@ def split_data(df, test_size=0.2, random_state=42, verbose=False, binary_classif
     """
     Split the dataframe into training and testing sets.
     """
-    x = df.drop(["pdg", "particle"], axis=1)
+    x = df.drop(["particle"], axis=1)
     y = df["particle"]
 
     # transform to binary classification
     if binary_classification:
-        y = convert_to_binary(y)
+        y = convert_to_binary(y, "$\pi^{\pm}$")
 
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=test_size, random_state=random_state)
 
@@ -324,7 +337,7 @@ def master_pion_selection(data=None, ntuple=None, size=-1, model=None, verbose=F
         pions = ["1"]
         not_pions = ["0"]
     else:
-        pions = ["pi+", "pi-"]
+        pions = ["$\pi^{\pm}$"]
 
     pion_purity = purity(y_pred, y_test, pions, pions)
     pion_efficiency = efficiency(y_pred, y_test, pions, pions, dropped_particles)
