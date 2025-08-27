@@ -1,0 +1,358 @@
+{
+  "NTUPLE_FILES": {
+    "mc": [
+      {
+        "file": "/data/dune/common/PDSPAnalyzer_Ntuples/PDSPProd4a_MC_2GeV_sce_datadriven_ntuple_v09_81_00d01_set0.root",
+        "type": "PDSPAnalyser",
+        "pmom": 1
+      }
+    ],
+    "data": [
+      {
+        "file": "/data/dune/common/PDSPAnalyzer_Ntuples/PDSPProd4_data_2GeV_reco2_ntuple_v09_42_03_01.root",
+        "type": "PDSPAnalyser",
+        "pmom": 1
+      }
+    ]
+  },
+  "norm": 3.001,
+  "pi_KE_lim": -1,
+  "fiducial_volume": [
+    0,
+    700
+  ],
+  "REGION_IDENTIFICATION": {
+    "type": "default"
+  },
+  "BEAM_QUALITY_FITS": {
+    "mc": "/home/pemb6649/pi0-analysis/analysis/work/analysis_demo/beam_quality/mc_beam_quality_fit_values.json",
+    "data": "/home/pemb6649/pi0-analysis/analysis/work/analysis_demo/beam_quality/data_beam_quality_fit_values.json",
+    "truncate": null
+  },
+  "BEAM_SCRAPER_FITS": {
+    "mc": "/home/pemb6649/pi0-analysis/analysis/work/analysis_demo/beam_scraper/mc_beam_scraper_fit_values.json",
+    "energy_range": null,
+    "energy_bins": [
+      1600,
+      1700,
+      1900,
+      2100,
+      2200
+    ]
+  },
+  "ENERGY_CORRECTION": {
+    "correction_params": "/home/pemb6649/pi0-analysis/analysis/work/analysis_demo/shower_energy_correction/gaussian.json",
+    "energy_range": [
+      0,
+      1500
+    ],
+    "correction": "response"
+  },
+  "BEAM_REWEIGHT": {
+    "params": "/home/pemb6649/pi0-analysis/analysis/work/analysis_demo/beam_reweight/gaussian.json",
+    "strength": 3
+  },
+  "UPSTREAM_ENERGY_LOSS": {
+    "correction_params": "/home/pemb6649/pi0-analysis/analysis/work/analysis_demo/upstream_loss/fit_parameters.json",
+    "cv_function": "gaussian",
+    "response": "poly2d",
+    "bins": [
+      1500,
+      1700,
+      1800,
+      1900,
+      2000,
+      2100,
+      2200
+    ]
+  },
+  "TOY_PARAMETERS": {
+    "beam_profile": "crystal_ball",
+    "smearing_residual_ranges": {
+      "KE_init": [
+        -250,
+        250
+      ],
+      "KE_int": [
+        -250,
+        250
+      ],
+      "z_int": [
+        -25,
+        25
+      ]
+    },
+    "plot_ranges": {
+      "KE_init": [
+        1200,
+        2400
+      ],
+      "KE_int": [
+        0,
+        2200
+      ],
+      "z_int": [
+        0,
+        700
+      ]
+    }
+  },
+  "FIT": {
+    "mc_stat_unc": true,
+    "mean_track_score": null,
+    "single_bin": true,
+    "regions": true,
+    "fix_np": false
+  },
+  "bkg_sub_mc_stat": true,
+  "ESLICE": {
+    "width": 150,
+    "min": 1400,
+    "max": 1900
+  },
+  "UNFOLDING": {
+    "method": 1,
+    "ts_stop": 0.0001,
+    "max_iter": 6,
+    "ts": "ks",
+    "covariance": "poisson",
+    "mc_stat_unc": true
+  },
+  "signal_process": "charge_exchange",
+  "BEAM_PARTICLE_SELECTION": {
+    "PiBeamSelection": {
+      "enable": true,
+      "use_beam_inst": false
+    },
+    "PandoraTagCut": {
+      "enable": true,
+      "cut": 13,
+      "op": "=="
+    },
+    "CaloSizeCut": {
+      "enable": true
+    },
+    "HasFinalStatePFOsCut": {
+      "enable": true
+    },
+    "DxyCut": {
+      "enable": true,
+      "cut": 3,
+      "op": "<"
+    },
+    "DzCut": {
+      "enable": true,
+      "cut": [
+        -3,
+        3
+      ],
+      "op": [
+        ">",
+        "<"
+      ]
+    },
+    "CosThetaCut": {
+      "enable": true,
+      "cut": 0.95,
+      "op": ">"
+    },
+    "APA3Cut": {
+      "enable": true,
+      "cut": 220,
+      "op": "<"
+    },
+    "MichelScoreCut": {
+      "enable": true,
+      "cut": 0.55,
+      "op": "<"
+    },
+    "MedianDEdXCut": {
+      "enable": true,
+      "cut": 2.4,
+      "op": "<",
+      "truncate": null
+    },
+    "BeamScraperCut": {
+      "enable": true,
+      "KE_range": 1,
+      "cut": 1.5,
+      "op": "<"
+    }
+  },
+  "VALID_PFO_SELECTION": {
+    "enable": true
+  },
+  "FINAL_STATE_PIPLUS_SELECTION": {
+    "Chi2ProtonSelection": {
+      "enable": true,
+      "cut": 61.2,
+      "op": ">"
+    },
+    "TrackScoreCut": {
+      "enable": true,
+      "cut": 0.5,
+      "op": ">"
+    },
+    "NHitsCut": {
+      "enable": true,
+      "cut": 20,
+      "op": ">"
+    },
+    "PiPlusSelection": {
+      "enable": true,
+      "cut": [
+        0.5,
+        2.8
+      ],
+      "op": [
+        ">",
+        "<"
+      ]
+    }
+  },
+  "FINAL_STATE_PHOTON_SELECTION": {
+    "Chi2ProtonSelection": {
+      "enable": true,
+      "cut": 61.2,
+      "op": ">"
+    },
+    "TrackScoreCut": {
+      "enable": true,
+      "cut": 0.45,
+      "op": "<"
+    },
+    "NHitsCut": {
+      "enable": true,
+      "cut": 80,
+      "op": ">"
+    },
+    "BeamParticleDistanceCut": {
+      "enable": true,
+      "cut": [
+        3,
+        90
+      ],
+      "op": [
+        ">",
+        "<"
+      ]
+    },
+    "BeamParticleIPCut": {
+      "enable": true,
+      "cut": 20,
+      "op": "<"
+    }
+  },
+  "FINAL_STATE_PI0_SELECTION": {
+    "NPhotonCandidateSelection": {
+      "enable": true,
+      "cut": 2,
+      "op": "=="
+    },
+    "Pi0MassSelection": {
+      "enable": true,
+      "cut": [
+        50,
+        250
+      ],
+      "op": [
+        ">",
+        "<"
+      ]
+    },
+    "Pi0OpeningAngleSelection": {
+      "enable": true,
+      "cut": [
+        10,
+        80
+      ],
+      "op": [
+        ">",
+        "<"
+      ]
+    }
+  },
+  "FINAL_STATE_LOOSE_PHOTON_SELECTION": {
+    "Chi2ProtonSelection": {
+      "enable": true,
+      "cut": 61.2,
+      "op": ">"
+    },
+    "TrackScoreCut": {
+      "enable": true,
+      "cut": 0.45,
+      "op": "<"
+    },
+    "NHitsCut": {
+      "enable": true,
+      "cut": 31,
+      "op": ">"
+    },
+    "BeamParticleDistanceCut": {
+      "enable": true,
+      "cut": 114,
+      "op": "<"
+    },
+    "BeamParticleIPCut": {
+      "enable": true,
+      "cut": 80,
+      "op": "<"
+    }
+  },
+  "FINAL_STATE_LOOSE_PION_SELECTION": {
+    "Chi2ProtonSelection": {
+      "enable": true,
+      "cut": 61.2,
+      "op": ">"
+    },
+    "TrackScoreCut": {
+      "enable": true,
+      "cut": 0.39,
+      "op": ">"
+    },
+    "PiPlusSelection": {
+      "enable": true,
+      "cut": 6.3,
+      "op": "<"
+    }
+  },
+  "KINEMATIC_RANGES": {
+    "beam_momentum": 2000,
+    "P_inst_range": [
+      1000,
+      2500
+    ],
+    "KE_inst_range": [
+      1500,
+      2500
+    ],
+    "KE_init_range": [
+      1500,
+      2200
+    ],
+    "KE_int_range": [
+      1000,
+      2200
+    ]
+  },
+  "SELECTION_MASKS": {
+    "mc": {
+      "beam": "/home/pemb6649/pi0-analysis/analysis/work/analysis_demo/masks_mc/beam_selection_masks.dill",
+      "null_pfo": "/home/pemb6649/pi0-analysis/analysis/work/analysis_demo/masks_mc/null_pfo_selection_masks.dill",
+      "photon": "/home/pemb6649/pi0-analysis/analysis/work/analysis_demo/masks_mc/photon_selection_masks.dill",
+      "pi0": "/home/pemb6649/pi0-analysis/analysis/work/analysis_demo/masks_mc/pi0_selection_masks.dill",
+      "pi": "/home/pemb6649/pi0-analysis/analysis/work/analysis_demo/masks_mc/pi_selection_masks.dill",
+      "loose_pi": "/home/pemb6649/pi0-analysis/analysis/work/analysis_demo/masks_mc/loose_pi_selection_masks.dill",
+      "loose_photon": "/home/pemb6649/pi0-analysis/analysis/work/analysis_demo/masks_mc/loose_photon_selection_masks.dill"
+    },
+    "data": {
+      "beam": "/home/pemb6649/pi0-analysis/analysis/work/analysis_demo/masks_data/beam_selection_masks.dill",
+      "null_pfo": "/home/pemb6649/pi0-analysis/analysis/work/analysis_demo/masks_data/null_pfo_selection_masks.dill",
+      "photon": "/home/pemb6649/pi0-analysis/analysis/work/analysis_demo/masks_data/photon_selection_masks.dill",
+      "pi0": "/home/pemb6649/pi0-analysis/analysis/work/analysis_demo/masks_data/pi0_selection_masks.dill",
+      "pi": "/home/pemb6649/pi0-analysis/analysis/work/analysis_demo/masks_data/pi_selection_masks.dill",
+      "loose_pi": "/home/pemb6649/pi0-analysis/analysis/work/analysis_demo/masks_data/loose_pi_selection_masks.dill",
+      "loose_photon": "/home/pemb6649/pi0-analysis/analysis/work/analysis_demo/masks_data/loose_photon_selection_masks.dill"
+    }
+  }
+}

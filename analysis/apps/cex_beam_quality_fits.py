@@ -32,7 +32,9 @@ def Fit_Vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
     sigma_err = {}
     for i in ["x", "y", "z"]:
         data = v[i]
-        y, bins_edges = np.histogram(np.array(data[~np.isnan(data)]), bins = bins, range = sorted([np.nanpercentile(data, 10), np.nanpercentile(data, 90)])) # fit only to  data within the 10th and 90th percentile of data to exclude large tails in the distriubtion.
+        
+        y, bins_edges = np.histogram(np.array(data[~np.isnan(data)]), bins = bins, range = sorted([np.nanpercentile(data[~np.isnan(data)], 10), np.nanpercentile(data[~np.isnan(data)], 90)])) # fit only to  data within the 10th and 90th percentile of data to exclude large tails in the distriubtion.
+        
         yerr = np.sqrt(y) # Poisson error
 
         popt, perr = Fitting.Fit(cross_section.bin_centers(bins_edges), y, yerr, Fitting.gaussian)
