@@ -183,7 +183,10 @@ class PrincipleNeighbourAggregator(tfgnn.keras.layers.AnyToAnyConvolutionBase):
             else:
                 # With not inputs: mean is 0, std is sqrt(1e-5) (default)
                 aggrs.append(extra_receiver_ops[agg](messages))
+        # Note the initial state will be passed by NodeSetUpdate
+        #   to the next state function
         return tf.concat(aggrs, axis=-1)
+        
         # counts = pool_to_receiver(messages, reduce_type="_count")
         # scalars = [self.scalar(counts, a) for a in self.scalar_alphas]
         # # tfgnn automatically adds in the initial state when using 
