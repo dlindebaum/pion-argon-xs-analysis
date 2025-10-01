@@ -22,7 +22,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import confusion_matrix, RocCurveDisplay
+from sklearn.metrics import confusion_matrix, RocCurveDisplay, roc_curve, auc
+from sklearn.utils import resample
 from xgboost import XGBClassifier
 from sklearn.neural_network import MLPClassifier
 import matplotlib.pyplot as plt
@@ -85,10 +86,12 @@ def classify_X_as_Y(list_a, list_b, X : list, Y : list):
             X_as_Y += 1
     return X_as_Y
 
-def create_confusion_matrix(y_test, y_pred, dropped_particles=None):
+def create_confusion_matrix(y_test, y_pred):
     """Create confusion matrix with purity and efficiency information."""
-    labels = sorted(list(set(y_test) | set(y_pred)))
-
+    labels = sorted(list(set(list(y_test)) | set(list(y_pred))))
+    labels = [str(label) for label in labels]
+    y_test = [str(label) for label in y_test]
+    y_pred = [str(label) for label in y_pred]
     cm = confusion_matrix(y_test, y_pred, labels=labels)
     purities = []
     efficiencies = []
@@ -96,8 +99,10 @@ def create_confusion_matrix(y_test, y_pred, dropped_particles=None):
 
     for true_particle in range(len(labels)):
         for predicted_particle in range(len(labels)):
-            purity_ = f"{purity(y_pred, y_test, [labels[predicted_particle]], [labels[true_particle]]):.3f}"
-            efficiency_ = f"{efficiency(y_pred, y_test, [labels[predicted_particle]], [labels[true_particle]], dropped_particles):.3f}"
+            pur, pur_uncertainty = purity(y_pred, y_test, [labels[predicted_particle]], [labels[true_particle]], return_uncertainty=True)
+            purity_ = f"{100*pur:.1f} ± {100*pur_uncertainty:.1f}%"
+            eff, eff_uncertainty = efficiency(y_pred, y_test, [labels[predicted_particle]], [labels[true_particle]], return_uncertainty=True)
+            efficiency_ = f"{100*eff:.1f} ± {100*eff_uncertainty:.1f}%"
             purities.append(purity_)
             efficiencies.append(efficiency_)
 
@@ -138,21 +143,19 @@ def purity(y_pred, y_test, identified_particles : list, true_particles : list, r
     total_identified = count_instances_in_list(y_pred, identified_particles)
 
     if total_identified == 0:
-        return 0
+        return 0, 0
     else:
         if return_uncertainty:
             return matched / total_identified, calculate_uncertainty(matched, total_identified)
         else:
             return matched / total_identified
 
-def efficiency(y_pred, y_test, identified_particles : list, true_particles : list, dropped_particles : list = None, return_uncertainty=False):
+def efficiency(y_pred, y_test, identified_particles : list, true_particles : list, return_uncertainty=False):
     """Calculate efficiency - ratio of correctly identified particles to total real particles."""
     matched = classify_X_as_Y(y_pred, y_test, identified_particles, true_particles)
     total_real = count_instances_in_list(y_test, true_particles)
-    if dropped_particles is not None:
-        total_real += count_instances_in_list(dropped_particles, true_particles)
     if total_real == 0:
-        return 0
+        return 0, 0
     else:
         if return_uncertainty:
             return matched / total_real, calculate_uncertainty(matched, total_real)
@@ -163,16 +166,55 @@ def efficiency(y_pred, y_test, identified_particles : list, true_particles : lis
 # DATA PROCESSING FUNCTIONS
 # =============================================================================
 
-def split_data(df, test_size=0.2, random_state=42, verbose=False, binary_classification=False):
+def split_train_test(df, test_size=0.2, random_state=42, verbose=False, binary_classification=False, balance_data=False, save=False, data_path="/home/pemb6649/pi0-analysis/analysis/summer-placement/extracted-data/data_split.pkl"):
     """Split the dataframe into training and testing sets."""
+    df = df.copy()
     x = df.drop(["particle"], axis=1)
     y = df["particle"]
 
     # transform to binary classification
     if binary_classification:
-        y = convert_to_binary(y, "$\pi^{\pm}$")
+        y = convert_to_binary(y, particle_type="$\pi^{\pm}$")
 
+    if balance_data:
+        # Balance the classes for the whole data before splitting
+        y_np = np.array(y)
+        x_np = x.values if hasattr(x, "values") else np.array(x)
+        pion_indices = np.where(y_np == 1)[0]
+        nonpion_indices = np.where(y_np == 0)[0]
+        n_pions = len(pion_indices)
+        n_nonpions = len(nonpion_indices)
+        if n_nonpions > n_pions and n_pions > 0:
+            # Randomly select a subset of non-pion indices to match pion count
+            np.random.seed(random_state)
+            selected_nonpion_indices = np.random.choice(nonpion_indices, size=n_pions, replace=False)
+            selected_indices = np.concatenate([pion_indices, selected_nonpion_indices])
+            # Shuffle to mix pions and non-pions
+            np.random.shuffle(selected_indices)
+            x = x.iloc[selected_indices].reset_index(drop=True)
+            y = y.iloc[selected_indices].reset_index(drop=True)
+        elif n_pions > n_nonpions and n_nonpions > 0:
+            # Randomly select a subset of pion indices to match non-pion count
+            np.random.seed(random_state)
+            selected_pion_indices = np.random.choice(pion_indices, size=n_nonpions, replace=False)
+            selected_indices = np.concatenate([selected_pion_indices, nonpion_indices])
+            np.random.shuffle(selected_indices)
+            x = x.iloc[selected_indices].reset_index(drop=True)
+            y = y.iloc[selected_indices].reset_index(drop=True)
+        # If already balanced or only one class, do nothing
+
+    # Now split the (possibly balanced) data
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=test_size, random_state=random_state)
+
+    split_data = {
+    "x_train": x_train,
+    "x_test": x_test,
+    "y_train": y_train,
+    "y_test": y_test
+    }
+
+    if save:
+        save_file(split_data, data_path)
 
     if verbose:
         print(f"Training set size: {len(x_train)} tracks.")
@@ -205,7 +247,7 @@ def clean_df(df, return_dropped=False, verbose=False):
 def convert_to_binary(y, particle_type="$\pi^{\pm}$"):
     """Convert the particle type to a binary classification."""
     for i in range(len(y)):
-        if y[i] == "$\pi^{\pm}$":
+        if y[i] == particle_type:
             y[i] = 1
         else:
             y[i] = 0
@@ -427,14 +469,75 @@ def cut_based_selection(mc_files, size=-1, verbose=False, plot=False):
         print(f"Pion efficiency: {pion_efficiency*100:.1f}% ± {pion_efficiency_uncertainty*100:.1f}%")
 
     if plot:
-        cm, info, labels= create_confusion_matrix(y_test, y_pred)
-        plot_confusion_matrix(cm, info, labels, plot=plot, size=(10, 8))
+        plotsave_confusion_matrix(y_test, y_pred, plot=plot, size=(8, 6))
+
+    return y_test, y_pred
+
+def get_cut_based_roc_point_with_errors(y_test, y_pred, n_bootstraps=1000):
+    """
+    Calculates the mean and error for a single ROC point via bootstrapping.
+    
+    Parameters:
+    -----------
+    y_test : array-like
+        True binary labels.
+    y_pred : array-like
+        Predicted binary labels from the cut-based selection.
+    n_bootstraps : int
+        Number of bootstrap samples to create.
+        
+    Returns:
+    --------
+    dict
+        A dictionary containing the mean and std dev for FPR and TPR.
+    """
+    y_test = np.asarray(y_test)
+    y_pred = np.asarray(y_pred)
+    
+    boot_tprs = []
+    boot_fprs = []
+    
+    for i in range(n_bootstraps):
+        # Resample indices
+        indices = resample(np.arange(len(y_test)))
+        
+        # This can be slow for very large datasets. For huge datasets,
+        # you can resample the y_test and y_pred arrays directly:
+        # y_test_boot, y_pred_boot = resample(y_test, y_pred)
+        y_test_boot = y_test[indices]
+        y_pred_boot = y_pred[indices]
+
+        # Handle cases where a bootstrap sample has only one class
+        if len(np.unique(y_test_boot)) < 2:
+            continue
+
+        try:
+            tn, fp, fn, tp = confusion_matrix(y_test_boot, y_pred_boot, labels=[0, 1]).ravel()
+        except ValueError:
+            continue # If a class is missing in predictions
+
+        # Calculate TPR (Efficiency) and FPR (Fake Rate)
+        tpr = tp / (tp + fn + 1e-9)
+        fpr = fp / (fp + tn + 1e-9)
+        
+        boot_tprs.append(tpr)
+        boot_fprs.append(fpr)
+        
+    # Calculate summary statistics
+    stats = {
+        'mean_tpr': np.mean(boot_tprs),
+        'std_tpr': np.std(boot_tprs),
+        'mean_fpr': np.mean(boot_fprs),
+        'std_fpr': np.std(boot_fprs)
+    }
+    
+    return stats
 
 # =============================================================================
 # HYPERPARAMETER TUNING FUNCTIONS
 # =============================================================================
 
-def tune_hp(hp_tuning, data, model_name, plot=False, save=True, verbose=False, binary_classification=False, consider_dropped_rows=False):
+def tune_hp(split_data, hp_tuning, fixed_hyper_params=None, model_name="dt", plot=False, save=True, verbose=False, binary_classification=False, consider_dropped_rows=False):
     """Tune a hyper parameter (hp) for a given model."""
     hp_tuning_results = {}
     if model_name == "rf":
@@ -448,44 +551,67 @@ def tune_hp(hp_tuning, data, model_name, plot=False, save=True, verbose=False, b
     else:
         raise ValueError(f"Model {model_name} not supported.")
         return
+    
+    x_train = split_data["x_train"]
+    x_test = split_data["x_test"]
+    y_train = split_data["y_train"]
+    y_test = split_data["y_test"]
 
     print(f"Tuning {full_name} HYPERPARAMETERS".upper())
     for hp_name, hp_values in hp_tuning.items():
         
-        pion_purities = []
-        pion_efficiencies = []
-        
-        for value in hp_values:
+        filtered_fixed_hyper_params = {k: v for k, v in fixed_hyper_params.items() if k != hp_name}
+
+        pion_purities_test = []
+        pion_efficiencies_test = []
+        pion_purities_train = []
+        pion_efficiencies_train = []
+
+        for i, value in enumerate(hp_values):
             
             if verbose:
                 print("--------------------------------")
                 print(f"Testing {hp_name} = {value}...")
 
             if model_name == "rf":
-                model = RandomForestClassifier(random_state=42, **{hp_name: value})
+                model = RandomForestClassifier(random_state=42, **{hp_name: value}, **filtered_fixed_hyper_params)
             elif model_name == "xgb":
-                model = XGBClassifier(random_state=42, **{hp_name: value})
+                model = XGBClassifier(random_state=42, **{hp_name: value}, **filtered_fixed_hyper_params)
             elif model_name == "mlp":
-                model = MLPClassifier(random_state=42, **{hp_name: value})
+                model = MLPClassifier(random_state=42, **{hp_name: value}, **filtered_fixed_hyper_params)
             elif model_name == "dt":
-                model = DecisionTreeClassifier(random_state=42, **{hp_name: value})
+                model = DecisionTreeClassifier(random_state=42, **{hp_name: value}, **filtered_fixed_hyper_params)
+
             else:
                 raise ValueError(f"Model {model_name} not supported.")
                 return
 
-            model, pion_purity, pion_efficiency = master_pion_selection(data=data, model=model, verbose=False, plot=False, binary_classification=binary_classification, consider_dropped_rows=consider_dropped_rows, return_performance=True);
-            print(f"Purity: {pion_purity:.3f}, Efficiency: {pion_efficiency:.3f}")
-            pion_purities.append(pion_purity)
-            pion_efficiencies.append(pion_efficiency)
+            model, le = train_model(model, split_data, verbose=True)
 
-        if plot:
-            plot_tuning_results(hp_name, hp_values, pion_purities, pion_efficiencies)
+            if binary_classification:
+                results_df = get_class_performance(model, le, x_train=x_train, y_train=y_train, x_test=x_test, y_test=y_test, class_label=1)
+            else:
+                results_df = get_class_performance(model, le, x_train=x_train, y_train=y_train, x_test=x_test, y_test=y_test, class_label="$\\pi^{\\pm}$")
 
-        hp_tuning_results[hp_name] = (hp_values, pion_purities, pion_efficiencies)
+            pion_purity_test = float(results_df["Test Data"][1].split('%')[0])
+            pion_efficiency_test = float(results_df["Test Data"][2].split('%')[0])
+            pion_purity_train = float(results_df["Train Data"][1].split('%')[0])
+            pion_efficiency_train = float(results_df["Train Data"][2].split('%')[0])
+            
+            if verbose:
+                print(f"TRAIN: Purity: {pion_purity_train:.1f}%, Efficiency: {pion_efficiency_train:.1f}%")
+                print(f"TEST: Purity: {pion_purity_test:.1f}%, Efficiency: {pion_efficiency_test:.1f}%")
+            
+            pion_purities_test.append(pion_purity_test)
+            pion_efficiencies_test.append(pion_efficiency_test)
+            pion_purities_train.append(pion_purity_train)
+            pion_efficiencies_train.append(pion_efficiency_train)
 
+        hp_tuning_results[hp_name] = (hp_values, pion_purities_test, pion_efficiencies_test, pion_purities_train, pion_efficiencies_train)
+        
     if save:
         save_hp_tuning_results(hp_tuning_results, model_name)
-        
+    
     return hp_tuning_results
 
 def save_hp_tuning_results(hp_tuning_results, model_name):
@@ -507,103 +633,82 @@ def find_best_hps(hp_tuning_results):
 # MASTER FUNCTION
 # =============================================================================
 
-def master_pion_selection(data=None, data_path=None, ntuple=None, size=-1, model=None, 
-                        custom_observables=None, verbose=False, plot=False, 
-                        save=False, binary_classification=False, drop_cols=None, 
-                        consider_dropped_rows=False, 
-                        title="", overfit_test=False):
+def master_pion_selection(data, model=None, 
+                        save=False, plot=False, verbose=False, drop_cols=None, 
+                        title="", threshold=0.5):
     """Master function to run the ML selection."""
-    # extract observables if not provided
-    if data is None and data_path is None:
-        if ntuple is None:
-            raise ValueError("Either data or ntuple must be provided.")
-        data = extract_observables(ntuple, size)
-    elif data_path is not None:
-        data = load_file(data_path)
 
-    if binary_classification:
-        title += f", binary classification, {len(data)} events"
+    x_train = data["x_train"]
+    x_test = data["x_test"]
+    y_train = data["y_train"]
+    y_test = data["y_test"]
+
+    if len(np.unique(y_test)) == 2:
+        binary_classification = True
+        title += f", binary classification"
+        pion_class_label = 1
     else:
-        title += f", full classification, {len(data)} events"
-
-    # add custom observables if provided
-    combined_data = []
-    if custom_observables is not None:
-        for i in range(len(custom_observables)):
-            combined_data.append(data[i] | custom_observables[i])
-        data = combined_data
-        
-    df = pd.DataFrame(data)
-    df = clean_df(df, return_dropped=False, verbose=verbose)
+        binary_classification = False
+        title += f", full classification"
+        pion_class_label = "$\pi^{\pm}$"
 
     if drop_cols is not None:
-        df.drop(columns=drop_cols, inplace=True)
-        
-    if binary_classification:
-        x_train, x_test, y_train, y_test = split_data(df, verbose=verbose, binary_classification=True)
-        pions = "1"
-        not_pions = "0"
-    else:
-        x_train, x_test, y_train, y_test = split_data(df, verbose=verbose, binary_classification=False)
-        pions = "$\pi^{\pm}$"
+        x_train = x_train.drop(columns=drop_cols, inplace=False)
+        x_test = x_test.drop(columns=drop_cols, inplace=False)
 
     if model is None:
         model = RandomForestClassifier(random_state=42)
 
-    model, le = train_model(model, x_train, y_train, verbose=verbose)
-
-    y_test_pred = get_predictions(model, le, x_test)
-    results_df = get_class_performance(model, le, x_train=x_train, y_train=y_train, x_test=x_test, y_test=y_test, class_label=pions)
-
+    model, le = train_model(model, x_train=x_train, y_train=y_train, verbose=verbose)
+    results_df = get_class_performance(model, le, x_train=x_train, y_train=y_train, x_test=x_test, y_test=y_test, class_label=pion_class_label, threshold=threshold, binary_classification=binary_classification)
+  
     if verbose:
         print(results_df)
     
     if not save and not plot:
-        return model
-
-    df_after_classification, df_before_classification = get_classified_df(x_test, y_test, y_test_pred, pions, return_before_classification=True)
+        return model, le, results_df
 
     if save:
-        performance_dir = "/home/pemb6649/pi0-analysis/analysis/summer-placement/model-performance"
-        existing_files = glob.glob(os.path.join(performance_dir, "performance_*.pdf"))
-        max_num = 0
-        for f in existing_files:
-            basename = os.path.basename(f)
-            try:
-                num = int(basename.split("_")[1].split(".")[0])
-                if num > max_num:
-                    max_num = num
-            except (IndexError, ValueError):
-                continue
-        next_num = max_num + 1
-        performance_filename = os.path.join(performance_dir, f"performance_{next_num}.pdf")
-        book = Plots.PlotBook(performance_filename)
+        dir = "/home/pemb6649/pi0-analysis/analysis/summer-placement/model-performance"
+        filepath = get_next_filename(dir, "performance")
+        book = Plots.PlotBook(filepath)    
+        title = f"{title}\n{datetime.now().strftime('%Y/%m/%d | %H:%M')}"
     else:
-        book = None
+        book = None    
 
-    title = f"{title}\n{datetime.now().strftime('%Y/%m/%d | %H:%M')}"
-
-    plot_df(results_df, title=title , size=(8, 4), book=book, plot=plot)
-    plot_feature_importances(model, x_train, book=book, plot=plot, size=(14, 8))
-    
-    cm, info, labels = create_confusion_matrix(y_test, y_test_pred, None)
-    plot_confusion_matrix(cm, info, labels, book=book, plot=plot, size=(12, 10))
-
-    plot_correlation_matrix(df_before_classification, title="Correlation Matrix of Observables BEFORE classification", size=(15, 12), book=book, plot=plot)
-    plot_correlation_matrix(df_after_classification, title="Correlation Matrix of Observables AFTER classification", size=(15, 12), book=book, plot=plot)
-    plot_observables_grid(df_before_classification, title="Observables BEFORE classification", percentiles=[0.1, 0.9], norm=True, book=book, plot=plot, size=(26, 28), binary_classification=binary_classification)
-    plot_observables_grid(df_after_classification, title="Observables AFTER classification", percentiles=[0.1, 0.9], norm=True, book=book, plot=plot, size=(26, 28), binary_classification=binary_classification)
+    y_test_pred = get_predictions(model, le, x_test, binary_classification=binary_classification, threshold=threshold)
+    df_after_classification, df_before_classification = get_classified_df(x_test, y_test, y_test_pred, pion_class_label, return_before_classification=True)
+    plotsave_df(results_df, title=title , size=(8, 4), book=book, plot=plot)
+    plotsave_feature_importances(model, x_train, book=book, plot=plot, size=(14, 8))
+    plotsave_confusion_matrix(y_test, y_test_pred, book=book, plot=plot, size=(12, 10))
+    plotsave_correlation_matrix(df_before_classification, title="Correlation Matrix of Observables BEFORE classification", size=(15, 12), book=book, plot=plot)
+    plotsave_correlation_matrix(df_after_classification, title="Correlation Matrix of Observables AFTER classification", size=(15, 12), book=book, plot=plot)
+    plotsave_observables_grid(df_before_classification, title="Observables BEFORE classification", percentiles=[0.1, 0.9], norm=True, book=book, plot=plot, size=(26, 28), binary_classification=binary_classification)
+    plotsave_observables_grid(df_after_classification, title="Observables AFTER classification", percentiles=[0.1, 0.9], norm=True, book=book, plot=plot, size=(26, 28), binary_classification=binary_classification)
 
     if save:
         book.close()
 
-    return model
+def get_next_filename(dir, fname):
+    existing_files = glob.glob(os.path.join(dir, f"{fname}_*.pdf"))
+    max_num = 0
+    for f in existing_files:
+        basename = os.path.basename(f)
+        try:
+            num = int(basename.split("_")[1].split(".")[0])
+            if num > max_num:
+                max_num = num
+        except (IndexError, ValueError):
+            continue
+    next_num = max_num + 1
+    filepath = os.path.join(dir, f"{fname}_{next_num}.pdf")
+    return filepath
 
-def get_class_performance(model, le=None, dtrain=None, dtest=None, x_test=None, y_test=None, x_train=None, y_train=None, class_label=None, threshold=0.5):
+def get_class_performance(model, le=None, dtrain=None, dtest=None, x_test=None, y_test=None, x_train=None, y_train=None, class_label=None, threshold=0.5, binary_classification=False):
     """Get the performance of a model for a given class."""
     if dtrain is not None and dtest is not None:
-        y_train_pred = get_predictions(model, le, x_test=dtrain, threshold=threshold)
-        y_test_pred = get_predictions(model, le, x_test=dtest, threshold=threshold)
+        y_train_pred = get_predictions(model, le, x_test=dtrain, threshold=threshold, binary_classification=binary_classification)
+        y_test_pred = get_predictions(model, le, x_test=dtest, threshold=threshold, binary_classification=binary_classification)
 
         y_train = dtrain.get_label()
         y_test = dtest.get_label()
@@ -611,12 +716,11 @@ def get_class_performance(model, le=None, dtrain=None, dtest=None, x_test=None, 
         if le is not None:
             # DMatrix objects for full classification were defined with encoded labels
             y_train = le.inverse_transform(y_train.astype(int))
-            y_test = le.inverse_transform(y_test.astype(int))
-        
+            y_test = le.inverse_transform(y_test.astype(int)) 
     else:
-        y_train_pred = get_predictions(model, le, x_test=x_train)
-        y_test_pred = get_predictions(model, le, x_test=x_test)
-
+        y_train_pred = get_predictions(model, le, x_test=x_train, binary_classification=binary_classification, threshold=threshold)
+        y_test_pred = get_predictions(model, le, x_test=x_test, binary_classification=binary_classification, threshold=threshold)
+    
     if class_label == 1:
         # safe way to ensure for binary classification (0 or 1) the outputs are integers and not strings e.g. "0" and "1"
         y_train_pred = y_train_pred.astype(int)
@@ -628,6 +732,9 @@ def get_class_performance(model, le=None, dtrain=None, dtest=None, x_test=None, 
     efficiency_train, efficiency_uncertainty_train = efficiency(y_train_pred, y_train, [class_label], [class_label], return_uncertainty=True)
     purity_test, purity_uncertainty_test = purity(y_test_pred, y_test, [class_label], [class_label], return_uncertainty=True)
     efficiency_test, efficiency_uncertainty_test = efficiency(y_test_pred, y_test, [class_label], [class_label], return_uncertainty=True)
+    
+    if purity_test == 0:
+        print(f"No positive classifications made, threshold likely too high".upper())
 
     results_dict = {
         f"{class_label}": [
@@ -640,8 +747,7 @@ def get_class_performance(model, le=None, dtrain=None, dtest=None, x_test=None, 
             len(y_test),
             f"{purity_test*100:.1f}% ± {purity_uncertainty_test*100:.1f}%",
             f"{efficiency_test*100:.1f}% ± {efficiency_uncertainty_test*100:.1f}%",
-            f"{purity_test * efficiency_test*100:.1f}% ± {purity_uncertainty_test*100 + efficiency_uncertainty_test*100:.1f}%"
-        ],
+            f"{purity_test * efficiency_test*100:.1f}% ± {purity_uncertainty_test*100 + efficiency_uncertainty_test*100:.1f}%"],
         "Train Data": [
             len(y_train),
             f"{purity_train*100:.1f}% ± {purity_uncertainty_train*100:.1f}%",
@@ -649,10 +755,17 @@ def get_class_performance(model, le=None, dtrain=None, dtest=None, x_test=None, 
             f"{purity_train * efficiency_train*100:.1f}% ± {purity_uncertainty_train*100 + efficiency_uncertainty_train*100:.1f}%"
         ]
     }
+
     results_df = pd.DataFrame(results_dict)
     return results_df
 
-def train_model(model, x_train, y_train, verbose=False, encode_labels=True):
+def train_model(model, split_data=None, x_train=None, y_train=None, verbose=False, encode_labels=True):
+
+    if split_data is not None:
+        x_train = split_data["x_train"]
+        y_train = split_data["y_train"]
+        if x_train is None or y_train is None:
+            return ValueError("Most specify either split_data or x_train and y_train!")
 
     if encode_labels:
         le = LabelEncoder()
@@ -671,21 +784,29 @@ def train_model(model, x_train, y_train, verbose=False, encode_labels=True):
     else:
         return model
 
-def get_predictions(model, le=None, x_test=None, threshold=0.5):
-    y_pred = model.predict(x_test);
+def get_predictions(model, le=None, x_test=None, threshold=0.5, binary_classification=False):
+
     if type(x_test) == xgboost.core.DMatrix:  
         # if working with lower level XGBoost, model.predict gives class probabilities for each sample (like predict_proba for sklearn)
-        try:
-            # multiclass classification -> take the class with the highest probability
-            y_pred = y_pred.argmax(axis=1)
-        except:
+        y_pred = model.predict(x_test)
+        if binary_classification:
             try:
-                # binary classification -> 1 only if the probability > threshold, else 0
                 y_pred = (y_pred > threshold).astype(int)
             except:
                 raise ValueError("Threshold too high! Try a lower threshold.")
+        else:
+            y_pred = y_pred.argmax(axis=1)
+    
+    else:
+        if binary_classification:
+            y_pred = model.predict_proba(x_test)[:, 1]
+            y_pred = (y_pred > threshold).astype(int)
+        else:
+            y_pred = model.predict(x_test)
+
     if le is not None:
         y_pred = le.inverse_transform(y_pred)
+
     return y_pred
 
 def get_class_probabilities(model, le=None, y_proba=None, x_test=None, class_label=None):
@@ -705,7 +826,7 @@ def get_class_probabilities(model, le=None, y_proba=None, x_test=None, class_lab
 # PLOTTING FUNCTIONS
 # =============================================================================
 
-def plot_df(df, title=None, size=(20, 15), book=None, plot=False, 
+def plotsave_df(df, title=None, size=(20, 15), book=None, plot=False, 
            style='modern', colormap='viridis', header_color=None, 
            cell_color=None, text_color='black', font_size=10,
            title_font_size=16, border_width=1.5):
@@ -800,20 +921,54 @@ def plot_df(df, title=None, size=(20, 15), book=None, plot=False,
     else:
         plt.show()
 
-def plot_tuning_results(hp_name, hp_values, pion_purities, pion_efficiencies):
-    """Plot the purity and efficiency tuning for a given hyper parameter (hp)."""
-    plt.plot(hp_values, pion_purities, label="purity")
-    plt.grid(True, which='both', axis='both', linestyle='--', linewidth=0.5, alpha=0.7)
-    plt.minorticks_on()
-    plt.plot(hp_values, pion_efficiencies, label="efficiency")
-    plt.xlabel(hp_name)
-    plt.ylabel("Purity/Efficiency")
-    plt.title(f"Purity/Efficiency tuning for {hp_name}")
-    plt.legend()
-    ax = plt.gca()
-    ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+def plot_tuning_results(hp_tuning_results, purity_only=False, save=False):
+    """
+    Plot the purity and efficiency tuning for each hyperparameter in hp_tuning_results.
 
-def plot_observables_grid(df, percentiles=[0.1, 0.9], ncols=4, size=(20, 15), norm=False, book=None, plot=False, title=None, binary_classification=False):
+    Parameters
+    ----------
+    hp_tuning_results : dict
+        Dictionary with entries:
+            hp_tuning_results[hp_name] = (hp_values, pion_purities_test, pion_efficiencies_test, pion_purities_train, pion_efficiencies_train)
+    purity_only : bool, optional
+        If True, only plot purity curves. Otherwise, plot both purity and efficiency.
+    """
+    if save:
+        hp_dir = "/home/pemb6649/pi0-analysis/analysis/summer-placement/hp-tuning-plots"
+        existing = [f for f in os.listdir(hp_dir) if f.startswith("hp_results_")]
+        nums = []
+        for f in existing:
+            try:
+                num = int(f.split("hp_results_")[1].split('.')[0])
+                nums.append(num)
+            except (IndexError, ValueError):
+                continue
+        next_num = max(nums) + 1 if nums else 1
+        filename = f"hp_results_{next_num}"
+        book = Plots.PlotBook(os.path.join(hp_dir, filename))
+
+    for hp_name, (hp_values, pion_purities_test, pion_efficiencies_test, pion_purities_train, pion_efficiencies_train) in hp_tuning_results.items():
+        plt.figure(figsize=(8, 5))
+        # Plot Purity
+        plt.plot(hp_values, pion_purities_test, marker='o', linestyle='-', color='#1f77b4', label="Purity (Test)")
+        plt.plot(hp_values, pion_purities_train, marker='o', linestyle='--', color='#aec7e8', label="Purity (Train)")
+        # Plot Efficiency if not purity_only
+        if not purity_only:
+            plt.plot(hp_values, pion_efficiencies_test, marker='s', linestyle='-', color='#ff7f0e', label="Efficiency (Test)")
+            plt.plot(hp_values, pion_efficiencies_train, marker='s', linestyle='--', color='#ffbb78', label="Efficiency (Train)")
+
+        plt.grid(True, which='both', axis='both', linestyle='--', linewidth=0.6, alpha=0.6)
+        plt.minorticks_on()
+        plt.xlabel(hp_name, fontsize=12)
+        plt.ylabel(r"$\pi^{\pm}$ purity / efficiency (%)", fontsize=12)
+        plt.title(f"$\\pi^{{\\pm}}$ purity & efficiency vs. {hp_name}", fontsize=14, fontweight='bold', pad=12)
+        plt.legend(frameon=True, fontsize=10)
+        plt.tight_layout()
+        book.Save()
+    if save:
+        book.close()
+
+def plotsave_observables_grid(df, percentiles=[0.1, 0.9], ncols=4, size=(20, 15), norm=False, book=None, plot=False, title=None, binary_classification=False):
     """Create a grid of plots for multiple observables using a pandas DataFrame."""
     if binary_classification:
         particle_colours = {
@@ -896,7 +1051,7 @@ def plot_observables_grid(df, percentiles=[0.1, 0.9], ncols=4, size=(20, 15), no
     if not plot:
         plt.close()
 
-def plot_correlation_matrix(df, obs_to_plot=None, size=(20, 15), title=None, book=None, plot=False):
+def plotsave_correlation_matrix(df, obs_to_plot=None, size=(20, 15), title=None, book=None, plot=False):
     """Plot a correlation matrix of the observables using seaborn."""
     if obs_to_plot is None:
         obs_to_plot = [col for col in df.columns if col != "particle"]
@@ -932,7 +1087,7 @@ def plot_correlation_matrix(df, obs_to_plot=None, size=(20, 15), title=None, boo
     if not plot:
         plt.close()
 
-def plot_scatter_matrix(df, obs_to_plot=None, title=None, size=(10, 8), save=False, plot=False, binary_classification=False):
+def plot_scatter_matrix(df, obs_to_plot=None, title=None, size=(10, 8), binary_classification=False):
     """Plot a scatter matrix of the observables using matplotlib."""
     if binary_classification:
         particle_colours = {
@@ -1042,7 +1197,7 @@ def plot_scatter_matrix(df, obs_to_plot=None, title=None, size=(10, 8), save=Fal
 
     plt.tight_layout(rect=[0, 0, 0.88, 1])  # leave space for legend on right
 
-def plot_feature_importances(model, x_train, book=None, plot=False, size=(12, 8)):
+def plotsave_feature_importances(model, x_train, book=None, plot=False, size=(12, 8)):
     """Plot the mean decrease in impurity (MDI) for each feature."""
     importances = model.feature_importances_
     importances = pd.Series(importances, index=x_train.columns)
@@ -1052,7 +1207,7 @@ def plot_feature_importances(model, x_train, book=None, plot=False, size=(12, 8)
         std = np.std([tree.feature_importances_ for tree in model.estimators_], axis=0)
         importances.plot.bar(yerr=std, ax=ax)
     except:
-        print("Cannot calculate standard deviation of feature importances.")
+        print("Cannot calculate standard deviation of feature importances (likely if you have used a decision tree).")
         
     importances.plot.bar(ax=ax)
 
@@ -1065,8 +1220,9 @@ def plot_feature_importances(model, x_train, book=None, plot=False, size=(12, 8)
     if not plot:
         plt.close()
 
-def plot_confusion_matrix(cm, info, labels, book=None, plot=False, size=(20, 15)):
+def plotsave_confusion_matrix(y_test, y_test_pred, book=None, plot=False, size=(20, 15)):
     """Plot confusion matrix."""
+    cm, info, labels = create_confusion_matrix(y_test, y_test_pred)
     plt.figure(figsize=size)
     sns.heatmap(cm, annot=info, fmt='', cmap='Blues', xticklabels=labels, yticklabels=labels[::-1], cbar_kws={'label': 'Count'})
     plt.xlabel('Predicted Label', fontsize=14)
@@ -1082,84 +1238,143 @@ def plot_confusion_matrix(cm, info, labels, book=None, plot=False, size=(20, 15)
     if not plot:
         plt.close()
 
-def plot_roc_curve(binary_y_test, model_probs, class_label="$\\pi^{\\pm}$"):
+def plot_roc_curve(binary_y_test, model_probs, class_label="$\\pi^{\\pm}$", 
+                   cut_stats=None, n_bootstraps=1000, sigma_interval=1, log=False):
     """
-    Plot ROC curve for multiple models. 
-    model_probs is a dictionary of model names and their probabilities for the given class.
-    binary_y_test is the binary labels of the test set where 1 is the given class and 0 is any other class.
-    """
+    Plot ROC curve for multiple models with confidence intervals using a bootstrap approach.
 
+    Args:
+        binary_y_test (array-like): True binary labels.
+        model_probs (dict): A dictionary where keys are model names and values are predicted probabilities.
+        class_label (str): The label for the positive class.
+        cut_stats (dict, optional): Statistics for a fixed cut point to plot.
+        n_bootstraps (int): Number of bootstrap samples for confidence intervals.
+        sigma_interval (int): The sigma value for the confidence interval (e.g., 1 for 68%, 2 for 95%).
+        log (bool): If True, plots the x-axis on a logarithmic scale.
+    """
+    
+    # Handle pandas input
+    if hasattr(binary_y_test, 'values'):
+        binary_y_test = binary_y_test.values
+    
+    plt.style.use('ggplot')
     plt.figure(figsize=(15, 12))
-    ax = plt.gca()
-
-    # Set a nice color cycle
-    prop_cycle = plt.rcParams['axes.prop_cycle']
-    colors = prop_cycle.by_key()['color']
-    lw = 2.5
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    
+    # --- NEW: Choose interpolation points based on scale ---
+    if log:
+        # Use logspace for points evenly distributed on a log scale (e.g., from 0.001 to 1)
+        mean_fpr = np.logspace(-3, 0, 100)
+    else:
+        # Original linear space
+        mean_fpr = np.linspace(0, 1, 100)
 
     # Plot ROC curves for each model
     for idx, (model, prob) in enumerate(model_probs.items()):
         color = colors[idx % len(colors)]
-        disp = RocCurveDisplay.from_predictions(
-            binary_y_test,
-            prob,
-            ax=ax,
-            name=f"{model}",
-            color=color,
-            linestyle='-',
-            linewidth=lw
-        )
+        
+        # Bootstrap for confidence intervals
+        tprs = []
+        aucs = []
+        
+        for _ in range(n_bootstraps):
+            indices = resample(range(len(binary_y_test)))
+            if len(np.unique(binary_y_test[indices])) < 2:
+                continue # Skip bootstrap sample if it only contains one class
+            
+            y_boot = binary_y_test[indices]
+            prob_boot = prob[indices]
+            
+            fpr_boot, tpr_boot, _ = roc_curve(y_boot, prob_boot)
 
-    # Plot the "No Skill" line
-    plt.plot([0, 1], [0, 1], color='gray', linestyle='--', linewidth=2, label='No Skill', alpha=0.7, zorder=0)
+            tpr_interp = np.interp(mean_fpr, fpr_boot, tpr_boot)
+            tpr_interp[0] = 0.0
+            
+            tprs.append(tpr_interp)
+            aucs.append(auc(fpr_boot, tpr_boot))
+        
+        tprs = np.array(tprs)
+        mean_tpr = np.mean(tprs, axis=0)
+        std_tpr = np.std(tprs, axis=0)
+        
+        tprs_upper = np.minimum(mean_tpr + sigma_interval * std_tpr, 1)
+        tprs_lower = np.maximum(mean_tpr - sigma_interval * std_tpr, 0)
+        
+        mean_auc = np.mean(aucs)
+        std_auc = np.std(aucs)
+        
+        plt.plot(mean_fpr, mean_tpr, color=color, linewidth=2.5, 
+                label=f'{model} (AUC = {mean_auc:.3f} ± {std_auc:.3f})')
+        plt.fill_between(mean_fpr, tprs_lower, tprs_upper, 
+                        color=color, alpha=0.2, label=f'{model} {sigma_interval}σ CI')
 
-    # Prettify axes
-    ax.set_xlim([-0.02, 1.02])
-    ax.set_ylim([-0.02, 1.02])
-    ax.set_xlabel("False Positive Rate", fontsize=14, labelpad=10)
-    ax.set_ylabel("True Positive Rate", fontsize=14, labelpad=10)
-    ax.tick_params(axis='both', which='major', labelsize=12)
-    ax.grid(True, linestyle=':', linewidth=1, alpha=0.5)
+    # Plot no-skill line
+    plt.plot([0, 1], [0, 1], 'gray', linestyle='--', linewidth=2, 
+             label='No Skill', alpha=0.7)
 
-    # Prettify legend
-    legend = plt.legend(
-        fontsize=12,
-        loc='lower right',
-        frameon=True,
-        fancybox=True,
-        framealpha=0.9,
-        borderpad=1,
-        title="Model",
-        title_fontsize=13
-    )
-    legend.get_frame().set_edgecolor('gray')
+    # Plot cut point if provided
+    if cut_stats is not None:
+        fpr_cut, tpr_cut = cut_stats['mean_fpr'], cut_stats['mean_tpr']
+        fpr_err, tpr_err = cut_stats['std_fpr'] * sigma_interval, cut_stats['std_tpr'] * sigma_interval
+        
+        plt.errorbar(fpr_cut, tpr_cut, xerr=fpr_err, yerr=tpr_err, 
+                    fmt='o', markersize=12, capsize=5, capthick=2, 
+                    label='Cut Point', zorder=10, color='red', ecolor='red')
+        plt.annotate(f"({fpr_cut:.3f}±{fpr_err:.3f}, {tpr_cut:.3f}±{tpr_err:.3f})", 
+                    (fpr_cut, tpr_cut), xytext=(15, 15), 
+                    textcoords="offset points", fontsize=11, color='red', weight='bold',
+                    bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="red", alpha=0.8))
 
-    # Prettify title
-    plt.title(f"ROC Curve for {class_label} Classification", fontsize=16, pad=15, weight='bold')
-
-    # Tight layout and show
+    # --- NEW: Conditional styling based on the 'log' parameter ---
+    if log:
+        plt.xscale('log')
+        plt.xlim([0.001, 1.0])
+        plt.ylim([-0.02, 1.02])
+        plt.xlabel("False Positive Rate (Log Scale)", fontsize=14)
+        plt.grid(True, which='both', linestyle=':', alpha=0.5)
+        # Adjust legend location for better visibility on log plots
+        legend_loc = 'center right'
+    else:
+        plt.xlim([-0.02, 1.02])
+        plt.ylim([-0.02, 1.02])
+        plt.xlabel("False Positive Rate", fontsize=14)
+        plt.grid(True, linestyle=':', alpha=0.5)
+        legend_loc = 'lower right'
+        
+    plt.ylabel("True Positive Rate", fontsize=14)
+    plt.legend(fontsize=11, loc=legend_loc, title="Model (AUC ± std)")
+    plt.title(f"ROC Curve for {class_label} Classification with {sigma_interval}σ Confidence Intervals", 
+              fontsize=16, weight='bold')
     plt.tight_layout()
-    plt.show()
 
-# =============================================================================
+# ============================================================================
 # CUSTOM LOSS FUNCTIONS
 # =============================================================================
 
-def binary_purity_loss(y_pred, dtrain):
+def binary_purity_loss(y_pred, dtrain, base_obj="log_loss"):
     """
     Custom loss function that optimizes for purity of correctly identified labels.
+    
+    Args:
+        y_pred: Raw prediction scores
+        dtrain: Training data with labels
+        base_obj: Base objective function - "log_loss" (default) or "mse"
     """
     y_true = dtrain.get_label()
-    
     # convert raw scores to probabilities using sigmoid
     prob = 1.0 / (1.0 + np.exp(-y_pred))
     
     # LOSS COMPONENTS
-    
-    # 1. Standard log loss component
-    epsilon = 1e-15  # Small value to prevent log(0)
-    prob = np.clip(prob, epsilon, 1 - epsilon)
-    log_loss = -(y_true * np.log(prob) + (1 - y_true) * np.log(1 - prob))
+    if base_obj == "log_loss":
+        # 1. Standard log loss component
+        epsilon = 1e-15  # Small value to prevent log(0)
+        prob_clipped = np.clip(prob, epsilon, 1 - epsilon)
+        base_loss = -(y_true * np.log(prob_clipped) + (1 - y_true) * np.log(1 - prob_clipped))
+    elif base_obj == "mse":
+        # 1. Mean squared error component
+        base_loss = (prob - y_true) ** 2
+    else:
+        raise ValueError(f"Unsupported base_obj: {base_obj}. Use 'log_loss' or 'mse'.")
     
     # 2. Confidence penalty: penalize predictions close to 0.5 (uncertain)
     confidence_penalty = 4 * (prob - 0.5) ** 2  # Quadratic penalty, max at 0.5
@@ -1179,14 +1394,16 @@ def binary_purity_loss(y_pred, dtrain):
     )
     
     # Combine all components
-    total_loss = log_loss + confidence_penalty + correct_high_conf + wrong_high_conf
+    total_loss = base_loss + confidence_penalty + correct_high_conf + wrong_high_conf
     
     # GRADIENT CALCULATIONS
-
     # For gradient calculation, we need derivative with respect to raw predictions (before sigmoid)
-    
-    # Standard logistic gradient
-    grad_log = prob - y_true
+    if base_obj == "log_loss":
+        # Standard logistic gradient
+        grad_base = prob - y_true
+    elif base_obj == "mse":
+        # MSE gradient
+        grad_base = 2 * (prob - y_true) * prob * (1 - prob)
     
     # Confidence penalty gradient (derivative of 4*(prob - 0.5)^2 w.r.t. raw prediction)
     grad_conf = 8 * (prob - 0.5) * prob * (1 - prob)
@@ -1205,12 +1422,15 @@ def binary_purity_loss(y_pred, dtrain):
         0
     )
     
-    grad = grad_log + grad_conf + grad_correct + grad_wrong
+    grad = grad_base + grad_conf + grad_correct + grad_wrong
     
     # HESSIAN CALCULATIONS
-
-    # Standard logistic hessian
-    hess_log = prob * (1 - prob)
+    if base_obj == "log_loss":
+        # Standard logistic hessian
+        hess_base = prob * (1 - prob)
+    elif base_obj == "mse":
+        # MSE hessian
+        hess_base = 2 * prob * (1 - prob) * (1 - 2 * prob * (prob - y_true))
     
     # Confidence penalty hessian
     hess_conf = 8 * prob * (1 - prob) * (1 - 2*prob + 2*prob*(prob - 0.5))
@@ -1228,7 +1448,7 @@ def binary_purity_loss(y_pred, dtrain):
         0
     )
     
-    hess = hess_log + hess_conf + hess_correct + hess_wrong
+    hess = hess_base + hess_conf + hess_correct + hess_wrong
     
     # Ensure hessian is positive for numerical stability
     hess = np.maximum(hess, 1e-8)
