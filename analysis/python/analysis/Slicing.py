@@ -951,7 +951,8 @@ class EnergySliceFiducial:
     def TotalCrossSection(
             flat_multi_hist,
             multi_dim_binner,
-            flat_multi_errs = None) -> tuple[np.ndarray, np.ndarray]:
+            flat_multi_errs = None,
+            alpha=1) -> tuple[np.ndarray, np.ndarray]:
         assert multi_dim_binner.has_tpc, "Must have ending information"
         dim_slicer = multi_dim_binner.slice_by_hist(slice(None), slice(None), slice(None))
         corr_hist = flat_multi_hist[dim_slicer]
@@ -970,17 +971,28 @@ class EnergySliceFiducial:
         inc_mask = np.logical_and(init_orders > indexer, end_orders <= indexer)
         #                        init energy before bin, end energy in bin
         all_end_mask = np.logical_and(init_orders > indexer, end_orders == indexer)
-        inte_mask = np.logical_and(all_end_mask, end_type==0)
-        end_mask = np.logical_and(all_end_mask, end_type==1)
+        init_end_mask = np.logical_and(init_orders == indexer, end_orders == indexer)
+        valid_inte_mask = np.logical_and(all_end_mask, end_type==0)
+        valid_end_mask = np.logical_and(all_end_mask, end_type==1)
+        # frac_inte_mask = valid_inte_mask
+        # frac_end_mask = valid_end_mask
+        frac_inte_mask = np.logical_and(init_end_mask, end_type==0)
+        frac_end_mask = np.logical_and(init_end_mask, end_type==1)
+        # all_end_mask = np.logical_and(init_orders >= indexer, end_orders == indexer)
+        # frac_inte_mask = np.logical_and(all_end_mask, end_type==0)
+        # frac_end_mask = np.logical_and(all_end_mask, end_type==1)
         sum_axes = (1,2,3)
         inc_hists = np.sum(corr_hist * inc_mask, axis=sum_axes)
-        int_hists = np.sum(corr_hist * inte_mask, axis=sum_axes)
-        end_hists = np.sum(corr_hist * end_mask, axis=sum_axes)
+        int_hists = np.sum(corr_hist * valid_inte_mask, axis=sum_axes)
+        end_hists = np.sum(corr_hist * valid_end_mask, axis=sum_axes)
+        frac_int_hists = np.sum(corr_hist * frac_inte_mask, axis=sum_axes)
+        frac_end_hists = np.sum(corr_hist * frac_end_mask, axis=sum_axes)
         all_end_hist = int_hists + end_hists
         pass_hists = inc_hists - all_end_hist
         hist_ratio = inc_hists/pass_hists
         hist_log = np.log(hist_ratio)
-        inte_ratio = (int_hists/all_end_hist)
+        inte_ratio = ((int_hists + alpha*(frac_int_hists))
+                      /(all_end_hist + alpha*(frac_int_hists+frac_end_hists)))
         # Multiplier factor from bin widths
         bins_no_overflow = multi_dim_binner.digit_edges
         beam_particle = Particle.from_pdgid(211)
@@ -1003,13 +1015,13 @@ class EnergySliceFiducial:
             dxs_dinc = inte_ratio * ((1/inc_hists) - (1/pass_hists))
             # d log(H_int/H_pass) / d H_end = 
             #         H_pass/H_int * ( -1 * -1 * H_int/(H_pass**2))
-            dlog_dend = inte_ratio/pass_hists
+            dxs_dvalid = inte_ratio/pass_hists
             # d (H_int/(H_int + H_end)) / d H_end =
             #         - H_int/(H_int + H_end)**2
-            dxs_dend = dlog_dend - ((inte_ratio/all_end_hist) * hist_log)
+            dxs_dfracend = - ((inte_ratio/all_end_hist) * hist_log)
             # d (H_int/(H_int + H_end)) / d H_int =
             #         1/(H_int + H_end) - H_int/(H_int + H_end)**2
-            dxs_dint = dlog_dend + (((1 - inte_ratio)/all_end_hist) * hist_log)
+            dxs_dfracinte = (((1 - inte_ratio)/all_end_hist) * hist_log)
             # D(xs)**2 = D(counts)**2 * (d xs / d counts)**2
             # d xs / d counts = sum_{H} [(d xs / d H) * (d H / d counts)]
             # (d H / d counts) is simply the mask of wther a count is
@@ -1017,8 +1029,12 @@ class EnergySliceFiducial:
             #   1 or 0, (d H / d counts)**2 = (d H / d counts)
             xs_vars = np.sum(
                 corr_vars * (((np.reshape(dxs_dinc, m_shape))*inc_mask
-                              + (np.reshape(dxs_dend, m_shape))*end_mask
-                              + (np.reshape(dxs_dint, m_shape))*inte_mask)**2),
+                               + (np.reshape(dxs_dvalid, m_shape))*(
+                                   valid_inte_mask+valid_end_mask)
+                               + (np.reshape(dxs_dfracend, m_shape))*valid_end_mask
+                               + (np.reshape(dxs_dfracend, m_shape))*alpha*frac_end_mask
+                               + (np.reshape(dxs_dfracinte, m_shape))*alpha*valid_inte_mask
+                               + (np.reshape(dxs_dfracinte, m_shape))*alpha*frac_inte_mask)**2),
                 axis=sum_axes)
             xs_err = factor * np.sqrt(xs_vars)
         return xs, xs_err
