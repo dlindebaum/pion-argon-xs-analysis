@@ -205,6 +205,11 @@ truth_beam_definitions = {
 def _mc_true_shared_mother(evts, pairs):
     return 1. * (evts.trueParticles.mother[pairs["0"]]
                  == evts.trueParticles.mother[pairs["1"]])
+def _mc_true_shared_mother_no_beam(evts, pairs):
+    return 1. * np.logical_and(
+        (evts.trueParticles.mother[pairs["0"]]
+         == evts.trueParticles.mother[pairs["1"]]),
+        np.logical_not(evts.trueParticles.mother[pairs["0"]] == 1))
 def _mc_true_closest_approach(evts, pairs):
     return Master.ShowerPairs.ClosestApproach(
         evts.trueParticles.direction[pairs["1"]],
@@ -216,6 +221,7 @@ def _mc_true_pfo_sep(evts, pairs):
                        evts.trueParticles.shower_start_pos[pairs["0"]])
 mc_truth_geometric_definitions = {
     "shared_mother": _mc_true_shared_mother,
+    "shared_mother_no_beam": _mc_true_shared_mother_no_beam,
     "closest_approach": _mc_true_closest_approach,
     "separation": _mc_true_pfo_sep}
 
