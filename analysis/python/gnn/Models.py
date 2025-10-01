@@ -545,7 +545,7 @@ def add_id_output_to_loaded_model(model):
     return tf.keras.Model(inputs=[input], outputs=model(input) + [id_out])
 
 
-def load_model_from_file(model_folder, new_norm=None, new_data_folder=None):
+def load_model_from_file(model_folder, new_norm=None, new_data_folder=None, construct_only=False):
     """
     Loads a model contained in the supplied folder.
 
@@ -623,7 +623,8 @@ def load_model_from_file(model_folder, new_norm=None, new_data_folder=None):
         outputs,
         model_type=model_type,
         save=False)
-    model.load_weights(paths_dict["weights_path"])
+    if not construct_only:
+        model.load_weights(paths_dict["weights_path"])
     return model
 
 # =====================================================================
@@ -1186,6 +1187,7 @@ def plot_regression_extra_loss_dist(
         extra_loss, loss_index,
         path_params, plot_config,
         logits=False, mask=None,
+        do_title=False,
         which_data="test"):
     schema, data = _get_paths_from_params(path_params, which_data=which_data)
     preds, truths = get_predictions(
@@ -1199,16 +1201,39 @@ def plot_regression_extra_loss_dist(
     if mask is not None:
         preds = preds[mask]
         truths = truths[mask]
-    plot_config.setup_figure(title=extra_loss.replace('_', ' ').title())
+    if do_title:
+        title=extra_loss.replace('_', ' ').title()
+    else:
+        print(extra_loss.replace('_', ' ').title())
+        title=None
+    if "pions" in extra_loss.lower():
+        particle_str = r"$\pi^\pm$ "
+    elif "pi0s" in extra_loss.lower():
+        particle_str = r"$\pi^0$ "
+    else:
+        particle_str = ""
+    if "bt" in extra_loss.lower():
+        truth_str = "backtracked "
+    else:
+        truth_str = ""
+    plot_config.setup_figure(title=title)
     pred_bins = plot_config.get_bins(preds, array=True)
     max_true = max(truths)
-    true_bins = np.linspace(-0.25, max_true + 0.25, int(max_true)*2 + 2)
+    offset=-0.4
+    width=0.8
+    true_bins = np.linspace(offset, max_true + offset+0.5, int(max_true)*2 + 2)
+    true_bins[1::2] += width-0.5
     plt.hist2d(
         truths, preds, norm=LogNorm(), bins=(true_bins, pred_bins))
     # plt.scatter(
     #     truths, preds, **plot_config.gen_kwargs(index=0, marker="x"))
     plot_config.format_axis(xlog=False, ylog=False,
-                            xlabel="True count", ylabel="Prediction")
+                            xlabel=f"True {truth_str}{particle_str}count",
+                            ylabel=f"Predicted {particle_str}count")
+    maj_ticks = np.arange(max_true+1)
+    plt.gca().set_xticks(maj_ticks)
+    plt.gca().set_xticks(true_bins, minor=True)
+    plt.colorbar(label = "Count")
     return plot_config.end_plot()
 
 def plot_confusion_extra_loss(
@@ -1233,7 +1258,7 @@ def plot_confusion_extra_loss(
     plot_confusion_matrix(
         confustion_mat,
         labels, labels,
-        x_label="reco region", y_label="true process")
+        x_label="Predicted process", y_label="True process")
     if plot_config is not None:
         plot_summary_information(pred_index, truth_index, plot_config)
     return pred_index, truth_index
@@ -1263,7 +1288,7 @@ def plot_confusion_main_vs_reco_loss(
     plot_confusion_matrix(
         confustion_mat,
         labels, labels,
-        x_label="reco region", y_label="true process")
+        x_label="Predicted process", y_label="True process")
     if plot_config is not None:
         plot_summary_information(pred_index, truth_index, plot_config)
     return pred_index, truth_index
@@ -1297,7 +1322,7 @@ def evaluate_model(
     plot_confusion_matrix(
         confustion_mat,
         labels, labels,
-        x_label="reco region", y_label="true process")
+        x_label="Predicted process", y_label="True process")
     if plot_config is not None:
         plot_summary_information(pred_index, truth_index, plot_config)
     return pred_index, truth_index
@@ -1308,13 +1333,19 @@ def template_dists(
         plot_config,
         classification_labels=None,
         expand_bins=True,
-        which_data="test"):
+        which_data="test",
+        split_figs=False):
     schema, data = _get_paths_from_params(path_params, which_data=which_data)
     predictions, truth_index = get_predictions(
         model, schema, data)
-    return template_dists_from_preds(
+    if split_figs:
+        template_dists_from_preds_multi_fig(
         predictions, truth_index, plot_config,
         classification_labels=classification_labels)
+    else:
+        return template_dists_from_preds(
+            predictions, truth_index, plot_config,
+            classification_labels=classification_labels)
 
 def template_dists_from_preds(
         predictions,
@@ -1339,6 +1370,34 @@ def template_dists_from_preds(
                     type="hist", index=j, bins=bins, label=lab, lw=lw))
         plot_config.format_axis(ax, xlabel="GNN score", ylabel = "Count")
         ax.legend()
+    return plot_config.end_plot()
+
+def template_dists_from_preds_multi_fig(
+        predictions,
+        truth_indicies,
+        plot_config,
+        classification_labels=None):
+    labels = _parse_classification_labels(
+        classification_labels, np.argmax(predictions, axis=1), truth_indicies)
+    n_regions = predictions.shape[-1]
+    min_pred = np.min(predictions)
+    max_pred = np.max(predictions)
+    range_pred = max_pred - min_pred
+    if (min_pred>=0) and (max_pred<=1) and (range_pred>=0.5):
+        bins=np.linspace(0,1,int(30/range_pred))
+    else:
+        bins = plot_config.get_bins(predictions.flatten(), array=True)
+    for i, temp in enumerate(labels):
+        plot_config.setup_figure(size=[1/n_regions])
+        temp_preds = predictions[truth_indicies == i]
+        for j, lab in enumerate(labels):
+            lw = 1.5 + 1*(temp == lab)
+            plt.hist(
+                temp_preds[:, j],
+                **plot_config.gen_kwargs(
+                    type="hist", index=j, bins=bins, label=lab, lw=lw))
+        plot_config.format_axis(xlabel="GNN score", ylabel = "Count")
+        plt.legend()
     return plot_config.end_plot()
 
 def region_dist(
@@ -1382,8 +1441,8 @@ def region_dist(
 
 def _get_region_masks(pred, truth, n):
     region_masks = np.full((n, n, truth.size), False, dtype=bool)
-    for i in range(4):
-        for j in range(4):
+    for i in range(n):
+        for j in range(n):
             region_masks[i, j] = np.logical_and(pred==i, truth==j)
     return region_masks
 
@@ -1405,7 +1464,7 @@ def per_region_dists(
     _, axes = plot_config.setup_figure(n_regions+1, n_regions+1, figsize=(32, 24))
     for reco_i in range(n_regions):
         for true_i in range(n_regions):
-            ax = axes[3-true_i, reco_i]
+            ax = axes[n_regions-1-true_i, reco_i]
             these_preds = predictions[region_masks[reco_i, true_i]]
             region_dist(
                 ax,
@@ -1435,7 +1494,7 @@ def per_region_dists(
                 ylabel=f"Count ({region_masks[reco_i, :].sum()} total)")
         ax.legend()
     for true_i in range(n_regions):
-        ax = axes[3-true_i, -1]
+        ax = axes[n_regions-1-true_i, -1]
         all_reco_mask = region_masks[0, true_i]
         for i in range(1, n_regions):
             all_reco_mask = np.logical_or(all_reco_mask, region_masks[i, true_i])

@@ -20,7 +20,7 @@ def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.arra
     p_mc, edges = np.histogram(np.array(p_MC), bins, range = p_nominal * p_range)
     p_data = np.histogram(np.array(p_Data), bins, range = p_nominal * p_range)[0]
 
-    with Plots.RatioPlot((edges[1:] + edges[:-1]) / 2, p_data, p_mc, np.sqrt(p_data), np.sqrt(p_mc), "$P_{inst}^{reco}$ (MeV)", "Data/MC") as ratio_plot:
+    with Plots.RatioPlot((edges[1:] + edges[:-1]) / 2, p_data, p_mc, np.sqrt(p_data), np.sqrt(p_mc), r"$p_\mathrm{inst}^\mathrm{reco}$ / MeV", "Data/MC") as ratio_plot:
         Plots.Plot(ratio_plot.x, ratio_plot.y1, yerr = ratio_plot.y1_err, newFigure = False)
         Plots.Plot(ratio_plot.x, ratio_plot.y2, yerr = ratio_plot.y2_err, newFigure = False, ylabel = "Counts")
     book.Save()
@@ -31,7 +31,7 @@ def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.arra
     ratio = scale * np.nan_to_num(cross_section.nandiv(ratio_plot.y2, ratio_plot.y1), posinf = 0)
     ratio_err = np.nan_to_num(abs(ratio * np.sqrt(cross_section.nandiv(ratio_plot.y1_err, ratio_plot.y1)**2 + cross_section.nandiv(ratio_plot.y2_err, ratio_plot.y2)**2)))
 
-    Plots.Plot(ratio_plot.x, ratio, yerr = ratio_err, xlabel = "$P_{inst}^{reco}$ (MeV)", ylabel = "$r$")
+    Plots.Plot(ratio_plot.x, ratio, yerr = ratio_err, xlabel = r"$p_\mathrm{inst}^\mathrm{reco}$ / MeV", ylabel = "$r$")
     book.Save()
 
     results = {}
@@ -42,10 +42,12 @@ def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.arra
             cross_section.Fitting.crystal_ball,
             cross_section.Fitting.double_crystal_ball,
             cross_section.Fitting.double_gaussian]:
-        Plots.plt.figure()
+        Plots.plt.figure(figsize=(3.0*2, 3.0*2*3/4))
         results[f.__name__] = cross_section.Fitting.Fit(
             ratio_plot.x[ratio > 0], ratio[ratio > 0], ratio_err[ratio > 0],
-            f, plot = True, xlabel = "$P_{inst}^{reco}$(MeV)", ylabel = "$r$")
+            f, plot = True,
+            xlabel = r"$p_\mathrm{inst}^\mathrm{reco}$ / MeV", ylabel = "Simulation / data ratio",
+            ylim=[0, 3])
         book.Save()
     return results
 
@@ -65,11 +67,11 @@ def ReWeightResults(
     Plots.PlotHist(weights, range = [0, 3], xlabel = "weights", truncate = True)
     book.Save()
 
-    Plots.PlotTagged(sideband_mc["p_inst"], sideband_mc["tags"], data2 = sideband_data["p_inst"], x_range = plot_range, norm = args.norm, data_weights = None, bins = bins, x_label = "$P_{inst}^{reco}$ (MeV)", ncols = 1)
+    Plots.PlotTagged(sideband_mc["p_inst"], sideband_mc["tags"], data2 = sideband_data["p_inst"], x_range = plot_range, norm = args.norm, data_weights = None, bins = bins, x_label = "$P_{inst}^{reco}$ / MeV", ncols = 1, size="half")
     Plots.plt.title("nominal", pad = 15)
     book.Save()
 
-    Plots.PlotTagged(sideband_mc["p_inst"], sideband_mc["tags"], data2 = sideband_data["p_inst"], x_range = plot_range, norm = args.norm, data_weights = weights, bins = bins, x_label = "$P_{inst}^{reco}$ (MeV)", ncols = 1)
+    Plots.PlotTagged(sideband_mc["p_inst"], sideband_mc["tags"], data2 = sideband_data["p_inst"], x_range = plot_range, norm = args.norm, data_weights = weights, bins = bins, x_label = "$P_{inst}^{reco}$ / MeV", ncols = 1, size="half")
     Plots.plt.title(f"reweighted : {reweight_func}", pad = 15)
     book.Save()
     return

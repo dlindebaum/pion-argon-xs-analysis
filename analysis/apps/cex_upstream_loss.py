@@ -80,6 +80,7 @@ def ErrSysEstimation(
         bins : np.ndarray,
         KE_reco_corrected : np.ndarray,
         KE_true_ff : np.ndarray,
+        KE_reco_uncorrected: np.ndarray,
         weights : np.ndarray = None) -> tuple[np.array, np.array]:
     """ Estiamte upstream loss using a reponse function to correct the reco KE at the instrumentaiton to get the KE at the front face of the TPC.
         estiamtes the central value of residuals in bins of KE_reco_inst using a fitting function.
@@ -93,12 +94,16 @@ def ErrSysEstimation(
     Returns:
         tuple[np.array, np.array]: central values in each bin, error in central values
     """
-    df = pd.DataFrame({"KE_corrected" : KE_reco_corrected, "true_ffKE" : KE_true_ff})
+    df = pd.DataFrame({"KE_corrected" : KE_reco_corrected,
+                       "KE_uncorrected" : KE_reco_uncorrected,
+                       "true_ffKE" : KE_true_ff})
     df["residual"] = df.KE_corrected - df.true_ffKE
+    df["residual_uncorr"] = df.KE_uncorrected - df.true_ffKE
     stds, counts = Fitting.ExtractGaussErr_df(
-        df, "KE_corrected", "residual", [-250, 250], bins, 50,
+        df, "KE_corrected", "residual", "residual_uncorr", [-250, 250], bins, 50,
         rms_err = False, weights = weights, bin_units = "(MeV)",
-        bin_label = "$KE^{reco}_{inst}$")
+        bin_label = r"p^\mathrm{reco}_\mathrm{inst}$",
+        outer_legend=True)
     return stds, counts
 
 def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
@@ -136,8 +141,8 @@ def main(args : argparse.Namespace):
             cv = CentralValueEstimation(bins, reco_KE_inst, output_mc["KE_ff"], cv_method[args.upstream_loss_cv_function], output_mc["weights"])
         pdf.Save()
 
-        Plots.plt.figure()
-        params = Fitting.Fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\mu(\Delta E_{upstream})$ (MeV)", loc = "upper center")
+        Plots.plt.figure(figsize=(3.0*2, 3.0*2*3/4))
+        params = Fitting.Fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = r"$p_\mathrm{inst}$ / MeV", ylabel = r"$\mu(\Delta E_\mathrm{upstream})$ / MeV", loc = "upper center")
         pdf.Save()
 
         params_dict = {
@@ -151,7 +156,7 @@ def main(args : argparse.Namespace):
                 reco_KE_inst, params_dict["value"],
                 args.upstream_loss_response))
 
-        Plots.PlotHistComparison([reco_KE_ff, output_mc["KE_ff"]], labels = ["$KE^{reco}_{init}$", "$KE^{true}_{init}$"], x_range = [bins[0], bins[-1]], xlabel = "Kinetic energy (MeV)", weights = [output_mc["weights"], output_mc["weights"]])
+        Plots.PlotHistComparison([reco_KE_ff, output_mc["KE_ff"]], labels = [r"$KE^\mathrm{reco}_\mathrm{init}$", r"$KE^\mathrm{true}_\mathrm{init}$"], x_range = [bins[0], bins[-1]], xlabel = "Kinetic energy / MeV", weights = [output_mc["weights"], output_mc["weights"]])
         pdf.Save()
 
         ana_bins = get_finite_clipped_edges(args.energy_slices.bin_edges_with_overflow)
@@ -161,7 +166,7 @@ def main(args : argparse.Namespace):
             slicer = slice(None)
         ana_bins = ana_bins[slicer]
         stds, counts = ErrSysEstimation(
-            ana_bins, reco_KE_ff, output_mc["KE_ff"], output_mc["weights"])
+            ana_bins, reco_KE_ff, output_mc["KE_ff"], reco_KE_inst, output_mc["weights"])
         pdf.Save()
         params_dict.update({
             "ana_bin_stds" : stds[slicer],

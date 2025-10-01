@@ -25,22 +25,22 @@ x_label = {
     "track_score_all" : "Track score", 
     "TrackScoreCut" : "Track score",
     "NHitsCut" : "Number of hits",
-    "PiPlusSelection" : "Median $dE/dX$ (MeV/cm)",
-    "BeamParticleDistanceCut" : "$d$ (cm)",
-    "BeamParticleIPCut" : "$b$ (cm)",
+    "PiPlusSelection" : "Median $dE/dX$ / MeV cm^{-1}",
+    "BeamParticleDistanceCut" : "$d$ / cm",
+    "BeamParticleIPCut" : "$b$ / cm",
     "Chi2ProtonSelection" : "$(\chi^{2}/ndf)_{p}$",
     "PiBeamSelection" : "True particle ID",
-    "APA3Cut" : "Beam end position $z$ (cm)",
-    "TrueFiducialCut" : "True beam end position $z$ (cm)",
-    "FiducialStart" : "True beam end position $z$ (cm)",
+    "APA3Cut" : "Beam end position $z$ / cm",
+    "TrueFiducialCut" : "True beam end position $z$ / cm",
+    "FiducialStart" : "True beam end position $z$ / cm",
     "PandoraTagCut" : "Pandora tag",
     "DxyCut" : "$\delta_{xy}$",
     "DzCut" : "$\delta_{z}$",
     "CosThetaCut" : "$\cos(\\theta)$",
     "MichelScoreCut" : "Michel score",
-    "MedianDEdXCut" : "Median $dE/dX$ (MeV/cm)",
+    "MedianDEdXCut" : "Median $dE/dX$ / MeV cm^{-1}",
     "BeamScraperCut" : "$r_{inst}$",
-    "TrackLengthSelection" : "l (cm)"
+    "TrackLengthSelection" : "l / cm"
 }
 y_scale = {
     "track_score_all" : "log",
@@ -75,7 +75,7 @@ x_range = {
     "PandoraTagCut" : None,
     "APA3Cut" : [0, 700],
     "TrueFiducialCut" : [0, 700],
-    "FiducialStart" : [0, 220],
+    "FiducialStart" : [0, 700],
     "DxyCut" : [0, 5],
     "DzCut" : [-5, 5],
     "CosThetaCut" : [0.9, 1],
@@ -656,7 +656,7 @@ def MakeEfficiencyPlots(output_mc : dict, output_data : dict, outDir : str, args
 
 @Master.timer
 def main(args):
-    shower_merging.SetPlotStyle(extend_colors = True)
+    cross_section.PlotStyler.SetPlotStyle(extend_colors = True)
     outdir = args.out + "beam_selection/"
     cross_section.os.makedirs(outdir, exist_ok = True)
 

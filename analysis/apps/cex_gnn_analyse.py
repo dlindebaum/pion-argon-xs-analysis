@@ -493,12 +493,11 @@ def gen_efficiency_correction_func(args, has_purity=True):
     zeros_mc_factor = pre_counts/final_mc_count
     # Where pre_count is 0, don't change anything
 
-    # Treat efficiency scaling as binomial + poisson N
-    # NOT yet confirmed the validity of this...
+    # Initial overestimated as
     # var(Np/N) = p(1-p)/N + p^2/N = p/N => var(p)/p^2 = 1/Np
-    multi_frac_vars = 1/post_counts
-    # Altanative would be:
+    # Correct method
     # var(p) = p(1-p)/N => var(p)/p^2 = (1-p)/Np which is smaller
+    multi_frac_vars = (1/post_counts) - (1/pre_counts)
     # multi_frac_vars = (1-sel_efficiency)/post_counts
     # Treat additions as Poisson
     add_self_term = zeros_mc_factor / final_mc_count
@@ -732,7 +731,7 @@ def split_info_by_other_ind(
     return split_info
 
 def plot_multi_dim_hist(hist, binner, plt_conf, pdf=None, title=None):
-    plt_conf.setup_figure(title=title)
+    plt_conf.setup_figure(title=None, size="half")#title)
     plt.step(binner.multi_bin_edges[:-1], hist,
              **plt_conf.gen_kwargs(where="mid"))
     plt_conf.format_axis(xlabel="Multi. dim bin index", ylabel="Count")
@@ -744,13 +743,13 @@ def plot_multi_dim_comparision(
         hist_1, binner_1, label_1,
         hist_2, binner_2, label_2,
         plt_conf, pdf=None, title=None, norm=True):
-    plt_conf.setup_figure(title=title)
+    plt_conf.setup_figure(title=None, size="half")#title)
     if norm:
         slice_1 = slice(0, -1) if binner_1.has_beam else slice(None)
         slice_2 = slice(0, -1) if binner_2.has_beam else slice(None)
         hist_1_norm = np.sum(hist_1[slice_1])
         hist_2_norm = np.sum(hist_2[slice_2])
-        ylab = "Valid density"
+        ylab = "Density"#"Valid density"
     else:
         hist_1_norm = 1
         hist_2_norm = 1
@@ -758,8 +757,8 @@ def plot_multi_dim_comparision(
     plt.step(binner_1.multi_bin_edges[:-1], hist_1/hist_1_norm,
              **plt_conf.gen_kwargs(label=label_1, where="mid"))
     plt.step(binner_2.multi_bin_edges[:-1], hist_2/hist_2_norm,
-             **plt_conf.gen_kwargs(label=label_2, where="mid"))
-    plt_conf.format_axis(xlabel="Multi. dim bin index", ylabel=ylab)
+             **plt_conf.gen_kwargs(label=label_2, where="mid", color="C2"))
+    plt_conf.format_axis(xlabel=r"$B^{ijk}$ flattened index", ylabel=ylab)
     if pdf is not None:
         pdf.Save()
     return plt_conf.end_plot()
@@ -774,7 +773,7 @@ def plot_unfolding_matrix(
     uf_weights_flat = uf_mat.flatten()
     uf_weights_flat[uf_weights_flat == 0] = np.nan
 
-    plt_conf.setup_figure(title=title)
+    plt_conf.setup_figure(title=None, size="half")#title)
     plt.hist2d(
         x_uf_flat, y_uf_flat, bins=bin_edges_uf, weights=uf_weights_flat,
         norm="linear", vmax=1, vmin=0)
@@ -803,10 +802,10 @@ def plot_fit_results(
         proc_labels = list(range(n_procs))
     clip_edges = get_finite_clipped_edges(bin_edges)
     e_centres = 0.5 * (clip_edges[1:] + clip_edges[:-1])
-    proc_offsets = (np.arange(n_procs) - (n_procs/2)) * 4
+    proc_offsets = (np.arange(n_procs) - (n_procs/2)) * 5
     err_offsets = np.array([proc_offsets, -proc_offsets])[:, np.newaxis, :]
     x_errs = (0.5*np.abs(clip_edges[1:]-clip_edges[:-1]))[np.newaxis, :,  np.newaxis] + err_offsets
-    plt_conf.setup_figure(title=title)
+    plt_conf.setup_figure(title=None, size="half")#title)
     for i, lab in enumerate(proc_labels):
         plt.errorbar(
             e_centres + proc_offsets[i],
@@ -815,7 +814,7 @@ def plot_fit_results(
             yerr=errs[..., i],
             **plt_conf.gen_kwargs(index=i, label=lab, ls=""))
     ylim = 1 if log else None
-    plt_conf.format_axis(xlabel="Interaction energy/MeV", ylabel=ylab, ylog=log, ylim=ylim)
+    plt_conf.format_axis(xlabel="Interaction energy / MeV", ylabel=ylab, ylog=log, ylim=ylim)
     if pdf is not None:
         pdf.Save()
     return plt_conf.end_plot()
@@ -842,7 +841,7 @@ def plot_xs(xs, xs_err, bins, plt_conf, proc="total", pdf=None, stat_err=None):
     chi2 = np.sum(((xs - expected)**2)/(xs_err**2))
     dof = len(xs) - 2 # assume cross section is linear
     # plt_conf.setup_figure(title=r"$\chi^2$: "+f"{chi2}\n "+r"$\chi^2$"+f"/{dof}: {chi2/dof}")
-    plt_conf.setup_figure(title=r"$\chi^2$: "+f"{chi2}")
+    plt_conf.setup_figure(title=None, size="half")#r"$\chi^2$: "+f"{chi2}")
     xs_x = np.linspace(min_e_x, max_e_x, 50)
     plt.plot(xs_x, interp(xs_x), **plt_conf.gen_kwargs(label=f"Geant4 {proc}"))
     lab = "Stat. + sys." if stat_err is not None else "Calculated XS"
@@ -851,7 +850,7 @@ def plot_xs(xs, xs_err, bins, plt_conf, proc="total", pdf=None, stat_err=None):
         xs,
         xerr = 0.5*np.abs(bins[1:]-bins[:-1]),
         yerr=xs_err,
-        **plt_conf.gen_kwargs(index=0, label=lab, ls="", capsize=10, capthick=3))
+        **plt_conf.gen_kwargs(index=0, label=lab, ls="", capsize=4, capthick=2))
     if stat_err is not None:
         plt.errorbar(
             bin_centres,
@@ -859,8 +858,8 @@ def plot_xs(xs, xs_err, bins, plt_conf, proc="total", pdf=None, stat_err=None):
             xerr = 0.5*np.abs(bins[1:]-bins[:-1]),
             yerr=stat_err,
             **plt_conf.gen_kwargs(index=1, label="Stat. only",
-                                  ls="", capsize=5))
-    plt_conf.format_axis(xlabel="Energy/MeV", ylabel="Cross section/mb", ylog=False)
+                                  ls="", capsize=2))
+    plt_conf.format_axis(xlabel="Energy / MeV", ylabel="Cross section / mb", ylog=False)
     if pdf is not None:
         pdf.Save()
     return plt_conf.end_plot()
@@ -1383,9 +1382,9 @@ def Analyse(args : argparse.Namespace, plot : bool = False):
             reco_mdim_hist, reco_mbins, plt_conf, pdf=book,
             title="Data counts pre-unfolding")
         plot_multi_dim_comparision(
-            true_mdim_hist_reco, reco_mbins, "MC reco",
-            true_mdim_hist_truth, true_mbins, "MC truth",
-            plt_conf, pdf=book, title="MC reco vs. truth, counts", norm=False)
+            true_mdim_hist_reco, reco_mbins, "Sim. reco.",
+            true_mdim_hist_truth, true_mbins, "Sim. truth",
+            plt_conf, pdf=book, title="Sim. reco vs. truth, counts", norm=False)
         plot_multi_dim_comparision(
             true_mdim_hist_reco, reco_mbins, "MC reco",
             true_mdim_hist_truth, true_mbins, "MC truth",
@@ -1432,7 +1431,7 @@ def Analyse(args : argparse.Namespace, plot : bool = False):
             title="Eff. corr. vs. unfolded data, counts")
         plot_multi_dim_comparision(
             corr_hist, true_mbins, "Eff. corrected data",
-            corr_mc, true_mbins, "Eff. corr. MC truth",
+            corr_mc, true_mbins, "Eff. corr. sim. truth",
             plt_conf, pdf=book, title="Eff. corr. data vs. MC truth")
     
     proc_labs = list(template_ai.classification_info.keys())
@@ -1449,11 +1448,11 @@ def Analyse(args : argparse.Namespace, plot : bool = False):
             int_fits, int_errs)
         plot_fit_results(
             pre_uf_fracs, pre_uf_frac_errs, edges, plt_conf,
-            title="Pre-unfold fracs.", ylab="Proc. frac. from fit",
+            title="Pre-unfold fracs.", ylab=r"$\hat{f_p}$ from fit",
             proc_labels=proc_labs, pdf=book, log=False)
         plot_fit_results(
             uf_int_frac, uf_int_err, edges, plt_conf,
-            title="Unfolded fracs.", ylab="Proc. frac. from fit",
+            title="Unfolded fracs.", ylab=r"$\hat{f_p}$ from fit",
             proc_labels=proc_labs, pdf=book, log=False)
 
     with Plots.PlotBook(outdir + "cross_section_plots.pdf", plot) as book:

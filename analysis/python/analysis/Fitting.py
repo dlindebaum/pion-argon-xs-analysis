@@ -71,6 +71,7 @@ class FitFunction(ABC):
 
 class gaussian(FitFunction):
     n_params = 3
+    _str = "Gaussian"
 
     def __new__(cls, x, p0, p1, p2) -> np.array:
         return cls.func(x, p0, p1, p2)
@@ -98,6 +99,7 @@ class gaussian(FitFunction):
 
 class student_t(FitFunction):
     n_params = 4
+    _str = "Student-t"
 
     def __new__(cls, x, p0, p1, p2, p3) -> np.array:
         return cls.func(x, p0, p1, p2, p3)
@@ -132,6 +134,7 @@ class student_t(FitFunction):
 
 class double_gaussian(FitFunction):
     n_params = 6
+    _str = "Double Gaussian"
 
     def __new__(cls, x, p0, p1, p2, p3, p4, p5) -> np.array:
         return cls.func(x, p0, p1, p2, p3, p4, p5)
@@ -165,6 +168,7 @@ class double_gaussian(FitFunction):
 
 class crystal_ball(FitFunction):
     n_params = 5
+    _str = "Crystal ball"
 
     def __new__(cls, x, p0, p1, p2, p3, p4) -> np.array:
         return cls.func(x, p0, p1, p2, p3, p4)
@@ -208,6 +212,7 @@ class crystal_ball(FitFunction):
 
 class poly2d_old(FitFunction):
     n_params = 3
+    _str = "Quadratic"
 
     def __new__(cls, x, p0, p1, p2) -> np.array:
         return cls.func(x, p0, p1, p2)
@@ -226,6 +231,7 @@ class poly2d_old(FitFunction):
 
 class poly2d(FitFunction):
     n_params = 3
+    _str = "Quadratic"
 
     def __new__(cls, x, p0, p1, p2) -> np.array:
         return cls.func(x, p0, p1, p2)
@@ -247,6 +253,7 @@ class poly2d(FitFunction):
 
 class exp(FitFunction):
     n_params = 3
+    _str = "Exponential"
 
     def __new__(cls, x, p0, p1, p2) -> np.array:
         return cls.func(x, p0, p1, p2)
@@ -267,6 +274,7 @@ class exp(FitFunction):
 
 class poly3d_old(FitFunction):
     n_params = 4
+    _str = "Cubic"
 
     def __new__(cls, x, p0, p1, p2, p3) -> np.array:
         return cls.func(x, p0, p1, p2, p3)
@@ -285,6 +293,7 @@ class poly3d_old(FitFunction):
 
 class poly3d(FitFunction):
     n_params = 4
+    _str = "Cubic"
 
     def __new__(cls, x, p0, p1, p2, p3) -> np.array:
         return cls.func(x, p0, p1, p2, p3)
@@ -304,6 +313,7 @@ class poly3d(FitFunction):
 
 class double_crystal_ball(FitFunction):
     n_params = 7
+    _str = "Double crystal ball"
 
     def __new__(cls, x, p0, p1, p2, p3, p4, p5, p6) -> np.array:
         return cls.func(x, p0, p1, p2, p3, p4, p5, p6)
@@ -346,6 +356,7 @@ class double_crystal_ball(FitFunction):
 
 class line(FitFunction):
     n_params = 2
+    _str = "Linear"
 
     def __new__(cls, x, p0, p1) -> np.array:
         return cls.func(x, p0, p1)
@@ -356,6 +367,7 @@ class line(FitFunction):
 
 class asym(FitFunction):
     n_params = 3
+    _str = "Asympotic"
 
     def __new__(cls, x, p0, p1, p2) -> np.array:
         return cls.func(x, p0, p1, p2)
@@ -366,6 +378,7 @@ class asym(FitFunction):
 
 class lognormal_gaussian_exp(FitFunction):
     n_params = 8
+    _str = "Lognormal Gaussian exponential"
 
     def __new__(cls, x, p0, p1, p2, p3, p4, p5, p6, p7) -> np.array:
         return cls.func(x, p0, p1, p2, p3, p4, p5, p6, p7)
@@ -423,7 +436,7 @@ def RejectionSampling(num : int, low : float, high : float, func : FitFunction, 
     return x[:num] #? is there a way to generate only the desired number rather than truncating x?
 
 
-def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, method = "trf", maxfev = int(10E4), plot : bool = False, xlabel : str = "", ylabel : str = "", ylim : list = None, plot_style : str = "scatter", title : str = "", plot_range : list = None, return_chi_sqr : bool = False, loc = "upper right") -> tuple[np.array, np.array]:
+def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, method = "trf", maxfev = int(10E4), plot : bool = False, xlabel : str = "", ylabel : str = "", ylim : list = None, plot_style : str = "scatter", title : str = "", plot_range : list = None, return_chi_sqr : bool = False, loc = "upper right", size="single") -> tuple[np.array, np.array]:
     """ Implementation of scipy's curve fit, with some constraints, checks to handle nan data and optional plotting.
 
     Args:
@@ -502,7 +515,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         for j in range(len(popt)):
             text += f"\n$p_{{{j}}}$: ${popt[j]:.2g}\pm${perr[j]:.2g}"
         text += "\n$\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2g}, p : " + f"{p_value:.1g}"
-        legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = loc, title = Utils.remove_(func.__name__))
+        legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = loc, title = func._str)
         legend.set_zorder(12)
         for l in legend.legend_handles:
             l.set_visible(False)
@@ -545,7 +558,7 @@ def ExtractCentralValues_df(
     cv_err = []
     fig_handles = None
     fig_labels = None
-    for i in Plots.MultiPlot(len(data_bins) - 1, orientation = "vertical"):
+    for i in Plots.MultiPlot(len(data_bins) - 1, orientation = "vertical", sharex_lab=None, sharey_lab=f"Number of entries (bin width={round((max(v_range) - min(v_range)) / hist_bins)})"):
         if i == len(data_bins): continue
         print_log(i)
         mask = (df[bin_variable] > data_bins[i]) & (df[bin_variable] < data_bins[i+1])
@@ -606,7 +619,21 @@ def ExtractCentralValues_df(
 
             Plots.Plot(x_interp, y_pred_interp, marker = "", color = "black", newFigure = False, label = "fit")
             plt.axvline(mean, color = "black", linestyle = "--", label = "central value")
-        Plots.PlotHist(binned_data[variable], bins = hist_bins, newFigure = False, title = f"{bin_label} : {[data_bins[i], data_bins[i+1]]} {bin_units}", range = [min(v_range), max(v_range)], weights = binned_weights)
+        title_str = f"{bin_label} : [{data_bins[i]:.0f}, {data_bins[i+1]:.0f}] {bin_units.replace('(', '').replace(')', '')}"
+        if variable == "residual":
+            xlab = r"$p_\mathrm{corr} - p_\mathrm{true}$" + f" / {bin_units.replace('(', '').replace(')', '')}"
+        else:
+            xlab = variable.replace("_", " ").capitalize() + f" / {bin_units.replace('(', '').replace(')', '')}"
+        Plots.PlotHist(
+            binned_data[variable],
+            bins = hist_bins,
+            newFigure = False,
+            # title = f"{bin_label} : {[data_bins[i], data_bins[i+1]]} {bin_units}",
+            # title = title_str,
+            range = [min(v_range), max(v_range)],
+            weights = binned_weights,
+            ylab=False,
+            xlabel=xlab)
 
         plt.axvline(np.mean(binned_data[variable]), linestyle = "--", color = "C1", label = "mean")
 
@@ -614,10 +641,21 @@ def ExtractCentralValues_df(
 
         if best_popt is not None:
             text = ""
+            # text=" " + title_str
             for j in range(len(best_popt)):
-                text += f"\np{j}: ${best_popt[j]:.2f}\pm${best_perr[j]:.2f}"
-            text += f"\nks : {k_best:.2f}, p : {p_best:.2f}"
-            legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], title = best_f.__name__.replace("_", " "))
+                if j == 0:
+                    text += f"\n$N$: ${best_popt[j]:.2f}\pm${best_perr[j]:.2f}"    
+                elif j == 1:
+                    text += f"\n$\mu$: ${best_popt[j]:.2f}\pm${best_perr[j]:.2f}"    
+                elif j ==2:
+                    text += f"\n$\sigma$: ${best_popt[j]:.2f}\pm${best_perr[j]:.2f}"    
+                # text += f"\np{j}: ${best_popt[j]:.2f}\pm${best_perr[j]:.2f}"
+            # text += f"\nks : {k_best:.2f}, p : {p_best:.2f}"
+            legend = plt.gca().legend(
+                handlelength = 0, labels = [text[1:]],
+                # title = best_f.__name__.replace("_", " "),
+                title=title_str)#,
+                # fontsize="x-small")
             for l in legend.legend_handles:
                 l.set_visible(False)
 
@@ -626,14 +664,17 @@ def ExtractCentralValues_df(
     
     if outer_legend:
         plt.gcf().legend(fig_handles, fig_labels, loc = "lower right", ncols = 3)
-    plt.gcf().supxlabel(variable.replace("_", " ").capitalize())
+    # plt.gcf().supxlabel(variable.replace("_", " ").capitalize())
+    # plt.subplots_adjust(bottom=0.0, right=1.0, top=1.0, left=0.0)
     plt.tight_layout()
+    plt.gcf().subplots_adjust(hspace=0.05, wspace=0)
     return np.array(cv), np.array(cv_err)
 
 def ExtractGaussErr_df(
         df : pd.DataFrame,
         bin_variable : str,
         variable : str,
+        uncorr_var: str,
         v_range : list,
         data_bins : list,
         hist_bins : int,
@@ -661,7 +702,7 @@ def ExtractGaussErr_df(
     counts = []
     fig_handles = None
     fig_labels = None
-    for i in Plots.MultiPlot(len(data_bins) - 1, orientation = "vertical"):
+    for i in Plots.MultiPlot(len(data_bins) - 1, orientation = "vertical", sharex_lab=None, sharey_lab=f"Number of entries (bin width={round((max(v_range) - min(v_range)) / hist_bins)})"):
         if i == len(data_bins): continue
         print_log(i)
         mask = (df[bin_variable] > data_bins[i]) & (df[bin_variable] < data_bins[i+1])
@@ -674,6 +715,7 @@ def ExtractGaussErr_df(
             n_in_bin = np.sum(binned_weights)
         
         y, edges = np.histogram(binned_data[variable], bins = hist_bins, range = [min(v_range), max(v_range)], weights = binned_weights)
+        y_uncorr, _ = np.histogram(binned_data[uncorr_var], bins = hist_bins, range = [min(v_range), max(v_range)], weights = binned_weights)
         x = (edges[1:] + edges[:-1]) / 2
         x_interp = np.linspace(min(x), max(x), hist_bins*5)
 
@@ -682,6 +724,7 @@ def ExtractGaussErr_df(
         best_perr = None
         k_best = None
         p_best = None
+        best_popt_uncorr = None
 
         for f in [gaussian]:
             popt = None
@@ -689,6 +732,7 @@ def ExtractGaussErr_df(
             perr = None
             try:
                 popt, pcov = curve_fit(f, x, y, p0 = f.p0(x, y), method = "dogbox", bounds = f.bounds(x, y), maxfev = 500000)
+                popt_uncor, _ = curve_fit(f, x, y_uncorr, p0 = f.p0(x, y_uncorr), method = "dogbox", bounds = f.bounds(x, y_uncorr), maxfev = 500000)
                 perr = np.sqrt(np.diag(pcov))
                 print_log(popt)
                 print_log(perr)
@@ -710,6 +754,7 @@ def ExtractGaussErr_df(
                 best_popt = popt
                 best_perr = perr
                 best_f = f
+                best_popt_uncorr = popt_uncor
 
         mean = None
         mean_error = None
@@ -722,20 +767,41 @@ def ExtractGaussErr_df(
             y_pred = best_f.func(x, *best_popt)
             y_pred_interp = best_f.func(x_interp, *best_popt)
 
-            Plots.Plot(x_interp, y_pred_interp, marker = "", color = "black", newFigure = False, label = "fit")
-            plt.axvline(mean, color = "black", linestyle = "--", label = "central value")
-        Plots.PlotHist(binned_data[variable], bins = hist_bins, newFigure = False, title = f"{bin_label} : {[data_bins[i], data_bins[i+1]]} {bin_units}", range = [min(v_range), max(v_range)], weights = binned_weights)
+            Plots.Plot(x_interp, y_pred_interp, marker = "", color = "black", newFigure = False, label = "Gaussian fit")
+            plt.axvline(mean, color = "black", linestyle = "--", label = "Corrected centre")
+            plt.axvline(best_f.mu(*best_popt_uncorr), linestyle = "--", color = "C1", label = "Uncorrected centre")
+        # title_str = f"{bin_label} : [{data_bins[i]:.0f}, {data_bins[i+1]:.0f}] {bin_units.replace('(', '').replace(')', '')}"
+        title_str = f"[{data_bins[i]:.0f}, {data_bins[i+1]:.0f}] {bin_units.replace('(', '').replace(')', '')}"
+        Plots.PlotHist(
+            binned_data[variable],
+            bins = hist_bins,
+            newFigure = False,
+            # title = f"{bin_label} : {[data_bins[i], data_bins[i+1]]} {bin_units}",
+            range = [min(v_range), max(v_range)],
+            weights = binned_weights,
+            ylab=False,
+            xlabel=r"$p_\mathrm{corr} - p_\mathrm{true}$" + f" / {bin_units.replace('(', '').replace(')', '')}")#variable.replace("_", " ").capitalize() + f" / {bin_units.replace('(', '').replace(')', '')}")
 
-        plt.axvline(np.mean(binned_data[variable]), linestyle = "--", color = "C1", label = "mean")
+        # plt.axvline(np.mean(binned_data[variable]), linestyle = "--", color = "C1", label = "mean")
 
         if not fig_handles: fig_handles, fig_labels = plt.gca().get_legend_handles_labels()
 
         if best_popt is not None:
             text = ""
+            # text=" " + title_str
             for j in range(len(best_popt)):
-                text += f"\np{j}: ${best_popt[j]:.2f}\pm${best_perr[j]:.2f}"
+                if j == 0:
+                    text += f"\n$N$: ${best_popt[j]:.2f}\pm${best_perr[j]:.2f}"    
+                elif j == 1:
+                    text += f"\n$\mu$: ${best_popt[j]:.2f}\pm${best_perr[j]:.2f}"    
+                elif j ==2:
+                    text += f"\n$\sigma$: ${best_popt[j]:.2f}\pm${best_perr[j]:.2f}"    
+                # text += f"\np{j}: ${best_popt[j]:.2f}\pm${best_perr[j]:.2f}"
             text += f"\nks : {k_best:.2f}, p : {p_best:.2f}"
-            legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], title = best_f.__name__.replace("_", " "))
+            legend = plt.gca().legend(
+                handlelength = 0, labels = [text[1:]],
+                # title = best_f.__name__.replace("_", " "),
+                title=title_str)
             for l in legend.legend_handles:
                 l.set_visible(False)
 
@@ -745,7 +811,12 @@ def ExtractGaussErr_df(
         counts.append(n_in_bin)
     
     if outer_legend:
-        plt.gcf().legend(fig_handles, fig_labels, loc = "lower right", ncols = 3)
-    plt.gcf().supxlabel(variable.replace("_", " ").capitalize())
+        plt.gcf().legend(
+            fig_handles, fig_labels,
+            title="Key:",
+            loc='lower center', bbox_to_anchor=(0.0, 0.2, 1.0, 0.5),
+            fontsize="large", title_fontsize="large",
+            framealpha=0.95, shadow=True)
     plt.tight_layout()
+    plt.gcf().subplots_adjust(hspace=0.035)
     return stds, counts

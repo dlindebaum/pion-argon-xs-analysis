@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.ticker import AutoMinorLocator, MultipleLocator
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from scipy.stats import iqr
 
 from python.analysis import vector, Tags, Utils
@@ -24,8 +25,9 @@ from python.analysis.SelectionTools import np_to_ak_indicies
 class PlotConfig():
 
     def __init__(self):
-        self.PLT_STYLE = "fivethirtyeight"
-        self.FIG_SIZE = (14, 10)
+        # self.PLT_STYLE = None
+        self.PLT_STYLE = "/users/wx21978/projects/pion-phys/pi0-analysis/analysis/config/thesis_plotstyle.mplstyle"
+        self.FIG_SIZE = "single"
         self.FIG_FACECOLOR = 'white'
         self.AXIS_FACECOLOR = 'white'
         self.BINS = 'best'                # Number of bins
@@ -74,13 +76,20 @@ class PlotConfig():
             3: self.HIST_COLOR4
         }
 
+        self.width_aspect = 0.75
+        self.string_sizes = {
+            "full": 6.2*2,
+            "half": 3.0*2,
+            "single": 3.2*2
+        }
+
     def __str__(self):
         return "\n".join(["{} = {}".format(str(var), vars(self)[var]) for var in vars(self)])
 
     def copy(self):
         return copy_lib.deepcopy(self)
 
-    def setup_figure(self, sub_rows=1, sub_cols=1, title=None, **kwargs):
+    def setup_figure(self, sub_rows=1, sub_cols=1, title=None, size=None, **kwargs):
         """
         Create a figure and axes instance with the supplied parameters
         and title.
@@ -106,52 +115,76 @@ class PlotConfig():
             shape `(sub_rows, sub_cols)`. This will be an array
             containing one axis if `sub_rows = sub_cols = 1`.
         """
+        if size is None:
+            size = self.FIG_SIZE
+        if isinstance(size, str):
+            figsize = (
+                self.string_sizes[size],
+                (self.string_sizes[size]/sub_cols)*self.width_aspect*sub_rows)
+        elif isinstance(size, list):
+            assert len(size) == 1, "List sizes indicate a fractional size, and may only contain one element"
+            figsize = (
+                self.string_sizes["half"]*2*size[0],
+                self.string_sizes["half"]*2*size[0]*self.width_aspect)
+        else:
+            figsize = size
         # TODO add a scaling function to adjust all test sizes etc,
         # base on either single scalling, or input dimensions
-        plt.style.use(self.PLT_STYLE)
+        if self.arg_style:
+            plt.style.use("fivethirtyeight")
+            fig_kwargs = {
+                "figsize": figsize,
+                "facecolor": self.FIG_FACECOLOR
+            }
+        else:
+            plt.style.use(self.PLT_STYLE)
+            fig_kwargs = {
+                "figsize": figsize
+            }
 
-        fig_kwargs = {
-            "figsize": self.FIG_SIZE,
-            "facecolor": self.FIG_FACECOLOR
-        }
         fig_kwargs.update(kwargs)
 
         fig, axs = plt.subplots(sub_rows, sub_cols, **fig_kwargs)
 
+        if self.arg_style:
+            title_kwarg = {"fontdict": {"fontsize": self.TITLE_SIZE}}
+        else:
+            title_kwarg = {}
         if title is not None:
-            plt.title(title, fontdict={"fontsize": self.TITLE_SIZE})
+            plt.title(title, **title_kwarg)
         elif self.TITLE is not None:
-            plt.title(self.TITLE, fontdict={"fontsize": self.TITLE_SIZE})
+            plt.title(self.TITLE, **title_kwarg)
 
-        if not isinstance(axs, np.ndarray):
-            axs = np.array([axs])
+        if self.arg_style:    
+            if not isinstance(axs, np.ndarray):
+                axs = np.array([axs])
 
-        for ax in axs.flatten():
-            ax.patch.set_alpha(self.AX_ALPHA)
+            for ax in axs.flatten():
+                ax.patch.set_alpha(self.AX_ALPHA)
 
-            ax.tick_params(axis='both', which='major',
-                           labelsize=self.TICK_SIZE)
-            ax.tick_params(axis='both', direction="out", length=self.TICK_LENGTH,
-                           width=self.TICK_WIDTH, grid_color=self.GRID_COLOR, grid_alpha=self.GRID_ALPHA)
+                ax.tick_params(axis='both', which='major',
+                            labelsize=self.TICK_SIZE)
+                ax.tick_params(axis='both', direction="out", length=self.TICK_LENGTH,
+                            width=self.TICK_WIDTH, grid_color=self.GRID_COLOR, grid_alpha=self.GRID_ALPHA)
 
-            if self.MINOR_TICK_SPACING_X == "auto":
-                ax.xaxis.set_minor_locator(AutoMinorLocator())
-            else:
-                ax.xaxis.set_minor_locator(
-                    MultipleLocator(self.MINOR_TICK_SPACING_X))
-            if self.MINOR_TICK_SPACING_Y == "auto":
-                ax.yaxis.set_minor_locator(AutoMinorLocator())
-            else:
-                ax.yaxis.set_minor_locator(
-                    MultipleLocator(self.MINOR_TICK_SPACING_X))
-            ax.tick_params(axis="both", which='minor',
-                           labelsize=self.TICK_SIZE-2, length=self.TICK_LENGTH-2)
+                if self.MINOR_TICK_SPACING_X == "auto":
+                    ax.xaxis.set_minor_locator(AutoMinorLocator())
+                else:
+                    ax.xaxis.set_minor_locator(
+                        MultipleLocator(self.MINOR_TICK_SPACING_X))
+                if self.MINOR_TICK_SPACING_Y == "auto":
+                    ax.yaxis.set_minor_locator(AutoMinorLocator())
+                else:
+                    ax.yaxis.set_minor_locator(
+                        MultipleLocator(self.MINOR_TICK_SPACING_X))
+                ax.tick_params(axis="both", which='minor',
+                            labelsize=self.TICK_SIZE-2, length=self.TICK_LENGTH-2)
 
-            ax.xaxis.grid(self.MINOR_GRID_X, which='minor')
-            ax.yaxis.grid(self.MINOR_GRID_Y, which='minor')
+                ax.xaxis.grid(self.MINOR_GRID_X, which='minor')
+                ax.yaxis.grid(self.MINOR_GRID_Y, which='minor')
 
-            if self.LOGSCALE:
-                ax.set_yscale("log")
+                # if self.LOGSCALE:
+                #     ax.set_yscale("log")
 
         return fig, axs
 
@@ -184,9 +217,12 @@ class PlotConfig():
             shape `(sub_rows, sub_cols)`. This will be an array
             containing one axis if `sub_rows = sub_cols = 1`.
         """
-        final_kwargs = {
-            "linewidth": self.LINEWIDTH
-        }
+        final_kwargs = {}
+
+        if self.arg_style:
+            final_kwargs.update({
+                "linewidth": self.LINEWIDTH
+            })
 
         if type == "hist":
             final_kwargs.update({
@@ -199,7 +235,7 @@ class PlotConfig():
         elif type == "line":
             final_kwargs.pop("linewidth")
             final_kwargs.update({
-                "linewidth": self.LINEWIDTH,
+                # "linewidth": self.LINEWIDTH,
                 "colors": "red"
             })
 
@@ -244,6 +280,10 @@ class PlotConfig():
             default settings of the `PlotConfig` instance is used.
             Default is None.
         """
+        if self.arg_style:
+            lab_args = {"size":self.LABEL_SIZE}
+        else:
+            lab_args = {}
         if len(ax) == 0 or (len(ax) == 1 and ax[0] is None):
             # Overrides for log scales needs to be before xlim call
             if xlog is not None:
@@ -256,17 +296,20 @@ class PlotConfig():
                     plt.gca().set_yscale("log")
                 else:
                     plt.gca().set_yscale("linear")
-
-            plt.xlabel(xlabel, size=self.LABEL_SIZE)
-            plt.ylabel(ylabel, size=self.LABEL_SIZE)
-            plt.xlim(xlim)
-            plt.ylim(ylim)
-            plt.gca().set_facecolor(self.AXIS_FACECOLOR)
-            for spine in plt.gca().spines.values():
-                spine.set_edgecolor(self.SPINE_COLOR)
-            if legend:
-                plt.legend(prop={'size': self.LEGEND_SIZE},
-                           facecolor=self.LEGEND_COLOR)
+            plt.xlabel(xlabel, **lab_args)
+            plt.ylabel(ylabel, **lab_args)
+            if self.arg_style:
+                plt.xlim(xlim)
+                plt.ylim(ylim)
+                plt.gca().set_facecolor(self.AXIS_FACECOLOR)
+                for spine in plt.gca().spines.values():
+                    spine.set_edgecolor(self.SPINE_COLOR)
+            if legend and len(plt.gca().get_legend_handles_labels()[1])>0:
+                if self.arg_style:
+                    plt.legend(prop={'size': self.LEGEND_SIZE},
+                            facecolor=self.LEGEND_COLOR)
+                else:
+                    plt.legend()
 
         else:
             for a in ax:
@@ -281,17 +324,20 @@ class PlotConfig():
                         a.set_yscale("log")
                     else:
                         a.set_yscale("linear")
-
-                a.set_xlabel(xlabel, size=self.LABEL_SIZE)
-                a.set_ylabel(ylabel, size=self.LABEL_SIZE)
-                a.set_xlim(xlim)
-                a.set_ylim(ylim)
-                a.set_facecolor(self.AXIS_FACECOLOR)
-                for spine in a.spines.values():
-                    spine.set_edgecolor(self.SPINE_COLOR)
-                if legend and len(plt.gca().get_legend_handles_labels()[1])>0:
-                    a.legend(prop={'size': self.LEGEND_SIZE},
-                             facecolor=self.LEGEND_COLOR)
+                a.set_xlabel(xlabel, **lab_args)
+                a.set_ylabel(ylabel, **lab_args)
+                if self.arg_style:
+                    a.set_xlim(xlim)
+                    a.set_ylim(ylim)
+                    a.set_facecolor(self.AXIS_FACECOLOR)
+                    for spine in a.spines.values():
+                        spine.set_edgecolor(self.SPINE_COLOR)
+                if legend and len(a.get_legend_handles_labels()[1])>0:
+                    if self.arg_style:
+                        a.legend(prop={'size': self.LEGEND_SIZE},
+                                 facecolor=self.LEGEND_COLOR)
+                    else:
+                        a.legend()
 
         return
 
@@ -315,16 +361,19 @@ class PlotConfig():
         """
         # Need to get this to work with multiple figures open
         plt.tight_layout()
-
+        if self.arg_style:
+            save_args = {"facecolor":self.FIG_FACECOLOR, "dpi":self.DPI}
+        else:
+            save_args = {}
         if save_name is not None:
             if "/" in save_name:
                 plt.savefig(save_name, bbox_inches='tight',
-                            facecolor=self.FIG_FACECOLOR, dpi=self.DPI)
+                            **save_args)
             elif self.SAVE_FOLDER is not None:
                 if self.SAVE_FOLDER[-1] != "/":
                     self.SAVE_FOLDER += "/"
                 plt.savefig(self.SAVE_FOLDER + save_name, bbox_inches='tight',
-                            facecolor=self.FIG_FACECOLOR, dpi=self.DPI)
+                            **save_args)
             else:
                 warnings.warn(
                     "Plot has been given a file name to save, but not path to folder in the PlotConfig")
@@ -414,6 +463,10 @@ class PlotConfig():
             bins = np.concatenate((bins, np.arange(
                 bins[-1] + high_bin_width, max(data) + high_bin_width*(1+1e-6), high_bin_width)))
         return bins
+
+    @property
+    def arg_style(self):
+        return self.PLT_STYLE is None
 
 
 class HistogramBatchPlotter():
@@ -961,7 +1014,7 @@ def FigureDimensions(x : int, orientation : str = "horizontal") -> tuple[int]:
     return dim
 
 
-def MultiPlot(n : int, xlim : tuple = None, ylim : tuple = None, orientation = "horizontal"):
+def MultiPlot(n : int, xlim : tuple = None, ylim : tuple = None, orientation = "horizontal", sharex_lab = None, sharey_lab=None, ylog=False):
     """ Generator for subplots.
 
     Args:
@@ -971,11 +1024,32 @@ def MultiPlot(n : int, xlim : tuple = None, ylim : tuple = None, orientation = "
         Iterator[int]: ith plot
     """
     dim = FigureDimensions(n, orientation)
-    plt.subplots(figsize = [6.4 * dim[1], 4.8 * dim[0]])
+    # null_ax = plt.subplots(figsize = [6.4 * dim[1], 4.8 * dim[0]])
+    fig, null_ax = plt.subplots(figsize = [6.2*2, 6.2*2*0.75*dim[0]/dim[1]])
+    null_ax.set_axis_off()
+    # null_ax.set_ylabel(sharey_lab)
+    # null_ax.set_xlabel(sharex_lab)
+    fig.supxlabel(sharex_lab)
+    fig.supylabel(sharey_lab)
+    # null_ax.remove()
+    axes = []
     for i in range(n):
-        plt.subplot(dim[0], dim[1], i + 1)
+        sub_kwargs = {}
+        # if i % dim[1] >0:
+        #     sub_kwargs.update({"sharey": axes[(i//dim[0]) * dim[1]]})
+        if i//dim[0] > 0:
+            sub_kwargs.update({"sharex": axes[(i%dim[1])]})
+        axes.append(plt.subplot(dim[0], dim[1], i + 1, **sub_kwargs))
         if xlim: plt.xlim(xlim)
         if ylim: plt.ylim(ylim)
+        # if ylog: plt.yscale("log")
+        # if i % dim[1] >0:
+        #     axes[-1].tick_params(axis="y", direction="inout", which="both", labelcolor=(0.0, 0.0, 0.0, 0.0))
+        if i < (n - dim[1]):
+            axes[-1].tick_params(axis="x", labelcolor=(0.0, 0.0, 0.0, 0.0))
+            axes[-1].set_xlabel(None, color=(0.0, 0.0, 0.0, 0.0))
+        # else:
+        #     axes[-1].tick_params(axis="y", direction="inout")
         yield i
 
 
@@ -997,11 +1071,13 @@ def IterMultiPlot(x, xlim : tuple = None, ylim : tuple = None, threshold = 100):
         yield i, j
 
 
-def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None, xerr = None, yerr = None, capsize : float = 3, zorder : int = None, style : str = "scatter", rasterized : bool = False):
+def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None, xerr = None, yerr = None, capsize : float = 3, zorder : int = None, style : str = "scatter", rasterized : bool = False, size="single"):
     """ Make scatter plot.
     """
+    size_dict = {"single": 3.2, "half": 3.0}
+    fig_size = (2*size_dict[size], 2*size_dict[size]*3/4)
     if newFigure is True:
-        plt.figure()
+        plt.figure(figsize=fig_size)
 
     if style == "bar":
         width = min(x[1:] - x[:-1]) # until I figure out how to do varaible widths
@@ -1055,7 +1131,7 @@ def PlotComparison(x, y, labels: list, xlabel: str = "", ylabel: str = "", title
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
-def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None, alpha : int = 1, histtype : str = "bar", sf : int = 2, density : bool = False, x_scale : str = "linear", y_scale : str = "linear", newFigure : bool = True, annotation : str = None, stacked : bool = False, color = None, range : list = None, truncate : bool = False, weights : ak.Array = None):
+def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None, alpha : int = 1, histtype : str = "bar", sf : int = 2, density : bool = False, x_scale : str = "linear", y_scale : str = "linear", newFigure : bool = True, annotation : str = None, stacked : bool = False, color = None, range : list = None, truncate : bool = False, weights : ak.Array = None, ylab=True):
     """ Plot 1D histograms.
     Returns:
         np.arrays : bin heights and edges
@@ -1067,14 +1143,15 @@ def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None
         data = ClipJagged(data, min(range), max(range))
 
     height, edges, _ = plt.hist(data, bins, label = label, alpha = alpha, density = density, histtype = histtype, stacked = stacked, color = color, range = range if range and len(range) == 2 else None, weights = weights)
-    binWidth = round((edges[-1] - edges[0]) / len(edges), sf)
+    binWidth = round((edges[-1] - edges[0]) / (len(edges)-1), sf)
     # TODO: make ylabel a parameter
-    if density == False:
-        yl = "Number of entries (bin width=" + str(binWidth) + ")"
-    else:
-        yl = "Normalized number of entries (bin width=" + str(binWidth) + ")"
+    if ylab:
+        if density == False:
+            yl = "Number of entries (bin width=" + str(binWidth) + ")"
+        else:
+            yl = "Normalized number of entries (bin width=" + str(binWidth) + ")"
+        plt.ylabel(yl)
     if xlabel is not None: plt.xlabel(xlabel)
-    plt.ylabel(yl)
     plt.xscale(x_scale)
     plt.yscale(y_scale)
     plt.title(title)
@@ -1219,14 +1296,32 @@ def PlotHist2DComparison(x : list, y : list, x_range : list, y_range : list, xla
     fig.colorbar(im, cax = cbar_ax)
 
 
-def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : list = None, stacked = False, data_label : str = "Data", mc_labels = "MC", xlabel : str = None, title : str = None, yscale : str = "linear", legend_loc : str = "best", ncols : int = 2, norm : bool = False, sf : int = 2, colour : str = None, alpha : float = None, truncate : bool = False, mc_weights : np.array = None):
+def PlotHistDataMC(
+        data : ak.Array, mc : ak.Array,
+        bins : int = 100,
+        x_range : list = None,
+        stacked = False,
+        data_label : str = "Data", mc_labels = "MC",
+        xlabel : str = None, title : str = None,
+        yscale : str = "linear",
+        legend_loc : str = "best",
+        ncols : int = 2,
+        norm : bool = False,
+        sf : int = 2,
+        colour : str = None,
+        alpha : float = None,
+        truncate : bool = False,
+        mc_weights : np.array = None,
+        size: str = "single"):
     """ Make Data MC histograms as seen in most typical particle physics analyses (but looks better).
 
     Args:
         data (ak.Array): data sample
         mc (ak.Array): MC sample
     """
-    plt.subplots(2, 1, figsize = (6.4, 4.8 * 1.2), gridspec_kw={"height_ratios" : [5, 1]} , sharex = True) # set to that the ratio plot is 1/5th the default plot height
+    size_dict = {"single": 3.2, "half": 3.0}
+    fig_size = (2*size_dict[size], 2*size_dict[size]*15/16)
+    plt.subplots(2, 1, figsize = fig_size, gridspec_kw={"height_ratios" : [5, 1]} , sharex = True) # set to that the ratio plot is 1/5th the default plot height
 
     is_tagged = hasattr(mc_labels, "__iter__") & (type(mc_labels) != str) 
     if norm == False:
@@ -1280,7 +1375,7 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
         else:
             for m in ind:
                 plt.hist(edges[:-1], edges, weights = h_mc[m], range = x_range, stacked = False, label = mc_labels[m], color = colour[m], alpha = alpha)
-        plt.errorbar(centres, np.sum(h_mc, 0), abs(np.sum(h_mc, 0))**0.5, c = "black", label = "MC total" + f" ({int(ak.count(mc) * scale)})", marker = "x", capsize = 3, linestyle = "")
+        plt.errorbar(centres, np.sum(h_mc, 0), abs(np.sum(h_mc, 0))**0.5, c = "black", label = "MC total" + f" ({int(ak.count(mc) * scale)})", marker = "x", capsize = 4, linestyle = "")
     else:
         plt.hist(edges[:-1], edges, weights = h_mc, range = x_range, stacked = False, label = mc_labels, color = colour, alpha = alpha)
 
@@ -1296,7 +1391,7 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
 
     h_data, edges = np.histogram(np.array(data), bins = edges, range = x_range) # bin the data in terms of MC
     data_err = np.sqrt(h_data) # poisson error in each bin
-    plt.errorbar(centres, h_data, data_err, marker = "o", c = "black", capsize = 3, linestyle = "", label = data_label + f" ({ak.count(data)})")
+    plt.errorbar(centres, h_data, data_err, marker = "o", c = "black", capsize = 4, linestyle = "", label = data_label + f" ({ak.count(data)})")
 
     plt.legend(loc = legend_loc, ncols = ncols, labelspacing = 0.25)
 
@@ -1314,7 +1409,7 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     ratio = Utils.nandiv(h_data, h_mc) # data / MC
     ratio_err = abs(ratio * np.sqrt(Utils.nandiv(data_err, h_data)**2 + Utils.nandiv(mc_error, h_mc)**2))
     ratio[ratio == np.inf] = -1 # if the ratio is undefined, set it to -1
-    plt.errorbar(centres, ratio, ratio_err, c = "black", marker = "o", capsize = 3, linestyle = "")
+    plt.errorbar(centres, ratio, ratio_err, c = "black", marker = "o", capsize = 4, linestyle = "")
     plt.ylabel("Data/MC")
 
     ticks = [0, 0.5, 1, 1.5, 2] # hardcode the yaxis to have 5 ticks
@@ -1384,7 +1479,15 @@ def PlotHist2DImshowMarginal(data_x, data_y, bins: int = 100, x_range: list = No
     return
 
 
-def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y_tick_labels : list[str] = None, title : str = None, newFigure : bool = True, cmap : str = "cool", x_label : str = None, y_label : str = None):
+def PlotConfusionMatrix(
+        counts : np.ndarray,
+        x_tick_labels : list[str] = None,
+        y_tick_labels : list[str] = None,
+        title : str = None,
+        newFigure : bool = True,
+        cmap : str = "cool",
+        x_label : str = None,
+        y_label : str = None):
     """ Plots confusion matrix
 
     Args:
@@ -1400,8 +1503,17 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
     fractions = counts / np.sum(counts, axis = 1)[:, np.newaxis]
     if newFigure: plt.figure()
     c_norm = counts/np.sum(counts, axis = 0)
-    plt.imshow(c_norm, cmap = cmap, origin = "lower", vmin=0., vmax=1.)
-    plt.colorbar(label = "Column normalised counts", shrink = 0.8)
+    gridspec = matplotlib.gridspec.GridSpec(2,2,width_ratios=[4,1], height_ratios=[2,5])
+    imax = plt.gcf().add_subplot(gridspec[:, 0])
+    holderax = plt.gcf().add_subplot(gridspec[1, 1])
+    cax=holderax.inset_axes([0,0,0.3,1])
+    holderax.set_axis_off()
+    keyax = plt.gcf().add_subplot(gridspec[0, 1])
+    im = imax.imshow(c_norm, cmap = cmap, origin = "lower", vmin=0., vmax=1.)
+    plt.gcf().colorbar(im, label = "Column normalised fraction", cax=cax)
+    imax.grid(False)
+    keyax.grid(False)
+    imax.grid(visible=True, which="minor", alpha=0.8)
 
     y_counts = np.sum(counts, axis = 1)
     x_counts = np.sum(counts, axis = 0)
@@ -1415,22 +1527,43 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
     y_counts = [f"{y_tick_labels[t].replace('_', ' ')}\n({y_counts[t]})" for t in range(len(y_tick_labels))]
 
 
-    plt.gca().set_xticks(np.arange(len(x_counts)), labels=x_counts)
-    plt.gca().set_yticks(np.arange(len(y_counts)), labels=y_counts)
+    imax.set_xticks(np.arange(len(x_counts)), labels=x_counts)
+    imax.set_yticks(np.arange(len(y_counts)), labels=y_counts)
+    imax.set_xticks(np.arange(len(x_counts)+1)-0.5, minor=True)
+    imax.set_yticks(np.arange(len(y_counts)+1)-0.5, minor=True)
 
-    plt.xlabel(x_label)
-    plt.ylabel(y_label)
-    plt.xticks(rotation = 30)
-    plt.yticks(rotation = 30)
+    keyax.set_xticks(np.arange(1)+0.5, labels=[None])#"Pred. process.\n(Total in column)"],fontsize="x-small")
+    keyax.set_yticks(np.arange(1)+0.5, labels=[None])#"True process.\n(Total in row)"],fontsize="x-small")
+    keyax.set_xticks(np.arange(2), minor=True)
+    keyax.set_yticks(np.arange(2), minor=True)
+    keyax.set_title("Key",fontsize="small")
+
+    cax_ticks = np.linspace(0,1,6)
+    cax.set_yticks(cax_ticks, labels = [f"{t:.0%}" for t in cax_ticks])
+
+    imax.set_xlabel(x_label)
+    imax.set_ylabel(y_label)
+    # plt.xticks(rotation = 30)
+    # plt.yticks(rotation = 30)
 
     if title is not None:
-        plt.title(title + "| Key: (counts, efficiency(%), purity(%))")
-    else:
-        plt.title("Key: (counts, efficiency(%), purity(%))")
+        plt.gcf().title(title)
+    # else:
+    #     plt.title("Key: (counts, efficiency(%), purity(%))")
 
     for (i, j), z in np.ndenumerate(counts):
-        plt.gca().text(j, i, f"{z},\n{fractions[i][j]*100:.2g}%,\n{c_norm[i][j]*100:.2g}%", ha='center', va='center', fontsize = 8)
-    plt.grid(False)
+        if fractions[i][j] == 1:
+            eff_str = "100%"
+        else:
+            eff_str = f"{fractions[i][j]*100:.2g}%"
+        if c_norm[i][j] == 1:
+            pur_str = "100%"
+        elif np.isnan(c_norm[i][j]):
+            pur_str = "-"
+        else:
+            pur_str = f"{c_norm[i][j]*100:.2g}%"
+        imax.text(j, i, f"{z},\n{eff_str},\n{pur_str}", ha='center', va='center', fontsize = 8)
+    keyax.text(0.5, 0.5, f"Count,\nEfficiency (row),\nPurity (column)", ha='center', va='center', fontsize = 8)
     plt.tight_layout()
 
 
@@ -1462,8 +1595,8 @@ def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float
     else:
         raise Exception("face must be left or right")
 
-    xy0 = (value - face_factor * (value/1500), arrow_loc)
-    xy1 = (value - (value/1500) + face_factor * arrow_length, arrow_loc)
+    xy0 = (value - face_factor * (100*value/1500), arrow_loc)
+    xy1 = (value - (face_factor*0*value/1500) + face_factor * arrow_length, arrow_loc)
     transform = ("data", "axes fraction")
 
     if flip:
@@ -1471,15 +1604,33 @@ def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float
         xy1 = tuple(reversed(xy1))
         transform = tuple(reversed(transform))
 
-        plt.axhline(value, color = color)
+        plt.axhline(value, color = color, linewidth=1)
     else:
-        plt.axvline(value, color = color)
+        plt.axvline(value, color = color, linewidth=1)
 
     if annotate: plt.annotate(f"{value:.3g}", xy = xy0, xycoords = transform)
     plt.annotate("", xy = xy1, xytext = xy0, arrowprops=dict(facecolor = color, edgecolor = color, arrowstyle = "->"), xycoords= transform)
 
 
-def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False, title : str = "", newFigure : bool = True, stacked : bool = True, alpha : float = None, truncate : bool = False, histtype : str = "stepfilled", reverse_sort : bool = False, data_weights : np.array = None):
+def PlotTagged(
+        data : np.array, tags : Tags.Tags,
+        bins = 100,
+        x_range : list = None,
+        y_scale : str = "linear",
+        x_label : str = "",
+        loc : str = "best",
+        ncols : int = 2,
+        data2 : np.array = None,
+        norm : bool = False,
+        title : str = "",
+        newFigure : bool = True,
+        stacked : bool = True,
+        alpha : float = None,
+        truncate : bool = False,
+        histtype : str = "stepfilled",
+        reverse_sort : bool = False,
+        data_weights : np.array = None,
+        size : str = "single"):
     """ Makes a stacked histogram and splits the sample based on tags.
 
     Args:
@@ -1520,7 +1671,7 @@ def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = N
         PlotHist(split_data, stacked = stacked, label = [Utils.remove_(i) for i in sorted_tags.name.values], bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, newFigure = newFigure, alpha = alpha, truncate = truncate, histtype = histtype, weights = split_weights)
         plt.legend(loc = loc, ncols = ncols, labelspacing = 0.25,  columnspacing = 0.25)
     else:
-        PlotHistDataMC(ak.ravel(data2), split_data, bins, x_range, stacked, "Data", sorted_tags.name.values, x_label, title, y_scale, loc, ncols, norm, colour = colours, alpha = alpha, truncate = truncate, mc_weights = split_weights)
+        PlotHistDataMC(ak.ravel(data2), split_data, bins, x_range, stacked, "Data", sorted_tags.name.values, x_label, title, y_scale, loc, ncols, norm, colour = colours, alpha = alpha, truncate = truncate, mc_weights = split_weights, size=size)
 
 
 def UniqueData(data):
@@ -1668,9 +1819,13 @@ def PlotTags(tags : Tags.Tags, xlabel : str = "name", fraction : bool = True, ne
     if newFigure: plt.figure()    
     counts = [ak.sum(m) for m in tags.mask.values]
     yl = "Counts"
+    print("ID TABLE RESULTS")
+    print(xlabel)
+    print(counts)
     if fraction is True:
         counts = counts / np.sum(counts)
         yl = "Fractional counts"
+    print(counts)
     bar = plt.bar(tags.name.values, counts, color = tags.colour.values)
     plt.xlabel(xlabel)
     plt.ylabel(yl)
@@ -1727,47 +1882,131 @@ def multi_dim_2d_plot(
     if plt_conf is None:
         plt_conf = PlotConfig()
         plt_conf.SHOW_PLOT = True
+        plt_conf.FIG_SIZE = "half"
         plt_conf.SAVE_FOLDER = None
-    weights_indexer = np.concatenate( # Put the inte and end energies on the same axis.
-        [multi_dim_binner.slice_by_hist(slice(None), slice(None), 0),
-         multi_dim_binner.slice_by_hist(slice(None), slice(None), 1)],
-        axis=-1).T.flatten()
-    weights_flat = info[weights_indexer]
-    x_pos = np.arange(multi_dim_binner.n_bins_end)[:, np.newaxis]# + int(multi_dim_binner.reversed)
+        plt_conf.width_aspect = 0.7
+    # weights_indexer = np.concatenate( # Put the inte and end energies on the same axis.
+    #     [multi_dim_binner.slice_by_hist(slice(None), slice(None), 0),
+    #      multi_dim_binner.slice_by_hist(slice(None), slice(None), 1)],
+    #     axis=-1).T.flatten()
+    # weights_flat = info[weights_indexer]
+    # x_pos = np.arange(multi_dim_binner.n_bins_end)[:, np.newaxis]# + int(multi_dim_binner.reversed)
+    # y_pos = np.arange(multi_dim_binner.n_bins_init)[np.newaxis, :]# + int(multi_dim_binner.reversed)
+    # x_flat = (x_pos * np.ones_like(y_pos)).flatten()
+    # y_flat = (y_pos * np.ones_like(x_pos)).flatten()
+
+    # bins_clip = np.clip(
+    #     e_bins_overflow,
+    #     np.min(e_bins_overflow[1:-1])-100,
+    #     np.max(e_bins_overflow[1:-1])+100)
+    # init_slicer = (slice(1, None) if multi_dim_binner.reversed
+    #                  else slice(None, -1))
+    # bins_clip_x = np.concatenate([
+    #     bins_clip[init_slicer], bins_clip[init_slicer]+2000], axis=0)
+    # # x_2d += x_2d//multi_dim_binner.n_bins_init
+    # x_2d = bins_clip_x[x_flat]
+    # y_2d = bins_clip[init_slicer][y_flat]
+    # # Adds an extra set of x values to separate out the inital in ending energies
+    # y_extra = bins_clip
+    # x_extra = np.full_like(bins_clip, np.max(bins_clip))
+    # x_2d = np.concatenate([x_2d, x_extra], axis=0)
+    # y_2d = np.concatenate([y_2d, y_extra], axis=0)
+    # use_weights = np.concatenate([weights_flat, np.full_like(bins_clip, np.nan)], axis=0)
+    # # use_weights = weights_flat
+    # # bins_2d = [bins_clip_x_edge[bins_2d[0]], bins_clip[bins_2d[1]]]
+    # full_bins_x = np.concatenate([
+    #     bins_clip, bins_clip+2000], axis=0)
+    # bins_2d = [np.sort(full_bins_x[np.arange(multi_dim_binner.n_bins_end+2)]),
+    #            np.sort(bins_clip[np.arange(multi_dim_binner.n_bins_init+1)])]
+    
+    inte_slicer = multi_dim_binner.slice_by_hist(slice(None), slice(None), 0).T.flatten()
+    end_slicer = multi_dim_binner.slice_by_hist(slice(None), slice(None), 1).T.flatten()
+    # weights_indexer = np.concatenate( # Put the inte and end energies on the same axis.
+    #     [multi_dim_binner.slice_by_hist(slice(None), slice(None), 0),
+    #      multi_dim_binner.slice_by_hist(slice(None), slice(None), 1)],
+    #     axis=-1).T.flatten()
+    inte_weights = info[inte_slicer]
+    end_weights = info[end_slicer]
+    x_pos = np.arange(multi_dim_binner.n_bins_init)[:, np.newaxis]# + int(multi_dim_binner.reversed)
     y_pos = np.arange(multi_dim_binner.n_bins_init)[np.newaxis, :]# + int(multi_dim_binner.reversed)
     x_flat = (x_pos * np.ones_like(y_pos)).flatten()
     y_flat = (y_pos * np.ones_like(x_pos)).flatten()
-
     bins_clip = np.clip(
         e_bins_overflow,
         np.min(e_bins_overflow[1:-1])-100,
         np.max(e_bins_overflow[1:-1])+100)
     init_slicer = (slice(1, None) if multi_dim_binner.reversed
                      else slice(None, -1))
-    bins_clip_x = np.concatenate([
-        bins_clip[init_slicer], bins_clip[init_slicer]+2000], axis=0)
+    # bins_clip_x = np.concatenate([
+    #     bins_clip[init_slicer], bins_clip[init_slicer]+2000], axis=0)
     # x_2d += x_2d//multi_dim_binner.n_bins_init
-    x_2d = bins_clip_x[x_flat]
+    x_2d = bins_clip[init_slicer][x_flat]
     y_2d = bins_clip[init_slicer][y_flat]
-    # Adds an extra set of x values to separate out the inital in ending energies
-    y_extra = bins_clip
-    x_extra = np.full_like(bins_clip, np.max(bins_clip))
-    x_2d = np.concatenate([x_2d, x_extra], axis=0)
-    y_2d = np.concatenate([y_2d, y_extra], axis=0)
-    use_weights = np.concatenate([weights_flat, np.full_like(bins_clip, np.nan)], axis=0)
+    # # Adds an extra set of x values to separate out the inital in ending energies
+    # y_extra = bins_clip
+    # x_extra = np.full_like(bins_clip, np.max(bins_clip))
+    # x_2d = np.concatenate([x_2d, x_extra], axis=0)
+    # y_2d = np.concatenate([y_2d, y_extra], axis=0)
+    # use_weights = np.concatenate([weights_flat, np.full_like(bins_clip, np.nan)], axis=0)
     # use_weights = weights_flat
     # bins_2d = [bins_clip_x_edge[bins_2d[0]], bins_clip[bins_2d[1]]]
-    full_bins_x = np.concatenate([
-        bins_clip, bins_clip+2000], axis=0)
-    bins_2d = [np.sort(full_bins_x[np.arange(multi_dim_binner.n_bins_end+2)]),
-               np.sort(bins_clip[np.arange(multi_dim_binner.n_bins_init+1)])]
+    # full_bins_x = np.concatenate([
+    #     bins_clip, bins_clip+2000], axis=0)
+    bins_2d = [np.sort(bins_clip),
+               np.sort(bins_clip)]
     # print(use_weights)
-    plt_conf.setup_figure(figsize=(12, 7), title=title)
-    plt.hist2d(x_2d, y_2d, bins=bins_2d, weights=use_weights, **plt_kwargs)
-    plt.colorbar()
-    plt_conf.format_axis(
-        xlabel="Inte./MeV                              (End+2000)/MeV",
-        ylabel="Init./MeV", ylog=False)
+    fig, ax1 = plt_conf.setup_figure(title=title)
+    # ax_null.remove()
+    # gspec = matplotlib.gridspec.GridSpec(1, 3, figure=fig, width_ratios=[17, 3])
+    # ax1 = fig.add_subplot(gspec[0])
+    # ax2 = fig.add_subplot(gspec[1], sharey=ax1)
+    # cax = fig.add_subplot(gspec[2:])
+    _, _, _, im = ax1.hist2d(x_2d, y_2d, bins=bins_2d, weights=inte_weights, **plt_kwargs)
+    divider = make_axes_locatable(ax1)
+    # ax2 = divider.append_axes("right", size=axes_size.AxesX(ax1, 0.5), pad=0.05, sharey=ax1)
+    ax2 = divider.append_axes("right", size="100%", pad=0.17, sharey=ax1)
+    ax2.hist2d(x_2d, y_2d, bins=bins_2d, weights=end_weights, **plt_kwargs)
+    plt.setp(ax2.get_yticklabels(), visible=False)
+    cb = fig.colorbar(im)#, ax=cax)
+    cb.outline.set_linewidth(0.5)
+    cb.set_label(r"$R_\mathrm{full/inst}$")
+    plt_conf.format_axis(ax1,
+        xlabel=r"$E_\mathrm{inte}$ / MeV",#xlabel="Inte. / MeV",
+        ylabel=r"$E_\mathrm{init}$ / MeV", ylog=False)#ylabel="Initial energy / MeV", ylog=False)
+    plt_conf.format_axis(ax2,
+        xlabel=r"$E_\mathrm{end}$ / MeV")#"End / MeV")#,
+        # ylabel="Init. / MeV", ylog=False)
+    tick_pos = [2000] + list(np.linspace(2100, 3100, 6)) + [3200]
+    subtick_pos = list(np.linspace(2100, 3100, 11))
+    # ticky_pos = [2000, 2050] + list(np.linspace(2100, 3100, 6)) + [2150, 3200]
+    subticky_pos = list(np.linspace(2050, 3150, 23))
+    # tick_labs = ["under", "2100", None, None, None, None, "2600", None, None, None, None, "3100", "over"]
+    tick_labs = ["under", "2100", "2300", "2500", "2700", "2900", "3100", "over"]
+    ticky_labs = [None, "2100", "2300", "2500", "2700", "2900", "3100", None]
+    tickysub_labs = ["under"] + [None]*21 + ["over"]
+    ax1.set_xticks(tick_pos, tick_labs, rotation=65)
+    ax1.set_xticks(subtick_pos, minor=True)
+    ax1.set_yticks(tick_pos, ticky_labs)
+    ax1.set_yticks(subticky_pos, tickysub_labs, minor=True)
+    for i, line in enumerate(ax1.yaxis.get_ticklines(minor=True)):
+        if i == 0 or i == 32:
+            line.set_alpha(0.0)
+    ax2.set_xticks(tick_pos, tick_labs, rotation=65)
+    ax2.set_xticks(subtick_pos, minor=True)
+    for label in ax2.get_yticklabels(minor=True):
+        label.set_alpha(0.0)
+    for i, line in enumerate(ax2.yaxis.get_ticklines(minor=True)):
+        if i == 0 or i == 32:
+            line.set_alpha(0)
+    # ax2.set_yticks(subticky_pos, [None]*23, minor=True)
+    # ax2.set_yticks(tick_pos)
+    # ax2.set_yticks(subticky_pos, minor=True)
+    # for i, label in enumerate(ax2.get_xticklabels()):
+    #     if i%12 == 0:
+    #         label.set_rotation(65)
+    # tick_labs = [str(p) for p in tick_pos]
+    # tick_labs[0] = "under"
+    # tick_labs[-1] = "over"
     # warnings.warn("Not ending plot to allow PDF to save it")
     if pdf is not None:
         pdf.Save()

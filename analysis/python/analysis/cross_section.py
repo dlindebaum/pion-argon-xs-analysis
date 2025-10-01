@@ -294,14 +294,15 @@ class PlotStyler:
     @staticmethod
     def SetPlotStyle(extend_colors : bool = False, custom_colors : list = None, dpi : int = 300, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):
         Plots.plt.style.use("default") # first load the default to reset any previous changes made by other styles
-        Plots.plt.style.use('ggplot')
-        Plots.plt.rcParams.update({'patch.linewidth': 1})
-        Plots.plt.rcParams.update({'font.size': font_scale * 10})
-        Plots.plt.rcParams.update({"axes.titlecolor" : "#555555"})
-        Plots.plt.rcParams.update({"axes.titlesize" : font_scale * 12})
-        Plots.plt.rcParams['figure.dpi'] = dpi
-        Plots.plt.rcParams['legend.fontsize'] = "small"
-        Plots.plt.rcParams["font.family"] = font_style
+        Plots.plt.style.use("/users/wx21978/projects/pion-phys/pi0-analysis/analysis/config/thesis_plotstyle.mplstyle")
+        # Plots.plt.style.use('seaborn-v0_8-paper')
+        # Plots.plt.rcParams.update({'patch.linewidth': 1})
+        # Plots.plt.rcParams.update({'font.size': font_scale * 10})
+        # # Plots.plt.rcParams.update({"axes.titlecolor" : "#555555"})
+        # Plots.plt.rcParams.update({"axes.titlesize" : font_scale * 12})
+        # Plots.plt.rcParams['figure.dpi'] = dpi
+        # Plots.plt.rcParams['legend.fontsize'] = "small"
+        # # Plots.plt.rcParams["font.family"] = font_style
 
         Plots.plt.rc('text.latex', preamble=r"\\usepackage{amsmath}")
         if custom_colors:
