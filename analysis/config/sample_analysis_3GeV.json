@@ -1,0 +1,215 @@
+{
+  "NTUPLE_FILES": {
+    "mc": [
+      {
+        "file": "/storage/0/wx21978/phys/mc_root/PDSPProd4a_MC_3GeV_Set00_reco1_sce_datadriven_v1_ntuple_v09_44_00_02.root",
+        "type": "PDSPAnalyser",
+        "pmom": 3
+      },
+      {
+        "file": "/storage/0/wx21978/phys/mc_root/PDSPProd4a_MC_3GeV_Set01_reco1_sce_datadriven_v1_ntuple_v09_44_00_02.root",
+        "type": "PDSPAnalyser",
+        "pmom": 3
+      },
+      {
+        "file": "/storage/0/wx21978/phys/mc_root/PDSPProd4a_MC_3GeV_Set02_reco1_sce_datadriven_v1_ntuple_v09_44_00_02.root",
+        "type": "PDSPAnalyser",
+        "pmom": 3
+      }
+    ],
+    "data": [
+      {
+        "file": "/storage/0/wx21978/phys/data_root/PDSPProd4_data_3GeV_Set00_reco2_ntuple_v09_44_00_02.root",
+        "type": "PDSPAnalyser",
+        "pmom": 1
+      },
+      {
+        "file": "/storage/0/wx21978/phys/data_root/PDSPProd4_data_3GeV_Set01_reco2_ntuple_v09_44_00_02.root",
+        "type": "PDSPAnalyser",
+        "pmom": 1
+      },
+      {
+        "file": "/storage/0/wx21978/phys/data_root/PDSPProd4_data_3GeV_Set02_reco2_ntuple_v09_44_00_02.root",
+        "type": "PDSPAnalyser",
+        "pmom": 1
+      },
+      {
+        "file": "/storage/0/wx21978/phys/data_root/PDSPProd4_data_3GeV_Set03_reco2_ntuple_v09_44_00_02.root",
+        "type": "PDSPAnalyser",
+        "pmom": 1
+      }
+    ]
+  },
+  "norm": null,
+  "pi_KE_lim": -1,
+  "FIDUCIAL_VOLUME": [
+    30,
+    220
+  ],
+  "REGION_IDENTIFICATION": {
+    "type": "sample_only"
+  },
+  "SYSTEMATICS": {
+    "track_length": 0.026,
+    "beam_momentum": 0.012,
+    "GNN_model": "true_proton_multiplicity",
+    "upstream_energy": "binned",
+    "GNN_theory": null,
+    "beam_reweight": null,
+    "purity": 0.2
+  },
+  "BEAM_QUALITY_FITS": {
+    "truncate": null
+  },
+  "BEAM_SCRAPER_FITS": {
+    "energy_range": [
+      2000,
+      3700
+    ],
+    "energy_bins": [
+      2200,
+      2600,
+      2750,
+      2900,
+      3050,
+      3200,
+      3400
+    ]
+  },
+  "ENERGY_CORRECTION": {
+    "correction_params": null,
+    "energy_range": [
+      0,
+      1500
+    ],
+    "correction": "response"
+  },
+  "BEAM_REWEIGHT": {
+    "strength": 2
+  },
+  "UPSTREAM_ENERGY_LOSS": {
+    "cv_function": "gaussian",
+    "response": "poly2d",
+    "bins": [
+      2200,
+      2400,
+      2500,
+      2600,
+      2700,
+      2800,
+      2900,
+      3000,
+      3100,
+      3200,
+      3300,
+      3500
+    ]
+  },
+  "ESLICE": {
+    "edges": [
+      3100,
+      2769,
+      2627,
+      2497,
+      2353,
+      2100
+    ],
+    "width": 250,
+    "min": 2100,
+    "max": 3100
+  },
+  "UNFOLDING": {
+    "purity_bin": true,
+    "method": 1,
+    "ts_stop": 0.0001,
+    "max_iter": 6,
+    "ts": "ks",
+    "covariance": "poisson"
+  },
+  "BEAM_PARTICLE_SELECTION": {
+    "PiBeamSelection": {
+      "enable": true,
+      "use_beam_inst_mc": false,
+      "use_beam_inst_data": true
+    },
+    "PandoraTagCut": {
+      "enable": true,
+      "cut": 13,
+      "op": "=="
+    },
+    "CaloSizeCut": {
+      "enable": true
+    },
+    "HasFinalStatePFOsCut": {
+      "enable": true
+    },
+    "DxyCut": {
+      "enable": true,
+      "cut": 2,
+      "op": "<"
+    },
+    "DzCut": {
+      "enable": true,
+      "cut": [
+        -3,
+        3
+      ],
+      "op": [
+        ">",
+        "<"
+      ]
+    },
+    "CosThetaCut": {
+      "enable": true,
+      "cut": 0.95,
+      "op": ">"
+    },
+    "APA3Cut": {
+      "enable": false,
+      "cut": 220,
+      "op": "<"
+    },
+    "MichelScoreCut": {
+      "enable": false,
+      "cut": 0.55,
+      "op": "<"
+    },
+    "MichelScoreCutChargeWeight": {
+      "enable": true,
+      "cut": 0.55,
+      "op": "<"
+    },
+    "MedianDEdXCut": {
+      "enable": true,
+      "cut": 2.4,
+      "op": "<",
+      "truncate": null
+    },
+    "BeamScraperCut": {
+      "enable": false,
+      "KE_range": 2,
+      "cut": 2,
+      "op": "<"
+    }
+  },
+  "VALID_PFO_SELECTION": {
+    "enable": true
+  },
+  "beam_momentum": 3000,
+  "P_inst_range": [
+    2000,
+    3000
+  ],
+  "KE_inst_range": [
+    2000,
+    3000
+  ],
+  "KE_init_range": [
+    2000,
+    3000
+  ],
+  "KE_int_range": [
+    2000,
+    3000
+  ]
+}
