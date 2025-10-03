@@ -141,7 +141,8 @@ regions = {
         ]
     },
     "gnn_per_event" : "NOT IMPLEMENTED",
-    "gnn" : "gnn"
+    "gnn" : "gnn",
+    "sample_only" : "NO IDENTIFICATION"
 }
 
 def TrueRegions(pi0_counts, pi_charged_counts):
