@@ -290,6 +290,11 @@ def RecoRegionSelection(region_selections : dict[dict], args : argparse.Namespac
         Plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "True process", x_label = "Reco region", title = cross_section.remove_(r))
         pdf.Save()
 
+        if (len(reco_regions.keys()) - 1) < len(true_regions.keys()):
+            counts = np.c_[counts, np.zeros(len(reco_regions))]
+        if (len(reco_regions.keys()) - 1) > len(true_regions.keys()):
+            counts = np.r_[counts, np.zeros(len(true_regions))]
+
         pe[cross_section.remove_(r)] = (np.diag(counts) / np.sum(counts, 0)[:-1]) * (np.diag(counts) / np.sum(counts, 1))
 
         reco_regions.pop("uncategorised")
