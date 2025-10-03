@@ -68,11 +68,9 @@
     ],
     "energy_bins": [
       2200,
-      2600,
-      2750,
+      2725,
       2900,
-      3050,
-      3200,
+      3075,
       3400
     ]
   },
@@ -85,6 +83,7 @@
     "correction": "response"
   },
   "BEAM_REWEIGHT": {
+    "params": null,
     "strength": 2
   },
   "UPSTREAM_ENERGY_LOSS": {
