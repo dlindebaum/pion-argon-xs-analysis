@@ -517,6 +517,7 @@ class ApplicationArguments:
                 args.has_data = "data" in value.keys()
             elif head == "REGION_IDENTIFICATION":
                 args.gnn_do_predict = value["type"] in ["gnn"]
+                args.sample_only = value["type"] in ["sample_only"]
                 # args.gnn_event_by_event = value["type"] == "gnn_per_event"
                 args.region_identification = RegionIdentification.regions[value["type"]]
             elif head == "BEAM_PARTICLE_SELECTION":

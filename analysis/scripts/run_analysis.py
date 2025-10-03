@@ -237,16 +237,19 @@ def check_run_dict(args, no_data):
                 and (not hasattr(args, "data_beam_quality_fit"))),
         "beam_scraper": not hasattr(args, "mc_beam_scraper_fit"),
         "photon_correction": 
-            hasattr(args, "shower_correction")
+            (not args.sample_only)
+            and hasattr(args, "shower_correction")
             and (not args.gnn_do_predict)
             and (args.shower_correction["correction_params"] is None),
         "beam_selection": not hasattr(args, "beam_selection_masks"),
-        "region_selection": 
-            (not args.gnn_do_predict)
+        "region_selection":
+            (not args.sample_only)
+            and (not args.gnn_do_predict)
             and (not hasattr(args, "region_selection_masks")),
         # "selection": not hasattr(args, "selection_masks"),
         "gnn_prediction":
-            args.gnn_do_predict
+            (not args.sample_only)
+            and args.gnn_do_predict
             and (not hasattr(args, "gnn_results")),
         "reweight": 
             ("params" not in args.beam_reweight) and (not no_data),
@@ -257,9 +260,10 @@ def check_run_dict(args, no_data):
             and hasattr(args, "beam_reweight")
             and ("toy_parameters" not in os.listdir(args.out)),
         "analysis_input":
-            (not hasattr(args, "analysis_input"))
+            (not args.sample_only)
+            and (not hasattr(args, "analysis_input"))
             and (not no_data),
-        "analyse": True}
+        "analyse": not args.sample_only}
     return {k: check_run(args, k, v) for k, v in can_run.items()}
 
 def main(args):
@@ -278,6 +282,8 @@ def main(args):
         no_data = len(n_data) == 0
         if no_data:
             print("no data file was specified, 'normalisation', 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
+        if args.sample_only:
+            print("Set to 'sample_only', therefore 'region_selection', 'gnn_prediction', 'analysis_input', and 'analyse' will not run")
 
         processing_args = CalculateEventBatches(args)
         args = update_args(processing_args)
