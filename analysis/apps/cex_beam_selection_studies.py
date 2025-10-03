@@ -415,7 +415,8 @@ def run(i, file, n_events, start, selected_events, args) -> dict:
         true_pion_mask = events.trueParticles.pdg[..., 0] == 211
         truth_fiducial_mask = BeamParticleSelection.TrueFiducialCut(
             events, True, cut=args["fiducial_volume"]["start"], op=">")
-        assert len(args["gnn_region_labels"]) == 3, "Not implemented process efficiencies for arbitrary regions"
+        if args["gnn_do_predict"]:
+            assert len(args["gnn_region_labels"]) == 3, "Not implemented process efficiencies for arbitrary regions"
         truth_masks = EventSelection.create_3_regions_from_evts(events)
 
     reco_multi_bins = Slicing.MultiDimBins(
