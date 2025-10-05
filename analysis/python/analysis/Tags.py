@@ -203,15 +203,15 @@ def GenerateTrueParticleTagsPiPlus(events):# : Data) -> Tags:
     masks = ParticleMasks(pdg, particles_to_tag)
     masks["other"] = OtherMask(masks)
 
-    masks["$\\pi^{\pm}$"] = masks["$\\pi^{+}$"] | masks["$\\pi^{-}$"]
+    masks["$\\pi^{\\pm}$"] = masks["$\\pi^{+}$"] | masks["$\\pi^{-}$"]
     for p in ["$\\pi^{+}$", "$\\pi^{-}$"]:
         masks.pop(p) 
 
-    masks["$\mu^{\pm}$"] = masks["$\mu^{+}$"] | masks["$\mu^{-}$"]
-    for p in ["$\mu^{+}$", "$\mu^{-}$"]:
+    masks["$\\mu^{\\pm}$"] = masks["$\\mu^{+}$"] | masks["$\\mu^{-}$"]
+    for p in ["$\\mu^{+}$", "$\\mu^{-}$"]:
         masks.pop(p) 
 
-    for p in ["$\\pi^{\pm}$"]:
+    for p in ["$\\pi^{\\pm}$"]:
         new_mask = {p : masks[p] & beam_daughter, f"{p}:2nd" : masks[p] & (~beam_daughter)}
         masks.pop(p)
         new_mask.update(masks)
@@ -244,20 +244,20 @@ def GenerateTrueParticleTagsInterestingPFOs(events) -> Tags:
     masks["other"] = OtherMask(masks)
 
     for p in ["$\\gamma$"]:
-        new_mask = {p+":2nd" : masks[p] & ~beam_pi0 & ~other_pi0, f"{p}:beam $\pi^{0}$" : masks[p] & beam_pi0, f"{p}:other $\pi^{0}$" : masks[p] & other_pi0}
+        new_mask = {p+":2nd" : masks[p] & ~beam_pi0 & ~other_pi0, f"{p}:beam $\\pi^{0}$" : masks[p] & beam_pi0, f"{p}:other $\\pi^{0}$" : masks[p] & other_pi0}
         masks.pop(p)
         new_mask.update(masks)
         masks = new_mask
 
-    masks["$\\pi^{\pm}$"] = masks["$\\pi^{+}$"] | masks["$\\pi^{-}$"]
+    masks["$\\pi^{\\pm}$"] = masks["$\\pi^{+}$"] | masks["$\\pi^{-}$"]
     for p in ["$\\pi^{+}$", "$\\pi^{-}$"]:
         masks.pop(p) 
 
-    masks["$\mu^{\pm}$"] = masks["$\mu^{+}$"] | masks["$\mu^{-}$"]
-    for p in ["$\mu^{+}$", "$\mu^{-}$"]:
+    masks["$\\mu^{\\pm}$"] = masks["$\\mu^{+}$"] | masks["$\\mu^{-}$"]
+    for p in ["$\\mu^{+}$", "$\\mu^{-}$"]:
         masks.pop(p) 
 
-    for p in ["$\\pi^{\pm}$"]:
+    for p in ["$\\pi^{\\pm}$"]:
         new_mask = {p : masks[p] & beam_daughter, f"{p}:2nd" : masks[p] & (~beam_daughter)}
         masks.pop(p)
         new_mask.update(masks)
@@ -293,7 +293,7 @@ def GenerateTrueParticleTagsPi0Shower(events) -> Tags:# : Data):
     masks["other"] = OtherMask(masks)
 
     for p in ["$\\gamma$"]:
-        new_mask = {p+":2nd" : masks[p] & ~beam_pi0 & ~other_pi0, f"{p}:beam $\pi^{0}$" : masks[p] & beam_pi0, f"{p}:other $\pi^{0}$" : masks[p] & other_pi0}
+        new_mask = {p+":2nd" : masks[p] & ~beam_pi0 & ~other_pi0, f"{p}:beam $\\pi^{0}$" : masks[p] & beam_pi0, f"{p}:other $\\pi^{0}$" : masks[p] & other_pi0}
         masks.pop(p)
         new_mask.update(masks)
         masks = new_mask
@@ -328,10 +328,10 @@ def GeneratePi0Tags(events, photon_PFOs : ak.Array) -> Tags:# : Data, photon_PFO
     same_mother = ak.where(correctly_matched_photons == 2, photon_mothers[:, 0] == photon_mothers[:, 1], False)
 
     pi0_tags = Tags()
-    pi0_tags["2 $\gamma$s, same $\pi^{0}$"]      = Tag("2 $\gamma$s, same $\pi^{0}$" , "pi0s"               , mask = same_mother, number = 0) # both PFOs are photons from the same pi0
-    pi0_tags["2 $\gamma$s, different $\pi^{0}$"] = Tag("2 $\gamma$s, different $\pi^{0}$", "different mother", mask = (~same_mother) & (correctly_matched_photons == 2), number = 1) # both PFOs are pi0 photons, but not from the same pi0
-    pi0_tags["1 $\gamma$"]                        = Tag("1 $\gamma$"                   , "one photon"         , mask = correctly_matched_photons == 1, number = 2) # one PFO is a pi0 photon
-    pi0_tags["0 $\gamma$"]                       = Tag("0 $\gamma$"                   , "no photons"          , mask = correctly_matched_photons == 0, number = 3) # no PFO is a pi0 photon
+    pi0_tags["2 $\\gamma$s, same $\\pi^{0}$"]      = Tag("2 $\\gamma$s, same $\\pi^{0}$" , "pi0s"               , mask = same_mother, number = 0) # both PFOs are photons from the same pi0
+    pi0_tags["2 $\\gamma$s, different $\\pi^{0}$"] = Tag("2 $\\gamma$s, different $\\pi^{0}$", "different mother", mask = (~same_mother) & (correctly_matched_photons == 2), number = 1) # both PFOs are pi0 photons, but not from the same pi0
+    pi0_tags["1 $\\gamma$"]                        = Tag("1 $\\gamma$"                   , "one photon"         , mask = correctly_matched_photons == 1, number = 2) # one PFO is a pi0 photon
+    pi0_tags["0 $\\gamma$"]                       = Tag("0 $\\gamma$"                   , "no photons"          , mask = correctly_matched_photons == 0, number = 3) # no PFO is a pi0 photon
     return pi0_tags
 
 
