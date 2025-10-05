@@ -31,8 +31,9 @@ def Fit_Vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
     sigma = {}
     sigma_err = {}
     for i in ["x", "y", "z"]:
-        data = v[i]
-        y, bins_edges = np.histogram(np.array(data[~np.isnan(data)]), bins = bins, range = sorted([np.nanpercentile(data[~np.isnan(data)], 10), np.nanpercentile(data[~np.isnan(data)], 90)])) # fit only to  data within the 10th and 90th percentile of data to exclude large tails in the distriubtion.
+        data = np.array(v[i][~np.isnan(v[i])].to_list(), dtype = float)
+
+        y, bins_edges = np.histogram(data, bins = bins, range = sorted([np.nanpercentile(data, 10), np.nanpercentile(data, 90)])) # fit only to data within the 10th and 90th percentile of data to exclude large tails in the distriubtion.
         yerr = np.sqrt(y) # Poisson error
 
         popt, perr = Fitting.Fit(cross_section.bin_centers(bins_edges), y, yerr, Fitting.gaussian)
@@ -70,7 +71,7 @@ def plot(value : ak.Array, x_label : str, mu : float, sigma : float, color : str
     ndf = len(y) - 2
 
     Plots.Plot(x, y/np.sum(y), yerr = yerr/np.sum(y), color = color, marker = "x", linestyle = "", capsize = 3, newFigure = False)
-    Plots.Plot(x_interp, y_interp / np.sum(y), xlabel = x_label, ylabel = "Counts (area normalised)", color = color, linestyle = "-", label = label + " $\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2f}", newFigure = False)
+    Plots.Plot(x_interp, y_interp / np.sum(y), xlabel = x_label, ylabel = "Counts (area normalised)", color = color, linestyle = "-", label = label + " $\\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2f}", newFigure = False)
     plt.ylim(0)
 
 
@@ -195,6 +196,9 @@ def main(args):
     os.makedirs(outdir, exist_ok = True)
 
     outputs = cross_section.ApplicationProcessing(list(args.ntuple_files.keys()), outdir, args, run, True)
+
+    print(outputs)
+    exit()
 
     fit_values = {s : Fits(args, outputs[s], outdir, s) for s in outputs}
 
