@@ -121,6 +121,8 @@ def Chi2ProtonSelection(events : Master.Data, cut = 80, op = "<", return_propert
     chi2_ndf = events.recoParticles.track_chi2_proton / events.recoParticles.track_chi2_proton_ndof
     return CreateMask(cut, op, chi2_ndf, return_property)
 
+def TrackLengthSelection(events : Master.Data, cut = 27.1, op = ">", return_property : bool = False):
+    return CreateMask(cut, op, events.recoParticles.track_len, return_property)
 
 def InitialPi0PhotonSelection(
         events : Master.Data,

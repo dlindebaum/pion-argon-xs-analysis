@@ -36,11 +36,12 @@ selection_map = {
     "GoodShowerSelection" : "Well reconstructed PFOs",
 
     "Chi2ProtonSelection" : "$(\chi^{2}/ndf)_{p}$",
-    "TrackScoreCut" : "track score",
+    "TrackScoreCut" : "Track score",
     "NHitsCut" : "Number of hits",
     "BeamParticleDistanceCut" : "$d$",
     "BeamParticleIPCut" : "$b$",
     "PiPlusSelection" : "Median $dE/dX$",
+    "TrackLengthSelection" : "$l$",
 
     "NPhotonCandidateSelection" : "Number of photons",
     "Pi0MassSelection" : "$m_{\gamma\gamma}$",
@@ -69,6 +70,7 @@ units_map = {
     "BeamParticleDistanceCut" : "cm",
     "BeamParticleIPCut" : "cm",
     "PiPlusSelection" : "MeV/cm",
+    "TrackLengthSelection" : "cm",
 
     "NPhotonCandidateSelection" : "",
     "Pi0MassSelection" : "MeV",
@@ -92,7 +94,7 @@ signal ={
     "pi" : "$\pi^{\pm}$",
     "loose_photon" : "$\gamma$:beam $\pi^0$",
     "photon" : "$\gamma$:beam $\pi^0$",
-    "pi0" : "2 $\gamma$'s, same $\pi^{0}$",
+    "pi0" : "2 $\gamma$s, same $\pi^{0}$",
     "null_pfo": None
 }
 
@@ -118,42 +120,14 @@ def fmt_op(op):
         return op
 
 
-def CreateTables(path : str, selection_name : str, signal : str = None):
-    tables_mc = {}
-    tables_data = {}
-
-    col_map = {"counts" : "Counts", "purity": "Purity (\%)", "efficiency" : "Efficiency (\%)"}
-
-    for f in col_map:
-        tables_mc[col_map[f]] = ReadHDF5(f"{path}/tables_mc/{selection_name}/{selection_name}_{f}.hdf5")
-        tables_data[col_map[f]] = ReadHDF5(f"{path}/tables_data/{selection_name}/{selection_name}_{f}.hdf5")
-    names = tables_mc[col_map["counts"]].Name
-
-    tables_mc[col_map["purity"]] = 100 * tables_mc[col_map["purity"]]
-    tables_mc[col_map["efficiency"]] = 100 * tables_mc[col_map["efficiency"]]
-
-    if "Remaining PFOs" in tables_mc[col_map["counts"]]:
-        counts_col = "Remaining PFOs"
-    else:
-        counts_col = "Remaining events"
-
-    total_counts = pd.concat({k : v[col_map["counts"]][counts_col] for k, v in {"data" : tables_data, "mc" : tables_mc}.items()}, axis = 1)
-    total_counts = total_counts.set_index(names)
-
-    if signal is not None:
-        signal_tables = pd.concat({t : tables_mc[t][signal] for t in tables_mc}, axis = 1)
-
-        signal_tables = signal_tables.set_index(names)
-    else:
-        signal_tables = None
-
+def selection_names_criteria(df : pd.DataFrame, name : str):
     defs = criteria_defs()
-
+    # print(f"{defs=}")
     fancy_names = {}
-    for n in total_counts.index:
-        if defs[selection_name] is None: continue
-        if n in defs[selection_name]:
-            cuts = defs[selection_name][n]
+    for n in df.index:
+        if defs[name] is None: continue
+        if n in defs[name]:
+            cuts = defs[name][n]
         else:
             cuts = None
         
@@ -168,6 +142,60 @@ def CreateTables(path : str, selection_name : str, signal : str = None):
             else:
                 fancy_name = f'{fancy_name} ${fmt_op(cuts["op"])}$ {cuts["cut"]} {units_map[n]}'
         fancy_names[n] = fancy_name
+    return fancy_names
+
+
+def eff_err(p, n):
+    p_err = (p * (1 - p) / n)**0.5
+    p_err = pd.Series([Utils.quadsum(p_err[:i+1]) for i in range(len(p_err))])
+    return p_err
+
+
+def CreateTables(path : str, selection_name : str, signal : str = None):
+    tables_mc = {}
+    tables_data = {}
+
+    col_map = {"counts" : "Counts", "purity": "Purity (\%)", "efficiency" : "Efficiency (\%)"}
+
+    for f in col_map:
+        tables_mc[col_map[f]] = ReadHDF5(f"{path}/tables_mc/{selection_name}/{selection_name}_{f}.hdf5")
+        tables_data[col_map[f]] = ReadHDF5(f"{path}/tables_data/{selection_name}/{selection_name}_{f}.hdf5")
+    names = tables_mc[col_map["counts"]].Name
+
+    tables_mc[col_map["purity"]] = 100 * tables_mc[col_map["purity"]]
+    tables_mc[col_map["efficiency"]] = 100 * tables_mc[col_map["efficiency"]]
+
+    # tables_mc["Purity error (%)"]     = 100 * tables_mc["Purity error (%)"]
+    # tables_mc["Efficiency error (%)"] = 100 * tables_mc["Efficiency error (%)"]
+
+    if "Remaining PFOs" in tables_mc[col_map["counts"]]:
+        counts_col = "Remaining PFOs"
+    else:
+        counts_col = "Remaining events"
+
+    total_counts = pd.concat(objs = {k : v[col_map["counts"]][counts_col] for k, v in {"Data" : tables_data, "MC" : tables_mc}.items()}, axis = 1)
+    total_counts = total_counts.set_index(names)
+
+
+    if signal is not None:
+        signal_tables = pd.concat({t : tables_mc[t][signal] for t in tables_mc}, axis = 1)
+
+        signal_tables = signal_tables.set_index(names)
+
+        purity_error = 100 * eff_err(signal_tables["Purity (\\%)"].values/100, tables_mc["Counts"].filter(regex = "Remaining*").values)
+        purity_error.index = names
+        signal_tables["Purity error (\\%)"] = purity_error
+
+        efficiency_error = 100 * eff_err(signal_tables["Efficiency (\\%)"].values/100, signal_tables["Counts"][0])
+        efficiency_error.index = names
+        signal_tables["Efficiency error (\\%)"] = efficiency_error
+
+    else:
+        signal_tables = None
+
+    fancy_names = selection_names_criteria(total_counts, selection_name)
+    print(f"{signal=}")
+    print(f"{fancy_names=}")
 
     if len(fancy_names) > 0:
         total_counts = total_counts.set_index(pd.Series(list(fancy_names.values())))
@@ -177,12 +205,19 @@ def CreateTables(path : str, selection_name : str, signal : str = None):
     return signal_tables, total_counts
 
 
-def FormatTable(filename):
+def FormatTable(filename, bf_column : bool = True):
     with open(filename) as file:
         lines = list(file.readlines())
         new_lines = []
         for i, l in enumerate(lines):
-            if i in [0, len(lines) - 1]:
+            if i == 0:
+                ncols = len(l.split("{")[-1][:-2])
+                if bf_column is True:
+                    cf = "l" + "".join(["r"] * (ncols - 1))
+                else:
+                    cf = "".join(["c"] * ncols)
+                new_lines.append(f"\\begin{{tabular}}{{{cf}}}\n")
+            elif i == len(lines) - 1:
                 new_lines.append(l)
             elif i == 1:
                 entries = l.split(" & ")
@@ -198,7 +233,8 @@ def FormatTable(filename):
             else:
                 formatted = []
                 entries = l.split(" & ")
-                entries[0] = f"\\textbf{{{entries[0]}}}"
+                if bf_column:
+                    entries[0] = f"\\textbf{{{entries[0]}}}"
                 for j in range(len(entries)):
                     if j == len(entries) - 1:
                         s = entries[j].split(" \\\\\n")[0]
@@ -224,13 +260,9 @@ def FormatTable(filename):
 
 def bq_xy(values : dict):
     t = {}
-    for i in ["mu", "sigma"]:
+    for i, e in zip(["mu", "sigma"], [1, 2]):
         for j in ["x", "y"]:
-            v = values[f"{i}_{j}"]
-            e = values[f"{i}_err_{j}"]
-
-            sf = len(f"{e:.1g}") - 2
-            t[f"$\{i}_{{{j}}}$"] = f"${v:.{sf}f} \pm {e:.1g}$"
+            t[f"$p_{{{e}}}^{{{j}}}$"] = Utils.round_value_to_error(values[f"{i}_{j}"], values[f"{i}_err_{j}"])
 
     return t
 
@@ -241,12 +273,26 @@ def bq_angle(values : dict):
         v = values[f"mu_dir_{j}"]
         e = values[f"mu_dir_err_{j}"]
 
-        sf = len(f"{e:.1g}") - 2
-        t[f"$\mu_{{\hat{{n}}_{{{j}}}}}$"] = f"${v:.{sf}f} \pm {e:.1g}$"
+        t[f"$\mu_{{\hat{{n}}_{{{j}}}}}$"] = Utils.round_value_to_error(values[f"mu_dir_{j}"], values[f"mu_dir_err_{j}"])
     return t
 
 
-def copy_table(source : str, dest : str, new_name : str = None):
+def brw_table(brw : dict):
+    table = {}
+    for i, p in enumerate(brw):
+        table[f"$p_{{{i}}}$"] = Utils.round_value_to_error(brw[p]["value"], brw[p]["error"])
+
+    table = pd.DataFrame(table, index = [0])
+    return table
+
+def upl_table(upl : dict):
+    table = {}
+    for i in range(args.upstream_loss_response.n_params):
+        table[f"$p_{{{i}}}$"] = Utils.round_value_to_error(upl["value"][f"p{i}"], upl["error"][f"p{i}"])
+    table = pd.DataFrame(table, index = [0])
+    return table
+
+def copy_table(source : str, dest : str, new_name : str = None, bf_cols : bool = True):
     name = source.split("/")[-1]
 
     if new_name: name = new_name.split(".tex")[0] + ".tex"
@@ -255,13 +301,39 @@ def copy_table(source : str, dest : str, new_name : str = None):
     with open(source) as f:
         with open(f"{dest}{name}", "w") as of:
             of.writelines(f.readlines())
-    FormatTable(f"{dest}{name}")
+    FormatTable(f"{dest}{name}", bf_cols)
     return
+
+
+def brw_selection(path):
+    selection_data = ReadHDF5(f"{path}/beam_reweight/selection_data.hdf5")
+    selection_mc = ReadHDF5(f"{path}/beam_reweight/selection_mc.hdf5")
+
+    selection_table = pd.concat(objs = [selection_data.rename(columns = {"Counts" : "Data"}), selection_mc.rename(columns = {"Counts" : "MC"})], axis = 1)
+    selection_table = selection_table.rename(index = {"TrueFiducialCut" : "Fiducial region", "HasFinalStatePFOsCut" : "Inverted preselection"})
+    fancy_names = selection_names_criteria(selection_table, "beam")
+
+    selection_table = selection_table.drop(index = ["CaloSizeCut", "PandoraTagCut"])
+
+    selection_table = selection_table.rename(index = fancy_names)
+    return selection_table
 
 
 def main(args : argparse.Namespace):
     path = os.path.abspath(args.workdir + "/")
     out = f"{path}/formatted_tables/"
+
+    os.makedirs(f"{out}upstream/", exist_ok = True)
+    upl_table(LoadConfiguration(f"{path}/upstream_loss/fit_parameters.json")).style.hide(axis = "index").to_latex(f"{out}upstream/fit.tex")
+    FormatTable(f"{out}upstream/fit.tex", False)
+
+    os.makedirs(f"{out}beam_reweight/", exist_ok = True)
+    brw_selection(path).style.to_latex(f"{out}beam_reweight/selection.tex")
+    FormatTable(f"{out}beam_reweight/selection.tex")
+
+    brw = brw_table(LoadConfiguration(f"{path}/beam_reweight/gaussian.json"))
+    brw.style.hide(axis = "index").to_latex(f"{out}/beam_reweight/fit.tex")
+    FormatTable(f"{out}/beam_reweight/fit.tex", False)
 
     fmt_tables = {}
     for s in signal:
@@ -271,7 +343,7 @@ def main(args : argparse.Namespace):
         outp = f"{out}{f}/"
         os.makedirs(outp, exist_ok = True)
         if fmt_tables[f][0] is not None:
-            fmt_tables[f][0].style.format(precision = 1).to_latex(f"{outp}/signal_table.tex")
+            fmt_tables[f][0].style.format(precision = 3).to_latex(f"{outp}/signal_table.tex")
             FormatTable(f"{outp}/signal_table.tex")
         fmt_tables[f][1].style.format(precision = 1).to_latex(f"{outp}/total_counts.tex")
         FormatTable(f"{outp}/total_counts.tex") 
@@ -288,12 +360,27 @@ def main(args : argparse.Namespace):
     t_angle.style.to_latex(f"{outp}/angle.tex")
     FormatTable(f"{outp}/angle.tex")
 
-    copy_table(f"{path}/shower_energy_correction/table.tex", f"{out}", "shower_correction.tex")
+    for f in Utils.ls_recursive(f"{path}/shower_energy_correction/"):
+        if f.split("/")[-1].split(".")[0] == "table":
+            cols = True
+        else:
+            cols = False
+        if ".tex" in f:
+            copy_table(f, f"{out}/shower_correction/", bf_cols = cols)
+
+
+    for f in Utils.ls_recursive(f"{path}/toy_parameters/smearing/"):
+        if (".tex" in f):
+            copy_table(f, f"{out}/smearing/{f.split('/')[-2]}/", bf_cols = False)
+
+    copy_table(f"{path}/toy_parameters/beam_profile/fit.tex", f"{out}/beam_profile/", bf_cols = False)
 
     copy_table(f"{path}/toy_parameters/reco_regions/pe.tex", f"{out}/reco_regions/")
 
-    copy_table(f"{path}/measurement/pdsp/fit_results_NP.tex", f"{out}/data_fit/")
-    copy_table(f"{path}/measurement/pdsp/fit_results_POI.tex", f"{out}/data_fit/")
+
+    copy_table(f"{path}/measurement/pdsp/fit_results_NP.tex", f"{out}/data_fit/", bf_cols = False)
+    copy_table(f"{path}/measurement/pdsp/fit_results_POI.tex", f"{out}/data_fit/", bf_cols = False)
+    copy_table(f"{path}/measurement/pdsp/regions.tex", f"{out}/")
 
     for f in Utils.ls_recursive(f'{path}'):
         if out in f: continue
@@ -303,6 +390,15 @@ def main(args : argparse.Namespace):
             copy_table(f, f"{out}", "pulls_no_np.tex")
         if "pulls_np.tex" in f:
             copy_table(f, f"{out}", "pulls_np.tex")
+
+    if os.path.isdir(f"{path}/systematics/track_length/"):
+        copy_table(f"{path}/systematics/track_length/fit_params.tex", f"{out}/track_length_resolution/", bf_cols = False)
+
+    if os.path.isdir(f"{path}/systematics/combined/"):
+        for f in Utils.ls_recursive(f"{path}/systematics/combined/"):
+            if ".tex" in f:
+                copy_table(f, f"{out}/systematics/", bf_cols = True)
+
     return
 
 

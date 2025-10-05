@@ -191,9 +191,6 @@ def GenerateTrueParticleTagsPiPlus(events):# : Data) -> Tags:
     particles_to_tag = [
         211, -211, 13, -13, -11, 22, 2212
     ] # anything not in this list is tagged as other
-    # particles_to_tag = [
-    #     211, -211, 13, -13, 11, -11, 22, 2212, 321
-    # ]
 
     if ak.count(events.trueParticlesBT.pdg) == 0: # the ntuple has no MC, so provide some null data base off recoParticles array shape
         pdg = ak.where(events.recoParticles.number, -1, 0)
@@ -328,12 +325,11 @@ def GeneratePi0Tags(events, photon_PFOs : ak.Array) -> Tags:# : Data, photon_PFO
     correctly_matched_photons = ak.sum(pi0_photon & photon_PFOs, -1)
     photon_mothers = events.trueParticlesBT.mother[pi0_photon & photon_PFOs]
     photon_mothers = ak.pad_none(photon_mothers, 2, -1)
-    # same_mother = photon_mothers[correctly_matched_photons == 2][:, 0] == photon_mothers[correctly_matched_photons == 2][:, 1]
     same_mother = ak.where(correctly_matched_photons == 2, photon_mothers[:, 0] == photon_mothers[:, 1], False)
 
     pi0_tags = Tags()
-    pi0_tags["2 $\gamma$'s, same $\pi^{0}$"]      = Tag("2 $\gamma$'s, same $\pi^{0}$" , "pi0s"               , mask = same_mother, number = 0) # both PFOs are photons from the same pi0
-    pi0_tags["2 $\gamma$'s, different $\pi^{0}$"] = Tag("2 $\gamma$s, different $\pi^{0}$", "different mother", mask = (~same_mother) & (correctly_matched_photons == 2), number = 1) # both PFOs are pi0 photons, but not from the same pi0
+    pi0_tags["2 $\gamma$s, same $\pi^{0}$"]      = Tag("2 $\gamma$s, same $\pi^{0}$" , "pi0s"               , mask = same_mother, number = 0) # both PFOs are photons from the same pi0
+    pi0_tags["2 $\gamma$s, different $\pi^{0}$"] = Tag("2 $\gamma$s, different $\pi^{0}$", "different mother", mask = (~same_mother) & (correctly_matched_photons == 2), number = 1) # both PFOs are pi0 photons, but not from the same pi0
     pi0_tags["1 $\gamma$"]                        = Tag("1 $\gamma$"                   , "one photon"         , mask = correctly_matched_photons == 1, number = 2) # one PFO is a pi0 photon
     pi0_tags["0 $\gamma$"]                       = Tag("0 $\gamma$"                   , "no photons"          , mask = correctly_matched_photons == 0, number = 3) # no PFO is a pi0 photon
     return pi0_tags

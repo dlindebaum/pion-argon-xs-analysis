@@ -9,6 +9,7 @@ import numpy as np
 import os
 import dill
 
+
 def dill_copy(obj : any):
     return dill.loads(dill.dumps(obj))
 
@@ -33,7 +34,7 @@ def nanlog(x) -> np.ndarray:
 def weighted_chi_sqr(observed, expected, uncertainties) -> np.ndarray:
     u = np.array(uncertainties)
     u[u == 0] = np.nan
-    return np.nansum((observed - expected)**2 / u**2) / len(observed)
+    return np.nansum((observed - expected)**2 / u**2) / (len(observed)-1)
 
 
 def quadsum(x : np.ndarray | list, axis : int = None) -> np.ndarray:
@@ -50,3 +51,21 @@ def remove_(str) -> str:
 
 def ls_recursive(path : os.PathLike):
     return [os.path.join(dp, f) for dp, dn, fn in os.walk(os.path.expanduser(path)) for f in fn]
+
+
+def sf(x):
+    try:
+        v = -int(np.ceil(np.log10(abs(x))))+1
+    except (OverflowError, ValueError):
+        v = 0
+    return v
+
+
+def round_value_to_error(v, e) -> str:
+    fe = sf(e)
+    fe = fe if fe > 0 else 0
+
+    fv = sf(v)
+    fv = fv if fv > 0 else 0
+    f = max(fe, fv)
+    return f"${round(v, f):.{f}f} \pm {round(e, f):.{f}f}$"

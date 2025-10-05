@@ -25,7 +25,7 @@ from scipy.stats import gaussian_kde
 
 from python.analysis.Master import timer, LoadConfiguration, ReadHDF5, LoadObject
 from python.analysis import Fitting, Utils
-from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle
+from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle, GEANT_XS
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # supress annoying pandas warnings
 
@@ -86,7 +86,7 @@ def P_int(sigma : np.array, l : float) -> np.array:
     return 1 - np.exp(-1E-27 * sigma * 6.02214076e23 * BetheBloch.rho * l / BetheBloch.A)
 
 
-def ModifyGeantXS(path = os.environ.get('PYTHONPATH', '').split(os.pathsep)[0] + "/data/g4_xs.root", scale_factors : dict = None, modified_PDFs : dict[np.array] = None):
+def ModifyGeantXS(path = GEANT_XS, scale_factors : dict = None, modified_PDFs : dict[np.array] = None):
     xs_sim = GeantCrossSections(file = path)
 
     if modified_PDFs is not None:
@@ -120,7 +120,7 @@ def ModifyGeantXS(path = os.environ.get('PYTHONPATH', '').split(os.pathsep)[0] +
     return xs_sim
 
 
-def GenerateStackedPDFs(l : float, path = os.environ.get('PYTHONPATH', '').split(os.pathsep)[0] + "/data/g4_xs.root", scale_factors : dict = None, modified_PDFs : dict[np.array] = None) -> dict:
+def GenerateStackedPDFs(l : float, path = GEANT_XS, scale_factors : dict = None, modified_PDFs : dict[np.array] = None) -> dict:
     """ Creates a PDF of the inclusive cross section and a stacked PDF of the exclusive process,
         such that rejection sampling can be used to allocate an exclusive process for a given inclusive process.
 
@@ -291,20 +291,7 @@ def ApplySmearing(df : pd.DataFrame, smearings : pd.DataFrame) -> pd.DataFrame:
     KE_init_smeared = df.KE_init + smearings.KE_init_smearing
     z_int_smeared = df.z_int + smearings.z_int_smearing
     KE_int_smeared = df.KE_int + smearings.KE_int_smearing
-    #! while this seems like the natural choice for smearing KE_int, the resolution using this method
-    #! is smaller than the resolution observed in MC, so use original approach for now
-    #? make this an option?
 
-    # KE_to_dEdX = BetheBloch.InterpolatedEdX(max(KE_init_smeared), step_size)
-    # dist_travelled = np.zeros(len(KE_init_smeared))
-    # KE_int_smeared = df.KE_init + smearings.KE_init_smearing
-    # while any(dist_travelled < z_int_smeared):
-    #     dEdX = KE_to_dEdX(KE_int_smeared)
-    #     KE_int_smeared = KE_int_smeared - (dist_travelled < z_int_smeared) * step_size * dEdX
-    #     dist_travelled = dist_travelled + (dist_travelled < z_int_smeared) * step_size
-
-    # KE_int_smeared = np.where(df.inclusive_process != "total_inelastic", 0, KE_int_smeared)
-    # KE_int_smeared = np.where(np.isnan(KE_int_smeared) | (KE_int_smeared < 0), 0, KE_int_smeared)
     return pd.DataFrame({
         "KE_int_smeared" : KE_int_smeared,
         "KE_init_smeared" : KE_init_smeared,

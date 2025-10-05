@@ -6,6 +6,7 @@ Author: Shyam Bhuller
 
 Description: Create analysis input files from Ntuples.
 """
+import awkward as ak
 import numpy as np
 
 from python.analysis import cross_section, SelectionTools, RegionIdentification, PFOSelection
@@ -104,23 +105,22 @@ def RegionSelection(events : cross_section.Data, args : cross_section.argparse.N
         events_copy = events.Filter(returnCopy = True)
         
         if "fiducial" in selection_masks and (len(selection_masks["fiducial"]) > 0):
-            mask = SelectionTools.CombineMasks(selection_masks["fiducial"][events.filename])
+            mask = SelectionTools.CombineMasks(selection_masks["fiducial"][events_copy.filename])
             events_copy.Filter([mask], [mask])
 
-        n_pi_true = events_copy.trueParticles.nPiMinus + events_copy.trueParticles.nPiPlus
-        n_pi0_true = events_copy.trueParticles.nPi0
+        # is_pip = events_copy.trueParticles.pdg[:, 0] == 211
 
-        is_pip = events_copy.trueParticles.pdg[:, 0] == 211
+        mask = SelectionTools.CombineMasks(selection_masks["beam"][events_copy.filename])
 
-        mask = SelectionTools.CombineMasks(selection_masks["beam"][events.filename])
+        n_pi_true, n_pi0_true = GetTruePionCounts(events_copy, args_c["pi_KE_lim"])
         n_pi_true = n_pi_true[mask]
         n_pi0_true = n_pi0_true[mask]
-        is_pip = is_pip[mask]
+        # is_pip = is_pip[mask]
         true_regions = RegionIdentification.TrueRegions(n_pi0_true, n_pi_true)
         for k in true_regions:
-            true_regions[k] = true_regions[k] & (is_pip)
+            true_regions[k] = true_regions[k]# & (is_pip)
         for k in reco_regions:
-            reco_regions[k] = reco_regions[k] & (is_pip)
+            reco_regions[k] = reco_regions[k]# & (is_pip)
         return reco_regions, true_regions
     else:
         return reco_regions
@@ -156,6 +156,17 @@ def CreateAnalysisInput(sample : cross_section.Data, args : cross_section.argpar
     return ai
 
 
+def GetTruePionCounts(events : cross_section.Data, ke_lim : float = 0):
+    n_pi_true = (events.trueParticles.number != 1) & (abs(events.trueParticles.pdg) == 211) & (events.trueParticles.mother == 1)
+
+    ke = cross_section.KE(cross_section.vector.magnitude(events.trueParticles.momentum), cross_section.Particle.from_pdgid(211).mass)
+
+    n_pi_true = ak.sum(n_pi_true & (ke > ke_lim), axis = -1)
+    n_pi0_true = events.trueParticles.nPi0
+
+    return n_pi_true, n_pi0_true
+
+
 def CreateAnalysisInputMCTrueBeam(mc : cross_section.Data, args : cross_section.argparse.Namespace | dict):
     args_c = args_to_dict(args)
 
@@ -174,8 +185,7 @@ def CreateAnalysisInputMCTrueBeam(mc : cross_section.Data, args : cross_section.
     n_pi0 = cross_section.EventSelection.SelectionTools.GetPFOCounts(args_c["selection_masks"]["mc"]["pi0"][mc.filename])
     reco_regions = RegionIdentification.TrueRegions(n_pi0, n_pi)
 
-    n_pi_true = mc_true_beam.trueParticles.nPiMinus + mc_true_beam.trueParticles.nPiPlus
-    n_pi0_true = mc_true_beam.trueParticles.nPi0
+    n_pi_true, n_pi0_true = GetTruePionCounts(mc_true_beam, args_c["pi_KE_lim"])
     true_regions = RegionIdentification.TrueRegions(n_pi0_true, n_pi_true)
 
     return cross_section.AnalysisInput.CreateAnalysisInputNtuple(mc_true_beam, args_c["upstream_loss_correction_params"]["value"], reco_regions, true_regions, [args["beam_reweight"]["params"][k]["value"] for k in args_c["beam_reweight"]["params"]], args_c["beam_reweight"]["strength"], upstream_loss_func = args_c["upstream_loss_response"])

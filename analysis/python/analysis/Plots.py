@@ -12,7 +12,6 @@ import warnings
 import awkward as ak
 import matplotlib
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import numpy as np
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.ticker import AutoMinorLocator, MultipleLocator
@@ -853,8 +852,9 @@ def _adjust_text_colour(value, colour, norm, offset=0.2, max_reduction=0.7):
 
 
 class PlotBook:
-    def __init__(self, name : str, open : bool = True) -> None:
+    def __init__(self, name : str, open : bool = True, watermark : str = None) -> None:
         self.name = name
+        self.watermark = watermark
         if ".pdf" not in self.name: self.name += ".pdf" 
         if open: self.open()
         self.is_open = True
@@ -866,9 +866,16 @@ class PlotBook:
         self.close()
         self.is_open = False
 
+    def PlotWatermark(self):
+        plt.text(0.5, 0.5, self.watermark, transform=plt.gca().transAxes, fontsize=38, color='gray', alpha=0.5, ha='center', va='center', rotation=30, zorder = np.inf)
+        return
+
     def Save(self):
+        global preliminary
         if hasattr(self, "pdf"):
             try:
+                if self.watermark is not None:
+                    self.PlotWatermark()
                 self.pdf.savefig(bbox_inches='tight')
             except AttributeError:
                 pass
@@ -951,7 +958,7 @@ def FigureDimensions(x : int, orientation : str = "horizontal") -> tuple[int]:
     return dim
 
 
-def MultiPlot(n : int, xlim : tuple = None, ylim : tuple = None):
+def MultiPlot(n : int, xlim : tuple = None, ylim : tuple = None, orientation = "horizontal"):
     """ Generator for subplots.
 
     Args:
@@ -960,7 +967,7 @@ def MultiPlot(n : int, xlim : tuple = None, ylim : tuple = None):
     Yields:
         Iterator[int]: ith plot
     """
-    dim = FigureDimensions(n)
+    dim = FigureDimensions(n, orientation)
     plt.subplots(figsize = [6.4 * dim[1], 4.8 * dim[0]])
     for i in range(n):
         plt.subplot(dim[0], dim[1], i + 1)
@@ -987,7 +994,7 @@ def IterMultiPlot(x, xlim : tuple = None, ylim : tuple = None, threshold = 100):
         yield i, j
 
 
-def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None, xerr = None, yerr = None, capsize : float = 3, zorder : int = None, style : str = "scatter"):
+def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None, xerr = None, yerr = None, capsize : float = 3, zorder : int = None, style : str = "scatter", rasterized : bool = False):
     """ Make scatter plot.
     """
     if newFigure is True:
@@ -995,7 +1002,15 @@ def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label:
 
     if style == "bar":
         width = min(x[1:] - x[:-1]) # until I figure out how to do varaible widths
-        plt.bar(x, y, width, xerr = xerr, yerr = yerr, linestyle = linestyle, label = label, color = color, alpha = alpha, capsize = capsize, zorder = zorder)
+        plt.bar(x, y, width, xerr = xerr, linestyle = linestyle, label = label, color = color, alpha = alpha, zorder = zorder)
+        
+        # automatically calculate cap size to match bin width
+        ax = plt.gca()
+        t = ax.transData.transform # tranform units to distance on page
+        ppd = 72 / ax.figure.dpi # points per distance (same point used in font sizes)
+        capsize =  0.5 * (ppd * (t([width, 0]) - t([0, 0])))[0] # factor of 0.5 because cap size is in units of half-pints
+        plt.errorbar(x, y, yerr = yerr, linestyle = "", color = "k", alpha = alpha, capsize = capsize, zorder = zorder)
+
     elif style == "step":
         if (xerr is not None): warnings.warn("x error bars are not supported with style 'step'")
         
@@ -1012,17 +1027,12 @@ def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label:
         
         if color is None: color = next(plt.gca()._get_lines.prop_cycler)["color"] # cause apparently stairs suck
 
-        # p1 = plt.step(x, y, where = "mid", linestyle = linestyle, color = color, alpha = alpha, zorder = zorder, label = label)
-        p1 = plt.stairs(y, edges, linestyle = linestyle, edgecolor = color, color = color, alpha = alpha, zorder = zorder, label = label)
+        plt.stairs(y, edges, linestyle = linestyle, edgecolor = color, color = color, alpha = alpha, zorder = zorder, label = label)
 
         if yerr is not None:
-            # plt.fill_between(x, y + yerr, y - yerr, step = "mid", alpha = 0.25, color = color)
             plt.stairs(y+yerr, edges, baseline=y-yerr, fill = True, alpha = 0.25, color = color)
-            # p2 = mpatches.Patch(color=color, alpha=0.25, linewidth=0)
-        # handles = ((p1[0],p2),)
-        # labels  = (label,)
     elif style == "scatter":
-        plt.errorbar(x, y, yerr, xerr, marker = marker, linestyle = linestyle, label = label, color = color, markersize = markersize, alpha = alpha, capsize = capsize, zorder = zorder)
+        plt.errorbar(x, y, yerr, xerr, marker = marker, linestyle = linestyle, label = label, color = color, markersize = markersize, alpha = alpha, capsize = capsize, zorder = zorder, rasterized = rasterized)
     else:
         raise Exception(f"{style} not a valid style")
 
@@ -1033,9 +1043,6 @@ def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label:
     plt.xscale(x_scale)
     plt.yscale(y_scale)
     if label != "":
-        # if style == "step":
-        #     plt.legend(handles = handles, labels = labels)
-        # else:
         plt.legend()
     if annotation is not None:
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
@@ -1062,7 +1069,6 @@ def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None
     if truncate == True:
         if range is None:
             raise Exception("if truncate is true, range must be provided")
-        # data = np.clip(data, min(range), max(range))
         data = ClipJagged(data, min(range), max(range))
 
     height, edges, _ = plt.hist(data, bins, label = label, alpha = alpha, density = density, histtype = histtype, stacked = stacked, color = color, range = range if range and len(range) == 2 else None, weights = weights)
@@ -1095,24 +1101,32 @@ def PlotHist2DMarginal(data_x, data_y, bins: int = 100, x_range: list = None, y_
     h, (x_e, y_e) = PlotHist2D(data_x[not_nan], data_y[not_nan], bins, x_range, y_range, z_range, xlabel, ylabel, title, label, x_scale, y_scale, False, annotation, cmap, norm, False)
 
     plt.subplot(2, 2, 1) # top right (x projection)
-    plt.hist(x_e[:-1], bins = x_e, weights = np.sum(h, 1), density = True)
+    ny, _, _ = plt.hist(x_e[:-1], bins = x_e, weights = np.sum(h, 1), density = True)
     plt.xticks(ticks = x_e, labels = [])
-    plt.locator_params(axis='both', nbins=4)
+    plt.locator_params(axis='x', nbins=4)
     plt.xlim(min(x_e), max(x_e))
-    plt.ylabel("fraction")
-    plt.gca().yaxis.get_major_ticks()[0].label1.set_visible(False)
+    # plt.ylabel("fraction")
+    plt.locator_params(axis='y', nbins=2)
+    plt.gca().yaxis.get_major_ticks()[0].label1.set_visible(True)
+
+    ty = [max(ny)/2, max(ny)]
+    plt.yticks(ty, [f"{i:.1g}" for i in ty], fontsize = "small")
 
     plt.subplot(2, 2, 4) # bottom right (y projection)
-    plt.hist(y_e[:-1], bins = y_e, weights = np.sum(h, 0), density = True, orientation="horizontal")
+    nx, _, _ = plt.hist(y_e[:-1], bins = y_e, weights = np.sum(h, 0), density = True, orientation="horizontal")
     plt.yticks(ticks = y_e, labels = [])
-    plt.locator_params(axis='both', nbins=4)
+    plt.locator_params(axis='y', nbins=4)
     plt.ylim(min(y_e), max(y_e))
-    plt.xlabel("fraction")
-    plt.gca().xaxis.get_major_ticks()[0].label1.set_visible(False)
+    # plt.xlabel("fraction")
+    plt.locator_params(axis='x', nbins=2)
+    plt.gca().xaxis.get_major_ticks()[0].label1.set_visible(True)
+
+    tx = [max(nx)/2, max(nx)]
+    plt.xticks(tx, [f"{i:.1g}" for i in tx], fontsize = "small")
 
     plt.colorbar(ax = plt.gca())
-    plt.tight_layout()
     plt.subplot(2, 2, 3) # switch back to main plot at the end
+    plt.tight_layout()
     return
 
 
@@ -1240,7 +1254,7 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
             mc = np.clip(mc, min(x_range), max(x_range))
 
     plt.subplot(211) # MC histogram
-    if x_range is None: x_range = [ak.min([mc, data]), ak.max([mc, data])]
+    if x_range is None: x_range = [ak.min([ak.ravel(mc), data]), ak.max([ak.ravel(mc), data])]
 
     if is_tagged:
         h_mc = []
@@ -1254,7 +1268,6 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
         h_mc, edges = np.histogram(np.array(mc), bins, range = x_range, weights = mc_weights)
         h_mc = h_mc * scale
 
-    # sum_mc = np.sum(h_mc, 1, dtype = int) # number of each species in MC
     ind = np.argsort(sum_mc)[::-1]
     if stacked == "ascending":
         ind = ind[::-1]
@@ -1298,7 +1311,6 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
 
     plt.tick_params("x", labelbottom = False) # hide x axes tick labels
 
-    # if stacked is True:
     if is_tagged:
         h_mc = np.sum(h_mc, axis = 0)
     mc_error = np.sqrt(abs(h_mc)) # weights can cause the counts to be negative
@@ -1362,7 +1374,6 @@ def PlotHist2DImshowMarginal(data_x, data_y, bins: int = 100, x_range: list = No
     plt.xticks(ticks = x_e, labels = [])
     plt.locator_params(axis='both', nbins=4)
     plt.xlim(min(x_e), max(x_e))
-    # plt.ylabel("fraction")
     plt.gca().yaxis.get_major_ticks()[0].label1.set_visible(False)
 
     plt.subplot(2, 2, 4) # bottom right (y projection)
@@ -1370,7 +1381,6 @@ def PlotHist2DImshowMarginal(data_x, data_y, bins: int = 100, x_range: list = No
     plt.yticks(ticks = y_e, labels = [])
     plt.locator_params(axis='both', nbins=4)
     plt.ylim(min(y_e), max(y_e))
-    # plt.xlabel("fraction")
     plt.gca().xaxis.get_major_ticks()[0].label1.set_visible(False)
 
     plt.colorbar(ax = plt.gca())
@@ -1395,8 +1405,12 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
     fractions = counts / np.sum(counts, axis = 1)[:, np.newaxis]
     if newFigure: plt.figure()
     c_norm = counts/np.sum(counts, axis = 0)
+    
+    fractions_err = (fractions * (1 - fractions) / np.sum(counts, axis = 1)[:, np.newaxis])**0.5
+    c_norm_err = (c_norm * (1 - c_norm) / np.sum(counts, axis = 0))**0.5
+
     plt.imshow(c_norm, cmap = cmap, origin = "lower")
-    plt.colorbar(label = "column normalised counts", shrink = 0.8)
+    plt.colorbar(label = "Column normalised counts", shrink = 0.8)
 
     y_counts = np.sum(counts, axis = 1)
     x_counts = np.sum(counts, axis = 0)
@@ -1424,7 +1438,7 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
         plt.title("Key: (counts, efficiency(%), purity(%))")
 
     for (i, j), z in np.ndenumerate(counts):
-        plt.gca().text(j, i, f"{z},\n{fractions[i][j]*100:.2g}%,{c_norm[i][j]*100:.2g}%", ha='center', va='center', fontsize = 8)
+        plt.gca().text(j, i, f"{z},\n{Utils.round_value_to_error(fractions[i][j]*100, fractions_err[i][j]*100)}%,\n{Utils.round_value_to_error(c_norm[i][j]*100, c_norm_err[i][j]*100)}%", ha='center', va='center', fontsize = 7)
     plt.grid(False)
     plt.tight_layout()
 
@@ -1589,7 +1603,7 @@ def PlotBarComparision(data_1, data_2, width: float = 0.4, xlabel: str = "", tit
     if fraction is True:
         y_1 = counts_1 / np.sum(counts_1)
         y_2 = counts_2 / np.sum(counts_2)
-        yl = "Fraction"
+        yl = "Fractional counts"
     else:
         y_1 = counts_1
         y_2 = counts_2
@@ -1659,15 +1673,17 @@ def PlotStackedBar(bars, labels, xlabel : str = None, colours : list = None, alp
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
-def PlotTags(tags : Tags.Tags, xlabel : str = "name", fraction : bool = True, newFigure : bool = True):
+def PlotTags(tags : Tags.Tags, xlabel : str = "name", fraction : bool = True, newFigure : bool = True, display_values : bool = False):
     if newFigure: plt.figure()    
     counts = [ak.sum(m) for m in tags.mask.values]
+    yl = "Counts"
     if fraction is True:
         counts = counts / np.sum(counts)
+        yl = "Fractional counts"
     bar = plt.bar(tags.name.values, counts, color = tags.colour.values)
     plt.xlabel(xlabel)
-    plt.ylabel("Counts")
-    plt.bar_label(bar)
+    plt.ylabel(yl)
+    if display_values: plt.bar_label(bar)
     plt.xticks(rotation = 30)
 
 

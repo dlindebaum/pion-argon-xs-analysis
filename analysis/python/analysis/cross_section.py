@@ -7,10 +7,12 @@ Description: Library for code used in the cross section analysis. Refer to the R
 """
 import argparse
 import copy
+import numbers
 import os
 
 from collections import namedtuple
 from dataclasses import dataclass
+from enum import Enum
 
 import awkward as ak
 import cabinetry
@@ -22,18 +24,20 @@ import uproot
 from cabinetry.fit.results_containers import FitResults
 from particle import Particle
 from scipy.interpolate import interp1d, UnivariateSpline
+from scipy.stats import chi2, ks_2samp
 
 from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, RegionIdentification, Processing
-from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer
-from python.analysis.shower_merging import SetPlotStyle
+from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer, IO
 from python.analysis.Utils import *
 
+GEANT_XS = os.environ["PYTHONPATH"] + "/data/g4_xs_pi_KE_100.root"
+# GEANT_XS = os.environ["PYTHONPATH"] + "/data/g4_xs.root"
 
 ### OVERRIDE UNFOLDING API TO RETURN COVARIANCE MATRIX ###
 
 from pyunfold.callbacks import setup_callbacks_regularizer, Logger
 from pyunfold.mix import Mixer
-from pyunfold.teststat import get_ts
+from pyunfold.teststat import get_ts, KS
 from pyunfold.priors import setup_prior
 from pyunfold.utils import cast_to_array
 
@@ -255,6 +259,124 @@ def _unfold_custom(prior=None, mixer=None, ts_func=None, max_iter=100,
 
 # pyhf.modifiers.staterror.required_parset = to_poisson(pyhf.modifiers.staterror.required_parset)
 
+class PlotStyler:
+    def __init__(self, extend_colors : bool = False, custom_colors : list = None, dpi : int = 100, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):
+        self.args = locals()
+        self.args.pop("self")
+        PlotStyler.SetPlotStyle(**self.args)
+
+    class __updater__:
+        def __init__(self, parent : "PlotStyler", extend_colors : bool = None, custom_colors : list = None, dpi : int = None, dark : bool = None, font_scale : float = None, font_style : str = None):
+            self.args = locals()
+            self.args.pop("self")
+            self.args.pop("parent")
+            self.parent = parent
+
+            for k in self.args:
+                if self.args[k] is None:
+                    self.args[k] = self.parent.args[k]
+
+            pass
+        def __enter__(self):
+            PlotStyler.SetPlotStyle(**self.args)
+            pass
+        def __exit__(self, type, value, traceback):
+            PlotStyler.SetPlotStyle(**self.parent.args)
+            pass
+
+    def Update(self, extend_colors : bool = None, custom_colors : list = None, dpi : int = None, dark : bool = None, font_scale : float = None, font_style : str = None):
+        return self.__updater__(self, extend_colors, custom_colors, dpi, dark, font_scale, font_style)
+
+    @staticmethod
+    def SetPlotStyle(extend_colors : bool = False, custom_colors : list = None, dpi : int = 300, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):
+        Plots.plt.style.use("default") # first load the default to reset any previous changes made by other styles
+        Plots.plt.style.use('ggplot')
+        Plots.plt.rcParams.update({'patch.linewidth': 1})
+        Plots.plt.rcParams.update({'font.size': font_scale * 10})
+        Plots.plt.rcParams.update({"axes.titlecolor" : "#555555"})
+        Plots.plt.rcParams.update({"axes.titlesize" : font_scale * 12})
+        Plots.plt.rcParams['figure.dpi'] = dpi
+        Plots.plt.rcParams['legend.fontsize'] = "small"
+        Plots.plt.rcParams["font.family"] = font_style
+
+        Plots.plt.rc('text.latex', preamble=r"\\usepackage{amsmath}")
+        if custom_colors:
+            Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", custom_colors)})
+        if dark:
+            l_2 = [
+            Plots.matplotlib.cm.get_cmap("tab20c").colors[0],
+            Plots.matplotlib.cm.get_cmap("tab20c").colors[8],
+            Plots.matplotlib.cm.get_cmap("tab20b").colors[13],
+            Plots.matplotlib.cm.get_cmap("tab20b").colors[0],
+            Plots.matplotlib.cm.get_cmap("tab20b").colors[17],
+            Plots.matplotlib.cm.get_cmap("tab20b").colors[4],
+            Plots.matplotlib.cm.get_cmap("tab20c").colors[12],
+            Plots.matplotlib.cm.get_cmap("tab20c").colors[16],
+            ]
+            Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", l_2)})
+        if extend_colors:
+            Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", Plots.matplotlib.cm.get_cmap("tab20").colors)})
+        return
+
+
+def SetPlotStyle(extend_colors : bool = False, custom_colors : list = None, dpi : int = 300, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):
+    Plots.plt.style.use("default") # first load the default to reset any previous changes made by other styles
+    Plots.plt.style.use('ggplot')
+    Plots.plt.rcParams.update({'patch.linewidth': 1})
+    Plots.plt.rcParams.update({'font.size': font_scale * 10})
+    Plots.plt.rcParams.update({"axes.titlecolor" : "#555555"})
+    Plots.plt.rcParams.update({"axes.titlesize" : font_scale * 12})
+    Plots.plt.rcParams['figure.dpi'] = dpi
+    Plots.plt.rcParams['legend.fontsize'] = "small"
+    Plots.plt.rcParams["font.family"] = font_style
+
+    Plots.plt.rc('text.latex', preamble=r"\\usepackage{amsmath}")
+    if custom_colors:
+        Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", custom_colors)})
+    if dark:
+        l_2 = [
+        Plots.matplotlib.cm.get_cmap("tab20c").colors[0],
+        Plots.matplotlib.cm.get_cmap("tab20c").colors[8],
+        Plots.matplotlib.cm.get_cmap("tab20b").colors[13],
+        Plots.matplotlib.cm.get_cmap("tab20b").colors[0],
+        Plots.matplotlib.cm.get_cmap("tab20b").colors[17],
+        Plots.matplotlib.cm.get_cmap("tab20b").colors[4],
+        Plots.matplotlib.cm.get_cmap("tab20c").colors[12],
+        Plots.matplotlib.cm.get_cmap("tab20c").colors[16],
+        ]
+        Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", l_2)})
+    if extend_colors:
+        Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", Plots.matplotlib.cm.get_cmap("tab20").colors)})
+
+
+def file_len(file : str):
+    return len(IO(file).Get(["EventID", "event"]))
+
+
+def CalculateBatches(args):
+    if "data" in args.ntuple_files:
+        n_data = [file_len(file["file"]) for file in args.ntuple_files["data"]]
+    else:
+        n_data = []
+
+    if len(n_data) == 0:
+        print("no data file was specified, 'normalisation', 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
+
+    n_mc = [file_len(file["file"]) for file in args.ntuple_files["mc"]] # must have MC
+
+    processing_args = {"events" : None, "batches" : None, "threads" : None}
+
+    # pass multiprocessing args
+    if max([*n_data, *n_mc]) >= 7E5:
+        processing_args["events"] = None
+        processing_args["batches"] = int(2 * max([*n_data, *n_mc]) // 7E5)
+        processing_args["threads"] = args.cpus
+    else:
+        processing_args["events"] = None
+        processing_args["batches"] = None
+        processing_args["threads"] = args.cpus
+    return processing_args
+
 
 def RunProcess(ntuple_files : list[str], is_data : bool, args : argparse.Namespace, func : callable, merge : bool = True) -> list:
     output = []
@@ -296,6 +418,22 @@ def MergeOutputs(outputs : list[dict]) -> dict:
     for o in outputs:
         search(o, merged_output)
     return merged_output
+
+
+class Sample(str, Enum):
+    MC = "mc"
+    DATA = "data"
+
+
+def ApplicationProcessing(samples : list[Sample], outdir : str, args : argparse.Namespace, func : callable, merge : bool, outname : str = "output"):
+    if (args.regen is True) or (os.path.isfile(f"{outdir}{outname}.dill") is False):
+        print("Processing Ntuples")
+        outputs = {s : RunProcess(args.ntuple_files[s], s == Sample.DATA, args, func, merge) for s in samples}
+        SaveObject(f"{outdir}{outname}.dill", outputs)
+    else:
+        print("Loading existing outputs")
+        outputs = LoadObject(f"{outdir}{outname}.dill")
+    return outputs
 
 
 def CountInRegions(true_regions : dict, reco_regions : dict, selection_efficincy : np.ndarray = None) -> np.ndarray:
@@ -359,15 +497,29 @@ def PlotXSHists(energy_slices, hist_counts : np.ndarray, hist_counts_err : np.nd
     Plots.Plot(x, scale * hist_counts[s], yerr = scale * hist_counts_err[s], xlabel = xlabel, newFigure = newFigure, style = "step", label = label, color = color, ylabel = ylabel, title = title)
     return
 
+def HypTestXS(cv, error, process, energy_slice, file = GEANT_XS):
+    xs_sim = GeantCrossSections(file, energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos])
+    sim_curve_interp = xs_sim.GetInterpolatedCurve(process)
+    x = energy_slice.pos[:-1] - energy_slice.width/2
+
+    w_chi_sqr = weighted_chi_sqr(cv, sim_curve_interp(x), error)
+
+    p = chi2.sf((len(x)-1) * w_chi_sqr, len(x) - 1)
+    return {"w_chi2" : w_chi_sqr, "p" : p}
 
 def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", chi2 : bool = True, newFigure : bool = True, cv_only : bool = False, marker_size : float = 6):
-    xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos])
+    if hasattr(energy_slice.width, "__iter__"):
+        width = energy_slice.width[:-1][::-1]
+        xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos - energy_slice.width[0], energy_slice.max_pos + energy_slice.width[-1]])
+    else:
+        width = energy_slice.width
+        xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos + energy_slice.width])
 
     if colors is None:
         colors = {k : f"C{i}" for i, k in enumerate(xs)}
 
     sim_curve_interp = xs_sim.GetInterpolatedCurve(process)
-    x = energy_slice.pos[:-1] - energy_slice.width/2
+    x = energy_slice.pos[:-1] - width/2
 
     if newFigure is True: Plots.plt.figure()
     chi_sqrs = {}
@@ -378,17 +530,20 @@ def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, 
             chi2_l = ", $\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}"
         else:
             chi2_l = ""
-        Plots.Plot(x, v[0], xerr = energy_slice.width / 2  if cv_only is False else None, yerr = v[1] if cv_only is False else None, label = k + chi2_l, color = colors[k], linestyle = "", marker = "x", newFigure = False, markersize = marker_size, capsize = marker_size/2)
+        Plots.Plot(x, v[0], xerr = width / 2  if cv_only is False else None, yerr = v[1] if cv_only is False else None, label = k + chi2_l, color = colors[k], linestyle = "", marker = "x", newFigure = False, markersize = marker_size, capsize = marker_size/2)
     
     if process == "single_pion_production":
-        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = simulation_label, title = "single pion production" if title is None else title, newFigure = False, xlabel = "$KE (MeV)$", ylabel = "$\sigma (mb)$", color = xs_sim_color)
+        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = simulation_label, title = "Single pion production" if title is None else title.capitalize(), newFigure = False, xlabel = "$KE (MeV)$", ylabel = "$\sigma$ (mb)", color = xs_sim_color)
     else:
-        xs_sim.Plot(process, label = simulation_label, color = xs_sim_color, title = title)
+        xs_sim.Plot(process, label = simulation_label, color = xs_sim_color, title = title.capitalize() if type(title) is str else title)
 
     Plots.plt.ylim(0)
     if max(Plots.plt.gca().get_ylim()) > np.nanmax(sim_curve_interp(xs_sim.KE).astype(float)) * 2:
         Plots.plt.ylim(0, max(sim_curve_interp(xs_sim.KE)) * 2)
-    Plots.plt.xlim(energy_slice.min_pos, energy_slice.max_pos)
+    if hasattr(width, "__iter__"):
+        Plots.plt.xlim(energy_slice.min_pos - (0.2 * width[0]), energy_slice.max_pos + (0.2 * width[-1]))
+    else:
+        Plots.plt.xlim(energy_slice.min_pos - (0.2 * width), energy_slice.max_pos + (0.2 * width))
     return chi_sqrs
 
 
@@ -583,50 +738,24 @@ class BetheBloch:
 
 class ApplicationArguments:
     @staticmethod
-    def Ntuples(parser : argparse.ArgumentParser, data : bool = False):
-        parser.add_argument("-m", "--mc-file", dest = "mc_file", nargs = "+", help = "MC NTuple file to study.", required = False)
-        if data: parser.add_argument("-d", "--data-file", dest = "data_file", nargs = "+", help = "Data Ntuple to study", required = False)
-        parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Ntuple_Type, help = f"type of ntuple I am looking at {[m.value for m in Ntuple_Type]}.", required = False)
-        return
-
-    @staticmethod
-    def SingleNtuple(parser : argparse.ArgumentParser, define_sample : bool = True):
-        parser.add_argument(dest = "file", help = "NTuple file to study.")
-        parser.add_argument("-T", "--ntuple-type", dest = "ntuple_type", type = Ntuple_Type, help = f"type of ntuple I am looking at {[m.value for m in Ntuple_Type]}.", required = False)
-        if define_sample : parser.add_argument("-S", "--sample-type", dest = "sample_type", type = str, choices = ["mc", "data"], help = f"type of sample I am looking at.", required = False)
-        return
-
-    @staticmethod
-    def BeamQualityCuts(parser : argparse.ArgumentParser, data : bool = False):
-        parser.add_argument("--mc_beam_quality_fit", dest = "mc_beam_quality_fit", type = str, help = "MC fit values for the beam quality cut.", required = False)
-        if data: parser.add_argument("--data_beam_quality_fit", dest = "data_beam_quality_fit", type = str, default = None, help = "Data fit values for the beam quality cut.", required = False)
-        return
-    
-    @staticmethod
     def Processing(parser : argparse.ArgumentParser):
         parser.add_argument("-b", "--batches", dest = "batches", type = int, default = None, help = "Number of batches to split n tuple files into when parallel processing processing data.")
         parser.add_argument("-e", "--events", dest = "events", type = int, default = None, help = "Number of events to process when parallel processing data.")
-        parser.add_argument("-t", "--threads", dest = "threads", type = int, default = 1, help = "Number of threads to use when processsing")
+        parser.add_argument("-t", "--threads", dest = "threads", type = int, default = 1, help = "Number of threads to use when processsing.")
+
+    @staticmethod
+    def Regen(parser : argparse.ArgumentParser):
+        parser.add_argument("-r", "--regen", dest = "regen", action = "store_true", help = "Regenerate any stored data.")
 
     @staticmethod
     def Output(parser : argparse.ArgumentParser, default : str = None):
-        parser.add_argument("-o", "--out", dest = "out", type = str, default = default, help = "Directory to save plots")
-        return
-
-    @staticmethod
-    def BeamSelection(parser : argparse.ArgumentParser):
-        parser.add_argument("--scraper", action = "store_true", help = "Toggle to enable the beam scraper cut for the beam particle selection.")
-        return
-
-    @staticmethod
-    def ShowerCorrection(parser : argparse.ArgumentParser):
-        parser.add_argument("-C, --shower_correction", nargs = 2, dest = "correction", help = f"Shower energy correction method {tuple(EnergyCorrection.shower_energy_correction.keys())} followed by a correction parameters json file.", required = False)
+        parser.add_argument("-o", "--out", dest = "out", type = str, default = default, help = "Directory to save output files.")
         return
 
     @staticmethod
     def Plots(parser : argparse.ArgumentParser):
         parser.add_argument("--nbins", dest = "nbins", type = int, default = 50, help = "Number of bins to make for histogram plots.")
-        parser.add_argument("-a", "--annotation", dest = "annotation", type = str, default = None, help = "Annotation to add to plots")
+        parser.add_argument("-a", "--annotation", dest = "annotation", type = str, default = None, help = "Annotation to add to plots.")
         return
 
     @staticmethod
@@ -740,6 +869,8 @@ class ApplicationArguments:
             elif head == "BEAM_SCRAPER_FITS":
                 args.beam_scraper_energy_range = value["energy_range"]
                 args.beam_scraper_energy_bins = value["energy_bins"]
+                if not hasattr(args.beam_scraper_energy_bins, "__iter__"):
+                    raise Exception("energy_bins must be a list of beam energy bin ranges in MeV")
                 if "mc" in value:
                     args.mc_beam_scraper_fit = LoadConfiguration(value["mc"])
             elif head == "ENERGY_CORRECTION":
@@ -749,6 +880,8 @@ class ApplicationArguments:
             elif head == "UPSTREAM_ENERGY_LOSS":
                 args.upstream_loss_cv_function = value["cv_function"]
                 args.upstream_loss_response = getattr(Fitting, value["response"])
+                if value["bins"] is None:
+                    raise Exception("Upstream energy loss KE bins need to be provided (in MeV)")
                 args.upstream_loss_bins = value["bins"]
                 if "correction_params" in value:
                     args.upstream_loss_correction_params = LoadConfiguration(value["correction_params"])
@@ -768,18 +901,37 @@ class ApplicationArguments:
                     if k == "beam_profile": 
                         args.toy_parameters[k] = getattr(Fitting, v)
                     else:
+                        for k1, v1 in v.items():
+                            if not ((hasattr(v1, "__iter__")) and (len(v1) == 2)):
+                                raise Exception(f"{k1} must be a list of two numbers.")
                         args.toy_parameters[k] = v
             elif head == "FIT":
                 args.fit = {}
                 for k, v in value.items():
                     args.fit[k] = v
             elif head == "ESLICE":
-                if value["width"] is not None:
-                    args.energy_slices = Slices(value["width"], value["min"] - value["width"], value["max"], reversed = True) # min - width to allocate an underflow bin (not used in the measurement)
+                for k, v in value.items():
+                    if not isinstance(v, numbers.Number):
+                        raise Exception(f"All SLICE paramters must be a number ({k}:{v}).")
+                # if value["width"] is not None:
+                args.energy_slices = Slices(value["width"], value["min"] - value["width"], value["max"], reversed = True) # min - width to allocate an underflow bin (not used in the measurement)
             elif head == "ANALYSIS_INPUTS":
                 args.analysis_input = {k : v for k, v in value.items()}
             elif head == "UNFOLDING":
                 args.unfolding = {k : v for k, v in value.items()}
+            elif head == "KINEMATIC_RANGES":
+                for k, v in value.items():
+                    if k == "beam_momentum":
+                        msg = "must be the nominal central value of the beam momentum distribution in MeV."
+                        cond = (type(v) == float) or (type(v) == int)
+                    else:
+                        msg = "must be a list of two elements"
+                        cond = (hasattr(v, "__iter__")) and (len(v) == 2)
+
+                    if not cond:
+                        raise Exception(f"{k} {msg}")
+                    else:
+                        setattr(args, k, v)
             else:
                 setattr(args, head, value) # allow for generic configurations in the json file
         if hasattr(args, "beam_selection"):
@@ -871,6 +1023,182 @@ def RecoDepositedEnergy(events : Data, ff_KE : ak.Array, method : str) -> ak.Arr
     else:
         raise Exception(f"{method} not a valid method, pick 'calo' or 'bb'")
     return dE
+
+
+class SlicesVar:
+    Slice = namedtuple("Slice", "num pos")
+    def __init__(self, edges : list[int]):
+        self.edges = np.array(edges)
+        self.min = min(edges)
+        self.max = max(edges)
+
+
+        if all((edges[1:] - edges[:-1]) > 0):
+            # increasing, not reversed
+            self.reversed = False
+        elif all((edges[1:] - edges[:-1]) < 0):
+            # decreasing, reversed
+            self.reversed = True
+        else:
+            raise Exception(f"edges: {edges}\n is not an ordered list (either ascending or descending), or slice widths are zero")
+
+        self.max_num = max(self.num)
+        self.min_num = min(self.num)
+        self.max_pos = max(self.pos)
+        self.min_pos = min(self.pos)
+
+
+    def __conversion__(self, x):
+        """ convert a value to its slice number.
+
+        Args:
+            x: value, array of float
+
+        Returns:
+            slice: slice number/s
+        """
+        if hasattr(x, "__iter__"):
+            if self.reversed:
+                n = len(self.edges) - 1  + ak.values_astype(x < min(self.edges), int) - sum(x > ak.unflatten(self.edges, 1, -1))
+            else:
+                n = sum(x >= ak.unflatten(self.edges, 1, -1))
+        else:
+            if self.reversed:
+                n = len(self.edges) - 1 + int(x < min(self.edges)) - sum(x > self.edges)
+            else:
+                n = sum(x >= self.edges)
+        return n
+
+
+    def __create_slice__(self, i) -> Slice:
+        """ using the slice number, create the Slice object.
+
+        Args:
+            i (int): slice number/s
+
+        Returns:
+            Slice: slice
+        """
+        if hasattr(i, "__iter__"):
+            if self.reversed:
+                j = ak.where(i >= len(self.edges), i - 1, i) # create a dummy index to truncate indexes beyond the range
+                p = ak.where(i >= len(self.edges), -np.inf, self.edges[j]) # get the slice edges, and underflow goes to -inf
+                p = ak.where(i < 0, np.inf, p) # overflow goes to inf
+            else:
+                p = ak.where(i == 0, -np.inf, self.edges[i-1]) # dont need to account for the +ve inf case (overflow)
+        else:
+            if self.reversed:
+                if i >= len(self.edges):
+                    p = -np.inf
+                elif i < 0:
+                    p = np.inf
+                else:
+                    p = self.edges[i]
+            else:
+                if i == 0:
+                    p = -np.inf
+                elif i > len(self.edges): # Given the way __conversion__ works, this condition will never be satisfied...
+                    p = np.inf
+                else:
+                    p = self.edges[i - 1]
+
+        return self.Slice(i, p)
+
+
+    def __call__(self, x):
+        """ get the slice number for a set of values
+
+        Args:
+            x: values
+
+        Returns:
+            array or int: slice numbers
+        """
+        return self.__create_slice__(self.__conversion__(x))
+
+
+    def __getitem__(self, i : int) -> Slice:
+        """ Creates slices from slice numbers.
+        #! it is possible to return slice -1 but not a slice value exceedin the maximum slice
+
+        Args:
+            i (int): slice number
+
+        Raises:
+            StopIteration
+
+        Returns:
+            Slice: ith slice
+        """
+        if i >= len(self.edges):
+            raise StopIteration
+        else:
+            if self.reversed:
+                return self.__create_slice__(i + self.__conversion__(self.max))
+            else:
+                return self.__create_slice__(i + self.__conversion__(self.min))
+
+    @property
+    def num(self) -> np.ndarray:
+        """ Return all slice numbers.
+
+        Returns:
+            np.ndarray: slice numbers
+        """
+        return np.array([ s.num for s in self], dtype = int)
+
+    @property
+    def pos(self) -> np.ndarray:
+        """ Return all slice positions.
+
+        Returns:
+            np.ndarray: slice positions
+        """
+        return np.array([s.pos for s in self])
+
+    @property
+    def width(self) -> np.ndarray:
+        """ Return widths of each slice.
+
+        Returns:
+            np.ndarray: slice widths
+        """
+        return self.pos_bins[1:] - self.pos_bins[:-1]
+
+    @property
+    def pos_overflow(self) -> np.ndarray:
+        widths = abs(self.edges[1:] - self.edges[:-1])
+        i = 0 if self.reversed else -1
+        ov = self.edges[i] + widths[i]
+        if self.reversed:
+            return np.insert(self.pos, i, ov)
+        else:
+            return np.append(self.pos, ov)
+
+    @property
+    def pos_bins(self):
+        return np.sort(self.pos_overflow)
+
+
+    def pos_to_num(self, pos):
+        """ Convert slice positions to numbers
+
+        Args:
+            pos: positions
+
+        Returns:
+            array or int: slice numbers
+        """
+        slice_num = self.__conversion__(pos)
+        if hasattr(pos, "__iter__"):
+            slice_num = ak.where(slice_num > max(self.num), max(self.num), slice_num)
+            slice_num = ak.where(slice_num < 0, min(self.num), slice_num)
+        else:
+            if pos > max(self.pos): 
+                slice_num = max(self.num) # above range go into overflow bin
+            if pos < 0:
+                slice_num = min(self.num) # below range go into the underflow bin
+        return slice_num
 
 
 class Slices:
@@ -1008,11 +1336,11 @@ class Slices:
 
 
 class GeantCrossSections:
-    """ Object for accessing Geant 4 cross sections from the root file generated with Geant4reweight tools.
+    """ Object for accessing Geant 4 cross sections from the root file generated with Geant4Reweight tools.
     """
     labels = {"abs_KE;1" : "absorption", "inel_KE;1" : "quasielastic", "cex_KE;1" : "charge_exchange", "dcex_KE;1" : "double_charge_exchange", "prod_KE;1" : "pion_production", "total_inel_KE;1" : "total_inelastic"}
 
-    def __init__(self, file : str = os.environ["PYTHONPATH"] + "/data/g4_xs.root", energy_range : list = None, n_cascades : int = None) -> None:
+    def __init__(self, file : str = GEANT_XS, energy_range : list = None, n_cascades : int = None) -> None:
         with uproot.open(file) as ufile: # open root file
             self.KE = ufile["abs_KE;1"].all_members["fX"] # load kinetic energy from one channel (shared for all cross section channels)
 
@@ -1055,7 +1383,7 @@ class GeantCrossSections:
         """ Plot all cross section channels.
         """
         for k in self.labels.values():
-            Plots.Plot(self.KE, getattr(self, k), label = remove_(k), newFigure = False, xlabel = "KE (MeV)", ylabel = "$\sigma (mb)$", title = title)
+            Plots.Plot(self.KE, getattr(self, k), label = remove_(k), newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\sigma$ (mb)", title = title)
             # Plots.plt.fill_between(self.KE, getattr(self, k) - self.Stat_Error(k), getattr(self, k) + self.Stat_Error(k), color = Plots.plt.gca()._get_lines.get_next_color())
 
 
@@ -1075,12 +1403,12 @@ class GeantCrossSections:
                 label = remove_(xs)
             else:
                 if title is None:
-                    title = remove_(xs)
+                    title = remove_(xs).capitalize()
             if xs == "single_pion_production":
                 y = self.quasielastic + self.double_charge_exchange
             else:
                 y = getattr(self, xs)
-            Plots.Plot(self.KE, y, label = label, title = title, newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\sigma (mb)$", color = color)
+            Plots.Plot(self.KE, y, label = label, title = title, newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\sigma$  (mb)", color = color)
             # Plots.plt.fill_between(self.KE, getattr(self, xs) - self.Stat_Error(xs), getattr(self, xs) + self.Stat_Error(xs), color = Plots.plt.gca()._get_lines.get_next_color())
 
 
@@ -1306,7 +1634,7 @@ class EnergySlice:
             return n_interact_exclusive
 
     @staticmethod
-    def CountingExperimentOld(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices) -> tuple[np.ndarray, np.ndarray]:
+    def CountingExperimentOld(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices | SlicesVar) -> tuple[np.ndarray, np.ndarray]:
         """ (Legacy) Creates the interacting and incident histograms.
 
         Args:
@@ -1356,7 +1684,7 @@ class EnergySlice:
         return n_interact, n_incident + n_interact
 
     @staticmethod
-    def Slice_dEdX(energy_slices : Slices, particle : Particle) -> np.ndarray:
+    def Slice_dEdX(energy_slices : Slices | SlicesVar, particle : Particle) -> np.ndarray:
         """ Computes the mean dEdX between energy slices.
 
         Args:
@@ -1721,7 +2049,6 @@ class AnalysisInput:
             true_KE_int = events.trueParticles.beam_traj_KE[:, -2]
             true_track_length = events.trueParticles.beam_track_length
             outside_tpc_true = (events.trueParticles.beam_traj_pos.z[:, -1] < min(fiducial_volume)) | (events.trueParticles.beam_traj_pos.z[:, -1] > max(fiducial_volume))
-            # inelastic = np.ones(len(events.eventNum), dtype = bool)
             inelastic = events.trueParticles.true_beam_endProcess == "pi+Inelastic"
 
         else:
@@ -1923,12 +2250,12 @@ class RegionFit:
         return counts_matrix
 
     @staticmethod
-    def CreateKEIntTemplates(analysis_input : AnalysisInput, energy_slices : Slices, single_bin : bool = False, pad : bool = False) -> list[np.ndarray]:
+    def CreateKEIntTemplates(analysis_input : AnalysisInput, energy_slices : Slices, single_bin : bool = False, pad : bool = False, reco : bool = True) -> list[np.ndarray]:
         model_input_data = []
         for c in analysis_input.regions:
             tmp = []
             for s in analysis_input.exclusive_process:
-                n_int = analysis_input.NInteract(energy_slices, analysis_input.exclusive_process[s], analysis_input.regions[c], True, analysis_input.weights) + 1E-10 * int(pad)
+                n_int = analysis_input.NInteract(energy_slices, analysis_input.exclusive_process[s], analysis_input.regions[c], reco, analysis_input.weights) + 1E-10 * int(pad)
                 if single_bin:
                     tmp.append(np.array([sum(n_int)]))
                 else:
@@ -2099,7 +2426,7 @@ class Unfold:
         Plots.plt.ylabel("Reco $KE$ (MeV)")
         Plots.plt.grid(False)
         Plots.plt.colorbar(label = c_label)
-        Plots.plt.title(title)
+        Plots.plt.title(title, pad = 10)
         Plots.plt.xticks(np.linspace(0, len(x) - 1, len(x)), np.array(x[::-1], dtype = int), rotation = 30)
         Plots.plt.yticks(np.linspace(0, len(x) - 1, len(x)), np.array(x[::-1], dtype = int), rotation = 30)
         Plots.plt.tight_layout(pad = 1)
@@ -2131,7 +2458,6 @@ class Unfold:
         reco_slices = EnergySlice.SliceNumbers(template.KE_int_reco, template.KE_init_reco, outside_tpc_mask, energy_slice)
 
         if regions:
-            # channel = {i : (template.exclusive_process[i] & template.regions[i])[~outside_tpc_mask] for i in template.regions}
             channel = {i : (template.exclusive_process[i])[~outside_tpc_mask] for i in template.regions}
         else:
             channel = template.exclusive_process[process][~outside_tpc_mask]
@@ -2146,8 +2472,6 @@ class Unfold:
                 slice_pairs[i] = [reco_slices[1][channel[i]], true_slices[1][channel[i]]]
         else:
             slice_pairs["int_ex"] = [reco_slices[1][channel], true_slices[1][channel]]
-
-        # slice_pairs = {"init" : [reco_slices[0], true_slices[0]], "int" : [reco_slices[1], true_slices[1]], "int_ex" : [reco_slices[1][channel], true_slices[1][channel]]}
 
         corr = {}
         resp = {}
@@ -2235,14 +2559,22 @@ class Unfold:
         else:
             label = "Data unfolded"
 
+        print(title)
+        # print(f"original: {weighted_chi_sqr(obs/sum(obs), true/sum(true), np.sqrt(true/sum(true)))}")
+        # print(f"unfolded: {weighted_chi_sqr(results['unfolded']/sum(results['unfolded']), true/sum(true), np.sqrt(true/sum(true)))}")
+        # print(f"original: {weighted_chi_sqr(obs/sum(obs), true/sum(true), obs_err/sum(obs))}")
+        # print(f"unfolded: {weighted_chi_sqr(results['unfolded']/sum(results['unfolded']), true/sum(true), results['stat_err']/sum(results['unfolded']))}")
+        # print(f"original: {ks_2samp(obs, true)}")
+        # print(f"unfolded: {ks_2samp(results['unfolded'], true)}")
+        ks = KS(num_causes = len(obs))
+        print(f"original: {ks.calc(obs, true)}")
+        print(f"unfolded: {ks.calc(results['unfolded'], true)}")
+
+
+        PlotXSHists(energy_slices, true, None, True, 1/sum(true), label = "MC true (initial prior)", ylabel = "Fractional counts", color = "C1", newFigure = False)
         PlotXSHists(energy_slices, obs, obs_err, True, 1/sum(obs), label = "Data reco", ylabel = "Fractional counts", color = "k")
-        PlotXSHists(energy_slices, true, None, True, 1/sum(true), label = "MC true", ylabel = "Fractional counts", color = "C1", newFigure = False)
         PlotXSHists(energy_slices, results["unfolded"], results["stat_err"], True, 1 / sum(results["unfolded"]), label =  label, color = "C4", ylabel = "Fractional counts", newFigure = False, title = title)
-
-
-        # Plots.Plot(energy_slices.pos_bins[::-1], obs/sum(obs), style = "step", label = "Data reco", color = "C6")
-        # Plots.Plot(energy_slices.pos_bins[::-1], true/sum(true), style = "step", label = "MC true", color = "C0", newFigure = False)
-        # Plots.Plot(energy_slices.pos_bins[::-1], results["unfolded"] / sum(results["unfolded"]), yerr = results["stat_err"] / sum(results["unfolded"]), style = "step", label = label, xlabel = xlabel + " (MeV)", color = "C4", newFigure = False)
+        Plots.plt.legend(loc = "upper left")
         book.Save() 
         if "unfolding_matrix" in results:
             Unfold.PlotMatrix(results["unfolding_matrix"], energy_slices, title = "Unfolded matrix: " + label, c_label = "$P(C_{j}|E_{i})$", text = True, text_colour = "red")
@@ -2250,10 +2582,6 @@ class Unfold:
 
             Unfold.PlotMatrix((results["unfolding_matrix"].T * obs).T, energy_slices, "Migrations : " + label, c_label = "Counts")
             book.Save()
-
-            #! same as unfolding matrix
-            # Unfold.PlotMatrix((results["unfolding_matrix"].T * obs / np.sum(results["unfolding_matrix"].T * obs, 0)).T, energy_slices, "Fractional Migrations : " + label, c_label = "Fractional Counts", text = True, text_colour = "red")
-            # book.Save()
 
         if "covariance_matrix" in results:
             Unfold.PlotMatrix(results["covariance_matrix"], energy_slices, title = "Covariance matrix: " + label, c_label = "Counts")

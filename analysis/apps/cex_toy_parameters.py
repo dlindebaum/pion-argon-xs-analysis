@@ -78,6 +78,19 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
     return {"kinematic_quantities" : cross_section_quantities, "true_pion_mask" : true_pion_mask, "pion_inel_mask" : pion_inel_mask, "region_identification" : ri, "mean_track_score" : mean_track_score, "beam_selection_mask" : mask}
 
 
+def CreateFitTable(params, errors):
+    table = {}
+    for i, (p, e) in enumerate(zip(params, errors)):
+        sf = len(str(float(f"{e:.1g}")))
+        if e > 1:
+            sf = -(sf - 3)
+        else:
+            sf = sf - 2
+        table[f"$p_{{{i}}}$"] = f"${round(p, sf)} \pm {float(f'{e:.1g}')}$"
+
+    return pd.DataFrame(table, index = [0])
+
+
 def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_quantity : ak.Array, mask : ak.Array = None, label = "quantity(units)", plot_range = None, residual_range = None, fit_functions : list[cross_section.Fitting.FitFunction] = [cross_section.Fitting.gaussian, cross_section.Fitting.student_t]) -> dict:
     """ Study of residuals of cross section inputs, used to smear toy observables. Done by fitting a curve to the residual, returning the fit parameters.
 
@@ -109,9 +122,12 @@ def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_q
 
     params = {}
     errors = {}
+    tables = {}
     for f in fit_functions:
         Plots.plt.figure()
-        params[f.__name__], errors[f.__name__] = cross_section.Fitting.Fit(centers, counts, np.sqrt(counts), f, plot = True, xlabel = label, ylabel = "counts", plot_style = "hist")
+        params[f.__name__], errors[f.__name__] = cross_section.Fitting.Fit(centers, counts, np.sqrt(counts), f, plot = True, xlabel = label, ylabel = "Counts", plot_style = "hist", plot_range = residual_range)
+        tables[f.__name__] = CreateFitTable(params[f.__name__], errors[f.__name__])
+        
         plot_book.Save()
         Plots.plt.close()
     params_formatted = {p : {"function" : p, "values" : {f"p{i}" : params[p][i] for i in range(len(params[p]))}} for p in params}
@@ -124,7 +140,8 @@ def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_q
             "errors" : {f"p{i}" : errors[p][i] for i in range(len(errors[p]))},
             "range" : residual_range
             }
-    return params_formatted
+
+    return params_formatted, tables
 
 @Master.timer
 def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : argparse.Namespace, labels : dict, out : str):
@@ -146,16 +163,20 @@ def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : 
     trial_functions = [cross_section.Fitting.gaussian, cross_section.Fitting.student_t, cross_section.Fitting.crystal_ball, cross_section.Fitting.double_crystal_ball]
 
     params = {}
+    tables = {}
     with Plots.PlotBook(out + "smearing/smearing_study") as pdf:
         for k in labels:
             print(f"{k=}")
-            params[k] = ResolutionStudy(pdf, selected_quantities["reco"][k], selected_quantities["true"][k], selected_quantities["reco"][k] != 0, labels[k], args.toy_parameters["plot_ranges"][k], args.toy_parameters["smearing_residual_ranges"][k], trial_functions)
+            params[k], tables[k] = ResolutionStudy(pdf, selected_quantities["reco"][k], selected_quantities["true"][k], selected_quantities["reco"][k] != 0, labels[k], args.toy_parameters["plot_ranges"][k], args.toy_parameters["smearing_residual_ranges"][k], trial_functions)
 
     for q in labels:
         sout = out + f"smearing/{q}/"
         os.makedirs(sout, exist_ok = True)
         for k in params[q]:
             Master.SaveConfiguration(params[q][k], sout + f"{k}.json")
+        
+        for k in tables[q]:
+            tables[q][k].style.hide(axis = "index").to_latex(sout + f"{k}.tex")
     return
 
 @Master.timer
@@ -266,8 +287,13 @@ def RecoRegionSelection(region_selections : dict[dict], args : argparse.Namespac
         true_regions = region_selections[r]["true_regions"]
 
         counts = cross_section.CountInRegions(true_regions, reco_regions)
-        Plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "true process", x_label = "reco region", title = cross_section.remove_(r))
+        Plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "True process", x_label = "Reco region", title = cross_section.remove_(r))
         pdf.Save()
+
+        if (len(reco_regions.keys()) - 1) < len(true_regions.keys()):
+            counts = np.c_[counts, np.zeros(len(reco_regions))]
+        if (len(reco_regions.keys()) - 1) > len(true_regions.keys()):
+            counts = np.r_[counts, np.zeros(len(true_regions))]
 
         pe[cross_section.remove_(r)] = (np.diag(counts) / np.sum(counts, 0)[:-1]) * (np.diag(counts) / np.sum(counts, 1))
 
@@ -330,14 +356,17 @@ def FitBeamProfile(KE_init : np.array, func : cross_section.Fitting.FitFunction,
 
     Plots.plt.figure()
     print(f"{book.open=}")
-    params = cross_section.Fitting.Fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = book.is_open, plot_style = "hist", xlabel = "$KE^{true}_{init}$ (MeV)")[0]
+    params, error = cross_section.Fitting.Fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = book.is_open, plot_style = "hist", xlabel = "$KE^{true}_{ff}$ (MeV)", ylabel = "Counts")
     book.Save()
+
+    table = CreateFitTable(params, error)
+
     return {
         "function" : func.__name__,
         "parameters" : {f"p{i}" : params[i] for i in range(len(params))},
         "min" : min(KE_range),
         "max" : max(KE_range)
-        }
+        }, table
 
 @Master.timer
 def BeamProfileStudy(quantities : dict, args : argparse.Namespace, true_beam_mask : ak.Array, func : cross_section.Fitting.FitFunction, KE_range : list, out : str):
@@ -352,14 +381,16 @@ def BeamProfileStudy(quantities : dict, args : argparse.Namespace, true_beam_mas
     """
     os.makedirs(out + "beam_profile/", exist_ok = True)
     with Plots.PlotBook(out + "beam_profile/beam_profile.pdf") as book:
-        beam_profile = FitBeamProfile(quantities["true"]["KE_init"][true_beam_mask], func, KE_range, 50, book)
+        beam_profile, table = FitBeamProfile(quantities["true"]["KE_init"][true_beam_mask], func, KE_range, 50, book)
         Master.SaveConfiguration(beam_profile, out + "beam_profile/beam_profile.json")
+        table.style.hide(axis = "index").to_latex(out + "beam_profile/fit.tex")
     return
 
 @Master.timer
 def main(args : argparse.Namespace):
-    cross_section.SetPlotStyle(True)
+    cross_section.PlotStyler.SetPlotStyle(True)
     out = args.out + "toy_parameters/"
+    cross_section.os.makedirs(out, exist_ok = True)
 
     args.batches = None
     args.events = None
@@ -367,12 +398,13 @@ def main(args : argparse.Namespace):
 
     bins = {r : np.linspace(min(args.toy_parameters["plot_ranges"][r]), max(args.toy_parameters["plot_ranges"][r]), 50) for r in args.toy_parameters["plot_ranges"]}
     labels = {
-        "KE_init" : "$KE^{res, MC}_{init}$ (MeV)",
-        "KE_int" : "$KE^{res, MC}_{int}$ (MeV)",
-        "z_int" : "$l^{res, MC}$ (cm)"
+        "KE_init" : "$KE^{res,MC}_{init}$ (MeV)",
+        "KE_int" : "$KE^{res,MC}_{int}$ (MeV)",
+        "z_int" : "$l^{res,MC}$ (cm)"
     }
 
-    output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
+    # output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
+    output_mc = cross_section.ApplicationProcessing(["mc"], out, args, run, True)["mc"]
 
     print(f"{output_mc=}")
 
@@ -391,9 +423,9 @@ def main(args : argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Analyses MC ntuples in order to determine parameters used to emulate selection efficiency and detector effects for the toy model.")
 
+    cross_section.ApplicationArguments.Config(parser, True)
     cross_section.ApplicationArguments.Output(parser)
-    cross_section.ApplicationArguments.Processing(parser)
-    cross_section.ApplicationArguments.Config(parser)
+    cross_section.ApplicationArguments.Regen(parser)
 
     args = parser.parse_args()
     args = cross_section.ApplicationArguments.ResolveArgs(args)

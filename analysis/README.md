@@ -1,4 +1,4 @@
-# analysis
+# Analysis
 Python code for ProtoDUNE analysis, requires python 3.10.0 or greater. Installing the requirements to run the code is as follows:
 
 Run this once.
@@ -41,7 +41,7 @@ cd analysis_demo
 To create a template configuration called `analysis_config.json`, run the following in your work area:
 
 ```bash
-run_analysis.py -C analysis_config.json
+run_analysis.py -C analysis_config.json -o .
 ```
 
 This configuration requires entry of basic information such as data file location and some configurations settings some apps cannot run without. To work off a minimal application with the basic information (except MC file location) settings check `config/cex_analysis_2GeV_config_minimal_MC.json`.
@@ -67,16 +67,28 @@ open the file and note the first three entries in the json file:
 `null` entries refer to an empty entry in the config, the others have descriptions describing what the entry refers to an possible values. For now populate the information as follows:
 
 ```json
-  "NTUPLE_FILE":{
-    "mc" : "<MC file path>",
-    "data" : null,
-    "type" : "PDSPAnalyser"
+  "NTUPLE_FILES": {
+    "mc": [
+      {
+        "file": "<MC file path>",
+        "type": "PDSPAnalyser",
+        "pmom": 2
+      }
+    ],
+    "data": [
+      {
+        "file": "<Data file path>",
+        "type": "PDSPAnalyser",
+        "pmom": 1
+      }
+    ]
   },
   "norm" : 1,
-  "pmom" : 2,
 ```
 
-"mc" should be set to the file path of the 2GeV MC file called `PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03.root` on the machine you are working on. for this ntuple file the "type" is PDSPAnalyser, no data is used, so "norm" is arbitrarily set to 1. For this specific MC file, "pmom" must be 2.
+"mc" should be set to the file path of the 2GeV MC file called `PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03.root` on the machine you are working on. for this ntuple file the "type" is PDSPAnalyser, no data is used, so "norm" is arbitrarily set to 1. For this specific MC file, "pmom" must be 2. If this must be set, it should be the expected beam energy in GeV.
+
+To run without data files, the `"data"` entry should be completely excluded.
 
 Save and close the file, now run the analysis (or most of it)
 
@@ -89,10 +101,10 @@ where `-o` sets the output path of the various results.
 when running you will see this message:
 
 ```bash
-no data file was specified, 'beam_reweight', 'toy_parameters' and 'analyse' will not run
+no data file was specified, 'normalisation', 'beam_reweight', 'toy_parameters' and 'analyse' will not run
 ```
 
-this is because without a data file, the full analysis can't be run. When the script finishes you should see multiple folders which are the outputs of the various applications:
+This is because without a data file, the full analysis can't be run. When the script finishes you should see multiple folders which are the outputs of the various applications:
 
 ```bash
 ls *
@@ -170,41 +182,56 @@ run_analysis.py -c analysis_config.json -o . --skip <selection, photon_correctio
 
 check `--help` for the names of all the apps which can be skipped or forced to run.
 
+## Toy generator
+To generate toys, you need to have run `cex_toy_parameters.py`. Then create a new json file to create your toy sample. An example template for the toy configuration is
 
+```[json]
+{
+  "events": 1000000,
+  "step": 2,
+  "p_init": 2000,
+  "beam_profile": "<path_to_your_analysis_directory>/toy_parameters/beam_profile/beam_profile.json",
+  "beam_width": 60,
+  "smearing_params": {
+    "KE_init": "<path_to_your_analysis_directory>/toy_parameters/smearing/KE_init/double_crystal_ball.json",
+    "KE_int": "<path_to_your_analysis_directory>/toy_parameters/smearing/KE_int/double_crystal_ball.json",
+    "z_int": "<path_to_your_analysis_directory>/toy_parameters/smearing/z_int/double_crystal_ball.json"
+  },
+  "reco_region_fractions": "<path_to_your_analysis_directory>/toy_parameters/reco_regions/moderate_efficiency_reco_region_fractions.hdf5",
+  "beam_selection_efficiencies": "<path_to_your_analysis_directory>/toy_parameters/pi_beam_efficiency/beam_selection_efficiencies_true.hdf5",
+  "mean_track_score_kde": "<path_to_your_analysis_directory>/toy_parameters/meanTrackScoreKDE/kdes.dill",
+  "pdf_scale_factors": null,
+  "df_format": "f",
+  "modified_PDFs": null,
+  "verbose": true,
+  "seed": 1337,
+  "max_cpus": 21
+}
+```
+Note that the beam profile takes a file in the example, but this can also be replaced with either `uniform` or `gaussian` to generate a generic beam profile with those distribution shapes.
 
-## Run shower merging analysis. (Legacy)
-Shower merging analysis workflow is as follows:
+to generate the toy run
 
----
-**sm_selection_studies.py**
- - input:
-     - <span style="color: maroon">Ntuple file (root)</span>
- - output:
-     - <span style="color: red">basic plots (png)</span>
-     - <span style="color: red">tables (tex) of selection efficiency</span>
+```
+cex_toy_generator.py -c <your_toy_config_file>
+```
 
-**sm_generate_geometric_quantities.py**
- - input:
-     - <span style="color: maroon">Ntuple file (root)</span>
- - output:
-     - <span style="color: magenta">geometric quantities file (csv)</span>
+which will produce an HDF5 file with the generated toy sample. Note the toy sample is used for systematic studies, but can also be used to do the fit, background estimation and cross section measurement.
 
-**sm_analyse_geometric_quantities.py**
- - input:
-     - <span style="color: magenta">geometric quantities file (csv)</span>
- - output:
-    - <span style="color: red">plots of geometric quantities (png)</span>
-    - <span style="color: green">list of cuts (csv)</span>
+## Running systematics
 
-**sm_shower_merging.py**
- - input:
-     - <span style="color: maroon">Ntuple file (root)</span>
-     - <span style="color: green">list of cuts (csv)</span>
- - output: <span style="color: blue">shower pair quantities (hdf5)</span>
+Make sure to run all the steps in `run_analysis.py` and have a configuration for a toy template file and toy data sample (the difference being reduced stats). Then run the following 
 
-**sm_plot_shower_quantities.py**
- - input:
-     - <span style="color: blue">shower pair quantities (hdf5)</span>
- - output:
-     - <span style="color: red">various plots of shower quantities (png)</span>
----
+`cex_systematics.py -c <analysis configuration file> -o <analysis directory> --cv <dill file of your central value measurement>`
+
+where, similar to `run_analysis.py` you can provide the argument `run`, `skip` and `regen`, then give a list of all the systematics you wish to evaluate.
+
+An example would be (to evaluate the mc stat uncertainty.):
+
+`cex_systematics.py -c <analysis configuration file> -o <analysis directory> --cv <dill file of your central value measurement> --run mc_stat`
+
+**WARNING THIS WILL TAKE A LONG TIME IF YOU DO `--run all` SO BE CAUTIOUS**
+
+To make a plot of the central value + any systematics you did generate, run
+
+`cex_systematics.py -c <analysis configuration file> -o <analysis directory> --cv <dill file of your central value measurement> --plot`.

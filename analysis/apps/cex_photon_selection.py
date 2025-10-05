@@ -106,11 +106,11 @@ def PhotonSelection(df : pd.DataFrame, book : Plots.PlotBook = Plots.PlotBook.nu
     print(counts)
     print({c : counts[c] / len(df) for c in counts})
 
-    Plots.PlotHist([df[pi0_mother].fractional_error, df[~pi0_mother].fractional_error], stacked = False, histtype = "step", range = [-1, 1], xlabel = "Shower energy fractional error", label = ["$\pi^{0}$ daughter", "other"])
+    Plots.PlotHist([df[pi0_mother].fractional_error, df[~pi0_mother].fractional_error], stacked = False, histtype = "step", range = [-1, 1], xlabel = "$E^{reco}$ fractional error", label = ["$\pi^{0}$ daughter", "other"])
     book.Save()
 
     df = df[pi0_mother]
-    Plots.PlotHist2DImshowMarginal(df.reco_shower_energy, df.fractional_error, bins = 100, xlabel = "Reco shower energy (MeV)", ylabel = "Shower energy fractional error", cmap = "plasma", x_range = [0, 1500], y_range = [-1, 1], norm = False)
+    Plots.PlotHist2DImshowMarginal(df.reco_shower_energy, df.fractional_error, bins = 100, xlabel = "$E^{reco}$ (MeV)", ylabel = "$E^{reco}$ fractional error", cmap = "plasma", x_range = [0, max(df.reco_shower_energy)], y_range = [-1, 1], norm = False)
     book.Save()
     return df
 
@@ -147,6 +147,9 @@ def linear_fit(df : pd.DataFrame, bins : np.ndarray, energy_range : list, book :
     x = (bins[1:] + bins[:-1]) / 2
     y = np.array([d.true_energy.mean() for d in binned_dataframe(df, bins, energy_range)])
 
+    if any(np.isnan(np.concatenate([x, y]))):
+        raise Exception(f"binned x and y values contain NaNs. Consider changing the binning range. \n {x, y=}")
+
     popt, pcov = curve_fit(LinearFit, x, y)
 
     print(popt, pcov**0.5)
@@ -155,14 +158,14 @@ def linear_fit(df : pd.DataFrame, bins : np.ndarray, energy_range : list, book :
     Plots.Plot(x, y, marker = "x", linestyle = "")
     Plots.Plot(x, LinearFit(x, *popt), newFigure = False, label = "fit")
     Plots.plt.fill_between(x, LinearFit(x, *(popt + perr)), LinearFit(x, *(popt - perr)), color = "C3", alpha = 0.5)
-    Plots.Plot(x, x, newFigure = False, label = "$y = x$", xlabel = "Reco shower energy (MeV)", ylabel = "True shower energy (MeV)")
+    Plots.Plot(x, x, newFigure = False, label = "$y = x$", xlabel = "$E^{reco}$ (MeV)", ylabel = "$E^{true}$ (MeV)")
     Plots.plt.legend()
 
 
     Plots.PlotHist2D(df.true_energy, df.reco_shower_energy, x_range = [0, 1500], y_range = [0, 1500], cmap = "summer")
     Plots.Plot(x, LinearFit(x, *popt), newFigure = False, label = "fit", color = "C0")
     Plots.Plot(x, x, newFigure = False, color = "black", label = "$y = x$")
-    Plots.Plot(x, y, marker = "x", linestyle = "", ylabel = "True shower energy (MeV)", xlabel = "Reco shower energy (MeV)", newFigure = False, color = "C0")
+    Plots.Plot(x, y, marker = "x", linestyle = "", ylabel = "$E^{true}$ (MeV)", xlabel = "$E^{reco}$ (MeV)", newFigure = False, color = "C0")
     book.Save()
     return popt[0]
 
@@ -182,11 +185,11 @@ def LinearFitPerformance(df : pd.DataFrame, linear_correction : float, book : Pl
     print(f"mean shower energy fractional error: {np.mean(fe)} +- {np.std(fe)}")
     print(f"mean shower energy fractional error after correction: {np.mean(np.mean(fec))} +- {np.std(fec)}")
 
-    Plots.PlotHistComparison([df.reco_shower_energy, corrected_energy], labels = ["uncorrected", "corrected"], x_range = [0, 2000], xlabel = "Shower energy (MeV)")
-    Plots.PlotHistComparison([df.reco_shower_energy - df.true_energy, corrected_energy - df.true_energy], labels = ["uncorrected", "corrected"], x_range=[-500, 500], xlabel = "Shower energy residual (MeV)")
+    Plots.PlotHistComparison([df.reco_shower_energy, corrected_energy], labels = ["uncorrected", "corrected"], x_range = [0, 2000], xlabel = "$E^{reco}$ (MeV)")
+    Plots.PlotHistComparison([df.reco_shower_energy - df.true_energy, corrected_energy - df.true_energy], labels = ["uncorrected", "corrected"], x_range=[-500, 500], xlabel = "$E^{reco}$ residual (MeV)")
     book.Save()
 
-    Plots.PlotHist2DComparison([df.true_energy, df.true_energy], [fe, fec], [0, 2000], [-1, 1], bins = 50, cmap = "Accent", xlabels = ["True shower energy (MeV)"]*2, ylabels = ["Fractional error"]*2, titles = ["uncorrected", "corrected"])
+    Plots.PlotHist2DComparison([df.true_energy, df.true_energy], [fe, fec], [0, 2000], [-1, 1], bins = 50, cmap = "Accent", xlabels = ["$E^{true}$ (MeV)"]*2, ylabels = ["Fractional error"]*2, titles = ["uncorrected", "corrected"])
     book.Save()
     return
 
@@ -229,12 +232,14 @@ def create_bins_df(value : pd.Series, n_entries, v_range : list = None) -> np.nd
 def CalculateCentralValues(df : pd.date_range, bins : np.ndarray, book : Plots.PlotBook) -> dict:
     central_values = {}
 
-    central_values["student_t"] = Fitting.ExtractCentralValues_df(df, "reco_shower_energy", "fractional_error", [-1, 1], [Fitting.student_t], bins, 20)
-    book.Save()
-    central_values["gaussian"] = Fitting.ExtractCentralValues_df(df, "reco_shower_energy", "fractional_error", [-1, 1], [Fitting.gaussian], bins, 20)
-    book.Save()
-    central_values["mean"] = [calculate_mean(df, "fractional_error", [-1, 1], bins), calculate_sem(df, "fractional_error", [-1, 1], bins)]
-    book.Save()
+    with cross_section.PlotStyler().Update(font_scale = 1.3):
+        for k, v in {"student_t" : Fitting.student_t, "gaussian" : Fitting.gaussian}.items():
+            central_values[k] = Fitting.ExtractCentralValues_df(df, "reco_shower_energy", "fractional_error", [-1, 1], [v], bins, 20, bin_label = "$E^{reco}$", bin_units = "(MeV)")
+            book.Save()
+        # central_values["gaussian"] = Fitting.ExtractCentralValues_df(df, "reco_shower_energy", "fractional_error", [-1, 1], [Fitting.gaussian], bins, 20)
+        # book.Save()
+        central_values["mean"] = [calculate_mean(df, "fractional_error", [-1, 1], bins), calculate_sem(df, "fractional_error", [-1, 1], bins)]
+        book.Save()
     return central_values
 
 
@@ -245,7 +250,7 @@ def ResponseFits(central_values : dict, bins : np.ndarray, book : Plots.PlotBook
     for _, cv in Plots.IterMultiPlot(central_values):
         print(cv)
         print(central_values[cv][1])
-        popt, perr = Fitting.Fit(x, central_values[cv][0], central_values[cv][1], cross_section.EnergyCorrection.ResponseFit, method = "lm", plot = True, xlabel = "Reco shower energy (MeV)", ylabel = "Fractional error", maxfev = int(1E6))
+        popt, perr = Fitting.Fit(x, central_values[cv][0], central_values[cv][1], cross_section.EnergyCorrection.ResponseFit, method = "lm", plot = True, xlabel = "$E^{reco}$ (MeV)", ylabel = "Fractional error", maxfev = int(1E6))
         Plots.plt.ylim(-1, 1)
         Plots.plt.title(cv)
         response_params[cv] = {"value" : popt, "error" : perr}
@@ -256,7 +261,7 @@ def ResponseFits(central_values : dict, bins : np.ndarray, book : Plots.PlotBook
 
     for cv in central_values:
         Plots.plt.figure()
-        popt, _ = Fitting.Fit(x, central_values[cv][0], central_values[cv][1], cross_section.EnergyCorrection.ResponseFit, method = "lm", plot = True, xlabel = "Reco shower energy (MeV)", ylabel = "Fractional error", maxfev = int(1E6))
+        popt, _ = Fitting.Fit(x, central_values[cv][0], central_values[cv][1], cross_section.EnergyCorrection.ResponseFit, method = "lm", plot = True, xlabel = "$E^{reco}$ (MeV)", ylabel = "Fractional error", maxfev = int(1E6))
         Plots.plt.ylim(-1, 1)
         book.Save()
     return response_params
@@ -270,18 +275,18 @@ def MethodComparison(df : pd.DataFrame, linear_correction : float, response_para
 
     energies = {"uncorrected" : energies["uncorrected"], "gaussian" : energies["gaussian"]}
 
-    Plots.PlotHistComparison(list(energies.values()), labels = list(energies.keys()), x_range = energy_range, xlabel = "Shower energy (MeV)")
+    Plots.PlotHistComparison(list(energies.values()), labels = list(energies.keys()), x_range = energy_range, xlabel = "$E^{reco}$ (MeV)")
 
     fe = {i : (energies[i]/df.true_energy) - 1 for i in energies}
 
-    Plots.PlotHist2DComparison([df.true_energy]*len(fe), list(fe.values()), energy_range, [-1, 1], bins = 50, cmap = "Accent", xlabels = ["True shower energy (MeV)"]*len(fe), ylabels = ["Fractional error"]*len(fe), titles = list(fe.keys()))
+    Plots.PlotHist2DComparison([df.true_energy]*len(fe), list(fe.values()), energy_range, [-1, 1], bins = 50, cmap = "Accent", xlabels = ["$E^{true}$ (MeV)"]*len(fe), ylabels = ["Fractional error"]*len(fe), titles = list(fe.keys()))
     book.Save()
 
     Plots.PlotHist2DComparison([df.reco_shower_energy]*len(fe), list(fe.values()), energy_range, [-1, 1], bins = 50, cmap = "Accent", xlabels = ["Uncorrected reco shower energy (MeV)"]*len(fe), ylabels = ["Fractional error"]*len(fe), titles = list(fe.keys()))
     book.Save()
 
     for _, (l, e) in Plots.IterMultiPlot(energies.items()):
-        Plots.PlotHist2D(e, df.true_energy, bins = 100, title = l, xlabel = "Reco shower energy (MeV)", ylabel = "True shower energy (MeV)", x_range = energy_range, y_range = energy_range, cmap = "summer", newFigure = False)
+        Plots.PlotHist2D(e, df.true_energy, bins = 100, title = l, xlabel = "$E^{reco}$ (MeV)", ylabel = "$E^{true}$ (MeV)", x_range = energy_range, y_range = energy_range, cmap = "summer", newFigure = False)
         Plots.plt.plot(energy_range, energy_range)
     book.Save()
 
@@ -310,51 +315,67 @@ def MethodComparison(df : pd.DataFrame, linear_correction : float, response_para
         Plots.plt.ylabel("Fractional error")
         Plots.plt.legend()
     book.Save()
-
     return tab
 
+@Master.timer
 def main(args):
-    cross_section.SetPlotStyle(False)    
-    output = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
-
-    output_photons = pd.DataFrame({i : output[i] for i in output if "shower_pairs" not in i and "tags" not in i})
-    output_pairs = pd.DataFrame({i : output[i] for i in output if "shower_pairs" in i and "tags" not in i})
-    output_tags = pd.DataFrame({i : output[i] for i in output if "tags" in i})
-
-    print(output_photons)
-    print(output_pairs)
-    print(output_tags)
-
+    cross_section.PlotStyler.SetPlotStyle(False)
     out = args.out + "shower_energy_correction/"
-    os.makedirs(out, exist_ok = True)
-    output_photons.to_hdf(out + "photon_energies.hdf5", "all_photons")
-    output_pairs.to_hdf(out + "photon_energies.hdf5", "photon_pairs")
-    output_tags.to_hdf(out + "photon_energies.hdf5", "tags")
 
+    if (not os.path.isfile(out + "photon_energies.hdf5")) or args.regen:
+        output = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
+
+        output_photons = pd.DataFrame({i : output[i] for i in output if "shower_pairs" not in i and "tags" not in i})
+        output_pairs = pd.DataFrame({i : output[i] for i in output if "shower_pairs" in i and "tags" not in i})
+        output_tags = pd.DataFrame({i : output[i] for i in output if "tags" in i})
+
+        print(output_photons)
+        print(output_pairs)
+        print(output_tags)
+
+        os.makedirs(out, exist_ok = True)
+        output_photons.to_hdf(out + "photon_energies.hdf5", "all_photons")
+        output_pairs.to_hdf(out + "photon_energies.hdf5", "photon_pairs")
+        output_tags.to_hdf(out + "photon_energies.hdf5", "tags")
 
     df = cross_section.ReadHDF5(out + "photon_energies.hdf5")["all_photons"]
     df["residual"] = df.reco_shower_energy - df.true_energy
     df["fractional_error"] = (df.reco_shower_energy / df.true_energy) - 1
 
-    book = Plots.PlotBook(out + "plots.pdf")
+    with Plots.PlotBook(out + "plots.pdf") as book:
+        #* initial plots
+        PhotonSelection(df, book)
 
-    #* initial plots
-    PhotonSelection(df, book)
+        #* linear correction
+        if args.shower_correction["energy_range"] is None:
+            print("Note: no energy range was defined for the shower correction, will use an auto-defined range instead")
+            energy_range = [
+                np.percentile(np.concatenate([df.true_energy, df.reco_shower_energy]), 0),
+                np.percentile(np.concatenate([df.true_energy, df.reco_shower_energy]), 100)
+                ]
+        else:
+            energy_range = sorted(args.shower_correction["energy_range"])
 
-    #* linear correction
-    energy_range = args.shower_correction["energy_range"]
-    bins = np.linspace(min(energy_range), max(energy_range), 11)
-    linear_correction = linear_fit(df, bins, energy_range, book)
-    LinearFitPerformance(df, linear_correction, book)
+        print(f"{energy_range=}")
 
-    #* response correction
-    bins = np.array(create_bins_df(df.reco_shower_energy, 850, energy_range), dtype = int)
+        bins = np.linspace(*energy_range, 11)
+        print(f"{bins=}")
+        linear_correction = linear_fit(df, bins, energy_range, book)
+        LinearFitPerformance(df, linear_correction, book)
 
-    central_values = CalculateCentralValues(df, bins, book)
-    response_params = ResponseFits(central_values, bins, book)
 
-    tab = MethodComparison(df, linear_correction, response_params, bins, energy_range, book)
-    book.close()
+        #* response correction
+        bins = np.array(create_bins_df(df.reco_shower_energy, int(len(df.reco_shower_energy)//11), energy_range), dtype = int)
+        #* response correction
+        bins = np.array(create_bins_df(df.reco_shower_energy, int(len(df.reco_shower_energy)//11), energy_range), dtype = int)
+
+        central_values = CalculateCentralValues(df, bins, book)
+        response_params = ResponseFits(central_values, bins, book)
+        central_values = CalculateCentralValues(df, bins, book)
+        response_params = ResponseFits(central_values, bins, book)
+
+        tab = MethodComparison(df, linear_correction, response_params, bins, energy_range, book)
+        tab = MethodComparison(df, linear_correction, response_params, bins, energy_range, book)
     
     tab.T.style.format(precision = 3).to_latex(out + "table.tex")
 
@@ -366,6 +387,9 @@ def main(args):
     for p in response_params}
 
     for name, p in params.items():
+        sf = [len(f'{p["error"][f"p{i}"]:.1g}') - 1 for i in range(len(p["value"]))]
+        table = pd.DataFrame({f"$p_{{{i}}}$" : f'{p["value"][f"p{i}"]:.{sf[i]}f} $\pm$ {p["error"][f"p{i}"]:.1g}' for i in range(len(p["value"]))}, index = [0])
+        table.style.hide(axis = "index").to_latex(out + name + ".tex")
         cross_section.SaveConfiguration(p, out + name + ".json")
 
 if __name__ == "__main__":
@@ -374,6 +398,7 @@ if __name__ == "__main__":
     cross_section.ApplicationArguments.Processing(parser)
     cross_section.ApplicationArguments.Output(parser)
     cross_section.ApplicationArguments.Config(parser)
+    cross_section.ApplicationArguments.Regen(parser)
 
     args = parser.parse_args()
     args = cross_section.ApplicationArguments.ResolveArgs(args)

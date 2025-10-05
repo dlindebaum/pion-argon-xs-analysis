@@ -85,7 +85,7 @@ def NormalisationTest(directory : str, data_config : dict, model : cross_section
         expected_mus = {}
     
         scales = {k : 1 for k in ['absorption', 'quasielastic', 'charge_exchange', 'double_charge_exchange', 'pion_production']}
-        for i in [0.8, 0.9, 1, 1.1, 1.2]:
+        for i in [0.5, 0.8, 0.9, 1, 1.1, 1.2, 1.5]:
             print(rule.Rule(f"process : {target} | normalisation : {i}"))
             if i == 1:
                 config = data_config
@@ -153,19 +153,47 @@ def CreateConfigShapeTest(data_config, modified_PDFs : dict):
     return cfg
 
 
-def CreateModPDFDict(KE : np.array, name : str, xs : np.array) -> dict[np.array]:
-    return {
-        "KE" : KE,
-        name : xs
-    }
+def SmoothStep(x : np.ndarray, high : float, low : float, split : float, smooth_amount : float) -> np.ndarray:
+    """ Generate points for a smoothstep function.
 
+    Args:
+        x (np.ndarray): x values.
+        high (float): High value of the smoothstep.
+        low (float): Low value of the smoothstep.
+        split (float): Where the step occurs in x.
+        smooth_amount (float): Amount to smooth the step by 0 results in a step function.
 
-def SmoothStep(x : np.ndarray, high : float, low : float, split : float, smooth_amount : float):
+    Returns:
+        np.ndarray: y values of smooth step function.
+    """
     step = np.where(x >= split, high, low)
     if smooth_amount == 0:
         return step
     else:
         return gaussian_filter1d(step, smooth_amount)
+
+
+def CreateModifiedXS(xs_sim : cross_section.GeantCrossSections, process : str, high : float, low : float, split : float, smooth_amount : float) -> dict:
+    """ Create a modified cross section curve based on a smoothstep function.
+
+    Args:
+        xs_sim (cross_section.GeantCrossSections): GEANT cross sections.
+        process (str): Processes cross section to modify.
+        high (float): High value of the smoothstep.
+        low (float): Low value of the smoothstep.
+        split (float): Where the step occurs in x.
+        smooth_amount (float): Amount to smooth the step by 0 results in a step function.
+
+    Returns:
+        dict: dictionary with KE and modified cross section. 
+    """
+    if process == "single_pion_production":
+        xs_quasi = xs_sim.quasielastic * SmoothStep(xs_sim.KE, high, low, split, smooth_amount)
+        xs_dcex = xs_sim.double_charge_exchange * SmoothStep(xs_sim.KE, high, low, split, smooth_amount)
+        return {**{"KE" : xs_sim.KE, "quasielastic" : xs_quasi}, **{"KE" : xs_sim.KE, "double_charge_exchange" : xs_dcex}}
+    else:
+        xs = getattr(xs_sim, process) * SmoothStep(xs_sim.KE, high, low, split, smooth_amount)
+        return {"KE" : xs_sim.KE, process : xs}
 
 
 def ShapeTestNew(directory : str, data_config : dict, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, mean_track_score_bins : np.array, xs_sim : cross_section.GeantCrossSections, energy_slices : cross_section.Slices, single_bin):
@@ -195,14 +223,8 @@ def ShapeTestNew(directory : str, data_config : dict, model : cross_section.pyhf
             if i == "null":
                 config = data_config
             else:
-                if target == "single_pion_production":
-                    xs_quasi = getattr(xs_sim, "quasielastic") * SmoothStep(xs_sim.KE, i[0], i[1], i[3], i[2])
-                    xs_dcex = getattr(xs_sim, "double_charge_exchange") * SmoothStep(xs_sim.KE, i[0], i[1], i[3], i[2])
-                    mod_pdf = {**CreateModPDFDict(xs_sim.KE, "quasielastic", xs_quasi), **CreateModPDFDict(xs_sim.KE, "double_charge_exchange", xs_dcex)}
-                    config = CreateConfigShapeTest(data_config, mod_pdf)
-                else:
-                    xs = getattr(xs_sim, target) * SmoothStep(xs_sim.KE, i[0], i[1], i[3], i[2])
-                    config = CreateConfigShapeTest(data_config, CreateModPDFDict(xs_sim.KE, target, xs))
+                config = CreateConfigShapeTest(data_config, CreateModifiedXS(xs_sim, target, i[0], i[1], i[3], i[2]))
+
             results[i], true_counts[i], expected_mus[i] = ModifiedConfigTest(config, energy_slices, model, toy_template, mean_track_score_bins, single_bin)
         cross_section.SaveObject(f"{directory}fit_results_{folder[target]}.dill", {"results" : results, "true_counts" : true_counts, "expected_mus" : expected_mus})
     return
@@ -238,7 +260,7 @@ def PullStudy(template : cross_section.AnalysisInput, model : cross_section.pyhf
 
 
 def PullStudyFast(toys : cross_section.Toy, n_template : int, n_data : int, args, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, n : int) -> dict:
-    out = {"expected" : None, "scale" : pd.Series(n_template / n_data), "bestfit" : None, "uncertainty" : None}
+    out = {"expected" : None, "scale" : None, "bestfit" : None, "uncertainty" : None}
 
     @cross_section.timer
     def Pull():
@@ -260,21 +282,29 @@ def PullStudyFast(toys : cross_section.Toy, n_template : int, n_data : int, args
 
         output["bestfit"] = {list(data.exclusive_process.keys())[j] : result.bestfit[j] for j in range(len(template.exclusive_process))}
         output["uncertainty"] = {list(data.exclusive_process.keys())[j] : result.uncertainty[j] for j in range(len(template.exclusive_process))}
-
+        output["scale"] = {k : sum(v) / sum(data.exclusive_process[k]) for k,v in template.exclusive_process.items()}
         return output
 
     expected = []
     bestfit = []
     uncertainty = []
+    scales = []
     for i in range(n):
-        o = Pull()
-        expected.append(o["expected"])
-        bestfit.append(o["bestfit"])
-        uncertainty.append(o["uncertainty"])
+        while True:
+            try:
+                o = Pull()
+                expected.append(o["expected"])
+                bestfit.append(o["bestfit"])
+                uncertainty.append(o["uncertainty"])
+                scales.append(o["scale"])
+                break
+            except ValueError:
+                print("minimum was invalid, trying again")
 
     out["expected"] = pd.DataFrame(expected)
     out["bestfit"] = pd.DataFrame(bestfit)
     out["uncertainty"] = pd.DataFrame(uncertainty)
+    out["scale"] = pd.DataFrame(scales)
     return out
 
 def PlotShapeExamples(energy_slices : cross_section.Slices, book : Plots.PlotBook = Plots.PlotBook.null):
@@ -321,35 +351,37 @@ def PlotShapeExamples(energy_slices : cross_section.Slices, book : Plots.PlotBoo
 def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.ndarray, pdf : Plots.PlotBook = Plots.PlotBook.null, single_bin : bool = False, ylim = None):
     x = data.index.values
 
+    xt = np.arange(min(x), max(x)+0.1, 0.1)
+
     # Plot the fit value for each scale factor 
     Plots.plt.figure()
     for i in range(4):
         Plots.Plot(x, data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], newFigure = False, label = f"${process_map[i]}$", marker = "o", ylabel = "$\mu^{fit}_{s}$", color = list(region_colours.values())[i], linestyle = "")
     Plots.plt.legend(title = "$s$")
-    Plots.plt.xticks(ticks = x, labels = x)
+    Plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
     Plots.plt.xlabel(xlabel)
     pdf.Save()
 
     # same as above, in separate plots
     for i in Plots.MultiPlot(4):
         Plots.Plot(x, data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], newFigure = False, marker = "o", xlabel = xlabel, ylabel = f"$\mu^{{fit}}_{{{process_map[i]}}}$", color = list(region_colours.values())[i], linestyle = "")
-        Plots.plt.xticks(ticks = x, labels = x)
+        Plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
     pdf.Save()
 
     # plot true process residual
     for n in Plots.MultiPlot(4):
         Plots.Plot(x, data[f"true_counts_{n}"] * data[f"fe_total_{n}"], yerr = data[f"true_counts_{n}"] * data[f"fe_err_total_{n}"], title = f"$N_{{{process_map[n]}}}^{{pred}}$", xlabel = xlabel, ylabel = "residual", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
         Plots.plt.axhline(0, color = "black", linestyle = "--")
-        Plots.plt.xticks(ticks = x, labels = x)
+        Plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
     pdf.Save()
 
     # plot true process fractional error
     Plots.plt.figure()
     for n in Plots.MultiPlot(4):
-        Plots.Plot(x, data[f"fe_total_{n}"], yerr = data[f"fe_err_total_{n}"], xlabel = xlabel, ylabel = f"$f_{process_map[n]}$", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
+        Plots.Plot(x, data[f"fe_total_{n}"], yerr = data[f"fe_err_total_{n}"], xlabel = xlabel, ylabel = f"$f_{{{process_map[n]}}}$", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
         Plots.plt.axhline(0, color = "black", linestyle = "--")
         Plots.plt.ylim(1.5 * np.min(data.filter(regex = "fe_total_").values), 1.5 * np.max(data.filter(regex = "fe_total_").values))
-        Plots.plt.xticks(ticks = x, labels = x)
+        Plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
         if ylim: Plots.plt.ylim(ylim)
     pdf.Save()
 
@@ -360,8 +392,21 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
         Plots.plt.axhline(0, color = "black", linestyle = "--")
         Plots.plt.ylim(1.5 * np.min(data.filter(regex = "fe_total_").values), 1.5 * np.max(data.filter(regex = "fe_total_").values))
     Plots.plt.legend(title = "$s$")
-    Plots.plt.xticks(ticks = x, labels = x)
+    Plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
     if ylim: Plots.plt.ylim(ylim)
+    pdf.Save()
+
+    Plots.plt.figure()
+    for i in Plots.MultiPlot(4):
+        Plots.Plot(data[f"mu_exp_{i}"], data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], linestyle = "", marker = "o", xlabel = f"$\mu^{{exp}}_{process_map[i]}$", ylabel = "$\mu^{fit}_{s}$", label = f"${process_map[i]}$", color = list(region_colours.values())[i], newFigure = False)
+        yl = Plots.plt.gca().get_ylim()
+        xl = Plots.plt.gca().get_xlim()
+
+        Plots.plt.axline([0, 0], [1, 1], linestyle = "--", color = "k", label = "$y = x$")
+        Plots.plt.xlim(xl)
+        Plots.plt.ylim(yl)
+        Plots.plt.legend(title = "$s$")
+
     pdf.Save()
 
     if single_bin is False:
@@ -389,7 +434,7 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
     return
 
 
-def ProcessResults(template_counts : int, results : dict, true_counts : dict, model : cross_section.pyhf.Model, single_bin : bool):
+def ProcessResults(template_counts : int, results : dict, true_counts : dict, expected_mu : dict, model : cross_section.pyhf.Model, single_bin : bool):
     true_counts_all = {}
     for t in true_counts:
         true_counts_all[t] = {f"true_counts_{i}" : np.sum(v) for i, v in enumerate(true_counts[t].values())}
@@ -398,9 +443,11 @@ def ProcessResults(template_counts : int, results : dict, true_counts : dict, mo
 
     mu = {}
     mu_err = {}
+    mu_exp = {}
     for k in results:
-        mu[k] = (results[k].bestfit[0:4] / scale_factors[k])
-        mu_err[k] = (results[k].uncertainty[0:4] / scale_factors[k])
+        mu[k] = results[k].bestfit[0:4] / scale_factors[k]
+        mu_err[k] = results[k].uncertainty[0:4] / scale_factors[k]
+        mu_exp[k] = expected_mu[k] / scale_factors[k]
 
     fe, fe_err = CountsFractionalError(results, true_counts, model, single_bin)
     tc_arr = np.swapaxes(np.array([np.array(list(v.values())) for v in true_counts.values()]), 0, 1)
@@ -419,8 +466,9 @@ def ProcessResults(template_counts : int, results : dict, true_counts : dict, mo
         pd.DataFrame(true_counts_all),
         pd.DataFrame(mu, index = [f"mu_{i}" for i in range(4)]),
         pd.DataFrame(mu_err, index = [f"mu_err_{i}" for i in range(4)]),
+        pd.DataFrame(mu_exp, index = [f"mu_exp_{i}" for i in range(4)], columns = list(scale_factors.keys())),
         pd.DataFrame(fe_total, index = [f"fe_total_{i}" for i in range(4)], columns = list(scale_factors.keys())),
-        pd.DataFrame(fe_err_total, index = [f"fe_err_total_{i}" for i in range(4)], columns = list(scale_factors.keys()))
+        pd.DataFrame(fe_err_total, index = [f"fe_err_total_{i}" for i in range(4)], columns = list(scale_factors.keys())),
         ])
     data_energy = {"values" : list(true_counts.keys()), "fe" : fe, "fe_err" : fe_err} # can't store this in pandas dataframes
     return data.T, data_energy
@@ -643,11 +691,11 @@ def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : n
 
 def PlotTotalChannel(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, book : Plots.PlotBook = Plots.PlotBook.null):
     for j, c in Plots.IterMultiPlot(templates_energy):
-        Plots.Plot(energy_slices.pos_overflow, sum(c), xlabel = f"$n_{{{j}}}$ (MeV)", ylabel = "counts", style = "bar", newFigure = False)
+        Plots.Plot(energy_slices.pos_overflow, sum(c), xlabel = f"$n_{{{j}}}$ (MeV)", ylabel = "Counts", style = "bar", newFigure = False)
     book.Save()
 
     if tempalates_mean_track_score is not None:
-        Plots.Plot(cross_section.bin_centers(mean_track_score_bins), sum(tempalates_mean_track_score), xlabel = f"$n_{{ts}}$", ylabel = "counts", style = "bar")
+        Plots.Plot(cross_section.bin_centers(mean_track_score_bins), sum(tempalates_mean_track_score), xlabel = f"$n_{{ts}}$", ylabel = "Counts", style = "bar")
         book.Save()
     book.close()
     return
@@ -670,7 +718,7 @@ def CalculateResultsFromFile(workdirs, test_name, model_name, template_counts, m
     for d, files in zip(workdirs, results_files):
         for f in files:
             fit_result = cross_section.LoadObject(d + f"{test_name}_test_{model_name}/" + files[f])
-            r = ProcessResults(template_counts, fit_result["results"], fit_result["true_counts"], model, single_bin)
+            r = ProcessResults(template_counts, fit_result["results"], fit_result["true_counts"], fit_result["expected_mus"], model, single_bin)
             results_total[f].append(r[0])
             results_bins[f].append(r[1])
 
@@ -680,7 +728,7 @@ def CalculateResultsFromFile(workdirs, test_name, model_name, template_counts, m
         else:
             results_total[k], results_bins[k] = results_total[k][0], results_bins[k][0]
 
-    nominal = results_total['absorption'].loc[1]
+    nominal = results_total['charge_exchange'].loc[1]
     for p in results_total:
         results_total[p].loc[1] = nominal
     return results_total, results_bins
@@ -689,7 +737,7 @@ def CalculateResultsFromFile(workdirs, test_name, model_name, template_counts, m
 
 @cross_section.timer
 def main(args : cross_section.argparse.Namespace):
-    cross_section.SetPlotStyle(extend_colors = True, dark = True, font_scale = 1.2)
+    cross_section.PlotStyler.SetPlotStyle(extend_colors = True, dark = True, font_scale = 1.4)
     toys = cross_section.Toy(file = args.template)
     args.template = cross_section.AnalysisInput.CreateAnalysisInputToy(toys)
 
@@ -735,7 +783,6 @@ def main(args : cross_section.argparse.Namespace):
                     args.energy_slices,
                     args.fit["single_bin"])
             if "pulls" not in args.skip:
-                # pull_results = PullStudy(args.template, models[m], args.energy_slices, mean_track_score_bins if m == "track_score" else None, args.toy_data_config, 100, args.fit["single_bin"])
                 pull_results = PullStudyFast(toys, int(5E6), int(1E6), args, args.energy_slices, mean_track_score_bins if m == "track_score" else None, 500)
                 os.makedirs(args.out + f"pull_test_{m}/", exist_ok = True)
                 DictToHDF5(pull_results, args.out + f"pull_test_{m}/" + "pull_results.hdf5")
@@ -762,7 +809,7 @@ def main(args : cross_section.argparse.Namespace):
             with Plots.PlotBook(outdir + "xs_curves") as book:
                 PlotShapeExamples(args.energy_slices, book)
 
-        label_map = {"absorption" : "abs", "charge_exchange" : "cex", "single_pion_production" : "spip", "pion_production" : "pip"}
+        tags = cross_section.Tags.ExclusiveProcessTags(None)
 
         test = ["shape", "normalisation", "pulls"] 
 
@@ -777,11 +824,28 @@ def main(args : cross_section.argparse.Namespace):
                     with Plots.PlotBook(outdir + f"pull_test_{m}/pulls.pdf", True) as book:
                         pull_results = ReadHDF5(outdir + f"pull_test_{m}/" + "pull_results.hdf5")
 
-                        pulls = (pull_results["bestfit"] - (pull_results["expected"] / pull_results["scale"][0])) / pull_results["uncertainty"]
+                        pulls = (pull_results["bestfit"] - (pull_results["expected"] / pull_results["scale"])) / pull_results["uncertainty"]
+                        res = (pull_results["scale"] * pull_results["bestfit"]) - pull_results["expected"]
+                        fe = ((pull_results["scale"] * pull_results["bestfit"]) - pull_results["expected"]) / pull_results["expected"]
+                        fe_err = (pull_results["scale"] * pull_results["uncertainty"]) / pull_results["expected"]
 
+                        mean_res = {}
+                        mean_fe = {}
+                        mean_fe_err = {}
                         means = {}
                         stds = {}
+
+                        for c in pulls.columns:
+                            Plots.plt.figure()
+                            y, edges = np.histogram(pulls[c], bins = 10)
+                            x = (edges[1:] + edges[:-1]) / 2
+                            popt, perr = cross_section.Fitting.Fit(x, y, np.sqrt(y), cross_section.Fitting.gaussian, plot = True, plot_style = "hist", method = "trf", xlabel = "$\\theta$", ylabel = "Number of entries")
+                            book.Save()
+
                         for _, k in Plots.IterMultiPlot(pulls.columns):
+                            mean_res[folder[k]] = f"{np.mean(res[k]):.3g}"
+                            mean_fe[folder[k]] = f"{np.mean(fe[k]):.3g}"
+                            mean_fe_err[folder[k]] = f"{np.mean(fe_err[k]):.3g}"
                             mean = np.mean(pulls[k])
                             std = np.std(pulls[k])
                             sem = std / np.sqrt(len(pulls[k]))
@@ -789,16 +853,21 @@ def main(args : cross_section.argparse.Namespace):
                             print(folder[k])
                             means[folder[k]] = f"{mean:.{p}g} $\pm$ {sem:.1g}"
                             stds[folder[k]] = f"{std:.3g}"
-                            Plots.PlotHist(pulls[k], bins = 10, title = f"$\mu_{{{label_map[k]}}}$ | mean : {mean:.3g} $\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = False)
+                            # Plots.PlotHist(pulls[k], bins = 10, title = f"$\mu_{{{tags[k].name_simple}}}$ | mean : {mean:.3g} $\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = False)
+                            Plots.PlotHist(pulls[k], bins = 10, xlabel = "$\\theta$", newFigure = False)
+
                         book.Save()
                         for k in pulls.columns:
                             mean = np.mean(pulls[k])
                             std = np.std(pulls[k])
                             sem = std / np.sqrt(len(pulls[k]))
-                            Plots.PlotHist(pulls[k], bins = 10, title = f"$\mu_{{{label_map[k]}}}$ | mean : {mean:.3g} $\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = True)
+                            Plots.plt.figure(figsize = (6.4, 5))
+                            # Plots.PlotHist(pulls[k], bins = 10, title = f"$\mu_{{{tags[k].name_simple}}}$ | mean : {mean:.3g} $\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = True)
+                            Plots.PlotHist(pulls[k], bins = 10, xlabel = "$\\theta$", newFigure = False)
+                            # Plots.plt.ylabel(Plots.plt.gca().yaxis.get_label_text(), loc = "bottom")
                             book.Save()
 
-                        table = pd.DataFrame({"mean" : means, "st.dev" : stds}).T
+                        table = pd.DataFrame({"mean" : means, "st.dev" : stds, "mean residual" : mean_res, "mean fractional error" : mean_fe, "mean_fractional_error_error" : mean_fe_err}).T
                         table.style.to_latex(outdir + f"pull_test_{m}/pulls.tex")
 
 
@@ -812,7 +881,7 @@ def main(args : cross_section.argparse.Namespace):
                             if (t == "shape"):
                                 PlotCrossCheckResultsShape(results_total[f], results_bins[f], args.energy_slices.pos_overflow, args.fit["single_bin"], pdf)
                             else:
-                                PlotCrossCheckResults(f"{cross_section.remove_(f)} {t}", results_total[f], results_bins[f], args.energy_slices.pos_overflow, pdf, args.fit["single_bin"], [-0.02, 0.06])
+                                PlotCrossCheckResults(f"$\mathcal{{N}}_{{{tags[f].name_simple}}}$", results_total[f], results_bins[f], args.energy_slices.pos_overflow, pdf, args.fit["single_bin"], [-0.02, 0.06])
                         Plots.plt.close("all")
                 
                     with Plots.PlotBook(outdir + f"{t}_test_{m}/summary_plots.pdf", True) as book:

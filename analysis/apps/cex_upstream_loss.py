@@ -72,7 +72,7 @@ def CentralValueEstimation(bins : np.ndarray, KE_reco_inst : np.ndarray, KE_true
     else:
         df = pd.DataFrame({"KE_inst" : KE_reco_inst, "true_ffKE" : KE_true_ff})
         df["residual"] = df.KE_inst - df.true_ffKE
-        cv = cross_section.Fitting.ExtractCentralValues_df(df, "KE_inst", "residual", [-250, 250], [cv_function], bins, 50, rms_err = False, weights = weights)
+        cv = cross_section.Fitting.ExtractCentralValues_df(df, "KE_inst", "residual", [-250, 250], [cv_function], bins, 50, rms_err = False, weights = weights, bin_units = "(MeV)", bin_label = "$KE^{reco}_{inst}$")
     return cv
 
 
@@ -89,13 +89,15 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
 
 
 def main(args : argparse.Namespace):
-    cross_section.SetPlotStyle(False, dpi = 100)
+    cross_section.PlotStyler.SetPlotStyle(False)
+    outdir = args.out + "upstream_loss/"
+    os.makedirs(outdir, exist_ok = True)
 
     args.batches = None
     args.events = None
     args.threads = 1
 
-    output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
+    output_mc = cross_section.ApplicationProcessing(["mc"], outdir, args, run, True)["mc"]
 
     if all(v is None for v in output_mc["weights"]):
         output_mc["weights"] = None
@@ -103,14 +105,14 @@ def main(args : argparse.Namespace):
     bins = ak.Array(args.upstream_loss_bins)
     x = (bins[1:] + bins[:-1]) / 2
 
-    os.makedirs(args.out + "upstream_loss/", exist_ok = True)
-    with Plots.PlotBook(args.out + "upstream_loss/" + "cex_upstream_loss_plots.pdf") as pdf:
+    with Plots.PlotBook(outdir + "cex_upstream_loss_plots.pdf") as pdf:
         reco_KE_inst = cross_section.KE(output_mc["p_inst"], cross_section.Particle.from_pdgid(211).mass)
-        cv = CentralValueEstimation(bins, reco_KE_inst, output_mc["KE_ff"], cv_method[args.upstream_loss_cv_function], output_mc["weights"])
+        with cross_section.PlotStyler().Update(font_scale = 1.3):
+            cv = CentralValueEstimation(bins, reco_KE_inst, output_mc["KE_ff"], cv_method[args.upstream_loss_cv_function], output_mc["weights"])
         pdf.Save()
 
         Plots.plt.figure()
-        params = cross_section.Fitting.Fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$(MeV)", ylabel = "$\mu(KE^{reco}_{inst} - KE^{true}_{init})$(MeV)", loc = "upper center")
+        params = cross_section.Fitting.Fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\mu(\Delta E_{upstream})$ (MeV)", loc = "upper center")
         pdf.Save()
 
         params_dict = {
@@ -124,15 +126,16 @@ def main(args : argparse.Namespace):
         pdf.Save()
     Plots.plt.close("all")
     print(f"fitted parameters : {params_dict}")
-    cross_section.SaveConfiguration(params_dict, args.out + "upstream_loss/" + "fit_parameters.json")
+    cross_section.SaveConfiguration(params_dict, outdir + "fit_parameters.json")
     return
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Computes the upstream energy loss for beam particles after beam particle selection, then writes the fitted parameters to file.", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    cross_section.ApplicationArguments.Config(parser)
+    cross_section.ApplicationArguments.Config(parser, True)
     cross_section.ApplicationArguments.Output(parser)
+    cross_section.ApplicationArguments.Regen(parser)
     parser.add_argument("--cv_function", dest = "upstream_loss_cv_function", type = str, default = "gaussian", help = "method to extract central value, possible options are ['None', 'gaussian', 'student_t', 'double_gaussian', 'crystal_ball']")
     parser.add_argument("--no_reweight", dest = "no_reweight", action = "store_true", help = "perform correction without reweighted MC")
 

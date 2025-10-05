@@ -226,6 +226,45 @@ class poly2d(FitFunction):
         return ([-np.inf, -np.inf, -np.inf], [np.inf]*3)
 
 
+class exp(FitFunction):
+    n_params = 3
+
+    def __new__(cls, x, p0, p1, p2) -> np.array:
+        return cls.func(x, p0, p1, p2)
+
+    @staticmethod
+    def func(x, p0, p1, p2):
+        return p0 + (p1 * np.exp(p2 * x))
+
+    @staticmethod
+    def p0(x, y):
+        return [0, 1, 1E-3]
+
+    @staticmethod
+    def bounds(x, y):
+        return ([-np.inf]*3, [np.inf]*3)
+
+
+class exp_alt(FitFunction):
+    n_params = 3
+
+    def __new__(cls, x, p0, p1, p2) -> np.array:
+        return cls.func(x, p0, p1, p2)
+
+    @staticmethod
+    def func(x, p0, p1, p2):
+        return p0 + np.exp(p2 * (x + p1))
+
+    @staticmethod
+    def p0(x, y):
+        return [0, 1, 1E-5]
+
+    @staticmethod
+    def bounds(x, y):
+        return ([-np.inf]*3, [np.inf]*3)
+
+
+
 class poly3d(FitFunction):
     n_params = 4
 
@@ -401,6 +440,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         y_err = y_err[mask]
 
     popt, pcov = curve_fit(func.func, x, y_obs, sigma = y_err, maxfev = maxfev, p0 = func.p0(x, y_obs), bounds = func.bounds(x, y_obs), method = method, absolute_sigma = True)
+    print(pcov)
     perr = np.sqrt(np.diag(pcov))
 
     y_pred = func.func(x, *popt) # y values predicted from the fit
@@ -409,39 +449,40 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
     p_value = 1 - chi2.cdf(chisqr, ndf)
 
     if plot is True:
-        # y_pred_min = func.func(x, *(popt - perr)) # y values predicted from the lower limit of the fit
-        # y_pred_max = func.func(x, *(popt + perr)) # y values predicted from the upper limit of the fit
-        # y_pred_err = (abs(y_pred - y_pred_min) + abs(y_pred - y_pred_max)) / 2 # error in the predicted fit value, taken to be the average deviation from the lower and upper limits
-
         #* main plotting
         x_interp = np.linspace(min(x), max(x), 1000)
         Plots.Plot(x_interp, func.func(x_interp, *popt), newFigure = False, x_scale = "linear", ylabel = ylabel, color = "#1f77b4", zorder = 11, label = "fit", title = title)
         
-        p_min = popt - perr
-        p_max = popt + perr
-
-        # in_range = (p_min > func.bounds(x, y_obs)[0]) & (p_min < func.bounds(x, y_obs)[1])
-        # p_min = np.where(in_range, func.bounds(x, y_obs)[0], p_min)
-
-        # in_range = (p_max > func.bounds(x, y_obs)[0]) & (p_max < func.bounds(x, y_obs)[1])
-        # p_min = np.where(in_range, func.bounds(x, y_obs)[1], p_max)
+        p_min = popt - perr #(perr * chisqr/ndf)
+        p_max = popt + perr #(perr * chisqr/ndf)
 
         plt.fill_between(x_interp, func.func(x_interp, *p_max), func.func(x_interp, *p_min), color = "#7f7f7f", alpha = 0.5, zorder = 10, label = "$1\sigma$ error region")
 
         if plot_style == "hist":
             marker = ""
             colour = "black"
-            label = "observed uncertainty"
+            label = "observed\nuncertainty"
             widths = (x[1] - x[0])/2
-            Plots.PlotHist(x - widths, x - widths, weights = y_obs, color = "#d62728", label = "observed", newFigure = False, range = plot_range)
+            # Plots.PlotHist(x - widths, x - widths, weights = y_obs, color = "#d62728", label = "observed", newFigure = False, range = plot_range)
+            Plots.Plot(x, y_obs, style = "bar", linestyle = "", color = "#d62728", xlabel = xlabel, label = "observed", newFigure = False)
+
+            # automatically calculate cap size to match bin width
+            w = x[1] - x[0] # bin width
+            ax = Plots.plt.gca()
+            t = ax.transData.transform # tranform units to distance on page
+            ppd = 72 / ax.figure.dpi # points per distance (same point used in font sizes)
+            capsize =  0.5 * (ppd * (t([w, 0]) - t([0, 0])))[0] # factor of 0.5 because cap size is in units of half-pints 
         else:
             marker = "x"
             colour = "#d62728"
             label = "observed"
+            capsize = 3
 
-        Plots.Plot(x, y_obs, yerr = y_err, marker = marker, linestyle = "", color = colour, xlabel = xlabel, label = label, newFigure = False)
+        Plots.Plot(x, y_obs, yerr = y_err, marker = marker, linestyle = "", color = colour, xlabel = xlabel, label = label, newFigure = False, capsize = capsize / 2)
         if ylim:
             plt.ylim(*sorted(ylim))
+        # if plot_range:
+        #     plt.xlim(plot_range)
 
         main_legend = plt.legend(loc = "upper left")
         main_legend.set_zorder(12)
@@ -463,7 +504,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         return popt, perr
 
 
-def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : str, v_range : list, funcs, data_bins : list, hist_bins : int, log : bool = False, rms_err : bool = False, weights : np.ndarray = None):
+def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : str, v_range : list, funcs, data_bins : list, hist_bins : int, log : bool = False, rms_err : bool = False, weights : np.ndarray = None, outer_legend : bool = False, bin_label : str = "bin", bin_units : str = ""):
     """ Estimate a central value in each reco energy bin based on some FitFunction or collection of FitFunctions.
 
     Args:
@@ -482,7 +523,7 @@ def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : st
     cv_err = []
     fig_handles = None
     fig_labels = None
-    for i in Plots.MultiPlot(len(data_bins) - 1):
+    for i in Plots.MultiPlot(len(data_bins) - 1, orientation = "vertical"):
         if i == len(data_bins): continue
         print_log(i)
         mask = (df[bin_variable] > data_bins[i]) & (df[bin_variable] < data_bins[i+1])
@@ -518,7 +559,7 @@ def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : st
                 pass
             y_pred = f.func(x, *popt) if popt is not None else None
             if y_pred is not None:
-                k, p = ks_2samp(y, y_pred)
+                k, p = ks_2samp(y[y > 0], y_pred[y > 0]) # ignore zero entries in bins to prevent overestimating the test statistic
             else:
                 k = 1
                 p = 0
@@ -536,15 +577,16 @@ def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : st
             mean = best_f.mu(*best_popt)
             if rms_err:
                 mean_error = np.sqrt(abs(best_f.var(*best_popt))/len(binned_data[variable]))
+                mean_error = np.sqrt(abs(best_f.var(*best_popt)))/2
             else:
                 mean_error = mean - best_f.mu(*(best_popt + best_perr))
             y_pred = best_f.func(x, *best_popt)
             y_pred_interp = best_f.func(x_interp, *best_popt)
-            k, p = ks_2samp(y, y_pred)
 
             Plots.Plot(x_interp, y_pred_interp, marker = "", color = "black", newFigure = False, label = "fit")
             plt.axvline(mean, color = "black", linestyle = "--", label = "central value")
-        Plots.PlotHist(binned_data[variable], bins = hist_bins, newFigure = False, title = f"bin : {[data_bins[i], data_bins[i+1]]}", range = [min(v_range), max(v_range)], weights = binned_weights)
+        # Plots.PlotHist(binned_data[variable], bins = hist_bins, newFigure = False, title = f"{bin_label} : {[data_bins[i], data_bins[i+1]]} {bin_units}", range = [min(v_range), max(v_range)], weights = binned_weights, color = "C0")
+        Plots.Plot(x, y, yerr = np.sqrt(y), newFigure = False, color = "C0", style = "bar", title = f"{bin_label} : {[data_bins[i], data_bins[i+1]]} {bin_units}")
 
         plt.axvline(np.mean(binned_data[variable]), linestyle = "--", color = "C1", label = "mean")
 
@@ -562,7 +604,8 @@ def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : st
         cv.append(mean)
         cv_err.append(abs(mean_error) if mean_error is not None else mean_error)
     
-    plt.gcf().legend(fig_handles, fig_labels, loc = "lower right", ncols = 3)
-    plt.gcf().supxlabel(variable.replace("_", " "))
+    if outer_legend:
+        plt.gcf().legend(fig_handles, fig_labels, loc = "lower right", ncols = 3)
+    plt.gcf().supxlabel(variable.replace("_", " ").capitalize())
     plt.tight_layout()
     return np.array(cv), np.array(cv_err)

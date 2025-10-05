@@ -108,6 +108,17 @@ regions = {
             process_criteria(criteria(">=", 0), criteria(">=", 0), criteria("==", 1), criteria("==", 1), criteria(">=", 0)),
         ],
     },
+    "jakes" : {
+        "absorption" : [
+            process_criteria(criteria(">=", 0), criteria(">=", 0), criteria("==", 0), criteria("==", 0), criteria(">=", 0)),
+        ],
+        "charge_exchange" : [
+            process_criteria(criteria(">=", 0), criteria(">=", 0), criteria("==", 0), criteria(">=", 1), criteria(">=", 0)),
+        ],
+        "other" : [
+            process_criteria(criteria(">=", 0), criteria(">=", 0), criteria(">=", 1), criteria(">=", 0), criteria(">=", 0)),
+        ],
+    },
     "default" : {
         "absorption" : [
             process_criteria(criteria(">=", 0), criteria(">=", 0), criteria("==", 0), criteria(">=", 0), criteria("==", 0)),

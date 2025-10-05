@@ -5,7 +5,6 @@ Author: Shyam Bhuller
 
 Description: Contains cuts for Beam Particle Selection.
 TODO depreciate BeamQualityCut
-? should this be kept in a class?
 """
 import awkward as ak
 import numpy as np
@@ -25,12 +24,10 @@ def GetTruncatedPos(sample : Data, truncate : float) -> tuple[ak.Array, ak.Array
     if truncate is not None:
         truncated_start = ak.argmax(sample.recoParticles.beam_calo_pos.z >= truncate, -1, keepdims = True)
         start_pos = sample.recoParticles.beam_calo_pos[truncated_start]
-        # start_pos = ak.flatten(ak.fill_none(start_pos, vector.vector(-999, -999, -999)))
         start_pos = ak.flatten(start_pos)
 
         end_pos = sample.recoParticles.beam_calo_pos[:, -1:]
         end_pos = ak.pad_none(end_pos, 1, -1)
-        # end_pos = ak.flatten(ak.fill_none(end_pos, vector.vector(-999, -999, -999)))
         end_pos = ak.flatten(end_pos)
     else:
         start_pos = sample.recoParticles.beam_startPos_SCE
@@ -64,7 +61,6 @@ def BeamTriggerSelection(events: Data, pdgs : list[int] = [211, 13, -13], use_be
             else:
                 beam_pdg = beam_pdg | tmp
         mask = mask & ak.any(beam_pdg, axis = -1)
-        # mask = mask & ak.any(ak.any([compare_beam_pdg(i) for i in pdgs], axis = 0), -1)
         mask = mask & events.recoParticles.reco_reconstructable_beam_event
     else:
         beam_pdg = ak.flatten(events.trueParticles.pdg[events.trueParticles.number == 1])
@@ -290,7 +286,7 @@ def BeamScraperCut(events : Data, KE_range : int, fits : dict, cut : float = 1.5
         ak.Array: boolean mask
     """
 
-    key = str(KE_range)
+    key = str(KE_range - 1)
     mu_x = fits[key]["mu_x_inst"]
     mu_y = fits[key]["mu_y_inst"]
     sigma_x = fits[key]["sigma_x_inst"]

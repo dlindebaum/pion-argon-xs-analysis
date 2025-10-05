@@ -21,13 +21,13 @@ from apps import (
     cex_analyse
     )
 
-from python.analysis.cross_section import ApplicationArguments, argparse, os
-from python.analysis.Master import SaveConfiguration, LoadConfiguration, IO
+from python.analysis.cross_section import ApplicationArguments, argparse, os, CalculateBatches, file_len
+from python.analysis.Master import SaveConfiguration, LoadConfiguration
 
 
 def template_config():
     template = {
-        "NTUPLE_FILE":{
+        "NTUPLE_FILES":{
             "mc" : [
                 {
                     "file": "ABSOLUTE file path",
@@ -44,6 +44,7 @@ def template_config():
             ]
         },
         "norm" : "normalisation to apply to MC when making Data/MC comparisons, usually defined as the ratio of pion-like triggers from the beam instrumentation", #! this should be inferred from one of the apps!
+        "pi_KE_lim": -1,
         "fiducial_volume" : [0, 700],
         "REGION_IDENTIFICATION":{
             "type" : "default"
@@ -86,9 +87,10 @@ def template_config():
             "mc_stat_unc" : True,
             "mean_track_score" : None,
             "single_bin" : True,
-            "regions": True
+            "regions": True,
+            "fix_np": False
         },
-        "bkg_sub_err" : False,
+        "bkg_sub_mc_stat": True,
         "ESLICE":{
             "width" : None,
             "min" : None,
@@ -99,7 +101,8 @@ def template_config():
             "ts_stop" : 0.0001,
             "max_iter" : 6,
             "ts" : "ks",
-            "covariance" : "poisson"
+            "covariance" : "poisson",
+            "mc_stat_unc": True
         },
         "signal_process" : "charge_exchange",
         "BEAM_PARTICLE_SELECTION":{
@@ -342,9 +345,6 @@ def update_args(processing_args : dict = {}):
         setattr(new_args, k, v)
     return new_args
 
-def file_len(file : str):
-    return len(IO(file).Get(["EventID", "event"]))
-
 
 def check_run(args : argparse.Namespace, step : str):
     return ((step in args.run) or (args.force is True)) and (step not in args.skip)
@@ -353,7 +353,7 @@ def check_run(args : argparse.Namespace, step : str):
 def main(args):
     os.makedirs(args.out, exist_ok = True)
     if args.create_config:
-        SaveConfiguration(template_config(), args.out + args.create_config)
+        SaveConfiguration(template_config(), os.path.join(args.out, args.create_config))
         print(f"template configuration saved as {args.out + args.create_config}")
         exit()
     else:
@@ -363,28 +363,15 @@ def main(args):
             n_data = [file_len(file["file"]) for file in args.ntuple_files["data"]]
         else:
             n_data = []
+        no_data = len(n_data) == 0
+        if no_data:
+            print("no data file was specified, 'normalisation', 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
 
-        if len(n_data) == 0:
-            print("no data file was specified, 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
-
-        n_mc = [file_len(file["file"]) for file in args.ntuple_files["mc"]] # must have MC
-
-        processing_args = {"events" : None, "batches" : None, "threads" : None}
-
-        # pass multiprocessing args
-        if max([*n_data, *n_mc]) >= 7E5:
-            processing_args["events"] = None
-            processing_args["batches"] = int(2 * max([*n_data, *n_mc]) // 7E5)
-            processing_args["threads"] = args.cpus
-        else:
-            processing_args["events"] = None
-            processing_args["batches"] = None
-            processing_args["threads"] = args.cpus
-
+        processing_args = CalculateBatches(args)
         args = update_args(processing_args)
 
         #* normalisation 
-        can_run_norm = (args.norm is None) or ("beam_norm" not in os.listdir(args.out))
+        can_run_norm = (not no_data) and ((args.norm is None) or ("beam_norm" not in os.listdir(args.out)))
         if can_run_norm or check_run(args, "normalisation"):
             print("calculate beam normalisation")
             cex_normalisation.main(args)
@@ -495,7 +482,7 @@ def main(args):
         if args.stop == "selection": return
 
         #* beam reweight
-        can_run_rw = ("params" not in args.beam_reweight) and (len(n_data) > 0)
+        can_run_rw = ("params" not in args.beam_reweight) and (not no_data)
         if can_run_rw or check_run(args, "reweight"):
             print("run beam reweight")
             cex_beam_reweight.main(args)
@@ -587,12 +574,13 @@ def main(args):
 
 if __name__ == "__main__":
 
-    analysis_options = ["normalisation", "beam_quality", "beam_scraper", "selection", "photon_correction", "reweight", "upstream_correction", "toy_parameters", "analysis_input", "analyse"]
+    analysis_options = ["normalisation", "beam_quality", "beam_scraper", "photon_correction", "selection", "reweight", "upstream_correction", "toy_parameters", "analysis_input", "analyse"]
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-C", "--create_config", type = str, help = "Create a template configuration with the default selection")
     ApplicationArguments.Config(parser)
     ApplicationArguments.Output(parser, "analysis/")
+    ApplicationArguments.Regen(parser)
     parser.add_argument("--skip", type = str, nargs = "+", default = [], choices = analysis_options)
     parser.add_argument("--run", type = str, nargs = "+", default = [], choices = analysis_options)
     parser.add_argument("--force", action = "store_true")
