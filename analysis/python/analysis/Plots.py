@@ -26,7 +26,7 @@ class PlotConfig():
 
     def __init__(self):
         # self.PLT_STYLE = None
-        self.PLT_STYLE = "/users/wx21978/projects/pion-phys/pi0-analysis/analysis/config/thesis_plotstyle.mplstyle"
+        self.PLT_STYLE = "~/pi0-analysis/analysis/config/thesis_plotstyle.mplstyle"
         self.FIG_SIZE = "single"
         self.FIG_FACECOLOR = 'white'
         self.AXIS_FACECOLOR = 'white'
