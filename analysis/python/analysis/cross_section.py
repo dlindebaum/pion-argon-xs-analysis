@@ -748,8 +748,12 @@ class ApplicationArguments:
         parser.add_argument("-r", "--regen", dest = "regen", action = "store_true", help = "Regenerate any stored data.")
 
     @staticmethod
-    def Output(parser : argparse.ArgumentParser, default : str = None):
-        parser.add_argument("-o", "--out", dest = "out", type = str, default = default, help = "Directory to save output files.")
+    def Output(parser : argparse.ArgumentParser, default : str = None, file : bool = False):
+        if file is True:
+            help = "output file name."
+        else:
+            help = "Directory to save output files."
+        parser.add_argument("-o", "--out", dest = "out", type = str, default = default, help = help)
         return
 
     @staticmethod

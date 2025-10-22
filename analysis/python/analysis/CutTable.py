@@ -7,6 +7,7 @@ import functools
 from particle import Particle
 from python.analysis import Tags
 from typing import TYPE_CHECKING
+import numbers
 if TYPE_CHECKING:
     from python.analysis import Master
 
@@ -339,7 +340,7 @@ class CutHandler():
         return ordered_results
 
     def _get_mask_signature(self, mask, end=False):
-        flat_array = isinstance(ak.count(mask, axis=0), int)
+        flat_array = isinstance(ak.count(mask, axis=0), numbers.Integral)
         if not end:
             pfo_level = -1 if flat_array else ak.count(mask)
             start_sig = (ak.num(mask, axis=0), pfo_level)
@@ -766,4 +767,5 @@ class CutHandler():
 
 def apply_filters(obj, filters):#: Master.Data, filters):
     for f in filters:
+        print(f"{f=}")
         obj.cutTable.add_mask(f)

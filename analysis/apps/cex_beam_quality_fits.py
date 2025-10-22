@@ -197,9 +197,6 @@ def main(args):
 
     outputs = cross_section.ApplicationProcessing(list(args.ntuple_files.keys()), outdir, args, run, True)
 
-    print(outputs)
-    exit()
-
     fit_values = {s : Fits(args, outputs[s], outdir, s) for s in outputs}
 
     if "data" not in outputs.keys():

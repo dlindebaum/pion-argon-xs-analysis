@@ -134,7 +134,7 @@ def GetScraperFits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : 
         text += "\n$\chi^{2}/ndf$ : " + f"{metrics[0]/metrics[1]:.2g}, p : " + f"{metrics[2]:.1g}"
         legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = "upper right", title = Fitting.gaussian.__name__)
         legend.set_zorder(12)
-        for l in legend.legendHandles:
+        for l in legend.legend_handles:
             l.set_visible(False)
 
         print(f"{popt=}")

@@ -8,6 +8,7 @@ Description: Runs cross section measurement.
 """
 import os
 
+import awkward as ak
 import numpy as np
 import pandas as pd
 
@@ -390,18 +391,18 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
     with cross_section.PlotStyler(extend_colors = False, dark = True).Update(font_scale = 1.1):
         if unfolding_args["method"] == 1: #* Unfold defector effect only
             resp = cross_section.Unfold.CalculateResponseMatrices(mc, signal_process, energy_slices, regions, book, None)
-            priors = {k : v for k, v in true_hists_selected.items()}
+            priors = {k : ak.to_numpy(v) for k, v in true_hists_selected.items()}
             if regions:
                 priors.pop("int_ex")
                 for k, v in true_hists_selected_regions.items():
-                    priors[k] = v
+                    priors[k] = ak.to_numpy(v)
 
         if unfolding_args["method"] == 2: #* Unfold detector effect and efficiency
             resp = cross_section.Unfold.CalculateResponseMatrices(mc_cheat, signal_process, energy_slices, regions, book, e_copy)
-            priors = {k : v for k, v in true_hists.items()}
+            priors = {k : ak.to_numpy(v) for k, v in true_hists.items()}
             if regions:
                 for k, v in true_hists_process.items():
-                    priors[k] = v
+                    priors[k] = ak.to_numpy(v)
 
     unfolding_args["priors"] = priors
     unfolding_args["response_matrices"] = resp
@@ -429,7 +430,7 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
             th = {**th, **true_hists_selected_process}
             th.pop("int_ex")
         for k in result:
-            cross_section.Unfold.PlotUnfoldingResults(reco_hists[k], reco_hists_err[k], norm * th[k], result[k], energy_slices, labels[k], book)
+            cross_section.Unfold.PlotUnfoldingResults(reco_hists[k], reco_hists_err[k], ak.to_numpy(norm * th[k]), result[k], energy_slices, labels[k], book)
             Plots.plt.close()
 
     th = true_hists
@@ -506,7 +507,7 @@ def FitParamTables(table : pd.DataFrame):
 
     t = {}
     for i , v in enumerate(table.columns):
-        t[v] = f"${cv[i]} \pm {err[i]}$"
+        t[v] = f"${cv[i]} \\pm {err[i]}$"
     return pd.DataFrame(t, index = [0])
 
 

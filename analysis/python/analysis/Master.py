@@ -200,12 +200,12 @@ def __GenericFilter__(data, filters: list, verbose : bool = True):
         for var in vars(data):
             if var == "filters": continue # skip filters list
             if hasattr(getattr(data, var), "__getitem__") and (type(getattr(data, var)) != str):
-                # try:
-                if verbose is True: print(f"{var, type(getattr(data, var))=}")
-                if __IsMaskCompatiable__(getattr(data, var), f, verbose):
-                    setattr(data, var, getattr(data, var)[f])
-                # except:
-                #     if verbose: warnings.warn(f"Couldn't apply filters to {var}.")
+                try:
+                    if verbose: print(f"{var, getattr(data, var), type(getattr(data, var))=}")
+                    if __IsMaskCompatiable__(getattr(data, var), f, verbose):
+                        setattr(data, var, getattr(data, var)[f])
+                except:
+                    if verbose: warnings.warn(f"Couldn't apply filters to {var}.")
     return
 
 
