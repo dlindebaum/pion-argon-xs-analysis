@@ -289,6 +289,9 @@ def main(args):
         args = update_args(processing_args)
 
         do_runs = check_run_dict(args, no_data)
+        # Not yet reached analysis stage yet
+        do_runs["analysis_input"] = False
+        do_runs["analyse"] = False
         stop_text = (f" (stopping after running {args.stop}):"
                      if args.stop is not None else ":")
         print("Apps to run" + stop_text)

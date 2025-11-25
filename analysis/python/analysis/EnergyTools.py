@@ -45,6 +45,7 @@ class EnergyCorrection:
 
     class ResponseFit(Fitting.FitFunction):
         n_params = 3
+        _str = "Response"
 
         @staticmethod
         def func(x, p0, p1, p2):

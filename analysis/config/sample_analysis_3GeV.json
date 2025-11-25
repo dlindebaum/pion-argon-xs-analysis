@@ -47,7 +47,7 @@
     220
   ],
   "REGION_IDENTIFICATION": {
-    "type": "sample_only"
+    "type": "default"
   },
   "SYSTEMATICS": {
     "track_length": 0.026,
@@ -194,6 +194,128 @@
   "VALID_PFO_SELECTION": {
     "enable": true
   },
+  "FINAL_STATE_PIPLUS_SELECTION": {
+      "Chi2ProtonSelection": {
+        "enable": true,
+        "cut": 61.2,
+        "op": ">"
+      },
+      "TrackScoreCut": {
+        "enable": true,
+        "cut": 0.5,
+        "op": ">"
+      },
+      "NHitsCut": {
+        "enable": true,
+        "cut": 20,
+        "op": ">"
+      },
+      "PiPlusSelection": {
+        "enable": true,
+        "cut": [
+          0.5,
+          2.8
+        ],
+        "op": [
+          ">",
+          "<"
+        ]
+      }
+    },
+    "FINAL_STATE_PHOTON_SELECTION": {
+      "Chi2ProtonSelection": {
+        "enable": true,
+        "cut": 61.2,
+        "op": ">"
+      },
+      "TrackScoreCut": {
+        "enable": true,
+        "cut": 0.45,
+        "op": "<"
+      },
+      "NHitsCut": {
+        "enable": true,
+        "cut": 80,
+        "op": ">"
+      },
+      "BeamParticleIPCut": {
+        "enable": true,
+        "cut": 20,
+        "op": "<"
+      },
+      "BeamParticleDistanceCut": {
+        "enable": true,
+        "cut": [
+          3,
+          90
+        ],
+        "op": [
+          ">",
+          "<"
+        ]
+      }
+    },
+    "FINAL_STATE_PI0_SELECTION": {
+      "NPhotonCandidateSelection": {
+        "enable": true,
+        "cut": 2,
+        "op": "=="
+      },
+      "Pi0MassSelection": {
+        "enable": true,
+        "cut": 225,
+        "op": "<"
+      },
+      "Pi0OpeningAngleSelection": {
+        "enable": true,
+        "cut": 60,
+        "op": "<"
+      }
+    },
+    "FINAL_STATE_LOOSE_PHOTON_SELECTION": {
+      "Chi2ProtonSelection": {
+        "enable": true,
+        "cut": 61.2,
+        "op": ">"
+      },
+      "TrackScoreCut": {
+        "enable": true,
+        "cut": 0.45,
+        "op": "<"
+      },
+      "NHitsCut": {
+        "enable": true,
+        "cut": 31,
+        "op": ">"
+      },
+      "BeamParticleIPCut": {
+        "enable": true,
+        "cut": 80,
+        "op": "<"
+      },
+      "BeamParticleDistanceCut": {
+        "enable": true,
+        "cut": 114,
+        "op": "<"
+      }
+    },
+    "FINAL_STATE_LOOSE_PION_SELECTION": {
+      "Chi2ProtonSelection": {
+        "enable": true,
+        "cut": 61.2,
+        "op": ">"
+      },
+      "TrackScoreCut": {
+        "enable": true,
+        "cut": 0.39,
+        "op": ">"
+      },
+      "PiPlusSelection": {
+        "enable": true,
+        "cut": 6.3,
+        "op": "<"
+      }
+    },
   "beam_momentum": 3000,
   "P_inst_range": [
     2000,

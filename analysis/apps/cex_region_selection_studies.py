@@ -15,6 +15,8 @@ from python.analysis import (
     shower_merging, Processing, Tags, cross_section, EnergyTools)
 import python.analysis.SelectionTools as st
 import apps.cex_beam_selection_studies as beam_selection
+from apps.cex_beam_selection_studies import x_label, y_scale, x_range, nbins, ncols, truncate
+from python.analysis import Utils, SelectionTools, RegionIdentification
 
 import awkward as ak
 import numpy as np
