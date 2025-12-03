@@ -482,7 +482,7 @@ class ApplicationArguments:
         return args
 
     @staticmethod
-    def __CreateSelection(value : dict, module) -> dict:
+    def __CreateSelection(value : dict, module, use_enable=True) -> dict:
         """ Creates a dictionary of selection functions and their argumenets as specified in the analysise configuration file. 
 
         Args:
@@ -494,7 +494,7 @@ class ApplicationArguments:
         """
         selection = {"selections" : {}, "arguments" : {}}
         for func, opt in value.items():
-            if opt["enable"] is True:
+            if (opt["enable"] is True) or (not use_enable):
                 selection["selections"][func] = getattr(module, func)
                 copy = opt.copy()
                 copy.pop("enable")
@@ -523,6 +523,7 @@ class ApplicationArguments:
                 args.region_identification = RegionIdentification.regions[value["type"]]
             elif head == "BEAM_PARTICLE_SELECTION":
                 args.beam_selection = ApplicationArguments.__CreateSelection(value, BeamParticleSelection)
+                args.all_beam_selections = ApplicationArguments.__CreateSelection(value, BeamParticleSelection, use_enable=False)
             elif head == "HAS_FINAL_STATE_PFO_SELECTION":
                 args.has_final_state_pfo_selection = value["enable"]
             elif head == "VALID_PFO_SELECTION":
@@ -669,6 +670,24 @@ class ApplicationArguments:
                 args.beam_selection["data_arguments"].update(
                     {"FiducialStart": fiducial_args})
                 args.beam_selection["mc_arguments"].update(
+                    {"FiducialStart": fiducial_args})
+        if hasattr(args, "all_beam_selections"):
+            if "PiBeamSelection" in args.all_beam_selections["mc_arguments"]:
+                args.all_beam_selections["data_arguments"]["PiBeamSelection"]["use_beam_inst"] = (
+                    args.all_beam_selections["data_arguments"]["PiBeamSelection"].pop("use_beam_inst_data"))
+                args.all_beam_selections["mc_arguments"]["PiBeamSelection"]["use_beam_inst"] = (
+                    args.all_beam_selections["mc_arguments"]["PiBeamSelection"].pop("use_beam_inst_mc"))
+                del args.all_beam_selections["data_arguments"]["PiBeamSelection"]["use_beam_inst_mc"]
+                del args.all_beam_selections["mc_arguments"]["PiBeamSelection"]["use_beam_inst_data"]
+            if hasattr(args, "fiducial_volume"):
+                fiducial_args = {
+                    "cut": args.fiducial_volume["start"],
+                    "op": ">"}
+                args.all_beam_selections["selections"].update({
+                    "FiducialStart": BeamParticleSelection.FiducialStart})
+                args.all_beam_selections["data_arguments"].update(
+                    {"FiducialStart": fiducial_args})
+                args.all_beam_selections["mc_arguments"].update(
                     {"FiducialStart": fiducial_args})
 
         return args
