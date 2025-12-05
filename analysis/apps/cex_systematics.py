@@ -24,6 +24,7 @@ systematics_label = {"mc_stat" : "MC stat", "fit_inaccuracy" : "Fit inaccuracy",
 
 exclusive_proc = ["absorption", "charge_exchange", "single_pion_production", "pion_production"]
 
+pd.set_option('future.no_silent_downcasting', True)
 
 def SaveSystematicError(systematic : dict, fractional : dict, out : str):
     return cross_section.SaveObject(out, {"systematic" : systematic, "fractional": fractional})
@@ -775,12 +776,14 @@ def SaveSystematicTables(systematic_tables : dict[pd.DataFrame], out : str):
 def PlotSysHist(systematic_table : dict[pd.DataFrame], book : Plots.PlotBook = Plots.PlotBook.null):
     for t in systematic_table:
         Plots.plt.figure()
-        for i in systematic_table[t].T:
+        c = 0
+        for i  in systematic_table[t].T:
             if i in ["KE (MeV)", "Central value (mb)"] : continue
             if i in ["Total uncertainty (mb)", "Total systematic uncertainty (mb)"]:
                 color = "k"
             else:
-                color = None
+                color = f"C{c}"
+                c+=1
             if i  == "Total uncertainty (mb)":
                 linestyle = "dashdot"
             else:
@@ -1080,7 +1083,7 @@ def main(args : cross_section.argparse.Namespace):
         SaveSystematicTables(tables, outdir)
 
         with Plots.PlotBook(outdir + "systematic_plots.pdf") as book:
-            with Plots.matplotlib.rc_context({"axes.prop_cycle" : Plots.plt.cycler("color", Plots.matplotlib.cm.get_cmap("tab20").colors)}):
+            with Plots.matplotlib.rc_context({"axes.prop_cycle" : Plots.plt.cycler("color", Plots.matplotlib.colormaps["tab20"].colors)}):
                 PlotSysHist(tables, book)
         with Plots.PlotBook(outdir + "final_plots.pdf", watermark = "DUNE: Work in Progress") as book:
             table, table_alt = FinalPlots(args.cv["pdsp"], tables, args.energy_slices, book, alt_xs = False)

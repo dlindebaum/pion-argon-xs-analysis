@@ -1025,7 +1025,7 @@ def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label:
             edges.append(i + width/2)
         edges.insert(0, edges[0] - width)
         
-        if color is None: color = next(plt.gca()._get_lines.prop_cycler)["color"] # cause apparently stairs suck
+        if color is None: Print("Warning: color need to be passed when using the style = step.") # cause apparently stairs suck
 
         plt.stairs(y, edges, linestyle = linestyle, edgecolor = color, color = color, alpha = alpha, zorder = zorder, label = label)
 
