@@ -763,8 +763,8 @@ class ApplicationArguments:
         return
 
     @staticmethod
-    def Config(parser : argparse.ArgumentParser, required : bool = False):
-        parser.add_argument("-c", "--config", dest = "config", type = str, default = None, required = required, help = "Analysis configuration file, if supplied will override command line arguments.")
+    def Config(parser : argparse.ArgumentParser, required : bool = False, default : any = None):
+        parser.add_argument("-c", "--config", dest = "config", type = str, default = default, required = required, help = "Analysis configuration file, if supplied will override command line arguments.")
 
     @staticmethod
     def ResolveArgs(args : argparse.Namespace, override_out : bool = True) -> argparse.Namespace:

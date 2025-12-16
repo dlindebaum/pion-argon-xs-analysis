@@ -6,7 +6,7 @@ Author: Shyam Bhuller
 Description: Run configuration for regression testing.
 """
 from glob import glob
-from rich import print
+from rich import print, rule
 import subprocess
 import time
 
@@ -15,7 +15,6 @@ from python.analysis.Master import SaveConfiguration, LoadConfiguration
 from scripts import run_analysis
 
 def file_search(path : str, data_cfg : list[dict]) -> None:
-    updated_data_cfg = []
     for f in data_cfg:
         name = f["file"].split("/")[-1]
 
@@ -33,40 +32,41 @@ def main(args : argparse.Namespace):
     * Update local config and run (in tmp area?)
     """
 
-    cfg_path = f"{os.environ['CONFIG_PATH']}/cex_analysis_2GeV_config.json"
+    work_dir = f"{args.work_dir}/pdune_analysis_test_{time.strftime('%Y%m%d-%H%M%S')}/" # optional? for file path at least.
 
-    work_dir = f"/tmp/pdune_analysis_test_{time.strftime('%Y%m%d-%H%M%S')}/"
-
-    root_file_path = "/data/dune/common/"
-
-    if os.path.isfile(cfg_path):
-        cfg = LoadConfiguration(cfg_path)
+    if os.path.isfile(args.config):
+        cfg = LoadConfiguration(args.config)
     else:
-        raise FileNotFoundError(f"reference configuration file could not be found at {cfg_path}")
+        raise FileNotFoundError(f"reference configuration file could not be found at {args.config}")
 
     # update files to ones found required to run this test.
-    file_search(root_file_path, cfg["NTUPLE_FILES"]["mc"])
-    print(cfg["NTUPLE_FILES"]["mc"])
+    if os.path.isdir(args.root_file_path):
+        file_search(args.root_file_path, cfg["NTUPLE_FILES"]["mc"])
+        print(rule.Rule("MC files"))
+        print(cfg["NTUPLE_FILES"]["mc"])
 
-    file_search(root_file_path, cfg["NTUPLE_FILES"]["data"])
-    print(cfg["NTUPLE_FILES"]["data"])
+        file_search(args.root_file_path, cfg["NTUPLE_FILES"]["data"])
+        print(rule.Rule("Data files"))
+        print(cfg["NTUPLE_FILES"]["data"])
+    else:
+        raise NotADirectoryError(f"{args.root_file_path} is not a directory.")
 
-    # create test area
-    os.mkdir(work_dir)
-    SaveConfiguration(cfg, f"{work_dir}/config.json")
 
-    # run the script
-    subprocess.run(["run_analysis.py", "-o", work_dir, "-c", f"{work_dir}/config.json"])
+    if not args.debug:
+        # create test area
+        os.mkdir(work_dir)
+        SaveConfiguration(cfg, f"{work_dir}/config.json")
 
-    # test_args = {"config" : f"{work_dir}/config.json", "out" : work_dir}
-    # test_args = argparse.Namespace(**test_args)
-    # print(test_args)
-    # run_analysis.main(test_args)
-
+        # run the script
+        subprocess.run(["run_analysis.py", "-o", work_dir, "-c", f"{work_dir}/config.json"])
     return
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    ApplicationArguments.Config(parser, required = False, default = f"{os.environ['CONFIG_PATH']}/cex_analysis_2GeV_config.json")
+    parser.add_argument("-d", "--directory", dest = "work_dir", default="/tmp", help="Directory where the test is ran.")
+    parser.add_argument("--debug", action = "store_true", help = "dont actually run the test, just verify the file path for the data is found.")
+    parser.add_argument("-f", "--files", dest = "root_file_path", required = True, help = "File path the Data and MC root files are stored in (will do a recusive search).")
     args = parser.parse_args()
     print(args)
     main(args)
