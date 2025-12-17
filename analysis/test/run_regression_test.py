@@ -6,16 +6,23 @@ Author: Shyam Bhuller
 
 Description: Run configuration for regression testing.
 """
+import argparse
 from glob import glob
+import os
 from rich import print, rule
 import subprocess
 import time
 
-from python.analysis.cross_section import ApplicationArguments, argparse, os, CalculateBatches, file_len
-from python.analysis.Master import SaveConfiguration, LoadConfiguration
-from scripts import run_analysis
+from python.analysis.cross_section import ApplicationArguments
+from python.analysis.Master import SaveConfiguration, LoadConfiguration, timer
 
-def file_search(path : str, data_cfg : list[dict]) -> None:
+def file_search(path : str, data_cfg : dict) -> None:
+    """ Search for files based on the names provided in the configuration, then update the paths in the configuration data.
+
+    Args:
+        path (str): Path to search for. Search is done recursively.
+        data_cfg (dict): Configuration data.
+    """
     for f in data_cfg:
         name = f["file"].split("/")[-1]
 
@@ -25,22 +32,17 @@ def file_search(path : str, data_cfg : list[dict]) -> None:
             raise FileNotFoundError(f"could not find input file {name} in root file path provided: {path}")
         f.update({"file" : found_files[0]})
 
-def main(args : argparse.Namespace):
-    """
-    * Load in 2 GeV config.
-    * Add requirement to pass in file directory for location with the files.
-    * Do a file search in the directory to get the correct MC/Data file.
-    * Update local config and run (in tmp area?)
-    """
+@timer
+def run_regression_test(args : argparse.Namespace):
+    work_dir = f"{args.work_dir}/pdune_analysis_test_{time.strftime('%Y%m%d-%H%M%S')}/"
 
-    work_dir = f"{args.work_dir}/pdune_analysis_test_{time.strftime('%Y%m%d-%H%M%S')}/" # optional? for file path at least.
-
+    # check for configuration
     if os.path.isfile(args.config):
         cfg = LoadConfiguration(args.config)
     else:
         raise FileNotFoundError(f"reference configuration file could not be found at {args.config}")
 
-    # update files to ones found required to run this test.
+    # try find the paths to the Data and MC files.
     if os.path.isdir(args.root_file_path):
         file_search(args.root_file_path, cfg["NTUPLE_FILES"]["mc"])
         print(rule.Rule("MC files"))
@@ -53,6 +55,7 @@ def main(args : argparse.Namespace):
         raise NotADirectoryError(f"{args.root_file_path} is not a directory.")
 
 
+    print(f"Test area to be created: {work_dir}") 
     if not args.debug:
         # create test area
         os.mkdir(work_dir)
@@ -60,6 +63,8 @@ def main(args : argparse.Namespace):
 
         # run the script
         subprocess.run(["run_analysis.py", "-o", work_dir, "-c", f"{work_dir}/config.json"])
+        subprocess.run(["run_analysis.py", "-o", work_dir, "-c", f"{work_dir}/config.json", "--run", "analyse"]) # need to specify to run the xs anaysis.
+        print("Test completed.")
     return
 
 if __name__ == "__main__":
@@ -70,4 +75,4 @@ if __name__ == "__main__":
     parser.add_argument("-f", "--files", dest = "root_file_path", required = True, help = "File path the Data and MC root files are stored in (will do a recusive search).")
     args = parser.parse_args()
     print(args)
-    main(args)
+    run_regression_test(args)
