@@ -95,17 +95,12 @@ regions = {
         ],
         "charge_exchange" : [
             process_criteria(criteria("==", 0), criteria("==", 2), criteria("==", 0), criteria("==", 2), criteria("==", 1)),
-            process_criteria(criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria("==", 1), criteria("==", 0)),
-        ],
-        "single_pion_production" : [
-            process_criteria(criteria(">", 0), criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria("==", 0)),
-        ],
+        ], 
         "pion_production" : [
-            process_criteria(criteria(">=", 0), criteria(">=", 0), criteria(">", 1), criteria(">=", 0), criteria(">=", 0)),
-            process_criteria(criteria(">=", 0), criteria(">=", 0), criteria(">", 0), criteria("==", 2), criteria("==", 1)),
+            process_criteria(criteria(">=", 0), criteria(">=", 0), criteria(">=", 1), criteria(">=", 0), criteria(">=", 0)),
+            process_criteria(criteria(">=", 0), criteria(">=", 0), criteria(">", 0), criteria(">=", 2), criteria(">=", 1)),
             process_criteria(criteria(">=", 0), criteria(">=", 0), criteria(">=", 0), criteria(">", 2), criteria(">=", 0)),
             process_criteria(criteria(">=", 0), criteria(">", 2), criteria(">=", 0), criteria(">=", 0), criteria(">=", 0)),
-            process_criteria(criteria(">=", 0), criteria(">=", 0), criteria("==", 1), criteria("==", 1), criteria(">=", 0)),
         ],
     },
     "jakes" : {

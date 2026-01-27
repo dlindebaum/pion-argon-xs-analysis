@@ -438,8 +438,59 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
     if y_err is not None:
         y_err = np.array(y_err, dtype = float)
         y_err = y_err[mask]
+        # Filter out bins with zero or very small errors (which can cause division issues)
+        # Use a minimum error threshold to avoid numerical issues
+        min_err = 1e-10
+        valid_err_mask = y_err > min_err
+        x = x[valid_err_mask]
+        y_obs = y_obs[valid_err_mask]
+        y_err = y_err[valid_err_mask]
 
-    popt, pcov = curve_fit(func.func, x, y_obs, sigma = y_err, maxfev = maxfev, p0 = func.p0(x, y_obs), bounds = func.bounds(x, y_obs), method = method, absolute_sigma = True)
+    # Validate that we have enough data points
+    if len(x) < func.n_params:
+        raise ValueError(f"Not enough data points ({len(x)}) for fitting function with {func.n_params} parameters")
+    
+    # Check if x has sufficient variation (important for gaussian fits)
+    if len(x) > 1 and np.std(x) < 1e-10:
+        raise ValueError(f"X values have insufficient variation (std={np.std(x)}). Cannot perform meaningful fit.")
+    
+    # Check if y has any non-zero values
+    if np.all(y_obs == 0):
+        raise ValueError("All y values are zero. Cannot perform fit.")
+
+    # Get initial parameter guess and validate it produces finite values
+    p0 = func.p0(x, y_obs)
+    bounds = func.bounds(x, y_obs)
+    
+    if p0 is not None:
+        p0 = np.array(p0, dtype=float)
+        # Ensure all parameters are finite
+        p0 = np.where(np.isfinite(p0), p0, 0.0)
+        
+        # Ensure initial guess is within bounds
+        if bounds is not None and len(bounds) == 2:
+            lower_bounds = np.array(bounds[0])
+            upper_bounds = np.array(bounds[1])
+            # Clip p0 to be within bounds
+            p0 = np.clip(p0, lower_bounds, upper_bounds)
+        
+        # For gaussian specifically, ensure sigma is positive and not too small
+        if func == gaussian and len(p0) >= 3:
+            if p0[2] <= 0 or not np.isfinite(p0[2]) or p0[2] < 0.001:
+                p0[2] = max(np.std(x), 0.001) if len(x) > 1 else 0.001
+            # Also ensure p0 (amplitude) is positive
+            if p0[0] <= 0:
+                p0[0] = max(y_obs) if len(y_obs) > 0 else 1.0
+        
+        # Check if initial guess produces finite values
+        try:
+            y_test = func.func(x, *p0)
+            if not np.all(np.isfinite(y_test)):
+                raise ValueError(f"Initial parameter guess {p0} produces non-finite values. Check data quality.")
+        except Exception as e:
+            raise ValueError(f"Error validating initial parameter guess: {e}")
+
+    popt, pcov = curve_fit(func.func, x, y_obs, sigma = y_err, maxfev = maxfev, p0 = p0, bounds = func.bounds(x, y_obs), method = method, absolute_sigma = True)
     print(pcov)
     perr = np.sqrt(np.diag(pcov))
 
