@@ -1,14 +1,37 @@
 # Analysis
-Python code for ProtoDUNE analysis, requires python 3.10.0 or greater. Installing the requirements to run the code is as follows:
+Python code for ProtoDUNE analysis, requires a python 3.13 environment or greater.
 
-Run this once.
+If you want to install the repo in an existing environment, run the following:
 ``` bash
 pip install -r requirements.txt
 ```
 
-and each time you load the python environment:
+If you want to install a new environment, run the following:
+```bash
+conda env create -f environment.yml
+```
+
+To activate the new enrionment, run the following or include this in your bashrc.
+
+```bash
+conda activate pdune_analysis
+```
+
+Each time you load the python environment:
 ``` bash
 source env.sh
+```
+---
+To generate the `requirements.txt` file, run the following:
+
+```bash
+pip freeze > requirements.txt
+```
+
+And to generate the `environment.yml` file:
+
+```bash
+conda env export | sed -n '/prefix:/q;p' > environment.yml
 ```
 
 ---

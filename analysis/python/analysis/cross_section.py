@@ -748,8 +748,12 @@ class ApplicationArguments:
         parser.add_argument("-r", "--regen", dest = "regen", action = "store_true", help = "Regenerate any stored data.")
 
     @staticmethod
-    def Output(parser : argparse.ArgumentParser, default : str = None):
-        parser.add_argument("-o", "--out", dest = "out", type = str, default = default, help = "Directory to save output files.")
+    def Output(parser : argparse.ArgumentParser, default : str = None, file : bool = False):
+        if file is True:
+            help = "output file name."
+        else:
+            help = "Directory to save output files."
+        parser.add_argument("-o", "--out", dest = "out", type = str, default = default, help = help)
         return
 
     @staticmethod
@@ -759,8 +763,8 @@ class ApplicationArguments:
         return
 
     @staticmethod
-    def Config(parser : argparse.ArgumentParser, required : bool = False):
-        parser.add_argument("-c", "--config", dest = "config", type = str, default = None, required = required, help = "Analysis configuration file, if supplied will override command line arguments.")
+    def Config(parser : argparse.ArgumentParser, required : bool = False, default : any = None):
+        parser.add_argument("-c", "--config", dest = "config", type = str, default = default, required = required, help = "Analysis configuration file, if supplied will override command line arguments.")
 
     @staticmethod
     def ResolveArgs(args : argparse.Namespace, override_out : bool = True) -> argparse.Namespace:

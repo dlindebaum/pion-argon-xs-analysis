@@ -44,9 +44,10 @@ def CreatePFOMasks(masks : dict[ak.Array]) -> ak.Array:
 def run(i, file, n_events, start, selected_events, args):
     output = {}
 
-    events = Master.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
+    events = Master.Data(file, n_events, start, args["nTuple_type"], args["pmom"], verbose = True)
 
     for s, a in zip(args["beam_selection"]["selections"].values(), args["beam_selection"]["mc_arguments"].values()):
+        print(s)
         mask = s(events, **a)
         events.Filter([mask], [mask])
     photon_masks = {}
@@ -106,7 +107,7 @@ def PhotonSelection(df : pd.DataFrame, book : Plots.PlotBook = Plots.PlotBook.nu
     print(counts)
     print({c : counts[c] / len(df) for c in counts})
 
-    Plots.PlotHist([df[pi0_mother].fractional_error, df[~pi0_mother].fractional_error], stacked = False, histtype = "step", range = [-1, 1], xlabel = "$E^{reco}$ fractional error", label = ["$\pi^{0}$ daughter", "other"])
+    Plots.PlotHist([df[pi0_mother].fractional_error, df[~pi0_mother].fractional_error], stacked = False, histtype = "step", range = [-1, 1], xlabel = "$E^{reco}$ fractional error", label = ["$\\pi^{0}$ daughter", "other"])
     book.Save()
 
     df = df[pi0_mother]
@@ -293,7 +294,7 @@ def MethodComparison(df : pd.DataFrame, linear_correction : float, response_para
     tab = {}
     for l, f in fe.items():
         v = f[(f > -1) & (f < 1)]
-        tab[l] = {"$\mu$" : v.mean(), "$\sigma$" : v.std()}
+        tab[l] = {"$\\mu$" : v.mean(), "$\\sigma$" : v.std()}
     tab = pd.DataFrame(tab)
 
     for i, f in Plots.IterMultiPlot(fe):

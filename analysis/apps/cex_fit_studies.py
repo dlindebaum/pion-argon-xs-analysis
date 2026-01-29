@@ -108,7 +108,7 @@ def FitSimulationCurve(xs_sim, sampling_factor : int, process : str, function : 
     y = getattr(xs_sim, process)[::sampling_factor]/1000
 
     if plot is True: Plots.plt.figure()
-    results = cross_section.Fitting.Fit(x, y, None, function, method = "dogbox", plot = plot, xlabel = "$KE$(GeV)", ylabel = "$\sigma$ (b)", title = process)
+    results = cross_section.Fitting.Fit(x, y, None, function, method = "dogbox", plot = plot, xlabel = "$KE$(GeV)", ylabel = "$\\sigma$ (b)", title = process)
     return results
 
 
@@ -322,7 +322,7 @@ def PlotShapeExamples(energy_slices : cross_section.Slices, book : Plots.PlotBoo
             Plots.plt.fill_between(xs_sim.KE, norms[0] * y, norms[1] * y, color = "k", alpha = 0.5)
         return
 
-    plot_curves({i : SmoothStep(xs_sim.KE, norms[1], norms[0], split, i) for i in [0, 100, 250, 500, 1000]}, False, "$\\alpha$", "$\mathcal{N}(E)$")
+    plot_curves({i : SmoothStep(xs_sim.KE, norms[1], norms[0], split, i) for i in [0, 100, 250, 500, 1000]}, False, "$\\alpha$", "$\\mathcal{N}(E)$")
     book.Save()
 
     for proc in list(folder.keys()):
@@ -356,7 +356,7 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
     # Plot the fit value for each scale factor 
     Plots.plt.figure()
     for i in range(4):
-        Plots.Plot(x, data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], newFigure = False, label = f"${process_map[i]}$", marker = "o", ylabel = "$\mu^{fit}_{s}$", color = list(region_colours.values())[i], linestyle = "")
+        Plots.Plot(x, data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], newFigure = False, label = f"${process_map[i]}$", marker = "o", ylabel = "$\\mu^{fit}_{s}$", color = list(region_colours.values())[i], linestyle = "")
     Plots.plt.legend(title = "$s$")
     Plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
     Plots.plt.xlabel(xlabel)
@@ -364,7 +364,7 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
 
     # same as above, in separate plots
     for i in Plots.MultiPlot(4):
-        Plots.Plot(x, data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], newFigure = False, marker = "o", xlabel = xlabel, ylabel = f"$\mu^{{fit}}_{{{process_map[i]}}}$", color = list(region_colours.values())[i], linestyle = "")
+        Plots.Plot(x, data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], newFigure = False, marker = "o", xlabel = xlabel, ylabel = f"$\\mu^{{fit}}_{{{process_map[i]}}}$", color = list(region_colours.values())[i], linestyle = "")
         Plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
     pdf.Save()
 
@@ -398,7 +398,7 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
 
     Plots.plt.figure()
     for i in Plots.MultiPlot(4):
-        Plots.Plot(data[f"mu_exp_{i}"], data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], linestyle = "", marker = "o", xlabel = f"$\mu^{{exp}}_{process_map[i]}$", ylabel = "$\mu^{fit}_{s}$", label = f"${process_map[i]}$", color = list(region_colours.values())[i], newFigure = False)
+        Plots.Plot(data[f"mu_exp_{i}"], data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], linestyle = "", marker = "o", xlabel = f"$\\mu^{{exp}}_{process_map[i]}$", ylabel = "$\\mu^{fit}_{s}$", label = f"${process_map[i]}$", color = list(region_colours.values())[i], newFigure = False)
         yl = Plots.plt.gca().get_ylim()
         xl = Plots.plt.gca().get_xlim()
 
@@ -579,7 +579,7 @@ def PlotDataShapeTest(data, key, label, vmin = None, vmax = None):
 def PlotCrossCheckResultsShape(results_total, results_bins, energy_overflow : np.ndarray, single_bin : bool, book : Plots.PlotBook.null):
 
     for p in process_map:
-        PlotDataShapeTest(results_total, f"mu_{p}", f"$\mu_{{{process_map[p]}}}$")
+        PlotDataShapeTest(results_total, f"mu_{p}", f"$\\mu_{{{process_map[p]}}}$")
         book.Save()
     if single_bin is False:
         PlotDataShapeTestEnergy(results_bins, energy_overflow, book)
@@ -624,8 +624,8 @@ def CreateSummaryTables(total_summaries, row_names):
         for c, v, e in zip(table_fe.columns, i, j):
             e_s = f"{100 * e:.1g}"
             v_s = str(round(100 * v, len(e_s.split(".")[-1])))
-            row[proc_tags[c].name_simple] = f"{v_s} $\pm$ {e_s}"
-        table_str[proc_tags[r].name_simple + "(\%)"] = row
+            row[proc_tags[c].name_simple] = f"{v_s} $\\pm$ {e_s}"
+        table_str[proc_tags[r].name_simple + "(\\%)"] = row
     return table_fe, table_err, pd.DataFrame(table_str)
 
 
@@ -674,7 +674,7 @@ def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : n
     tags = cross_section.Tags.ExclusiveProcessTags(template.exclusive_process)
     for j, c in Plots.IterMultiPlot(templates_energy):
         for i, s in enumerate(c):
-            Plots.Plot(energy_slices.pos_overflow, s/np.sum(templates_energy), color = tags.number[i].colour, label = f"$\lambda_{{{process_map[j]},{process_map[i]}}}$", xlabel = f"$\lambda_{{{process_map[j]},s}}$ (MeV)", ylabel = "normalised counts", style = "step", newFigure = False)
+            Plots.Plot(energy_slices.pos_overflow, s/np.sum(templates_energy), color = tags.number[i].colour, label = f"$\\lambda_{{{process_map[j]},{process_map[i]}}}$", xlabel = f"$\\lambda_{{{process_map[j]},s}}$ (MeV)", ylabel = "normalised counts", style = "step", newFigure = False)
         Plots.plt.title(f"region : {process_map[j]}")
         Plots.plt.legend(title = "process")
     book.Save()
@@ -682,7 +682,7 @@ def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : n
     if tempalates_mean_track_score is not None:
         Plots.plt.figure()
         for i, s in enumerate(tempalates_mean_track_score):
-            Plots.Plot(cross_section.bin_centers(mean_track_score_bins), s/np.sum(tempalates_mean_track_score), color = tags.number[i].colour, label = f"$\lambda_{{t,{process_map[i]}}}$", xlabel = f"$\lambda_{{t,s}}$", ylabel = "normalised counts", style = "step", newFigure = False)
+            Plots.Plot(cross_section.bin_centers(mean_track_score_bins), s/np.sum(tempalates_mean_track_score), color = tags.number[i].colour, label = f"$\\lambda_{{t,{process_map[i]}}}$", xlabel = f"$\\lambda_{{t,s}}$", ylabel = "normalised counts", style = "step", newFigure = False)
         Plots.plt.legend(loc = "upper left")
         book.Save()
         book.close()
@@ -851,9 +851,9 @@ def main(args : cross_section.argparse.Namespace):
                             sem = std / np.sqrt(len(pulls[k]))
                             p = len(f"{sem:.1g}") - 2
                             print(folder[k])
-                            means[folder[k]] = f"{mean:.{p}g} $\pm$ {sem:.1g}"
+                            means[folder[k]] = f"{mean:.{p}g} $\\pm$ {sem:.1g}"
                             stds[folder[k]] = f"{std:.3g}"
-                            # Plots.PlotHist(pulls[k], bins = 10, title = f"$\mu_{{{tags[k].name_simple}}}$ | mean : {mean:.3g} $\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = False)
+                            # Plots.PlotHist(pulls[k], bins = 10, title = f"$\\mu_{{{tags[k].name_simple}}}$ | mean : {mean:.3g} $\\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = False)
                             Plots.PlotHist(pulls[k], bins = 10, xlabel = "$\\theta$", newFigure = False)
 
                         book.Save()
@@ -862,7 +862,7 @@ def main(args : cross_section.argparse.Namespace):
                             std = np.std(pulls[k])
                             sem = std / np.sqrt(len(pulls[k]))
                             Plots.plt.figure(figsize = (6.4, 5))
-                            # Plots.PlotHist(pulls[k], bins = 10, title = f"$\mu_{{{tags[k].name_simple}}}$ | mean : {mean:.3g} $\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = True)
+                            # Plots.PlotHist(pulls[k], bins = 10, title = f"$\\mu_{{{tags[k].name_simple}}}$ | mean : {mean:.3g} $\\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = True)
                             Plots.PlotHist(pulls[k], bins = 10, xlabel = "$\\theta$", newFigure = False)
                             # Plots.plt.ylabel(Plots.plt.gca().yaxis.get_label_text(), loc = "bottom")
                             book.Save()
@@ -881,7 +881,7 @@ def main(args : cross_section.argparse.Namespace):
                             if (t == "shape"):
                                 PlotCrossCheckResultsShape(results_total[f], results_bins[f], args.energy_slices.pos_overflow, args.fit["single_bin"], pdf)
                             else:
-                                PlotCrossCheckResults(f"$\mathcal{{N}}_{{{tags[f].name_simple}}}$", results_total[f], results_bins[f], args.energy_slices.pos_overflow, pdf, args.fit["single_bin"], [-0.02, 0.06])
+                                PlotCrossCheckResults(f"$\\mathcal{{N}}_{{{tags[f].name_simple}}}$", results_total[f], results_bins[f], args.energy_slices.pos_overflow, pdf, args.fit["single_bin"], [-0.02, 0.06])
                         Plots.plt.close("all")
                 
                     with Plots.PlotBook(outdir + f"{t}_test_{m}/summary_plots.pdf", True) as book:

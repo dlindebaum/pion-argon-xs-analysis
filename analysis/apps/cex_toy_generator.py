@@ -138,7 +138,7 @@ def GenerateStackedPDFs(l : float, path = GEANT_XS, scale_factors : dict = None,
     # sort the exclusice channels based on area under curve
     area = {}
     for v in xs_sim.exclusive_processes:
-        area[v] = np.trapz(P_int(getattr(xs_sim, v), l))
+        area[v] = np.trapezoid(P_int(getattr(xs_sim, v), l))
 
     # stack the pdfs in ascending order
     y = np.zeros(len(xs_sim.KE))
@@ -504,7 +504,7 @@ def main(args : argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Generates toy events for inelastic pion interactions.")
     parser.add_argument("-c", "--config", type = str, default = None, help = "Config json file.")
-    ApplicationArguments.Output(parser)
+    ApplicationArguments.Output(parser, default = "toy_sample", file = True)
 
     args = parser.parse_args()
     config = LoadConfiguration(args.config)

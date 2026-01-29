@@ -24,6 +24,7 @@ systematics_label = {"mc_stat" : "MC stat", "fit_inaccuracy" : "Fit inaccuracy",
 
 exclusive_proc = ["absorption", "charge_exchange", "single_pion_production", "pion_production"]
 
+pd.set_option('future.no_silent_downcasting', True)
 
 def SaveSystematicError(systematic : dict, fractional : dict, out : str):
     return cross_section.SaveObject(out, {"systematic" : systematic, "fractional": fractional})
@@ -131,7 +132,7 @@ class MCMethod(ABC):
         
             table = pd.concat([KEs, t, d, e], axis = 1).sort_values(by = ["$KE$ (MeV)"])
 
-            avg = table.mean()
+            avg = table.mean().astype(object)
             avg["$KE$ (MeV)"] = "average"
             tables[p] = pd.concat([table, pd.DataFrame(avg).T]).reset_index(drop = True)
 
@@ -222,7 +223,7 @@ class DataAnalysis(ABC):
         
             table = pd.concat([KEs, t, d, l, h], axis = 1).sort_values(by = ["$KE$ (MeV)"])
 
-            avg = table.mean()
+            avg = table.mean().astype(object)
             avg["$KE$ (MeV)"] = "average"
             tables[p] = pd.concat([table, pd.DataFrame(avg).T]).reset_index(drop = True)
 
@@ -294,7 +295,7 @@ class NuisanceParameters:
         
             table = pd.concat([KEs, t, d, m], axis = 1).sort_values(by = ["$KE$ (MeV)"])
 
-            avg = table.mean()
+            avg = table.mean().astype(object)
             avg["$KE$ (MeV)"] = "average"
             tables[p] = pd.concat([table, pd.DataFrame(avg).T]).reset_index(drop = True)
         return tables
@@ -592,16 +593,16 @@ class NormalisationSystematic(MCMethod):
                     else:
                         gxs = getattr(mod_sim, p)
 
-                    Plots.Plot(mod_sim.KE, gxs, newFigure = False, label = f"true, $\mathcal{{N}} = {n}$", title = f"process : {cross_section.remove_(p)}", ylabel = "$\sigma$ (mb)", xlabel = "$KE$ (MeV)")
-                    Plots.Plot(args.energy_slices.pos[:-1] - args.energy_slices.width/2, results["cv"][r][n][p][0], yerr = results["cv"][r][n][p][1], xerr = args.energy_slices.width/2, marker = "x", linestyle = "", label = f"measured, $\mathcal{{N}} = {n}$", newFigure = False)
+                    Plots.Plot(mod_sim.KE, gxs, newFigure = False, label = f"true, $\\mathcal{{N}} = {n}$", title = f"process : {cross_section.remove_(p)}", ylabel = "$\\sigma$ (mb)", xlabel = "$KE$ (MeV)")
+                    Plots.Plot(args.energy_slices.pos[:-1] - args.energy_slices.width/2, results["cv"][r][n][p][0], yerr = results["cv"][r][n][p][1], xerr = args.energy_slices.width/2, marker = "x", linestyle = "", label = f"measured, $\\mathcal{{N}} = {n}$", newFigure = False)
                     Plots.plt.xlim(args.energy_slices.min_pos - args.energy_slices.width, args.energy_slices.max_pos + args.energy_slices.width)
                     # Plots.plt.ylim(0, 1.5 * max(results["cv"][r][n][p][0]))
                 if p == "single_pion_production":
                     gxs = getattr(xs_sim, "double_charge_exchange") + getattr(xs_sim, "quasielastic")
                 else:
                     gxs = getattr(xs_sim, p)
-                Plots.Plot(mod_sim.KE, gxs, newFigure = False, label = f"true, $\mathcal{{N}} = 1$")
-                Plots.Plot(args.energy_slices.pos[:-1] - args.energy_slices.width/2, xs_nominal[p][0], yerr = xs_nominal[p][1], xerr = args.energy_slices.width/2, marker = "x", linestyle = "", label = f"measured, $\mathcal{{N}} = 1$", newFigure = False)
+                Plots.Plot(mod_sim.KE, gxs, newFigure = False, label = f"true, $\\mathcal{{N}} = 1$")
+                Plots.Plot(args.energy_slices.pos[:-1] - args.energy_slices.width/2, xs_nominal[p][0], yerr = xs_nominal[p][1], xerr = args.energy_slices.width/2, marker = "x", linestyle = "", label = f"measured, $\\mathcal{{N}} = 1$", newFigure = False)
             Plots.plt.suptitle(f"normalisation test : {cross_section.remove_(r)}")
             Plots.plt.tight_layout()
             book.Save()
@@ -696,7 +697,7 @@ class NormalisationSystematic(MCMethod):
 
             table = pd.concat([KEs, t, d, ls, hs], axis = 1).sort_values(by = ["$KE$ (MeV)"])
 
-            avg = table.mean()
+            avg = table.mean().astype(object)
             avg["$KE$ (MeV)"] = "average"
             tables[p] = pd.concat([table, pd.DataFrame(avg).T]).reset_index(drop = True)
         return tables
@@ -775,12 +776,14 @@ def SaveSystematicTables(systematic_tables : dict[pd.DataFrame], out : str):
 def PlotSysHist(systematic_table : dict[pd.DataFrame], book : Plots.PlotBook = Plots.PlotBook.null):
     for t in systematic_table:
         Plots.plt.figure()
-        for i in systematic_table[t].T:
+        c = 0
+        for i  in systematic_table[t].T:
             if i in ["KE (MeV)", "Central value (mb)"] : continue
             if i in ["Total uncertainty (mb)", "Total systematic uncertainty (mb)"]:
                 color = "k"
             else:
-                color = None
+                color = f"C{c}"
+                c+=1
             if i  == "Total uncertainty (mb)":
                 linestyle = "dashdot"
             else:
@@ -833,7 +836,7 @@ def FinalPlots(cv, systematics_table : dict[pd.DataFrame], energy_slices, book :
         cross_section.PlotXSComparison(xs, energy_slices, p, simulation_label = "Geant4 v10.6", colors = {k : f"C0" for k in xs}, chi2 = False)
         goodness_of_fit[p] = cross_section.HypTestXS(cv[p][0], systematics_table[p].loc["Total uncertainty (mb)"], p, energy_slices)
         if alt_xs:
-            xs_alt.Plot(p, "red", label = "Geant4 v10.6, $\pi^{\pm}$:$2^{nd}$ $KE > 100 MeV$")
+            xs_alt.Plot(p, "red", label = "Geant4 v10.6, $\\pi^{\\pm}$:$2^{nd}$ $KE > 100 MeV$")
             goodness_of_fit_alt[p] = cross_section.HypTestXS(cv[p][0], systematics_table[p].loc["Total uncertainty (mb)"], p, energy_slices, cross_section.GEANT_XS)
         book.Save()
     return pd.DataFrame(goodness_of_fit), pd.DataFrame(goodness_of_fit_alt)
@@ -1080,17 +1083,17 @@ def main(args : cross_section.argparse.Namespace):
         SaveSystematicTables(tables, outdir)
 
         with Plots.PlotBook(outdir + "systematic_plots.pdf") as book:
-            with Plots.matplotlib.rc_context({"axes.prop_cycle" : Plots.plt.cycler("color", Plots.matplotlib.cm.get_cmap("tab20").colors)}):
+            with Plots.matplotlib.rc_context({"axes.prop_cycle" : Plots.plt.cycler("color", Plots.matplotlib.colormaps["tab20"].colors)}):
                 PlotSysHist(tables, book)
         with Plots.PlotBook(outdir + "final_plots.pdf", watermark = "DUNE: Work in Progress") as book:
             table, table_alt = FinalPlots(args.cv["pdsp"], tables, args.energy_slices, book, alt_xs = False)
 
         tags = cross_section.Tags.ExclusiveProcessTags(None)
-        table = table.rename(index = {"w_chi2" : "$\chi^{2}/ndf$", "p" : "$p$"}, columns={t : tags[t].name_simple.capitalize() for t in tags})
+        table = table.rename(index = {"w_chi2" : "$\\chi^{2}/ndf$", "p" : "$p$"}, columns={t : tags[t].name_simple.capitalize() for t in tags})
         table.style.format("{:.3g}").to_latex(outdir + "goodness_of_fit.tex")
 
         if len(table_alt) > 0:
-            table_alt = table_alt.rename(index = {"w_chi2" : "$\chi^{2}/ndf$", "p" : "$p$"}, columns={t : tags[t].name_simple.capitalize() for t in tags})
+            table_alt = table_alt.rename(index = {"w_chi2" : "$\\chi^{2}/ndf$", "p" : "$p$"}, columns={t : tags[t].name_simple.capitalize() for t in tags})
             table_alt.style.format("{:.3g}").to_latex(outdir + "goodness_of_fit_alt.tex")
     return
 

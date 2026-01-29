@@ -26,6 +26,7 @@ from rich import print
 # custom modules
 from python.analysis import vector, CutTable
 
+null_vector = ak.Array([{"x": -999, "y": -999, "z": -999}])
 
 def timer(func):
     """ Decorator which times a function.
@@ -129,13 +130,13 @@ def ReadHDF5(file : str):
         return {k : pd.read_hdf(file, k) for k in keys}
 
 
-def dimension(shape):
-    if type(shape) != int:
+def dimension(shape : ak.Array | np.ndarray):
+    if type(shape) != np.ndarray:
         return len(str(shape.type).split(" * ")) - 1
     else:
         return 0
 
-def match_dimension(mask_shape, var_shape):
+def match_dimension(mask_shape : ak.Array | np.ndarray, var_shape : ak.Array | np.ndarray):
     target_dim = dimension(mask_shape)
 
     counter = 0
@@ -155,22 +156,22 @@ def __IsMaskCompatiable__(var : any, mask : ak.Array, verbose : bool = False):
 
     var_shape = ak.num(var, -1)
     if type(var) == ak.highlevel.Array:
-        if var.type.numfields != -1:
+        if len(var.fields) > 0:
             var_shape = ak.num(var[var.fields[0]], -1) # assume records are vectors only (should be true)
 
     if verbose: print(f"{var_shape=}")
     if verbose: print(f"{mask_shape=}")
-    if (type(var_shape) == int) and (type(mask_shape) == int): # mask is flat, variable is flat
+    if (type(var_shape) == np.ndarray) and (type(mask_shape) == np.ndarray): # mask is flat, variable is flat
         if var_shape == mask_shape:
             if verbose: print("compatible")
             return True
         else:
             if verbose: print("not compatible, event numbers not the same")
             return False
-    elif (type(var_shape) == int) and (type(mask_shape) != int): # mask is not flat, variable is flat
+    elif (type(var_shape) == np.ndarray) and (type(mask_shape) != np.ndarray): # mask is not flat, variable is flat
         if verbose: print("not compatible, mask and variable have different dimensions")
         return False
-    elif (type(var_shape) != int) and (type(mask_shape) == int): # mask is flat, variable is not flat
+    elif (type(var_shape) != np.ndarray) and (type(mask_shape) == np.ndarray): # mask is flat, variable is not flat
         if match_dimension(mask_shape, var_shape) == mask_shape:
             if verbose: print("compatible")
             return True
@@ -200,7 +201,7 @@ def __GenericFilter__(data, filters: list, verbose : bool = True):
             if var == "filters": continue # skip filters list
             if hasattr(getattr(data, var), "__getitem__") and (type(getattr(data, var)) != str):
                 try:
-                    if verbose is True: print(f"{var, type(getattr(data, var))=}")
+                    if verbose: print(f"{var, getattr(data, var), type(getattr(data, var))=}")
                     if __IsMaskCompatiable__(getattr(data, var), f, verbose):
                         setattr(data, var, getattr(data, var)[f])
                 except:
@@ -785,8 +786,8 @@ class Data:
         events_matched.recoParticles._RecoParticleData__shower_momentum = new_momentum
 
         new_direction = vector.normalize(events_matched.recoParticles.shower_momentum)
-        new_direction = ak.where(events_matched.recoParticles.shower_momentum.x != -
-                                 999, new_direction, {"x": -999, "y": -999, "z": -999})
+        new_direction = ak.where(events_matched.recoParticles.shower_momentum.x !=
+                                -999, new_direction, null_vector)
         events_matched.recoParticles._RecoParticleData__shower_direction = new_direction
 
         new_energy = vector.magnitude(events_matched.recoParticles.shower_momentum)
@@ -1550,18 +1551,17 @@ class RecoParticleData(ParticleData):
     @property
     def shower_energy(self) -> ak.Array:
         self.LoadData("shower_energy", "reco_daughter_allShower_energy")
-        return getattr(self, f"_{type(self).__name__}__shower_energy") #! should be renamed shower energy, as track objects don't have an energy, but have a dEdX
+        return getattr(self, f"_{type(self).__name__}__shower_energy")
 
     @property
     def shower_momentum(self) -> ak.Record:
         if not hasattr(self, f"_{type(self).__name__}__shower_momentum"):
             mom = vector.prod(self.shower_energy, self.shower_direction)
             mom = ak.where(self.shower_direction.x == -999,
-                           {"x": -999, "y": -999, "z": -999}, mom)
-            mom = ak.where(self.shower_energy < 0, {
-                           "x": -999, "y": -999, "z": -999}, mom)
+                           null_vector, mom)
+            mom = ak.where(self.shower_energy < 0, null_vector, mom)
             self.__shower_momentum = mom
-        return self.__shower_momentum #! should be renamed shower momentum
+        return self.__shower_momentum
 
     @property
     def shower_length(self) -> ak.Array:
@@ -1954,10 +1954,8 @@ class TrueParticleDataBT(ParticleData):
         if not hasattr(self, f"_{type(self).__name__}__momentumByHits"):
             if type(self.energyByHits) == ak.highlevel.Array and type(self.direction) == ak.highlevel.Array:
                 mom = vector.prod(self.energyByHits, self.direction)
-                mom = ak.where(self.direction.x == -999,
-                            {"x": -999, "y": -999, "z": -999}, mom)
-                mom = ak.where(self.energy < 0, {
-                            "x": -999, "y": -999, "z": -999}, mom)
+                mom = ak.where(self.direction.x == -999, null_vector, mom)
+                mom = ak.where(self.energy < 0, null_vector, mom)
             else:
                 mom = None
             setattr(self, f"_{type(self).__name__}__momentumByHits", mom)
