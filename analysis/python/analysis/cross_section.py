@@ -1017,9 +1017,8 @@ def RecoDepositedEnergy(events : Data, ff_KE : ak.Array, method : str) -> ak.Arr
     Returns:
         ak.Array: depotisted energy
     """
-    reco_pitch = vector.dist(events.recoParticles.beam_calo_pos[:, :-1], events.recoParticles.beam_calo_pos[:, 1:]) # distance between reconstructed calorimetry points
-    
     if method == "calo":
+        reco_pitch = vector.dist(events.recoParticles.beam_calo_pos[:, :-1], events.recoParticles.beam_calo_pos[:, 1:]) # distance between reconstructed calorimetry points
         dE = ak.sum(events.recoParticles.beam_dEdX[:, :-1] * reco_pitch, -1)
     elif method == "bb":
         KE_int_bb = BetheBloch.InteractingKE(ff_KE, events.recoParticles.beam_track_length, 50)
