@@ -57,7 +57,6 @@ def BeamPionSelection(events : cross_section.Data, args : cross_section.argparse
         for s in args_c["beam_selection"]["selections"]:
             mask = args_c["beam_selection"]["selections"][s](events_copy, **args_c["beam_selection"][selection_args][s])
             events_copy.Filter([mask], [mask])
-            print(events_copy.cutTable.get_table())
 
     if "valid_pfo_selection" in args_c:
         if args_c["valid_pfo_selection"] is True:
