@@ -22,6 +22,7 @@ class CriteriaList(ABC):
     """ A list of Criteria """
     pass
 
+
 class SampleDefinition:
     """ Class that is used to define Samples based on provided criteria.
         Members:
@@ -31,6 +32,7 @@ class SampleDefinition:
     criteria_list : CriteriaList
     definitions : dict[list[CriteriaList]]
 
+    @staticmethod
     def CreateDefinitions(self, particle_counts : dict[ak.Array], uncategorised = False) -> dict[ak.Array]:
         """ Based on the definitions and criteria list, generate masks to categorise events when provided the particle counts.
 

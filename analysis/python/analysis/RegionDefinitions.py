@@ -117,10 +117,10 @@ class default(SampleDefinition):
         ],        
     }
 
-regions = [
-    default,
-    pdsp_1GeV_regions,
-    moderate_efficiency_regions,
-    high_efficiency_regions,
-    high_purity_regions
-]
+regions = {
+    "default" : default,
+    "pdsp_1GeV_regions" : pdsp_1GeV_regions,
+    "moderate_efficiency_regions" : moderate_efficiency_regions,
+    "high_efficiency_regions" : high_efficiency_regions,
+    "high_purity_regions" : high_purity_regions
+}

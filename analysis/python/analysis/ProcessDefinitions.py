@@ -54,7 +54,7 @@ class three_signal_process(SampleDefinition):
         ]
     }
 
-processes = [
-    four_signal_process,
-    three_signal_process,
-]
+processes = {
+    "four_signal_process" : four_signal_process,
+    "three_signal_process" : three_signal_process,
+}
