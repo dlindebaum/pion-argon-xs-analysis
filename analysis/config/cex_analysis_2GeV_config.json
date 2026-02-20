@@ -41,8 +41,9 @@
     30,
     220
   ],
-  "REGION_IDENTIFICATION": {
-    "type": "moderate_efficiency"
+  "SAMPLE_DEFINITIONS": {
+    "region" : "moderate_efficiency_regions",
+    "process" : "four_signal_process"
   },
   "BEAM_QUALITY_FITS": {
     "truncate": 30

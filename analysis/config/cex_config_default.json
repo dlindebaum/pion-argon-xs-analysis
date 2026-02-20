@@ -21,8 +21,9 @@
     0,
     700
   ],
-  "REGION_IDENTIFICATION": {
-    "type": "default"
+  "SAMPLE_DEFINITIONS": {
+    "region" : "default",
+    "process" : "four_signal_process"
   },
   "BEAM_QUALITY_FITS": {
     "truncate": null

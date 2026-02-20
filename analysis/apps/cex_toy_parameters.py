@@ -17,7 +17,7 @@ import scipy.stats as stats
 
 from alive_progress import alive_bar
 
-from python.analysis import cross_section, Master, Plots, Tags, SelectionTools, RegionIdentification
+from python.analysis import cross_section, Master, Plots, Tags, SelectionTools, RegionDefinitions
 
 from apps.cex_analysis_input import RegionSelection, BeamPionSelection
 
@@ -63,9 +63,9 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
     cross_section_quantities = ComputeQuantities(mc, args)
 
     ri = {}
-    for r in RegionIdentification.regions:
+    for r in RegionDefinitions.regions:
         print(r)
-        reco_regions, true_regions = RegionSelection(mc, args, True, r, True)
+        reco_regions, true_regions = RegionSelection(mc, args, True, r, None, True) # should we generate permutations of the true process as well?
         ri[r] = {"reco_regions" : reco_regions, "true_regions" : true_regions}
 
     mc_copy = BeamPionSelection(mc, args, True)
@@ -299,7 +299,7 @@ def RecoRegionSelection(region_selections : dict[dict], args : argparse.Namespac
         counts = np.pad(counts, padding, mode='constant', constant_values = 0)
 
 
-        pe[cross_section.remove_(r)] = ((np.diag(counts) / np.sum(counts, 0)) * (np.diag(counts) / np.sum(counts, 1)))[:len(true_regions)]
+        pe[cross_section.remove_(r)] = ((np.diag(counts) / np.sum(counts, 0)) * (np.diag(counts) / np.sum(counts, 1)))[:len(true_regions) - 1] # -1 to exlcude the uncategorised species. (purity x efficiency not needed)
 
         reco_regions.pop("uncategorised")
         counts = cross_section.CountInRegions(true_regions, reco_regions)
@@ -309,6 +309,7 @@ def RecoRegionSelection(region_selections : dict[dict], args : argparse.Namespac
         fractions_df.to_hdf(out + f"reco_regions/{r}_reco_region_fractions.hdf5", "df")
     pdf.close()
     print(pe)
+    print(Tags.ExclusiveProcessTags(None).name_simple.values)
     pd.DataFrame(pe, index = Tags.ExclusiveProcessTags(None).name_simple.values).style.format(precision = 2).to_latex(out + "reco_regions/pe.tex")
     return
 
@@ -320,10 +321,11 @@ def MeanTrackScoreKDE(mean_track_score : ak.Array, true_processes : dict[ak.Arra
         mc (Master.Data): mc sample
         args (argparse.Namespace): application arguments.
     """
-    tags = Tags.ExclusiveProcessTags(true_processes)
+    true_processes_filtered = {k : v for k, v in true_processes.items() if k != "uncategorised"}
+    tags = Tags.ExclusiveProcessTags(true_processes_filtered)
 
     kdes = {}
-    for k, v in true_processes.items():
+    for k, v in true_processes_filtered.items():
         kdes[k] = stats.gaussian_kde(mean_track_score[v])
         kdes[k].set_bandwidth(0.2)
 
@@ -413,16 +415,15 @@ def main(args : argparse.Namespace):
 
     print(f"{output_mc=}")
 
-
-    # BeamProfileStudy(output_mc["kinematic_quantities"], args, output_mc["true_pion_mask"], args.toy_parameters["beam_profile"], args.toy_parameters["plot_ranges"]["KE_init"], out)
-
-    # Smearing(output_mc["kinematic_quantities"], output_mc["true_pion_mask"], args, labels, out)
-
-    # BeamSelectionEfficiency(output_mc["kinematic_quantities"]["true"], output_mc["pion_inel_mask"], output_mc["beam_selection_mask"], args, args.toy_parameters["plot_ranges"], labels, bins, out)
-
     RecoRegionSelection(output_mc["region_identification"], args, out)
 
-    # MeanTrackScoreKDE(output_mc["mean_track_score"], output_mc["region_identification"][list(output_mc["region_identification"].keys())[0]]["true_regions"], args, out)
+    BeamProfileStudy(output_mc["kinematic_quantities"], args, output_mc["true_pion_mask"], args.toy_parameters["beam_profile"], args.toy_parameters["plot_ranges"]["KE_init"], out)
+
+    Smearing(output_mc["kinematic_quantities"], output_mc["true_pion_mask"], args, labels, out)
+
+    BeamSelectionEfficiency(output_mc["kinematic_quantities"]["true"], output_mc["pion_inel_mask"], output_mc["beam_selection_mask"], args, args.toy_parameters["plot_ranges"], labels, bins, out)
+
+    MeanTrackScoreKDE(output_mc["mean_track_score"], output_mc["region_identification"][list(output_mc["region_identification"].keys())[0]]["true_regions"], args, out)
     return
 
 if __name__ == "__main__":

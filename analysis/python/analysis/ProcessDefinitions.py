@@ -12,8 +12,8 @@ class process_criteria(CriteriaList):
     """ Criteria defined on the true particle counts.
         Uses only pions in the final state to categorise events. 
     """
-    pi : criteria
-    pi0 : criteria
+    n_pi : criteria
+    n_pi0 : criteria
 
 
 class four_signal_process(SampleDefinition):
