@@ -5,7 +5,7 @@ Author: Shyam Bhuller
 
 Description: True process defintions.
 """
-from SampleDefinition import SampleDefinition, CriteriaList, criteria, dataclass
+from python.analysis.SampleDefinition import SampleDefinition, CriteriaList, criteria, dataclass
 
 @dataclass
 class process_criteria(CriteriaList):
@@ -53,3 +53,8 @@ class three_signal_process(SampleDefinition):
             process_criteria(criteria("==", 1), criteria("==", 1))
         ]
     }
+
+processes = [
+    four_signal_process,
+    three_signal_process,
+]
