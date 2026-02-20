@@ -9,7 +9,7 @@ Description: Create analysis input files from Ntuples.
 import awkward as ak
 import numpy as np
 
-from python.analysis import cross_section, SelectionTools, RegionIdentification, PFOSelection
+from python.analysis import cross_section, SelectionTools, PFOSelection, RegionDefinitions, ProcessDefinitions
 
 from rich import print
 
@@ -68,7 +68,7 @@ def BeamPionSelection(events : cross_section.Data, args : cross_section.argparse
 
 
 @cross_section.timer
-def RegionSelection(events : cross_section.Data, args : cross_section.argparse.Namespace | dict, is_mc : bool, region_type : str = None, removed : bool = False) -> dict[np.ndarray]:
+def RegionSelection(events : cross_section.Data, args : cross_section.argparse.Namespace | dict, is_mc : bool, region_type : str = None, process_type : str = None, removed : bool = False) -> dict[np.ndarray]:
     """ Get reco and true regions (if possible) for ntuple.
 
     Args:
@@ -93,14 +93,21 @@ def RegionSelection(events : cross_section.Data, args : cross_section.argparse.N
     for obj in selection_masks:
         if obj in ["beam", "null_pfo", "fiducial"]: continue
         counts[f"n_{obj}"] = SelectionTools.GetPFOCounts(selection_masks[obj][events.filename])
-    if region_type is None:
-        region_def = args_c["region_identification"]
-    else:
-        region_def = RegionIdentification.regions[region_type]
-    reco_regions = RegionIdentification.CreateRegionIdentification(region_def, **counts, removed = removed)
 
+    if region_type is None:
+        region_def = args_c["region_definitions"]
+    else:
+        region_def = RegionDefinitions.regions[region_type]
+
+    reco_regions = region_def.CreateDefinitions(counts, uncategorised = removed)
+    
 
     if is_mc:
+        if process_type is None:
+            process_def = args_c["process_definitions"]
+        else:
+            process_def = ProcessDefinitions.processes[process_type]
+
         events_copy = events.Filter(returnCopy = True)
         
         if "fiducial" in selection_masks and (len(selection_masks["fiducial"]) > 0):
@@ -115,7 +122,8 @@ def RegionSelection(events : cross_section.Data, args : cross_section.argparse.N
         n_pi_true = n_pi_true[mask]
         n_pi0_true = n_pi0_true[mask]
         # is_pip = is_pip[mask]
-        true_regions = RegionIdentification.TrueRegions(n_pi0_true, n_pi_true)
+
+        true_regions = process_def.CreateDefinitions({"n_pi" : n_pi_true, "n_pi0" : n_pi0_true}, uncategorised = removed)
         for k in true_regions:
             true_regions[k] = true_regions[k]# & (is_pip)
         for k in reco_regions:
@@ -126,7 +134,7 @@ def RegionSelection(events : cross_section.Data, args : cross_section.argparse.N
 
 
 def CreateAnalysisInput(sample : cross_section.Data, args : cross_section.argparse.Namespace | dict, is_mc : bool) -> cross_section.AnalysisInput:
-    """ Create analysis input from ntuple sample
+    """ Create analysis input from ntuple sample.
 
     Args:
         sample (cross_section.Data): sample
@@ -166,7 +174,7 @@ def GetTruePionCounts(events : cross_section.Data, ke_lim : float = 0):
     return n_pi_true, n_pi0_true
 
 
-def CreateAnalysisInputMCTrueBeam(mc : cross_section.Data, args : cross_section.argparse.Namespace | dict):
+def CreateAnalysisInputMCTrueBeam(mc : cross_section.Data, args : cross_section.argparse.Namespace | dict, uncategorised : bool = False):
     args_c = args_to_dict(args)
 
     is_pip = mc.trueParticles.pdg[:, 0] == 211
@@ -182,12 +190,15 @@ def CreateAnalysisInputMCTrueBeam(mc : cross_section.Data, args : cross_section.
     #! this is just a placeholder to populate reco regions
     n_pi =  cross_section.EventSelection.SelectionTools.GetPFOCounts(args_c["selection_masks"]["mc"]["pi"][mc.filename])
     n_pi0 = cross_section.EventSelection.SelectionTools.GetPFOCounts(args_c["selection_masks"]["mc"]["pi0"][mc.filename])
-    reco_regions = RegionIdentification.TrueRegions(n_pi0, n_pi)
+
+    process_defs = args_c["process_definitions"]
+    reco_regions = process_defs.CreateDefinitions({"n_pi" : n_pi, "n_pi0" : n_pi0}, uncategorised = uncategorised)
 
     n_pi_true, n_pi0_true = GetTruePionCounts(mc_true_beam, args_c["pi_KE_lim"])
-    true_regions = RegionIdentification.TrueRegions(n_pi0_true, n_pi_true)
+    true_regions = process_defs.CreateDefinitions({"n_pi" : n_pi_true, "n_pi0" : n_pi0_true}, uncategorised = uncategorised)
 
     return cross_section.AnalysisInput.CreateAnalysisInputNtuple(mc_true_beam, args_c["upstream_loss_correction_params"]["value"], reco_regions, true_regions, [args["beam_reweight"]["params"][k]["value"] for k in args_c["beam_reweight"]["params"]], args_c["beam_reweight"]["strength"], upstream_loss_func = args_c["upstream_loss_response"])
+
 
 def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
     events = cross_section.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
