@@ -86,7 +86,7 @@ def CreateFitTable(params, errors):
             sf = -(sf - 3)
         else:
             sf = sf - 2
-        table[f"$p_{{{i}}}$"] = f"${round(p, sf)} \pm {float(f'{e:.1g}')}$"
+        table[f"$p_{{{i}}}$"] = f"${round(p, sf)} \\pm {float(f'{e:.1g}')}$"
 
     return pd.DataFrame(table, index = [0])
 
@@ -255,7 +255,7 @@ def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, beam_s
     e = {i : Efficiency(selected_counts_true[i], initial_counts_true[i]) for i in initial_counts_true}
 
     for _, i in Plots.IterMultiPlot(initial_counts_true):
-        Plots.Plot(x[i], e[i][0], yerr = e[i][1], xlabel = "true" + labels[i], ylabel = "beam $\pi^{+}$:inel selection efficiency", newFigure = False)
+        Plots.Plot(x[i], e[i][0], yerr = e[i][1], xlabel = "true" + labels[i], ylabel = "beam $\\pi^{+}$:inel selection efficiency", newFigure = False)
     pdf.Save()
     pdf.close()
 

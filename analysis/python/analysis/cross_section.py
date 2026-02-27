@@ -527,13 +527,13 @@ def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, 
         w_chi_sqr = weighted_chi_sqr(v[0], sim_curve_interp(x), v[1])
         chi_sqrs[k] = w_chi_sqr
         if (chi2 is True) and (cv_only is False):
-            chi2_l = ", $\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}"
+            chi2_l = ", $\\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}"
         else:
             chi2_l = ""
         Plots.Plot(x, v[0], xerr = width / 2  if cv_only is False else None, yerr = v[1] if cv_only is False else None, label = k + chi2_l, color = colors[k], linestyle = "", marker = "x", newFigure = False, markersize = marker_size, capsize = marker_size/2)
     
     if process == "single_pion_production":
-        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = simulation_label, title = "Single pion production" if title is None else title.capitalize(), newFigure = False, xlabel = "$KE (MeV)$", ylabel = "$\sigma$ (mb)", color = xs_sim_color)
+        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = simulation_label, title = "Single pion production" if title is None else title.capitalize(), newFigure = False, xlabel = "$KE (MeV)$", ylabel = "$\\sigma$ (mb)", color = xs_sim_color)
     else:
         xs_sim.Plot(process, label = simulation_label, color = xs_sim_color, title = title.capitalize() if type(title) is str else title)
 
@@ -1386,7 +1386,7 @@ class GeantCrossSections:
         """ Plot all cross section channels.
         """
         for k in self.labels.values():
-            Plots.Plot(self.KE, getattr(self, k), label = remove_(k), newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\sigma$ (mb)", title = title)
+            Plots.Plot(self.KE, getattr(self, k), label = remove_(k), newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\\sigma$ (mb)", title = title)
             # Plots.plt.fill_between(self.KE, getattr(self, k) - self.Stat_Error(k), getattr(self, k) + self.Stat_Error(k), color = Plots.plt.gca()._get_lines.get_next_color())
 
 
@@ -1411,7 +1411,7 @@ class GeantCrossSections:
                 y = self.quasielastic + self.double_charge_exchange
             else:
                 y = getattr(self, xs)
-            Plots.Plot(self.KE, y, label = label, title = title, newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\sigma$  (mb)", color = color)
+            Plots.Plot(self.KE, y, label = label, title = title, newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\\sigma$  (mb)", color = color)
             # Plots.plt.fill_between(self.KE, getattr(self, xs) - self.Stat_Error(xs), getattr(self, xs) + self.Stat_Error(xs), color = Plots.plt.gca()._get_lines.get_next_color())
 
 
