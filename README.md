@@ -1,260 +1,154 @@
-# Analysis
-Python code for ProtoDUNE analysis, requires a python 3.13 environment or greater.
+# pi0-analysis
 
-If you want to install the repo in an existing environment, run the following:
-``` bash
-pip install -r requirements.txt
-```
+LArSoft module which retrieves and calculates some useful quantities to study reconstructed data/MC.
 
-If you want to install a new environment, run the following:
-```bash
-conda env create -f environment.yml
-```
+## Helpful links:
+[DUNE doxygen page](https://internal.dunescience.org/doxygen/index.html)
 
-To activate the new enrionment, run the following or include this in your bashrc.
+[DUNE computing page](https://wiki.dunescience.org/wiki/DUNE_Computing)
 
-```bash
-conda activate pdune_analysis
-```
+[Setup a dunesw environment](https://github.com/DUNE/dunesw/wiki)
 
-Each time you load the python environment:
-``` bash
-source env.sh
-```
----
-To generate the `requirements.txt` file, run the following:
+[ProtoDUNE SP data/MC list](https://wiki.dunescience.org/wiki/Look_at_ProtoDUNE_SP_data)
 
-```bash
-pip freeze > requirements.txt
-```
-
-And to generate the `environment.yml` file:
-
-```bash
-conda env export | sed -n '/prefix:/q;p' > environment.yml
-```
+[Directory of plots/event displays](https://cernbox.cern.ch/index.php/s/BQsBfVGywtP1sHk)
 
 ---
+## Installation
+Folder should be cloned in the top level directory and `pi0-analyser` should be copied into `srcs/protoduneana/protoduneana/`. The CMakeLists file that exists in the same directory as the cloned repo should be modified to include this line:
+```
+add_subdirectory(pi0-analyser)
+```
 
-Code runs on ntuples produced by the Pi0 Analyser module (to be added), a list of produced ntuples are here:
+Then, then rebuild the full environment by running `mrb i -j 16` in the build directory. Ensure you are doiing this on either `dunebuild01.fnal.gov` or `dunebuild02.fnal.gov` or else you will be shouted at.
 
-[https://cernbox.cern.ch/index.php/s/8UqObev6XPNhRXn](https://cernbox.cern.ch/index.php/s/8UqObev6XPNhRXn)
-
-if you are working on DICE, i.e. `sc01.dice.priv` files are located in hdfs
-```bash
-/hdfs/DUNE/physics/cex/
+---
+## Usage
+If the environment successfully builds you can run the LArsoft analyser by running one of these fcl files:
+```
+runDiphoton.fcl
+runPi0_BeamSim.fcl
+runPi0.fcl
+runPi0_noFilter.fcl (same as runPi0_noFilter.fcl should be removed)
+runPi0Test.fcl
+```
+e.g.
+```
+lar -c runPi0_BeamSim.fcl <file list or root file>
 ```
 
 ---
+## Running grid jobs
+To run grid jobs first run the following command on a dunegpvm:
+```bash
+setup_fnal_security
+```
+Which creates a new voms-proxy to let you submit jobs (note this will expire in 7 days so you should run this at least weekly).
 
-Core modules are Master.py, vector.py and Plots.py (optional). A simple example of how to look at true data is shown in `cex_beam_quality.py`, and the other scripts are more complicated examples of how to analyse nTuples. For further detail on each module you can read the docstrings.
-## Run Cross section analysis
+Then, setup jobtools:
+```bash
+source pi0-analysis/jobtools/setup_tools.sh
+```
+Now to run the analyser you need to create a tarball of the local products directory, as well as a bash script to setup the environment on the remote machine and a list of files you wish to process.
 
-This is run using configuration files, located in `config/`. All applications and notebooks which run the with the prefix `cex`. To run the entire analysis chain with Data and MC (excluding toy studies and systematics) is done through `run_analysis.py`.
+The bash scripts in `jobsetup` are needed to setup the environment, one called `setup-grid` and the other `setup-jobenv.sh`. Copy `setup-grid` into the localProducts directory and `setup-jobenv.sh` in the top directory of the environment. Note that lines 89, 94 and 96 in `setup-grid` need to be modified to include your dunesw version and the local products directory name. 
 
-First, make a work area in this directory:
+First you need to create a list of root files to run (1 per job). Data/MC is stored on tape and prestaged to disk when people need to run an analysis. Typically most recent data/MC remains on disk but just in case, check the status of a dataset using cached_state.py
 
 ```bash
-mkdir work
-cd work
-mkdir analysis_demo
-cd analysis_demo
+cache_state.py -d <samweb definition>
 ```
+If a significant portion is on tape, you need to prestage a dataset so run the same command with the -p flag (also nohup as prestaging takes as while). To get the samweb definition of a dataset you can usually locate this on the [ProtoDUNE SP data/MC list](https://wiki.dunescience.org/wiki/Look_at_ProtoDUNE_SP_data).
 
-To create a template configuration called `analysis_config.json`, run the following in your work area:
+Now, create a file list of prestaged data using `get_staged.py` for a given samweb definition i.e.:
 
 ```bash
-run_analysis.py -C analysis_config.json -o .
+get-staged.py PDSPProd4a_MC_6GeV_reco1_sce_datadriven_v1_00
 ```
 
-This configuration requires entry of basic information such as data file location and some configurations settings some apps cannot run without. To work off a minimal application with the basic information (except MC file location) settings check `config/cex_analysis_2GeV_config_minimal_MC.json`.
+To create a tarball which can run on the remote machines:
+```bash
+tar -czvf dunesw.tar.gz localProducts* setup-jobenv.sh
+```
+Ensure these files are on the top level directory.
 
-For now, copy the minimal config file to your area:
+Now to run jobs you can use `submit_jobs.py` as follows:
+```bash
+submit_job.py -s <configuration file>
+```
+
+the configuration file (`.ini`) contains settings which can be changed for each gridjob such as file lists and resources. An example configuration is shown below:
+
+```ini
+[SETTINGS]
+numberOfJobs=1
+memory=2800MB
+disk=100MB
+lifetime=3h
+cpu=1
+tarball=/dune/app/users/sbhuller/dunesw/dunesw.tar.gz
+fhicl=runPi0_BeamSim.fcl
+; outputDirectory is a relative file path, starts from /pnfs/dune/scratch/users/${USER}/
+outputDirectory=test
+fileList=/pnfs/dune/resilient/users/sbhuller/xaa.txt
+```
+
+To check the status of jobs you can use:
+```bash
+jobsub_q --user <fermilab-username>
+```
+example output:
+```bash
+bash-4.2$ jobsub_q --user sbhuller
+JOBSUBJOBID                           OWNER           SUBMITTED     RUN_TIME   ST PRI SIZE CMD
+56541241.0@jobsub01.fnal.gov          sbhuller        05/25 07:33   0+00:00:00 I   0   0.0 1_20220525_073349_292366_0_1_wrap.sh 
+
+1 jobs; 0 completed, 0 removed, 1 idle, 0 running, 0 held, 0 suspended
+```
+Things to note, `I` indictes the job is idle and is waiting to be run on a worker node. `R` inidcates the job is running `H` means the job has been held. This usually occurs if the job exceeds the resource usage. However, in `submit_job.py` an option to restart jobs with increases resources is used, so if a job is held it will attempt to re-run the job one more time.
+
+For a better monitoring experience, you can use [grafana](https://fifemon.fnal.gov/monitor/d/000000116/user-batch-details?orgId=1&var-cluster=fifebatch&var-user=sbhuller), make sure to switch to your home page using the buttons on the top left of the page.
+
+---
+
+## Retrieving grid job outputs
+output files produced by the job script should be in the specified out directory and should be moved to persistent storage (i.e. `/pnfs/dune/persistent/users/$USER/`) as scratch directories are wiped every month.
+
+To merge multiple ROOT files, first get a file list, one way to do so is:
+```bash
+ls <path to root files>/*.root > out.list
+```
+
+then you can run the command `merge-ana.sh`:
+```bash
+merge-ana.sh <root file name> <file list>
+```
+or `hadd` (used in `merge-ana.sh`)
+```bash
+hadd <root file name> <ROOT files to merge>
+```
+
+Note, that exceeding ~2000 root files will cause the process to crash, so merge files in batches and progressively merge the files.
+
+---
+
+## unfinished jobs
+
+It is normal for some jobs to fail or not complete, likely due to network errors with a specific node or other miscillaneous errors. A list of jobs which did not produce an output file can be found using `find-missing.py`:
 
 ```bash
-cp ../../config/cex_analysis_2GeV_config_minimal_MC.json analysis_config.json
+find-missing.py <list of output files> <list of input files>
 ```
 
-open the file and note the first three entries in the json file:
+Note the list of output files can be found as shown in the previous section. With this new file list you can rerun the gridjobs.
 
-```json
-  "NTUPLE_FILE":{
-    "mc" : "MC ntuple file ENSURE ALL FILE PATHS ARE ABSOLUTE",
-    "data" : null,
-    "type" : "type of ntuple files, this is either PDSPAnalyser or shower_merging"
-  },
-  "norm" : "normalisation to apply to MC when making Data/MC comparisons, usually defined as the ratio of pion-like triggers from the beam instrumentation",
-  "pmom" : "momentum byte of the beam i.e. central value of beam momentum in GeV, required if ntuple does not have the correct scale for the P_inst distribution",
+***(Moving to hdfs storage?)***
 
+---
+## Making changes
+Note if you need to create new fcl files or c++ code, you need to do fully rebuild the environment i.e. `mrb i -j 16`, if you are modifying an exisitng file then you can just rebuild the changed files with
 ```
-`null` entries refer to an empty entry in the config, the others have descriptions describing what the entry refers to an possible values. For now populate the information as follows:
-
-```json
-  "NTUPLE_FILES": {
-    "mc": [
-      {
-        "file": "<MC file path>",
-        "type": "PDSPAnalyser",
-        "pmom": 2
-      }
-    ],
-    "data": [
-      {
-        "file": "<Data file path>",
-        "type": "PDSPAnalyser",
-        "pmom": 1
-      }
-    ]
-  },
-  "norm" : 1,
+mrbsetenv # once per session
+make install -j 16
 ```
-
-"mc" should be set to the file path of the 2GeV MC file called `PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03.root` on the machine you are working on. for this ntuple file the "type" is PDSPAnalyser, no data is used, so "norm" is arbitrarily set to 1. For this specific MC file, "pmom" must be 2. If this must be set, it should be the expected beam energy in GeV.
-
-To run without data files, the `"data"` entry should be completely excluded.
-
-Save and close the file, now run the analysis (or most of it)
-
-```bash
-run_analysis.py -c analysis_config.json -o .
-```
-
-where `-o` sets the output path of the various results.
-
-when running you will see this message:
-
-```bash
-no data file was specified, 'normalisation', 'beam_reweight', 'toy_parameters' and 'analyse' will not run
-```
-
-This is because without a data file, the full analysis can't be run. When the script finishes you should see multiple folders which are the outputs of the various applications:
-
-```bash
-ls *
-```
-
-```bash
-analysis_config.json
-
-analysis_input:
-
-beam_quality:
-beam_quality_fits.pdf  mc_beam_quality_fit_values.json
-
-beam_scraper:
-beam_scraper_fits.pdf  mc_beam_scraper_fit_values.json
-
-masks_mc:
-beam_selection_masks.dill  null_pfo_selection_masks.dill  photon_selection_masks.dill  pi0_selection_masks.dill  pip_selection_masks.dill
-
-plots:
-beam.pdf  photon.pdf  pi0.pdf  piplus.pdf  regions.pdf
-
-shower_energy_correction:
-gaussian.json  mean.json  photon_energies.hdf5  plots.pdf  student_t.json
-
-tables_mc:
-beam  null_pfo  photon  pi0  pip
-
-toy_parameters:
-beam_profile  meanTrackScoreKDE  pi_beam_efficiency  reco_regions  smearing
-
-upstream_loss:
-cex_upstream_loss_plots.pdf  fit_parameters.json
-```
-
-outputs will be of five types, `pdf`, `json`, `tex`, `hdf5`, and `dill`.
-
- * `pdf` are plots produced by the various apps
- * `json` are values computed by the apps which are important for other apps to function. This could be something like fitted parameters or numerical constants or whole configuration settings
- * `tex` are tables saved in LaTeX format i.e. for results where plots are not appropriate.
- * `hdf5` is data which can be stored as a pandas dataframe. This is usally data which is useful for further studies, dut does not require computing them again using the Ntuple file.
- * `dill`, similar to `hdf5`, this is data which is useful for further study but does not require computing them again. The difference is this data is stored as serialisable python objects i.e. can only be correcty opened using python 
-
-This example ran with MC, to run with Data, you can add the corresponding Data ntuple file path, and run the analysis again, this time forcing all prior steps to be re-ran:
-
-```bash
-run_analysis.py -c analysis_config.json -o . --force
-```
-
-Now, if you run the analysis again, you will notice the application finishes very quickly. This is because the analysis will *NOT* run any steps again it doesn't need to. This can be overriden with the `--force` option but this can be more fine tuned.
-
-If you want to run a specific part of the analysis you can use the `run` option:
-
-```bash
-run_analysis.py -c analysis_config.json -o . --run <list of steps to run>
-```
-
-and you can skip certain steps with
-
-```bash
-run_analysis.py -c analysis_config.json -o . --skip <list of steps to skip>
-```
-
-Note `--skip` will do nothing if --force is not specified or the analysis has not been run for the first time.
-
-Note that these options can be combined e.g.
-
-```bash
-run_analysis.py -c analysis_config.json -o . --skip <selection, photon_correction> --run <beam_scraper_fit>
-```
-
-```bash
-run_analysis.py -c analysis_config.json -o . --skip <selection, photon_correction> --force
-```
-
-check `--help` for the names of all the apps which can be skipped or forced to run.
-
-## Toy generator
-To generate toys, you need to have run `cex_toy_parameters.py`. Then create a new json file to create your toy sample. An example template for the toy configuration is
-
-```[json]
-{
-  "events": 1000000,
-  "step": 2,
-  "p_init": 2000,
-  "beam_profile": "<path_to_your_analysis_directory>/toy_parameters/beam_profile/beam_profile.json",
-  "beam_width": 60,
-  "smearing_params": {
-    "KE_init": "<path_to_your_analysis_directory>/toy_parameters/smearing/KE_init/double_crystal_ball.json",
-    "KE_int": "<path_to_your_analysis_directory>/toy_parameters/smearing/KE_int/double_crystal_ball.json",
-    "z_int": "<path_to_your_analysis_directory>/toy_parameters/smearing/z_int/double_crystal_ball.json"
-  },
-  "reco_region_fractions": "<path_to_your_analysis_directory>/toy_parameters/reco_regions/moderate_efficiency_reco_region_fractions.hdf5",
-  "beam_selection_efficiencies": "<path_to_your_analysis_directory>/toy_parameters/pi_beam_efficiency/beam_selection_efficiencies_true.hdf5",
-  "mean_track_score_kde": "<path_to_your_analysis_directory>/toy_parameters/meanTrackScoreKDE/kdes.dill",
-  "pdf_scale_factors": null,
-  "df_format": "f",
-  "modified_PDFs": null,
-  "verbose": true,
-  "seed": 1337,
-  "max_cpus": 21
-}
-```
-Note that the beam profile takes a file in the example, but this can also be replaced with either `uniform` or `gaussian` to generate a generic beam profile with those distribution shapes.
-
-to generate the toy run
-
-```
-cex_toy_generator.py -c <your_toy_config_file>
-```
-
-which will produce an HDF5 file with the generated toy sample. Note the toy sample is used for systematic studies, but can also be used to do the fit, background estimation and cross section measurement.
-
-## Running systematics
-
-Make sure to run all the steps in `run_analysis.py` and have a configuration for a toy template file and toy data sample (the difference being reduced stats). Then run the following 
-
-`cex_systematics.py -c <analysis configuration file> -o <analysis directory> --cv <dill file of your central value measurement>`
-
-where, similar to `run_analysis.py` you can provide the argument `run`, `skip` and `regen`, then give a list of all the systematics you wish to evaluate.
-
-An example would be (to evaluate the mc stat uncertainty.):
-
-`cex_systematics.py -c <analysis configuration file> -o <analysis directory> --cv <dill file of your central value measurement> --run mc_stat`
-
-**WARNING THIS WILL TAKE A LONG TIME IF YOU DO `--run all` SO BE CAUTIOUS**
-
-To make a plot of the central value + any systematics you did generate, run
-
-`cex_systematics.py -c <analysis configuration file> -o <analysis directory> --cv <dill file of your central value measurement> --plot`.
+in your build directory.

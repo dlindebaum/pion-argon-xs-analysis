@@ -1,0 +1,126 @@
+# No magic #!, this script must be sourced!
+
+# NOTICE: this script is not relocatable
+
+#
+#  Begin boilerplate.
+#
+
+# Note: All the following special tricks for $_ must continue
+#       relaying the value to the next rule.  Be careful!
+# Special trick to nail the value of $_ down in a variety of shells.
+echo $_ >& /dev/null
+# Special trick for tcsh which is one-off on the command history stack.
+: $_
+# Special trick to capture the value of $_ in zsh and bash
+test $?shell$_ != 1$_ >& /dev/null && \
+    dollar_underscore="$_" && \
+    dollar_underscore=`expr "${dollar_underscore}" : ".\(.*\)"`
+# Special trick to capture the value of $_ in tcsh
+test $?shell = 1 && set dollar_underscore=`echo $_`
+
+# need to be able to check for mrb
+test $?shell = 1 && set ss="csh" || ss="sh"
+test "$ss" = "csh" && alias return exit
+
+test "$ss" = "csh" && \
+    alias tnotnull "eval '"'test $?'"\!* -eq 1' && eval '"'test -n "$'"\!*"'"'"'"
+test "$ss" = "sh" && \
+    eval 'tnotnull() { eval "test -n \"\${$1-}\"" ;}'
+
+# check for mrb
+tnotnull UPS_DIR || ( echo "ERROR:" ; echo "ERROR: you MUST set up UPS!" ; echo "ERROR:" )
+tnotnull UPS_DIR || unset ss 
+tnotnull UPS_DIR || return 1
+tnotnull MRB_DIR || ( echo "ERROR:"; echo "ERROR: you MUST first setup mrb!"; echo "ERROR:" )
+tnotnull MRB_DIR || unset ss 
+tnotnull MRB_DIR || return 1
+test -f "$MRB_DIR/libexec/shell_independence" || \
+    ( echo "ERROR:" ; echo "ERROR: this mrb area expects mrb >= v5_00_00 (found $MRB_VERSION)!" ; echo "ERROR:" )
+test -f "$MRB_DIR/libexec/shell_independence" || unset ss
+test -f "$MRB_DIR/libexec/shell_independence" || return 1
+
+# Get the shell independence aliases and functions.
+source "$MRB_DIR/libexec/shell_independence"
+
+# Capture the value of $0
+set_ dollar_zed=`echo "${0}" | sed -e 's/^-//'`
+
+# Special tricks to figure out if this script has been sourced.
+# Works for bash, tcsh, and in some cases for zsh.
+set_ is_sourced=false
+ifcsh_
+    # Note: It is unfortunate that we must hard-code the name
+    #       of this script here, but there is no other way
+    #       that works, tcsh is brain-dead.
+    set base=`basename "${dollar_zed}"`
+    test "${base}" != "setup" && \
+        set is_sourced=true
+else
+    # Special trick for zsh.
+    test "${ZSH_NAME}" && test "${dollar_underscore}" = "${dollar_zed}" && \
+        is_sourced=true
+    # If there were arguments then there is no safe way to find out
+    # whether or not the script was sourced in zsh.  Pretend it was.
+    test "${ZSH_NAME}" && test "${#argv}" != "0" && \
+        is_sourced=true
+    # Special trick for bash.
+    test "${BASH}" && test "${BASH_SOURCE}" != "${dollar_zed}" && \
+        is_sourced=true
+# Warning, this must be here because the tcsh parser is brain-dead.
+endif
+endifcsh_
+
+#
+#  End of boilerplate.  Begin of real work.
+#
+
+tnotnull UPS_DIR || ( echo "ERROR:" ; echo "ERROR: you MUST set up UPS" ; echo "ERROR:" )
+tnotnull UPS_DIR || source "$MRB_DIR/libexec/unset_shell_independence"
+tnotnull UPS_DIR || unset me db dollar_underscore dollar_zed is_sourced base msg1 flav
+tnotnull UPS_DIR || return 1
+
+
+tnotnull MRB_DIR || ( echo "ERROR:"; echo "ERROR: you MUST first set up mrb!"; echo "ERROR:" )
+tnotnull MRB_DIR || unset me db dollar_underscore dollar_zed is_sourced base msg1 flav
+tnotnull MRB_DIR || return 1
+
+setenv MRB_PROJECT "larsoft"
+setenv MRB_PROJECT_VERSION "v09_63_00"
+setenv MRB_QUALS "e20:prof"
+setenv MRB_TOP "${INPUT_TAR_DIR_LOCAL}"
+setenv MRB_TOP_BUILD "${INPUT_TAR_DIR_LOCAL}"
+setenv MRB_SOURCE "${INPUT_TAR_DIR_LOCAL}/srcs"
+setenv MRB_INSTALL "${INPUT_TAR_DIR_LOCAL}/localProducts_larsoft_${MRB_PROJECT_VERSION}_${MRB_QUALS/:/_}"
+setenv PRODUCTS "${MRB_INSTALL}:${PRODUCTS}"
+setenv CETPKG_INSTALL "${INPUT_TAR_DIR_LOCAL}/localProducts_larsoft_${MRB_PROJECT_VERSION}_${MRB_QUALS/:/_}"
+
+#--- begin middle boilerplate
+
+set_ flav=`get-directory-name subdir`
+set_ buildDirName="build_${flav}"
+
+test "$ss" =  sh && test -n "${MRB_BUILDDIR}" && setenv OLD_MRB_BUILDDIR "${MRB_BUILDDIR}"
+test "$ss" = csh && tnotnull MRB_BUILDDIR && setenv OLD_MRB_BUILDDIR "${MRB_BUILDDIR}"
+setenv MRB_BUILDDIR ${MRB_TOP_BUILD}/${buildDirName}
+
+unset me dollar_underscore dollar_zed is_sourced base msg1 flav
+
+#--- end middle boilerplate
+# report the environment
+echo
+echo MRB_PROJECT=$MRB_PROJECT
+echo MRB_PROJECT_VERSION=$MRB_PROJECT_VERSION
+echo MRB_QUALS=$MRB_QUALS
+echo MRB_TOP=$MRB_TOP
+echo MRB_SOURCE=$MRB_SOURCE
+echo MRB_BUILDDIR=$MRB_BUILDDIR
+echo MRB_INSTALL=$MRB_INSTALL
+echo
+echo PRODUCTS=$PRODUCTS
+echo CETPKG_INSTALL=$CETPKG_INSTALL
+echo
+
+source "$MRB_DIR/libexec/unset_shell_independence"
+unset db buildDirName
+

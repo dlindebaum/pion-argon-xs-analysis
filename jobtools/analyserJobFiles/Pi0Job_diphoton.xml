@@ -1,0 +1,78 @@
+<?xml version="1.0"?>
+
+<!-- Production project -->
+<!DOCTYPE project [
+<!ENTITY release "v09_39_01">
+<!ENTITY file_type "mc">
+<!ENTITY run_type "physics">
+<!ENTITY fcl_file "runDiphoton.fcl">
+<!ENTITY name "sbhuller_DiphotonAna">
+<!-- System Resources -->
+<!ENTITY memory "1200">
+<!ENTITY cpu "1">
+<!ENTITY disk "4GB">
+<!ENTITY time "1h">
+<!-- Misc -->
+<!ENTITY scratch "/pnfs/dune/scratch/users/sbhuller">
+<!ENTITY resilient "/pnfs/dune/resilient/users/sbhuller">
+]>
+
+<project name="&name;">
+
+  <!-- Group -->
+  <group>dune</group>
+
+  <!-- project size -->
+  <numevents>50000</numevents>
+  <numjobs>1000</numjobs>
+  <maxfilesperjob>1</maxfilesperjob>
+  <!-- Operating System -->
+  <os>SL7</os>
+
+  <!-- Batch resources -->
+  <resource>DEDICATED,OPPORTUNISTIC</resource>
+
+  <!-- Memory To Use -->
+  <memory>&memory;</memory>
+
+  <!-- CPUs To Use -->
+  <cpu>&cpu;</cpu>
+
+  <!-- Disk space -->
+  <disk>&disk;</disk>
+
+  <!-- Jobsub commands -->
+  <jobsub>-e IFDH_CP_MAXRETRIES=2</jobsub>
+
+  <jobsub> --use-cvmfs-dropbox</jobsub>
+
+  <ups>protoduneana</ups>
+
+  <!-- Larsoft information -->
+  <larsoft>
+    <tag>&release;</tag>
+    <qual>e20:prof</qual>
+    <local>&resilient;/&release;/dunetpc_&release;.tar</local>
+  </larsoft>
+
+  <!-- project stages -->
+  <stage name="ana">
+    <!-- job lifetime -->
+    <jobsub>--expected-lifetime=&time;</jobsub>
+
+    <fcl>&fcl_file;</fcl>
+    <inputlist>/pnfs/dune/scratch/users/sbhuller/v09_39_01/reco/diphoton_1/out/files.list</inputlist>
+    <outdir>&scratch;/&release;/ana/diphoton_2/out/</outdir>
+    <workdir>&scratch;/&release;/ana/diphoton_2/work/</workdir>
+		<schema>root</schema>
+		<datatier>physics</datatier>
+    <defname>&name;</defname>
+  </stage>
+
+  <!-- file type -->
+  <filetype>&file_type;</filetype>
+
+  <!-- run type -->
+  <runtype>&run_type;</runtype>
+
+</project>
