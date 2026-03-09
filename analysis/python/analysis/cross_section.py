@@ -7,6 +7,7 @@ Description: Library for code used in the cross section analysis. Refer to the R
 """
 import argparse
 import copy
+import itertools
 import numbers
 import os
 
@@ -1924,6 +1925,7 @@ class AnalysisInput:
                 return len(getattr(self, o))
         return
 
+
     def ToFile(self, file : str):
         """ Save to dill file.
 
@@ -1931,6 +1933,39 @@ class AnalysisInput:
             file (str): file path.
         """
         SaveObject(file, self)
+        return
+
+
+    def ToROOTFile(self, file : str):
+        """ Save to a ROOT File as a flat TTree.
+
+        Args:
+            file (str): file path.
+        """
+        file_writer = IO(file)
+        file_writer.WriteData("FlatTree_VARS", vars(self))
+        return
+
+
+    def ToSplitROOTFiles(self, name : str):
+        """ Save to regions and samples to multiple ROOT Files, each as a flat TTree.
+            Compatible with MaCh3 ROOT input files.
+
+        Args:
+            file (str): file path.
+        """
+        dir_name = f"root_analysis_input_{name}"
+        os.makedirs(dir_name, exist_ok = True)
+
+        #* create different files for a combination of regions and processes, could support more splits.
+        if self.exclusive_process is None: # in the case we have Data.
+            for r in self.region_labels:
+                new_sample = self.SelectSample(self.regions[r])
+                new_sample.ToROOTFile(f"{dir_name}/data_{name}_R{r}")
+        else:
+            for r, t in itertools.product(self.region_labels, self.process_labels):
+                new_sample = self.SelectSample(self.regions[r] & self.exclusive_process[t])
+                new_sample.ToROOTFile(f"{dir_name}/mc_{name}_R{r}_T{t}")
         return
 
     @staticmethod
@@ -2090,6 +2125,31 @@ class AnalysisInput:
         return AnalysisInput(**fields)
 
 
+    def SelectSample(self, mask : ak.Array) -> "AnalysisInput":
+        """ Select a subset of the sample, creating a new AnalysisInput.
+
+        Args:
+            mask (ak.Array): Sample to select, can be a boolean mask or list of indices.
+
+        Returns:
+            AnalysisInput: Selected sample.
+        """
+        selection = {}
+        for attr in vars(self):
+            value = getattr(self, attr)
+            if value is None:
+                selection[attr] = value # we allow Non types when defining data samples.
+            if hasattr(value, "__iter__"):
+                if type(value) is dict:
+                    tmp_dict = {}
+                    for k, v in value.items():
+                        tmp_dict[k] = v[mask]
+                    selection[attr] = tmp_dict
+                else:
+                    selection[attr] = value[mask]
+        return AnalysisInput(**selection)
+
+
     def CreateTrainTestSamples(self, seed : int, train_fraction : float = None) -> dict:
         """ Split analysis input into two samples
 
@@ -2108,27 +2168,8 @@ class AnalysisInput:
         else:
             fraction = round(train_fraction * len(sample))
 
-        train_indices = sample[:fraction]
-        test_indices = sample[fraction:]
-
-        train = {}
-        test = {}
-        for attr in vars(self):
-            value = getattr(self, attr)
-            if hasattr(value, "__iter__"):
-                if type(value) is dict:
-                    tmp_dict_train = {}
-                    tmp_dict_test = {}
-                    for k, v in value.items():
-                        tmp_dict_train[k] = v[train_indices]
-                        tmp_dict_test[k] = v[test_indices]
-                    train[attr] = tmp_dict_train
-                    test[attr] = tmp_dict_test
-                else:
-                    train[attr] = value[train_indices]
-                    test[attr] = value[test_indices]
-
-        return {"train" : AnalysisInput(**train), "test" : AnalysisInput(**test)}
+        return {
+            "train" : self.SelectSample(sample[:fraction]), "test" : self.SelectSample(sample[fraction:])}
 
 
     def CreateHistograms(self, energy_slice : Slices, exclusive_process : str, reco : bool, mask : np.ndarray = None) -> dict[np.ndarray]:
