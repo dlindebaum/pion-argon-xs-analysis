@@ -187,17 +187,11 @@ def CreateAnalysisInputMCTrueBeam(mc : cross_section.Data, args : cross_section.
     #         masks.insert(0, args.selection_masks["mc"]["fiducial"]["TrueFiducialCut"])
     mc_true_beam = mc.Filter(masks, masks, True)
 
-    #! this is just a placeholder to populate reco regions
-    n_pi =  cross_section.EventSelection.SelectionTools.GetPFOCounts(args_c["selection_masks"]["mc"]["pi"][mc.filename])
-    n_pi0 = cross_section.EventSelection.SelectionTools.GetPFOCounts(args_c["selection_masks"]["mc"]["pi0"][mc.filename])
-
     process_defs = args_c["process_definitions"]
-    reco_regions = process_defs.CreateDefinitions({"n_pi" : n_pi, "n_pi0" : n_pi0}, uncategorised = uncategorised)
-
     n_pi_true, n_pi0_true = GetTruePionCounts(mc_true_beam, args_c["pi_KE_lim"])
     true_regions = process_defs.CreateDefinitions({"n_pi" : n_pi_true, "n_pi0" : n_pi0_true}, uncategorised = uncategorised)
 
-    return cross_section.AnalysisInput.CreateAnalysisInputNtuple(mc_true_beam, args_c["upstream_loss_correction_params"]["value"], reco_regions, true_regions, [args["beam_reweight"]["params"][k]["value"] for k in args_c["beam_reweight"]["params"]], args_c["beam_reweight"]["strength"], upstream_loss_func = args_c["upstream_loss_response"])
+    return cross_section.AnalysisInput.CreateAnalysisInputNtuple(mc_true_beam, args_c["upstream_loss_correction_params"]["value"], None, true_regions, [args["beam_reweight"]["params"][k]["value"] for k in args_c["beam_reweight"]["params"]], args_c["beam_reweight"]["strength"], upstream_loss_func = args_c["upstream_loss_response"])
 
 
 def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
@@ -222,14 +216,17 @@ def main(args):
     output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run, False)
     output_data = cross_section.RunProcess(args.ntuple_files["data"], True, args, run, False)
 
-    ai_mc_selected = cross_section.AnalysisInput.Concatenate([mc["selected"] for mc in output_mc])
-    ai_mc_cheated = cross_section.AnalysisInput.Concatenate([mc["cheated"] for mc in output_mc])
+    ais = {
+        "mc_selected" : cross_section.AnalysisInput.Concatenate([mc["selected"] for mc in output_mc]),
+        "mc_cheated" : cross_section.AnalysisInput.Concatenate([mc["cheated"] for mc in output_mc]),
+        "data_selected" : cross_section.AnalysisInput.Concatenate([data["selected"] for data in output_data])
+    }
+    for name, ai in ais.items():
+        print(f"Writing analysis input file for {name}")
+        ai.ToFile(f"{out}analysis_input_{name}.dill")
 
-    ai_data_selected = cross_section.AnalysisInput.Concatenate([data["selected"] for data in output_data])
-
-    ai_mc_cheated.ToFile(f"{out}analysis_input_mc_cheated.dill")
-    ai_mc_selected.ToFile(f"{out}analysis_input_mc_selected.dill")
-    ai_data_selected.ToFile(f"{out}analysis_input_data_selected.dill")
+        if args.root is True:
+            ai.ToSplitROOTFiles(out, name)
     return
 
 
@@ -238,6 +235,7 @@ if __name__ == "__main__":
     parser = cross_section.argparse.ArgumentParser("Create analysis input files from Ntuples.")
     cross_section.ApplicationArguments.Config(parser)
     cross_section.ApplicationArguments.Output(parser)
+    parser.add_argument("-R", "--ROOT", dest = "root", action="store_true", help = "Saves the output to ROOT files in addition to the dill files.")
 
     args = cross_section.ApplicationArguments.ResolveArgs(parser.parse_args())
     print(vars(args))

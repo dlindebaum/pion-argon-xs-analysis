@@ -587,6 +587,7 @@ if __name__ == "__main__":
     parser.add_argument("--force", action = "store_true")
     parser.add_argument("--stop", type = str, default = None, choices = analysis_options)
     parser.add_argument("--cpus", type = int, default = 1)
+    parser.add_argument("-R", "--ROOT", dest = "root", action="store_true", help = "Saves the output to ROOT files in addition to the dill files.")
 
     original_args = parser.parse_args()
     

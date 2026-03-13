@@ -225,6 +225,49 @@ class IO:
         self.start = _start
         self.nEvents = _nEvents
 
+
+    def __convert_types(self, d : dict[dict | ak.Array]) -> dict:
+        """ Convert the types from a nested dictionary of awkward arrays being written to a ROOT file.
+            Optional types (data where there was/is a null entry) is converted to a standard Awkward array type.
+
+        Args:
+            d (dict): Nested dictionary of awkward arrays. 
+
+        Returns:
+            dict: converted dictionary. Dictionary is flattened to prevent overwrites in TTree entries.
+        """
+        d_new = {}
+        for k, v in d.items():
+            if v is None:
+                print(f"Info: data entry {k} is None, this entry will be dropped.")
+                continue
+            if type(v) == dict:
+                for k1, v1 in self.__convert_types(v).items():
+                    d_new[f"{k}_{k1}"] = v1
+            elif isinstance(v.type.content, ak.types.OptionType):
+                d_new[k] = ak.Array(v.layout.project())
+            else:
+                d_new[k] = v
+        return d_new
+
+
+    def WriteData(self, name : str, data : dict):
+        """ Write TTree to a new root file. Overwrites are not permitted.
+
+        Args:
+            name (str): TTree name.
+            data (dict): data file, can be a nested dictionary of np or Awkward arrays.
+            flat_tree (bool, optional): Flattens the dictionary create a TTree with no nesting. Note, the data itself is not flattened. Defaults to True.
+        """
+        split = self.filename.split("/")
+        path = "/".join(split[:-1] + [split[-1].split(".")[0] + ".root"])
+        with uproot.create(path) as file: # create instead of recreate so we dont accidently overwrite our precious ntuple files.
+            print(file)
+            file.mktree(name, self.__convert_types(data))
+        print(f"TTree Written to {path}")
+        return
+
+
     def LoadData(self, item: str) -> ak.Array:
         """ Load nTuple from root file as awkward array.
 
