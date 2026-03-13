@@ -259,7 +259,8 @@ class IO:
             data (dict): data file, can be a nested dictionary of np or Awkward arrays.
             flat_tree (bool, optional): Flattens the dictionary create a TTree with no nesting. Note, the data itself is not flattened. Defaults to True.
         """
-        path = self.filename.split(".")[0] + ".root"
+        split = self.filename.split("/")
+        path = "/".join(split[:-1] + [split[-1].split(".")[0] + ".root"])
         with uproot.create(path) as file: # create instead of recreate so we dont accidently overwrite our precious ntuple files.
             print(file)
             file.mktree(name, self.__convert_types(data))
