@@ -17,7 +17,7 @@ import scipy.stats as stats
 
 from alive_progress import alive_bar
 
-from python.analysis import cross_section, Master, Plots, Tags, SelectionTools, RegionIdentification
+from python.analysis import cross_section, Master, Plots, Tags, SelectionTools, RegionDefinitions
 
 from apps.cex_analysis_input import RegionSelection, BeamPionSelection
 
@@ -63,9 +63,9 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
     cross_section_quantities = ComputeQuantities(mc, args)
 
     ri = {}
-    for r in RegionIdentification.regions:
+    for r in RegionDefinitions.regions:
         print(r)
-        reco_regions, true_regions = RegionSelection(mc, args, True, r, True)
+        reco_regions, true_regions = RegionSelection(mc, args, True, r, None, True) # should we generate permutations of the true process as well?
         ri[r] = {"reco_regions" : reco_regions, "true_regions" : true_regions}
 
     mc_copy = BeamPionSelection(mc, args, True)
@@ -86,7 +86,7 @@ def CreateFitTable(params, errors):
             sf = -(sf - 3)
         else:
             sf = sf - 2
-        table[f"$p_{{{i}}}$"] = f"${round(p, sf)} \pm {float(f'{e:.1g}')}$"
+        table[f"$p_{{{i}}}$"] = f"${round(p, sf)} \\pm {float(f'{e:.1g}')}$"
 
     return pd.DataFrame(table, index = [0])
 
@@ -255,7 +255,7 @@ def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, beam_s
     e = {i : Efficiency(selected_counts_true[i], initial_counts_true[i]) for i in initial_counts_true}
 
     for _, i in Plots.IterMultiPlot(initial_counts_true):
-        Plots.Plot(x[i], e[i][0], yerr = e[i][1], xlabel = "true" + labels[i], ylabel = "beam $\pi^{+}$:inel selection efficiency", newFigure = False)
+        Plots.Plot(x[i], e[i][0], yerr = e[i][1], xlabel = "true" + labels[i], ylabel = "beam $\\pi^{+}$:inel selection efficiency", newFigure = False)
     pdf.Save()
     pdf.close()
 
@@ -286,16 +286,20 @@ def RecoRegionSelection(region_selections : dict[dict], args : argparse.Namespac
         reco_regions = region_selections[r]["reco_regions"]
         true_regions = region_selections[r]["true_regions"]
 
-        counts = cross_section.CountInRegions(true_regions, reco_regions)
+        counts = np.array(cross_section.CountInRegions(true_regions, reco_regions))
         Plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "True process", x_label = "Reco region", title = cross_section.remove_(r))
         pdf.Save()
 
-        if (len(reco_regions.keys()) - 1) < len(true_regions.keys()):
-            counts = np.c_[counts, np.zeros(len(reco_regions))]
-        if (len(reco_regions.keys()) - 1) > len(true_regions.keys()):
-            counts = np.r_[counts, np.zeros(len(true_regions))]
+        (a,b)=counts.shape
+        diff = a-b
+        if a>b:
+            padding=((0,0),(0,diff))
+        else:
+            padding=((0,-diff),(0,0))
+        counts = np.pad(counts, padding, mode='constant', constant_values = 0)
 
-        pe[cross_section.remove_(r)] = (np.diag(counts) / np.sum(counts, 0)[:-1]) * (np.diag(counts) / np.sum(counts, 1))
+
+        pe[cross_section.remove_(r)] = ((np.diag(counts) / np.sum(counts, 0)) * (np.diag(counts) / np.sum(counts, 1)))[:len(true_regions) - 1] # -1 to exlcude the uncategorised species. (purity x efficiency not needed)
 
         reco_regions.pop("uncategorised")
         counts = cross_section.CountInRegions(true_regions, reco_regions)
@@ -304,6 +308,8 @@ def RecoRegionSelection(region_selections : dict[dict], args : argparse.Namespac
         fractions_df = pd.DataFrame(np.array(fractions_df).T, columns = true_regions, index = reco_regions) # columns are the true regions, so index over those to get the fractions
         fractions_df.to_hdf(out + f"reco_regions/{r}_reco_region_fractions.hdf5", "df")
     pdf.close()
+    print(pe)
+    print(Tags.ExclusiveProcessTags(None).name_simple.values)
     pd.DataFrame(pe, index = Tags.ExclusiveProcessTags(None).name_simple.values).style.format(precision = 2).to_latex(out + "reco_regions/pe.tex")
     return
 
@@ -315,10 +321,11 @@ def MeanTrackScoreKDE(mean_track_score : ak.Array, true_processes : dict[ak.Arra
         mc (Master.Data): mc sample
         args (argparse.Namespace): application arguments.
     """
-    tags = Tags.ExclusiveProcessTags(true_processes)
+    true_processes_filtered = {k : v for k, v in true_processes.items() if k != "uncategorised"}
+    tags = Tags.ExclusiveProcessTags(true_processes_filtered)
 
     kdes = {}
-    for k, v in true_processes.items():
+    for k, v in true_processes_filtered.items():
         kdes[k] = stats.gaussian_kde(mean_track_score[v])
         kdes[k].set_bandwidth(0.2)
 
@@ -408,14 +415,13 @@ def main(args : argparse.Namespace):
 
     print(f"{output_mc=}")
 
+    RecoRegionSelection(output_mc["region_identification"], args, out)
 
     BeamProfileStudy(output_mc["kinematic_quantities"], args, output_mc["true_pion_mask"], args.toy_parameters["beam_profile"], args.toy_parameters["plot_ranges"]["KE_init"], out)
 
     Smearing(output_mc["kinematic_quantities"], output_mc["true_pion_mask"], args, labels, out)
 
     BeamSelectionEfficiency(output_mc["kinematic_quantities"]["true"], output_mc["pion_inel_mask"], output_mc["beam_selection_mask"], args, args.toy_parameters["plot_ranges"], labels, bins, out)
-
-    RecoRegionSelection(output_mc["region_identification"], args, out)
 
     MeanTrackScoreKDE(output_mc["mean_track_score"], output_mc["region_identification"][list(output_mc["region_identification"].keys())[0]]["true_regions"], args, out)
     return

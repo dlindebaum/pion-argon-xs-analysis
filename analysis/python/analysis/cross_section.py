@@ -7,6 +7,7 @@ Description: Library for code used in the cross section analysis. Refer to the R
 """
 import argparse
 import copy
+import itertools
 import numbers
 import os
 
@@ -26,7 +27,7 @@ from particle import Particle
 from scipy.interpolate import interp1d, UnivariateSpline
 from scipy.stats import chi2, ks_2samp
 
-from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, RegionIdentification, Processing
+from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, RegionDefinitions, ProcessDefinitions, Processing
 from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer, IO
 from python.analysis.Utils import *
 
@@ -527,13 +528,13 @@ def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, 
         w_chi_sqr = weighted_chi_sqr(v[0], sim_curve_interp(x), v[1])
         chi_sqrs[k] = w_chi_sqr
         if (chi2 is True) and (cv_only is False):
-            chi2_l = ", $\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}"
+            chi2_l = ", $\\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}"
         else:
             chi2_l = ""
         Plots.Plot(x, v[0], xerr = width / 2  if cv_only is False else None, yerr = v[1] if cv_only is False else None, label = k + chi2_l, color = colors[k], linestyle = "", marker = "x", newFigure = False, markersize = marker_size, capsize = marker_size/2)
     
     if process == "single_pion_production":
-        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = simulation_label, title = "Single pion production" if title is None else title.capitalize(), newFigure = False, xlabel = "$KE (MeV)$", ylabel = "$\sigma$ (mb)", color = xs_sim_color)
+        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = simulation_label, title = "Single pion production" if title is None else title.capitalize(), newFigure = False, xlabel = "$KE (MeV)$", ylabel = "$\\sigma$ (mb)", color = xs_sim_color)
     else:
         xs_sim.Plot(process, label = simulation_label, color = xs_sim_color, title = title.capitalize() if type(title) is str else title)
 
@@ -846,8 +847,9 @@ class ApplicationArguments:
         for head, value in config.items():
             if head == "NTUPLE_FILES":
                 args.ntuple_files = value
-            elif head == "REGION_IDENTIFICATION":
-                args.region_identification = RegionIdentification.regions[value["type"]] 
+            elif head == "SAMPLE_DEFINITIONS":
+                args.region_definitions = RegionDefinitions.regions[value["region"]]
+                args.process_definitions = ProcessDefinitions.processes[value["process"]]
             elif head == "BEAM_PARTICLE_SELECTION":
                 args.beam_selection = ApplicationArguments.__CreateSelection(value, BeamParticleSelection)
             elif head == "HAS_FINAL_STATE_PFO_SELECTION":
@@ -1017,9 +1019,8 @@ def RecoDepositedEnergy(events : Data, ff_KE : ak.Array, method : str) -> ak.Arr
     Returns:
         ak.Array: depotisted energy
     """
-    reco_pitch = vector.dist(events.recoParticles.beam_calo_pos[:, :-1], events.recoParticles.beam_calo_pos[:, 1:]) # distance between reconstructed calorimetry points
-    
     if method == "calo":
+        reco_pitch = vector.dist(events.recoParticles.beam_calo_pos[:, :-1], events.recoParticles.beam_calo_pos[:, 1:]) # distance between reconstructed calorimetry points
         dE = ak.sum(events.recoParticles.beam_dEdX[:, :-1] * reco_pitch, -1)
     elif method == "bb":
         KE_int_bb = BetheBloch.InteractingKE(ff_KE, events.recoParticles.beam_track_length, 50)
@@ -1387,7 +1388,7 @@ class GeantCrossSections:
         """ Plot all cross section channels.
         """
         for k in self.labels.values():
-            Plots.Plot(self.KE, getattr(self, k), label = remove_(k), newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\sigma$ (mb)", title = title)
+            Plots.Plot(self.KE, getattr(self, k), label = remove_(k), newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\\sigma$ (mb)", title = title)
             # Plots.plt.fill_between(self.KE, getattr(self, k) - self.Stat_Error(k), getattr(self, k) + self.Stat_Error(k), color = Plots.plt.gca()._get_lines.get_next_color())
 
 
@@ -1412,7 +1413,7 @@ class GeantCrossSections:
                 y = self.quasielastic + self.double_charge_exchange
             else:
                 y = getattr(self, xs)
-            Plots.Plot(self.KE, y, label = label, title = title, newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\sigma$  (mb)", color = color)
+            Plots.Plot(self.KE, y, label = label, title = title, newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\\sigma$  (mb)", color = color)
             # Plots.plt.fill_between(self.KE, getattr(self, xs) - self.Stat_Error(xs), getattr(self, xs) + self.Stat_Error(xs), color = Plots.plt.gca()._get_lines.get_next_color())
 
 
@@ -1911,11 +1912,23 @@ class AnalysisInput:
     weights : np.ndarray = None
 
     @property
+    def has_regions(self):
+        return type(self.regions) == dict
+
+    @property
+    def has_exclusive_process(self):
+        return type(self.exclusive_process) == dict 
+
+    @property
     def region_labels(self):
+        if not self.has_regions:
+            raise Exception("Analysis input does not have well defined regions.")
         return list(self.regions.keys())
 
     @property
     def process_labels(self):
+        if not self.has_exclusive_process:
+            raise Exception("Analysis input does not have well defined exclusive processes.")
         return list(self.exclusive_process.keys())
 
     def __len__(self):
@@ -1924,6 +1937,7 @@ class AnalysisInput:
                 return len(getattr(self, o))
         return
 
+
     def ToFile(self, file : str):
         """ Save to dill file.
 
@@ -1931,6 +1945,43 @@ class AnalysisInput:
             file (str): file path.
         """
         SaveObject(file, self)
+        return
+
+
+    def ToROOTFile(self, file : str):
+        """ Save to a ROOT File as a flat TTree.
+
+        Args:
+            file (str): file path.
+        """
+        file_writer = IO(file)
+        file_writer.WriteData("FlatTree_VARS", vars(self))
+        return
+
+
+    def ToSplitROOTFiles(self, directory : str, name : str):
+        """ Save to regions and samples to multiple ROOT Files, each as a flat TTree.
+            Compatible with MaCh3 ROOT input files.
+
+        Args:
+            file (str): file path.
+        """
+        dir_name = f"{directory}/root_analysis_input_{name}"
+        os.makedirs(dir_name, exist_ok = True)
+
+        #* create different files for a combination of regions and processes, could add support for more splits.
+        if not self.has_exclusive_process: # in the case we have Data.
+            for r in self.region_labels:
+                new_sample = self.SelectSample(self.regions[r])
+                new_sample.ToROOTFile(f"{dir_name}/data_{name}_R{r}")
+        elif not self.has_regions: # cheated MC
+            for t in self.process_labels:
+                new_sample = self.SelectSample(self.exclusive_process[t])
+                new_sample.ToROOTFile(f"{dir_name}/mc_cheated_{name}_T{t}")
+        else:
+            for r, t in itertools.product(self.region_labels, self.process_labels):
+                new_sample = self.SelectSample(self.regions[r] & self.exclusive_process[t])
+                new_sample.ToROOTFile(f"{dir_name}/mc_{name}_R{r}_T{t}")
         return
 
     @staticmethod
@@ -2009,7 +2060,7 @@ class AnalysisInput:
             )
 
     @staticmethod
-    def CreateAnalysisInputNtuple(events : Data, upstream_energy_loss_params : dict, reco_regions : dict[np.ndarray], true_regions : dict[np.ndarray] = None, mc_reweight_params : dict = None, mc_reweight_stength : float = 3, fiducial_volume : list[float] = [0, 700], upstream_loss_func : callable = Fitting.poly2d) -> "AnalysisInput":
+    def CreateAnalysisInputNtuple(events : Data, upstream_energy_loss_params : dict, reco_regions : dict[np.ndarray] = None, true_regions : dict[np.ndarray] = None, mc_reweight_params : dict = None, mc_reweight_stength : float = 3, fiducial_volume : list[float] = [0, 700], upstream_loss_func : callable = Fitting.poly2d) -> "AnalysisInput":
         """ Create analysis input from an ntuple sample.
 
         Args:
@@ -2090,6 +2141,34 @@ class AnalysisInput:
         return AnalysisInput(**fields)
 
 
+    def SelectSample(self, mask : ak.Array) -> "AnalysisInput":
+        """ Select a subset of the sample, creating a new AnalysisInput.
+
+        Args:
+            mask (ak.Array): Sample to select, can be a boolean mask or list of indices.
+
+        Returns:
+            AnalysisInput: Selected sample.
+        """
+        selection = {}
+        for attr in vars(self):
+            value = getattr(self, attr)
+            if value is None:
+                selection[attr] = value # we allow Non types when defining data samples.
+            if hasattr(value, "__iter__"):
+                if type(value) is dict:
+                    tmp_dict = {}
+                    for k, v in value.items():
+                        tmp_dict[k] = v[mask]
+                    selection[attr] = tmp_dict
+                elif type(value) is list:
+                    print(f"found {attr} is a list type, cannot slice using an array, skipping.") #! might want to add specific logic to check if regions and processes are not null.
+                    selection[attr] = None
+                else:
+                    selection[attr] = value[mask]
+        return AnalysisInput(**selection)
+
+
     def CreateTrainTestSamples(self, seed : int, train_fraction : float = None) -> dict:
         """ Split analysis input into two samples
 
@@ -2108,27 +2187,8 @@ class AnalysisInput:
         else:
             fraction = round(train_fraction * len(sample))
 
-        train_indices = sample[:fraction]
-        test_indices = sample[fraction:]
-
-        train = {}
-        test = {}
-        for attr in vars(self):
-            value = getattr(self, attr)
-            if hasattr(value, "__iter__"):
-                if type(value) is dict:
-                    tmp_dict_train = {}
-                    tmp_dict_test = {}
-                    for k, v in value.items():
-                        tmp_dict_train[k] = v[train_indices]
-                        tmp_dict_test[k] = v[test_indices]
-                    train[attr] = tmp_dict_train
-                    test[attr] = tmp_dict_test
-                else:
-                    train[attr] = value[train_indices]
-                    test[attr] = value[test_indices]
-
-        return {"train" : AnalysisInput(**train), "test" : AnalysisInput(**test)}
+        return {
+            "train" : self.SelectSample(sample[:fraction]), "test" : self.SelectSample(sample[fraction:])}
 
 
     def CreateHistograms(self, energy_slice : Slices, exclusive_process : str, reco : bool, mask : np.ndarray = None) -> dict[np.ndarray]:

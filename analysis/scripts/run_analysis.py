@@ -46,8 +46,9 @@ def template_config():
         "norm" : "normalisation to apply to MC when making Data/MC comparisons, usually defined as the ratio of pion-like triggers from the beam instrumentation", #! this should be inferred from one of the apps!
         "pi_KE_lim": -1,
         "fiducial_volume" : [0, 700],
-        "REGION_IDENTIFICATION":{
-            "type" : "default"
+        "SAMPLE_DEFINITIONS":{
+            "region" : "default_regions",
+            "process" : "four_signal_process",
         },
         "BEAM_QUALITY_FITS": {
             "truncate" : None,
@@ -531,7 +532,7 @@ def main(args):
             print("run toy parameters")
             cex_toy_parameters.main(args)
             # special case where the main config is not updated, rather the results from this would be used in the toy configurations
-            selection_type = LoadConfiguration(args.config)["REGION_IDENTIFICATION"]["type"]
+            selection_type = LoadConfiguration(args.config)["SAMPLE_DEFINITIONS"]["region"]
             toy_template_config = template_toy_config(os.path.abspath(args.out + "toy_parameters"), int(1E7), 1337, os.cpu_count() - 1, 2, args.beam_momentum, selection_type)
             data_config = template_toy_config(os.path.abspath(args.out + "toy_parameters"), int(1E6), 1, os.cpu_count() - 1, 2, args.beam_momentum, selection_type)
             SaveConfiguration(toy_template_config, args.out + "toy_template_config.json")
@@ -586,6 +587,7 @@ if __name__ == "__main__":
     parser.add_argument("--force", action = "store_true")
     parser.add_argument("--stop", type = str, default = None, choices = analysis_options)
     parser.add_argument("--cpus", type = int, default = 1)
+    parser.add_argument("-R", "--ROOT", dest = "root", action="store_true", help = "Saves the output to ROOT files in addition to the dill files.")
 
     original_args = parser.parse_args()
     
