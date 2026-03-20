@@ -340,13 +340,11 @@ def ExclusiveProcessTags(true_masks):
     colours = {
         "charge_exchange" : "#8EBA42",
         "absorption"      : "#777777",
-        "single_pion_production" : "#E24A33",
         "pion_production" : "#988ED5",
     }
     name_simple = {
         "charge_exchange" : "cex",
         "absorption" :"abs",
-        "single_pion_production" : "spip",
         "pion_production" : "pip"
     }
 

@@ -571,13 +571,13 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
 
         print(f"{fit_values.bestfit=}")
         if plot:
-            indices = [f"$\mu_{{{i}}}$" for i in ["abs", "cex", "spip", "pip"]]
-            table = cross_section.pd.DataFrame({"fit value" : fit_values.bestfit[0:4] / scale, "uncertainty" : fit_values.uncertainty[0:4] / scale}, index = indices).T
+            indices = [f"$\mu_{{{i}}}$" for i in ["abs", "cex", "pip"]]
+            table = cross_section.pd.DataFrame({"fit value" : fit_values.bestfit[0:3] / scale, "uncertainty" : fit_values.uncertainty[0:3] / scale}, index = indices).T
             table.to_hdf(outdir + "fit_results_POI.hdf5", key = "df")
             FitParamTables(table).style.hide(axis = "index").to_latex(outdir + "fit_results_POI.tex")
             if len(fit_values.bestfit) > 4:
-                indices = [f"$\\alpha_{{{i}}}$" for i in ["abs", "cex", "spip", "pip"]]
-                table = cross_section.pd.DataFrame({"fit value" : fit_values.bestfit[4:], "uncertainty" : fit_values.uncertainty[4:]}, index = indices).T
+                indices = [f"$\\alpha_{{{i}}}$" for i in ["abs", "cex", "pip"]]
+                table = cross_section.pd.DataFrame({"fit value" : fit_values.bestfit[3:], "uncertainty" : fit_values.uncertainty[3:]}, index = indices).T
                 table.to_hdf(outdir + "fit_results_NP.hdf5", key = "df")
                 FitParamTables(table).style.hide(axis = "index").to_latex(outdir + "fit_results_NP.tex")
 
