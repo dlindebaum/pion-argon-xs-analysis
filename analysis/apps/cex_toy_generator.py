@@ -333,13 +333,16 @@ def GenerateRecoRegions(exclusive_process : pd.Series, fractions : pd.DataFrame,
     """
     exclusive_processes = np.unique(exclusive_process.values)
 
-    keys = list(fractions.columns)
+    keys = list(fractions.index)
 
     toy_reco_regions = np.array(["-"]*len(exclusive_process))
     for i in exclusive_processes:
         if i == "": continue
         if i in ["quasielastic", "double_charge_exchange"]: # can't distinguish these two processes in reco
-            sample_from = "single_pion_production"
+            if "single_pion_production" not in keys:
+                sample_from = "pion_production"
+            else:
+                sample_from = "single_pion_production"
             # this is single pion production
         else:
             sample_from = i
@@ -354,7 +357,10 @@ def GenerateRecoRegions(exclusive_process : pd.Series, fractions : pd.DataFrame,
     for i in exclusive_processes:
         if i == "": continue
         if i in ["quasielastic", "double_charge_exchange"]:
-            sample_from = "single_pion_production"
+            if "single_pion_production" not in keys:
+                sample_from = "pion_production"
+            else:
+                sample_from = "single_pion_production"
             # this is single pion production
         else:
             sample_from = i
@@ -362,6 +368,7 @@ def GenerateRecoRegions(exclusive_process : pd.Series, fractions : pd.DataFrame,
             toy_true_region_masks[sample_from] = toy_true_region_masks[sample_from] | (exclusive_process.values == i)
         else:
             toy_true_region_masks[sample_from] = exclusive_process.values == i
+
 
     regions_df = {}
     for i in toy_reco_region_masks:
@@ -386,12 +393,19 @@ def GenerateMeanTrackScores(kde : gaussian_kde, n : int, seed : int = None) -> n
     Returns:
         np.array: sampled mean track scores
     """
+    # scipy.stats.gaussian_kde.resample() uses numpy RandomState seeding rules:
+    # integer seeds must be in [0, 2**32 - 1]. We may pass large integers
+    # (e.g. base_seed + channel_index), so wrap into the valid range.
+    if seed is not None:
+        seed = int(seed) % (2**32 - 1)
+
     values = kde.resample(n, seed)[0] # generate the first set of samples
     mask = (values > 1) | (values < 0) # mask for scores which exceed the range
     counter = 1
     while any(mask): # loop while there are still scores outside the range
         values = values[~mask] # remove the scores outside the range
-        values = np.concatenate([values, kde.resample(sum(mask), seed + counter)[0]]) # generate a new set of values to replace the removed scores
+        reseed = None if seed is None else int(seed + counter) % (2**32 - 1)
+        values = np.concatenate([values, kde.resample(sum(mask), reseed)[0]]) # generate a new set of values to replace the removed scores
         mask = (values > 1) | (values < 0) # check again
         counter += 1
     return values
@@ -413,13 +427,15 @@ def MeanTrackScore(exclusive_process : pd.Series, kdes : dict, seed : int) -> np
     for c, i in enumerate(exclusive_processes):
         if i == "": continue
         if i in ["quasielastic", "double_charge_exchange"]:
-            sample_from = "single_pion_production"
+            if "single_pion_production" not in kdes:
+                sample_from = "pion_production"
+            else:
+                sample_from = "single_pion_production"
             # this is single pion production
         else:
             sample_from = i
-        scores = np.where(exclusive_process == i, GenerateMeanTrackScores(kdes[sample_from], len(exclusive_process), (seed + c) % 2**32 - 1), scores)
+        scores = np.where(exclusive_process == i, GenerateMeanTrackScores(kdes[sample_from], len(exclusive_process), seed + c), scores)
     return pd.DataFrame({"mean_track_score" : scores.astype(float)}).reset_index(drop = True)
-
 
 def run(config : dict):
     return main(ResolveConfig(config))

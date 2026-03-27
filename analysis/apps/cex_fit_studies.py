@@ -613,7 +613,7 @@ def PredictedCountsSummary(template_counts : float, model : cross_section.pyhf.M
     return n_fe_max, n_fe_total_max
 
 def CreateSummaryTables(total_summaries, row_names):
-    proc_tags = cross_section.Tags.ExclusiveProcessTags(None)
+    proc_tags = cross_section.Tags.ExclusiveProcessTags({k : None for k in dict.fromkeys(list(row_names) + list(total_summaries.keys()))})
 
     table_fe = pd.DataFrame({k : v[0] for k, v in total_summaries.items()}, index = row_names)
     table_err = pd.DataFrame({k : v[1] for k, v in total_summaries.items()}, index = row_names)
@@ -809,7 +809,10 @@ def main(args : cross_section.argparse.Namespace):
             with Plots.PlotBook(outdir + "xs_curves") as book:
                 PlotShapeExamples(args.energy_slices, book)
 
-        tags = cross_section.Tags.ExclusiveProcessTags(None)
+        if (hasattr(args.template, "exclusive_process")) and (type(args.template.exclusive_process) == dict):
+            tags = cross_section.Tags.ExclusiveProcessTags({k : None for k in args.template.exclusive_process.keys()})
+        else:
+            tags = cross_section.Tags.ExclusiveProcessTags({k : None for k in args.template.regions.keys()})
 
         test = ["shape", "normalisation", "pulls"] 
 

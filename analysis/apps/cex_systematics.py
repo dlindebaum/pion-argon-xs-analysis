@@ -680,7 +680,8 @@ class NormalisationSystematic(MCMethod):
 
         data_stat_err = pd.DataFrame({p : xs_nominal["pdsp"][p][1] for p in xs_nominal["pdsp"]})
 
-        tags = cross_section.Tags.ExclusiveProcessTags(None)
+        process_keys = list(xs_nominal["pdsp"].keys())
+        tags = cross_section.Tags.ExclusiveProcessTags({k : None for k in process_keys})
 
         tables = {}
         for p in xs_nominal["pdsp"]:
@@ -1088,7 +1089,7 @@ def main(args : cross_section.argparse.Namespace):
         with Plots.PlotBook(outdir + "final_plots.pdf", watermark = "DUNE: Work in Progress") as book:
             table, table_alt = FinalPlots(args.cv["pdsp"], tables, args.energy_slices, book, alt_xs = False)
 
-        tags = cross_section.Tags.ExclusiveProcessTags(None)
+        tags = cross_section.Tags.ExclusiveProcessTags({k : None for k in table.columns})
         table = table.rename(index = {"w_chi2" : "$\\chi^{2}/ndf$", "p" : "$p$"}, columns={t : tags[t].name_simple.capitalize() for t in tags})
         table.style.format("{:.3g}").to_latex(outdir + "goodness_of_fit.tex")
 

@@ -162,7 +162,7 @@ def PlotBkgRegions(energy_slices : cross_section.Slices, data : cross_section.An
 
     N_int_regions = {k : data.NInteract(energy_slices, v, None, True) for k, v in data.regions.items()}
 
-    tags = cross_section.Tags.ExclusiveProcessTags(None)
+    tags = cross_section.Tags.ExclusiveProcessTags({k : None for k in N_int_regions.keys()})
 
     for r in N_int_regions:
         cross_section.PlotXSHists(energy_slices, N_int_regions[r], xlabel = "$KE$ (MeV)", label = f"$N^{{Data}}_{{{tags[r].name_simple}}}$", title = cross_section.remove_(r).capitalize(), color = "k")
@@ -559,7 +559,7 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
                 PlotRegions(templates[k], book)
 
             if plot:
-                tags = cross_section.Tags.ExclusiveProcessTags(None)
+                tags = cross_section.Tags.ExclusiveProcessTags({kk : None for kk in templates[k].regions.keys()})
                 region_counts = {
                     "MC" : {tags[k].name_simple : np.sum(v) for k, v in templates[k].regions.items()},
                     "Data" : {tags[k].name_simple : np.sum(v) for k, v in samples[k].regions.items()}
