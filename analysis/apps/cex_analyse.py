@@ -162,7 +162,7 @@ def PlotBkgRegions(energy_slices : cross_section.Slices, data : cross_section.An
 
     N_int_regions = {k : data.NInteract(energy_slices, v, None, True) for k, v in data.regions.items()}
 
-    tags = cross_section.Tags.ExclusiveProcessTags(None)
+    tags = cross_section.Tags.ExclusiveProcessTags({k : None for k in N_int_regions.keys()})
 
     for r in N_int_regions:
         cross_section.PlotXSHists(energy_slices, N_int_regions[r], xlabel = "$KE$ (MeV)", label = f"$N^{{Data}}_{{{tags[r].name_simple}}}$", title = cross_section.remove_(r).capitalize(), color = "k")
@@ -458,6 +458,8 @@ def XSUnfold(unfolded_result, energy_slices, sys : bool = False, stat = True, re
             total_err[r] = None # statistical uncertianties from histograms only
 
     if regions:
+        available_processes = [k for k in process_labels if k in unfolded_result]
+
         return {k : cross_section.EnergySlice.CrossSection(
                 unfolded_result[k]["unfolded"][1:-1],
                 unfolded_result["int"]["unfolded"][1:-1],
@@ -467,7 +469,7 @@ def XSUnfold(unfolded_result, energy_slices, sys : bool = False, stat = True, re
                 total_err[k],
                 total_err["int"],
                 total_err["inc"])
-                for k in list(process_labels.keys())
+                for k in available_processes
         }
     else:
         return cross_section.EnergySlice.CrossSection(
@@ -557,7 +559,7 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
                 PlotRegions(templates[k], book)
 
             if plot:
-                tags = cross_section.Tags.ExclusiveProcessTags(None)
+                tags = cross_section.Tags.ExclusiveProcessTags({kk : None for kk in templates[k].regions.keys()})
                 region_counts = {
                     "MC" : {tags[k].name_simple : np.sum(v) for k, v in templates[k].regions.items()},
                     "Data" : {tags[k].name_simple : np.sum(v) for k, v in samples[k].regions.items()}
@@ -571,13 +573,36 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
 
         print(f"{fit_values.bestfit=}")
         if plot:
-            indices = [f"$\mu_{{{i}}}$" for i in ["abs", "cex", "spip", "pip"]]
-            table = cross_section.pd.DataFrame({"fit value" : fit_values.bestfit[0:4] / scale, "uncertainty" : fit_values.uncertainty[0:4] / scale}, index = indices).T
+            fit_par_names = list(region_fit_result.model.config.par_order)
+            poi_indices = [i for i, p in enumerate(fit_par_names) if p.startswith("mu_")]
+            np_indices = [i for i, p in enumerate(fit_par_names) if not p.startswith("mu_")]
+
+            process_names = list(templates[k].process_labels)
+            if len(process_names) != len(poi_indices):
+                process_names = [f"{i}" for i in range(len(poi_indices))]
+
+            poi_labels = [process_labels.get(p, p) for p in process_names]
+            indices = [f"$\\mu_{{{i}}}$" for i in poi_labels]
+            table = cross_section.pd.DataFrame(
+                {
+                    "fit value" : fit_values.bestfit[poi_indices] / scale,
+                    "uncertainty" : fit_values.uncertainty[poi_indices] / scale
+                },
+                index = indices
+            ).T
             table.to_hdf(outdir + "fit_results_POI.hdf5", key = "df")
             FitParamTables(table).style.hide(axis = "index").to_latex(outdir + "fit_results_POI.tex")
-            if len(fit_values.bestfit) > 4:
-                indices = [f"$\\alpha_{{{i}}}$" for i in ["abs", "cex", "spip", "pip"]]
-                table = cross_section.pd.DataFrame({"fit value" : fit_values.bestfit[4:], "uncertainty" : fit_values.uncertainty[4:]}, index = indices).T
+
+            if len(np_indices) > 0:
+                np_labels = [fit_par_names[i].replace("_", "\\_") for i in np_indices]
+                indices = [f"$\\alpha_{{{i}}}$" for i in np_labels]
+                table = cross_section.pd.DataFrame(
+                    {
+                        "fit value" : fit_values.bestfit[np_indices],
+                        "uncertainty" : fit_values.uncertainty[np_indices]
+                    },
+                    index = indices
+                ).T
                 table.to_hdf(outdir + "fit_results_NP.hdf5", key = "df")
                 FitParamTables(table).style.hide(axis = "index").to_latex(outdir + "fit_results_NP.tex")
 

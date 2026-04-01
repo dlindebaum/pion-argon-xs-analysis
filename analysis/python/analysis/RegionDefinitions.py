@@ -82,6 +82,40 @@ class moderate_efficiency_regions(SampleDefinition):
         ],        
     }
 
+class moderate_efficiency_three_regions(SampleDefinition):
+    criteria_list = region_criteria
+    definitions = {
+        "absorption" : [
+            region_criteria(criteria("==", 0), criteria("==", 0), criteria(">=", 0), criteria(">=", 0), criteria(">=", 0)),
+        ],
+        "charge_exchange" : [
+            region_criteria(criteria("==", 0), criteria("==", 2), criteria("==", 0), criteria("==", 2), criteria("==", 1)),
+            region_criteria(criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria("==", 1), criteria("==", 0)),
+        ],
+        "pion_production" : [
+            region_criteria(criteria(">", 0), criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria("==", 0)),
+            region_criteria(criteria(">=", 0), criteria(">=", 0), criteria(">", 1), criteria(">=", 0), criteria(">=", 0)),
+            region_criteria(criteria(">=", 0), criteria(">=", 0), criteria(">", 0), criteria("==", 2), criteria("==", 1)),
+            region_criteria(criteria(">=", 0), criteria(">=", 0), criteria(">=", 0), criteria(">", 2), criteria(">=", 0)),
+            region_criteria(criteria(">=", 0), criteria(">", 2), criteria(">=", 0), criteria(">=", 0), criteria(">=", 0)),
+            region_criteria(criteria(">=", 0), criteria(">=", 0), criteria("==", 1), criteria("==", 1), criteria(">=", 0)),
+        ],        
+    }
+
+class moderate_efficiency_three_regions_loose_pi(SampleDefinition):
+    criteria_list = region_criteria
+    definitions = {
+        "absorption" : [
+            region_criteria(criteria("==", 0), criteria("==", 0), criteria(">=", 0), criteria(">=", 0), criteria(">=", 0)),
+        ],
+        "charge_exchange" : [
+            region_criteria(criteria("==", 0), criteria("==", 2), criteria("==", 0), criteria("==", 2), criteria("==", 1)),
+            region_criteria(criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria("==", 1), criteria("==", 0)),
+        ],
+        "pion_production" : [
+            region_criteria(criteria(">", 0), criteria("==", 0), criteria(">=", 0), criteria("==", 0), criteria("==", 0)),
+        ],        
+    }
 
 class pdsp_1GeV_regions(SampleDefinition):
     criteria_list = region_criteria
@@ -120,6 +154,8 @@ class default(SampleDefinition):
 regions = {
     "default" : default,
     "pdsp_1GeV_regions" : pdsp_1GeV_regions,
+    "moderate_efficiency_three_regions" : moderate_efficiency_three_regions,
+    "moderate_efficiency_three_regions_loose_pi" : moderate_efficiency_three_regions_loose_pi,
     "moderate_efficiency_regions" : moderate_efficiency_regions,
     "high_efficiency_regions" : high_efficiency_regions,
     "high_purity_regions" : high_purity_regions
