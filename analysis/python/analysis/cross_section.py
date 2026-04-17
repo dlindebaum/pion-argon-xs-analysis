@@ -1979,9 +1979,9 @@ class AnalysisInput:
                 new_sample = self.SelectSample(self.exclusive_process[t])
                 new_sample.ToROOTFile(f"{dir_name}/mc_cheated_{name}_T{t}")
         else:
-            for r, t in itertools.product(self.region_labels, self.process_labels):
-                new_sample = self.SelectSample(self.regions[r] & self.exclusive_process[t])
-                new_sample.ToROOTFile(f"{dir_name}/mc_{name}_R{r}_T{t}")
+            for t in self.process_labels:
+                new_sample = self.SelectSample(self.exclusive_process[t])
+                new_sample.ToROOTFile(f"{dir_name}/mc_{name}_T{t}")
         return
 
     @staticmethod
