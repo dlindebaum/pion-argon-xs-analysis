@@ -49,6 +49,7 @@ class three_signal_process(SampleDefinition):
         ],
         "pion_production" : [
             process_criteria(criteria(">=", 1), criteria(">=", 0)),
+            process_criteria(criteria("==", 0), criteria(">", 1)),
         ]
     }
 
