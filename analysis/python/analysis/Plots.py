@@ -1416,9 +1416,9 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
     x_counts = np.sum(counts, axis = 0)
 
     if x_tick_labels is None:
-        x_tick_labels = [f"{i}" for i in range(np.array(counts).shape[0])]
+        x_tick_labels = [f"{i}" for i in range(np.array(counts).shape[0]-1)]
     if y_tick_labels is None:
-        y_tick_labels = [f"{i}" for i in range(np.array(counts).shape[1])]
+        y_tick_labels = [f"{i}" for i in range(np.array(counts).shape[1]-1)]
 
     x_counts = [f"{x_tick_labels[r].replace('_', ' ')}\n({x_counts[r]})" for r in range(len(x_tick_labels))]
     y_counts = [f"{y_tick_labels[t].replace('_', ' ')}\n({y_counts[t]})" for t in range(len(y_tick_labels))]
