@@ -10,6 +10,7 @@ import time
 import warnings
 
 from abc import ABC, abstractmethod
+from collections import namedtuple
 from enum import Enum
 
 import awkward as ak
@@ -25,6 +26,8 @@ from rich import print
 
 # custom modules
 from python.analysis import vector, CutTable
+
+FileDescriptor = namedtuple("FileDescriptor", ["file", "type", "pmom"])
 
 null_vector = ak.Array([{"x": -999, "y": -999, "z": -999}])
 
@@ -73,7 +76,7 @@ def SaveObject(file : str, obj : dict):
 
 def LoadConfiguration(file : str) -> dict:
     """ Loads a json file.
-
+path
     Args:
         file (str): file path
 

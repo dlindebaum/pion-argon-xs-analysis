@@ -12,7 +12,7 @@ import numbers
 import os
 
 from collections import namedtuple
-from dataclasses import dataclass, fields, field
+from dataclasses import dataclass, field
 from enum import Enum
 
 import awkward as ak
@@ -28,7 +28,7 @@ from scipy.interpolate import interp1d, UnivariateSpline
 from scipy.stats import chi2, ks_2samp
 
 from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, RegionDefinitions, ProcessDefinitions, Processing
-from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer, IO
+from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer, IO, FileDescriptor
 from python.analysis.Utils import *
 
 GEANT_XS = os.environ["PYTHONPATH"] + "/data/g4_xs_pi_KE_100.root"
@@ -857,7 +857,10 @@ class ApplicationArguments:
         args = argparse.Namespace()
         for head, value in config.items():
             if head == "NTUPLE_FILES":
-                args.ntuple_files = value
+                ntuple_files = value
+                for k in ntuple_files:
+                    ntuple_files[k] = [FileDescriptor(**i) for i in ntuple_files[k]]
+                args.ntuple_files = ntuple_files
             elif head == "SAMPLE_DEFINITIONS":
                 args.region_definitions = RegionDefinitions.regions[value["region"]]
                 args.process_definitions = ProcessDefinitions.processes[value["process"]]
