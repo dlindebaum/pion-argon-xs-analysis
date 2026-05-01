@@ -205,8 +205,8 @@ def load_and_cut_data(
         A Data instance containing the cut events.
     """
     # TODO add wther truth or MC to names (+ generally better names etc.)
-    events = Master.Data(path,
-                         nTuple_type=ntuple_type,
+    fd = Master.FileDescriptor(path, ntuple_type, None)
+    events = Master.Data(fd,
                          nEvents=batch_size,
                          start=batch_start)
     # Apply cuts:

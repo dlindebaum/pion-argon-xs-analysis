@@ -17,8 +17,8 @@ from rich import print
 from python.analysis import Master, Plots, cross_section, BeamParticleSelection, Tags
 
 
-def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
-    events = Master.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
+def run(i : int, file : Master.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
+    events = Master.Data(file, n_events, start)
     mask = BeamParticleSelection.PiBeamSelection(events, args["data"])
     if args["data"] is False:
         tags = Tags.GenerateTrueBeamParticleTags(events)
@@ -32,7 +32,7 @@ def main(args):
     cross_section.PlotStyler.SetPlotStyle(extend_colors = True)
     outdir = args.out + "beam_norm/"
     os.makedirs(outdir, exist_ok = True)
-    
+
     outputs = cross_section.ApplicationProcessing(list(args.ntuple_files.keys()), outdir, args, run, True)
 
     n_data = ak.sum(outputs["data"]["mask"])

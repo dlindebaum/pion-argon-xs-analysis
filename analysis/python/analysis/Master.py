@@ -27,7 +27,7 @@ from rich import print
 # custom modules
 from python.analysis import vector, CutTable
 
-FileDescriptor = namedtuple("FileDescriptor", ["file", "type", "pmom"])
+FileDescriptor = namedtuple("FileDescriptor", ["file", "type", "momentum_scale"])
 
 null_vector = ak.Array([{"x": -999, "y": -999, "z": -999}])
 
@@ -360,28 +360,28 @@ class Data:
         MergeShowerBT (Data): Merge showers using bactacked matching for pure pi0 sample.
     """
 
-    def __init__(self, filename: str = None, nEvents: int = -1, start: int = 0, nTuple_type : Ntuple_Type = None, target_momentum : int = None, verbose : bool = False):
-        self.filename = filename
+    def __init__(self, file_descriptor: FileDescriptor = None, nEvents: int = -1, start: int = 0, verbose : bool = False):
+        self.filename = file_descriptor.file
         self.verbose = verbose
         if start < 0:
             raise ValueError("start cannot be less than zero")
 
-        if (filename is not None) and (nTuple_type is None):
-            warnings.warn(f"nTuple type is not specified, assuming it is {Ntuple_Type.SHOWER_MERGING}")
-            self.nTuple_type = Ntuple_Type.SHOWER_MERGING
+        if (self.filename is not None) and (file_descriptor.type is None):
+            warnings.warn(f"nTuple type is not specified, assuming it is {Ntuple_Type.PDSP}")
+            self.nTuple_type = Ntuple_Type.SHOWER_MERGING # TODO remove shower merging related data IO
         else:
-            self.nTuple_type = nTuple_type
+            self.nTuple_type = file_descriptor.type
         if (self.filename != None):
-            if target_momentum is None:
+            if file_descriptor.momentum_scale is None:
                 if ("_data_" in self.filename):
-                    self.target_mom = 1
+                    self.momentum_scale = 1
                 else:
                     if "GeV" in self.filename:
-                        self.target_mom = float(self.filename.split("GeV")[0][-1])
+                        self.momentum_scale = float(self.filename.split("GeV")[0][-1])
                     else:
-                        self.target_mom = target_momentum
+                        self.momentum_scale = file_descriptor.momentum_scale
             else:
-                self.target_mom = target_momentum
+                self.momentum_scale = file_descriptor.momentum_scale
             self.nEvents = nEvents
             self.start = start
             self.io = IO(self.filename, self.nEvents, self.start)
@@ -614,10 +614,10 @@ class Data:
                 self.trueParticlesBT.events = self
         else:
             # copy filtered attributes into new instance
-            filtered = Data(nTuple_type = self.nTuple_type)
+            filtered = Data(FileDescriptor(self.filename, self.type, self.pmom))
             filtered.filename = self.filename
             filtered.verbose = self.verbose
-            filtered.target_mom = self.target_mom
+            filtered.momentum_scale = self.momentum_scale
             filtered.nEvents = self.nEvents
             filtered.start = self.start
             filtered.io = IO(filtered.filename,
@@ -1504,7 +1504,7 @@ class RecoParticleData(ParticleData):
     @property
     def beam_inst_P(self) -> type:
         self.LoadData("beam_inst_P", "beam_inst_P")
-        return self.events.target_mom * 1000 * getattr(self, f"_{type(self).__name__}__beam_inst_P")
+        return self.events.momentum_scale * 1000 * getattr(self, f"_{type(self).__name__}__beam_inst_P")
 
     @property
     def beam_inst_pos(self) -> ak.Record:

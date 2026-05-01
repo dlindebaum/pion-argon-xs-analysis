@@ -356,14 +356,14 @@ def file_len(file : str):
 
 def CalculateBatches(args):
     if "data" in args.ntuple_files:
-        n_data = [file_len(file["file"]) for file in args.ntuple_files["data"]]
+        n_data = [file_len(file_desc.file) for file_desc in args.ntuple_files["data"]]
     else:
         n_data = []
 
     if len(n_data) == 0:
         print("no data file was specified, 'normalisation', 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
 
-    n_mc = [file_len(file["file"]) for file in args.ntuple_files["mc"]] # must have MC
+    n_mc = [file_len(file_desc.file) for file_desc in args.ntuple_files["mc"]] # must have MC
 
     processing_args = {"events" : None, "batches" : None, "threads" : None}
 
@@ -379,25 +379,16 @@ def CalculateBatches(args):
     return processing_args
 
 
-def RunProcessAlt(ntuple_files : list[str], is_data : bool, args : argparse.Namespace, func : callable, merge : bool = True) -> list:
-    inputs = []
-    for i in ntuple_files:
-        func_args = vars(args)
-        func_args["data"] = is_data
-        func_args["ntuple_type"] = i["type"]
-        func_args["pmom"] = i["pmom"]
-        inputs.append()
-    return
-
-
-def RunProcess(ntuple_files : list[str], is_data : bool, args : argparse.Namespace, func : callable, merge : bool = True) -> list:
-    output = []
-    for i in ntuple_files:
-        func_args = vars(args)
-        func_args["data"] = is_data
-        func_args["nTuple_type"] = i["type"]
-        func_args["pmom"] = i["pmom"]
-        output.extend(Processing.mutliprocess(func, [i["file"]], args.batches, args.events, func_args, args.threads))
+def RunProcess(ntuple_files : list[FileDescriptor], is_data : bool, args : argparse.Namespace, func : callable, merge : bool = True) -> list:
+    func_args = vars(args)
+    func_args["data"] = is_data
+    output = Processing.mutliprocess(func, ntuple_files, args.batches, args.events, func_args, args.threads)
+    # for i in ntuple_files:
+    #     func_args = vars(args)
+    #     func_args["data"] = is_data
+    #     # func_args["nTuple_type"] = i.type
+    #     # func_args["pmom"] = i.pmom
+    #     output.extend(Processing.mutliprocess(func, [i], args.batches, args.events, func_args, args.threads))
     if merge:
         output = MergeOutputs(output)
     return output

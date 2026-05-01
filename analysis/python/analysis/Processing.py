@@ -33,18 +33,18 @@ def log_process(func):
     return wrap
 
 
-def CalculateBatches(file : str, n_batches : int = None, n_events : int = None) -> list[int]:
+def CalculateBatches(file_desc : Master.FileDescriptor, n_batches : int = None, n_events : int = None) -> list[int]:
     """ Calculate the number of events to run per job (batch).
 
     Args:
-        file (str): input Ntuple file
+        file_desc (str): Input file descriptor.
         n_batches (int, optional): Number of batches, if None number of batches created is decided based on the number of events. Defaults to None.
-        n_events (int, optional): number of events to run per batch, if None, the number of events per batch is automatically calculated. Defaults to None.
+        n_events (int, optional): Number of events to run per batch, if None, the number of events per batch is automatically calculated. Defaults to None.
 
     Returns:
         list[int]: list of batches
     """
-    total_events = ak.count(Master.Data(file, nTuple_type = Master.Ntuple_Type.SHOWER_MERGING).eventNum) # get number of events, use shower merging ntuple type to supress false warnings
+    total_events = ak.count(Master.Data(file_desc).eventNum) # get number of events, use shower merging ntuple type to supress false warnings
     print(f"{total_events=}")
 
     if n_batches is None and n_events is None:
@@ -86,21 +86,21 @@ def CalculateBatches(file : str, n_batches : int = None, n_events : int = None) 
     return batches
 
 
-def GenerateFunctionArguments(files : list, nBatches : int, nEvents : int, args : dict, event_indices : list = None) -> list:
+def GenerateFunctionArguments(files : list[Master.FileDescriptor], nBatches : int, nEvents : int, args : dict, event_indices : list = None) -> list:
     """ Create a list of function arguments to supply to each job. It will automatically calculate the number of events and stride for each job.
 
     Args:
-        files (list): Input file lists
+        files (list[Master.FileDescriptor]): Input file lists
         nBatches (int): Number of batches run (i.e. number of jobs)
         nEvents (int): number of events to run per job
         args (dict): additional function arguments
 
     Returns:
-        list: _description_
+        list: list of function arguments to pass to multiprocess.
     """
     batches = []
     start = []
-    for f in files: # calcualte event numbers and stride for each file
+    for f in files: # calculate event numbers and stride for each file
         b = CalculateBatches(f, nBatches, nEvents)
         start.append([0] + list(np.cumsum(b[:-1])))
         batches.append(b)
@@ -125,21 +125,21 @@ def GenerateFunctionArguments(files : list, nBatches : int, nEvents : int, args 
 
 
 @Master.timer
-def mutliprocess(func, files : list, nBatches : int, nEvents : int, args : dict, nodes : int = None, event_indices : list = None):
+def mutliprocess(func : callable, files : list[Master.FileDescriptor], nBatches : int, nEvents : int, args : dict, n_pus : int = None, event_indices : list = None):
     """ Run a function with parallel processing, requires that it analyses ntuples.
 
     Args:
-        func (_type_): function to run
-        files (list): input root files
+        func (callable): function to run
+        files (list[Master.FileDescriptor]): input root files
         nBatches (list): number of batches
         nEvents (list): number of events
         args (dict): args for function
-        nodes (int) : number of processors to use, if None all are used.
+        pus (int) : number of processors to use. If None, all are used.
 
     Returns:
         Any: function output
     """
-    pool = ProcessPool(nodes = nodes)
+    pool = ProcessPool(nodes = n_pus)
     pool.restart(True)
 
     inputs = GenerateFunctionArguments(files, nBatches, nEvents, args = args, event_indices = event_indices)
