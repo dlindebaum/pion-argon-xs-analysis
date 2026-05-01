@@ -251,17 +251,19 @@ class IO:
         return d_new
 
 
-    def WriteData(self, name : str, data : dict):
+    def WriteData(self, name : str, data : dict, overwrite : bool = False):
         """ Write TTree to a new root file. Overwrites are not permitted.
 
         Args:
             name (str): TTree name.
             data (dict): data file, can be a nested dictionary of np or Awkward arrays.
-            flat_tree (bool, optional): Flattens the dictionary create a TTree with no nesting. Note, the data itself is not flattened. Defaults to True.
+            overwrite (bool, optional): Overwrites output file. Defaults to True.
         """
         split = self.filename.split("/")
         path = "/".join(split[:-1] + [split[-1].split(".")[0] + ".root"])
-        with uproot.create(path) as file: # create instead of recreate so we dont accidently overwrite our precious ntuple files.
+
+        io_obj = uproot.recreate if overwrite is True else uproot.create
+        with io_obj(path) as file: # create instead of recreate so we dont accidently overwrite our precious ntuple files.
             print(file)
             file.mktree(name, self.__convert_types(data))
         print(f"TTree Written to {path}")

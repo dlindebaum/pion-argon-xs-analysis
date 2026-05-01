@@ -12,7 +12,7 @@ import numbers
 import os
 
 from collections import namedtuple
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, field
 from enum import Enum
 
 import awkward as ak
@@ -377,6 +377,17 @@ def CalculateBatches(args):
         processing_args["batches"] = None
         processing_args["threads"] = args.cpus
     return processing_args
+
+
+def RunProcessAlt(ntuple_files : list[str], is_data : bool, args : argparse.Namespace, func : callable, merge : bool = True) -> list:
+    inputs = []
+    for i in ntuple_files:
+        func_args = vars(args)
+        func_args["data"] = is_data
+        func_args["ntuple_type"] = i["type"]
+        func_args["pmom"] = i["pmom"]
+        inputs.append()
+    return
 
 
 def RunProcess(ntuple_files : list[str], is_data : bool, args : argparse.Namespace, func : callable, merge : bool = True) -> list:
@@ -1896,6 +1907,8 @@ class AnalysisInput:
     regions : dict[np.ndarray]
     inclusive_process : dict[np.ndarray]
     exclusive_process : dict[np.ndarray]
+    process_id : np.ndarray = field(init=False)
+    region_id : np.ndarray = field(init=False)
     outside_tpc_reco : np.ndarray
     outside_tpc_true : np.ndarray
     # observables
@@ -1931,6 +1944,18 @@ class AnalysisInput:
             raise Exception("Analysis input does not have well defined exclusive processes.")
         return list(self.exclusive_process.keys())
 
+
+    def __post_init__(self):
+        # need to set defaults for fields otherwise they are undefined (and python doesnt complain...)
+        self.region_id = None
+        self.process_id = None
+
+        if self.regions is not None:
+            self.region_id = self.IDFromSamples(self.regions)
+        if self.exclusive_process is not None:
+            self.process_id = self.IDFromSamples(self.exclusive_process)
+
+
     def __len__(self):
         for o in ["outside_tpc_reco", "outside_tpc_true", "track_length_reco", "KE_int_reco", "KE_init_reco", "mean_track_score", "track_length_true", "KE_int_true", "KE_init_true", "weights"]:
             if getattr(self, o) is not None:
@@ -1955,7 +1980,7 @@ class AnalysisInput:
             file (str): file path.
         """
         file_writer = IO(file)
-        file_writer.WriteData("FlatTree_VARS", vars(self))
+        file_writer.WriteData("FlatTree_VARS", vars(self), True)
         return
 
 
@@ -2026,6 +2051,23 @@ class AnalysisInput:
         n_interact = EnergySlice.CountingExperiment(KE_int[mask], KE_init[mask], outside_tpc[mask], process[mask], energy_slice, interact_only = True, weights = weights[mask] if weights is not None else weights)
         return n_interact
 
+
+    def IDFromSamples(self, sample_masks : dict[np.ndarray], uncategorised : int = -1) -> ak.Array:
+        """ Create ID from sample masks. Counts from 0 and includes override for uncategorised events.
+
+        Args:
+            sample_masks (dict[np.ndarray]): sample masks, such as reco regions.
+            uncategorised (int, optional): id for uncategorised objects. Defaults to -1.
+
+        Returns:
+            ak.Array: _description_
+        """
+        id = ak.zeros_like(list(sample_masks.values())[0]) + uncategorised
+        for i, v in enumerate(sample_masks.values()):
+            id = ak.where(v, i, id)
+        return id
+
+
     @staticmethod
     def CreateAnalysisInputToy(toy : Toy) -> "AnalysisInput":
         """ Create analysis input from a toy sample.
@@ -2091,7 +2133,6 @@ class AnalysisInput:
         reco_track_length = events.recoParticles.beam_track_length
         outside_tpc_reco = (events.recoParticles.beam_endPos_SCE.z < min(fiducial_volume)) | (events.recoParticles.beam_endPos_SCE.z > max(fiducial_volume))
 
-
         if true_regions is not None:
             true_KE_ff = events.trueParticles.beam_KE_front_face
 
@@ -2134,10 +2175,19 @@ class AnalysisInput:
             weights,
             )
 
+    @staticmethod
+    def req_fields():
+        return [k for k, v in AnalysisInput.__dataclass_fields__.items() if v.init is True]
 
     @staticmethod
     def Concatenate(ais : list["AnalysisInput"]):
-        fields = MergeOutputs([vars(a) for a in ais])
+        fields = MergeOutputs([{f : getattr(a, f) for f in AnalysisInput.req_fields()} for a in ais])
+
+        # check for null entries after merging outputs (null entries are list of Nones)
+        for k in fields:
+            if (type(fields[k]) == list) and (all(ak.is_none(fields[k]))):
+                fields[k] = None
+
         return AnalysisInput(**fields)
 
 
@@ -2151,21 +2201,21 @@ class AnalysisInput:
             AnalysisInput: Selected sample.
         """
         selection = {}
-        for attr in vars(self):
-            value = getattr(self, attr)
+        for field in AnalysisInput.req_fields():
+            value = getattr(self, field)
             if value is None:
-                selection[attr] = value # we allow Non types when defining data samples.
+                selection[field] = value # we allow Non types when defining data samples.
             if hasattr(value, "__iter__"):
                 if type(value) is dict:
                     tmp_dict = {}
                     for k, v in value.items():
                         tmp_dict[k] = v[mask]
-                    selection[attr] = tmp_dict
+                    selection[field] = tmp_dict
                 elif type(value) is list:
-                    print(f"found {attr} is a list type, cannot slice using an array, skipping.") #! might want to add specific logic to check if regions and processes are not null.
-                    selection[attr] = None
+                    print(f"found {field} is a list type, cannot slice using an array, skipping.") #! might want to add specific logic to check if regions and processes are not null.
+                    selection[field] = None
                 else:
-                    selection[attr] = value[mask]
+                    selection[field] = value[mask]
         return AnalysisInput(**selection)
 
 
