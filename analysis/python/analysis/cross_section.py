@@ -1992,15 +1992,11 @@ class AnalysisInput:
         if not self.has_exclusive_process: # in the case we have Data.
             for r in self.region_labels:
                 new_sample = self.SelectSample(self.regions[r])
-                new_sample.ToROOTFile(f"{dir_name}/data_{name}_R{r}")
-        elif not self.has_regions: # cheated MC
+                new_sample.ToROOTFile(f"{dir_name}/{name}_R{r}")
+        else: # cheated MC
             for t in self.process_labels:
                 new_sample = self.SelectSample(self.exclusive_process[t])
-                new_sample.ToROOTFile(f"{dir_name}/mc_cheated_{name}_T{t}")
-        else:
-            for t in self.process_labels:
-                new_sample = self.SelectSample(self.exclusive_process[t])
-                new_sample.ToROOTFile(f"{dir_name}/mc_{name}_T{t}")
+                new_sample.ToROOTFile(f"{dir_name}/{name}_T{t}")
         return
 
     @staticmethod
