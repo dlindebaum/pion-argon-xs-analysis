@@ -93,10 +93,6 @@ def main(args : argparse.Namespace):
     outdir = args.out + "upstream_loss/"
     os.makedirs(outdir, exist_ok = True)
 
-    args.batches = None
-    args.events = None
-    args.threads = 1
-
     output_mc = cross_section.ApplicationProcessing(["mc"], outdir, args, run, True)["mc"]
 
     if all(v is None for v in output_mc["weights"]):
@@ -136,6 +132,7 @@ if __name__ == "__main__":
     cross_section.ApplicationArguments.Config(parser, True)
     cross_section.ApplicationArguments.Output(parser)
     cross_section.ApplicationArguments.Regen(parser)
+    cross_section.ApplicationArguments.Processing(parser)
     parser.add_argument("--cv_function", dest = "upstream_loss_cv_function", type = str, default = "gaussian", help = "method to extract central value, possible options are ['None', 'gaussian', 'student_t', 'double_gaussian', 'crystal_ball']")
     parser.add_argument("--no_reweight", dest = "no_reweight", action = "store_true", help = "perform correction without reweighted MC")
 

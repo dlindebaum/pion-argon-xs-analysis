@@ -139,10 +139,6 @@ def main(args : cross_section.argparse.Namespace):
     out = args.out + "beam_reweight/"
     os.makedirs(out, exist_ok = True)
 
-    args.batches = None
-    args.events = None
-    args.threads = 1
-
     outputs = cross_section.ApplicationProcessing(list(args.ntuple_files.keys()), out, args, run, True)
 
     for o in outputs:
@@ -208,6 +204,7 @@ if __name__ == "__main__":
     cross_section.ApplicationArguments.Config(args, True)
     cross_section.ApplicationArguments.Output(args)
     cross_section.ApplicationArguments.Regen(args)
+    cross_section.ApplicationArguments.Processing(args)
 
     args = cross_section.ApplicationArguments.ResolveArgs(args.parse_args())
     print(vars(args))

@@ -405,10 +405,6 @@ def main(args : argparse.Namespace):
     out = args.out + "toy_parameters/"
     cross_section.os.makedirs(out, exist_ok = True)
 
-    args.batches = None
-    args.events = None
-    args.threads = 1
-
     bins = {r : np.linspace(min(args.toy_parameters["plot_ranges"][r]), max(args.toy_parameters["plot_ranges"][r]), 50) for r in args.toy_parameters["plot_ranges"]}
     labels = {
         "KE_init" : "$KE^{res,MC}_{init}$ (MeV)",
@@ -416,7 +412,6 @@ def main(args : argparse.Namespace):
         "z_int" : "$l^{res,MC}$ (cm)"
     }
 
-    # output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
     output_mc = cross_section.ApplicationProcessing(["mc"], out, args, run, True)["mc"]
 
     print(f"{output_mc=}")
@@ -438,6 +433,7 @@ if __name__ == "__main__":
     cross_section.ApplicationArguments.Config(parser, True)
     cross_section.ApplicationArguments.Output(parser)
     cross_section.ApplicationArguments.Regen(parser)
+    cross_section.ApplicationArguments.Processing(parser)
 
     args = parser.parse_args()
     args = cross_section.ApplicationArguments.ResolveArgs(args)

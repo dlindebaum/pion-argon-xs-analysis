@@ -209,10 +209,6 @@ def main(args):
     out = args.out + "analysis_input/"
     cross_section.os.makedirs(out, exist_ok = True)
 
-    args.batches = None
-    args.events = None
-    args.threads = 1
-
     output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run, False)
     output_data = cross_section.RunProcess(args.ntuple_files["data"], True, args, run, False)
 
@@ -235,6 +231,7 @@ if __name__ == "__main__":
     parser = cross_section.argparse.ArgumentParser("Create analysis input files from Ntuples.")
     cross_section.ApplicationArguments.Config(parser)
     cross_section.ApplicationArguments.Output(parser)
+    cross_section.ApplicationArguments.Processing(parser)
     parser.add_argument("-R", "--ROOT", dest = "root", action="store_true", help = "Saves the output to ROOT files in addition to the dill files.")
 
     args = cross_section.ApplicationArguments.ResolveArgs(parser.parse_args())

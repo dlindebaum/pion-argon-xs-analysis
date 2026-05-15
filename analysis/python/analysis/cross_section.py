@@ -383,12 +383,6 @@ def RunProcess(ntuple_files : list[FileDescriptor], is_data : bool, args : argpa
     func_args = vars(args)
     func_args["data"] = is_data
     output = Processing.mutliprocess(func, ntuple_files, args.batches, args.events, func_args, args.threads)
-    # for i in ntuple_files:
-    #     func_args = vars(args)
-    #     func_args["data"] = is_data
-    #     # func_args["nTuple_type"] = i.type
-    #     # func_args["pmom"] = i.pmom
-    #     output.extend(Processing.mutliprocess(func, [i], args.batches, args.events, func_args, args.threads))
     if merge:
         output = MergeOutputs(output)
     return output
