@@ -4,34 +4,34 @@
       {
         "file": "PDSPProd4a_MC_2GeV_sce_datadriven_ntuple_v09_81_00d01_set0.root",
         "type": "PDSPAnalyser",
-        "pmom": 1
+        "momentum_scale": 1
       },
       {
         "file": "PDSPProd4a_MC_2GeV_sce_datadriven_ntuple_v09_81_00d01_set1.root",
         "type": "PDSPAnalyser",
-        "pmom": 1
+        "momentum_scale": 1
       },
       {
         "file": "PDSPProd4a_MC_2GeV_sce_datadriven_ntuple_v09_81_00d01_set2.root",
         "type": "PDSPAnalyser",
-        "pmom": 1
+        "momentum_scale": 1
       },
       {
         "file": "PDSPProd4a_MC_2GeV_sce_datadriven_ntuple_v09_81_00d01_set3.root",
         "type": "PDSPAnalyser",
-        "pmom": 1
+        "momentum_scale": 1
       },
       {
         "file": "PDSPProd4a_MC_2GeV_reco1_sce_datadriven_v1_ntuple_v09_41_00_03.root",
         "type": "PDSPAnalyser",
-        "pmom": 2
+        "momentum_scale": 2
       }
     ],
     "data": [
       {
         "file": "PDSPProd4_data_2GeV_reco2_ntuple_v09_42_03_01.root",
         "type": "PDSPAnalyser",
-        "pmom": 1
+        "momentum_scale": 1
       }
     ]
   },

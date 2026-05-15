@@ -365,17 +365,14 @@ def CalculateBatches(args):
 
     n_mc = [file_len(file_desc.file) for file_desc in args.ntuple_files["mc"]] # must have MC
 
-    processing_args = {"events" : None, "batches" : None, "threads" : None}
+    processing_args = {"events" : None, "batches" : None, "threads" : args.cpus}
 
     # pass multiprocessing args
-    if max([*n_data, *n_mc]) >= 7E5:
-        processing_args["events"] = None
-        processing_args["batches"] = int(2 * max([*n_data, *n_mc]) // 7E5)
-        processing_args["threads"] = args.cpus
-    else:
-        processing_args["events"] = None
-        processing_args["batches"] = None
-        processing_args["threads"] = args.cpus
+    # if max([*n_data, *n_mc]) >= 7E5:
+    #     processing_args["events"] = None
+    #     processing_args["batches"] = int(2 * max([*n_data, *n_mc]) // 7E5)
+    #     processing_args["threads"] = args.cpus
+
     return processing_args
 
 

@@ -62,7 +62,7 @@ def run_regression_test(args : argparse.Namespace):
         SaveConfiguration(cfg, f"{work_dir}/config.json")
 
         # run the script
-        subprocess.run(["run_analysis.py", "-o", work_dir, "-c", f"{work_dir}/config.json"])
+        subprocess.run(["run_analysis.py", "-o", work_dir, "-c", f"{work_dir}/config.json", "--cpus", str(args.cpus)])
         subprocess.run(["run_analysis.py", "-o", work_dir, "-c", f"{work_dir}/config.json", "--run", "analyse"]) # need to specify to run the xs anaysis.
         print("Test completed.")
     return
@@ -73,6 +73,7 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--directory", dest = "work_dir", default="/tmp", help="Directory where the test is ran.")
     parser.add_argument("--debug", action = "store_true", help = "dont actually run the test, just verify the file path for the data is found.")
     parser.add_argument("-f", "--files", dest = "root_file_path", required = True, help = "File path the Data and MC root files are stored in (will do a recusive search).")
+    parser.add_argument("--cpus", type = int, default = 1)
     args = parser.parse_args()
     print(args)
     run_regression_test(args)

@@ -4,14 +4,14 @@
       {
         "file": "ABSOLUTE file path",
         "type": "PDSPAnalyser or shower_merging",
-        "pmom": "momentum byte of the beam, may need a value different to 1 if MC was not generated properly"
+        "momentum_scale": "momentum byte of the beam, may need a value different to 1 if MC was not generated properly"
       }
     ],
     "data": [
       {
         "file": "ABSOLUTE file path",
         "type": "PDSPAnalyser or shower_merging",
-        "pmom": 1
+        "momentum_scale": 1
       }
     ]
   },
