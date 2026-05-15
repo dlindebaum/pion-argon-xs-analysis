@@ -1908,6 +1908,9 @@ class AnalysisInput:
     KE_ff_true : np.ndarray
     # extras
     weights : np.ndarray = None
+    event_num : np.ndarray = None
+    run : np.ndarray = None
+    sub_run : np.ndarray = None
 
     @property
     def has_regions(self):
@@ -2079,7 +2082,9 @@ class AnalysisInput:
             np.array(toy.df.KE_int.values),
             np.array(toy.df.KE_init.values),
             np.array(toy.df.KE_init.values),
-            None
+            None,
+            None,
+            None,
             )
 
     @staticmethod
@@ -2154,6 +2159,9 @@ class AnalysisInput:
             true_KE_init,
             true_KE_ff,
             weights,
+            events.eventNum,
+            events.run,
+            events.subRun,
             )
 
     @staticmethod
