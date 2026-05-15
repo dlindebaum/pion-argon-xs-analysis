@@ -1989,7 +1989,7 @@ class AnalysisInput:
         os.makedirs(dir_name, exist_ok = True)
 
         #* create different files for a combination of regions and processes, could add support for more splits.
-        if not self.has_exclusive_process: # in the case we have Data.
+        if self.has_regions: # Data/MC.
             for r in self.region_labels:
                 new_sample = self.SelectSample(self.regions[r])
                 new_sample.ToROOTFile(f"{dir_name}/{name}_R{r}")

@@ -17,8 +17,8 @@ from rich import print
 from python.analysis import Master, Plots, cross_section, BeamParticleSelection, Tags
 
 
-def run(i : int, file : Master.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
-    events = Master.Data(file, n_events, start)
+def run(i : int, file_desc : Master.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
+    events = Master.Data(file_desc, n_events, start)
     mask = BeamParticleSelection.PiBeamSelection(events, args["data"])
     if args["data"] is False:
         tags = Tags.GenerateTrueBeamParticleTags(events)

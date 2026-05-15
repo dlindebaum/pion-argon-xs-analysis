@@ -156,8 +156,8 @@ def Fits(args : cross_section.argparse.Namespace, output : dict, out : str, samp
     return fit_values
 
 
-def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
-    events = Master.Data(file, nTuple_type = args["nTuple_type"], target_momentum = args["pmom"])
+def run(i : int, file_desc : Master.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
+    events = Master.Data(file_desc, n_events, start)
 
     #? should this be made configurable i.e. pass config and apply all selections before the beam quality cuts if it is in the list?
 

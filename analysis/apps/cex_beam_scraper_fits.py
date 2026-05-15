@@ -16,11 +16,11 @@ import numpy as np
 from particle import Particle
 from rich import print
 
-from python.analysis import Master, cross_section, Plots, Fitting, Processing
+from python.analysis import Master, cross_section, Plots, Fitting
 
 
-def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
-    mc = Master.Data(file, nTuple_type = args["nTuple_type"], target_momentum = args["pmom"])
+def run(i : int, file_desc : Master.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
+    mc = cross_section.Data(file_desc, n_events, start)
     for s in args["beam_selection"]["selections"]:
         if s == "BeamScraperCut": break
         mask = args["beam_selection"]["selections"][s](mc, **args["beam_selection"]["mc_arguments"][s])
@@ -119,8 +119,8 @@ def GetScraperFits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : 
         heights, _ = Plots.PlotHist(data, newFigure = False, bins = fit_bins, range = residual_range, label = "observed")
         x_interp = np.linspace(min(data), max(data), 10 * fit_bins)
         y_interp = Fitting.gaussian.func(x_interp, max(heights), popt[1], popt[2])
-        Plots.Plot(x_interp, y_interp, color = "black", label = "fit", title = bin_label, xlabel = "$\Delta E_{upstream}$ (MeV)", newFigure = False)
-        plt.axvline(popt[1] + 3 * abs(popt[2]), color = "black", linestyle = "--", label = "$\mu + 3\sigma$")
+        Plots.Plot(x_interp, y_interp, color = "black", label = "fit", title = bin_label, xlabel = "$\\Delta E_{upstream}$ (MeV)", newFigure = False)
+        plt.axvline(popt[1] + 3 * abs(popt[2]), color = "black", linestyle = "--", label = "$\\mu + 3\\sigma$")
         plt.xlim(*residual_range)
 
         main_legend = plt.legend(loc = "upper left")
@@ -130,8 +130,8 @@ def GetScraperFits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : 
         plt.gca().add_artist(main_legend)
         text = ""
         for j in range(len(popt)):
-            text += f"\np{j}: ${popt[j]:.2g}\pm${perr[j]:.2g}"
-        text += "\n$\chi^{2}/ndf$ : " + f"{metrics[0]/metrics[1]:.2g}, p : " + f"{metrics[2]:.1g}"
+            text += f"\\np{j}: ${popt[j]:.2g}\\pm${perr[j]:.2g}"
+        text += "\\n$\\chi^{2}/ndf$ : " + f"{metrics[0]/metrics[1]:.2g}, p : " + f"{metrics[2]:.1g}"
         legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = "upper right", title = Fitting.gaussian.__name__)
         legend.set_zorder(12)
         for l in legend.legend_handles:

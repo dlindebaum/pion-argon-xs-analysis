@@ -361,39 +361,47 @@ class Data:
     """
 
     def __init__(self, file_descriptor: FileDescriptor = None, nEvents: int = -1, start: int = 0, verbose : bool = False):
-        self.filename = file_descriptor.file
+
         self.verbose = verbose
+    
         if start < 0:
             raise ValueError("start cannot be less than zero")
 
-        if (self.filename is not None) and (file_descriptor.type is None):
-            warnings.warn(f"nTuple type is not specified, assuming it is {Ntuple_Type.PDSP}")
-            self.nTuple_type = Ntuple_Type.SHOWER_MERGING # TODO remove shower merging related data IO
+        if file_descriptor is None:
+            self.filemane = None
+            self.nTuple_type = None
+            self.momentum_scale = None
         else:
-            self.nTuple_type = file_descriptor.type
-        if (self.filename != None):
-            if file_descriptor.momentum_scale is None:
-                if ("_data_" in self.filename):
-                    self.momentum_scale = 1
-                else:
-                    if "GeV" in self.filename:
-                        self.momentum_scale = float(self.filename.split("GeV")[0][-1])
-                    else:
-                        self.momentum_scale = file_descriptor.momentum_scale
+            self.filename = file_descriptor.file
+
+            if (self.filename is not None) and (file_descriptor.type is None):
+                warnings.warn(f"nTuple type is not specified, assuming it is {Ntuple_Type.PDSP}")
+                self.nTuple_type = Ntuple_Type.SHOWER_MERGING # TODO remove shower merging related data IO
             else:
-                self.momentum_scale = file_descriptor.momentum_scale
-            self.nEvents = nEvents
-            self.start = start
-            self.io = IO(self.filename, self.nEvents, self.start)
-            self.run = self.io.Get(["Run", "run"])
-            self.subRun = self.io.Get(["SubRun", "subrun"])
-            self.eventNum = self.io.Get(["EventID", "event"])
-            if self.eventNum is not None:
-                self.event_index = ak.local_index(self.eventNum) + start # unique index for each event
-            self.trueParticles = TrueParticleData(self)
-            self.recoParticles = RecoParticleData(self)
-            self.trueParticlesBT = TrueParticleDataBT(self)
-            self.cutTable = CutTable.CutHandler(self)
+                self.nTuple_type = file_descriptor.type
+            if (self.filename != None):
+                if file_descriptor.momentum_scale is None:
+                    if ("_data_" in self.filename):
+                        self.momentum_scale = 1
+                    else:
+                        if "GeV" in self.filename:
+                            self.momentum_scale = float(self.filename.split("GeV")[0][-1])
+                        else:
+                            self.momentum_scale = file_descriptor.momentum_scale
+                else:
+                    self.momentum_scale = file_descriptor.momentum_scale
+                self.nEvents = nEvents
+                self.start = start
+                self.io = IO(self.filename, self.nEvents, self.start)
+                self.run = self.io.Get(["Run", "run"])
+                self.subRun = self.io.Get(["SubRun", "subrun"])
+                self.eventNum = self.io.Get(["EventID", "event"])
+                if self.eventNum is not None:
+                    self.event_index = ak.local_index(self.eventNum) + start # unique index for each event
+                self.trueParticles = TrueParticleData(self)
+                self.recoParticles = RecoParticleData(self)
+                self.trueParticlesBT = TrueParticleDataBT(self)
+                self.cutTable = CutTable.CutHandler(self)
 
     @property
     def SortedTrueEnergyMask(self) -> ak.Array:
@@ -614,7 +622,7 @@ class Data:
                 self.trueParticlesBT.events = self
         else:
             # copy filtered attributes into new instance
-            filtered = Data(FileDescriptor(self.filename, self.type, self.pmom))
+            filtered = Data(FileDescriptor(self.filename, self.nTuple_type, self.momentum_scale))
             filtered.filename = self.filename
             filtered.verbose = self.verbose
             filtered.momentum_scale = self.momentum_scale

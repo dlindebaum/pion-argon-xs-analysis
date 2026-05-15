@@ -194,8 +194,8 @@ def CreateAnalysisInputMCTrueBeam(mc : cross_section.Data, args : cross_section.
     return cross_section.AnalysisInput.CreateAnalysisInputNtuple(mc_true_beam, args_c["upstream_loss_correction_params"]["value"], None, true_regions, [args["beam_reweight"]["params"][k]["value"] for k in args_c["beam_reweight"]["params"]], args_c["beam_reweight"]["strength"], upstream_loss_func = args_c["upstream_loss_response"])
 
 
-def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
-    events = cross_section.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
+def run(i : int, file_desc : cross_section.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
+    events = cross_section.Data(file_desc, n_events, start)
 
     analysis_input_s = CreateAnalysisInput(events, args, not args["data"])
     if args["data"] == False:

@@ -76,8 +76,8 @@ def CentralValueEstimation(bins : np.ndarray, KE_reco_inst : np.ndarray, KE_true
     return cv
 
 
-def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
-    mc = Master.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
+def run(i : int, file_desc : Master.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
+    mc = Master.Data(file_desc, n_events, start)
     
     mc = BeamPionSelection(mc, args, True)
     if args["no_reweight"] is False:

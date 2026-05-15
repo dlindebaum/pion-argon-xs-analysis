@@ -65,7 +65,7 @@ def SmearingFactors(sample, weights : np.array = None):
     return average, std
 
 
-def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
+def run(i : int, file_desc : cross_section.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
 
     sample = "data" if args["data"] else "mc"
 
@@ -73,7 +73,7 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
 
     if "fiducial" in selections:
         if len(selections["fiducial"]) > 0:
-            fiducial_mask = SelectionTools.CombineMasks(selections["fiducial"][file])
+            fiducial_mask = SelectionTools.CombineMasks(selections["fiducial"][file_desc.file])
         else:
             fiducial_mask = None
     else:
@@ -82,11 +82,11 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
     invert = ["HasFinalStatePFOsCut"] # invert preselection
 
     sideband_selection = {}
-    for m in selections["beam"][file]:
+    for m in selections["beam"][file_desc.file]:
         if m in invert:
-            sideband_selection[m] = ~selections["beam"][file][m]
+            sideband_selection[m] = ~selections["beam"][file_desc.file][m]
         else:
-            sideband_selection[m] = selections["beam"][file][m]
+            sideband_selection[m] = selections["beam"][file_desc.file][m]
 
     table = {}
     mask = None
@@ -100,9 +100,9 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
     print(table)
     sideband_selection = SelectionTools.CombineMasks(sideband_selection)
 
-    events = cross_section.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
+    events = cross_section.Data(file_desc, n_events, start)
 
-    mask = SelectionTools.CombineMasks(selections["beam"][file])
+    mask = SelectionTools.CombineMasks(selections["beam"][file_desc.file])
 
     if fiducial_mask is not None:
         masks = [fiducial_mask, mask]

@@ -361,7 +361,7 @@ def main(args):
         print("run analysis, checking what steps have already been run")
 
         if "data" in args.ntuple_files:
-            n_data = [file_len(file["file"]) for file in args.ntuple_files["data"]]
+            n_data = [file_len(file.file) for file in args.ntuple_files["data"]]
         else:
             n_data = []
         no_data = len(n_data) == 0
