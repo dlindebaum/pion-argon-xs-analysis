@@ -32,7 +32,7 @@ def GetTruncatedPos(sample : Data, truncate : float) -> tuple[ak.Array, ak.Array
     else:
         start_pos = sample.recoParticles.beam_startPos_SCE
         end_pos = sample.recoParticles.beam_endPos_SCE
-
+                                                                                                                
     return start_pos, end_pos
 
 
@@ -63,7 +63,10 @@ def BeamTriggerSelection(events: Data, pdgs : list[int] = [211, 13, -13], use_be
         mask = mask & ak.any(beam_pdg, axis = -1)
         mask = mask & events.recoParticles.reco_reconstructable_beam_event
     else:
-        beam_pdg = ak.flatten(events.trueParticles.pdg[events.trueParticles.number == 1])
+        #beam_pdg = ak.flatten(events.trueParticles.pdg[events.trueParticles.number == 1])
+        #Flattening caused the empty entries to be removed which caused reduced evt num lengthed masks to shorten. 
+        beam_pdg = ak.firsts(events.trueParticles.pdg[events.trueParticles.number == 1])
+        beam_pdg = ak.fill_none(beam_pdg, -999)
         mask = ak.any([beam_pdg == i for i in pdgs], axis = 0)
     if return_property is True:
         return mask, beam_pdg
@@ -286,8 +289,10 @@ def MedianDEdXCut(events: Data, cut : float = 2.4, op = "<", truncate : float = 
     """
     if truncate is None:
         dEdX = events.recoParticles.beam_dEdX
+        print(f"dEdX: {dEdX}")
     else:
         dEdX = GetTruncatedDEdX(events, truncate)
+    print(f"dEdX: {dEdX}")
     median = Median(dEdX)
     return CreateMask(cut, op, median, return_property)
 

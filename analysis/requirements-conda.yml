@@ -1,4 +1,4 @@
-name: pi0-test-test
+name: pdune_analysis
 channels:
   - conda-forge
   - defaults
@@ -354,4 +354,4 @@ dependencies:
     - tables==3.8.0
     - tensorflow-gnn==1.0.3
     - tzlocal==5.2
-prefix: /software/wx21978/miniconda/envs/pi0-test-test
+prefix: /software/gj23442/miniconda3/envs/pdune_analysis

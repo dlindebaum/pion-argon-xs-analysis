@@ -143,9 +143,40 @@ def GenerateTrueParticleTags(events):# : Data) -> Tags:
 
     return tags
 
-
 def GenerateTrueBeamParticleTags(events):# : Data) -> Tags:
     """ Creates true particle tags with boolean masks for beam particles.
+
+    Args:
+        events (Master.Data): events to look at
+
+    Returns:
+        Tags: tags
+    """
+    particles_to_tag = [
+        211, -13, -11, 2212, 321
+    ] # anything not in this list is tagged as other
+
+    masks = ParticleMasks(events.trueParticles.pdg[:, 0], particles_to_tag)
+    masks["other"] = OtherMask(masks)
+
+    inel = events.trueParticles.true_beam_endProcess == "pi+Inelastic"
+    #cosmic = events.trueParticlesBT.beam_origin == 2
+
+    new_mask = {"$\\pi^{+}$:inel" : masks["$\\pi^{+}$"] & inel, "$\\pi^{+}$:decay" : masks["$\\pi^{+}$"] & ~inel}
+
+    masks.pop("$\\pi^{+}$")
+
+    new_mask.update(masks)
+    masks = new_mask
+
+    tags = Tags()
+    for i, m in enumerate(masks):
+        tags[m] = Tag(m, m, "C" + str(i), masks[m], i)
+
+    return tags
+
+def GenerateBeamCandidateTags(events):# : Data) -> Tags:
+    """ Creates particle tags with boolean masks for reco beam candidates.
 
     Args:
         events (Master.Data): events to look at

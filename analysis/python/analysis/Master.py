@@ -278,6 +278,7 @@ class IO:
 class Ntuple_Type(str, Enum):
     PDSP = "PDSPAnalyser"
     SHOWER_MERGING = "shower_merging"
+    PDSP_SCEOff = "PDSPAnalyser_SCEOff"
 
 
 class Data:
@@ -1018,7 +1019,7 @@ class TrueParticleData(ParticleData):
 
     @property
     def pdg(self) -> ak.Array:
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.PDSP or self.events.nTuple_type == Ntuple_Type.PDSP_SCEOff:
             self.PDSPData("pdg", "true_beam_PDG", "true_beam_daughter_PDG", "true_beam_Pi0_decay_PDG")
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             self.LoadData("pdg", "g4_Pdg")
@@ -1026,7 +1027,7 @@ class TrueParticleData(ParticleData):
 
     @property
     def number(self) -> ak.Array:
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.PDSP or self.events.nTuple_type == Ntuple_Type.PDSP_SCEOff:
             self.PDSPData("number", "true_beam_ID", "true_beam_daughter_ID", "true_beam_Pi0_decay_ID")
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             self.LoadData("number", "g4_num")
@@ -1035,7 +1036,7 @@ class TrueParticleData(ParticleData):
     @property
     def mother(self) -> ak.Array:
         var_name = f"_{type(self).__name__}__mother"
-        if self.events.nTuple_type == Ntuple_Type.PDSP and not hasattr(self, var_name):
+        if self.events.nTuple_type == Ntuple_Type.PDSP or self.events.nTuple_type == Ntuple_Type.PDSP_SCEOff and not hasattr(self, var_name):
             beam = ak.Array([0] * ak.count(self.events.io.Get("true_beam_ID"))) #! need to check null values for these
             daughter = ak.Array([[1]*i for i in ak.num(self.events.io.Get("true_beam_daughter_ID"))]) #! need to check null values for these
             grand_daughter = self.events.io.Get("true_beam_Pi0_decay_parID")
@@ -1048,7 +1049,7 @@ class TrueParticleData(ParticleData):
 
     @property
     def mother_pdg(self) -> ak.Array:
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.PDSP or self.events.nTuple_type == Ntuple_Type.PDSP_SCEOff:
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
                 + "'mother_pdg' for 'PDSP' ntuple type.")
@@ -1059,7 +1060,7 @@ class TrueParticleData(ParticleData):
     def mass(self) -> ak.Array:
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             self.LoadData("mass", "g4_mass") # PDSPAnalyzer does not contain this information, but we can create this ourselves
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.PDSP or self.events.nTuple_type == Ntuple_Type.PDSP_SCEOff:
             unique_pdgs = np.unique(ak.ravel(self.events.trueParticles.pdg)) # get all unique pdg codes
 
             # make a "mask" for each pdg code, mapping pdg code to mass
@@ -1084,7 +1085,7 @@ class TrueParticleData(ParticleData):
     def energy(self) -> ak.Array:
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             self.LoadData("energy", "g4_startE") # PDSPAnalyzer does not contain this information, but we can create this ourselves
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.PDSP or self.events.nTuple_type == Ntuple_Type.PDSP_SCEOff:
             e = (vector.magnitude(self.momentum) ** 2 - self.mass ** 2) ** 0.5
             setattr(self, f"_{type(self).__name__}__energy", e)
             self.FilterVariable("energy")
@@ -1094,7 +1095,7 @@ class TrueParticleData(ParticleData):
     def momentum(self) -> ak.Record:
         var_name = f"_{type(self).__name__}__momentum"
         apply_scaling = not hasattr(self, var_name)
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.PDSP or self.events.nTuple_type == Ntuple_Type.PDSP_SCEOff:
             self.PDSPDataVector("momentum", ["true_beam_startPx", "true_beam_startPy", "true_beam_startPz"], ["true_beam_daughter_startPx", "true_beam_daughter_startPy", "true_beam_daughter_startPz"], ["true_beam_Pi0_decay_startPx", "true_beam_Pi0_decay_startPy", "true_beam_Pi0_decay_startPz"])
             if apply_scaling: # PDSP analyser stores true energy information in GeV
                 setattr(self, var_name, vector.prod(1000, getattr(self, var_name)))
@@ -1110,7 +1111,7 @@ class TrueParticleData(ParticleData):
 
     @property
     def shower_start_pos(self) -> ak.Record:
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.PDSP or self.events.nTuple_type == Ntuple_Type.PDSP_SCEOff:
             self.PDSPDataVector("shower_start_pos", ["true_beam_startX", "true_beam_startY", "true_beam_startZ"], ["true_beam_daughter_startX", "true_beam_daughter_startY", "true_beam_daughter_startZ"], ["true_beam_Pi0_decay_startX", "true_beam_Pi0_decay_startY", "true_beam_Pi0_decay_startZ"])
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             self.LoadData("shower_start_pos", ["g4_startX", "g4_startY", "g4_startZ"], is_vector = True)
@@ -1118,7 +1119,7 @@ class TrueParticleData(ParticleData):
 
     @property
     def endPos(self) -> ak.Record:
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.PDSP or self.events.nTuple_type == Ntuple_Type.PDSP_SCEOff:
             self.PDSPDataVector("endPos", ["true_beam_endX", "true_beam_endY", "true_beam_endZ"], ["true_beam_daughter_endX", "true_beam_daughter_endY", "true_beam_daughter_endZ"], ["true_beam_Pi0_decay_startX", "true_beam_Pi0_decay_startY", "true_beam_Pi0_decay_startZ"])
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
             self.LoadData("endPos", ["g4_endX", "g4_endY", "g4_endZ"], is_vector = True)
@@ -1340,6 +1341,11 @@ class RecoParticleData(ParticleData):
     def beam_number(self) -> ak.Array:
         self.LoadData("beam_number", ["beamNum", "reco_beam_PFP_ID"])
         return getattr(self, f"_{type(self).__name__}__beam_number")
+    
+    @property
+    def beam_particles(self) -> ak.Array:
+        self.LoadData("beam_particles", ["n_beam_particles"])
+        return getattr(self, f"_{type(self).__name__}__beam_particles")
 
     @property
     def beam_sliceID(self) -> ak.Array:
@@ -1359,6 +1365,14 @@ class RecoParticleData(ParticleData):
             ["reco_beam_calo_endY"],
             ["reco_beam_calo_endZ"]
         ]
+
+        if self.events.nTuple_type == Ntuple_Type.PDSP_SCEOff:
+            nTuples = [
+                ["reco_beam_endX"],
+                ["reco_beam_endY"],
+                ["reco_beam_endZ"]
+            ]
+        
         self.LoadData("beam_endPos_SCE", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__beam_endPos_SCE")
 
@@ -1379,6 +1393,12 @@ class RecoParticleData(ParticleData):
             ["reco_beam_calo_startY"],
             ["reco_beam_calo_startZ"]
         ]
+        if self.events.nTuple_type == Ntuple_Type.PDSP_SCEOff:
+            nTuples = [
+                ["reco_beam_startX"],
+                ["reco_beam_startY"],
+                ["reco_beam_startZ"]
+            ]
         self.LoadData("beam_startPos_SCE", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__beam_startPos_SCE")
 
@@ -1400,6 +1420,9 @@ class RecoParticleData(ParticleData):
     @property
     def beam_caloWire(self) -> ak.Array:
         self.LoadData("beam_caloWire", "reco_beam_calo_wire")
+
+        if self.events.nTuple_type == Ntuple_Type.PDSP_SCEOff:
+            self.LoadData("beam_caloWire", "reco_beam_calo_wire_NoSCE")
         return getattr(self, f"_{type(self).__name__}__beam_caloWire")
 
     @property
@@ -1694,7 +1717,7 @@ class RecoParticleData(ParticleData):
             tag = self.events.recoParticles.pandora_tag[self.events.recoParticles.beam_number == self.events.recoParticles.number]
             tag = ak.flatten(ak.fill_none(ak.pad_none(tag, 1), -999))
             setattr(self, f"_{type(self).__name__}__beam_pandora_tag", tag)
-        if self.events.nTuple_type == Ntuple_Type.PDSP:
+        if self.events.nTuple_type == Ntuple_Type.PDSP or self.events.nTuple_type == Ntuple_Type.PDSP_SCEOff:
             self.LoadData("beam_pandora_tag", "reco_beam_type")
         return getattr(self, f"_{type(self).__name__}__beam_pandora_tag")
 
@@ -1932,7 +1955,7 @@ class TrueParticleDataBT(ParticleData):
     @property
     def energy(self) -> ak.Array:
         self.LoadData("energy", "reco_daughter_PFP_true_byHits_startE")
-        factor = 1000 if self.events.nTuple_type == Ntuple_Type.PDSP else 1
+        factor = 1000 if self.events.nTuple_type == Ntuple_Type.PDSP or self.events.nTuple_type == Ntuple_Type.PDSP_SCEOff else 1
         return factor * getattr(self, f"_{type(self).__name__}__energy")
 
     @property
@@ -2017,7 +2040,7 @@ class TrueParticleDataBT(ParticleData):
                 else:
                     v = None
                 setattr(self, f"_{type(self).__name__}__purity", v)
-            if self.events.nTuple_type == Ntuple_Type.PDSP:
+            if  self.events.nTuple_type == Ntuple_Type.PDSP or self.events.nTuple_type == Ntuple_Type.PDSP_SCEOff:
                 self.LoadData("purity", "reco_daughter_PFP_true_byHits_purity")
         return getattr(self, f"_{type(self).__name__}__purity")
 
@@ -2030,7 +2053,7 @@ class TrueParticleDataBT(ParticleData):
                 else:
                     v = None
                 setattr(self, f"_{type(self).__name__}__completeness", v)
-            if self.events.nTuple_type == Ntuple_Type.PDSP:
+            if self.events.nTuple_type == Ntuple_Type.PDSP or self.events.nTuple_type == Ntuple_Type.PDSP_SCEOff:
                 self.LoadData("completeness", "reco_daughter_PFP_true_byHits_completeness")
         return getattr(self, f"_{type(self).__name__}__completeness")
 
