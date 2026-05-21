@@ -18,6 +18,7 @@ from apps import (
     cex_upstream_loss,
     cex_toy_parameters,
     cex_analysis_input,
+    cex_mach3_input,
     cex_analyse
     )
 
@@ -567,6 +568,12 @@ def main(args):
             args = update_args() # reload config to continue
         if args.stop == "analysis_input": return
 
+        #* mach3_input
+        can_run_m3 = ("mach3_input" not in os.listdir(args.out)) and len(n_data > 0)
+        if can_run_m3 or check_run(args, "mach3_input"):
+            print("run mach3_input")
+            cex_mach3_input.main(args)
+
         # if all other prerequisites were met, this should run
         if check_run(args, "analyse"):
             print("analyse")
@@ -581,7 +588,7 @@ def main(args):
 
 if __name__ == "__main__":
 
-    analysis_options = ["normalisation", "beam_quality", "beam_scraper", "photon_correction", "selection", "reweight", "upstream_correction", "toy_parameters", "analysis_input", "analyse"]
+    analysis_options = ["normalisation", "beam_quality", "beam_scraper", "photon_correction", "selection", "reweight", "upstream_correction", "toy_parameters", "analysis_input", "mach3_input", "analyse"]
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-C", "--create_config", type = str, help = "Create a template configuration with the default selection")
