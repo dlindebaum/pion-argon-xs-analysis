@@ -21,7 +21,13 @@ def main(args : cross_section.argparse.Namespace):
     # MaCh3 file requires MC samples with information and the Data histograms.
     for n, m in data.regions.items():
         new_sample = mc.SelectSample(mc.regions[n])
-        hists = {f"{n}_DataHist" : np.histogram(np.array(data.KE_int_reco[m]), np.arange(0, 2450, 50))}
+
+        bins = np.arange(
+            min(args.mach3_input["KE_int_binning"]["range"]),
+            max(args.mach3_input["KE_int_binning"]["range"]) + args.mach3_input["KE_int_binning"]["bin_width"],
+            args.mach3_input["KE_int_binning"]["bin_width"]
+            )
+        hists = {f"{n}_DataHist" : np.histogram(np.array(data.KE_int_reco[m]), bins)}
 
         fw = cross_section.IO(f"{out}pdsp_R{n}.root")
         fw.WriteData(vars(new_sample), hists, True)

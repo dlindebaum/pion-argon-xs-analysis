@@ -297,6 +297,12 @@ def template_config():
             "op": "<"
             }
         },
+        "MACH3_INPUT": {
+            "KE_int_binning" : {
+                "range" : [None, None],
+                "bin_width" : None
+            }
+        },
         "beam_momentum" : "nominal beam momentum in MeV", #! should be deprciated
         "P_inst_range" : "plot range",
         "KE_inst_range" : "plot range",

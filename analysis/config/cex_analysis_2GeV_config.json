@@ -329,6 +329,12 @@
       "op": "<"
     }
   },
+  "MACH3_INPUT": {
+    "KE_int_binning" : {
+        "range" : [0, 2400],
+        "bin_width" : 50
+    }
+  },
   "beam_momentum": 2000,
   "P_inst_range": [
     1000,

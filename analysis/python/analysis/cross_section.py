@@ -921,6 +921,8 @@ class ApplicationArguments:
                 args.analysis_input = {k : v for k, v in value.items()}
             elif head == "UNFOLDING":
                 args.unfolding = {k : v for k, v in value.items()}
+            elif head == "MACH3_INPUT":
+                args.mach3_input = value
             elif head == "KINEMATIC_RANGES":
                 for k, v in value.items():
                     if k == "beam_momentum":
