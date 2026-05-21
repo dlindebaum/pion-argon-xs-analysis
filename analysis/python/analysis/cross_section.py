@@ -1968,7 +1968,7 @@ class AnalysisInput:
             file (str): file path.
         """
         file_writer = IO(file)
-        file_writer.WriteData("FlatTree_VARS", vars(self), True)
+        file_writer.WriteData(vars(self), None, True)
         return
 
 

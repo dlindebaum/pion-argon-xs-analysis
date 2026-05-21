@@ -228,8 +228,8 @@ class IO:
         self.start = _start
         self.nEvents = _nEvents
 
-
-    def __convert_types(self, d : dict[dict | ak.Array]) -> dict:
+    @staticmethod
+    def convert_types(d : dict[dict | ak.Array]) -> dict:
         """ Convert the types from a nested dictionary of awkward arrays being written to a ROOT file.
             Optional types (data where there was/is a null entry) is converted to a standard Awkward array type.
 
@@ -245,7 +245,7 @@ class IO:
                 print(f"Info: data entry {k} is None, this entry will be dropped.")
                 continue
             if type(v) == dict:
-                for k1, v1 in self.__convert_types(v).items():
+                for k1, v1 in IO.convert_types(v).items():
                     d_new[f"{k}_{k1}"] = v1
             elif isinstance(v.type.content, ak.types.OptionType):
                 d_new[k] = ak.Array(v.layout.project())
@@ -254,21 +254,28 @@ class IO:
         return d_new
 
 
-    def WriteData(self, name : str, data : dict, overwrite : bool = False):
-        """ Write TTree to a new root file. Overwrites are not permitted.
+    def WriteData(self, vectors : dict = None, histograms : dict = None, overwrite : bool = False):
+        """ Write TTree to a new root file.
 
         Args:
-            name (str): TTree name.
-            data (dict): data file, can be a nested dictionary of np or Awkward arrays.
-            overwrite (bool, optional): Overwrites output file. Defaults to True.
+            vectors (dict, optional): Dictionary of vectors. Vectors must be the same size, can be a nested dictionary of np or Awkward arrays. Defaults to None.
+            histograms (dict, optional): Dictionary of Histogram like objects (e.g. output of np.histogram). Can be variable in size. Defaults to None.
+            overwrite (bool, optional): Overwrites output file. Defaults to False.
         """
         split = self.filename.split("/")
         path = "/".join(split[:-1] + [split[-1].split(".")[0] + ".root"])
 
         io_obj = uproot.recreate if overwrite is True else uproot.create
         with io_obj(path) as file: # create instead of recreate so we dont accidently overwrite our precious ntuple files.
-            print(file)
-            file.mktree(name, self.__convert_types(data))
+            # vector like inputs
+            if vectors is not None:
+                file.mktree("FlatTree_VARS", self.convert_types(vectors))
+    
+            # histogram like inputs
+            if histograms is not None:
+                for k, v in histograms.items():
+                    file[k] = v
+
         print(f"TTree Written to {path}")
         return
 
@@ -307,6 +314,7 @@ class IO:
                 warnings.warn(f"ntuple names {item} could not be found in the file.")
         else:
             return self.LoadData(item)
+
 
     def ListNTuples(self, search: str = "", return_keys=False):
         """ list all NTuple entries produced by the analyser.
