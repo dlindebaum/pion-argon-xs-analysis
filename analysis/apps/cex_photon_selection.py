@@ -40,11 +40,10 @@ def CreatePFOMasks(masks : dict[ak.Array]) -> ak.Array:
             mask = mask & masks[m]
     return mask
 
-
-def run(i, file, n_events, start, selected_events, args):
+def run(i : int, file_desc : Master.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
     output = {}
 
-    events = Master.Data(file, n_events, start, args["nTuple_type"], args["pmom"], verbose = True)
+    events = Master.Data(file_desc, n_events, start)
 
     for s, a in zip(args["beam_selection"]["selections"].values(), args["beam_selection"]["mc_arguments"].values()):
         print(s)
@@ -389,7 +388,7 @@ def main(args):
 
     for name, p in params.items():
         sf = [len(f'{p["error"][f"p{i}"]:.1g}') - 1 for i in range(len(p["value"]))]
-        table = pd.DataFrame({f"$p_{{{i}}}$" : f'{p["value"][f"p{i}"]:.{sf[i]}f} $\pm$ {p["error"][f"p{i}"]:.1g}' for i in range(len(p["value"]))}, index = [0])
+        table = pd.DataFrame({f"$p_{{{i}}}$" : f'{p["value"][f"p{i}"]:.{sf[i]}f} $\\pm$ {p["error"][f"p{i}"]:.1g}' for i in range(len(p["value"]))}, index = [0])
         table.style.hide(axis = "index").to_latex(out + name + ".tex")
         cross_section.SaveConfiguration(p, out + name + ".json")
 

@@ -10,6 +10,7 @@ import time
 import warnings
 
 from abc import ABC, abstractmethod
+from collections import namedtuple
 from enum import Enum
 
 import awkward as ak
@@ -25,6 +26,8 @@ from rich import print
 
 # custom modules
 from python.analysis import vector, CutTable
+
+FileDescriptor = namedtuple("FileDescriptor", ["file", "type", "momentum_scale"])
 
 null_vector = ak.Array([{"x": -999, "y": -999, "z": -999}])
 
@@ -73,7 +76,7 @@ def SaveObject(file : str, obj : dict):
 
 def LoadConfiguration(file : str) -> dict:
     """ Loads a json file.
-
+path
     Args:
         file (str): file path
 
@@ -225,8 +228,8 @@ class IO:
         self.start = _start
         self.nEvents = _nEvents
 
-
-    def __convert_types(self, d : dict[dict | ak.Array]) -> dict:
+    @staticmethod
+    def convert_types(d : dict[dict | ak.Array]) -> dict:
         """ Convert the types from a nested dictionary of awkward arrays being written to a ROOT file.
             Optional types (data where there was/is a null entry) is converted to a standard Awkward array type.
 
@@ -242,7 +245,7 @@ class IO:
                 print(f"Info: data entry {k} is None, this entry will be dropped.")
                 continue
             if type(v) == dict:
-                for k1, v1 in self.__convert_types(v).items():
+                for k1, v1 in IO.convert_types(v).items():
                     d_new[f"{k}_{k1}"] = v1
             elif isinstance(v.type.content, ak.types.OptionType):
                 d_new[k] = ak.Array(v.layout.project())
@@ -251,19 +254,28 @@ class IO:
         return d_new
 
 
-    def WriteData(self, name : str, data : dict):
-        """ Write TTree to a new root file. Overwrites are not permitted.
+    def WriteData(self, vectors : dict = None, histograms : dict = None, overwrite : bool = False):
+        """ Write TTree to a new root file.
 
         Args:
-            name (str): TTree name.
-            data (dict): data file, can be a nested dictionary of np or Awkward arrays.
-            flat_tree (bool, optional): Flattens the dictionary create a TTree with no nesting. Note, the data itself is not flattened. Defaults to True.
+            vectors (dict, optional): Dictionary of vectors. Vectors must be the same size, can be a nested dictionary of np or Awkward arrays. Defaults to None.
+            histograms (dict, optional): Dictionary of Histogram like objects (e.g. output of np.histogram). Can be variable in size. Defaults to None.
+            overwrite (bool, optional): Overwrites output file. Defaults to False.
         """
         split = self.filename.split("/")
         path = "/".join(split[:-1] + [split[-1].split(".")[0] + ".root"])
-        with uproot.create(path) as file: # create instead of recreate so we dont accidently overwrite our precious ntuple files.
-            print(file)
-            file.mktree(name, self.__convert_types(data))
+
+        io_obj = uproot.recreate if overwrite is True else uproot.create
+        with io_obj(path) as file: # create instead of recreate so we dont accidently overwrite our precious ntuple files.
+            # vector like inputs
+            if vectors is not None:
+                file.mktree("FlatTree_VARS", self.convert_types(vectors))
+    
+            # histogram like inputs
+            if histograms is not None:
+                for k, v in histograms.items():
+                    file[k] = v
+
         print(f"TTree Written to {path}")
         return
 
@@ -302,6 +314,7 @@ class IO:
                 warnings.warn(f"ntuple names {item} could not be found in the file.")
         else:
             return self.LoadData(item)
+
 
     def ListNTuples(self, search: str = "", return_keys=False):
         """ list all NTuple entries produced by the analyser.
@@ -355,40 +368,48 @@ class Data:
         MergeShowerBT (Data): Merge showers using bactacked matching for pure pi0 sample.
     """
 
-    def __init__(self, filename: str = None, nEvents: int = -1, start: int = 0, nTuple_type : Ntuple_Type = None, target_momentum : int = None, verbose : bool = False):
-        self.filename = filename
+    def __init__(self, file_descriptor: FileDescriptor = None, nEvents: int = -1, start: int = 0, verbose : bool = False):
+
         self.verbose = verbose
+    
         if start < 0:
             raise ValueError("start cannot be less than zero")
 
-        if (filename is not None) and (nTuple_type is None):
-            warnings.warn(f"nTuple type is not specified, assuming it is {Ntuple_Type.SHOWER_MERGING}")
-            self.nTuple_type = Ntuple_Type.SHOWER_MERGING
+        if file_descriptor is None:
+            self.filemane = None
+            self.nTuple_type = None
+            self.momentum_scale = None
         else:
-            self.nTuple_type = nTuple_type
-        if (self.filename != None):
-            if target_momentum is None:
-                if ("_data_" in self.filename):
-                    self.target_mom = 1
-                else:
-                    if "GeV" in self.filename:
-                        self.target_mom = float(self.filename.split("GeV")[0][-1])
-                    else:
-                        self.target_mom = target_momentum
+            self.filename = file_descriptor.file
+
+            if (self.filename is not None) and (file_descriptor.type is None):
+                warnings.warn(f"nTuple type is not specified, assuming it is {Ntuple_Type.PDSP}")
+                self.nTuple_type = Ntuple_Type.SHOWER_MERGING # TODO remove shower merging related data IO
             else:
-                self.target_mom = target_momentum
-            self.nEvents = nEvents
-            self.start = start
-            self.io = IO(self.filename, self.nEvents, self.start)
-            self.run = self.io.Get(["Run", "run"])
-            self.subRun = self.io.Get(["SubRun", "subrun"])
-            self.eventNum = self.io.Get(["EventID", "event"])
-            if self.eventNum is not None:
-                self.event_index = ak.local_index(self.eventNum) + start # unique index for each event
-            self.trueParticles = TrueParticleData(self)
-            self.recoParticles = RecoParticleData(self)
-            self.trueParticlesBT = TrueParticleDataBT(self)
-            self.cutTable = CutTable.CutHandler(self)
+                self.nTuple_type = file_descriptor.type
+            if (self.filename != None):
+                if file_descriptor.momentum_scale is None:
+                    if ("_data_" in self.filename):
+                        self.momentum_scale = 1
+                    else:
+                        if "GeV" in self.filename:
+                            self.momentum_scale = float(self.filename.split("GeV")[0][-1])
+                        else:
+                            self.momentum_scale = file_descriptor.momentum_scale
+                else:
+                    self.momentum_scale = file_descriptor.momentum_scale
+                self.nEvents = nEvents
+                self.start = start
+                self.io = IO(self.filename, self.nEvents, self.start)
+                self.run = self.io.Get(["Run", "run"])
+                self.subRun = self.io.Get(["SubRun", "subrun"])
+                self.eventNum = self.io.Get(["EventID", "event"])
+                if self.eventNum is not None:
+                    self.event_index = ak.local_index(self.eventNum) + start # unique index for each event
+                self.trueParticles = TrueParticleData(self)
+                self.recoParticles = RecoParticleData(self)
+                self.trueParticlesBT = TrueParticleDataBT(self)
+                self.cutTable = CutTable.CutHandler(self)
 
     @property
     def SortedTrueEnergyMask(self) -> ak.Array:
@@ -609,10 +630,10 @@ class Data:
                 self.trueParticlesBT.events = self
         else:
             # copy filtered attributes into new instance
-            filtered = Data(nTuple_type = self.nTuple_type)
+            filtered = Data(FileDescriptor(self.filename, self.nTuple_type, self.momentum_scale))
             filtered.filename = self.filename
             filtered.verbose = self.verbose
-            filtered.target_mom = self.target_mom
+            filtered.momentum_scale = self.momentum_scale
             filtered.nEvents = self.nEvents
             filtered.start = self.start
             filtered.io = IO(filtered.filename,
@@ -1499,7 +1520,7 @@ class RecoParticleData(ParticleData):
     @property
     def beam_inst_P(self) -> type:
         self.LoadData("beam_inst_P", "beam_inst_P")
-        return self.events.target_mom * 1000 * getattr(self, f"_{type(self).__name__}__beam_inst_P")
+        return self.events.momentum_scale * 1000 * getattr(self, f"_{type(self).__name__}__beam_inst_P")
 
     @property
     def beam_inst_pos(self) -> ak.Record:

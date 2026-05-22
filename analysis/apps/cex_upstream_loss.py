@@ -76,8 +76,8 @@ def CentralValueEstimation(bins : np.ndarray, KE_reco_inst : np.ndarray, KE_true
     return cv
 
 
-def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
-    mc = Master.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
+def run(i : int, file_desc : Master.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
+    mc = Master.Data(file_desc, n_events, start)
     
     mc = BeamPionSelection(mc, args, True)
     if args["no_reweight"] is False:
@@ -92,10 +92,6 @@ def main(args : argparse.Namespace):
     cross_section.PlotStyler.SetPlotStyle(False)
     outdir = args.out + "upstream_loss/"
     os.makedirs(outdir, exist_ok = True)
-
-    args.batches = None
-    args.events = None
-    args.threads = 1
 
     output_mc = cross_section.ApplicationProcessing(["mc"], outdir, args, run, True)["mc"]
 
@@ -136,6 +132,7 @@ if __name__ == "__main__":
     cross_section.ApplicationArguments.Config(parser, True)
     cross_section.ApplicationArguments.Output(parser)
     cross_section.ApplicationArguments.Regen(parser)
+    cross_section.ApplicationArguments.Processing(parser)
     parser.add_argument("--cv_function", dest = "upstream_loss_cv_function", type = str, default = "gaussian", help = "method to extract central value, possible options are ['None', 'gaussian', 'student_t', 'double_gaussian', 'crystal_ball']")
     parser.add_argument("--no_reweight", dest = "no_reweight", action = "store_true", help = "perform correction without reweighted MC")
 

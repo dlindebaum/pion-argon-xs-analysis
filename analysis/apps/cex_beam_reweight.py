@@ -65,7 +65,7 @@ def SmearingFactors(sample, weights : np.array = None):
     return average, std
 
 
-def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
+def run(i : int, file_desc : cross_section.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
 
     sample = "data" if args["data"] else "mc"
 
@@ -73,7 +73,7 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
 
     if "fiducial" in selections:
         if len(selections["fiducial"]) > 0:
-            fiducial_mask = SelectionTools.CombineMasks(selections["fiducial"][file])
+            fiducial_mask = SelectionTools.CombineMasks(selections["fiducial"][file_desc.file])
         else:
             fiducial_mask = None
     else:
@@ -82,11 +82,11 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
     invert = ["HasFinalStatePFOsCut"] # invert preselection
 
     sideband_selection = {}
-    for m in selections["beam"][file]:
+    for m in selections["beam"][file_desc.file]:
         if m in invert:
-            sideband_selection[m] = ~selections["beam"][file][m]
+            sideband_selection[m] = ~selections["beam"][file_desc.file][m]
         else:
-            sideband_selection[m] = selections["beam"][file][m]
+            sideband_selection[m] = selections["beam"][file_desc.file][m]
 
     table = {}
     mask = None
@@ -100,9 +100,9 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
     print(table)
     sideband_selection = SelectionTools.CombineMasks(sideband_selection)
 
-    events = cross_section.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
+    events = cross_section.Data(file_desc, n_events, start)
 
-    mask = SelectionTools.CombineMasks(selections["beam"][file])
+    mask = SelectionTools.CombineMasks(selections["beam"][file_desc.file])
 
     if fiducial_mask is not None:
         masks = [fiducial_mask, mask]
@@ -138,10 +138,6 @@ def main(args : cross_section.argparse.Namespace):
     cross_section.PlotStyler.SetPlotStyle(extend_colors = True, dpi = 100)
     out = args.out + "beam_reweight/"
     os.makedirs(out, exist_ok = True)
-
-    args.batches = None
-    args.events = None
-    args.threads = 1
 
     outputs = cross_section.ApplicationProcessing(list(args.ntuple_files.keys()), out, args, run, True)
 
@@ -208,6 +204,7 @@ if __name__ == "__main__":
     cross_section.ApplicationArguments.Config(args, True)
     cross_section.ApplicationArguments.Output(args)
     cross_section.ApplicationArguments.Regen(args)
+    cross_section.ApplicationArguments.Processing(args)
 
     args = cross_section.ApplicationArguments.ResolveArgs(args.parse_args())
     print(vars(args))

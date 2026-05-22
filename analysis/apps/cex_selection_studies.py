@@ -23,14 +23,14 @@ x_label = {
     "PiPlusSelection" : "Median $dE/dX$ (MeV/cm)",
     "BeamParticleDistanceCut" : "$d$ (cm)",
     "BeamParticleIPCut" : "$b$ (cm)",
-    "Chi2ProtonSelection" : "$(\chi^{2}/ndf)_{p}$",
+    "Chi2ProtonSelection" : "$(\\chi^{2}/ndf)_{p}$",
     "PiBeamSelection" : "True particle ID",
     "APA3Cut" : "Beam end position $z$ (cm)",
     "TrueFiducialCut" : "True beam end position $z$ (cm)",
     "PandoraTagCut" : "Pandora tag",
-    "DxyCut" : "$\delta_{xy}$",
-    "DzCut" : "$\delta_{z}$",
-    "CosThetaCut" : "$\cos(\\theta)$",
+    "DxyCut" : "$\\delta_{xy}$",
+    "DzCut" : "$\\delta_{z}$",
+    "CosThetaCut" : "$\\cos(\\theta)$",
     "MichelScoreCut" : "Michel score",
     "MedianDEdXCut" : "Median $dE/dX$ (MeV/cm)",
     "BeamScraperCut" : "$r_{inst}$",
@@ -437,11 +437,11 @@ def CreatePFOMasks(sample : Master.Data, selections : dict, args_type : str, ext
         masks[n] = c(sample, **v)
     return masks
 
-def run(i, file, n_events, start, selected_events, args) -> dict:
-    events = Master.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
+def run(i, file : Master.FileDescriptor, n_events, start, selected_events, args) -> dict:
+    events = Master.Data(file, n_events, start)
 
     output = {
-        "name" : file,
+        "name" : file.file,
         "fiducial" : None,
         "beam" : None,
         "null_pfo" : None,
@@ -664,22 +664,22 @@ def MakePi0SelectionPlots(output_mc : dict, output_data : dict, outDir : str, no
                 for i, j in zip(u, c):
                     n_photons_scaled.extend([i]* int(scale * j))
 
-                Plots.PlotBarComparision(n_photons_scaled, output_data["NPhotonCandidateSelection"]["value"], xlabel = "Number of $\pi^{0}$ photon candidates", label_1 = "MC", label_2 = "Data", fraction = True, barlabel = False)
+                Plots.PlotBarComparision(n_photons_scaled, output_data["NPhotonCandidateSelection"]["value"], xlabel = "Number of $\\pi^{0}$ photon candidates", label_1 = "MC", label_2 = "Data", fraction = True, barlabel = False)
             else:
-                Plots.PlotBar(output_mc["NPhotonCandidateSelection"]["value"], xlabel = "Number of $\pi^{0}$ photon candidates")
+                Plots.PlotBar(output_mc["NPhotonCandidateSelection"]["value"], xlabel = "Number of $\\pi^{0}$ photon candidates")
             pdf.Save()
 
         if "Pi0MassSelection" in output_mc:
-            Plots.PlotTagged(output_mc["Pi0MassSelection"]["value"], output_mc["Pi0MassSelection"]["tags"], data2 = output_data["Pi0MassSelection"]["value"] if output_data else None, bins = nbins, x_label = "$m_{\gamma\gamma}$ (MeV)", x_range = [0, 500], norm = norm, ncols = 1)
+            Plots.PlotTagged(output_mc["Pi0MassSelection"]["value"], output_mc["Pi0MassSelection"]["tags"], data2 = output_data["Pi0MassSelection"]["value"] if output_data else None, bins = nbins, x_label = "$m_{\\gamma\\gamma}$ (MeV)", x_range = [0, 500], norm = norm, ncols = 1)
             Plots.DrawMultiCutPosition(output_mc["Pi0MassSelection"]["cuts"], face = output_mc["Pi0MassSelection"]["op"], arrow_length = 50, color = "C6")
             pdf.Save()
 
-            Plots.PlotTagged(output_mc["Pi0MassSelection"]["value"], output_mc["mass_event_tag"]["tags"], data2 = output_data["Pi0MassSelection"]["value"] if output_data else None, bins = nbins, x_label = "$m_{\gamma\gamma}$ (MeV)", x_range = [0, 500], norm = norm, ncols = 1)
+            Plots.PlotTagged(output_mc["Pi0MassSelection"]["value"], output_mc["mass_event_tag"]["tags"], data2 = output_data["Pi0MassSelection"]["value"] if output_data else None, bins = nbins, x_label = "$m_{\\gamma\\gamma}$ (MeV)", x_range = [0, 500], norm = norm, ncols = 1)
             Plots.DrawMultiCutPosition(output_mc["Pi0MassSelection"]["cuts"], face = output_mc["Pi0MassSelection"]["op"], arrow_length = 50, color = "C6")
             pdf.Save()
 
         if "Pi0OpeningAngleSelection" in output_mc:
-            Plots.PlotTagged(output_mc["Pi0OpeningAngleSelection"]["value"], output_mc["Pi0OpeningAngleSelection"]["tags"], data2 = output_data["Pi0OpeningAngleSelection"]["value"] if output_data else None, bins = nbins, x_label = "$\phi$ (rad)", norm = norm, ncols = 1)
+            Plots.PlotTagged(output_mc["Pi0OpeningAngleSelection"]["value"], output_mc["Pi0OpeningAngleSelection"]["tags"], data2 = output_data["Pi0OpeningAngleSelection"]["value"] if output_data else None, bins = nbins, x_label = "$\\phi$ (rad)", norm = norm, ncols = 1)
 
             Plots.DrawMultiCutPosition((np.array(output_mc["Pi0OpeningAngleSelection"]["cuts"]) * np.pi / 180).tolist(), face = output_mc["Pi0OpeningAngleSelection"]["op"], arrow_length = 0.25, color = "C6")
             Plots.plt.ylim(bottom = 0)

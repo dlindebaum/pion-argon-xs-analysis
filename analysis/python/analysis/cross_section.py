@@ -12,7 +12,7 @@ import numbers
 import os
 
 from collections import namedtuple
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 import awkward as ak
@@ -28,7 +28,7 @@ from scipy.interpolate import interp1d, UnivariateSpline
 from scipy.stats import chi2, ks_2samp
 
 from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, RegionDefinitions, ProcessDefinitions, Processing
-from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer, IO
+from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer, IO, FileDescriptor
 from python.analysis.Utils import *
 
 GEANT_XS = os.environ["PYTHONPATH"] + "/data/g4_xs_pi_KE_100.root"
@@ -356,37 +356,30 @@ def file_len(file : str):
 
 def CalculateBatches(args):
     if "data" in args.ntuple_files:
-        n_data = [file_len(file["file"]) for file in args.ntuple_files["data"]]
+        n_data = [file_len(file_desc.file) for file_desc in args.ntuple_files["data"]]
     else:
         n_data = []
 
     if len(n_data) == 0:
         print("no data file was specified, 'normalisation', 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
 
-    n_mc = [file_len(file["file"]) for file in args.ntuple_files["mc"]] # must have MC
+    n_mc = [file_len(file_desc.file) for file_desc in args.ntuple_files["mc"]] # must have MC
 
-    processing_args = {"events" : None, "batches" : None, "threads" : None}
+    processing_args = {"events" : None, "batches" : None, "threads" : args.cpus}
 
     # pass multiprocessing args
-    if max([*n_data, *n_mc]) >= 7E5:
-        processing_args["events"] = None
-        processing_args["batches"] = int(2 * max([*n_data, *n_mc]) // 7E5)
-        processing_args["threads"] = args.cpus
-    else:
-        processing_args["events"] = None
-        processing_args["batches"] = None
-        processing_args["threads"] = args.cpus
+    # if max([*n_data, *n_mc]) >= 7E5:
+    #     processing_args["events"] = None
+    #     processing_args["batches"] = int(2 * max([*n_data, *n_mc]) // 7E5)
+    #     processing_args["threads"] = args.cpus
+
     return processing_args
 
 
-def RunProcess(ntuple_files : list[str], is_data : bool, args : argparse.Namespace, func : callable, merge : bool = True) -> list:
-    output = []
-    for i in ntuple_files:
-        func_args = vars(args)
-        func_args["data"] = is_data
-        func_args["nTuple_type"] = i["type"]
-        func_args["pmom"] = i["pmom"]
-        output.extend(Processing.mutliprocess(func, [i["file"]], args.batches, args.events, func_args, args.threads))
+def RunProcess(ntuple_files : list[FileDescriptor], is_data : bool, args : argparse.Namespace, func : callable, merge : bool = True) -> list:
+    func_args = vars(args)
+    func_args["data"] = is_data
+    output = Processing.mutliprocess(func, ntuple_files, args.batches, args.events, func_args, args.threads)
     if merge:
         output = MergeOutputs(output)
     return output
@@ -846,7 +839,10 @@ class ApplicationArguments:
         args = argparse.Namespace()
         for head, value in config.items():
             if head == "NTUPLE_FILES":
-                args.ntuple_files = value
+                ntuple_files = value
+                for k in ntuple_files:
+                    ntuple_files[k] = [FileDescriptor(**i) for i in ntuple_files[k]]
+                args.ntuple_files = ntuple_files
             elif head == "SAMPLE_DEFINITIONS":
                 args.region_definitions = RegionDefinitions.regions[value["region"]]
                 args.process_definitions = ProcessDefinitions.processes[value["process"]]
@@ -925,6 +921,8 @@ class ApplicationArguments:
                 args.analysis_input = {k : v for k, v in value.items()}
             elif head == "UNFOLDING":
                 args.unfolding = {k : v for k, v in value.items()}
+            elif head == "MACH3_INPUT":
+                args.mach3_input = value
             elif head == "KINEMATIC_RANGES":
                 for k, v in value.items():
                     if k == "beam_momentum":
@@ -1896,6 +1894,8 @@ class AnalysisInput:
     regions : dict[np.ndarray]
     inclusive_process : dict[np.ndarray]
     exclusive_process : dict[np.ndarray]
+    process_id : np.ndarray = field(init=False)
+    region_id : np.ndarray = field(init=False)
     outside_tpc_reco : np.ndarray
     outside_tpc_true : np.ndarray
     # observables
@@ -1910,6 +1910,9 @@ class AnalysisInput:
     KE_ff_true : np.ndarray
     # extras
     weights : np.ndarray = None
+    event_num : np.ndarray = None
+    run : np.ndarray = None
+    sub_run : np.ndarray = None
 
     @property
     def has_regions(self):
@@ -1930,6 +1933,18 @@ class AnalysisInput:
         if not self.has_exclusive_process:
             raise Exception("Analysis input does not have well defined exclusive processes.")
         return list(self.exclusive_process.keys())
+
+
+    def __post_init__(self):
+        # need to set defaults for fields otherwise they are undefined (and python doesnt complain...)
+        self.region_id = None
+        self.process_id = None
+
+        if self.regions is not None:
+            self.region_id = self.IDFromSamples(self.regions)
+        if self.exclusive_process is not None:
+            self.process_id = self.IDFromSamples(self.exclusive_process)
+
 
     def __len__(self):
         for o in ["outside_tpc_reco", "outside_tpc_true", "track_length_reco", "KE_int_reco", "KE_init_reco", "mean_track_score", "track_length_true", "KE_int_true", "KE_init_true", "weights"]:
@@ -1955,7 +1970,7 @@ class AnalysisInput:
             file (str): file path.
         """
         file_writer = IO(file)
-        file_writer.WriteData("FlatTree_VARS", vars(self))
+        file_writer.WriteData(vars(self), None, True)
         return
 
 
@@ -1970,7 +1985,7 @@ class AnalysisInput:
         os.makedirs(dir_name, exist_ok = True)
 
         #* create different files for a combination of regions and processes, could add support for more splits.
-        if not self.has_exclusive_process: # in the case we have Data.
+        if self.has_regions: # Data/MC.
             for r in self.region_labels:
                 new_sample = self.SelectSample(self.regions[r])
                 new_sample.ToROOTFile(f"{dir_name}/{name}_R{r}")
@@ -2022,6 +2037,23 @@ class AnalysisInput:
         n_interact = EnergySlice.CountingExperiment(KE_int[mask], KE_init[mask], outside_tpc[mask], process[mask], energy_slice, interact_only = True, weights = weights[mask] if weights is not None else weights)
         return n_interact
 
+
+    def IDFromSamples(self, sample_masks : dict[np.ndarray], uncategorised : int = -1) -> ak.Array:
+        """ Create ID from sample masks. Counts from 0 and includes override for uncategorised events.
+
+        Args:
+            sample_masks (dict[np.ndarray]): sample masks, such as reco regions.
+            uncategorised (int, optional): id for uncategorised objects. Defaults to -1.
+
+        Returns:
+            ak.Array: _description_
+        """
+        id = ak.zeros_like(list(sample_masks.values())[0]) + uncategorised
+        for i, v in enumerate(sample_masks.values()):
+            id = ak.where(v, i, id)
+        return id
+
+
     @staticmethod
     def CreateAnalysisInputToy(toy : Toy) -> "AnalysisInput":
         """ Create analysis input from a toy sample.
@@ -2052,7 +2084,9 @@ class AnalysisInput:
             np.array(toy.df.KE_int.values),
             np.array(toy.df.KE_init.values),
             np.array(toy.df.KE_init.values),
-            None
+            None,
+            None,
+            None,
             )
 
     @staticmethod
@@ -2086,7 +2120,6 @@ class AnalysisInput:
         reco_KE_int = reco_KE_ff - RecoDepositedEnergy(events, reco_KE_ff, "bb") # interacting kinetic energy
         reco_track_length = events.recoParticles.beam_track_length
         outside_tpc_reco = (events.recoParticles.beam_endPos_SCE.z < min(fiducial_volume)) | (events.recoParticles.beam_endPos_SCE.z > max(fiducial_volume))
-
 
         if true_regions is not None:
             true_KE_ff = events.trueParticles.beam_KE_front_face
@@ -2128,12 +2161,24 @@ class AnalysisInput:
             true_KE_init,
             true_KE_ff,
             weights,
+            events.eventNum,
+            events.run,
+            events.subRun,
             )
 
+    @staticmethod
+    def req_fields():
+        return [k for k, v in AnalysisInput.__dataclass_fields__.items() if v.init is True]
 
     @staticmethod
     def Concatenate(ais : list["AnalysisInput"]):
-        fields = MergeOutputs([vars(a) for a in ais])
+        fields = MergeOutputs([{f : getattr(a, f) for f in AnalysisInput.req_fields()} for a in ais])
+
+        # check for null entries after merging outputs (null entries are list of Nones)
+        for k in fields:
+            if (type(fields[k]) == list) and (all(ak.is_none(fields[k]))):
+                fields[k] = None
+
         return AnalysisInput(**fields)
 
 
@@ -2147,21 +2192,21 @@ class AnalysisInput:
             AnalysisInput: Selected sample.
         """
         selection = {}
-        for attr in vars(self):
-            value = getattr(self, attr)
+        for field in AnalysisInput.req_fields():
+            value = getattr(self, field)
             if value is None:
-                selection[attr] = value # we allow Non types when defining data samples.
+                selection[field] = value # we allow Non types when defining data samples.
             if hasattr(value, "__iter__"):
                 if type(value) is dict:
                     tmp_dict = {}
                     for k, v in value.items():
                         tmp_dict[k] = v[mask]
-                    selection[attr] = tmp_dict
+                    selection[field] = tmp_dict
                 elif type(value) is list:
-                    print(f"found {attr} is a list type, cannot slice using an array, skipping.") #! might want to add specific logic to check if regions and processes are not null.
-                    selection[attr] = None
+                    print(f"found {field} is a list type, cannot slice using an array, skipping.") #! might want to add specific logic to check if regions and processes are not null.
+                    selection[field] = None
                 else:
-                    selection[attr] = value[mask]
+                    selection[field] = value[mask]
         return AnalysisInput(**selection)
 
 
