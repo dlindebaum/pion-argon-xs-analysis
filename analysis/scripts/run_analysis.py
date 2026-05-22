@@ -436,9 +436,6 @@ def main(args):
         can_run_pec = hasattr(args, "shower_correction") and (args.shower_correction["correction_params"] is None)
         if can_run_pec or check_run(args, "photon_correction"):
             print("run shower correction")
-            args.events = None
-            args.batches = None
-            args.threads = 1
             cex_photon_selection.main(args)
             output_path = args.out + "shower_energy_correction/"
             print("outputs: " + output_path)
@@ -506,7 +503,7 @@ def main(args):
                     new_config_entry[k] = os.path.abspath(output_path + v)
             new_config_entry["strength"] = args.beam_reweight["strength"]
             update_config(args.config, {"BEAM_REWEIGHT" : new_config_entry})
-            args = update_args() # reload config to continue
+            args = update_args(processing_args) # reload config to continue
         if args.stop == "reweight": return
 
         #* upstream correction
@@ -530,7 +527,7 @@ def main(args):
             new_config_entry["response"] = args.upstream_loss_response.__name__
             new_config_entry["bins"] = args.upstream_loss_bins
             update_config(args.config, {"UPSTREAM_ENERGY_LOSS" : new_config_entry})
-            args = update_args() # reload config to continue
+            args = update_args(processing_args) # reload config to continue
         if args.stop == "upstream_correction": return
 
         #* toy parameters
@@ -544,6 +541,7 @@ def main(args):
             data_config = template_toy_config(os.path.abspath(args.out + "toy_parameters"), int(1E6), 1, os.cpu_count() - 1, 2, args.beam_momentum, selection_type)
             SaveConfiguration(toy_template_config, args.out + "toy_template_config.json")
             SaveConfiguration(data_config, args.out + "toy_data_config.json")
+            args = update_args(processing_args) # reload config to continue
         if args.stop == "toy_parameters": return
 
         #* analysis input
@@ -565,14 +563,15 @@ def main(args):
                 if v in files:
                     new_config_entry[k] = os.path.abspath(output_path + v)
             update_config(args.config, {"ANALYSIS_INPUTS" : new_config_entry})
-            args = update_args() # reload config to continue
+            args = update_args(processing_args) # reload config to continue
         if args.stop == "analysis_input": return
 
         #* mach3_input
-        can_run_m3 = ("mach3_input" not in os.listdir(args.out)) and len(n_data > 0)
+        can_run_m3 = ("mach3_input" not in os.listdir(args.out)) and (len(n_data) > 0)
         if can_run_m3 or check_run(args, "mach3_input"):
             print("run mach3_input")
             cex_mach3_input.main(args)
+        if args.stop == "mach3_input": return
 
         # if all other prerequisites were met, this should run
         if check_run(args, "analyse"):
