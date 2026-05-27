@@ -108,7 +108,7 @@ def main(args : argparse.Namespace):
         pdf.Save()
 
         Plots.plt.figure()
-        params = cross_section.Fitting.Fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\mu(\Delta E_{upstream})$ (MeV)", loc = "upper center")
+        params = cross_section.Fitting.Fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\\mu(\Delta E_{upstream})$ (MeV)", loc = "upper center")
         pdf.Save()
 
         params_dict = {

@@ -114,16 +114,15 @@ def RegionSelection(events : cross_section.Data, args : cross_section.argparse.N
             mask = SelectionTools.CombineMasks(selection_masks["fiducial"][events_copy.filename])
             events_copy.Filter([mask], [mask])
 
-        # is_pip = events_copy.trueParticles.pdg[:, 0] == 211
-
         mask = SelectionTools.CombineMasks(selection_masks["beam"][events_copy.filename])
 
         n_pi_true, n_pi0_true = GetTruePionCounts(events_copy, args_c["pi_KE_lim"])
         n_pi_true = n_pi_true[mask]
         n_pi0_true = n_pi0_true[mask]
-        # is_pip = is_pip[mask]
+        pi_inel = events_copy.trueParticlesBT.beam_endProcess == "pi+Inelastic"
+        pi_inel = pi_inel[mask]
 
-        true_regions = process_def.CreateDefinitions({"n_pi" : n_pi_true, "n_pi0" : n_pi0_true}, uncategorised = removed)
+        true_regions = process_def.CreateDefinitions({"pi_inelastic" : pi_inel, "n_pi" : n_pi_true, "n_pi0" : n_pi0_true}, uncategorised = removed)
         for k in true_regions:
             true_regions[k] = true_regions[k]# & (is_pip)
         for k in reco_regions:
