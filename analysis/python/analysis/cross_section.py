@@ -1900,11 +1900,23 @@ class AnalysisInput:
     outside_tpc_true : np.ndarray
     # observables
     track_length_reco : np.ndarray
+    end_x_reco : np.ndarray
+    end_y_reco : np.ndarray
+    end_z_reco : np.ndarray
+    start_x_reco : np.ndarray
+    start_y_reco : np.ndarray
+    start_z_reco : np.ndarray
     KE_int_reco : np.ndarray
     KE_init_reco : np.ndarray
     KE_ff_reco : np.ndarray
     mean_track_score : np.ndarray
     track_length_true : np.ndarray
+    end_x_true : np.ndarray
+    end_y_true : np.ndarray
+    end_z_true : np.ndarray
+    start_x_true : np.ndarray
+    start_y_true : np.ndarray
+    start_z_true : np.ndarray
     KE_int_true : np.ndarray
     KE_init_true : np.ndarray
     KE_ff_true : np.ndarray
@@ -2076,11 +2088,23 @@ class AnalysisInput:
             np.array(toy.outside_tpc_smeared.values),
             np.array(toy.outside_tpc.values),
             np.array(toy.df.z_int_smeared.values),
+            None,
+            None,
+            np.array(toy.df.z_int_smeared.values),
+            None,
+            None,
+            None,
             np.array(toy.df.KE_int_smeared.values),
             np.array(toy.df.KE_init_smeared.values),
             np.array(toy.df.KE_init_smeared.values),
             np.array(toy.df.mean_track_score.values),
             np.array(toy.df.z_int.values),
+            None,
+            None,
+            np.array(toy.df.z_int.values),
+            None,
+            None,
+            None,
             np.array(toy.df.KE_int.values),
             np.array(toy.df.KE_init.values),
             np.array(toy.df.KE_init.values),
@@ -2120,6 +2144,8 @@ class AnalysisInput:
         reco_KE_int = reco_KE_ff - RecoDepositedEnergy(events, reco_KE_ff, "bb") # interacting kinetic energy
         reco_track_length = events.recoParticles.beam_track_length
         outside_tpc_reco = (events.recoParticles.beam_endPos_SCE.z < min(fiducial_volume)) | (events.recoParticles.beam_endPos_SCE.z > max(fiducial_volume))
+        reco_start_pos = events.recoParticles.beam_startPos_SCE
+        reco_end_pos = events.recoParticles.beam_endPos_SCE
 
         if true_regions is not None:
             true_KE_ff = events.trueParticles.beam_KE_front_face
@@ -2132,6 +2158,8 @@ class AnalysisInput:
 
             true_KE_int = events.trueParticles.beam_traj_KE[:, -2]
             true_track_length = events.trueParticles.beam_track_length
+            true_start_pos = events.trueParticles.beam_traj_pos[:, 0]
+            true_end_pos = events.trueParticles.beam_traj_pos[:, -1]
             outside_tpc_true = (events.trueParticles.beam_traj_pos.z[:, -1] < min(fiducial_volume)) | (events.trueParticles.beam_traj_pos.z[:, -1] > max(fiducial_volume))
             inelastic = events.trueParticles.true_beam_endProcess == "pi+Inelastic"
 
@@ -2142,6 +2170,8 @@ class AnalysisInput:
             true_track_length = None
             outside_tpc_true = None
             inelastic = None
+            true_start_pos = vector.vector([None], [None], [None])
+            true_end_pos = vector.vector([None], [None], [None])
 
         mean_track_score = ak.fill_none(ak.mean(events.recoParticles.track_score, axis = -1), -0.05) # fill null values in case empty events are supplied
 
@@ -2152,11 +2182,23 @@ class AnalysisInput:
             outside_tpc_reco,
             outside_tpc_true,
             reco_track_length,
+            reco_end_pos.x,
+            reco_end_pos.y,
+            reco_end_pos.z,
+            reco_start_pos.x,
+            reco_start_pos.y,
+            reco_start_pos.z,
             reco_KE_int,
             reco_KE_init,
             reco_KE_ff,
             mean_track_score,
             true_track_length,
+            true_end_pos.x,
+            true_end_pos.y,
+            true_end_pos.z,
+            true_start_pos.x,
+            true_start_pos.y,
+            true_start_pos.z,
             true_KE_int,
             true_KE_init,
             true_KE_ff,
