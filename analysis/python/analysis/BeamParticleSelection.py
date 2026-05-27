@@ -24,14 +24,16 @@ def GetTruncatedPos(sample : Data, truncate : float) -> tuple[ak.Array, ak.Array
     if truncate is not None:
         truncated_start = ak.argmax(sample.recoParticles.beam_calo_pos.z >= truncate, -1, keepdims = True)
         start_pos = sample.recoParticles.beam_calo_pos[truncated_start]
+        start_pos = ak.fill_none(start_pos, vector.null_vector[0])
         start_pos = ak.flatten(start_pos)
 
         end_pos = sample.recoParticles.beam_calo_pos[:, -1:]
         end_pos = ak.pad_none(end_pos, 1, -1)
+        end_pos = ak.fill_none(end_pos, vector.null_vector[0])
         end_pos = ak.flatten(end_pos)
     else:
         start_pos = sample.recoParticles.beam_startPos_SCE
-        end_pos = sample.recoParticles.beam_endPos_SCE
+        end_pos = sample.recoParticles.beam_endPos_SCE # these should already be populaed with null vectors.
 
     return start_pos, end_pos
 
