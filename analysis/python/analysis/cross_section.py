@@ -2690,7 +2690,7 @@ class Unfold:
         return results
 
     @staticmethod
-    def PlotUnfoldingResults(obs : np.ndarray, obs_err : np.ndarray, true : np.ndarray, results : dict, energy_slices : Slices, title : str, book : Plots.PlotBook = Plots.PlotBook.null):
+    def PlotUnfoldingResults(obs : np.ndarray, obs_err : np.ndarray, true : np.ndarray, results : dict, energy_slices : Slices, title : str, book : Plots.PlotBook = Plots.PlotBook.null()):
         """ Plot unfolded histogram in comparison to observed and true.
 
         Args:
@@ -2699,7 +2699,7 @@ class Unfold:
             results (dict): unfolding results
             energy_bins (np.ndarray): energy bins
             label (str): x label (units of MeV are automatically applied)
-            book (Plots.PlotBook, optional): plot book. Defaults to Plots.PlotBook.null.
+            book (Plots.PlotBook, optional): plot book. Defaults to Plots.PlotBook.null().
         """
         if "num_iterations" in results:
             label = f"Data unfolded, {results['num_iterations']} iterations"

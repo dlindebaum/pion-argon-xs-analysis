@@ -342,12 +342,15 @@ def ExclusiveProcessTags(true_masks):
         "absorption"      : "#777777",
         "single_pion_production" : "#E24A33",
         "pion_production" : "#988ED5",
+        "uncategorised" : "#E24A33",
+
     }
     name_simple = {
         "charge_exchange" : "cex",
         "absorption" :"abs",
         "single_pion_production" : "spip",
-        "pion_production" : "pip"
+        "pion_production" : "pip",
+        "uncategorised" : "imp",
     }
 
     if true_masks is None:

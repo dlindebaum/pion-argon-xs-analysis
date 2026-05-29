@@ -150,10 +150,10 @@ def CreateAnalysisInput(sample : cross_section.Data, args : cross_section.argpar
     elif type(sample) == cross_section.Data:
         sample_selected = BeamPionSelection(sample, args_c, is_mc)
         if is_mc:
-            reco_regions, true_regions = RegionSelection(sample, args_c, True)
+            reco_regions, true_regions = RegionSelection(sample, args_c, True, removed = True)
             reweight_params = [args_c["beam_reweight"]["params"][k]["value"] for k in args_c["beam_reweight"]["params"]]
         else:
-            reco_regions = RegionSelection(sample, args_c, False)
+            reco_regions = RegionSelection(sample, args_c, False, removed = True)
             true_regions = None
             reweight_params = None
         ai = cross_section.AnalysisInput.CreateAnalysisInputNtuple(sample_selected, args_c["upstream_loss_correction_params"]["value"], reco_regions, true_regions, reweight_params, args_c["beam_reweight"]["strength"], args_c["fiducial_volume"], args_c["upstream_loss_response"])
@@ -188,7 +188,8 @@ def CreateAnalysisInputMCTrueBeam(mc : cross_section.Data, args : cross_section.
 
     process_defs = args_c["process_definitions"]
     n_pi_true, n_pi0_true = GetTruePionCounts(mc_true_beam, args_c["pi_KE_lim"])
-    true_regions = process_defs.CreateDefinitions({"n_pi" : n_pi_true, "n_pi0" : n_pi0_true}, uncategorised = uncategorised)
+    pi_inel = mc_true_beam.trueParticlesBT.beam_endProcess == "pi+Inelastic"
+    true_regions = process_defs.CreateDefinitions({"pi_inelastic" : pi_inel, "n_pi" : n_pi_true, "n_pi0" : n_pi0_true}, uncategorised = uncategorised)
 
     return cross_section.AnalysisInput.CreateAnalysisInputNtuple(mc_true_beam, args_c["upstream_loss_correction_params"]["value"], None, true_regions, [args["beam_reweight"]["params"][k]["value"] for k in args_c["beam_reweight"]["params"]], args_c["beam_reweight"]["strength"], upstream_loss_func = args_c["upstream_loss_response"])
 

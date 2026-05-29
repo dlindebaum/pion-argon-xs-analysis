@@ -100,7 +100,7 @@ def run(i : int, file_desc : Master.FileDescriptor, n_events : int, start : int,
     return output
 
 
-def PhotonSelection(df : pd.DataFrame, book : Plots.PlotBook = Plots.PlotBook.null):
+def PhotonSelection(df : pd.DataFrame, book : Plots.PlotBook = Plots.PlotBook.null()):
     pi0_mother = df.true_mother == 111
     counts = {"pi0_daughter" : len(pi0_mother[df.pi0_photon]), "other" : len(df.pi0_photon) - len(df.pi0_photon[df.pi0_photon])}
     print(counts)
@@ -135,7 +135,7 @@ def binned_dataframe(df : pd.DataFrame, bins : list, energy_range : list) -> lis
     return binned_data
 
 
-def linear_fit(df : pd.DataFrame, bins : np.ndarray, energy_range : list, book : Plots.PlotBook = Plots.PlotBook.null) -> float:
+def linear_fit(df : pd.DataFrame, bins : np.ndarray, energy_range : list, book : Plots.PlotBook = Plots.PlotBook.null()) -> float:
     """ perform linear fit of true energy vs reco energy, equivalent to the correction done in the microboone simulation paper.
 
     Args:
@@ -170,7 +170,7 @@ def linear_fit(df : pd.DataFrame, bins : np.ndarray, energy_range : list, book :
     return popt[0]
 
 
-def LinearFitPerformance(df : pd.DataFrame, linear_correction : float, book : Plots.PlotBook = Plots.PlotBook.null):
+def LinearFitPerformance(df : pd.DataFrame, linear_correction : float, book : Plots.PlotBook = Plots.PlotBook.null()):
     """ Performance plots and metrics of linear correction.
 
     Args:

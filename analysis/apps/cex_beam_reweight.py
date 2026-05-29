@@ -15,7 +15,7 @@ from rich import print
 from python.analysis import cross_section, Plots, SelectionTools
 
 
-def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.array = np.array([0.75, 1.25]), book : Plots.PlotBook = Plots.PlotBook.null):
+def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.array = np.array([0.75, 1.25]), book : Plots.PlotBook = Plots.PlotBook.null()):
     p_mc, edges = np.histogram(np.array(p_MC), bins, range = p_nominal * p_range)
     p_data = np.histogram(np.array(p_Data), bins, range = p_nominal * p_range)[0]
 
@@ -40,7 +40,7 @@ def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.arra
     return results
 
 
-def ReWeightResults(sideband_mc : dict, sideband_data : dict, args : cross_section.argparse.Namespace, bins : int, reweight_results : dict, reweight_func : str, book : Plots.PlotBook = Plots.PlotBook.null):
+def ReWeightResults(sideband_mc : dict, sideband_data : dict, args : cross_section.argparse.Namespace, bins : int, reweight_results : dict, reweight_func : str, book : Plots.PlotBook = Plots.PlotBook.null()):
     weights = cross_section.RatioWeights(np.array(sideband_mc["p_inst"]), reweight_func, reweight_results[reweight_func][0], args.beam_reweight["strength"])
 
     plot_range = [args.beam_momentum * 0.75, args.beam_momentum * 1.25]

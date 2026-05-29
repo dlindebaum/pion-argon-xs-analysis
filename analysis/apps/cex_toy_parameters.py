@@ -351,7 +351,7 @@ def MeanTrackScoreKDE(mean_track_score : ak.Array, true_processes : dict[ak.Arra
     return
 
 
-def FitBeamProfile(KE_init : np.array, func : cross_section.Fitting.FitFunction, KE_range : list, bins : int, book : Plots.PlotBook = Plots.PlotBook.null) -> dict:
+def FitBeamProfile(KE_init : np.array, func : cross_section.Fitting.FitFunction, KE_range : list, bins : int, book : Plots.PlotBook = Plots.PlotBook.null()) -> dict:
     """ Fit the MC beam profile for use increating KE init.
 
     Args:
@@ -359,7 +359,7 @@ def FitBeamProfile(KE_init : np.array, func : cross_section.Fitting.FitFunction,
         func (cross_section.Fitting.FitFunction): fit function
         KE_range (list): kinetic energy range
         bins (int): bin numbers
-        book (Plots.PlotBook, optional): plot book. Defaults to Plots.PlotBook.null.
+        book (Plots.PlotBook, optional): plot book. Defaults to Plots.PlotBook.null().
 
     Returns:
         dict: _description_
