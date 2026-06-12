@@ -293,7 +293,8 @@ def RecoRegionSelection(region_selections : dict[dict], args : argparse.Namespac
             pe_index_labels = tags.name_simple.values
 
         counts = np.array(cross_section.CountInRegions(true_regions, reco_regions))
-        Plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "True process", x_label = "Reco region", title = cross_section.remove_(r))
+        Plots.plt.figure(figsize = [3 * 6.4, 3 * 4.8])
+        Plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "True process", x_label = "Reco region", title = cross_section.remove_(r), newFigure = False)
         pdf.Save()
 
         (a,b)=counts.shape

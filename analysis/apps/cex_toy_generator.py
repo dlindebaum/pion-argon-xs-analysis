@@ -24,8 +24,8 @@ from scipy.interpolate import interp1d
 from scipy.stats import gaussian_kde
 
 from python.analysis.Master import timer, LoadConfiguration, ReadHDF5, LoadObject
-from python.analysis import Fitting, Utils
-from python.analysis.cross_section import ApplicationArguments, BetheBloch, GeantCrossSections, Particle, GEANT_XS
+from python.analysis import Fitting, Utils, Application
+from python.analysis.cross_section import BetheBloch, GeantCrossSections, Particle, GEANT_XS
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # supress annoying pandas warnings
 
@@ -520,7 +520,7 @@ def main(args : argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Generates toy events for inelastic pion interactions.")
     parser.add_argument("-c", "--config", type = str, default = None, help = "Config json file.")
-    ApplicationArguments.Output(parser, default = "toy_sample", file = True)
+    Application.ApplicationArguments.Output(parser, default = "toy_sample", file = True)
 
     args = parser.parse_args()
     config = LoadConfiguration(args.config)

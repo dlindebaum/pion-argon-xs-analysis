@@ -6,9 +6,6 @@ Author: Shyam Bhuller
 Description: Library for code used in the cross section analysis. Refer to the README to see which apps correspond to the cross section analysis.
 """
 import argparse
-import copy
-import itertools
-import numbers
 import os
 
 from collections import namedtuple
@@ -28,7 +25,7 @@ from scipy.interpolate import interp1d, UnivariateSpline
 from scipy.stats import chi2, ks_2samp
 
 from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, Processing
-from python.analysis.Master import LoadConfiguration, LoadObject, SaveObject, SaveConfiguration, ReadHDF5, Data, Ntuple_Type, timer, IO, FileDescriptor
+from python.analysis.Master import LoadObject, SaveObject, ReadHDF5, Data, timer, IO, FileDescriptor
 from python.analysis.Utils import *
 
 GEANT_XS = os.environ["PYTHONPATH"] + "/data/g4_xs_pi_KE_100.root"

@@ -20,8 +20,8 @@ class process_criteria(CriteriaList):
     n_pi0 : criteria # numbre of pi0's
 
     @staticmethod
-    def get_criteria_values(events : cross_section.Data, ke_lim : float = 0):
-        n_pi_true, n_pi0_true = GetTruePionCounts(events, ke_lim)
+    def get_criteria_values(events : cross_section.Data, pi_KE_lim : float = 0):
+        n_pi_true, n_pi0_true = GetTruePionCounts(events, pi_KE_lim)
         pi_inel = events.trueParticlesBT.beam_endProcess == "pi+Inelastic"
         return {"pi_inelastic" : pi_inel, "n_pi" : n_pi_true, "n_pi0" : n_pi0_true}
 
@@ -38,13 +38,13 @@ class process_criteria_exp(CriteriaList):
     n_pi0 : criteria # numbre of pi0's
 
     @staticmethod
-    def get_criteria_values(events : cross_section.Data, ke_lim : float = 0, fiducial_volume : list[float] = [0, 700]):
+    def get_criteria_values(events : cross_section.Data, pi_KE_lim : float = 0, fiducial_volume : list[float] = [0, 700]):
 
-        cvs = process_criteria.get_criteria_values(events, ke_lim)
+        cvs = process_criteria.get_criteria_values(events, pi_KE_lim)
 
         pi_beam = events.trueParticles.pdg[:, 0] == 211
         decay = (events.trueParticles.true_beam_endProcess == "Decay")
-        escapes = events.trueParticles.beam_traj_pos.z[:, -1] < max(fiducial_volume)
+        escapes = events.trueParticles.beam_traj_pos.z[:, -1] >= max(fiducial_volume)
 
         return cvs | {"pi_beam" : pi_beam , "beam_escapes" : escapes, "beam_decay" : decay}
 
@@ -148,4 +148,5 @@ processes = {
     "four_signal_process" : four_signal_process,
     "three_signal_process" : three_signal_process,
     "three_signal_process_bkg" : three_signal_process_bkg,
+    "three_signal_process_bkg_fd" : three_signal_process_bkg_fd,
 }

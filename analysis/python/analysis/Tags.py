@@ -342,6 +342,8 @@ def ExclusiveProcessTags(true_masks):
         "absorption"      : "#777777",
         "single_pion_production" : "#E24A33",
         "pion_production" : "#988ED5",
+        "decay" : "#5970C5",
+        "escaping": "#478235",
         "impurities" : "#E24A33",
         "uncategorised" : "#000000",
     }
@@ -351,6 +353,8 @@ def ExclusiveProcessTags(true_masks):
         "single_pion_production" : "spip",
         "pion_production" : "pip",
         "impurities" : "imp",
+        "decay" : "dec",
+        "escaping" : "esc",
         "uncategorised" : "unc",
 
     }
