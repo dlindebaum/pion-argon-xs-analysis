@@ -9,7 +9,7 @@ Description: Create analysis input files from Ntuples.
 import awkward as ak
 import numpy as np
 
-from python.analysis import cross_section, SelectionTools, PFOSelection, RegionDefinitions, ProcessDefinitions
+from python.analysis import cross_section, SelectionTools, PFOSelection, RegionDefinitions, ProcessDefinitions, Application
 
 from rich import print
 
@@ -101,7 +101,6 @@ def RegionSelection(events : cross_section.Data, args : cross_section.argparse.N
 
     reco_regions = region_def.CreateDefinitions(counts, uncategorised = removed)
     
-
     if is_mc:
         if process_type is None:
             process_def = args_c["process_definitions"]
@@ -115,18 +114,20 @@ def RegionSelection(events : cross_section.Data, args : cross_section.argparse.N
             events_copy.Filter([mask], [mask])
 
         mask = SelectionTools.CombineMasks(selection_masks["beam"][events_copy.filename])
+        events_copy.Filter([mask], [mask])
 
-        n_pi_true, n_pi0_true = GetTruePionCounts(events_copy, args_c["pi_KE_lim"])
-        n_pi_true = n_pi_true[mask]
-        n_pi0_true = n_pi0_true[mask]
-        pi_inel = events_copy.trueParticlesBT.beam_endProcess == "pi+Inelastic"
-        pi_inel = pi_inel[mask]
+        # n_pi_true, n_pi0_true = GetTruePionCounts(events_copy, args_c["pi_KE_lim"])
+        # n_pi_true = n_pi_true[mask]
+        # n_pi0_true = n_pi0_true[mask]
+        # pi_inel = events_copy.trueParticlesBT.beam_endProcess == "pi+Inelastic"
+        # pi_inel = pi_inel[mask]
 
-        true_regions = process_def.CreateDefinitions({"pi_inelastic" : pi_inel, "n_pi" : n_pi_true, "n_pi0" : n_pi0_true}, uncategorised = removed)
+        true_regions = process_def.CreateDefinitions(process_def.get_criteria_values(events_copy, args.process_args), uncategorised = removed)
+
         for k in true_regions:
-            true_regions[k] = true_regions[k]# & (is_pip)
+            true_regions[k] = true_regions[k]
         for k in reco_regions:
-            reco_regions[k] = reco_regions[k]# & (is_pip)
+            reco_regions[k] = reco_regions[k]
         return reco_regions, true_regions
     else:
         return reco_regions
@@ -229,11 +230,11 @@ def main(args):
 if __name__ == "__main__":
 
     parser = cross_section.argparse.ArgumentParser("Create analysis input files from Ntuples.")
-    cross_section.ApplicationArguments.Config(parser)
-    cross_section.ApplicationArguments.Output(parser)
-    cross_section.ApplicationArguments.Processing(parser)
+    Application.ApplicationArguments.Config(parser)
+    Application.ApplicationArguments.Output(parser)
+    Application.ApplicationArguments.Processing(parser)
     parser.add_argument("-R", "--ROOT", dest = "root", action="store_true", help = "Saves the output to ROOT files in addition to the dill files.")
 
-    args = cross_section.ApplicationArguments.ResolveArgs(parser.parse_args())
+    args = Application.ApplicationArguments.ResolveArgs(parser.parse_args())
     print(vars(args))
     main(args)

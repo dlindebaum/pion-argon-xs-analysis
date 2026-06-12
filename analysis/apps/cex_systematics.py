@@ -14,7 +14,7 @@ import numpy as np
 from rich import print
 from rich.rule import Rule
 
-from python.analysis import cross_section, Plots
+from python.analysis import cross_section, Plots, Application
 from python.analysis.Master import DictToHDF5
 from python.analysis.Utils import dill_copy, quadsum, round_value_to_error
 from apps import cex_toy_generator, cex_analyse, cex_fit_studies, cex_analysis_input
@@ -1101,8 +1101,8 @@ def main(args : cross_section.argparse.Namespace):
 if __name__ == "__main__":
 
     parser = cross_section.argparse.ArgumentParser("Estimate Systematics for the cross section analysis")
-    cross_section.ApplicationArguments.Config(parser)
-    cross_section.ApplicationArguments.Output(parser, "systematic/")
+    Application.ApplicationArguments.Config(parser)
+    Application.ApplicationArguments.Output(parser, "systematic/")
 
     parser.add_argument("--cv", "-v", dest = "cv", type = str, default = None, help = "plot systematics with central value measurement", required = True)
 
@@ -1119,7 +1119,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--plot", "-p", dest = "plot", action = "store_true", default = None, help = "plot systematics with central value measurement")
 
-    args = cross_section.ApplicationArguments.ResolveArgs(parser.parse_args())
+    args = Application.ApplicationArguments.ResolveArgs(parser.parse_args())
 
     if ("all" in args.run) or ("fit_inaccuracy" in args.run) or ("track_length" in args.run) or ("beam_res" in args.run) or ("theory" in args.run):
         if not args.toy_template:

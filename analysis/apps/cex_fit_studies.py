@@ -17,7 +17,7 @@ from rich import print, rule
 from scipy.ndimage import gaussian_filter1d
 
 
-from python.analysis import cross_section, Plots
+from python.analysis import cross_section, Plots, Application
 from python.analysis.Master import DictToHDF5, ReadHDF5
 from apps import cex_toy_generator
 
@@ -897,7 +897,7 @@ def main(args : cross_section.argparse.Namespace):
 if __name__ == "__main__":
     parser = cross_section.argparse.ArgumentParser("app which performs cross checks for the region fit using toys.")
     
-    cross_section.ApplicationArguments.Config(parser, True)
+    Application.ApplicationArguments.Config(parser, True)
 
     parser.add_argument("--template", "-t", dest = "template", type = str, help = "toy template hdf5 file", required = True)
 
@@ -912,9 +912,9 @@ if __name__ == "__main__":
 
     parser.add_argument("--skip", dest = "skip", type = str, choices = ["normalisation", "shape", "pulls"], nargs = "+", default = [], help = "test to skip")
 
-    cross_section.ApplicationArguments.Output(parser, None)
+    Application.ApplicationArguments.Output(parser, None)
 
-    args = cross_section.ApplicationArguments.ResolveArgs(parser.parse_args(), False)
+    args = Application.ApplicationArguments.ResolveArgs(parser.parse_args(), False)
 
     if (not args.toy_data_config) and (not args.workdir):
         raise Exception("--toy_data_config or --workdir or both must be supplied")

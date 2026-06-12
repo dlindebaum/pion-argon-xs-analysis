@@ -14,7 +14,7 @@ import awkward as ak
 
 from rich import print
 
-from python.analysis import Master, Plots, cross_section, BeamParticleSelection, Tags
+from python.analysis import Master, Plots, cross_section, BeamParticleSelection, Tags, Application
 
 
 def run(i : int, file_desc : Master.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
@@ -50,13 +50,13 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Computes normalisation for beam pion analysis.", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    cross_section.ApplicationArguments.Config(parser, True)
-    cross_section.ApplicationArguments.Processing(parser)
-    cross_section.ApplicationArguments.Output(parser)
-    cross_section.ApplicationArguments.Regen(parser)
+    Application.ApplicationArguments.Config(parser, True)
+    Application.ApplicationArguments.Processing(parser)
+    Application.ApplicationArguments.Output(parser)
+    Application.ApplicationArguments.Regen(parser)
 
     args = parser.parse_args()
 
-    args = cross_section.ApplicationArguments.ResolveArgs(args)
+    args = Application.ApplicationArguments.ResolveArgs(args)
     print(vars(args))
     main(args)

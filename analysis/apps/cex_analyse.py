@@ -16,7 +16,7 @@ from rich import print
 
 from apps import cex_toy_generator, cex_toy_parameters
 from pyunfold.callbacks import SplineRegularizer
-from python.analysis import cross_section, Plots
+from python.analysis import cross_section, Plots, Application
 
 label_map = {"toy" : "toy", "pdsp" : "ProtoDUNE SP"}
 
@@ -686,15 +686,15 @@ def main(args):
 if __name__ == "__main__":
     parser = cross_section.argparse.ArgumentParser(description = "Computes the upstream energy loss for beam particles after beam particle selection, then writes the fitted parameters to file.", formatter_class = cross_section.argparse.RawDescriptionHelpFormatter)
 
-    cross_section.ApplicationArguments.Config(parser, required = True)
-    cross_section.ApplicationArguments.Output(parser)
+    Application.ApplicationArguments.Config(parser, required = True)
+    Application.ApplicationArguments.Output(parser)
 
     parser.add_argument("--toy_data", dest = "toy_data", type = str, help = "toy data, proivde a hdf5 toy file or toy config")
     parser.add_argument("--toy_template", dest = "toy_template", type = str, help = "toy template, proivde a hdf5 toy file or toy config")
     parser.add_argument("--pdsp", dest = "pdsp", action = "store_true", help = "run the analysis with the PDSP samples")
     parser.add_argument("--all", dest = "all", action = "store_true", help = "measure all exclusive cross sections.")
 
-    args = cross_section.ApplicationArguments.ResolveArgs(parser.parse_args())
+    args = Application.ApplicationArguments.ResolveArgs(parser.parse_args())
 
     if args.toy_data and (not args.toy_template):
         raise Exception("if toy data is provided toy template must also be provided")

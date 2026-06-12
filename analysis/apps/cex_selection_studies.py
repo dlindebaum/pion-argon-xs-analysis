@@ -10,7 +10,7 @@ import argparse
 import os
 
 from rich import print as rprint
-from python.analysis import Master, BeamParticleSelection, EventSelection, PFOSelection, Plots, shower_merging, Processing, Tags, cross_section
+from python.analysis import Master, BeamParticleSelection, EventSelection, PFOSelection, Plots, shower_merging, Tags, cross_section, Application
 
 import awkward as ak
 import numpy as np
@@ -86,7 +86,7 @@ nbins = {
     "BeamParticleIPCut" : 50,
     "Chi2ProtonSelection" : 50,
     "PiBeamSelection" : 50,
-    "APA3Cut" : 50,
+    "APA3Cut" : np.append(np.linspace(0, 220, 11), 700),
     "TrueFiducialCut" : 50,
     "PandoraTagCut" : 50,
     "DxyCut" : 50,
@@ -943,16 +943,16 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Applies beam particle selection, PFO selection, produces tables and basic plots.", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    cross_section.ApplicationArguments.Config(parser, required = True)
-    cross_section.ApplicationArguments.Processing(parser)
-    cross_section.ApplicationArguments.Output(parser)
-    cross_section.ApplicationArguments.Regen(parser)
+    Application.ApplicationArguments.Config(parser, required = True)
+    Application.ApplicationArguments.Processing(parser)
+    Application.ApplicationArguments.Output(parser)
+    Application.ApplicationArguments.Regen(parser)
 
     parser.add_argument("--mc", dest = "mc_only", action = "store_true", help = "Only analyse the MC file.")
 
     args = parser.parse_args()
 
-    args = cross_section.ApplicationArguments.ResolveArgs(args)
+    args = Application.ApplicationArguments.ResolveArgs(args)
 
     rprint(vars(args))
     main(args)

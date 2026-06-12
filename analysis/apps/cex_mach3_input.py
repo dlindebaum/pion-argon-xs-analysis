@@ -9,7 +9,7 @@ Description: Converts Analysis input files to MaCh3 input files.
 
 import numpy as np
 
-from python.analysis import cross_section
+from python.analysis import cross_section, Application
 
 def main(args : cross_section.argparse.Namespace):
     out = args.out + "mach3_input/"
@@ -36,9 +36,9 @@ def main(args : cross_section.argparse.Namespace):
 
 if __name__ == "__main__":
     parser = cross_section.argparse.ArgumentParser("Create analysis input files from Ntuples.")
-    cross_section.ApplicationArguments.Config(parser)
-    cross_section.ApplicationArguments.Output(parser)
+    Application.ApplicationArguments.Config(parser)
+    Application.ApplicationArguments.Output(parser)
 
-    args = cross_section.ApplicationArguments.ResolveArgs(parser.parse_args())
+    args = Application.ApplicationArguments.ResolveArgs(parser.parse_args())
     print(vars(args))
     main(args)

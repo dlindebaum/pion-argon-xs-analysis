@@ -12,7 +12,7 @@ import numpy as np
 
 from rich import print
 
-from python.analysis import cross_section, Plots, SelectionTools
+from python.analysis import cross_section, Plots, SelectionTools, Application
 
 
 def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.array = np.array([0.75, 1.25]), book : Plots.PlotBook = Plots.PlotBook.null()):
@@ -201,11 +201,11 @@ def main(args : cross_section.argparse.Namespace):
 
 if __name__ == "__main__":
     args = cross_section.argparse.ArgumentParser("Calculates reweighting parameters for beam momentum.")
-    cross_section.ApplicationArguments.Config(args, True)
-    cross_section.ApplicationArguments.Output(args)
-    cross_section.ApplicationArguments.Regen(args)
-    cross_section.ApplicationArguments.Processing(args)
+    Application.ApplicationArguments.Config(args, True)
+    Application.ApplicationArguments.Output(args)
+    Application.ApplicationArguments.Regen(args)
+    Application.ApplicationArguments.Processing(args)
 
-    args = cross_section.ApplicationArguments.ResolveArgs(args.parse_args())
+    args = Application.ApplicationArguments.ResolveArgs(args.parse_args())
     print(vars(args))
     main(args)

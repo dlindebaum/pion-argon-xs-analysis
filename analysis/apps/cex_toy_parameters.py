@@ -17,7 +17,7 @@ import scipy.stats as stats
 
 from alive_progress import alive_bar
 
-from python.analysis import cross_section, Master, Plots, Tags, SelectionTools, RegionDefinitions
+from python.analysis import cross_section, Master, Plots, Tags, SelectionTools, RegionDefinitions, Application
 
 from apps.cex_analysis_input import RegionSelection, BeamPionSelection
 
@@ -430,13 +430,13 @@ def main(args : argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Analyses MC ntuples in order to determine parameters used to emulate selection efficiency and detector effects for the toy model.")
 
-    cross_section.ApplicationArguments.Config(parser, True)
-    cross_section.ApplicationArguments.Output(parser)
-    cross_section.ApplicationArguments.Regen(parser)
-    cross_section.ApplicationArguments.Processing(parser)
+    Application.ApplicationArguments.Config(parser, True)
+    Application.ApplicationArguments.Output(parser)
+    Application.ApplicationArguments.Regen(parser)
+    Application.ApplicationArguments.Processing(parser)
 
     args = parser.parse_args()
-    args = cross_section.ApplicationArguments.ResolveArgs(args)
+    args = Application.ApplicationArguments.ResolveArgs(args)
 
     print(vars(args))
     main(args)

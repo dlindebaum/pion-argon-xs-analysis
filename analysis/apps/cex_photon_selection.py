@@ -17,7 +17,7 @@ from rich import print
 
 from scipy.optimize import curve_fit
 
-from python.analysis import Master, Processing, cross_section, EventSelection, Tags, SelectionTools, Plots, Fitting
+from python.analysis import Master, cross_section, EventSelection, Tags, SelectionTools, Plots, Fitting, Application
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # hide pesky pandas warnings (performance is actually ok)
 
@@ -395,13 +395,13 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Applies beam particle selection and saves properties of photon shower candidate PFOs to hdf5 file (MC only)", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    cross_section.ApplicationArguments.Processing(parser)
-    cross_section.ApplicationArguments.Output(parser)
-    cross_section.ApplicationArguments.Config(parser)
-    cross_section.ApplicationArguments.Regen(parser)
+    Application.ApplicationArguments.Processing(parser)
+    Application.ApplicationArguments.Output(parser)
+    Application.ApplicationArguments.Config(parser)
+    Application.ApplicationArguments.Regen(parser)
 
     args = parser.parse_args()
-    args = cross_section.ApplicationArguments.ResolveArgs(args)
+    args = Application.ApplicationArguments.ResolveArgs(args)
 
     print(vars(args))
     main(args)
