@@ -48,9 +48,15 @@ def template_config():
         "norm" : "normalisation to apply to MC when making Data/MC comparisons, usually defined as the ratio of pion-like triggers from the beam instrumentation", #! this should be inferred from one of the apps!
         "pi_KE_lim": -1,
         "fiducial_volume" : [0, 700],
-        "SAMPLE_DEFINITIONS":{
-            "region" : "default_regions",
-            "process" : "four_signal_process",
+        "SAMPLE_DEFINITIONS": {
+            "region": "region definition to choose",
+            "region_args": {
+            "contains key value pairs of arguments needed to calculate the specified region"
+            },
+            "process": "region definition to choose",
+            "process_args": {
+            "contains key value pairs of arguments needed to calculate the specified process"
+            }
         },
         "BEAM_QUALITY_FITS": {
             "truncate" : None,
