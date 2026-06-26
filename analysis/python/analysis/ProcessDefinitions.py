@@ -22,7 +22,7 @@ class process_criteria(CriteriaList):
     @staticmethod
     def get_criteria_values(events : cross_section.Data, pi_KE_lim : float = 0):
         n_pi_true, n_pi0_true = GetTruePionCounts(events, pi_KE_lim)
-        pi_inel = events.trueParticlesBT.beam_endProcess == "pi+Inelastic"
+        pi_inel = events.trueParticles.true_beam_endProcess == "pi+Inelastic"
         return {"pi_inelastic" : pi_inel, "n_pi" : n_pi_true, "n_pi0" : n_pi0_true}
 
 

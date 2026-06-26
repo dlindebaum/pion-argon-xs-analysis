@@ -63,9 +63,9 @@ def run(i : int, file_desc : Master.FileDescriptor, n_events : int, start : int,
     cross_section_quantities = ComputeQuantities(mc, args)
 
     ri = {}
-    for r in RegionDefinitions.regions:
+    for r, v in RegionDefinitions.regions.items():
         print(r)
-        reco_regions, true_regions = RegionSelection(mc, args, True, r, None, True) # should we generate permutations of the true process as well?
+        reco_regions, true_regions = RegionSelection(mc, args, True, v, None, True) # should we generate permutations of the true process as well?
         ri[r] = {"reco_regions" : reco_regions, "true_regions" : true_regions}
 
     mc_copy = BeamPionSelection(mc, args, True)

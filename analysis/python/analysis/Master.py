@@ -1516,9 +1516,20 @@ class RecoParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__beam_inst_trigger")
 
     @property
-    def beam_inst_P(self) -> type:
+    def beam_inst_P(self) -> ak.Array:
         self.LoadData("beam_inst_P", "beam_inst_P")
         return self.events.momentum_scale * 1000 * getattr(self, f"_{type(self).__name__}__beam_inst_P")
+
+    @property
+    def beam_inst_dir(self) -> ak.Record:
+        nTuples = [
+            ["beam_inst_dirX"], # the first name in the list is prioritised.
+            ["beam_inst_dirY"],
+            ["beam_inst_dirZ"]
+        ]
+        self.LoadData("beam_inst_dir", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__beam_inst_dir")
+
 
     @property
     def beam_inst_pos(self) -> ak.Record:
