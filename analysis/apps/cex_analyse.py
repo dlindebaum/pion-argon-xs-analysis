@@ -496,8 +496,7 @@ def LoadToy(file):
 
 def PlotRegions(mc : cross_section.AnalysisInput, book : Plots.PlotBook):
     counts = cross_section.CountInRegions(mc.exclusive_process, mc.regions)
-    print(counts)
-    Plots.PlotConfusionMatrix(counts, list(mc.exclusive_process.keys()), list(mc.regions.keys()), y_label = "True process", x_label = "Reco region")
+    Plots.PlotConfusionMatrix(counts, list(mc.regions.keys()), list(mc.exclusive_process.keys()), y_label = "True process", x_label = "Reco region")
     book.Save()
     return
 
