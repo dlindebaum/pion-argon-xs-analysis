@@ -13,7 +13,7 @@ from rich import print, rule
 import subprocess
 import time
 
-from python.analysis.cross_section import ApplicationArguments
+from python.analysis.Application import ApplicationArguments
 from python.analysis.Master import SaveConfiguration, LoadConfiguration, timer
 
 def file_search(path : str, data_cfg : dict) -> None:
