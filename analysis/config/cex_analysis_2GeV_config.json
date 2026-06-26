@@ -35,18 +35,34 @@
       }
     ]
   },
-  "norm": null,
+  "MACH3_INPUT": {
+    "KE_int_binning": {
+      "range": [
+        0,
+        2400
+      ],
+      "bin_width": 50
+    }
+  },
+  "norm": 0.592,
   "pi_KE_lim": 100,
   "fiducial_volume": [
-    30,
-    220
+    0,
+    700
   ],
   "SAMPLE_DEFINITIONS": {
-    "region" : "moderate_efficiency_regions",
-    "process" : "four_signal_process"
+    "region": "moderate_efficiency_three_regions_esc",
+    "region_args": {
+      "fiducial_volume": [0, 220]
+    },
+    "process": "three_signal_process_bkg_fd",
+    "process_args": {
+      "pi_KE_lim" : 100,
+      "fiducial_volume": [0, 220]
+    }
   },
   "BEAM_QUALITY_FITS": {
-    "truncate": 30
+    "truncate": 0
   },
   "BEAM_SCRAPER_FITS": {
     "energy_range": null,
@@ -129,7 +145,7 @@
   "signal_process": "charge_exchange",
   "BEAM_PARTICLE_SELECTION": {
     "TrueFiducialCut": {
-      "enable": true,
+      "enable": false,
       "is_mc": false,
       "cut": [
         30,
@@ -156,7 +172,7 @@
       "enable": true
     },
     "APA3Cut": {
-      "enable": true,
+      "enable": false,
       "cut": [
         30,
         220
@@ -185,7 +201,7 @@
       "enable": true,
       "cut": 2.4,
       "op": "<",
-      "truncate": 30
+      "truncate": 0
     },
     "BeamScraperCut": {
       "enable": true,
@@ -327,12 +343,6 @@
       "enable": true,
       "cut": 4,
       "op": "<"
-    }
-  },
-  "MACH3_INPUT": {
-    "KE_int_binning" : {
-        "range" : [0, 2400],
-        "bin_width" : 50
     }
   },
   "beam_momentum": 2000,
