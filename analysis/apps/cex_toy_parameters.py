@@ -17,7 +17,7 @@ import scipy.stats as stats
 
 from alive_progress import alive_bar
 
-from python.analysis import cross_section, Master, Plots, Tags, SelectionTools, RegionDefinitions
+from python.analysis import cross_section, Master, Plots, Tags, SelectionTools, RegionDefinitions, Application
 
 from apps.cex_analysis_input import RegionSelection, BeamPionSelection
 
@@ -63,9 +63,9 @@ def run(i : int, file_desc : Master.FileDescriptor, n_events : int, start : int,
     cross_section_quantities = ComputeQuantities(mc, args)
 
     ri = {}
-    for r in RegionDefinitions.regions:
+    for r, v in RegionDefinitions.regions.items():
         print(r)
-        reco_regions, true_regions = RegionSelection(mc, args, True, r, None, True) # should we generate permutations of the true process as well?
+        reco_regions, true_regions = RegionSelection(mc, args, True, v, None, True) # should we generate permutations of the true process as well?
         ri[r] = {"reco_regions" : reco_regions, "true_regions" : true_regions}
 
     mc_copy = BeamPionSelection(mc, args, True)
@@ -293,7 +293,8 @@ def RecoRegionSelection(region_selections : dict[dict], args : argparse.Namespac
             pe_index_labels = tags.name_simple.values
 
         counts = np.array(cross_section.CountInRegions(true_regions, reco_regions))
-        Plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "True process", x_label = "Reco region", title = cross_section.remove_(r))
+        Plots.plt.figure(figsize = [3 * 6.4, 3 * 4.8])
+        Plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "True process", x_label = "Reco region", title = cross_section.remove_(r), newFigure = False)
         pdf.Save()
 
         (a,b)=counts.shape
@@ -351,7 +352,7 @@ def MeanTrackScoreKDE(mean_track_score : ak.Array, true_processes : dict[ak.Arra
     return
 
 
-def FitBeamProfile(KE_init : np.array, func : cross_section.Fitting.FitFunction, KE_range : list, bins : int, book : Plots.PlotBook = Plots.PlotBook.null) -> dict:
+def FitBeamProfile(KE_init : np.array, func : cross_section.Fitting.FitFunction, KE_range : list, bins : int, book : Plots.PlotBook = Plots.PlotBook.null()) -> dict:
     """ Fit the MC beam profile for use increating KE init.
 
     Args:
@@ -359,7 +360,7 @@ def FitBeamProfile(KE_init : np.array, func : cross_section.Fitting.FitFunction,
         func (cross_section.Fitting.FitFunction): fit function
         KE_range (list): kinetic energy range
         bins (int): bin numbers
-        book (Plots.PlotBook, optional): plot book. Defaults to Plots.PlotBook.null.
+        book (Plots.PlotBook, optional): plot book. Defaults to Plots.PlotBook.null().
 
     Returns:
         dict: _description_
@@ -430,13 +431,13 @@ def main(args : argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Analyses MC ntuples in order to determine parameters used to emulate selection efficiency and detector effects for the toy model.")
 
-    cross_section.ApplicationArguments.Config(parser, True)
-    cross_section.ApplicationArguments.Output(parser)
-    cross_section.ApplicationArguments.Regen(parser)
-    cross_section.ApplicationArguments.Processing(parser)
+    Application.ApplicationArguments.Config(parser, True)
+    Application.ApplicationArguments.Output(parser)
+    Application.ApplicationArguments.Regen(parser)
+    Application.ApplicationArguments.Processing(parser)
 
     args = parser.parse_args()
-    args = cross_section.ApplicationArguments.ResolveArgs(args)
+    args = Application.ApplicationArguments.ResolveArgs(args)
 
     print(vars(args))
     main(args)

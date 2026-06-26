@@ -9,6 +9,8 @@ import awkward as ak
 import numpy as np
 
 
+null_vector = ak.Array([{"x": -999, "y": -999, "z": -999}])
+
 def vector(x, y, z) -> ak.Record:
     """ Creates a vector like record.
 

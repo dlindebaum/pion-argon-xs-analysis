@@ -16,7 +16,7 @@ import numpy as np
 from particle import Particle
 from rich import print
 
-from python.analysis import Master, cross_section, Plots, Fitting
+from python.analysis import Master, cross_section, Plots, Fitting, Application
 
 
 def run(i : int, file_desc : Master.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
@@ -232,7 +232,7 @@ def main(args : argparse.Namespace):
         json_dict[str(i)] = {**{"bins" : k}, **scraper_thresholds[k], **position_means[k]}
 
     name = outdir + "mc_beam_scraper_fit_values.json"
-    cross_section.SaveConfiguration(json_dict, name)
+    Master.SaveConfiguration(json_dict, name)
     print(f"fit values written to {name}")
     return
 
@@ -240,16 +240,16 @@ def main(args : argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Calculates parameters required to idenfify beam scrapers and apply the selection.")
 
-    cross_section.ApplicationArguments.Config(parser, required = True)
-    cross_section.ApplicationArguments.Processing(parser)
-    cross_section.ApplicationArguments.Output(parser)
-    cross_section.ApplicationArguments.Regen(parser)
+    Application.ApplicationArguments.Config(parser, required = True)
+    Application.ApplicationArguments.Processing(parser)
+    Application.ApplicationArguments.Output(parser)
+    Application.ApplicationArguments.Regen(parser)
 
     parser.add_argument("--energy_range", dest = "beam_scraper_energy_range", type = float, nargs = 2, help = "energy range to study (MeV).")
     parser.add_argument("--energy_bins", dest = "beam_scraper_energy_bins", type = float, nargs = 5, help = "kinetic energy bin edges (currently allows only 4 bins to be made) (MeV)")
 
     args = parser.parse_args()
-    args = cross_section.ApplicationArguments.ResolveArgs(args)
+    args = Application.ApplicationArguments.ResolveArgs(args)
 
     print(vars(args))
     main(args)

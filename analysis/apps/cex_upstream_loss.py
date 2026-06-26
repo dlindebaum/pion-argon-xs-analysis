@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from apps.cex_analysis_input import BeamPionSelection
-from python.analysis import cross_section, Master, Plots
+from python.analysis import cross_section, Master, Plots, Application
 from rich import print
 
 cv_method = {
@@ -108,7 +108,7 @@ def main(args : argparse.Namespace):
         pdf.Save()
 
         Plots.plt.figure()
-        params = cross_section.Fitting.Fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\mu(\Delta E_{upstream})$ (MeV)", loc = "upper center")
+        params = cross_section.Fitting.Fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\\mu(\Delta E_{upstream})$ (MeV)", loc = "upper center")
         pdf.Save()
 
         params_dict = {
@@ -122,20 +122,20 @@ def main(args : argparse.Namespace):
         pdf.Save()
     Plots.plt.close("all")
     print(f"fitted parameters : {params_dict}")
-    cross_section.SaveConfiguration(params_dict, outdir + "fit_parameters.json")
+    Master.SaveConfiguration(params_dict, outdir + "fit_parameters.json")
     return
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Computes the upstream energy loss for beam particles after beam particle selection, then writes the fitted parameters to file.", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    cross_section.ApplicationArguments.Config(parser, True)
-    cross_section.ApplicationArguments.Output(parser)
-    cross_section.ApplicationArguments.Regen(parser)
-    cross_section.ApplicationArguments.Processing(parser)
+    Application.ApplicationArguments.Config(parser, True)
+    Application.ApplicationArguments.Output(parser)
+    Application.ApplicationArguments.Regen(parser)
+    Application.ApplicationArguments.Processing(parser)
     parser.add_argument("--cv_function", dest = "upstream_loss_cv_function", type = str, default = "gaussian", help = "method to extract central value, possible options are ['None', 'gaussian', 'student_t', 'double_gaussian', 'crystal_ball']")
     parser.add_argument("--no_reweight", dest = "no_reweight", action = "store_true", help = "perform correction without reweighted MC")
 
-    args = cross_section.ApplicationArguments.ResolveArgs(parser.parse_args())
+    args = Application.ApplicationArguments.ResolveArgs(parser.parse_args())
     print(vars(args))
     main(args)

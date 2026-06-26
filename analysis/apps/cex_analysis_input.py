@@ -9,7 +9,7 @@ Description: Create analysis input files from Ntuples.
 import awkward as ak
 import numpy as np
 
-from python.analysis import cross_section, SelectionTools, PFOSelection, RegionDefinitions, ProcessDefinitions
+from python.analysis import cross_section, SelectionTools, PFOSelection, SampleDefinition, Application
 
 from rich import print
 
@@ -68,11 +68,11 @@ def BeamPionSelection(events : cross_section.Data, args : cross_section.argparse
 
 
 @cross_section.timer
-def RegionSelection(events : cross_section.Data, args : cross_section.argparse.Namespace | dict, is_mc : bool, region_type : str = None, process_type : str = None, removed : bool = False) -> dict[np.ndarray]:
+def RegionSelection(events : cross_section.Data, args : cross_section.argparse.Namespace | dict, is_mc : bool, region_type : SampleDefinition.SampleDefinition = None, process_type : SampleDefinition.SampleDefinition = None, removed : bool = False) -> dict[np.ndarray]:
     """ Get reco and true regions (if possible) for ntuple.
 
     Args:
-        events (Master.Data): events after beam pion selection
+        events (Master.Data): events before beam pion selection.
         args (argparse.Namespace): application arguements
         is_mc (bool): if ntuple is MC or Data.
 
@@ -89,45 +89,39 @@ def RegionSelection(events : cross_section.Data, args : cross_section.argparse.N
 
     selection_masks = args_c["selection_masks"][key]
 
-    counts = {}
-    for obj in selection_masks:
-        if obj in ["beam", "null_pfo", "fiducial"]: continue
-        counts[f"n_{obj}"] = SelectionTools.GetPFOCounts(selection_masks[obj][events.filename])
+    events_copy = events.Filter(returnCopy = True)
+    
+    if "fiducial" in selection_masks and (len(selection_masks["fiducial"]) > 0):
+        mask = SelectionTools.CombineMasks(selection_masks["fiducial"][events_copy.filename])
+        events_copy.Filter([mask], [mask])
+
+    mask = SelectionTools.CombineMasks(selection_masks["beam"][events_copy.filename])
+    events_copy.Filter([mask], [mask])
+
+    # counts = {}
+    # for obj in selection_masks:
+    #     if obj in ["beam", "null_pfo", "fiducial"]: continue
+    #     counts[f"n_{obj}"] = SelectionTools.GetPFOCounts(selection_masks[obj][events.filename])
 
     if region_type is None:
         region_def = args_c["region_definitions"]
     else:
-        region_def = RegionDefinitions.regions[region_type]
+        region_def = region_type
 
-    reco_regions = region_def.CreateDefinitions(counts, uncategorised = removed)
+    reco_regions = region_def.CreateDefinitions(region_def.criteria_list.get_criteria_values(events_copy, selection_masks, **args["region_args"]), uncategorised = removed)
     
-
     if is_mc:
         if process_type is None:
             process_def = args_c["process_definitions"]
         else:
-            process_def = ProcessDefinitions.processes[process_type]
+            process_def = process_type
 
-        events_copy = events.Filter(returnCopy = True)
-        
-        if "fiducial" in selection_masks and (len(selection_masks["fiducial"]) > 0):
-            mask = SelectionTools.CombineMasks(selection_masks["fiducial"][events_copy.filename])
-            events_copy.Filter([mask], [mask])
+        true_regions = process_def.CreateDefinitions(process_def.criteria_list.get_criteria_values(events_copy, **args["process_args"]), uncategorised = removed)
 
-        # is_pip = events_copy.trueParticles.pdg[:, 0] == 211
-
-        mask = SelectionTools.CombineMasks(selection_masks["beam"][events_copy.filename])
-
-        n_pi_true, n_pi0_true = GetTruePionCounts(events_copy, args_c["pi_KE_lim"])
-        n_pi_true = n_pi_true[mask]
-        n_pi0_true = n_pi0_true[mask]
-        # is_pip = is_pip[mask]
-
-        true_regions = process_def.CreateDefinitions({"n_pi" : n_pi_true, "n_pi0" : n_pi0_true}, uncategorised = removed)
         for k in true_regions:
-            true_regions[k] = true_regions[k]# & (is_pip)
+            true_regions[k] = true_regions[k]
         for k in reco_regions:
-            reco_regions[k] = reco_regions[k]# & (is_pip)
+            reco_regions[k] = reco_regions[k]
         return reco_regions, true_regions
     else:
         return reco_regions
@@ -151,10 +145,10 @@ def CreateAnalysisInput(sample : cross_section.Data, args : cross_section.argpar
     elif type(sample) == cross_section.Data:
         sample_selected = BeamPionSelection(sample, args_c, is_mc)
         if is_mc:
-            reco_regions, true_regions = RegionSelection(sample, args_c, True)
+            reco_regions, true_regions = RegionSelection(sample, args_c, True, removed = True)
             reweight_params = [args_c["beam_reweight"]["params"][k]["value"] for k in args_c["beam_reweight"]["params"]]
         else:
-            reco_regions = RegionSelection(sample, args_c, False)
+            reco_regions = RegionSelection(sample, args_c, False, removed = True)
             true_regions = None
             reweight_params = None
         ai = cross_section.AnalysisInput.CreateAnalysisInputNtuple(sample_selected, args_c["upstream_loss_correction_params"]["value"], reco_regions, true_regions, reweight_params, args_c["beam_reweight"]["strength"], args_c["fiducial_volume"], args_c["upstream_loss_response"])
@@ -163,33 +157,16 @@ def CreateAnalysisInput(sample : cross_section.Data, args : cross_section.argpar
     return ai
 
 
-def GetTruePionCounts(events : cross_section.Data, ke_lim : float = 0):
-    n_pi_true = (events.trueParticles.number != 1) & (abs(events.trueParticles.pdg) == 211) & (events.trueParticles.mother == 1)
-
-    ke = cross_section.KE(cross_section.vector.magnitude(events.trueParticles.momentum), cross_section.Particle.from_pdgid(211).mass)
-
-    n_pi_true = ak.sum(n_pi_true & (ke > ke_lim), axis = -1)
-    n_pi0_true = events.trueParticles.nPi0
-
-    return n_pi_true, n_pi0_true
-
-
 def CreateAnalysisInputMCTrueBeam(mc : cross_section.Data, args : cross_section.argparse.Namespace | dict, uncategorised : bool = False):
     args_c = args_to_dict(args)
 
-    is_pip = mc.trueParticles.pdg[:, 0] == 211
-    masks = [is_pip]
-
+    masks = [mc.trueParticles.pdg[:, 0] == 211]
     #! mc true beam does not encorperate fiducial cuts in truth, as this loss in efficiency needs to be corrected for the final cross section measurement
     #! if a particle interacted outside the fiducial region, it was still incident on slices within the fiducial region
-    # if "fiducial" in args.selection_masks["mc"]:
-    #     if "TrueFiducialCut" in args.selection_masks["mc"]["fiducial"]:
-    #         masks.insert(0, args.selection_masks["mc"]["fiducial"]["TrueFiducialCut"])
     mc_true_beam = mc.Filter(masks, masks, True)
 
-    process_defs = args_c["process_definitions"]
-    n_pi_true, n_pi0_true = GetTruePionCounts(mc_true_beam, args_c["pi_KE_lim"])
-    true_regions = process_defs.CreateDefinitions({"n_pi" : n_pi_true, "n_pi0" : n_pi0_true}, uncategorised = uncategorised)
+    process_def = args_c["process_definitions"]
+    true_regions = process_def.CreateDefinitions(process_def.criteria_list.get_criteria_values(mc_true_beam, **args["process_args"]), uncategorised = uncategorised)
 
     return cross_section.AnalysisInput.CreateAnalysisInputNtuple(mc_true_beam, args_c["upstream_loss_correction_params"]["value"], None, true_regions, [args["beam_reweight"]["params"][k]["value"] for k in args_c["beam_reweight"]["params"]], args_c["beam_reweight"]["strength"], upstream_loss_func = args_c["upstream_loss_response"])
 
@@ -229,11 +206,11 @@ def main(args):
 if __name__ == "__main__":
 
     parser = cross_section.argparse.ArgumentParser("Create analysis input files from Ntuples.")
-    cross_section.ApplicationArguments.Config(parser)
-    cross_section.ApplicationArguments.Output(parser)
-    cross_section.ApplicationArguments.Processing(parser)
+    Application.ApplicationArguments.Config(parser)
+    Application.ApplicationArguments.Output(parser)
+    Application.ApplicationArguments.Processing(parser)
     parser.add_argument("-R", "--ROOT", dest = "root", action="store_true", help = "Saves the output to ROOT files in addition to the dill files.")
 
-    args = cross_section.ApplicationArguments.ResolveArgs(parser.parse_args())
+    args = Application.ApplicationArguments.ResolveArgs(parser.parse_args())
     print(vars(args))
     main(args)

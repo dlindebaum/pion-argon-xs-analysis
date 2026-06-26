@@ -12,10 +12,10 @@ import numpy as np
 
 from rich import print
 
-from python.analysis import cross_section, Plots, SelectionTools
+from python.analysis import Master, cross_section, Plots, SelectionTools, Application
 
 
-def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.array = np.array([0.75, 1.25]), book : Plots.PlotBook = Plots.PlotBook.null):
+def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.array = np.array([0.75, 1.25]), book : Plots.PlotBook = Plots.PlotBook.null()):
     p_mc, edges = np.histogram(np.array(p_MC), bins, range = p_nominal * p_range)
     p_data = np.histogram(np.array(p_Data), bins, range = p_nominal * p_range)[0]
 
@@ -40,7 +40,7 @@ def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.arra
     return results
 
 
-def ReWeightResults(sideband_mc : dict, sideband_data : dict, args : cross_section.argparse.Namespace, bins : int, reweight_results : dict, reweight_func : str, book : Plots.PlotBook = Plots.PlotBook.null):
+def ReWeightResults(sideband_mc : dict, sideband_data : dict, args : cross_section.argparse.Namespace, bins : int, reweight_results : dict, reweight_func : str, book : Plots.PlotBook = Plots.PlotBook.null()):
     weights = cross_section.RatioWeights(np.array(sideband_mc["p_inst"]), reweight_func, reweight_results[reweight_func][0], args.beam_reweight["strength"])
 
     plot_range = [args.beam_momentum * 0.75, args.beam_momentum * 1.25]
@@ -167,10 +167,10 @@ def main(args : cross_section.argparse.Namespace):
             ReWeightResults(output_mc["sideband"], output_data["sideband"], args, 25, results, r, book = book)
             ReWeightResults(output_mc["analysis"], output_data["analysis"], args, 50, results, r, book = book)
             reweight_params = {f"p{i}" : {"value" : results[r][0][i], "error" : results[r][1][i]} for i in range(getattr(cross_section.Fitting, r).n_params)}
-            cross_section.SaveConfiguration(reweight_params, out + r + ".json")
+            Master.SaveConfiguration(reweight_params, out + r + ".json")
         Plots.plt.close("all")
 
-    reweight_params = cross_section.LoadConfiguration(out + "gaussian" + ".json")
+    reweight_params = Master.LoadConfiguration(out + "gaussian" + ".json")
 
 
     chi2_table = {}
@@ -201,11 +201,11 @@ def main(args : cross_section.argparse.Namespace):
 
 if __name__ == "__main__":
     args = cross_section.argparse.ArgumentParser("Calculates reweighting parameters for beam momentum.")
-    cross_section.ApplicationArguments.Config(args, True)
-    cross_section.ApplicationArguments.Output(args)
-    cross_section.ApplicationArguments.Regen(args)
-    cross_section.ApplicationArguments.Processing(args)
+    Application.ApplicationArguments.Config(args, True)
+    Application.ApplicationArguments.Output(args)
+    Application.ApplicationArguments.Regen(args)
+    Application.ApplicationArguments.Processing(args)
 
-    args = cross_section.ApplicationArguments.ResolveArgs(args.parse_args())
+    args = Application.ApplicationArguments.ResolveArgs(args.parse_args())
     print(vars(args))
     main(args)

@@ -29,8 +29,6 @@ from python.analysis import vector, CutTable
 
 FileDescriptor = namedtuple("FileDescriptor", ["file", "type", "momentum_scale"])
 
-null_vector = ak.Array([{"x": -999, "y": -999, "z": -999}])
-
 def timer(func):
     """ Decorator which times a function.
 
@@ -851,7 +849,7 @@ class Data:
 
         new_direction = vector.normalize(events_matched.recoParticles.shower_momentum)
         new_direction = ak.where(events_matched.recoParticles.shower_momentum.x !=
-                                -999, new_direction, null_vector)
+                                -999, new_direction, vector.null_vector)
         events_matched.recoParticles._RecoParticleData__shower_direction = new_direction
 
         new_energy = vector.magnitude(events_matched.recoParticles.shower_momentum)
@@ -1518,9 +1516,20 @@ class RecoParticleData(ParticleData):
         return getattr(self, f"_{type(self).__name__}__beam_inst_trigger")
 
     @property
-    def beam_inst_P(self) -> type:
+    def beam_inst_P(self) -> ak.Array:
         self.LoadData("beam_inst_P", "beam_inst_P")
         return self.events.momentum_scale * 1000 * getattr(self, f"_{type(self).__name__}__beam_inst_P")
+
+    @property
+    def beam_inst_dir(self) -> ak.Record:
+        nTuples = [
+            ["beam_inst_dirX"], # the first name in the list is prioritised.
+            ["beam_inst_dirY"],
+            ["beam_inst_dirZ"]
+        ]
+        self.LoadData("beam_inst_dir", nTuples, is_vector = True)
+        return getattr(self, f"_{type(self).__name__}__beam_inst_dir")
+
 
     @property
     def beam_inst_pos(self) -> ak.Record:
@@ -1622,8 +1631,8 @@ class RecoParticleData(ParticleData):
         if not hasattr(self, f"_{type(self).__name__}__shower_momentum"):
             mom = vector.prod(self.shower_energy, self.shower_direction)
             mom = ak.where(self.shower_direction.x == -999,
-                           null_vector, mom)
-            mom = ak.where(self.shower_energy < 0, null_vector, mom)
+                           vector.null_vector, mom)
+            mom = ak.where(self.shower_energy < 0, vector.null_vector, mom)
             self.__shower_momentum = mom
         return self.__shower_momentum
 
@@ -2018,8 +2027,8 @@ class TrueParticleDataBT(ParticleData):
         if not hasattr(self, f"_{type(self).__name__}__momentumByHits"):
             if type(self.energyByHits) == ak.highlevel.Array and type(self.direction) == ak.highlevel.Array:
                 mom = vector.prod(self.energyByHits, self.direction)
-                mom = ak.where(self.direction.x == -999, null_vector, mom)
-                mom = ak.where(self.energy < 0, null_vector, mom)
+                mom = ak.where(self.direction.x == -999, vector.null_vector, mom)
+                mom = ak.where(self.energy < 0, vector.null_vector, mom)
             else:
                 mom = None
             setattr(self, f"_{type(self).__name__}__momentumByHits", mom)

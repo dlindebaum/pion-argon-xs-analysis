@@ -16,7 +16,7 @@ import pandas as pd
 from rich import print
 
 from python.analysis.Master import ReadHDF5, LoadConfiguration
-from python.analysis.cross_section import ApplicationArguments
+from python.analysis.Application import ApplicationArguments
 from python.analysis import Utils
 
 selection_map = {
@@ -152,14 +152,22 @@ def eff_err(p, n):
 
 
 def CreateTables(path : str, selection_name : str, signal : str = None):
+
     tables_mc = {}
     tables_data = {}
 
     col_map = {"counts" : "Counts", "purity": "Purity (\%)", "efficiency" : "Efficiency (\%)"}
 
     for f in col_map:
+        if not os.path.exists(f"{path}/tables_mc/{selection_name}/{selection_name}_{f}.hdf5"):
+            continue
+        file_path_data = f"{path}/tables_mc/{selection_name}/{selection_name}_{f}.hdf5"
         tables_mc[col_map[f]] = ReadHDF5(f"{path}/tables_mc/{selection_name}/{selection_name}_{f}.hdf5")
         tables_data[col_map[f]] = ReadHDF5(f"{path}/tables_data/{selection_name}/{selection_name}_{f}.hdf5")
+
+    if len(tables_mc) == 0:
+        return None, None
+
     names = tables_mc[col_map["counts"]].Name
 
     tables_mc[col_map["purity"]] = 100 * tables_mc[col_map["purity"]]
@@ -340,6 +348,7 @@ def main(args : argparse.Namespace):
         fmt_tables[s] = CreateTables(path, s, signal[s])
 
     for f in fmt_tables:
+        if fmt_tables[f][1] is None: continue
         outp = f"{out}{f}/"
         os.makedirs(outp, exist_ok = True)
         if fmt_tables[f][0] is not None:

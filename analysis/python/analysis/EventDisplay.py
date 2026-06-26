@@ -35,7 +35,7 @@ class EventDisplay:
     """
     xlim = (-350, 350)
     ylim = (0, 600)
-    zlim = (0, 600)
+    zlim = (0, 700)
     def __init__(self, eventID : str, run : str, subrun : str, plot2D : bool = True, plot3D : bool = True):
         """ Constructor
 
@@ -53,12 +53,12 @@ class EventDisplay:
         #* make figures/axes
         if plot2D:
             plt.figure(1).clf() # clear existing 2D figure 
-            self.fig2D, (self.xy, self.xz) = plt.subplots(nrows=2, ncols=1, figsize=(6.4*20, 4.8*20), num=1)
-            self.xy.set_xlabel("x (cm)")
-            self.xz.set_xlabel("x (cm)")
-            self.xy.set_ylabel("y (cm)")
-            self.xz.set_ylabel("z (cm)")
-            self.xy.set_title(title)
+            self.fig2D, (self.zy, self.zx) = plt.subplots(nrows=2, ncols=1, figsize=(6.4*20, 4.8*20), num=1)
+            self.zx.set_xlabel("z (cm)")
+            self.zy.set_xlabel("z (cm)")
+            self.zx.set_ylabel("x (cm)")
+            self.zy.set_ylabel("y (cm)")
+            self.zy.set_title(title)
 
         if plot3D:
             plt.figure(2).clf() # clear existing 3D figure 
@@ -79,10 +79,11 @@ class EventDisplay:
             z (tuple, optional): z bound. Defaults to zlim.
         """
         if hasattr(self, "fig2D"):
-            self.xy.set_xlim(x)
-            self.xy.set_ylim(y)
-            self.xz.set_xlim(x)
-            self.xz.set_ylim(z)
+            self.zx.set_xlim(z)
+            self.zx.set_ylim(x)
+            self.zy.set_xlim(z)
+            self.zy.set_ylim(y)
+
         if hasattr(self, "fig3D"):
             self.ax3D.set_xlim3d(x)
             self.ax3D.set_ylim3d(z)
@@ -110,11 +111,12 @@ class EventDisplay:
         points = points[fudicial_cut]
 
         if hasattr(self, "fig2D"):
-            self.xy.scatter(points.x, points.y, pointSize, marker = marker, color = colour, alpha = alpha)
-            self.xz.scatter(points.x, points.z, pointSize, marker = marker, color = colour, alpha = alpha)
+            self.zx.scatter(points.z, points.x, pointSize, marker = marker, color = colour, alpha = alpha)
+            self.zy.scatter(points.z, points.y, pointSize, marker = marker, color = colour, alpha = alpha)
+
             if startPoint is not None:
-                self.xy.scatter(startPoint.x, startPoint.y, pointSize * 30, marker = "x", color = colour, alpha = alpha)
-                self.xz.scatter(startPoint.x, startPoint.z, pointSize * 30, marker = "x", color = colour, alpha = alpha)
+                self.zx.scatter(startPoint.z, startPoint.x, pointSize * 30, marker = "x", color = colour, alpha = alpha)
+                self.zy.scatter(startPoint.z, startPoint.y, pointSize * 30, marker = "x", color = colour, alpha = alpha)
         
         if hasattr(self, "fig3D"):
             self.ax3D.scatter(points.x, points.z, points.y, s = pointSize, marker = marker, color = colour, alpha = alpha)
@@ -139,8 +141,8 @@ class EventDisplay:
             pointSize (int, optional): point size. Defaults to 2.
         """
         if hasattr(self, "fig2D"):
-            self.xy.scatter(point.x, point.y, pointSize, marker=marker, color=colour)
-            self.xz.scatter(point.x, point.z, pointSize, marker=marker, color=colour)
+            self.zx.scatter(point.z, point.x, pointSize, marker=marker, color=colour)
+            self.zy.scatter(point.z, point.y, pointSize, marker=marker, color=colour)
         
         if hasattr(self, "fig3D"):
             self.ax3D.scatter(point.x, point.z, point.y, s=pointSize, marker=marker, color=colour)
@@ -157,8 +159,8 @@ class EventDisplay:
             lineStyle (str, optional): line style. Defaults to "-".
         """
         if hasattr(self, "fig2D"):
-            self.xy.plot([start.x, end.x], [start.y, end.y], lineStyle, color = colour)
-            self.xz.plot([start.x, end.x], [start.z, end.z], lineStyle, color = colour)
+            self.zx.plot([start.z, end.z], [start.x, end.x], lineStyle, color = colour)
+            self.zy.plot([start.z, end.z], [start.y, end.y], lineStyle, color = colour)
         
         if hasattr(self, "fig3D"):
             self.ax3D.plot([start.x, end.x], [start.z, end.z], [start.y, end.y], lineStyle, color = colour)
@@ -174,8 +176,9 @@ class EventDisplay:
             fontsize (int, optional): font size. Defaults to 16.
         """
         if hasattr(self, "fig2D"):
-            self.xy.text(point.x, point.y, str(text), fontsize = fontsize, clip_on = True, color = colour, path_effects = [pe.withStroke(linewidth = 1, foreground = "black")])
-            self.xz.text(point.x, point.z, str(text), fontsize = fontsize, clip_on = True, color = colour, path_effects = [pe.withStroke(linewidth = 1, foreground = "black")])
+            self.zx.text(point.z, point.x, str(text), fontsize = fontsize, clip_on = True, color = colour, path_effects = [pe.withStroke(linewidth = 1, foreground = "black")])
+            self.zy.text(point.z, point.y, str(text), fontsize = fontsize, clip_on = True, color = colour, path_effects = [pe.withStroke(linewidth = 1, foreground = "black")])
+
 
         if hasattr(self, "fig3D"):
             self.ax3D.text(point.x, point.z, point.y, str(text), fontsize = fontsize, clip_on = True, color = colour, path_effects = [pe.withStroke(linewidth = 1, foreground = "black")])

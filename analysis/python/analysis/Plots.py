@@ -898,7 +898,6 @@ class PlotBook:
         return
 
     @classmethod
-    @property
     def null(cls):
         return cls(name = "", open = False)
 

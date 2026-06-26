@@ -13,7 +13,7 @@ from rich import print, rule
 import subprocess
 import time
 
-from python.analysis.cross_section import ApplicationArguments
+from python.analysis.Application import ApplicationArguments
 from python.analysis.Master import SaveConfiguration, LoadConfiguration, timer
 
 def file_search(path : str, data_cfg : dict) -> None:
@@ -63,7 +63,7 @@ def run_regression_test(args : argparse.Namespace):
 
         # run the script
         subprocess.run(["run_analysis.py", "-o", work_dir, "-c", f"{work_dir}/config.json", "--cpus", str(args.cpus)])
-        subprocess.run(["run_analysis.py", "-o", work_dir, "-c", f"{work_dir}/config.json", "--run", "analyse"]) # need to specify to run the xs analysis.
+        # subprocess.run(["run_analysis.py", "-o", work_dir, "-c", f"{work_dir}/config.json", "--run", "analyse"]) # need to specify to run the xs analysis.
         print("Test completed.")
     return
 

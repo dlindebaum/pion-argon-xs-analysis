@@ -17,8 +17,8 @@ from rich import print, rule
 from scipy.ndimage import gaussian_filter1d
 
 
-from python.analysis import cross_section, Plots
-from python.analysis.Master import DictToHDF5, ReadHDF5
+from python.analysis import cross_section, Plots, Application
+from python.analysis.Master import DictToHDF5, ReadHDF5, LoadConfiguration
 from apps import cex_toy_generator
 
 region_colours = {
@@ -307,7 +307,7 @@ def PullStudyFast(toys : cross_section.Toy, n_template : int, n_data : int, args
     out["scale"] = pd.DataFrame(scales)
     return out
 
-def PlotShapeExamples(energy_slices : cross_section.Slices, book : Plots.PlotBook = Plots.PlotBook.null):
+def PlotShapeExamples(energy_slices : cross_section.Slices, book : Plots.PlotBook = Plots.PlotBook.null()):
     norms = [0.8, 1.2]
     split = 1000
     smooth_amount = 500
@@ -348,7 +348,7 @@ def PlotShapeExamples(energy_slices : cross_section.Slices, book : Plots.PlotBoo
     return
 
 @cross_section.timer
-def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.ndarray, pdf : Plots.PlotBook = Plots.PlotBook.null, single_bin : bool = False, ylim = None):
+def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.ndarray, pdf : Plots.PlotBook = Plots.PlotBook.null(), single_bin : bool = False, ylim = None):
     x = data.index.values
 
     xt = np.arange(min(x), max(x)+0.1, 0.1)
@@ -491,7 +491,7 @@ def MeanProcessedResults(total, energy):
 
 
 @cross_section.timer
-def PlotDataShapeTestEnergy(data : tuple, energy_overflow : np.ndarray, book : Plots.PlotBook.null):
+def PlotDataShapeTestEnergy(data : tuple, energy_overflow : np.ndarray, book : Plots.PlotBook.null()):
 
     def remove_zero(a):
         return a[a != 0]
@@ -576,7 +576,7 @@ def PlotDataShapeTest(data, key, label, vmin = None, vmax = None):
     fig.tight_layout()
 
 @cross_section.timer
-def PlotCrossCheckResultsShape(results_total, results_bins, energy_overflow : np.ndarray, single_bin : bool, book : Plots.PlotBook.null):
+def PlotCrossCheckResultsShape(results_total, results_bins, energy_overflow : np.ndarray, single_bin : bool, book : Plots.PlotBook.null()):
 
     for p in process_map:
         PlotDataShapeTest(results_total, f"mu_{p}", f"$\\mu_{{{process_map[p]}}}$")
@@ -636,7 +636,7 @@ def SaveSummaryTables(directory : str, tables : tuple[pd.DataFrame], name : str)
     return
 
 
-def Summary(directory : str, test_name : str, model_name : str, model : cross_section.pyhf.Model, energy_overflow : np.ndarray, template_counts : float, single_bin : bool, book : Plots.PlotBook = Plots.PlotBook.null, ymax = None):
+def Summary(directory : str, test_name : str, model_name : str, model : cross_section.pyhf.Model, energy_overflow : np.ndarray, template_counts : float, single_bin : bool, book : Plots.PlotBook = Plots.PlotBook.null(), ymax = None):
 
     n_fe_max, n_fe_total_max = PredictedCountsSummary(template_counts, model, test_name, model_name, args.workdir, single_bin)
 
@@ -670,7 +670,7 @@ def Summary(directory : str, test_name : str, model_name : str, model : cross_se
     return ymax
 
 
-def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, template : cross_section.AnalysisInput, book : Plots.PlotBook = Plots.PlotBook.null):
+def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, template : cross_section.AnalysisInput, book : Plots.PlotBook = Plots.PlotBook.null()):
     tags = cross_section.Tags.ExclusiveProcessTags(template.exclusive_process)
     for j, c in Plots.IterMultiPlot(templates_energy):
         for i, s in enumerate(c):
@@ -689,7 +689,7 @@ def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : n
     return
 
 
-def PlotTotalChannel(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, book : Plots.PlotBook = Plots.PlotBook.null):
+def PlotTotalChannel(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, book : Plots.PlotBook = Plots.PlotBook.null()):
     for j, c in Plots.IterMultiPlot(templates_energy):
         Plots.Plot(energy_slices.pos_overflow, sum(c), xlabel = f"$n_{{{j}}}$ (MeV)", ylabel = "Counts", style = "bar", newFigure = False)
     book.Save()
@@ -897,7 +897,7 @@ def main(args : cross_section.argparse.Namespace):
 if __name__ == "__main__":
     parser = cross_section.argparse.ArgumentParser("app which performs cross checks for the region fit using toys.")
     
-    cross_section.ApplicationArguments.Config(parser, True)
+    Application.ApplicationArguments.Config(parser, True)
 
     parser.add_argument("--template", "-t", dest = "template", type = str, help = "toy template hdf5 file", required = True)
 
@@ -912,9 +912,9 @@ if __name__ == "__main__":
 
     parser.add_argument("--skip", dest = "skip", type = str, choices = ["normalisation", "shape", "pulls"], nargs = "+", default = [], help = "test to skip")
 
-    cross_section.ApplicationArguments.Output(parser, None)
+    Application.ApplicationArguments.Output(parser, None)
 
-    args = cross_section.ApplicationArguments.ResolveArgs(parser.parse_args(), False)
+    args = Application.ApplicationArguments.ResolveArgs(parser.parse_args(), False)
 
     if (not args.toy_data_config) and (not args.workdir):
         raise Exception("--toy_data_config or --workdir or both must be supplied")
@@ -922,7 +922,7 @@ if __name__ == "__main__":
     if args.events: args.events = int(args.events)
 
     if args.toy_data_config:
-        args.toy_data_config = cross_section.LoadConfiguration(args.toy_data_config)
+        args.toy_data_config = Master.LoadConfiguration(args.toy_data_config)
         OverrideConfig(args)
 
     if args.workdir:

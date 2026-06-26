@@ -14,8 +14,8 @@ import numpy as np
 from rich import print
 from rich.rule import Rule
 
-from python.analysis import cross_section, Plots
-from python.analysis.Master import DictToHDF5
+from python.analysis import cross_section, Plots, Application
+from python.analysis.Master import DictToHDF5, LoadConfiguration
 from python.analysis.Utils import dill_copy, quadsum, round_value_to_error
 from apps import cex_toy_generator, cex_analyse, cex_fit_studies, cex_analysis_input
 
@@ -44,7 +44,7 @@ class MCMethod(ABC):
         self.data_config = data_config
         pass
 
-    def Analyse(self, analysis_input : cross_section.AnalysisInput, book : Plots.PlotBook = Plots.PlotBook.null):
+    def Analyse(self, analysis_input : cross_section.AnalysisInput, book : Plots.PlotBook = Plots.PlotBook.null()):
 
         region_fit_result = cex_analyse.RegionFit(analysis_input, self.args.energy_slices, self.args.fit["mean_track_score"], self.model, mc_stat_unc = self.args.fit["mc_stat_unc"], single_bin = self.args.fit["single_bin"])
 
@@ -82,7 +82,7 @@ class MCMethod(ABC):
         return xs
 
 
-    def CalculateSysCov(self, results : list[dict], book : Plots.PlotBook = Plots.PlotBook.null):
+    def CalculateSysCov(self, results : list[dict], book : Plots.PlotBook = Plots.PlotBook.null()):
         values = {k : [] for k in results[0]}
         for i in results:
             for k in i:
@@ -173,7 +173,7 @@ class DataAnalysis(ABC):
         return xs
 
 
-    def PlotResults(self, xs_nominal : dict, result : dict, book : Plots.PlotBook = Plots.PlotBook.null):
+    def PlotResults(self, xs_nominal : dict, result : dict, book : Plots.PlotBook = Plots.PlotBook.null()):
         for p in xs_nominal["pdsp"]:
             cross_section.PlotXSComparison({"low" : result["low"][p], "nominal" : xs_nominal["pdsp"][p], "high" : result["high"][p]}, self.args.energy_slices, p, cv_only = True, marker_size = 12)
             book.Save()
@@ -269,7 +269,7 @@ class NuisanceParameters:
         return np_sys
 
 
-    def PlotXSMCStat(self, result, book : Plots.PlotBook = Plots.PlotBook.null):
+    def PlotXSMCStat(self, result, book : Plots.PlotBook = Plots.PlotBook.null()):
         for p in result["np"]:
             cross_section.PlotXSComparison({"Data stat + MC stat" : result["np"][p], "Data stat" : result["no_np"][p]}, self.args.energy_slices, process = p)
             book.Save()
@@ -476,7 +476,7 @@ class TrackLengthResolutionSystematic(MCMethod):
         return xs
     
 
-    def CalculateResolution(self, book : Plots.PlotBook = Plots.PlotBook.null):
+    def CalculateResolution(self, book : Plots.PlotBook = Plots.PlotBook.null()):
         ai_mc = cross_section.AnalysisInput.FromFile(self.args.analysis_input["mc"])
 
         r = np.array(cross_section.nandiv(ai_mc.track_length_reco - ai_mc.track_length_true, ai_mc.track_length_reco))
@@ -574,7 +574,7 @@ class NormalisationSystematic(MCMethod):
         return {"cv" : cvs, "true_cv" : true_cvs}
 
     @staticmethod
-    def PlotNormalisationTestResults(results : dict, args : cross_section.argparse.Namespace, xs_nominal : dict, book : Plots.PlotBook = Plots.PlotBook.null):
+    def PlotNormalisationTestResults(results : dict, args : cross_section.argparse.Namespace, xs_nominal : dict, book : Plots.PlotBook = Plots.PlotBook.null()):
         xs_sim = cross_section.GeantCrossSections()
         scale_factors = {"absorption" : 1, "charge_exchange" : 1, "pion_production" : 1, "double_charge_exchange" : 1, "quasielastic" : 1}
         for r in results["cv"]:
@@ -774,7 +774,7 @@ def SaveSystematicTables(systematic_tables : dict[pd.DataFrame], out : str):
     return
 
 
-def PlotSysHist(systematic_table : dict[pd.DataFrame], book : Plots.PlotBook = Plots.PlotBook.null):
+def PlotSysHist(systematic_table : dict[pd.DataFrame], book : Plots.PlotBook = Plots.PlotBook.null()):
     for t in systematic_table:
         Plots.plt.figure()
         c = 0
@@ -824,7 +824,7 @@ def PlotSysHist(systematic_table : dict[pd.DataFrame], book : Plots.PlotBook = P
     return
 
 
-def FinalPlots(cv, systematics_table : dict[pd.DataFrame], energy_slices, book : Plots.PlotBook = Plots.PlotBook.null, alt_xs : bool = False):
+def FinalPlots(cv, systematics_table : dict[pd.DataFrame], energy_slices, book : Plots.PlotBook = Plots.PlotBook.null(), alt_xs : bool = False):
     goodness_of_fit = {}
     if alt_xs:
         xs_alt = cross_section.GeantCrossSections(cross_section.GEANT_XS, energy_range = [energy_slices.min_pos - energy_slices.width, energy_slices.max_pos])
@@ -1101,8 +1101,8 @@ def main(args : cross_section.argparse.Namespace):
 if __name__ == "__main__":
 
     parser = cross_section.argparse.ArgumentParser("Estimate Systematics for the cross section analysis")
-    cross_section.ApplicationArguments.Config(parser)
-    cross_section.ApplicationArguments.Output(parser, "systematic/")
+    Application.ApplicationArguments.Config(parser)
+    Application.ApplicationArguments.Output(parser, "systematic/")
 
     parser.add_argument("--cv", "-v", dest = "cv", type = str, default = None, help = "plot systematics with central value measurement", required = True)
 
@@ -1119,7 +1119,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--plot", "-p", dest = "plot", action = "store_true", default = None, help = "plot systematics with central value measurement")
 
-    args = cross_section.ApplicationArguments.ResolveArgs(parser.parse_args())
+    args = Application.ApplicationArguments.ResolveArgs(parser.parse_args())
 
     if ("all" in args.run) or ("fit_inaccuracy" in args.run) or ("track_length" in args.run) or ("beam_res" in args.run) or ("theory" in args.run):
         if not args.toy_template:
@@ -1127,7 +1127,7 @@ if __name__ == "__main__":
         if not args.toy_data_config:
             raise Exception("--toy_data_config must be specified")        
     if args.toy_data_config:
-        args.toy_data_config = cross_section.LoadConfiguration(args.toy_data_config)
+        args.toy_data_config = LoadConfiguration(args.toy_data_config)
 
     args.cv = cross_section.LoadObject(args.cv)
 
