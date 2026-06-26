@@ -12,7 +12,7 @@ import numpy as np
 
 from rich import print
 
-from python.analysis import cross_section, Plots, SelectionTools, Application
+from python.analysis import Master, cross_section, Plots, SelectionTools, Application
 
 
 def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.array = np.array([0.75, 1.25]), book : Plots.PlotBook = Plots.PlotBook.null()):
@@ -167,10 +167,10 @@ def main(args : cross_section.argparse.Namespace):
             ReWeightResults(output_mc["sideband"], output_data["sideband"], args, 25, results, r, book = book)
             ReWeightResults(output_mc["analysis"], output_data["analysis"], args, 50, results, r, book = book)
             reweight_params = {f"p{i}" : {"value" : results[r][0][i], "error" : results[r][1][i]} for i in range(getattr(cross_section.Fitting, r).n_params)}
-            cross_section.SaveConfiguration(reweight_params, out + r + ".json")
+            Master.SaveConfiguration(reweight_params, out + r + ".json")
         Plots.plt.close("all")
 
-    reweight_params = cross_section.LoadConfiguration(out + "gaussian" + ".json")
+    reweight_params = Master.LoadConfiguration(out + "gaussian" + ".json")
 
 
     chi2_table = {}

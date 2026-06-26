@@ -122,7 +122,7 @@ def main(args : argparse.Namespace):
         pdf.Save()
     Plots.plt.close("all")
     print(f"fitted parameters : {params_dict}")
-    cross_section.SaveConfiguration(params_dict, outdir + "fit_parameters.json")
+    Master.SaveConfiguration(params_dict, outdir + "fit_parameters.json")
     return
 
 

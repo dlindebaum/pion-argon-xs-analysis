@@ -410,7 +410,7 @@ def AnalyseRegions(events : Master.Data, photon_mask : ak.Array, is_data : bool,
     if correction_params is None:
         params = None
     else:
-        params = cross_section.LoadConfiguration(correction_params)
+        params = Master.LoadConfiguration(correction_params)
 
     reco_pi0_counts = EventSelection.count_pi0_candidates(events, exactly_two_photons = True, photon_mask = photon_mask, correction = cross_section.EnergyCorrection.shower_energy_correction[correction], correction_params = params)
     reco_pi_plus_counts_mom_cut = EventSelection.count_charged_pi_candidates(events, energy_cut = None)

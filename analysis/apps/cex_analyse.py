@@ -16,7 +16,7 @@ from rich import print
 
 from apps import cex_toy_generator, cex_toy_parameters
 from pyunfold.callbacks import SplineRegularizer
-from python.analysis import cross_section, Plots, Application
+from python.analysis import cross_section, Plots, Application, Master
 
 label_map = {"toy" : "toy", "pdsp" : "ProtoDUNE SP"}
 
@@ -488,7 +488,7 @@ def LoadToy(file):
     if file.split(".")[-1] == "hdf5":
         toy = cross_section.Toy(file = file)
     elif file.split(".")[-1] == "json":
-        toy = cross_section.Toy(df = cex_toy_generator.run(cross_section.LoadConfiguration(file)))
+        toy = cross_section.Toy(df = cex_toy_generator.run(Master.LoadConfiguration(file)))
     else:
         raise Exception("toy file format not recognised")
     return cross_section.AnalysisInput.CreateAnalysisInputToy(toy)

@@ -18,7 +18,7 @@ from scipy.ndimage import gaussian_filter1d
 
 
 from python.analysis import cross_section, Plots, Application
-from python.analysis.Master import DictToHDF5, ReadHDF5
+from python.analysis.Master import DictToHDF5, ReadHDF5, LoadConfiguration
 from apps import cex_toy_generator
 
 region_colours = {
@@ -922,7 +922,7 @@ if __name__ == "__main__":
     if args.events: args.events = int(args.events)
 
     if args.toy_data_config:
-        args.toy_data_config = cross_section.LoadConfiguration(args.toy_data_config)
+        args.toy_data_config = Master.LoadConfiguration(args.toy_data_config)
         OverrideConfig(args)
 
     if args.workdir:

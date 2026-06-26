@@ -390,7 +390,7 @@ def main(args):
         sf = [len(f'{p["error"][f"p{i}"]:.1g}') - 1 for i in range(len(p["value"]))]
         table = pd.DataFrame({f"$p_{{{i}}}$" : f'{p["value"][f"p{i}"]:.{sf[i]}f} $\\pm$ {p["error"][f"p{i}"]:.1g}' for i in range(len(p["value"]))}, index = [0])
         table.style.hide(axis = "index").to_latex(out + name + ".tex")
-        cross_section.SaveConfiguration(p, out + name + ".json")
+        Master.SaveConfiguration(p, out + name + ".json")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Applies beam particle selection and saves properties of photon shower candidate PFOs to hdf5 file (MC only)", formatter_class = argparse.RawDescriptionHelpFormatter)

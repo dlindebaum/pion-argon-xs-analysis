@@ -15,7 +15,7 @@ from rich import print
 from rich.rule import Rule
 
 from python.analysis import cross_section, Plots, Application
-from python.analysis.Master import DictToHDF5
+from python.analysis.Master import DictToHDF5, LoadConfiguration
 from python.analysis.Utils import dill_copy, quadsum, round_value_to_error
 from apps import cex_toy_generator, cex_analyse, cex_fit_studies, cex_analysis_input
 
@@ -1127,7 +1127,7 @@ if __name__ == "__main__":
         if not args.toy_data_config:
             raise Exception("--toy_data_config must be specified")        
     if args.toy_data_config:
-        args.toy_data_config = cross_section.LoadConfiguration(args.toy_data_config)
+        args.toy_data_config = LoadConfiguration(args.toy_data_config)
 
     args.cv = cross_section.LoadObject(args.cv)
 
