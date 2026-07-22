@@ -18,12 +18,13 @@ from rich import print
 from python.analysis import (
     Master, BeamParticleSelection, vector, Plots, cross_section, Fitting, Processing)
 
-def Fit_Vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
+def Fit_Vector(v : ak.Record, bins : int, fit_percentiles : dict) -> tuple[dict, dict, dict, dict]:
     """ Gaussian fit to each component in the vector.
 
     Args:
         v (ak.Record): vector
         bins (int): number of bins
+        fit_percentiles (dict): Configurable percentiles to use for the fit
 
     Returns:
         tuple: fit paramaters for each component.
@@ -32,9 +33,10 @@ def Fit_Vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
     mu_err = {}
     sigma = {}
     sigma_err = {}
+
     for i in ["x", "y", "z"]:
         data = v[i]
-        y, bins_edges = np.histogram(np.array(data[~np.isnan(data)]), bins = bins, range = sorted([np.nanpercentile(data, 10), np.nanpercentile(data, 90)])) # fit only to  data within the 10th and 90th percentile of data to exclude large tails in the distriubtion.
+        y, bins_edges = np.histogram(np.array(data[~np.isnan(data)]), bins = bins, range = sorted([np.nanpercentile(data, fit_percentiles[i][0]), np.nanpercentile(data, fit_percentiles[i][1])])) 
         yerr = np.sqrt(y) # Poisson error
 
         popt, perr = Fitting.Fit(cross_section.bin_centers(bins_edges), y, yerr, Fitting.gaussian)
@@ -111,16 +113,21 @@ def MakePlots(output_mc : dict[ak.Array], mc_fits : dict, output_data : dict[ak.
             data_ranges = [] if data_fits is None else plot_range(data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"])
 
             plot_ranges = mc_ranges + data_ranges
+            #plot_ranges = [-100, 400]
+            print(f"Plot ranges: {plot_ranges}")
             if output_mc is not None: plot(output_mc["start_pos"][i], f"{label_name} start position ${i}$ (cm)", mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"], "C0", "MC", range = [min(plot_ranges), max(plot_ranges)])
             if output_data is not None: plot(output_data["start_pos"][i], f"{label_name} start position ${i}$ (cm)", data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"], "C1", "Data", range = [min(plot_ranges), max(plot_ranges)])
             pdf.Save()
     return
 
-
 def Fits(args : argparse.Namespace, output : dict, out : str, sample_name : str):
+
     start_pos = output["start_pos"]
     beam_dir = output["beam_dir"]
-    mu, sigma, mu_err, sigma_err = Fit_Vector(start_pos, 100)
+
+    print(f"Start_pos: {start_pos}")
+
+    mu, sigma, mu_err, sigma_err = Fit_Vector(start_pos, 10, args.beam_quality_fit_percentiles) #bins=100
 
     mu_dir = {i : ak.mean(ak.nan_to_num(beam_dir[i])) for i in ["x", "y", "z"]}
     mu_dir_err = {i : ak.std(ak.nan_to_num(beam_dir[i]))/np.sqrt(ak.count(beam_dir[i])) for i in ["x", "y", "z"]}
@@ -146,7 +153,6 @@ def Fits(args : argparse.Namespace, output : dict, out : str, sample_name : str)
         "mu_dir_err_z" : mu_dir_err["z"],
         "truncate"     : args.beam_quality_truncate
     }
-    print(fit_values)
 
     #* write to json file
     os.makedirs(args.out, exist_ok = True)
@@ -159,6 +165,8 @@ def Fits(args : argparse.Namespace, output : dict, out : str, sample_name : str)
 
 def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
     events = Master.Data(file, nTuple_type = args["nTuple_type"], target_momentum = args["pmom"])
+    
+    print(f"Loaded {len(events.event_index)} events from file {file} with pmom={args['pmom']}")
 
     #? should this be made configurable i.e. pass config and apply all selections before the beam quality cuts if it is in the list?
 
@@ -180,11 +188,15 @@ def run(i : int, file : str, n_events : int, start : int, selected_events, args 
         mask = BeamParticleSelection.PandoraTagCut(events)
         events.Filter([mask], [mask])
 
-        mask = BeamParticleSelection.CaloSizeCut(events)
+        # mask = BeamParticleSelection.CaloSizeCut(events)
+        # events.Filter([mask], [mask])
+
+        mask = BeamParticleSelection.BeamValidSelection(events)
         events.Filter([mask], [mask])
 
-        mask = BeamParticleSelection.HasFinalStatePFOsCut(events)
-        events.Filter([mask], [mask])
+        # mask = BeamParticleSelection.HasFinalStatePFOsCut(events)
+        # events.Filter([mask], [mask])
+
     #* fit gaussians to the start positions
     start_pos, end_pos = BeamParticleSelection.GetTruncatedPos(events, args["beam_quality_truncate"])
     beam_dir = vector.normalize(vector.sub(end_pos, start_pos))
@@ -195,8 +207,13 @@ def main(args):
     outdir = args.out + "beam_quality/"
     os.makedirs(outdir, exist_ok = True)
 
-    outputs = Processing.ApplicationProcessing(list(args.ntuple_files.keys()), outdir, args, run, True)
+    print(args.ntuple_files.keys())
 
+    outputs = Processing.ApplicationProcessing(list(args.ntuple_files.keys()), outdir, args, run, True)
+    
+    print(outputs.keys(), f"Outputs for MC: {outputs['mc']}")
+    #print(f"Start positions for MC: {outputs['mc']['start_pos']}")
+    
     fit_values = {s : Fits(args, outputs[s], outdir, s) for s in outputs}
 
     if "data" not in outputs.keys():

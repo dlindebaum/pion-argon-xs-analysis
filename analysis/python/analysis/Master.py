@@ -1008,6 +1008,11 @@ class TrueParticleData(ParticleData):
             self.FilterVariable(name)
 
     @property
+    def beam_len(self) -> ak.Array:
+        self.LoadData("beam_len", "true_beam_len")
+        return getattr(self, f"_{type(self).__name__}__beam_len")
+
+    @property
     def beam_traj_KE(self) -> ak.Array:
         self.LoadData("beam_traj_KE", "true_beam_traj_KE")
         return getattr(self, f"_{type(self).__name__}__beam_traj_KE")
@@ -1420,10 +1425,12 @@ class RecoParticleData(ParticleData):
     @property
     def beam_caloWire(self) -> ak.Array:
         self.LoadData("beam_caloWire", "reco_beam_calo_wire")
-
-        if self.events.nTuple_type == Ntuple_Type.PDSP_SCEOff:
-            self.LoadData("beam_caloWire", "reco_beam_calo_wire_NoSCE")
         return getattr(self, f"_{type(self).__name__}__beam_caloWire")
+    
+    @property
+    def beam_caloWire_noSCE(self) -> ak.Array:
+        self.LoadData("beam_caloWire_noSCE", "reco_beam_calo_wire_NoSCE")
+        return getattr(self, f"_{type(self).__name__}__beam_caloWire_noSCE")
 
     @property
     def beam_michelScore(self) -> ak.Array:
@@ -1449,11 +1456,26 @@ class RecoParticleData(ParticleData):
     def beam_dEdX(self) -> ak.Array:
         self.LoadData("beam_dEdX", "reco_beam_dEdX_SCE")
         return getattr(self, f"_{type(self).__name__}__beam_dEdX")
+    
+    @property
+    def beam_dEdX_noSCE(self) -> ak.Array:
+        self.LoadData("beam_dEdX_noSCE", "reco_beam_dEdX_NoSCE")
+        return getattr(self, f"_{type(self).__name__}__beam_dEdX_noSCE")
+
+    # @property
+    # def beam_dEdX_calibrated(self) -> ak.Array:
+    #     self.LoadData("beam_dEdX_calibrated", "reco_beam_calibrated_dEdX_SCE")
+    #     return getattr(self, f"_{type(self).__name__}__beam_dEdX_calibrated")
 
     @property
-    def beam_dEdX_calibrated(self) -> ak.Array:
-        self.LoadData("beam_dEdX_calibrated", "reco_beam_calibrated_dEdX_SCE")
-        return getattr(self, f"_{type(self).__name__}__beam_dEdX_calibrated")
+    def beam_chi2_proton(self) -> ak.Array:
+        self.LoadData("beam_chi2_proton", "reco_beam_Chi2_proton")
+        return getattr(self, f"_{type(self).__name__}__beam_chi2_proton")
+    
+    @property
+    def beam_chi2_proton_noSCE(self) -> ak.Array:
+        self.LoadData("beam_chi2_proton_noSCE", "reco_beam_Chi2_proton_NoSCE")
+        return getattr(self, f"_{type(self).__name__}__beam_chi2_proton_noSCE")
 
     @property
     def reco_reconstructable_beam_event(self) -> ak.Array:
@@ -1648,7 +1670,7 @@ class RecoParticleData(ParticleData):
 
     @property
     def track_dEdX(self) -> ak.Array:
-        self.LoadData("track_dEdX", "reco_daughter_allTrack_calibrated_dEdX_SCE")
+        self.LoadData("track_dEdX", "reco_daughter_allTrack_dEdX_SCE")
         return getattr(self, f"_{type(self).__name__}__track_dEdX")
 
     @property
@@ -1721,7 +1743,41 @@ class RecoParticleData(ParticleData):
             self.LoadData("beam_pandora_tag", "reco_beam_type")
         return getattr(self, f"_{type(self).__name__}__beam_pandora_tag")
 
+    @property
+    def reco_beam_michel_vertex_X(self) -> ak.Array:
+        self.LoadData("reco_beam_michel_vertex_X", "reco_beam_michel_vertex_X")
+        return getattr(self, f"_{type(self).__name__}__reco_beam_michel_vertex_X")
+    
+    @property
+    def reco_beam_michel_vertex_Y(self) -> ak.Array:
+        self.LoadData("reco_beam_michel_vertex_Y", "reco_beam_michel_vertex_Y")
+        return getattr(self, f"_{type(self).__name__}__reco_beam_michel_vertex_Y")
+    
+    @property
+    def reco_beam_michel_vertex_Z(self) -> ak.Array:
+        self.LoadData("reco_beam_michel_vertex_Z", "reco_beam_michel_vertex_Z")
+        return getattr(self, f"_{type(self).__name__}__reco_beam_michel_vertex_Z")
+    
+    @property
+    def reco_beam_michel_end_X(self) -> ak.Array:
+        self.LoadData("reco_beam_michel_end_X", "reco_beam_michel_end_X")
+        return getattr(self, f"_{type(self).__name__}__reco_beam_michel_end_X")
+    
+    @property
+    def reco_beam_michel_end_Y(self) -> ak.Array:
+        self.LoadData("reco_beam_michel_end_Y", "reco_beam_michel_end_Y")
+        return getattr(self, f"_{type(self).__name__}__reco_beam_michel_end_Y")
+    
+    @property
+    def reco_beam_michel_end_Z(self) -> ak.Array:
+        self.LoadData("reco_beam_michel_end_Z", "reco_beam_michel_end_Z")
+        return getattr(self, f"_{type(self).__name__}__reco_beam_michel_end_Z")
 
+    @property
+    def reco_beam_len(self) -> ak.Array:
+        self.LoadData("reco_beam_len", "reco_beam_len")
+        return getattr(self, f"_{type(self).__name__}__reco_beam_len")
+     
     @property
     def beam_track_length(self) -> ak.Array:
         setattr(self, f"_{type(self).__name__}__beam_track_length", self.track_length(self.beam_calo_pos))

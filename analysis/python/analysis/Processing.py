@@ -67,6 +67,7 @@ def ApplicationProcessing(
 
     if (args.regen is True) or (os.path.isfile(f"{outdir}{outname}.dill") is False):
         print("Processing Ntuples")
+        print(f"Samples: {samples}")
         outputs = {
             s : RunProcess(args.ntuple_files[s], s == Sample.DATA,
                            args, func, merge, batchless=batchless)

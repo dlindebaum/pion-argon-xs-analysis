@@ -35,10 +35,16 @@ def main(args):
     os.makedirs(outdir, exist_ok = True)
     
     outputs = Processing.ApplicationProcessing(list(args.ntuple_files.keys()), outdir, args, run, True)
-
-    n_data = ak.sum(outputs["data"]["mask"])
+    
     n_mc = ak.sum(outputs["mc"]["mask"])
-    norm = round(n_data / n_mc, 3)
+    print(f"n_mc: {n_mc}")
+
+    if 'data' in outputs:
+        n_data = ak.sum(outputs["data"]["mask"])
+        norm = round(n_data / n_mc, 3)
+    else:
+        n_data=0
+        norm=1.0
 
     with Plots.PlotBook(outdir + "plots.pdf") as book:
         Plots.PlotTags(outputs["mc"]["tags"], "True particle ID")

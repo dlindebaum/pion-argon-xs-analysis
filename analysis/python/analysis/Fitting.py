@@ -82,7 +82,16 @@ class gaussian(FitFunction):
 
     @staticmethod
     def bounds(x, y):
-        return [(0, min(x), 0.001), (np.inf, max(x), max(x) - min(x))]
+        xmin = min(x)
+        xmax = max(x)
+
+        sigma_max = max(xmax - xmin, 1e-3)
+
+        lower = (0, xmin, 1e-3)
+        upper = (np.inf, xmax, sigma_max)
+
+        return (lower, upper)
+        #return [(0, min(x), 0.001), (np.inf, max(x), max(x) - min(x))]
 
     @staticmethod
     def p0(x, y):

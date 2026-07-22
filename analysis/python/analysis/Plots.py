@@ -26,7 +26,7 @@ class PlotConfig():
 
     def __init__(self):
         # self.PLT_STYLE = None
-        self.PLT_STYLE = "/users/wx21978/projects/pion-phys/pi0-analysis/analysis/config/thesis_plotstyle.mplstyle"
+        self.PLT_STYLE = "/users/gj23442/analysis/pion-argon-xs-analysis/analysis/config/thesis_plotstyle.mplstyle"
         self.FIG_SIZE = "single"
         self.FIG_FACECOLOR = 'white'
         self.AXIS_FACECOLOR = 'white'
@@ -1037,7 +1037,7 @@ def MultiPlot(n : int, xlim : tuple = None, ylim : tuple = None, orientation = "
         sub_kwargs = {}
         # if i % dim[1] >0:
         #     sub_kwargs.update({"sharey": axes[(i//dim[0]) * dim[1]]})
-        if i//dim[0] > 0:
+        if i//dim[1] > 0:
             sub_kwargs.update({"sharex": axes[(i%dim[1])]})
         axes.append(plt.subplot(dim[0], dim[1], i + 1, **sub_kwargs))
         if xlim: plt.xlim(xlim)

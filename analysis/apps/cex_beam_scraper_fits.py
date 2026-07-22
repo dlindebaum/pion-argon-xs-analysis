@@ -22,9 +22,12 @@ from python.analysis import (
 
 def run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
     mc = Master.Data(file, nTuple_type = args["nTuple_type"], target_momentum = args["pmom"])
+    print(f"Momentum: {mc.target_mom}", type(mc.target_mom))
     for s in args["beam_selection"]["selections"]:
+        print(f"applying {s} selection")
         if s == "BeamScraperCut": break
         mask = args["beam_selection"]["selections"][s](mc, **args["beam_selection"]["mc_arguments"][s])
+        print(f"selected {ak.sum(mask)} events")
         mc.Filter([mask], [mask])
 
     beam_inst_KE = EnergyTools.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
@@ -102,6 +105,8 @@ def GetScraperFits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : 
     """
     plot = Plots.MultiPlot(len(ke_bins) - 1)
 
+    print(f"ke_bins: {ke_bins}")
+
     scraper_fit = {}
     for i in range(1, len(ke_bins)):
         bin_label = "$KE^{reco}_{inst}$:" + f"[{ke_bins[i-1]},{ke_bins[i]}] (MeV)"
@@ -109,13 +114,45 @@ def GetScraperFits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : 
 
         data = delta_KE_upstream[e]
 
+        print(data)
+
+        print(f"\n--- KE bin [{ke_bins[i-1]}, {ke_bins[i]}] ---")
+        print("events in bin:", np.sum(e))
+        print("len(data):", len(data))
+
+        data_np = np.array(data)
+
+        if len(data_np) <= 3:
+            print(f"Skipping KE bin [{ke_bins[i-1]}, {ke_bins[i]}] — too few entries ({len(data_np)})")
+            continue
+
+        print("nan count:", np.sum(np.isnan(data_np)))
+        print("finite count:", np.sum(np.isfinite(data_np)))
+
+        p10 = np.nanpercentile(data_np, 10)
+        p90 = np.nanpercentile(data_np, 90)
+
+        print("p10:", p10)
+        print("p90:", p90)
+
+        print(f"Hist input:{data[~np.isnan(data)]}")
+
         y, bin_edges = np.histogram(np.array(data[~np.isnan(data)]), bins = fit_bins, range = sorted([np.nanpercentile(data, 10), np.nanpercentile(data, 90)]))
         yerr = np.sqrt(y) # Poisson error
 
+        mask = y > 0
+        x = cross_section.bin_centers(bin_edges)
+        y = y[mask]
+        yerr = yerr[mask]
+        bin_edges = bin_edges[:-1][mask]
+        x = x[mask]
+
+        print("p0:", Fitting.gaussian.p0(x, y))
+        print("bounds:", Fitting.gaussian.bounds(x, y))
         print(f"{(max(y), np.nanmedian(data), np.nanstd(data))=}")
 
         next(plot)
-        popt, perr, metrics = Fitting.Fit(cross_section.bin_centers(bin_edges), y, yerr, Fitting.gaussian, method = "dogbox", return_chi_sqr = True)#, plot = True, plot_style = "scatter", xlabel = "$\Delta E_{upstream}$ (MeV)", title = bin_label, plot_range = residual_range)
+        popt, perr, metrics = Fitting.Fit(x, y, yerr, Fitting.gaussian, method = "dogbox", return_chi_sqr = True)#, plot = True, plot_style = "scatter", xlabel = "$\Delta E_{upstream}$ (MeV)", title = bin_label, plot_range = residual_range)
         heights, _ = Plots.PlotHist(np.array(data[~np.isnan(data)]), newFigure = False, bins = fit_bins, range = residual_range, label = "observed")
         x_interp = np.linspace(min(np.array(data[~np.isnan(data)])), max(np.array(data[~np.isnan(data)])), 10 * fit_bins)
         y_interp = Fitting.gaussian.func(x_interp, max(heights), popt[1], popt[2])
@@ -206,6 +243,9 @@ def main(args : argparse.Namespace):
     bins = 50
 
     with Plots.PlotBook(outdir + "beam_scraper_fits.pdf") as pdf:
+        print(f"Beam_inst_KE:{output_mc['beam_inst_KE']}")
+        print(np.unique(output_mc["beam_inst_KE"]))
+
         Plots.Plot(args.beam_scraper_energy_range, args.beam_scraper_energy_range, color = "red")
         Plots.PlotHist2D(output_mc["beam_inst_KE"], output_mc["true_ffKE"], xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$KE^{true}_{ff}$ (MeV)", x_range = args.beam_scraper_energy_range, y_range = args.beam_scraper_energy_range, newFigure = False)
         pdf.Save()

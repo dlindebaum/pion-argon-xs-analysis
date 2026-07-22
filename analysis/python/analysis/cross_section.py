@@ -294,7 +294,7 @@ class PlotStyler:
     @staticmethod
     def SetPlotStyle(extend_colors : bool = False, custom_colors : list = None, dpi : int = 300, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):
         Plots.plt.style.use("default") # first load the default to reset any previous changes made by other styles
-        Plots.plt.style.use("/users/wx21978/projects/pion-phys/pi0-analysis/analysis/config/thesis_plotstyle.mplstyle")
+        Plots.plt.style.use("/users/gj23442/analysis/pion-argon-xs-analysis/analysis/config/thesis_plotstyle.mplstyle")
         # Plots.plt.style.use('seaborn-v0_8-paper')
         # Plots.plt.rcParams.update({'patch.linewidth': 1})
         # Plots.plt.rcParams.update({'font.size': font_scale * 10})
@@ -541,6 +541,7 @@ class ApplicationArguments:
                 if "data" in value:
                     args.data_beam_quality_fit = LoadConfiguration(value["data"])
                 args.beam_quality_truncate = value["truncate"]
+                args.beam_quality_fit_percentiles = value["fit_percentiles"]
             elif head == "BEAM_SCRAPER_FITS":
                 args.beam_scraper_energy_range = value["energy_range"]
                 args.beam_scraper_energy_bins = value["energy_bins"]

@@ -1,0 +1,178 @@
+{
+  "NTUPLE_FILES": {
+    "mc": [
+      {
+        "file": "/storage/2/gj23442/ana_pdhd_prod_beam_test_v4_gen_g4_IonScintPDExt_PDInt.root",
+        "type": "PDSPAnalyser_SCEOff",
+        "pmom": 1
+      }
+    ]
+  },
+  "norm": 1.0,
+  "REGION_IDENTIFICATION": {
+    "type": "default"
+  },
+  "GNN_MODEL": {
+    "model_path": null,
+    "region_labels": [
+      "absorption",
+      "charge_exchange",
+      "pion_production"
+    ]
+  },
+  "FIDUCIAL_VOLUME": [
+    0,
+    999
+  ],
+  "BEAM_QUALITY_FITS": {
+    "mc": "/users/gj23442/analysis/pion-argon-xs-analysis/analysis/pdhd_mc/outputs_new/beam_quality/mc_beam_quality_fit_values.json",
+    "truncate": null,
+    "fit_percentiles": {
+      "x": [
+        10,
+        90
+      ],
+      "y": [
+        20,
+        90
+      ],
+      "z": [
+        10,
+        90
+      ]
+    }
+  },
+  "BEAM_SCRAPER_FITS": {
+    "mc": "/users/gj23442/analysis/pion-argon-xs-analysis/analysis/pdhd_mc/outputs_new/beam_scraper/mc_beam_scraper_fit_values.json",
+    "energy_range": null,
+    "energy_bins": [
+      600,
+      800,
+      1000,
+      1200
+    ]
+  },
+  "ENERGY_CORRECTION": {
+    "correction_params": null,
+    "energy_range": null,
+    "correction": "response"
+  },
+  "BEAM_REWEIGHT": {
+    "strength": 2,
+    "params": null
+  },
+  "UPSTREAM_ENERGY_LOSS": {
+    "cv_function": "gaussian",
+    "response": "poly2d",
+    "bins": [
+      600,
+      800,
+      1000,
+      1200
+    ]
+  },
+  "ESLICE": {
+    "width": 100,
+    "min": 800,
+    "max": 1200
+  },
+  "UNFOLDING": {},
+  "BEAM_PARTICLE_SELECTION": {
+    "PiBeamSelection": {
+      "enable": true,
+      "use_beam_inst_mc": false,
+      "use_beam_inst_data": true
+    },
+    "PandoraTagCut": {
+      "enable": true,
+      "cut": 13,
+      "op": "=="
+    },
+    "CaloSizeCut": {
+      "enable": false
+    },
+    "BeamValidSelection": {
+      "enable": true,
+      "cut": 0,
+      "op": ">"
+    },
+    "HasFinalStatePFOsCut": {
+      "enable": false
+    },
+    "DxyCut": {
+      "enable": true,
+      "cut": 3,
+      "op": "<"
+    },
+    "DzCut": {
+      "enable": false,
+      "cut": [
+        -3,
+        3
+      ],
+      "op": [
+        ">",
+        "<"
+      ]
+    },
+    "CosThetaCut": {
+      "enable": false,
+      "cut": 0.95,
+      "op": ">"
+    },
+    "APA3Cut": {
+      "enable": false,
+      "cut": 220,
+      "op": "<"
+    },
+    "MichelScoreCut": {
+      "enable": false,
+      "cut": 0.55,
+      "op": "<"
+    },
+    "MedianDEdXCut": {
+      "enable": true,
+      "cut": 3.0,
+      "op": "<",
+      "truncate": null
+    },
+    "BeamScraperCut": {
+      "enable": true,
+      "KE_range": 1,
+      "cut": 1.5,
+      "op": "<"
+    }
+  },
+  "VALID_PFO_SELECTION": {
+    "enable": true
+  },
+  "beam_momentum": "nominal beam momentum in MeV",
+  "P_inst_range": [
+    800,
+    1200
+  ],
+  "KE_inst_range": [
+    800,
+    1200
+  ],
+  "KE_init_range": [
+    800,
+    1200
+  ],
+  "KE_int_range": [
+    800,
+    1200
+  ],
+  "BEAM_SELECTION_MASKS": {
+    "mc": {
+      "beam": "/users/gj23442/analysis/pion-argon-xs-analysis/analysis/pdhd_mc/outputs_new/masks_mc/beam_selection_masks.dill",
+      "fiducial": "/users/gj23442/analysis/pion-argon-xs-analysis/analysis/pdhd_mc/outputs_new/masks_mc/fiducial_selection_masks.dill",
+      "null_pfo": "/users/gj23442/analysis/pion-argon-xs-analysis/analysis/pdhd_mc/outputs_new/masks_mc/null_pfo_selection_masks.dill"
+    }
+  },
+  "MC_EFFICIENCIES": {
+    "reco": "/users/gj23442/analysis/pion-argon-xs-analysis/analysis/pdhd_mc/outputs_new/efficiency_mc/reco_eff_from_selection.dill",
+    "truth": "/users/gj23442/analysis/pion-argon-xs-analysis/analysis/pdhd_mc/outputs_new/efficiency_mc/truth_eff_from_selection.dill",
+    "process": "/users/gj23442/analysis/pion-argon-xs-analysis/analysis/pdhd_mc/outputs_new/efficiency_mc/process_eff_from_selection.dill"
+  }
+}

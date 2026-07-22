@@ -380,7 +380,9 @@ def CombineSelections(events : Data, selection: list, levels: int, args: list = 
 
         if return_table or verbose:
             successive_counts = ak.count(mask[mask])
+            #successive_counts = ak.firsts(mask)
             single_counts = ak.count(new_mask[new_mask])
+            #single_counts = ak.firsts(new_mask)
             table[s.__name__] = [single_counts, 100 * single_counts / table["no selection"]
                                  [0], successive_counts, 100 * successive_counts / table["no selection"][0]]
 

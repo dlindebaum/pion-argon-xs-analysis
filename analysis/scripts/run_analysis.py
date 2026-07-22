@@ -70,6 +70,7 @@ def template_config():
         },
         "BEAM_QUALITY_FITS": {
             "truncate" : None,
+            "fit_percentiles" : None
         },
         "BEAM_SCRAPER_FITS":{
             "energy_range" : None,
@@ -317,6 +318,7 @@ def main(args):
                 if v in files:
                     new_config_entry[k] = os.path.abspath(output_path + v)
             new_config_entry["truncate"] = args.beam_quality_truncate
+            new_config_entry["fit_percentiles"] = args.beam_quality_fit_percentiles
             update_config(args.config, {"BEAM_QUALITY_FITS" : new_config_entry})
             args = update_args(processing_args) # reload config to continue
         if args.stop == "beam_quality": return

@@ -129,6 +129,18 @@ def CaloSizeCut(events: Data, return_property : bool = False) -> ak.Array:
 
     return CreateMask(0, ">", ak.num(calo_wire, 1), return_property)
 
+def BeamValidSelection(events: Data, cut : int = 0, op : str = ">", return_property : bool = False) -> ak.Array:
+    """ Beam particle selection using beam instrumentation information for Data and truth information if MC.
+
+    Args:
+        events (Master.Data): events to study
+    """
+    
+    n_beam_particles = events.recoParticles.beam_particles
+     # Analyser fills the empty entry with a -999
+    n_beam_particles = n_beam_particles[n_beam_particles != -999]
+
+    return CreateMask(cut, op, n_beam_particles, return_property)
 
 def BeamQualityCut(events: Data, fits : dict, dxy_cut : list = [-3, 3], dz_cut : list = [-3, 3], costh_cut : list = [0.95, 2]) -> ak.Array:
     """ Cut on beam particle start position and trajectory, 
