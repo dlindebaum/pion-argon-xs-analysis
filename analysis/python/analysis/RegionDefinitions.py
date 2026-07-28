@@ -198,10 +198,10 @@ class default(SampleDefinition):
 regions = {
     "default" : default,
     "pdsp_1GeV_regions" : pdsp_1GeV_regions,
-    "moderate_efficiency_three_regions" : moderate_efficiency_three_regions,
     "moderate_efficiency_three_regions_loose_pi" : moderate_efficiency_three_regions_loose_pi,
     "moderate_efficiency_regions" : moderate_efficiency_regions,
     "high_efficiency_regions" : high_efficiency_regions,
     "high_purity_regions" : high_purity_regions,
+    "moderate_efficiency_three_regions" : moderate_efficiency_three_regions,
     "moderate_efficiency_three_regions_esc": moderate_efficiency_three_regions_esc
 }

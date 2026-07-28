@@ -46,9 +46,10 @@
   },
   "norm": 0.592,
   "pi_KE_lim": 100,
+  "energy_method" : "track",
   "fiducial_volume": [
-    0,
-    700
+    30,
+    220
   ],
   "SAMPLE_DEFINITIONS": {
     "region": "moderate_efficiency_three_regions_esc",
