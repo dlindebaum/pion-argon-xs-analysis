@@ -39,7 +39,7 @@ def ComputeQuantities(mc : Master.Data, args : dict) -> dict[dict, dict]:
         reco_upstream_loss = cross_section.UpstreamEnergyLoss(cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass), args["upstream_loss_correction_params"]["value"], args["upstream_loss_response"])
         
         reco_KE_ff = cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass) - reco_upstream_loss
-        reco_KE_int = reco_KE_ff - cross_section.RecoDepositedEnergy(mc, reco_KE_ff, "bb")
+        reco_KE_int = cross_section.RecoEndEnergy(mc.recoParticles.beam_calo_pos, reco_KE_ff, mc.recoParticles.beam_dEdX, args["energy_method"])
         reco_track_length = mc.recoParticles.beam_track_length
 
     with alive_bar(title = "computng true quantities") as bar:
@@ -124,12 +124,16 @@ def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_q
     errors = {}
     tables = {}
     for f in fit_functions:
-        Plots.plt.figure()
-        params[f.__name__], errors[f.__name__] = cross_section.Fitting.Fit(centers, counts, np.sqrt(counts), f, plot = True, xlabel = label, ylabel = "Counts", plot_style = "hist", plot_range = residual_range)
-        tables[f.__name__] = CreateFitTable(params[f.__name__], errors[f.__name__])
+        try:
+            Plots.plt.figure()
+            params[f.__name__], errors[f.__name__] = cross_section.Fitting.Fit(centers, counts, np.sqrt(counts), f, plot = True, xlabel = label, ylabel = "Counts", plot_style = "hist", plot_range = residual_range)
+            tables[f.__name__] = CreateFitTable(params[f.__name__], errors[f.__name__])
+        except ValueError as e:
+            print(f"fit not successful for {f.__name__}, reason: \n {e}")
         
         plot_book.Save()
         Plots.plt.close()
+
     params_formatted = {p : {"function" : p, "values" : {f"p{i}" : params[p][i] for i in range(len(params[p]))}} for p in params}
 
     params_formatted = {}

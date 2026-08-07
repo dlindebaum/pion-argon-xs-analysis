@@ -142,3 +142,41 @@ def dist(a : ak.Record, b : ak.Record):
         ak.Array: distance between a and b
     """
     return magnitude(sub(a, b))
+
+
+def reciprocal(v : ak.Record) -> ak.Record:
+    """ Compute the reciprocal of each component for a vector.
+
+    Args:
+        v (ak.Recod): a vector
+
+    Returns:
+        ak.Record: vector of reciprocal values.
+    """
+    return ak.zip({"x" : 1/v.x, "y" : 1/v.y, "z" : 1/v.z})
+
+
+def multiply(a : ak.Record, b : ak.Record) -> ak.Record:
+    """ Compute the product of each component for two vectors.
+
+    Args:
+        a (ak.Recod): a vector
+        a (ak.Recod): another vector
+
+    Returns:
+        ak.Record: vector of multiplied values.
+    """
+    return ak.zip({"x" : a.x * b.x, "y" : a.y * b.y, "z" : a.z * b.z})
+
+
+def power(a : ak.Record, e : float) -> ak.Record:
+    """ Raise each component by an exponent.
+
+    Args:
+        a (ak.Record): a vector
+        e (float): exponent
+
+    Returns:
+        ak.Record: vector of values raised to a power.
+    """
+    return ak.zip({"x" : a.x ** e, "y" : a.y ** e, "z" : a.z ** e})

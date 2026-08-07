@@ -565,6 +565,36 @@ class EnergyCorrection:
     }
 
 
+def TrackPitch(tracks : ak.Array) -> ak.Array:
+    return vector.dist(tracks[:, :-1], tracks[:, 1:])
+
+
+def TrackLength(tracks : ak.Array = None, pitches : ak.Array = None) -> ak.Array:
+    if (tracks is None) & (pitches is not None):
+        p = pitches
+    elif (tracks is not None) & (pitches is None):
+        p = TrackPitch(tracks)
+    else:
+        raise Exception("Track length requires either tracks or pitches to be supplied.")
+    return ak.fill_none(ak.sum(p, -1), 0)
+
+
+def TruncateTrack(tracks : ak.Array, x_trunc = None, y_trunc = None, z_trunc = None):
+    trunc = {"x" : x_trunc, "y" : y_trunc, "z" : z_trunc}
+
+    masks = {}
+    for k, v in trunc.items():
+        if v is None: continue
+        masks[k] = (SelectionTools.cuts_to_func(trunc[k], "<")(tracks[k]))
+    mask = SelectionTools.CombineMasks(masks, "and")
+
+    index = ak.local_index(mask)
+    max_ind = ak.argmin(~mask == False, -1) 
+    max_ind = ak.where(max_ind == 0, ak.num(mask), max_ind)
+    truncated_tracks = tracks[index <= max_ind]
+    return truncated_tracks
+
+
 class BetheBloch:
     rho = 1.39 # [g/cm3] density of LAr
     K = 0.307075 # [MeV cm2 / mol]
@@ -740,28 +770,30 @@ def UpstreamEnergyLoss(KE_inst : ak.Array, params : np.ndarray, function : Fitti
     """
     return function.func(KE_inst, **params)
 
-@timer
-def RecoDepositedEnergy(events : Data, ff_KE : ak.Array, method : str) -> ak.Array:
-    """ Calcuales the energy deposited by the beam particle in the TPC, either using calorimetric information or the bethe bloch formula (spatial information).
+
+def RecoEndEnergy(tracks : ak.Array, KE_init: ak.Array, dEdX : ak.Array | None, method : str) -> ak.Array:
+    """ Calculates the energy deposited by the beam particle in the TPC, either using calorimetric information or the bethe bloch formula (track information).
 
     Args:
-        events (Data): events to look at
-        ff_KE (ak.Array): front facing kinetic energy
-        method (str): method to calcualte the deposited energy, either "calo" or "bb"
+        tracks (ak.Array): Track trajectory points.
+        KE_init (ak.Array): Initial kinetic energy.
+        dEdX (ak.Array | None): dEdX for each hit deposition, note this is only used for calo method.
+        method (str): method to calcualte the deposited energy, either "calo" or "track".
 
     Returns:
-        ak.Array: depotisted energy
+        ak.Array: deposited energy
     """
-    if method == "calo":
-        reco_pitch = vector.dist(events.recoParticles.beam_calo_pos[:, :-1], events.recoParticles.beam_calo_pos[:, 1:]) # distance between reconstructed calorimetry points
-        dE = ak.sum(events.recoParticles.beam_dEdX[:, :-1] * reco_pitch, -1)
-    elif method == "bb":
-        KE_int_bb = BetheBloch.InteractingKE(ff_KE, events.recoParticles.beam_track_length, 50)
-        dE = ff_KE - KE_int_bb
-    else:
-        raise Exception(f"{method} not a valid method, pick 'calo' or 'bb'")
-    return dE
+    pitches = TrackPitch(tracks)
 
+    if method == "calo":
+        dE = ak.sum(dEdX[:, :-1] * pitches, -1)
+        KE_end = KE_init - dE
+    elif method == "track":
+        track_length = TrackLength(pitches=pitches)
+        KE_end = BetheBloch.InteractingKE(KE_init, track_length, 50)
+    else:
+        raise Exception(f"{method} not a valid method, pick 'calo' or 'track'")
+    return KE_end
 
 class SlicesVar:
     Slice = namedtuple("Slice", "num pos")
@@ -1635,6 +1667,7 @@ class AnalysisInput:
     outside_tpc_true : np.ndarray
     # observables
     track_length_reco : np.ndarray
+    track_length_truncated_reco : np.ndarray
     end_x_reco : np.ndarray
     end_y_reco : np.ndarray
     end_z_reco : np.ndarray
@@ -1644,8 +1677,10 @@ class AnalysisInput:
     KE_int_reco : np.ndarray
     KE_init_reco : np.ndarray
     KE_ff_reco : np.ndarray
+    KE_end_reco : np.ndarray
     mean_track_score : np.ndarray
     track_length_true : np.ndarray
+    track_length_truncated_true : np.ndarray
     end_x_true : np.ndarray
     end_y_true : np.ndarray
     end_z_true : np.ndarray
@@ -1655,6 +1690,7 @@ class AnalysisInput:
     KE_int_true : np.ndarray
     KE_init_true : np.ndarray
     KE_ff_true : np.ndarray
+    KE_end_true : np.ndarray
     # extras
     weights : np.ndarray = None
     event_num : np.ndarray = None
@@ -1817,39 +1853,44 @@ class AnalysisInput:
         process = {k : np.array(v.values) for k, v in toy.truth_regions.items()}
 
         return AnalysisInput(
-            regions,
-            inclusive_events,
-            process,
-            np.array(toy.outside_tpc_smeared.values),
-            np.array(toy.outside_tpc.values),
-            np.array(toy.df.z_int_smeared.values),
-            None,
-            None,
-            np.array(toy.df.z_int_smeared.values),
-            None,
-            None,
-            None,
-            np.array(toy.df.KE_int_smeared.values),
-            np.array(toy.df.KE_init_smeared.values),
-            np.array(toy.df.KE_init_smeared.values),
-            np.array(toy.df.mean_track_score.values),
-            np.array(toy.df.z_int.values),
-            None,
-            None,
-            np.array(toy.df.z_int.values),
-            None,
-            None,
-            None,
-            np.array(toy.df.KE_int.values),
-            np.array(toy.df.KE_init.values),
-            np.array(toy.df.KE_init.values),
-            None,
-            None,
-            None,
+            regions = regions,
+            inclusive_process = inclusive_events,
+            exclusive_process = process,
+            outside_tpc_reco = np.array(toy.outside_tpc_smeared.values),
+            outside_tpc_true = np.array(toy.outside_tpc.values),
+            track_length_reco = np.array(toy.df.z_int_smeared.values),
+            track_length_truncated_reco = None,
+            end_x_reco = None,
+            end_y_reco = None,
+            end_z_reco = np.array(toy.df.z_int_smeared.values),
+            start_x_reco = None,
+            start_y_reco = None,
+            start_z_reco = None,
+            KE_int_reco = np.array(toy.df.KE_int_smeared.values),
+            KE_init_reco = None,
+            KE_ff_reco = np.array(toy.df.KE_init_smeared.values),
+            KE_end_reco = np.array(toy.df.KE_init_smeared.values),
+            mean_track_score = np.array(toy.df.mean_track_score.values),
+            track_length_true = np.array(toy.df.z_int.values),
+            track_length_truncated_true = None,
+            end_x_true = None,
+            end_y_true = None,
+            end_z_true = np.array(toy.df.z_int.values),
+            start_x_true = None,
+            start_y_true = None,
+            start_z_true = None,
+            KE_int_true = np.array(toy.df.KE_int.values),
+            KE_init_true = None,
+            KE_ff_true = np.array(toy.df.KE_init.values),
+            KE_end_true = np.array(toy.df.KE_init.values),
+            weights = None,
+            event_num = None,
+            run = None,
+            sub_run = None,
             )
 
     @staticmethod
-    def CreateAnalysisInputNtuple(events : Data, upstream_energy_loss_params : dict, reco_regions : dict[np.ndarray] = None, true_regions : dict[np.ndarray] = None, mc_reweight_params : dict = None, mc_reweight_stength : float = 3, fiducial_volume : list[float] = [0, 700], upstream_loss_func : callable = Fitting.poly2d) -> "AnalysisInput":
+    def CreateAnalysisInputNtuple(events : Data, upstream_energy_loss_params : dict, reco_regions : dict[np.ndarray] = None, true_regions : dict[np.ndarray] = None, mc_reweight_params : dict = None, mc_reweight_stength : float = 3, fiducial_volume : list[float] = [0, 700], upstream_loss_func : callable = Fitting.poly2d, energy_method : str = "track") -> "AnalysisInput":
         """ Create analysis input from an ntuple sample.
 
         Args:
@@ -1867,80 +1908,100 @@ class AnalysisInput:
         else:
             weights = None
 
-        reco_KE_inst = KE(events.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass)
-        reco_upstream_loss = UpstreamEnergyLoss(reco_KE_inst, upstream_energy_loss_params, upstream_loss_func)
-        reco_KE_ff = reco_KE_inst - reco_upstream_loss
+        KE_inst_reco = KE(events.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass)
+        upstream_loss_reco = UpstreamEnergyLoss(KE_inst_reco, upstream_energy_loss_params, upstream_loss_func)
+        KE_ff_reco = KE_inst_reco - upstream_loss_reco
 
         if min(fiducial_volume) > 0:
-            reco_KE_init = BetheBloch.InteractingKE(reco_KE_ff, min(fiducial_volume) * np.ones_like(reco_KE_ff), 25) # initial kinetic energy in the fiducial volume
+            KE_init_reco = BetheBloch.InteractingKE(KE_ff_reco, min(fiducial_volume) * np.ones_like(KE_ff_reco), 50) # initial kinetic energy in the fiducial volume
         else:
-            reco_KE_init = reco_KE_ff
+            KE_init_reco = KE_ff_reco
 
-        reco_KE_int = reco_KE_ff - RecoDepositedEnergy(events, reco_KE_ff, "bb") # interacting kinetic energy
-        reco_track_length = events.recoParticles.beam_track_length
+        KE_int_reco = RecoEndEnergy(events.recoParticles.beam_calo_pos, KE_ff_reco, events.recoParticles.beam_dEdX, energy_method)
+
+        truncated_track_reco = TruncateTrack(events.recoParticles.beam_calo_pos, z_trunc = max(fiducial_volume))
+        track_length_truncated_reco = TrackLength(tracks=truncated_track_reco)
+        KE_end_reco = RecoEndEnergy(truncated_track_reco, KE_ff_reco, events.recoParticles.beam_dEdX, energy_method)
+
+        track_length_reco = events.recoParticles.beam_track_length
         outside_tpc_reco = (events.recoParticles.beam_endPos_SCE.z < min(fiducial_volume)) | (events.recoParticles.beam_endPos_SCE.z > max(fiducial_volume))
-        reco_start_pos = events.recoParticles.beam_startPos_SCE
-        reco_end_pos = events.recoParticles.beam_endPos_SCE
+        start_pos_reco = events.recoParticles.beam_startPos_SCE
+        end_pos_reco = events.recoParticles.beam_endPos_SCE
 
         if true_regions is not None:
-            true_KE_ff = events.trueParticles.beam_KE_front_face
+            KE_ff_true = events.trueParticles.beam_KE_front_face
 
             if min(fiducial_volume) > 0:
-                true_KE_init = BetheBloch.InteractingKE(true_KE_ff, min(fiducial_volume) * np.ones_like(true_KE_ff), 25) # initial kinetic energy in the fiducial volume
+                KE_init_true = BetheBloch.InteractingKE(KE_ff_true, min(fiducial_volume) * np.ones_like(KE_ff_true), 50) # initial kinetic energy in the fiducial volume
             else:
-                true_KE_init = true_KE_ff
+                KE_init_true = KE_ff_true
 
 
-            true_KE_int = events.trueParticles.beam_traj_KE[:, -2]
-            true_track_length = events.trueParticles.beam_track_length
-            true_start_pos = events.trueParticles.beam_traj_pos[:, 0]
-            true_end_pos = events.trueParticles.beam_traj_pos[:, -1]
+            KE_int_true = events.trueParticles.beam_traj_KE[:, -2]
+            track_length_true = events.trueParticles.beam_track_length
+            start_pos_true = events.trueParticles.beam_traj_pos[:, 0]
+            end_pos_true = events.trueParticles.beam_traj_pos[:, -1]
             outside_tpc_true = (events.trueParticles.beam_traj_pos.z[:, -1] < min(fiducial_volume)) | (events.trueParticles.beam_traj_pos.z[:, -1] > max(fiducial_volume))
             inelastic = events.trueParticles.true_beam_endProcess == "pi+Inelastic"
 
+            truncated_tracks_true = TruncateTrack(events.trueParticles.beam_traj_pos[events.trueParticles.in_tpc_z], z_trunc = max(fiducial_volume))
+            track_length_truncated_true = TrackLength(tracks=truncated_tracks_true)
+
+            traj_KE = events.trueParticles.beam_traj_KE[events.trueParticles.in_tpc_z]
+            KE_end_true = traj_KE[ak.local_index(traj_KE) == (ak.num(truncated_tracks_true)-2)]
+            KE_end_true = ak.ravel(ak.fill_none(ak.pad_none(KE_end_true, 1, -1), -999, None)) # current null value for invalid true tracks is -999
+
+
         else:
-            true_KE_int = None
-            true_KE_init = None
-            true_KE_ff = None
-            true_track_length = None
+            KE_int_true = None
+            KE_init_true = None
+            KE_ff_true = None
+            track_length_true = None
             outside_tpc_true = None
             inelastic = None
-            true_start_pos = vector.vector([None], [None], [None])
-            true_end_pos = vector.vector([None], [None], [None])
+            start_pos_true = vector.vector([None], [None], [None])
+            end_pos_true = vector.vector([None], [None], [None])
+            KE_end_true = None
+            track_length_truncated_true = None
+
 
         mean_track_score = ak.fill_none(ak.mean(events.recoParticles.track_score, axis = -1), -0.05) # fill null values in case empty events are supplied
 
         return AnalysisInput(
-            reco_regions,
-            inelastic,
-            true_regions,
-            outside_tpc_reco,
-            outside_tpc_true,
-            reco_track_length,
-            reco_end_pos.x,
-            reco_end_pos.y,
-            reco_end_pos.z,
-            reco_start_pos.x,
-            reco_start_pos.y,
-            reco_start_pos.z,
-            reco_KE_int,
-            reco_KE_init,
-            reco_KE_ff,
-            mean_track_score,
-            true_track_length,
-            true_end_pos.x,
-            true_end_pos.y,
-            true_end_pos.z,
-            true_start_pos.x,
-            true_start_pos.y,
-            true_start_pos.z,
-            true_KE_int,
-            true_KE_init,
-            true_KE_ff,
-            weights,
-            events.eventNum,
-            events.run,
-            events.subRun,
+            regions = reco_regions,
+            inclusive_process = inelastic,
+            exclusive_process = true_regions,
+            outside_tpc_reco = outside_tpc_reco,
+            outside_tpc_true = outside_tpc_true,
+            track_length_reco = track_length_reco,
+            track_length_truncated_reco = track_length_truncated_reco,
+            end_x_reco = end_pos_reco.x,
+            end_y_reco = end_pos_reco.y,
+            end_z_reco = end_pos_reco.z,
+            start_x_reco = start_pos_reco.x,
+            start_y_reco = start_pos_reco.y,
+            start_z_reco = start_pos_reco.z,
+            KE_int_reco = KE_int_reco,
+            KE_init_reco = KE_init_reco,
+            KE_ff_reco = KE_ff_reco,
+            KE_end_reco = KE_end_reco,
+            mean_track_score = mean_track_score,
+            track_length_true = track_length_true,
+            track_length_truncated_true = track_length_truncated_true,
+            end_x_true = end_pos_true.x,
+            end_y_true = end_pos_true.y,
+            end_z_true = end_pos_true.z,
+            start_x_true = start_pos_true.x,
+            start_y_true = start_pos_true.y,
+            start_z_true = start_pos_true.z,
+            KE_int_true = KE_int_true,
+            KE_init_true = KE_init_true,
+            KE_ff_true = KE_ff_true,
+            KE_end_true = KE_end_true,
+            weights = weights,
+            event_num = events.eventNum,
+            run = events.run,
+            sub_run = events.subRun,
             )
 
     @staticmethod

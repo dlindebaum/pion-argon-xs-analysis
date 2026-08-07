@@ -1255,9 +1255,12 @@ class TrueParticleData(ParticleData):
         return ak.flatten(self.beam_traj_KE[self.beam_ind_in_tpc])
 
     @property
+    def in_tpc_z(self) -> ak.Array:
+        return (self.beam_traj_pos.z > 0) & (self.beam_traj_pos.z < 700)
+
+    @property
     def beam_track_length(self) -> ak.Array:
-        in_tpc = (self.beam_traj_pos.z > 0) & (self.beam_traj_pos.z < 700)
-        pos_in_tpc = self.beam_traj_pos[in_tpc]
+        pos_in_tpc = self.beam_traj_pos[self.in_tpc_z]
         return ak.sum(vector.dist(pos_in_tpc[:, 1:], pos_in_tpc[:, :-1]), -1)
 
 

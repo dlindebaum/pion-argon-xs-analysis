@@ -1159,7 +1159,7 @@ def PlotHist2D(data_x, data_y, bins: int = 100, x_range: list = None, y_range: l
     return height, [xedges, yedges]
 
 
-def PlotHistComparison(datas, x_range: list = [], bins: int = 100, xlabel: str = "", title: str = "", labels: list = [], alpha: int = 1, histtype: str = "step", x_scale: str = "linear", y_scale: str = "linear", sf: int = 2, density: bool = True, annotation: str = None, newFigure: bool = True, colours : list = None, weights : list = None):
+def PlotHistComparison(datas, labels: list, x_range: list = [], bins: int = 100, xlabel: str = "", title: str = "", alpha: int = 1, histtype: str = "step", x_scale: str = "linear", y_scale: str = "linear", sf: int = 2, density: bool = True, annotation: str = None, newFigure: bool = True, colours : list = None, weights : list = None):
     """ Plots multiple histograms on one plot
 
     Args:
@@ -1388,7 +1388,7 @@ def PlotHist2DImshowMarginal(data_x, data_y, bins: int = 100, x_range: list = No
     return
 
 
-def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y_tick_labels : list[str] = None, title : str = None, newFigure : bool = True, cmap : str = "cool", x_label : str = None, y_label : str = None):
+def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y_tick_labels : list[str] = None, title : str = None, newFigure : bool = True, cmap : str = "cool", x_label : str = None, y_label : str = None, detailed_info : bool = True):
     """ Plots confusion matrix
 
     Args:
@@ -1431,13 +1431,20 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
     plt.xticks(rotation = 30)
     plt.yticks(rotation = 30)
 
-    if title is not None:
-        plt.title(title + "| Key: (counts, efficiency(%), purity(%))")
-    else:
-        plt.title("Key: (counts, efficiency(%), purity(%))")
+    if detailed_info is True:
+        key_label = "Key: (counts, efficiency(%), purity(%))"
 
-    for (i, j), z in np.ndenumerate(counts):
-        plt.gca().text(j, i, f"{z},\n{Utils.round_value_to_error(fractions[i][j]*100, fractions_err[i][j]*100)}%,\n{Utils.round_value_to_error(c_norm[i][j]*100, c_norm_err[i][j]*100)}%", ha='center', va='center', fontsize = 7)
+        if title is not None:
+            plt.title(title + f"| {key_label}")
+        else:
+            plt.title(key_label)
+
+        for (i, j), z in np.ndenumerate(counts):
+            plt.gca().text(j, i, f"{z},\n{Utils.round_value_to_error(fractions[i][j]*100, fractions_err[i][j]*100)}%,\n{Utils.round_value_to_error(c_norm[i][j]*100, c_norm_err[i][j]*100)}%", ha='center', va='center', fontsize = 7)
+    else:
+        plt.title(title)
+        for (i, j), z in np.ndenumerate(counts):
+            plt.gca().text(j, i, f"{z}", ha='center', va='center', fontsize = 7)
     plt.grid(False)
     plt.tight_layout()
 
