@@ -63,7 +63,7 @@ def BeamPionSelection(events : cross_section.Data, args : cross_section.argparse
             if "selection_masks" in args:
                 events_copy.Filter([args_c["selection_masks"][sample]['null_pfo'][events.filename]['ValidPFOSelection']]) # apply PFO preselection here
             else:
-                events_copy.Filter([PFOSelection.GoodShowerSelection(events_copy)])
+                events_copy.Filter(PFOSelection.GoodShowerSelection(events))
     return events_copy
 
 
