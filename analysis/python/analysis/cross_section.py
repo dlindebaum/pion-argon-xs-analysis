@@ -488,6 +488,7 @@ def PlotXSHists(energy_slices, hist_counts : np.ndarray, hist_counts_err : np.nd
     Plots.Plot(x, scale * hist_counts[s], yerr = scale * hist_counts_err[s], xlabel = xlabel, newFigure = newFigure, style = "step", label = label, color = color, ylabel = ylabel, title = title)
     return
 
+
 def HypTestXS(cv, error, process, energy_slice, file = GEANT_XS):
     xs_sim = GeantCrossSections(file, energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos])
     sim_curve_interp = xs_sim.GetInterpolatedCurve(process)
@@ -977,20 +978,46 @@ class Slices:
     Slice : a Single slice, has properies number (integer) and "position" in the parameter space of the value you want to slice up. 
     """
     Slice = namedtuple("Slice", "num pos")
-    def __init__(self, width, _min, _max, reversed : bool = False):
-        self.width = width
-        self.min = _min
-        self.max = _max
-        self.reversed = reversed
+    def __init__(self, width, min_value, max_value, reversed : bool = False):
+        """_summary_
+
+        Args:
+            width (_type_): _description_
+            min_value (_type_): minimum value to consider in the slices (not inclusive of underflow).
+            max_value (_type_): maximum value to consider in the slices (not inclusive of overflow).
+            reversed (bool, optional): _description_. Defaults to False.
+        """
+        self.width = width # width of the slice
+
+        # valid slice range is the slices that are not overflow and underflow.
+        self.min = min_value + self.width # minium edge of the valid slice range (Note that min_value would be the start of the underflow bin, hence not considered the minimum.)
+        self.max = max_value # maximum edge of the valid slice range
+
+        self.reversed = reversed # reverse order the slices.
         
-        self.max_num = max(self.num)
-        self.min_num = min(self.num)
-        self.max_pos = max(self.pos)
-        self.min_pos = min(self.pos)
+        self.max_num = max(self.num) # maximum slice number in the valid range
+        self.min_num = min(self.num) # minimum slice number in the valid range
+
+        self.overflow_num = self.max_num + 1 # overflow slice number
+        self.underflow_num = -1 # underflow slice number
+
+        self.overflow_pos = self.max + self.width
+        self.underflow_pos = self.min - self.width
+
+
+    def __truncate__(self, x):
+        if hasattr(x, "__iter__"):
+            x = ak.where(x > self.overflow_num, self.overflow_num, x)
+            x = ak.where(x <= self.underflow_num, self.underflow_num, x)
+            return x
+        else:
+            x = self.overflow_num if x > self.overflow_num else x
+            x = self.underflow_num if x <= self.underflow_num else x
+            return x
 
 
     def __conversion__(self, x):
-        """ convert a value to its slice number.
+        """ convert a value to its slice number. Does not respect the valid slice range.
 
         Args:
             x: value, array of float
@@ -1025,7 +1052,7 @@ class Slices:
         return self.Slice(i, p)
 
 
-    def __call__(self, x):
+    def __call__(self, x) -> Slice:
         """ get the slice number for a set of values
 
         Args:
@@ -1034,11 +1061,11 @@ class Slices:
         Returns:
             array or int: slice numbers
         """
-        return self.__create_slice__(self.__conversion__(x))
+        return self.__create_slice__(self.__truncate__(self.__conversion__(x)))
 
 
     def __getitem__(self, i : int) -> Slice:
-        """ Creates slices from slice numbers.
+        """ Creates slices from slice numbers. Respects The valid slice range.
 
         Args:
             i (int): slice number
@@ -1048,8 +1075,9 @@ class Slices:
 
         Returns:
             Slice: ith slice
+
         """
-        if i * self.width > (self.max - self.min):
+        if (i * self.width > (self.max - self.min)) or (i * self.width < 0):
             raise StopIteration
         else:
             if self.reversed:
@@ -1064,20 +1092,44 @@ class Slices:
         Returns:
             np.ndarray: slice numbers
         """
-        return np.array([ s.num for s in self], dtype = int)
+        return np.array([s.num for s in self], dtype = int)
 
     @property
-    def pos(self) -> np.ndarray:
-        """ Return all slice positions.
+    def num_all(self) -> np.ndarray:
+        """ Return all slice numbers.
+
+        Returns:
+            np.ndarray: slice numbers
+        """
+        return np.array([self.underflow_num] + [s.num for s in self] + [self.overflow_num], dtype = int)
+
+    @property
+    def edges(self) -> np.ndarray:
+        """ Return the edges of each slice. This does not include overflow and underflow slices.
 
         Returns:
             np.ndarray: slice positions
         """
-        return np.array([ s.pos for s in self])
+        return np.array([s.pos for s in self])
+
+    @property
+    def edges_all(self) -> np.ndarray:
+        """ Return the edges of each slice. This includes overflow and underflow slices.
+            Note:
+                Underflow : minimum slice edge - slice width.
+                Overflow : maximum slice edge + slice width.
+
+        Returns:
+            np.ndarray: slice positions
+        """
+        ends = [self.underflow_pos, self.overflow_pos]
+        if self.reversed is True:
+            ends.reverse()
+        return np.array([ends[0]] + [s.pos for s in self] + [ends[1]])
 
     @property
     def pos_overflow(self):
-        return np.insert(self.pos, 0, self.max_pos + self.width)
+        return np.insert(self.edges, 0, self.max + self.width)
 
     @property
     def pos_bins(self):
@@ -1093,12 +1145,12 @@ class Slices:
         Returns:
             array or int: slice numbers
         """
-        slice_num = self.__conversion__(pos)
+        slice_num = self.__truncate__(self.__conversion__(pos))
         if hasattr(pos, "__iter__"):
             slice_num = ak.where(slice_num > max(self.num), max(self.num), slice_num)
-            slice_num = ak.where(slice_num < 0, min(self.num), slice_num)
+            slice_num = ak.where(slice_num < 0, min(self.num), slice_num) #! < 0 assumes something about the range (for xs analysis, its actually fine)
         else:
-            if pos > max(self.pos): 
+            if pos > max(self.edges): 
                 slice_num = max(self.num) # above range go into overflow bin
             if pos < 0:
                 slice_num = min(self.num) # below range go into the underflow bin
@@ -1364,7 +1416,7 @@ class EnergySlice:
         int_slice = EnergySlice.TrunacteSlices(int_slice, energy_slices)
 
         # removes instances where the particle incident energy and interacting energy are in the same slice (Yinrui calls this an incomplete slice)
-        # i.e. this happens if the particle interacting in its first slice, must be an artifact of the energy slicing but not sure why.
+        # i.e. this happens if the particle interacting in its first slice, must be an artifact of the energy slicing because a particle that starts and interacts in a slice is thus not incident on any slice.
         bad_slices = (int_slice < init_slice) | outside_tpc
         init_slice = ak.where(bad_slices, -1, init_slice)
         int_slice = ak.where(bad_slices, -1, int_slice)
@@ -1464,7 +1516,7 @@ class EnergySlice:
         Returns:
             np.ndarray: mean dEdX
         """
-        return BetheBloch.meandEdX(energy_slices.pos - energy_slices.width/2, particle)
+        return BetheBloch.meandEdX(energy_slices.edges - energy_slices.width/2, particle)
 
     @staticmethod
     def TotalCrossSection(n_interact : np.ndarray, n_incident : np.ndarray, dEdX : np.ndarray, dE : float) -> tuple[np.ndarray, np.ndarray]:

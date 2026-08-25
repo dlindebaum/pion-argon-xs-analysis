@@ -218,7 +218,7 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
 
         if book is not None:
             if data.exclusive_process is not None:
-                energy_bins = np.sort(np.insert(energy_slice.pos, 0, energy_slice.max_pos + energy_slice.width))
+                energy_bins = np.sort(np.insert(energy_slice.edges, 0, energy_slice.max + energy_slice.width))
 
                 if regions:
                     for i in KE_int_fit:
