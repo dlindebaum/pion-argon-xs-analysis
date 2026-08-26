@@ -1426,7 +1426,9 @@ class EnergySlice:
         init_slice = init_slice[~outside_fv]
         end_slice = end_slice[~outside_fv]
 
-        invalid_slices = (init_slice == end_slice) # the incident calculation accounts for this, but not the histogramming for init and end.
+        # particles that end and start in the same slice do not count towards the sample counted (they are not incident on any slice)
+        # the incident calculation accounts for this, but not the histogramming for init and end.
+        invalid_slices = (init_slice == end_slice)
         init_slice = init_slice[~invalid_slices]
         end_slice = end_slice[~invalid_slices]
 
