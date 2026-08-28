@@ -1674,6 +1674,8 @@ class AnalysisInput:
     start_x_reco : np.ndarray
     start_y_reco : np.ndarray
     start_z_reco : np.ndarray
+    P_inst_reco : np.ndarray
+    KE_inst_reco : np.ndarray
     KE_int_reco : np.ndarray
     KE_init_reco : np.ndarray
     KE_ff_reco : np.ndarray
@@ -1866,6 +1868,8 @@ class AnalysisInput:
             start_x_reco = None,
             start_y_reco = None,
             start_z_reco = None,
+            P_inst_reco = None,
+            KE_inst_reco = None,
             KE_int_reco = np.array(toy.df.KE_int_smeared.values),
             KE_init_reco = None,
             KE_ff_reco = np.array(toy.df.KE_init_smeared.values),
@@ -1981,6 +1985,8 @@ class AnalysisInput:
             start_x_reco = start_pos_reco.x,
             start_y_reco = start_pos_reco.y,
             start_z_reco = start_pos_reco.z,
+            P_inst_reco = events.recoParticles.beam_inst_P,
+            KE_inst_reco = KE_inst_reco,
             KE_int_reco = KE_int_reco,
             KE_init_reco = KE_init_reco,
             KE_ff_reco = KE_ff_reco,
