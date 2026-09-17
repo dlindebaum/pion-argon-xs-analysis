@@ -9,6 +9,7 @@ import argparse
 import os
 
 from collections import namedtuple
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -1363,34 +1364,67 @@ class ThinSlice:
 class EnergySlice:
     """ Methods for implementing the energy slice measurement method.
     """
+
     @staticmethod
-    def convert_energy_to_slice(init : np.ndarray, end : np.ndarray, slices : Slices) -> tuple[np.ndarray, np.ndarray]:
-        """ Converts initial and end energy into their respective slice numbers for each interaction.
+    def process_multiple_array(input : list[any], function : callable) -> list[any]:
+        """ Call function on multiple arrays.
 
         Args:
-            init (np.ndarray): Initial energy for each event.
-            end (np.ndarray): End energy for each event.
-            slices (Slices): Energy slices.
+            input (list[any]): input arrays.
+            function (callable): function to call.
+
+        Raises:
+            ValueError: At least one array must be passed.
+            TypeError: only arrays should be passed.
 
         Returns:
-            tuple[np.ndarray, np.ndarray]: initial and end slice numbers.
+            list[any]: outputs.
         """
-        return slices(init).num, slices(end).num
+        out = []
+        if len(input) == 0:
+            raise ValueError("At least one energy array must be provided.")
+
+        for i in input:
+            if isinstance(i, Iterable) and not isinstance(i, str):
+                out.append(function(i))
+            else:
+                raise TypeError("inputs passed should be an array of values.")
+
+        if len(out) == 1:
+            return out[0]
+        else:
+            return out
 
     @staticmethod
-    def count(s_init : np.ndarray, s_end : np.ndarray, slices : Slices) -> tuple[np.ndarray, np.ndarray]:
-        """ Count initial and end counts for each slice.
+    def convert_energy_to_slice(slices : Slices, *energy : np.ndarray) -> np.ndarray | tuple[np.ndarray]:
+        """ Converts energy distributions to slice number distributions.
 
         Args:
-            s_init (np.ndarray): Initial slice numbers for each event. 
-            s_end (np.ndarray): End slice numbers for each event.
-            slices (Slices): Slices to count in.
+            slices (Slices): Energy slices.
+            energy (np.ndarray): Energy distribution, multiple can be passed.
 
         Returns:
-            tuple[np.ndarray, np.ndarray]: Initial and end counts for each slice.
+            np.ndarray | tuple[np.ndarray]: Slice distributions, equal to the number of energy distributions passed. 
+        """
+        func = lambda x : slices(x).num
+        return EnergySlice.process_multiple_array(energy, func)
+
+    @staticmethod
+    def count(slices : Slices, *slice : np.ndarray) -> tuple[np.ndarray]:
+        """ Produce counts of each slice.
+
+        Args:
+            slices (Slices): Energy slices.
+            slice (np.ndarray): slice distribution, multiple can be passed.
+
+        Returns:
+            tuple[np.ndarray]: Slice distributions, equal to the number of slice distributions passed.
         """
         slice_bins = np.arange(slices.underflow_num - 0.5, slices.overflow_num + 1.5)
-        return np.histogram(np.array(s_init), slice_bins)[0], np.histogram(np.array(s_end), slice_bins)[0]
+
+        func = lambda x: np.histogram(np.array(x), slice_bins)[0]
+
+        return EnergySlice.process_multiple_array(slice, func)
 
     @staticmethod
     def incident(n_init : np.ndarray, n_end : np.ndarray) -> np.ndarray:
@@ -1409,7 +1443,30 @@ class EnergySlice:
         return c_init - n_init - c_end + n_end
 
     @staticmethod
-    def counting_experiment(KE_init : np.ndarray, KE_end : np.ndarray, slices : Slices, outside_fv : np.ndarray):
+    def complete_slice(init_slice : np.ndarray, end_slice : np.ndarray):
+        return (init_slice != end_slice)
+
+    @staticmethod
+    def counting_experiment_exclusive(energy_slices : Slices, KE_init : np.ndarray, KE_end : np.ndarray, mask : np.ndarray, outside_fv : np.ndarray) -> np.ndarray:
+        """ perform counting experiment to get the exclusive interacing slices for a particular subset of interactions. 
+
+        Args:
+            energy_slices (Slices): Energy slices.
+            KE_init (np.ndarray): Initial kinetic energy.
+            KE_end (np.ndarray): End kinetic energy.
+            mask (np.ndarray): Mask of particles to include in the count.
+            outside_fv (np.ndarray): Mask that excludes events that end outside the bounds of the fiducial volume.
+
+        Returns:
+            np.ndarray: Exclusive interacting counts.
+        """
+        selected = mask & ~outside_fv
+        s_init, s_int = EnergySlice.convert_energy_to_slice(energy_slices, KE_init[selected], KE_end[selected])
+        complete_slice = EnergySlice.complete_slice(s_init, s_int)
+        return EnergySlice.count(energy_slices, s_int[complete_slice])
+
+    @staticmethod
+    def counting_experiment(KE_init : np.ndarray, KE_end : np.ndarray, slices : Slices, outside_fv : np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """ perform counting experiment to get initial, end and incident counts.
 
         Args:
@@ -1419,22 +1476,23 @@ class EnergySlice:
             outside_fv (np.ndarray): Mask that excludes events that end outside the bounds of the fiducial volume.
 
         Returns:
-            _type_: _description_
+            tuple[np.ndarray, np.ndarray, np.ndarray]: initial counts, end counts and incident counts
         """
-        init_slice, end_slice = EnergySlice.convert_to_slice(KE_init, KE_end, slices)
+        init_slice, end_slice = EnergySlice.convert_energy_to_slice(slices, KE_init, KE_end)
 
         init_slice = init_slice[~outside_fv]
         end_slice = end_slice[~outside_fv]
 
         # particles that end and start in the same slice do not count towards the sample counted (they are not incident on any slice)
         # the incident calculation accounts for this, but not the histogramming for init and end.
-        invalid_slices = (init_slice == end_slice)
-        init_slice = init_slice[~invalid_slices]
-        end_slice = end_slice[~invalid_slices]
+        valid_slices = EnergySlice.complete_slice(init_slice, end_slice)
+        init_slice = init_slice[valid_slices]
+        end_slice = end_slice[valid_slices]
 
-        init_counts, end_counts = EnergySlice.count(init_slice, end_slice, slices)
+        init_counts, end_counts = EnergySlice.count(slices, init_slice, end_slice)
         inc_counts = EnergySlice.incident(init_counts, end_counts)
         return init_counts, end_counts, inc_counts
+
 
     @staticmethod
     def slice_dEdX(energy_slices : Slices | SlicesVar, particle : Particle) -> np.ndarray:
@@ -1475,6 +1533,15 @@ class EnergySlice:
         factor = 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * slice_width)
 
         return factor * xs, abs(factor * xs_e)
+
+    @staticmethod
+    def exclusive_cross_section(n_incident : np.ndarray, n_end : np.ndarray, n_int : np.ndarray, dEdX : np.ndarray, dE : float) -> tuple[np.ndarray, np.ndarray]:
+        xs, xs_err = EnergySlice.total_cross_section(n_incident, n_end, dEdX, dE)
+
+        ratio = n_int / n_end
+        ratio_err = ratio * (1/n_end + 1/n_int)**0.5
+
+        return ratio * xs,  quadsum([ratio_err, xs_err], 0)
 
     @staticmethod
     def NIncident(n_initial : np.ndarray, n_end : np.ndarray) -> np.ndarray:
@@ -1644,6 +1711,38 @@ class EnergySlice:
 
         xs_err = ((diff_n_int_ex**2 * var_int_ex) + (diff_n_inc**2 * var_inc_inclusive) + (diff_n_int**2 * var_int))**0.5
         return np.array(xs, dtype = float), np.array(xs_err, dtype = float)
+
+
+class TPCGeometry:
+    x : tuple[float, float]
+    y : tuple[float, float]
+    z : tuple[float, float]
+
+
+    def __check_bounds__(self, v, v_bounds):
+        return (min(v_bounds) > v) | (v > max(v_bounds))
+
+
+    def outside_tpc_x(self, x):
+        return self.__check_bounds__(x, self.x)
+
+    
+    def outside_tpc_y(self, y):
+        return self.__check_bounds__(y, self.y)
+
+    
+    def outside_tpc_z(self, z):
+        return self.__check_bounds__(z, self.z)
+
+
+    def outside_tpc(self, x, y, z):
+        return self.outside_tpc_x(x) | self.outside_tpc_y(y) | self.outside_tpc_z(z)
+
+
+class ProtoDUNESPGeometry(TPCGeometry):
+    x = [-350, 350]
+    y = [0, 600]
+    z = [0, 700]
 
 
 class Toy:
