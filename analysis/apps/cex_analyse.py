@@ -112,7 +112,7 @@ def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_sect
 
 
 def BkgSubAllRegion(data : cross_section.AnalysisInput, energy_slices : cross_section.Slices, bkg, bkg_err):
-    N_int = data.NInteract(energy_slices, np.ones_like(data.outside_tpc_reco, dtype = bool))
+    N_int = data.NInteract(energy_slices, np.ones_like(data.outside_fv_reco, dtype = bool))
     N_int_ex = N_int - np.sum(bkg, 0)
     N_int_ex_err = np.sqrt(N_int + np.sum(bkg_err**2, 0))
     return N_int_ex, N_int_ex_err
@@ -218,7 +218,7 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
 
         if book is not None:
             if data.exclusive_process is not None:
-                energy_bins = np.sort(np.insert(energy_slice.pos, 0, energy_slice.max_pos + energy_slice.width))
+                energy_bins = np.sort(np.insert(energy_slice.edges, 0, energy_slice.max + energy_slice.width))
 
                 if regions:
                     for i in KE_int_fit:
@@ -464,7 +464,7 @@ def XSUnfold(unfolded_result, energy_slices, sys : bool = False, stat = True, re
                 unfolded_result[k]["unfolded"][1:-1],
                 unfolded_result["int"]["unfolded"][1:-1],
                 unfolded_result["inc"]["unfolded"][1:-1],
-                cross_section.EnergySlice.Slice_dEdX(energy_slices, cross_section.Particle.from_pdgid(211))[:-1],
+                cross_section.EnergySlice.slice_dEdX(energy_slices, cross_section.Particle.from_pdgid(211))[:-1],
                 energy_slices.width,
                 total_err[k],
                 total_err["int"],
@@ -476,7 +476,7 @@ def XSUnfold(unfolded_result, energy_slices, sys : bool = False, stat = True, re
             unfolded_result["int_ex"]["unfolded"][1:-1],
             unfolded_result["int"]["unfolded"][1:-1],
             unfolded_result["inc"]["unfolded"][1:-1],
-            cross_section.EnergySlice.Slice_dEdX(energy_slices, cross_section.Particle.from_pdgid(211))[:-1],
+            cross_section.EnergySlice.slice_dEdX(energy_slices, cross_section.Particle.from_pdgid(211))[:-1],
             energy_slices.width,
             total_err["int_ex"],
             total_err["int"],
