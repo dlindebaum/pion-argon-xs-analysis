@@ -1210,7 +1210,7 @@ class GeantCrossSections:
             # Plots.plt.fill_between(self.KE, getattr(self, k) - self.Stat_Error(k), getattr(self, k) + self.Stat_Error(k), color = Plots.plt.gca()._get_lines.get_next_color())
 
 
-    def Plot(self, xs : str, color : str = None, label : str = None, title : str = None):
+    def Plot(self, xs : str, color : str = None, label : str = None, title : str = None, simplified_pion_production : bool = False):
         """ Plot cross sections. To be used in conjunction with other plots for comparisons.
 
         Args:
@@ -1229,6 +1229,8 @@ class GeantCrossSections:
                     title = remove_(xs).capitalize()
             if xs == "single_pion_production":
                 y = self.quasielastic + self.double_charge_exchange
+            elif xs == "pion_production" and simplified_pion_production is True:
+                y = self.quasielastic + self.double_charge_exchange + self.pion_production
             else:
                 y = getattr(self, xs)
             Plots.Plot(self.KE, y, label = label, title = title, newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\\sigma$  (mb)", color = color)
@@ -1878,6 +1880,8 @@ class AnalysisInput:
     exclusive_process : dict[np.ndarray]
     process_id : np.ndarray = field(init=False)
     region_id : np.ndarray = field(init=False)
+    outside_fv_reco : np.ndarray
+    outside_fv_true : np.ndarray
     outside_tpc_reco : np.ndarray
     outside_tpc_true : np.ndarray
     # observables
@@ -2029,11 +2033,11 @@ class AnalysisInput:
         if reco is True:
             KE_int = self.KE_int_reco
             KE_init = self.KE_init_reco
-            outside_tpc = self.outside_tpc_reco
+            outside_tpc = self.outside_fv_reco
         else:
             KE_int = self.KE_int_true
             KE_init = self.KE_init_true
-            outside_tpc = self.outside_tpc_true
+            outside_tpc = self.outside_fv_true
         n_interact = EnergySlice.CountingExperiment(KE_int[mask], KE_init[mask], outside_tpc[mask], process[mask], energy_slice, interact_only = True, weights = weights[mask] if weights is not None else weights)
         return n_interact
 
@@ -2073,6 +2077,8 @@ class AnalysisInput:
             regions = regions,
             inclusive_process = inclusive_events,
             exclusive_process = process,
+            outside_fv_reco = np.array(toy.outside_tpc_smeared.values),
+            outside_fv_true = np.array(toy.outside_tpc.values),
             outside_tpc_reco = np.array(toy.outside_tpc_smeared.values),
             outside_tpc_true = np.array(toy.outside_tpc.values),
             track_length_reco = np.array(toy.df.z_int_smeared.values),
@@ -2143,7 +2149,9 @@ class AnalysisInput:
         KE_end_reco = RecoEndEnergy(truncated_track_reco, KE_ff_reco, events.recoParticles.beam_dEdX, energy_method)
 
         track_length_reco = events.recoParticles.beam_track_length
-        outside_tpc_reco = (events.recoParticles.beam_endPos_SCE.z < min(fiducial_volume)) | (events.recoParticles.beam_endPos_SCE.z > max(fiducial_volume))
+        outside_tpc_reco = ProtoDUNESPGeometry().outside_tpc(events.recoParticles.beam_endPos_SCE.x, events.recoParticles.beam_endPos_SCE.y, events.recoParticles.beam_endPos_SCE.z)
+
+        outside_fv_reco = (events.recoParticles.beam_endPos_SCE.z < min(fiducial_volume)) | (events.recoParticles.beam_endPos_SCE.z > max(fiducial_volume))
         start_pos_reco = events.recoParticles.beam_startPos_SCE
         end_pos_reco = events.recoParticles.beam_endPos_SCE
 
@@ -2160,7 +2168,11 @@ class AnalysisInput:
             track_length_true = events.trueParticles.beam_track_length
             start_pos_true = events.trueParticles.beam_traj_pos[:, 0]
             end_pos_true = events.trueParticles.beam_traj_pos[:, -1]
-            outside_tpc_true = (events.trueParticles.beam_traj_pos.z[:, -1] < min(fiducial_volume)) | (events.trueParticles.beam_traj_pos.z[:, -1] > max(fiducial_volume))
+
+            outside_tpc_true = ProtoDUNESPGeometry().outside_tpc(events.trueParticles.endPos.x[:, 0], events.trueParticles.endPos.y[:, 0], events.trueParticles.endPos.z[:, 0])
+
+
+            outside_fv_true = (events.trueParticles.beam_traj_pos.z[:, -1] < min(fiducial_volume)) | (events.trueParticles.beam_traj_pos.z[:, -1] > max(fiducial_volume))
             inelastic = events.trueParticles.true_beam_endProcess == "pi+Inelastic"
 
             truncated_tracks_true = TruncateTrack(events.trueParticles.beam_traj_pos[events.trueParticles.in_tpc_z], z_trunc = max(fiducial_volume))
@@ -2176,6 +2188,7 @@ class AnalysisInput:
             KE_init_true = None
             KE_ff_true = None
             track_length_true = None
+            outside_fv_true = None
             outside_tpc_true = None
             inelastic = None
             start_pos_true = vector.vector([None], [None], [None])
@@ -2190,6 +2203,8 @@ class AnalysisInput:
             regions = reco_regions,
             inclusive_process = inelastic,
             exclusive_process = true_regions,
+            outside_fv_reco = outside_fv_reco,
+            outside_fv_true = outside_fv_true,
             outside_tpc_reco = outside_tpc_reco,
             outside_tpc_true = outside_tpc_true,
             track_length_reco = track_length_reco,
@@ -2306,12 +2321,12 @@ class AnalysisInput:
         KE_int = self.KE_int_true if reco is False else self.KE_int_reco
         KE_init = self.KE_init_true if reco is False else self.KE_init_reco
 
-        if mask is None: mask = np.zeros_like(self.outside_tpc_reco, dtype = bool)
+        if mask is None: mask = np.zeros_like(self.outside_fv_reco, dtype = bool)
 
-        if self.outside_tpc_true is None:
-            outside_tpc = self.outside_tpc_reco | mask
+        if self.outside_fv_true is None:
+            outside_tpc = self.outside_fv_reco | mask
         else:
-            outside_tpc = self.outside_tpc_true | mask
+            outside_tpc = self.outside_fv_true | mask
 
         if self.exclusive_process is not None:
             channel_mask = self.exclusive_process[exclusive_process]
@@ -2616,7 +2631,7 @@ class Unfold:
         """
         slice_bins = np.arange(-1 - 0.5, energy_slice.max_num + 1.5)
 
-        outside_tpc_mask = template.outside_tpc_reco | template.outside_tpc_true
+        outside_tpc_mask = template.outside_fv_reco | template.outside_fv_true
 
         true_slices = EnergySlice.SliceNumbers(template.KE_int_true, template.KE_init_true, outside_tpc_mask, energy_slice)
         reco_slices = EnergySlice.SliceNumbers(template.KE_int_reco, template.KE_init_reco, outside_tpc_mask, energy_slice)

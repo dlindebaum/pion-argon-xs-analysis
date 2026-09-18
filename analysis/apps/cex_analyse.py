@@ -112,7 +112,7 @@ def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_sect
 
 
 def BkgSubAllRegion(data : cross_section.AnalysisInput, energy_slices : cross_section.Slices, bkg, bkg_err):
-    N_int = data.NInteract(energy_slices, np.ones_like(data.outside_tpc_reco, dtype = bool))
+    N_int = data.NInteract(energy_slices, np.ones_like(data.outside_fv_reco, dtype = bool))
     N_int_ex = N_int - np.sum(bkg, 0)
     N_int_ex_err = np.sqrt(N_int + np.sum(bkg_err**2, 0))
     return N_int_ex, N_int_ex_err
