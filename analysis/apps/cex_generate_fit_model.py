@@ -10,33 +10,6 @@ Description: Script that creates the systematics.yaml file for MaCh3 that define
 from python.analysis import Application, cross_section, ProcessDefinitions
 import numpy as np
 
-ENERGY_BINS = {
-    "Under": ("0.", "1500"),
-    "0": ("1500", "1700"),
-    "1": ("1700", "1900"),
-    "2": ("1900", "2100"),
-    "Over": ("2100", "999999"),
-}
-
-MODES = {
-    "Abs": 0,
-    "CEx": 1,
-    "Pip": 2,
-    "Decay": 3,
-    "Esc": 4,
-    "Impure": 999,
-}
-
-END_Z = {
-    "Abs": (30, 220),
-    "CEx": (30, 220),
-    "Pip": (30, 220),
-    "Decay": (30, 220),
-    "Esc": (220, 999),
-    "Impure": (30, 999),
-}
-
-
 def make_systematic(proc_info : tuple, init_bin : tuple, end_bin : tuple):
     init_low, init_high = init_bin[1]
     end_low, end_high = end_bin[1]
