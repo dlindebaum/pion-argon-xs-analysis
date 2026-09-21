@@ -453,6 +453,23 @@ def CountInRegions(true_regions : dict, reco_regions : dict, selection_efficincy
 def KE(p, m):
     return (p**2 + m**2)**0.5 - m
 
+
+def Efficiency(selected_count : np.array, total_count : np.array) -> tuple[np.array, np.array]:
+    """ Calcualtes selection efficiency and binomial error.
+
+    Args:
+        selected_count (np.array): number of selected events
+        total_count (np.array): number of total events
+
+    Returns:
+        tuple[np.array, np.array]: efficiency, error
+    """
+    p = selected_count / total_count
+    p = np.nan_to_num(p)
+    error = (p * (1 - p) / total_count)**0.5
+    return p, error
+
+
 def IsScraper(mc : Data, beam_scraper_args : dict) -> ak.Array:
     beam_inst_KE = KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
     true_ffKE = mc.trueParticles.beam_KE_front_face

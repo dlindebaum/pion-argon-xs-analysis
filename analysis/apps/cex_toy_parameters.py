@@ -212,22 +212,6 @@ def GetTotalPionCounts(pion_mask : ak.Array, quantities : dict[str, ak.Array], b
     counts = {q : np.histogram(np.array(quantities[q][pion_mask]), bins[q], range = ranges[q])[0] for q in quantities}
     return counts
 
-
-def Efficiency(selected_count : np.array, total_count : np.array) -> tuple[np.array, np.array]:
-    """ Calcualtes selection efficiency and binomial error.
-
-    Args:
-        selected_count (np.array): number of selected events
-        total_count (np.array): number of total events
-
-    Returns:
-        tuple[np.array, np.array]: efficiency, error
-    """
-    p = selected_count / total_count
-    p = np.nan_to_num(p)
-    error = (p * (1 - p) / total_count)**0.5
-    return p, error
-
 @Master.timer
 def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, beam_selection_mask : ak.Array, args : argparse.Namespace, ranges : dict, labels : dict, bins : dict, out : str):
     """ Study which looks at the beam selection efficiency as a function of each cross section quantity, then saves the per bin efficiencies to file to use for the toy simulation.
@@ -256,7 +240,7 @@ def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, beam_s
     pdf = Plots.PlotBook(out + "pi_beam_efficiency/efficiency_study")
 
     x = {i : (bins[i][1:] + bins[i][:-1])/2 for i in initial_counts_true}
-    e = {i : Efficiency(selected_counts_true[i], initial_counts_true[i]) for i in initial_counts_true}
+    e = {i : cross_section.Efficiency(selected_counts_true[i], initial_counts_true[i]) for i in initial_counts_true}
 
     for _, i in Plots.IterMultiPlot(initial_counts_true):
         Plots.Plot(x[i], e[i][0], yerr = e[i][1], xlabel = "true" + labels[i], ylabel = "beam $\\pi^{+}$:inel selection efficiency", newFigure = False)

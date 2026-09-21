@@ -286,7 +286,7 @@ def PlotDataBkgSub(hist_data : dict[np.ndarray], hist_data_err : dict[np.ndarray
 
 
 def SelectionEfficiency(true_hists_selected, true_hists):
-    return {k : cex_toy_parameters.Efficiency(true_hists_selected[k], true_hists[k]) for k in true_hists}
+    return {k : cross_section.Efficiency(true_hists_selected[k], true_hists[k]) for k in true_hists}
 
 
 def EfficiencyErrStat(eff, err, val, val_eff, norm, true):
