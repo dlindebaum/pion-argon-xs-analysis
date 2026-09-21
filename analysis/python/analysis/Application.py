@@ -200,9 +200,8 @@ class ApplicationArguments:
             elif head == "ESLICE":
                 for k, v in value.items():
                     if not isinstance(v, numbers.Number):
-                        raise Exception(f"All SLICE paramters must be a number ({k}:{v}).")
-                # if value["width"] is not None:
-                args.energy_slices = Slices(value["width"], value["min"] - value["width"], value["max"], reversed = True) # min - width to allocate an underflow bin (not used in the measurement)
+                        raise Exception(f"All slice parameters must be a number ({k}:{v}).")
+                args.energy_slices = Slices(value["width"], value["min"], value["max"], reversed = True)
             elif head == "ANALYSIS_INPUTS":
                 args.analysis_input = {k : v for k, v in value.items()}
             elif head == "UNFOLDING":

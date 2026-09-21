@@ -160,7 +160,7 @@ class three_signal_process_bkg_fd(SampleDefinition):
     criteria_list = process_criteria_exp
     definitions = {
         "absorption" : [
-            process_criteria_exp(criteria("==", 1), criteria("==", 0), criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria("==", 0)),
+            criteria_list(criteria("==", 1), criteria("==", 0), criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria("==", 0)),
         ],
         "charge_exchange" : [
             criteria_list(criteria("==", 1), criteria("==", 0), criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria("==", 1)),
@@ -169,16 +169,31 @@ class three_signal_process_bkg_fd(SampleDefinition):
             criteria_list(criteria("==", 1), criteria("==", 0), criteria("==", 0), criteria("==", 1), criteria(">=", 1), criteria(">=", 0)),
             criteria_list(criteria("==", 1), criteria("==", 0), criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria(">", 1)),
         ],
+        "decay" : [
+            criteria_list(criteria("==", 1), criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria(">=", 0), criteria(">=", 0))
+        ],
+        "escaping" : [
+            criteria_list(criteria("==", 1), criteria("==", 1), criteria(">=", 0) ,criteria(">=", 0), criteria(">=", 0), criteria(">=", 0))
+        ],
         "impurities" : [
             criteria_list(criteria("==", 0), criteria(">=", 0), criteria(">=", 0), criteria("==", 0), criteria(">=", 0), criteria(">=", 0)),
         ],
-        "decay" : [
-            process_criteria_exp(criteria("==", 1), criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria(">=", 0), criteria(">=", 0))
-        ],
-        "escaping" : [
-            process_criteria_exp(criteria("==", 1), criteria("==", 1), criteria(">=", 0) ,criteria(">=", 0), criteria(">=", 0), criteria(">=", 0))
-        ]
-
+    }
+    mode = {
+        "absorption" : 0,
+        "charge_exchange" : 1,
+        "pion_production" : 2,
+        "decay" : 3,
+        "escaping" : 4,
+        "impurities" : 999,
+    }
+    short_name = {
+        "absorption" : "Abs",
+        "charge_exchange" : "CEx",
+        "pion_production" : "Pip",
+        "decay" : "Dec",
+        "escaping" : "Esc",
+        "impurities" : "Imp",
     }
 
 
@@ -204,7 +219,6 @@ def GetTruePionCountsGeant(events, ke_lim : float = 0) -> tuple[ak.Array, ak.Arr
     n_pi0_true = events.trueParticles.nPi0
 
     return n_pip_true, n_pim_true, n_pi0_true
-
 
 processes = {
     "four_signal_process" : four_signal_process,
