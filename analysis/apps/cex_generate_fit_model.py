@@ -7,6 +7,8 @@ Author: Shyam Bhuller
 Description: Script that creates the systematics.yaml file for MaCh3 that defines the binning.
 """
 
+import itertools
+
 from python.analysis import Application, cross_section, ProcessDefinitions
 import numpy as np
 
@@ -18,27 +20,28 @@ def make_systematic(proc_info : tuple, init_bin : tuple, end_bin : tuple):
 
     name = f"True{proc_info[0]}-Init_{init_bin[0]}-End_{end_bin[0]}"
 
-    return f"""  - Systematic:
-      Names:
-        FancyName: {name}
-        ParameterName: {name}
+    return  f"""
+- Systematic:
+    Names:
+      FancyName: {name}
+      ParameterName: {name}
 
-      SampleNames: ["PDSP"]
-      Mode: [{mode}]
-      Error: 0.1
-      FlatPrior: true
-      ParameterBounds: [0, 4]
-      ParameterGroup: Fit
-      KinematicCuts:
-        - TrueKEInt: [{init_low}, {init_high}]
-        - TrueKEIni: [{end_low}, {end_high}]
-        - TrueEndZ: [{z_low}, {z_high}]
-      ParameterValues:
-        Generator: 1.
-        PreFitValue: 1.
-      Type: Norm
-      StepScale:
-        MCMC: 0.01
+    SampleNames: ["PDSP"]
+    Mode: [{mode}]
+    Error: 0.1
+    FlatPrior: true
+    ParameterBounds: [0, 4]
+    ParameterGroup: Fit
+    KinematicCuts:
+      - TrueKEInt: [{end_low}, {end_high}]
+      - TrueKEIni: [{init_low}, {init_high}]
+      - TrueEndZ: [{z_low}, {z_high}]
+    ParameterValues:
+      Generator: 1.
+      PreFitValue: 1.
+    Type: Norm
+    StepScale:
+      MCMC: 0.01
 """
 
 def slices_to_model_bins(energy_slices : cross_section.Slices) -> dict[tuple]:
@@ -53,7 +56,7 @@ def slices_to_model_bins(energy_slices : cross_section.Slices) -> dict[tuple]:
         elif i == len(model_bins)-2:
             k = "Over"
         else:
-            k = str(i)
+            k = str(i-1)
         bins[k] = (model_bins[i], model_bins[i+1])
     return bins
 
@@ -84,12 +87,12 @@ def main(args : Application.argparse.Namespace):
 
 
     with open(f"{args.out}/systematics.yaml", "w") as f:
-        f.write("Systematics:\n\n")
+        f.write("Systematics:\n")
 
-        for init_bin in model_bins.items():
-            for end_bin in model_bins.items():
-                for proc_info in process_info.items():
-                    f.write(make_systematic(proc_info, init_bin, end_bin))
+        for end_bin, init_bin in itertools.combinations_with_replacement(model_bins.items(), 2):
+            for proc_info in process_info.items():
+                f.write(make_systematic(proc_info, init_bin, end_bin))
+    
     return
 
 
