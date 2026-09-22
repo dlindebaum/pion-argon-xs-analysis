@@ -967,7 +967,9 @@ def MultiPlot(n : int, xlim : tuple = None, ylim : tuple = None, orientation = "
         Iterator[int]: ith plot
     """
     dim = FigureDimensions(n, orientation)
-    plt.subplots(figsize = [6.4 * dim[1], 4.8 * dim[0]])
+    fig, ax = plt.subplots(figsize = [6.4 * dim[1], 4.8 * dim[0]],frameon=False)
+    fig.patch.set_visible(False)
+    ax.axis('off')
     for i in range(n):
         plt.subplot(dim[0], dim[1], i + 1)
         if xlim: plt.xlim(xlim)
