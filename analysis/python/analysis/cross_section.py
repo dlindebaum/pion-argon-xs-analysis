@@ -814,9 +814,10 @@ def RecoEndEnergy(tracks : ak.Array, KE_init: ak.Array, dEdX : ak.Array | None, 
         raise Exception(f"{method} not a valid method, pick 'calo' or 'track'")
     return KE_end
 
-class SlicesVar:
+
+class Slices:
     Slice = namedtuple("Slice", "num pos")
-    def __init__(self, edges : list[int]):
+    def __init__(self, edges : np.ndarray[int]):
         self.edges = np.array(edges)
         self.min = min(edges)
         self.max = max(edges)
@@ -833,8 +834,12 @@ class SlicesVar:
 
         self.max_num = max(self.num)
         self.min_num = min(self.num)
+
         self.max_pos = max(self.pos)
         self.min_pos = min(self.pos)
+
+        self.overflow_num = self.max_num + 1 # overflow slice number
+        self.underflow_num = -1 # underflow slice number
 
 
     def __conversion__(self, x):
@@ -847,15 +852,16 @@ class SlicesVar:
             slice: slice number/s
         """
         if hasattr(x, "__iter__"):
-            if self.reversed:
-                n = len(self.edges) - 1  + ak.values_astype(x < min(self.edges), int) - sum(x > ak.unflatten(self.edges, 1, -1))
+            if reversed:
+                n = ak.sum(ak.unflatten(x, 1) <= self.edges, 1) - 1
+
             else:
-                n = sum(x >= ak.unflatten(self.edges, 1, -1))
+                n = ak.sum(ak.unflatten(x, 1) >= self.edges, 1) - 1
         else:
             if self.reversed:
-                n = len(self.edges) - 1 + int(x < min(self.edges)) - sum(x > self.edges)
+                n = sum(x <= self.edges) - 1
             else:
-                n = sum(x >= self.edges)
+                n = sum(x >= self.edges) - 1
         return n
 
 
@@ -919,7 +925,7 @@ class SlicesVar:
         Returns:
             Slice: ith slice
         """
-        if i >= len(self.edges):
+        if i >= len(self.edges) - 1:
             raise StopIteration
         else:
             if self.reversed:
@@ -937,8 +943,17 @@ class SlicesVar:
         return np.array([ s.num for s in self], dtype = int)
 
     @property
+    def num_all(self) -> np.ndarray:
+        """ Return all slice numbers.
+
+        Returns:
+            np.ndarray: slice numbers
+        """
+        return np.array([self.underflow_num] + [s.num for s in self] + [self.overflow_num], dtype = int)
+
+    @property
     def pos(self) -> np.ndarray:
-        """ Return all slice positions.
+        """ Return all slice positions. Within the valid slice range.
 
         Returns:
             np.ndarray: slice positions
@@ -952,7 +967,10 @@ class SlicesVar:
         Returns:
             np.ndarray: slice widths
         """
-        return self.pos_bins[1:] - self.pos_bins[:-1]
+        if reversed:
+            return self.edges[:-1] - self.edges[1:]
+        else:
+            return self.edges[1:] - self.edges[:-1] 
 
     @property
     def pos_overflow(self) -> np.ndarray:
@@ -990,7 +1008,7 @@ class SlicesVar:
         return slice_num
 
 
-class Slices:
+class Slices_Fixed:
     """ Describes slices of a variable, equivilant to a list of bin edges but has more functionality. 
 
     Slice : a Single slice, has properies number (integer) and "position" in the parameter space of the value you want to slice up. 
@@ -1514,7 +1532,7 @@ class EnergySlice:
 
 
     @staticmethod
-    def slice_dEdX(energy_slices : Slices | SlicesVar, particle : Particle) -> np.ndarray:
+    def slice_dEdX(energy_slices : Slices, particle : Particle) -> np.ndarray:
         """ Computes the mean dEdX between energy slices.
 
         Args:
@@ -1637,7 +1655,7 @@ class EnergySlice:
             return n_interact_exclusive
 
     @staticmethod
-    def CountingExperimentOld(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices | SlicesVar) -> tuple[np.ndarray, np.ndarray]:
+    def CountingExperimentOld(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices) -> tuple[np.ndarray, np.ndarray]:
         """ (Legacy) Creates the interacting and incident histograms.
 
         Args:
