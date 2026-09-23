@@ -9,6 +9,7 @@ import argparse
 import os
 
 from collections import namedtuple
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -18,6 +19,7 @@ import numpy as np
 import pandas as pd
 import pyhf
 import uproot
+import warnings
 
 from cabinetry.fit.results_containers import FitResults
 from particle import Particle
@@ -452,6 +454,23 @@ def CountInRegions(true_regions : dict, reco_regions : dict, selection_efficincy
 def KE(p, m):
     return (p**2 + m**2)**0.5 - m
 
+
+def Efficiency(selected_count : np.array, total_count : np.array) -> tuple[np.array, np.array]:
+    """ Calcualtes selection efficiency and binomial error.
+
+    Args:
+        selected_count (np.array): number of selected events
+        total_count (np.array): number of total events
+
+    Returns:
+        tuple[np.array, np.array]: efficiency, error
+    """
+    p = selected_count / total_count
+    p = np.nan_to_num(p)
+    error = (p * (1 - p) / total_count)**0.5
+    return p, error
+
+
 def IsScraper(mc : Data, beam_scraper_args : dict) -> ak.Array:
     beam_inst_KE = KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
     true_ffKE = mc.trueParticles.beam_KE_front_face
@@ -487,6 +506,7 @@ def PlotXSHists(energy_slices, hist_counts : np.ndarray, hist_counts_err : np.nd
 
     Plots.Plot(x, scale * hist_counts[s], yerr = scale * hist_counts_err[s], xlabel = xlabel, newFigure = newFigure, style = "step", label = label, color = color, ylabel = ylabel, title = title)
     return
+
 
 def HypTestXS(cv, error, process, energy_slice, file = GEANT_XS):
     xs_sim = GeantCrossSections(file, energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos])
@@ -795,9 +815,10 @@ def RecoEndEnergy(tracks : ak.Array, KE_init: ak.Array, dEdX : ak.Array | None, 
         raise Exception(f"{method} not a valid method, pick 'calo' or 'track'")
     return KE_end
 
-class SlicesVar:
+
+class Slices:
     Slice = namedtuple("Slice", "num pos")
-    def __init__(self, edges : list[int]):
+    def __init__(self, edges : np.ndarray[int]):
         self.edges = np.array(edges)
         self.min = min(edges)
         self.max = max(edges)
@@ -814,8 +835,12 @@ class SlicesVar:
 
         self.max_num = max(self.num)
         self.min_num = min(self.num)
+
         self.max_pos = max(self.pos)
         self.min_pos = min(self.pos)
+
+        self.overflow_num = self.max_num + 1 # overflow slice number
+        self.underflow_num = -1 # underflow slice number
 
 
     def __conversion__(self, x):
@@ -829,14 +854,15 @@ class SlicesVar:
         """
         if hasattr(x, "__iter__"):
             if self.reversed:
-                n = len(self.edges) - 1  + ak.values_astype(x < min(self.edges), int) - sum(x > ak.unflatten(self.edges, 1, -1))
+                n = ak.sum(ak.unflatten(x, 1) <= self.edges, 1) - 1
+
             else:
-                n = sum(x >= ak.unflatten(self.edges, 1, -1))
+                n = ak.sum(ak.unflatten(x, 1) >= self.edges, 1) - 1
         else:
             if self.reversed:
-                n = len(self.edges) - 1 + int(x < min(self.edges)) - sum(x > self.edges)
+                n = sum(x <= self.edges) - 1
             else:
-                n = sum(x >= self.edges)
+                n = sum(x >= self.edges) - 1
         return n
 
 
@@ -900,7 +926,7 @@ class SlicesVar:
         Returns:
             Slice: ith slice
         """
-        if i >= len(self.edges):
+        if i >= len(self.edges) - 1:
             raise StopIteration
         else:
             if self.reversed:
@@ -918,8 +944,17 @@ class SlicesVar:
         return np.array([ s.num for s in self], dtype = int)
 
     @property
+    def num_all(self) -> np.ndarray:
+        """ Return all slice numbers.
+
+        Returns:
+            np.ndarray: slice numbers
+        """
+        return np.array([self.underflow_num] + [s.num for s in self] + [self.overflow_num], dtype = int)
+
+    @property
     def pos(self) -> np.ndarray:
-        """ Return all slice positions.
+        """ Return all slice positions. Within the valid slice range.
 
         Returns:
             np.ndarray: slice positions
@@ -933,7 +968,10 @@ class SlicesVar:
         Returns:
             np.ndarray: slice widths
         """
-        return self.pos_bins[1:] - self.pos_bins[:-1]
+        if reversed:
+            return self.edges[:-1] - self.edges[1:]
+        else:
+            return self.edges[1:] - self.edges[:-1] 
 
     @property
     def pos_overflow(self) -> np.ndarray:
@@ -944,140 +982,6 @@ class SlicesVar:
             return np.insert(self.pos, i, ov)
         else:
             return np.append(self.pos, ov)
-
-    @property
-    def pos_bins(self):
-        return np.sort(self.pos_overflow)
-
-
-    def pos_to_num(self, pos):
-        """ Convert slice positions to numbers
-
-        Args:
-            pos: positions
-
-        Returns:
-            array or int: slice numbers
-        """
-        slice_num = self.__conversion__(pos)
-        if hasattr(pos, "__iter__"):
-            slice_num = ak.where(slice_num > max(self.num), max(self.num), slice_num)
-            slice_num = ak.where(slice_num < 0, min(self.num), slice_num)
-        else:
-            if pos > max(self.pos): 
-                slice_num = max(self.num) # above range go into overflow bin
-            if pos < 0:
-                slice_num = min(self.num) # below range go into the underflow bin
-        return slice_num
-
-
-class Slices:
-    """ Describes slices of a variable, equivilant to a list of bin edges but has more functionality. 
-
-    Slice : a Single slice, has properies number (integer) and "position" in the parameter space of the value you want to slice up. 
-    """
-    Slice = namedtuple("Slice", "num pos")
-    def __init__(self, width, _min, _max, reversed : bool = False):
-        self.width = width
-        self.min = _min
-        self.max = _max
-        self.reversed = reversed
-        
-        self.max_num = max(self.num)
-        self.min_num = min(self.num)
-        self.max_pos = max(self.pos)
-        self.min_pos = min(self.pos)
-
-
-    def __conversion__(self, x):
-        """ convert a value to its slice number.
-
-        Args:
-            x: value, array of float
-
-        Returns:
-            slice: slice number/s
-        """
-        if self.reversed:
-            numerator = self.max - x
-        else:
-            numerator = x
-        c = np.floor(numerator // self.width)
-        if hasattr(c, "__iter__"):
-            return ak.values_astype(c, int)
-        else:
-            return int(c)
-
-
-    def __create_slice__(self, i) -> Slice:
-        """ using the slice number, create the Slice object.
-
-        Args:
-            i (int): slice number/s
-
-        Returns:
-            Slice: slice
-        """
-        if self.reversed:
-            p = self.max - i * self.width
-        else:
-            p = i * self.width
-        return self.Slice(i, p)
-
-
-    def __call__(self, x):
-        """ get the slice number for a set of values
-
-        Args:
-            x: values
-
-        Returns:
-            array or int: slice numbers
-        """
-        return self.__create_slice__(self.__conversion__(x))
-
-
-    def __getitem__(self, i : int) -> Slice:
-        """ Creates slices from slice numbers.
-
-        Args:
-            i (int): slice number
-
-        Raises:
-            StopIteration
-
-        Returns:
-            Slice: ith slice
-        """
-        if i * self.width > (self.max - self.min):
-            raise StopIteration
-        else:
-            if self.reversed:
-                return self.__create_slice__(i + self.__conversion__(self.max))
-            else:
-                return self.__create_slice__(i + self.__conversion__(self.min))
-
-    @property
-    def num(self) -> np.ndarray:
-        """ Return all slice numbers.
-
-        Returns:
-            np.ndarray: slice numbers
-        """
-        return np.array([ s.num for s in self], dtype = int)
-
-    @property
-    def pos(self) -> np.ndarray:
-        """ Return all slice positions.
-
-        Returns:
-            np.ndarray: slice positions
-        """
-        return np.array([ s.pos for s in self])
-
-    @property
-    def pos_overflow(self):
-        return np.insert(self.pos, 0, self.max_pos + self.width)
 
     @property
     def pos_bins(self):
@@ -1157,7 +1061,7 @@ class GeantCrossSections:
             # Plots.plt.fill_between(self.KE, getattr(self, k) - self.Stat_Error(k), getattr(self, k) + self.Stat_Error(k), color = Plots.plt.gca()._get_lines.get_next_color())
 
 
-    def Plot(self, xs : str, color : str = None, label : str = None, title : str = None):
+    def Plot(self, xs : str, color : str = None, label : str = None, title : str = None, simplified_pion_production : bool = False):
         """ Plot cross sections. To be used in conjunction with other plots for comparisons.
 
         Args:
@@ -1176,6 +1080,8 @@ class GeantCrossSections:
                     title = remove_(xs).capitalize()
             if xs == "single_pion_production":
                 y = self.quasielastic + self.double_charge_exchange
+            elif xs == "pion_production" and simplified_pion_production is True:
+                y = self.quasielastic + self.double_charge_exchange + self.pion_production
             else:
                 y = getattr(self, xs)
             Plots.Plot(self.KE, y, label = label, title = title, newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\\sigma$  (mb)", color = color)
@@ -1201,6 +1107,11 @@ class GeantCrossSections:
 class ThinSlice:
     """ Methods for implementing the thin slice measurement method.
     """
+
+    @staticmethod
+    def deprecation_warning():
+        return warnings.warn("ThinSlice functions are deprecrated!", DeprecationWarning)
+
     @staticmethod
     def CountingExperiment(endPos : ak.Array, channel : ak.Array, slices : Slices) -> tuple[ak.Array, ak.Array]:
         """ Creates the interacting and incident histograms.
@@ -1213,6 +1124,8 @@ class ThinSlice:
         Returns:
             tuple[ak.Array, ak.Array]: n_interact and n_incident histograms
         """
+        ThinSlice.deprecation_warning()
+
         end_slice_pos = slices.pos_to_num(endPos)
         slice_nums = slices.num
 
@@ -1234,6 +1147,7 @@ class ThinSlice:
         Returns:
             tuple[ak.Array, ak.Array]: means slice energy, error in the mean slice energy
         """
+        ThinSlice.deprecation_warning()
         beam_traj_slice = slices.pos_to_num(endPos)
         slice_nums = slices.num
         
@@ -1252,7 +1166,7 @@ class ThinSlice:
         return mean_energy, error_mean_energy
 
     @staticmethod 
-    def TotalCrossSection(n_incident : np.ndarray, n_interact : np.ndarray, slice_width : float) -> tuple[np.ndarray, np.ndarray]:
+    def total_cross_section(n_incident : np.ndarray, n_interact : np.ndarray, slice_width : float) -> tuple[np.ndarray, np.ndarray]:
         """ Returns cross section in mb.
 
         Args:
@@ -1263,6 +1177,7 @@ class ThinSlice:
         Returns:
             tuple[np.ndarray, np.ndarray]: cross section, statistical uncertainty
         """
+        ThinSlice.deprecation_warning()
         xs = np.log(n_incident / (n_incident - n_interact)) # calculate a dimensionless cross section
 
         v_incident = n_incident # poisson uncertainty
@@ -1288,6 +1203,7 @@ class ThinSlice:
         Returns:
             tuple[np.ndarray, np.ndarray]: cross section and error
         """
+        ThinSlice.deprecation_warning()
         NA = 6.02214076e23
         factor = 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * slice_width)
 
@@ -1311,27 +1227,192 @@ class ThinSlice:
 class EnergySlice:
     """ Methods for implementing the energy slice measurement method.
     """
+
     @staticmethod
-    def TrunacteSlices(slice_array : ak.Array, energy_slices : Slices) -> ak.Array:
-        """ Method for truncating slice numbers due to the fact energy slices should be in reverse order vs kinetic energy.
+    def process_multiple_array(input : np.ndarray, function : callable) -> np.ndarray:
+        """ Call function on multiple arrays.
 
         Args:
-            slice_array (ak.Array): slices to truncate
-            energy_slices (Slices): energy slices
+            input (np.ndarray): input arrays.
+            function (callable): function to call.
+
+        Raises:
+            ValueError: At least one array must be passed.
+            TypeError: only arrays should be passed.
 
         Returns:
-            ak.Array: truncated slices
+            list[any]: outputs.
         """
-        # set minimum to -1 (underflow i.e. energy > plim)
-        slice_array = ak.where(slice_array < 0, -1, slice_array)
-        # set maxslice (overflow i.e. energy < dE)
-        slice_array = ak.where(slice_array > energy_slices.max_num, energy_slices.max_num, slice_array)
-        return slice_array
+        out = []
+        if len(input) == 0:
+            raise ValueError("At least one energy array must be provided.")
 
+        for i in input:
+            if isinstance(i, Iterable) and not isinstance(i, str):
+                out.append(function(i))
+            else:
+                raise TypeError("inputs passed should be an array of values.")
+
+        if len(out) == 1:
+            return out[0]
+        else:
+            return out
+
+    @staticmethod
+    def convert_energy_to_slice(slices : Slices, *energy : np.ndarray) -> np.ndarray | tuple[np.ndarray]:
+        """ Converts energy distributions to slice number distributions.
+
+        Args:
+            slices (Slices): Energy slices.
+            energy (np.ndarray): Energy distribution, multiple can be passed.
+
+        Returns:
+            np.ndarray | tuple[np.ndarray]: Slice distributions, equal to the number of energy distributions passed. 
+        """
+        func = lambda x : slices(x).num
+        return EnergySlice.process_multiple_array(energy, func)
+
+    @staticmethod
+    def count(slices : Slices, *slice : np.ndarray) -> tuple[np.ndarray]:
+        """ Produce counts of each slice.
+
+        Args:
+            slices (Slices): Energy slices.
+            slice (np.ndarray): slice distribution, multiple can be passed.
+
+        Returns:
+            tuple[np.ndarray]: Slice distributions, equal to the number of slice distributions passed.
+        """
+        slice_bins = np.arange(slices.underflow_num - 0.5, slices.overflow_num + 1.5)
+
+        func = lambda x: np.histogram(np.array(x), slice_bins)[0]
+
+        return EnergySlice.process_multiple_array(slice, func)
+
+    @staticmethod
+    def incident(n_init : np.ndarray, n_end : np.ndarray) -> np.ndarray:
+        """ Calculates the incident counts for each slice.
+
+        Args:
+            n_init (np.ndarray): Initial counts for each slice.
+            n_end (np.ndarray): End counts for each slice
+
+        Returns:
+            np.ndarray: Incident counts for each slice.
+        """
+        c_init = np.cumsum(n_init)
+        c_end = np.cumsum(n_end)
+
+        return c_init - n_init - c_end + n_end
+
+    @staticmethod
+    def complete_slice(init_slice : np.ndarray, end_slice : np.ndarray):
+        return (init_slice != end_slice)
+
+    @staticmethod
+    def counting_experiment_exclusive(energy_slices : Slices, KE_init : np.ndarray, KE_end : np.ndarray, mask : np.ndarray, outside_fv : np.ndarray) -> np.ndarray:
+        """ perform counting experiment to get the exclusive interacing slices for a particular subset of interactions. 
+
+        Args:
+            energy_slices (Slices): Energy slices.
+            KE_init (np.ndarray): Initial kinetic energy.
+            KE_end (np.ndarray): End kinetic energy.
+            mask (np.ndarray): Mask of particles to include in the count.
+            outside_fv (np.ndarray): Mask that excludes events that end outside the bounds of the fiducial volume.
+
+        Returns:
+            np.ndarray: Exclusive interacting counts.
+        """
+        selected = mask & ~outside_fv
+        s_init, s_int = EnergySlice.convert_energy_to_slice(energy_slices, KE_init[selected], KE_end[selected])
+        complete_slice = EnergySlice.complete_slice(s_init, s_int)
+        return EnergySlice.count(energy_slices, s_int[complete_slice])
+
+    @staticmethod
+    def counting_experiment(KE_init : np.ndarray, KE_end : np.ndarray, slices : Slices, outside_fv : np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """ perform counting experiment to get initial, end and incident counts.
+
+        Args:
+            KE_init (np.ndarray): Initial kinetic energy
+            KE_end (np.ndarray): end kinetic energy
+            slices (Slices): Energy slices
+            outside_fv (np.ndarray): Mask that excludes events that end outside the bounds of the fiducial volume.
+
+        Returns:
+            tuple[np.ndarray, np.ndarray, np.ndarray]: initial counts, end counts and incident counts
+        """
+        if slices.reversed is False:
+            raise Exception("Energy slices should be in reverse order.")
+
+        init_slice, end_slice = EnergySlice.convert_energy_to_slice(slices, KE_init, KE_end)
+
+        init_slice = init_slice[~outside_fv]
+        end_slice = end_slice[~outside_fv]
+
+        # particles that end and start in the same slice do not count towards the sample counted (they are not incident on any slice)
+        # the incident calculation accounts for this, but not the histogramming for init and end.
+        valid_slices = EnergySlice.complete_slice(init_slice, end_slice)
+        init_slice = init_slice[valid_slices]
+        end_slice = end_slice[valid_slices]
+
+        init_counts, end_counts = EnergySlice.count(slices, init_slice, end_slice)
+        inc_counts = EnergySlice.incident(init_counts, end_counts)
+        return init_counts, end_counts, inc_counts
+
+
+    @staticmethod
+    def slice_dEdX(energy_slices : Slices, particle : Particle) -> np.ndarray:
+        """ Computes the mean dEdX between energy slices.
+
+        Args:
+            energy_slices (Slices): energy slices
+            particle (Particle): particle
+
+        Returns:
+            np.ndarray: mean dEdX
+        """
+        return BetheBloch.meandEdX(energy_slices.edges - energy_slices.width/2, particle)
+
+    @staticmethod 
+    def total_cross_section(n_incident : np.ndarray, n_end : np.ndarray, dEdX : np.ndarray, dE : float) -> tuple[np.ndarray, np.ndarray]:
+        """ Calculate total inelastic cross section in mb.
+
+        Args:
+            n_incident (np.ndarray): incident counts.
+            n_end (np.ndarray): end counts.
+            dEdX (np.ndarray): mean slice dEdX.
+            dE (float): energy slice width.
+
+        Returns:
+            tuple[np.ndarray, np.ndarray]: Total inelastic cross section and statistical undertainty in mb.
+        """
+        slice_width = dE/dEdX
+
+        xs = np.log(n_incident / (n_incident - n_end)) # calculate a dimensionless cross section
+
+        v_incident = n_incident # poisson uncertainty
+        v_interact = n_end * (1- (n_end/n_incident)) # binomial uncertainty
+
+        xs_e = (1/n_incident) * (1/(n_incident - n_end)) * (n_end**2 * v_incident + n_incident**2 * v_interact)**0.5
+
+        NA = 6.02214076e23
+        factor = 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * slice_width)
+
+        return factor * xs, abs(factor * xs_e)
+
+    @staticmethod
+    def exclusive_cross_section(n_incident : np.ndarray, n_end : np.ndarray, n_int : np.ndarray, dEdX : np.ndarray, dE : float) -> tuple[np.ndarray, np.ndarray]:
+        xs, xs_err = EnergySlice.total_cross_section(n_incident, n_end, dEdX, dE)
+
+        ratio = n_int / n_end
+        ratio_err = ratio * (1/n_end + 1/n_int)**0.5
+
+        return ratio * xs,  quadsum([ratio_err, xs_err], 0)
 
     @staticmethod
     def NIncident(n_initial : np.ndarray, n_end : np.ndarray) -> np.ndarray:
-        """ Calculate number of incident particles
+        """ #! Deprecated.
+            Calculate number of incident particles
 
         Args:
             n_initial (np.ndarray): initial particle counts
@@ -1346,7 +1427,8 @@ class EnergySlice:
 
     @staticmethod
     def SliceNumbers(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak.Array, energy_slices : Slices) -> tuple[np.ndarray, np.ndarray]:
-        """ Convert energies from physical units to slice numbers.
+        """ #! Deprecated.
+            Convert energies from physical units to slice numbers.
 
         Args:
             int_energy (ak.Array): interaction energy
@@ -1360,11 +1442,8 @@ class EnergySlice:
         init_slice = energy_slices(init_energy).num + 1 # equivilant to ceil
         int_slice = energy_slices(int_energy).num
 
-        init_slice = EnergySlice.TrunacteSlices(init_slice, energy_slices)
-        int_slice = EnergySlice.TrunacteSlices(int_slice, energy_slices)
-
         # removes instances where the particle incident energy and interacting energy are in the same slice (Yinrui calls this an incomplete slice)
-        # i.e. this happens if the particle interacting in its first slice, must be an artifact of the energy slicing but not sure why.
+        # i.e. this happens if the particle interacting in its first slice, must be an artifact of the energy slicing because a particle that starts and interacts in a slice is thus not incident on any slice.
         bad_slices = (int_slice < init_slice) | outside_tpc
         init_slice = ak.where(bad_slices, -1, init_slice)
         int_slice = ak.where(bad_slices, -1, int_slice)
@@ -1372,7 +1451,8 @@ class EnergySlice:
 
     @staticmethod
     def CountingExperiment(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak.Array, process : ak.Array, energy_slices : Slices, interact_only : bool = False, weights : np.ndarray = None) -> tuple[np.ndarray]:
-        """ Creates the interacting and incident histograms.
+        """ #! Deprecated
+            Creates the interacting and incident histograms.
 
         Args:
             int_energy (ak.Array): interacting enrgy
@@ -1404,7 +1484,7 @@ class EnergySlice:
             return n_interact_exclusive
 
     @staticmethod
-    def CountingExperimentOld(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices | SlicesVar) -> tuple[np.ndarray, np.ndarray]:
+    def CountingExperimentOld(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices) -> tuple[np.ndarray, np.ndarray]:
         """ (Legacy) Creates the interacting and incident histograms.
 
         Args:
@@ -1419,9 +1499,6 @@ class EnergySlice:
         """
         true_init_slice = energy_slices(ff_energy).num + 1 # equivilant to ceil
         true_int_slice = energy_slices(int_energy).num
-
-        true_init_slice = EnergySlice.TrunacteSlices(true_init_slice, energy_slices)
-        true_int_slice = EnergySlice.TrunacteSlices(true_int_slice, energy_slices)
 
         # just in case we encounter an instance where E_int > E_ini (unphysical)
         bad_slices = true_int_slice < true_init_slice
@@ -1453,35 +1530,7 @@ class EnergySlice:
         n_interact = np.roll(n_interact, -1) # shift the underflow bin to the location of the overflow bin in n_incident i.e. merge them.
         return n_interact, n_incident + n_interact
 
-    @staticmethod
-    def Slice_dEdX(energy_slices : Slices | SlicesVar, particle : Particle) -> np.ndarray:
-        """ Computes the mean dEdX between energy slices.
-
-        Args:
-            energy_slices (Slices): energy slices
-            particle (Particle): particle
-
-        Returns:
-            np.ndarray: mean dEdX
-        """
-        return BetheBloch.meandEdX(energy_slices.pos - energy_slices.width/2, particle)
-
-    @staticmethod
-    def TotalCrossSection(n_interact : np.ndarray, n_incident : np.ndarray, dEdX : np.ndarray, dE : float) -> tuple[np.ndarray, np.ndarray]:
-        """ Compute cross section using ThinSlice.CrossSection, by passing an effective spatial slice width.
-
-        Args:
-            n_interact (np.ndarray): interacting histogram
-            n_incident (np.ndarray): incident histogram
-            dEdX (np.ndarray): mean slice dEdX
-            dE (float): energy slice width
-
-        Returns:
-            tuple[np.ndarray, np.ndarray]: Cross section and statistical uncertainty.
-        """
-        return ThinSlice.TotalCrossSection(n_incident, n_interact, dE/dEdX)
-
-    @staticmethod
+    @staticmethod #! deprecated
     def CrossSection(n_int_ex : np.ndarray, n_int : np.ndarray, n_inc : np.ndarray, dEdX : np.ndarray, dE : float, n_int_ex_err : np.ndarray = None, n_int_err : np.ndarray = None, n_inc_err : np.ndarray = None) -> tuple[np.ndarray, np.ndarray]:
         """ Compute exclusive cross sections. If interactions errors are not provided, staticial uncertainties are used (poisson for incident, binomial for interactions).
 
@@ -1528,6 +1577,38 @@ class EnergySlice:
 
         xs_err = ((diff_n_int_ex**2 * var_int_ex) + (diff_n_inc**2 * var_inc_inclusive) + (diff_n_int**2 * var_int))**0.5
         return np.array(xs, dtype = float), np.array(xs_err, dtype = float)
+
+
+class TPCGeometry:
+    x : tuple[float, float]
+    y : tuple[float, float]
+    z : tuple[float, float]
+
+
+    def __check_bounds__(self, v, v_bounds):
+        return (min(v_bounds) > v) | (v > max(v_bounds))
+
+
+    def outside_tpc_x(self, x):
+        return self.__check_bounds__(x, self.x)
+
+    
+    def outside_tpc_y(self, y):
+        return self.__check_bounds__(y, self.y)
+
+    
+    def outside_tpc_z(self, z):
+        return self.__check_bounds__(z, self.z)
+
+
+    def outside_tpc(self, x, y, z):
+        return self.outside_tpc_x(x) | self.outside_tpc_y(y) | self.outside_tpc_z(z)
+
+
+class ProtoDUNESPGeometry(TPCGeometry):
+    x = [-350, 350]
+    y = [0, 600]
+    z = [0, 700]
 
 
 class Toy:
@@ -1663,6 +1744,8 @@ class AnalysisInput:
     exclusive_process : dict[np.ndarray]
     process_id : np.ndarray = field(init=False)
     region_id : np.ndarray = field(init=False)
+    outside_fv_reco : np.ndarray
+    outside_fv_true : np.ndarray
     outside_tpc_reco : np.ndarray
     outside_tpc_true : np.ndarray
     # observables
@@ -1814,12 +1897,12 @@ class AnalysisInput:
         if reco is True:
             KE_int = self.KE_int_reco
             KE_init = self.KE_init_reco
-            outside_tpc = self.outside_tpc_reco
+            outside_fv = self.outside_fv_reco
         else:
             KE_int = self.KE_int_true
             KE_init = self.KE_init_true
-            outside_tpc = self.outside_tpc_true
-        n_interact = EnergySlice.CountingExperiment(KE_int[mask], KE_init[mask], outside_tpc[mask], process[mask], energy_slice, interact_only = True, weights = weights[mask] if weights is not None else weights)
+            outside_fv = self.outside_fv_true
+        n_interact = EnergySlice.CountingExperiment(KE_int[mask], KE_init[mask], outside_fv[mask], process[mask], energy_slice, interact_only = True, weights = weights[mask] if weights is not None else weights)
         return n_interact
 
 
@@ -1858,6 +1941,8 @@ class AnalysisInput:
             regions = regions,
             inclusive_process = inclusive_events,
             exclusive_process = process,
+            outside_fv_reco = np.array(toy.outside_tpc_smeared.values),
+            outside_fv_true = np.array(toy.outside_tpc.values),
             outside_tpc_reco = np.array(toy.outside_tpc_smeared.values),
             outside_tpc_true = np.array(toy.outside_tpc.values),
             track_length_reco = np.array(toy.df.z_int_smeared.values),
@@ -1928,7 +2013,9 @@ class AnalysisInput:
         KE_end_reco = RecoEndEnergy(truncated_track_reco, KE_ff_reco, events.recoParticles.beam_dEdX, energy_method)
 
         track_length_reco = events.recoParticles.beam_track_length
-        outside_tpc_reco = (events.recoParticles.beam_endPos_SCE.z < min(fiducial_volume)) | (events.recoParticles.beam_endPos_SCE.z > max(fiducial_volume))
+        outside_tpc_reco = ProtoDUNESPGeometry().outside_tpc(events.recoParticles.beam_endPos_SCE.x, events.recoParticles.beam_endPos_SCE.y, events.recoParticles.beam_endPos_SCE.z)
+
+        outside_fv_reco = (events.recoParticles.beam_endPos_SCE.z < min(fiducial_volume)) | (events.recoParticles.beam_endPos_SCE.z > max(fiducial_volume))
         start_pos_reco = events.recoParticles.beam_startPos_SCE
         end_pos_reco = events.recoParticles.beam_endPos_SCE
 
@@ -1945,7 +2032,11 @@ class AnalysisInput:
             track_length_true = events.trueParticles.beam_track_length
             start_pos_true = events.trueParticles.beam_traj_pos[:, 0]
             end_pos_true = events.trueParticles.beam_traj_pos[:, -1]
-            outside_tpc_true = (events.trueParticles.beam_traj_pos.z[:, -1] < min(fiducial_volume)) | (events.trueParticles.beam_traj_pos.z[:, -1] > max(fiducial_volume))
+
+            outside_tpc_true = ProtoDUNESPGeometry().outside_tpc(events.trueParticles.endPos.x[:, 0], events.trueParticles.endPos.y[:, 0], events.trueParticles.endPos.z[:, 0])
+
+
+            outside_fv_true = (events.trueParticles.beam_traj_pos.z[:, -1] < min(fiducial_volume)) | (events.trueParticles.beam_traj_pos.z[:, -1] > max(fiducial_volume))
             inelastic = events.trueParticles.true_beam_endProcess == "pi+Inelastic"
 
             truncated_tracks_true = TruncateTrack(events.trueParticles.beam_traj_pos[events.trueParticles.in_tpc_z], z_trunc = max(fiducial_volume))
@@ -1961,6 +2052,7 @@ class AnalysisInput:
             KE_init_true = None
             KE_ff_true = None
             track_length_true = None
+            outside_fv_true = None
             outside_tpc_true = None
             inelastic = None
             start_pos_true = vector.vector([None], [None], [None])
@@ -1975,6 +2067,8 @@ class AnalysisInput:
             regions = reco_regions,
             inclusive_process = inelastic,
             exclusive_process = true_regions,
+            outside_fv_reco = outside_fv_reco,
+            outside_fv_true = outside_fv_true,
             outside_tpc_reco = outside_tpc_reco,
             outside_tpc_true = outside_tpc_true,
             track_length_reco = track_length_reco,
@@ -2091,12 +2185,12 @@ class AnalysisInput:
         KE_int = self.KE_int_true if reco is False else self.KE_int_reco
         KE_init = self.KE_init_true if reco is False else self.KE_init_reco
 
-        if mask is None: mask = np.zeros_like(self.outside_tpc_reco, dtype = bool)
+        if mask is None: mask = np.zeros_like(self.outside_fv_reco, dtype = bool)
 
-        if self.outside_tpc_true is None:
-            outside_tpc = self.outside_tpc_reco | mask
+        if self.outside_fv_true is None:
+            outside_tpc = self.outside_fv_reco | mask
         else:
-            outside_tpc = self.outside_tpc_true | mask
+            outside_tpc = self.outside_fv_true | mask
 
         if self.exclusive_process is not None:
             channel_mask = self.exclusive_process[exclusive_process]
@@ -2401,7 +2495,7 @@ class Unfold:
         """
         slice_bins = np.arange(-1 - 0.5, energy_slice.max_num + 1.5)
 
-        outside_tpc_mask = template.outside_tpc_reco | template.outside_tpc_true
+        outside_tpc_mask = template.outside_fv_reco | template.outside_fv_true
 
         true_slices = EnergySlice.SliceNumbers(template.KE_int_true, template.KE_init_true, outside_tpc_mask, energy_slice)
         reco_slices = EnergySlice.SliceNumbers(template.KE_int_reco, template.KE_init_reco, outside_tpc_mask, energy_slice)

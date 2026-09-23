@@ -311,7 +311,7 @@ def PlotShapeExamples(energy_slices : cross_section.Slices, book : Plots.PlotBoo
     norms = [0.8, 1.2]
     split = 1000
     smooth_amount = 500
-    xs_sim = cross_section.GeantCrossSections(energy_range = [0, energy_slices.max_pos + energy_slices.width])
+    xs_sim = cross_section.GeantCrossSections(energy_range = [0, energy_slices.max + energy_slices.width])
 
     def plot_curves(curves : dict, geant : bool, label : str, ylabel : str):
         Plots.plt.figure()
