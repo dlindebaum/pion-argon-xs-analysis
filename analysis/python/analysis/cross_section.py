@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 import pyhf
 import uproot
+import warnings
 
 from cabinetry.fit.results_containers import FitResults
 from particle import Particle
@@ -814,9 +815,10 @@ def RecoEndEnergy(tracks : ak.Array, KE_init: ak.Array, dEdX : ak.Array | None, 
         raise Exception(f"{method} not a valid method, pick 'calo' or 'track'")
     return KE_end
 
-class SlicesVar:
+
+class Slices:
     Slice = namedtuple("Slice", "num pos")
-    def __init__(self, edges : list[int]):
+    def __init__(self, edges : np.ndarray[int]):
         self.edges = np.array(edges)
         self.min = min(edges)
         self.max = max(edges)
@@ -833,8 +835,12 @@ class SlicesVar:
 
         self.max_num = max(self.num)
         self.min_num = min(self.num)
+
         self.max_pos = max(self.pos)
         self.min_pos = min(self.pos)
+
+        self.overflow_num = self.max_num + 1 # overflow slice number
+        self.underflow_num = -1 # underflow slice number
 
 
     def __conversion__(self, x):
@@ -848,14 +854,15 @@ class SlicesVar:
         """
         if hasattr(x, "__iter__"):
             if self.reversed:
-                n = len(self.edges) - 1  + ak.values_astype(x < min(self.edges), int) - sum(x > ak.unflatten(self.edges, 1, -1))
+                n = ak.sum(ak.unflatten(x, 1) <= self.edges, 1) - 1
+
             else:
-                n = sum(x >= ak.unflatten(self.edges, 1, -1))
+                n = ak.sum(ak.unflatten(x, 1) >= self.edges, 1) - 1
         else:
             if self.reversed:
-                n = len(self.edges) - 1 + int(x < min(self.edges)) - sum(x > self.edges)
+                n = sum(x <= self.edges) - 1
             else:
-                n = sum(x >= self.edges)
+                n = sum(x >= self.edges) - 1
         return n
 
 
@@ -919,7 +926,7 @@ class SlicesVar:
         Returns:
             Slice: ith slice
         """
-        if i >= len(self.edges):
+        if i >= len(self.edges) - 1:
             raise StopIteration
         else:
             if self.reversed:
@@ -937,8 +944,17 @@ class SlicesVar:
         return np.array([ s.num for s in self], dtype = int)
 
     @property
+    def num_all(self) -> np.ndarray:
+        """ Return all slice numbers.
+
+        Returns:
+            np.ndarray: slice numbers
+        """
+        return np.array([self.underflow_num] + [s.num for s in self] + [self.overflow_num], dtype = int)
+
+    @property
     def pos(self) -> np.ndarray:
-        """ Return all slice positions.
+        """ Return all slice positions. Within the valid slice range.
 
         Returns:
             np.ndarray: slice positions
@@ -952,7 +968,10 @@ class SlicesVar:
         Returns:
             np.ndarray: slice widths
         """
-        return self.pos_bins[1:] - self.pos_bins[:-1]
+        if reversed:
+            return self.edges[:-1] - self.edges[1:]
+        else:
+            return self.edges[1:] - self.edges[:-1] 
 
     @property
     def pos_overflow(self) -> np.ndarray:
@@ -984,191 +1003,6 @@ class SlicesVar:
             slice_num = ak.where(slice_num < 0, min(self.num), slice_num)
         else:
             if pos > max(self.pos): 
-                slice_num = max(self.num) # above range go into overflow bin
-            if pos < 0:
-                slice_num = min(self.num) # below range go into the underflow bin
-        return slice_num
-
-
-class Slices:
-    """ Describes slices of a variable, equivilant to a list of bin edges but has more functionality. 
-
-    Slice : a Single slice, has properies number (integer) and "position" in the parameter space of the value you want to slice up. 
-    """
-    Slice = namedtuple("Slice", "num pos")
-    def __init__(self, width, min_value, max_value, reversed : bool = False):
-        """_summary_
-
-        Args:
-            width (_type_): _description_
-            min_value (_type_): minimum value to consider in the slices (not inclusive of underflow).
-            max_value (_type_): maximum value to consider in the slices (not inclusive of overflow).
-            reversed (bool, optional): _description_. Defaults to False.
-        """
-        self.width = width # width of the slice
-
-        # valid slice range is the slices that are not overflow and underflow.
-        self.min = min_value + self.width # minium edge of the valid slice range (Note that min_value would be the start of the underflow bin, hence not considered the minimum.)
-        self.max = max_value # maximum edge of the valid slice range
-
-        self.reversed = reversed # reverse order the slices.
-        
-        self.max_num = max(self.num) # maximum slice number in the valid range
-        self.min_num = min(self.num) # minimum slice number in the valid range
-
-        self.overflow_num = self.max_num + 1 # overflow slice number
-        self.underflow_num = -1 # underflow slice number
-
-        self.overflow_pos = self.max + self.width
-        self.underflow_pos = self.min - self.width
-
-
-    def __truncate__(self, x):
-        if hasattr(x, "__iter__"):
-            x = ak.where(x > self.overflow_num, self.overflow_num, x)
-            x = ak.where(x <= self.underflow_num, self.underflow_num, x)
-            return x
-        else:
-            x = self.overflow_num if x > self.overflow_num else x
-            x = self.underflow_num if x <= self.underflow_num else x
-            return x
-
-
-    def __conversion__(self, x):
-        """ convert a value to its slice number. Does not respect the valid slice range.
-
-        Args:
-            x: value, array of float
-
-        Returns:
-            slice: slice number/s
-        """
-        if self.reversed:
-            numerator = self.max - x
-        else:
-            numerator = x
-        c = np.floor(numerator // self.width)
-        if hasattr(c, "__iter__"):
-            return ak.values_astype(c, int)
-        else:
-            return int(c)
-
-
-    def __create_slice__(self, i) -> Slice:
-        """ using the slice number, create the Slice object.
-
-        Args:
-            i (int): slice number/s
-
-        Returns:
-            Slice: slice
-        """
-        if self.reversed:
-            p = self.max - i * self.width
-        else:
-            p = i * self.width
-        return self.Slice(i, p)
-
-
-    def __call__(self, x) -> Slice:
-        """ get the slice number for a set of values
-
-        Args:
-            x: values
-
-        Returns:
-            array or int: slice numbers
-        """
-        return self.__create_slice__(self.__truncate__(self.__conversion__(x)))
-
-
-    def __getitem__(self, i : int) -> Slice:
-        """ Creates slices from slice numbers. Respects The valid slice range.
-
-        Args:
-            i (int): slice number
-
-        Raises:
-            StopIteration
-
-        Returns:
-            Slice: ith slice
-
-        """
-        if (i * self.width > (self.max - self.min)) or (i * self.width < 0):
-            raise StopIteration
-        else:
-            if self.reversed:
-                return self.__create_slice__(i + self.__conversion__(self.max))
-            else:
-                return self.__create_slice__(i + self.__conversion__(self.min))
-
-    @property
-    def num(self) -> np.ndarray:
-        """ Return all slice numbers.
-
-        Returns:
-            np.ndarray: slice numbers
-        """
-        return np.array([s.num for s in self], dtype = int)
-
-    @property
-    def num_all(self) -> np.ndarray:
-        """ Return all slice numbers.
-
-        Returns:
-            np.ndarray: slice numbers
-        """
-        return np.array([self.underflow_num] + [s.num for s in self] + [self.overflow_num], dtype = int)
-
-    @property
-    def edges(self) -> np.ndarray:
-        """ Return the edges of each slice. This does not include overflow and underflow slices.
-
-        Returns:
-            np.ndarray: slice positions
-        """
-        return np.array([s.pos for s in self])
-
-    @property
-    def edges_all(self) -> np.ndarray:
-        """ Return the edges of each slice. This includes overflow and underflow slices.
-            Note:
-                Underflow : minimum slice edge - slice width.
-                Overflow : maximum slice edge + slice width.
-
-        Returns:
-            np.ndarray: slice positions
-        """
-        ends = [self.underflow_pos, self.overflow_pos]
-        if self.reversed is True:
-            ends.reverse()
-        return np.array([ends[0]] + [s.pos for s in self] + [ends[1]])
-
-    @property
-    def pos_overflow(self):
-        return np.insert(self.edges, 0, self.max + self.width)
-
-    @property
-    def pos_bins(self):
-        return np.sort(self.pos_overflow)
-
-
-    def pos_to_num(self, pos):
-        """ Convert slice positions to numbers
-
-        Args:
-            pos: positions
-
-        Returns:
-            array or int: slice numbers
-        """
-        slice_num = self.__truncate__(self.__conversion__(pos))
-        if hasattr(pos, "__iter__"):
-            slice_num = ak.where(slice_num > max(self.num), max(self.num), slice_num)
-            slice_num = ak.where(slice_num < 0, min(self.num), slice_num) #! < 0 assumes something about the range (for xs analysis, its actually fine)
-        else:
-            if pos > max(self.edges): 
                 slice_num = max(self.num) # above range go into overflow bin
             if pos < 0:
                 slice_num = min(self.num) # below range go into the underflow bin
@@ -1273,6 +1107,11 @@ class GeantCrossSections:
 class ThinSlice:
     """ Methods for implementing the thin slice measurement method.
     """
+
+    @staticmethod
+    def deprecation_warning():
+        return warnings.warn("ThinSlice functions are deprecrated!", DeprecationWarning)
+
     @staticmethod
     def CountingExperiment(endPos : ak.Array, channel : ak.Array, slices : Slices) -> tuple[ak.Array, ak.Array]:
         """ Creates the interacting and incident histograms.
@@ -1285,6 +1124,8 @@ class ThinSlice:
         Returns:
             tuple[ak.Array, ak.Array]: n_interact and n_incident histograms
         """
+        ThinSlice.deprecation_warning()
+
         end_slice_pos = slices.pos_to_num(endPos)
         slice_nums = slices.num
 
@@ -1306,6 +1147,7 @@ class ThinSlice:
         Returns:
             tuple[ak.Array, ak.Array]: means slice energy, error in the mean slice energy
         """
+        ThinSlice.deprecation_warning()
         beam_traj_slice = slices.pos_to_num(endPos)
         slice_nums = slices.num
         
@@ -1335,6 +1177,7 @@ class ThinSlice:
         Returns:
             tuple[np.ndarray, np.ndarray]: cross section, statistical uncertainty
         """
+        ThinSlice.deprecation_warning()
         xs = np.log(n_incident / (n_incident - n_interact)) # calculate a dimensionless cross section
 
         v_incident = n_incident # poisson uncertainty
@@ -1360,6 +1203,7 @@ class ThinSlice:
         Returns:
             tuple[np.ndarray, np.ndarray]: cross section and error
         """
+        ThinSlice.deprecation_warning()
         NA = 6.02214076e23
         factor = 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * slice_width)
 
@@ -1385,11 +1229,11 @@ class EnergySlice:
     """
 
     @staticmethod
-    def process_multiple_array(input : list[any], function : callable) -> list[any]:
+    def process_multiple_array(input : np.ndarray, function : callable) -> np.ndarray:
         """ Call function on multiple arrays.
 
         Args:
-            input (list[any]): input arrays.
+            input (np.ndarray): input arrays.
             function (callable): function to call.
 
         Raises:
@@ -1497,6 +1341,9 @@ class EnergySlice:
         Returns:
             tuple[np.ndarray, np.ndarray, np.ndarray]: initial counts, end counts and incident counts
         """
+        if slices.reversed is False:
+            raise Exception("Energy slices should be in reverse order.")
+
         init_slice, end_slice = EnergySlice.convert_energy_to_slice(slices, KE_init, KE_end)
 
         init_slice = init_slice[~outside_fv]
@@ -1514,7 +1361,7 @@ class EnergySlice:
 
 
     @staticmethod
-    def slice_dEdX(energy_slices : Slices | SlicesVar, particle : Particle) -> np.ndarray:
+    def slice_dEdX(energy_slices : Slices, particle : Particle) -> np.ndarray:
         """ Computes the mean dEdX between energy slices.
 
         Args:
@@ -1637,7 +1484,7 @@ class EnergySlice:
             return n_interact_exclusive
 
     @staticmethod
-    def CountingExperimentOld(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices | SlicesVar) -> tuple[np.ndarray, np.ndarray]:
+    def CountingExperimentOld(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices) -> tuple[np.ndarray, np.ndarray]:
         """ (Legacy) Creates the interacting and incident histograms.
 
         Args:
@@ -1683,7 +1530,7 @@ class EnergySlice:
         n_interact = np.roll(n_interact, -1) # shift the underflow bin to the location of the overflow bin in n_incident i.e. merge them.
         return n_interact, n_incident + n_interact
 
-    @staticmethod
+    @staticmethod #! deprecated
     def CrossSection(n_int_ex : np.ndarray, n_int : np.ndarray, n_inc : np.ndarray, dEdX : np.ndarray, dE : float, n_int_ex_err : np.ndarray = None, n_int_err : np.ndarray = None, n_inc_err : np.ndarray = None) -> tuple[np.ndarray, np.ndarray]:
         """ Compute exclusive cross sections. If interactions errors are not provided, staticial uncertainties are used (poisson for incident, binomial for interactions).
 
@@ -2050,12 +1897,12 @@ class AnalysisInput:
         if reco is True:
             KE_int = self.KE_int_reco
             KE_init = self.KE_init_reco
-            outside_tpc = self.outside_fv_reco
+            outside_fv = self.outside_fv_reco
         else:
             KE_int = self.KE_int_true
             KE_init = self.KE_init_true
-            outside_tpc = self.outside_fv_true
-        n_interact = EnergySlice.CountingExperiment(KE_int[mask], KE_init[mask], outside_tpc[mask], process[mask], energy_slice, interact_only = True, weights = weights[mask] if weights is not None else weights)
+            outside_fv = self.outside_fv_true
+        n_interact = EnergySlice.CountingExperiment(KE_int[mask], KE_init[mask], outside_fv[mask], process[mask], energy_slice, interact_only = True, weights = weights[mask] if weights is not None else weights)
         return n_interact
 
 

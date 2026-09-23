@@ -9,6 +9,8 @@ import argparse
 import copy
 import numbers
 
+import awkward as ak
+
 from python.analysis.Master import LoadConfiguration, LoadObject, FileDescriptor
 from python.analysis.cross_section import EnergyCorrection, Slices
 from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, Fitting, RegionDefinitions, ProcessDefinitions, Processing
@@ -198,10 +200,7 @@ class ApplicationArguments:
                 for k, v in value.items():
                     args.fit[k] = v
             elif head == "ESLICE":
-                for k, v in value.items():
-                    if not isinstance(v, numbers.Number):
-                        raise Exception(f"All slice parameters must be a number ({k}:{v}).")
-                args.energy_slices = Slices(value["width"], value["min"], value["max"], reversed = True)
+                args.energy_slices = Slices(ak.Array(value["edges"]))
             elif head == "ANALYSIS_INPUTS":
                 args.analysis_input = {k : v for k, v in value.items()}
             elif head == "UNFOLDING":
