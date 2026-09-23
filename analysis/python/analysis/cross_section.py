@@ -23,7 +23,7 @@ from particle import Particle
 from scipy.interpolate import interp1d, UnivariateSpline
 from scipy.stats import chi2, ks_2samp
 
-from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, Processing, BetheBloch, ThinSlice, EnergySlice
+from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, Processing, BetheBloch, ThinSlice, EnergySlice, NtupleProcessing
 from python.analysis.Master import LoadObject, SaveObject, ReadHDF5, Data, timer, IO, FileDescriptor
 from python.analysis.Utils import *
 
@@ -344,86 +344,6 @@ def SetPlotStyle(extend_colors : bool = False, custom_colors : list = None, dpi 
         Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", l_2)})
     if extend_colors:
         Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", Plots.matplotlib.cm.get_cmap("tab20").colors)})
-
-
-def file_len(file : str):
-    return len(IO(file).Get(["EventID", "event"]))
-
-
-def CalculateBatches(args):
-    if "data" in args.ntuple_files:
-        n_data = [file_len(file_desc.file) for file_desc in args.ntuple_files["data"]]
-    else:
-        n_data = []
-
-    if len(n_data) == 0:
-        print("no data file was specified, 'normalisation', 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
-
-    n_mc = [file_len(file_desc.file) for file_desc in args.ntuple_files["mc"]] # must have MC
-
-    processing_args = {"events" : None, "batches" : None, "threads" : args.cpus}
-
-    # pass multiprocessing args
-    # if max([*n_data, *n_mc]) >= 7E5:
-    #     processing_args["events"] = None
-    #     processing_args["batches"] = int(2 * max([*n_data, *n_mc]) // 7E5)
-    #     processing_args["threads"] = args.cpus
-
-    return processing_args
-
-
-def RunProcess(ntuple_files : list[FileDescriptor], is_data : bool, args : argparse.Namespace, func : callable, merge : bool = True) -> list:
-    func_args = vars(args)
-    func_args["data"] = is_data
-    output = Processing.mutliprocess(func, ntuple_files, args.batches, args.events, func_args, args.threads)
-    if merge:
-        output = MergeOutputs(output)
-    return output
-
-
-def MergeOutputs(outputs : list[dict]) -> dict:
-    def search(collection : dict, output : dict):
-        for k, v in collection.items():
-            if type(v) is dict:
-                if k not in output:
-                    output[k] = {}
-                search(v, output[k])
-            else:
-                if k not in output:
-                    output[k] = v
-                else:
-                    if type(v) == ak.Array:
-                        output[k] = ak.concatenate([output[k], v])
-                    elif type(v) == Tags.Tags:
-                        output[k] = Tags.MergeTags([output[k], v])
-                    elif type(v) == list:
-                        output[k].extend(v)
-                    else:
-                        if type(output[k]) != list:
-                            output[k] = [output[k], v]
-                        else:
-                            output[k].append(v)
-
-    merged_output = {}
-    for o in outputs:
-        search(o, merged_output)
-    return merged_output
-
-
-class Sample(str, Enum):
-    MC = "mc"
-    DATA = "data"
-
-
-def ApplicationProcessing(samples : list[Sample], outdir : str, args : argparse.Namespace, func : callable, merge : bool, outname : str = "output"):
-    if (args.regen is True) or (os.path.isfile(f"{outdir}{outname}.dill") is False):
-        print("Processing Ntuples")
-        outputs = {s : RunProcess(args.ntuple_files[s], s == Sample.DATA, args, func, merge) for s in samples}
-        SaveObject(f"{outdir}{outname}.dill", outputs)
-    else:
-        print("Loading existing outputs")
-        outputs = LoadObject(f"{outdir}{outname}.dill")
-    return outputs
 
 
 def CountInRegions(true_regions : dict, reco_regions : dict, selection_efficincy : np.ndarray = None) -> np.ndarray:
@@ -1279,7 +1199,7 @@ class AnalysisInput:
 
     @staticmethod
     def Concatenate(ais : list["AnalysisInput"]):
-        fields = MergeOutputs([{f : getattr(a, f) for f in AnalysisInput.req_fields()} for a in ais])
+        fields = NtupleProcessing.MergeOutputs([{f : getattr(a, f) for f in AnalysisInput.req_fields()} for a in ais])
 
         # check for null entries after merging outputs (null entries are list of Nones)
         for k in fields:

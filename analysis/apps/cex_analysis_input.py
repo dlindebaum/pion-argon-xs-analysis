@@ -9,7 +9,7 @@ Description: Create analysis input files from Ntuples.
 import awkward as ak
 import numpy as np
 
-from python.analysis import cross_section, SelectionTools, PFOSelection, SampleDefinition, Application
+from python.analysis import cross_section, SelectionTools, PFOSelection, SampleDefinition, Application, NtupleProcessing
 
 from rich import print
 
@@ -186,8 +186,8 @@ def main(args):
     out = args.out + "analysis_input/"
     cross_section.os.makedirs(out, exist_ok = True)
 
-    output_mc = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run, False)
-    output_data = cross_section.RunProcess(args.ntuple_files["data"], True, args, run, False)
+    output_mc = NtupleProcessing.RunProcess(args.ntuple_files["mc"], False, args, run, False)
+    output_data = NtupleProcessing.RunProcess(args.ntuple_files["data"], True, args, run, False)
 
     ais = {
         "mc_selected" : cross_section.AnalysisInput.Concatenate([mc["selected"] for mc in output_mc]),

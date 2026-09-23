@@ -16,7 +16,7 @@ import numpy as np
 from particle import Particle
 from rich import print
 
-from python.analysis import Master, cross_section, Plots, Fitting, Application, BetheBloch
+from python.analysis import Master, cross_section, Plots, Fitting, Application, BetheBloch, NtupleProcessing
 
 
 def run(i : int, file_desc : Master.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
@@ -201,7 +201,7 @@ def main(args : argparse.Namespace):
     outdir = args.out + "beam_scraper/"
     os.makedirs(outdir, exist_ok = True)
 
-    output_mc = cross_section.ApplicationProcessing(["mc"], outdir, args, run, True)["mc"]
+    output_mc = NtupleProcessing.ApplicationProcessing(["mc"], outdir, args, run, True)["mc"]
 
     residual_range = [-300, 300] # range of residual for plotsdefine 
     bins = 50

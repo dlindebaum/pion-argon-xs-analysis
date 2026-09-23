@@ -14,7 +14,7 @@ import numpy as np
 from rich import print
 from rich.rule import Rule
 
-from python.analysis import cross_section, Plots, Application, BetheBloch
+from python.analysis import cross_section, Plots, Application, BetheBloch, NtupleProcessing
 from python.analysis.Master import DictToHDF5, LoadConfiguration
 from python.analysis.Utils import dill_copy, quadsum, round_value_to_error
 from apps import cex_toy_generator, cex_analyse, cex_fit_studies, cex_analysis_input
@@ -390,7 +390,7 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
 
         merged_output = []
         for s in split_output:
-            o = cross_section.MergeOutputs(split_output[s])
+            o = NtupleProcessing.MergeOutputs(split_output[s])
             if type(o["name"]) == list:
                 o["name"] = o["name"][0] 
             merged_output.append(o)
@@ -405,9 +405,9 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
             setattr(self.args, k, v)
 
         print("running MC")
-        output_mc = self.__merge(cross_section.RunProcess(self.args.ntuple_files["mc"], False, self.args, self.__run, False))
+        output_mc = self.__merge(NtupleProcessing.RunProcess(self.args.ntuple_files["mc"], False, self.args, self.__run, False))
         print("running Data")
-        output_data = self.__merge(cross_section.RunProcess(self.args.ntuple_files["data"], True, self.args, self.__run, False))
+        output_data = self.__merge(NtupleProcessing.RunProcess(self.args.ntuple_files["data"], True, self.args, self.__run, False))
         return {"mc" : output_mc, "data" : output_data}
 
 

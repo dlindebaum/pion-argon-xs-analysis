@@ -22,7 +22,8 @@ from apps import (
     cex_analyse
     )
 
-from python.analysis.cross_section import os, CalculateBatches, file_len
+from python.analysis.cross_section import os
+from python.analysis.NtupleProcessing import CalculateBatches, file_len
 from python.analysis.Application import ApplicationArguments, argparse
 from python.analysis.Master import SaveConfiguration, LoadConfiguration
 
