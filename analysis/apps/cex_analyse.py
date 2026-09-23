@@ -16,7 +16,8 @@ from rich import print
 
 from apps import cex_toy_generator, cex_toy_parameters
 from pyunfold.callbacks import SplineRegularizer
-from python.analysis import cross_section, Plots, Application, Master
+from python.analysis import cross_section, Plots, Application, Master, BetheBloch
+from python.analysis import Slices
 
 label_map = {"toy" : "toy", "pdsp" : "ProtoDUNE SP"}
 
@@ -40,13 +41,13 @@ def PlotKEs(mc : cross_section.AnalysisInput, data : cross_section.AnalysisInput
 
     return
 
-def CreateInitParams(model : cross_section.pyhf.Model, analysis_input : cross_section.AnalysisInput, energy_slices : cross_section.Slices, mean_track_score_bins : np.array) -> np.array:
+def CreateInitParams(model : cross_section.pyhf.Model, analysis_input : cross_section.AnalysisInput, energy_slices : Slices, mean_track_score_bins : np.array) -> np.array:
     """ Create initial parameters for the region fit, using the proportion of reco regions and template to get a rough estimate of the process rates.
 
     Args:
         model (cross_section.pyhf.Model): fit model
         analysis_input (cross_section.AnalysisInput): analysis input
-        energy_slices (cross_section.Slices): energy slices
+        energy_slices (Slices): energy slices
         mean_track_score_bins (np.array): mean track score bins
 
     Returns:
@@ -65,12 +66,12 @@ def CreateInitParams(model : cross_section.pyhf.Model, analysis_input : cross_se
     return init
 
 
-def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_section.Slices, mean_track_score_bins : np.array, template_input : cross_section.AnalysisInput | cross_section.pyhf.Model, suggest_init : bool = False, template_weights : np.array = None, return_fit_results : bool = False, mc_stat_unc : bool = False, single_bin : bool = False, fix_np : bool = False) -> cross_section.cabinetry.model_utils.ModelPrediction | cross_section.FitResults:
+def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : Slices, mean_track_score_bins : np.array, template_input : cross_section.AnalysisInput | cross_section.pyhf.Model, suggest_init : bool = False, template_weights : np.array = None, return_fit_results : bool = False, mc_stat_unc : bool = False, single_bin : bool = False, fix_np : bool = False) -> cross_section.cabinetry.model_utils.ModelPrediction | cross_section.FitResults:
     """ Fit model to analysis input to predict the normalaisations of each process.
 
     Args:
         fit_input (cross_section.AnalysisInput): observed data
-        energy_slice (cross_section.Slices): energy slices
+        energy_slice (Slices): energy slices
         mean_track_score_bins (np.array): mean track score bins
         template_input (cross_section.AnalysisInput | cross_section.pyhf.Model): template sample or existing model
         suggest_init (bool, optional): estimate normalisations ans use these as the initial values for the fit. Defaults to False.
@@ -111,14 +112,14 @@ def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : cross_sect
         return cross_section.cabinetry.model_utils.prediction(model, fit_results = result)
 
 
-def BkgSubAllRegion(data : cross_section.AnalysisInput, energy_slices : cross_section.Slices, bkg, bkg_err):
+def BkgSubAllRegion(data : cross_section.AnalysisInput, energy_slices : Slices, bkg, bkg_err):
     N_int = data.NInteract(energy_slices, np.ones_like(data.outside_fv_reco, dtype = bool))
     N_int_ex = N_int - np.sum(bkg, 0)
     N_int_ex_err = np.sqrt(N_int + np.sum(bkg_err**2, 0))
     return N_int_ex, N_int_ex_err
 
 
-def BkgSubRegions(data : cross_section.AnalysisInput, energy_slices : cross_section.Slices, bkg, bkg_err):
+def BkgSubRegions(data : cross_section.AnalysisInput, energy_slices : Slices, bkg, bkg_err):
     processes = list(data.regions.keys())
     
     N_int_regions = {k : data.NInteract(energy_slices, v, None, True) for k, v in data.regions.items()}
@@ -158,7 +159,7 @@ def BkgSingleBin(N_bkg_s : np.ndarray, N_bkg_err_s : np.ndarray, template : cros
     return N_bkg, np.sqrt(N_bkg_var), labels
 
 
-def PlotBkgRegions(energy_slices : cross_section.Slices, data : cross_section.AnalysisInput, bkg : dict[np.ndarray], bkg_err : dict[np.ndarray], bkg_label : dict[list[str]], book : Plots.PlotBook):
+def PlotBkgRegions(energy_slices : Slices, data : cross_section.AnalysisInput, bkg : dict[np.ndarray], bkg_err : dict[np.ndarray], bkg_label : dict[list[str]], book : Plots.PlotBook):
 
     N_int_regions = {k : data.NInteract(energy_slices, v, None, True) for k, v in data.regions.items()}
 
@@ -173,13 +174,13 @@ def PlotBkgRegions(energy_slices : cross_section.Slices, data : cross_section.An
     return
 
 
-def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, energy_slice : cross_section.Slices, postfit_pred : cross_section.cabinetry.model_utils.ModelPrediction = None, single_bin : bool = False, regions : bool = False, template : cross_section.AnalysisInput = None, mc_stat : bool = True, book : Plots.PlotBook = Plots.PlotBook.null()) -> tuple[np.ndarray]:
+def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, energy_slice : Slices, postfit_pred : cross_section.cabinetry.model_utils.ModelPrediction = None, single_bin : bool = False, regions : bool = False, template : cross_section.AnalysisInput = None, mc_stat : bool = True, book : Plots.PlotBook = Plots.PlotBook.null()) -> tuple[np.ndarray]:
     """ Background subtraction using the fit if a fit result is specified.
 
     Args:
         data (cross_section.AnalysisInput): observed data
         process (str): signal process
-        energy_slice (cross_section.Slices): energy slices
+        energy_slice (Slices): energy slices
         fit_results (cross_section.cabinetry.model_utils.ModelPrediction, optional): fit predictions. Defaults to None.
         book (Plots.PlotBook, optional): plot book. Defaults to Plots.PlotBook.null().
 
@@ -249,7 +250,7 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
     return histograms_true_obs, histograms_reco_obs, histograms_reco_obs_err
 
 
-def PlotDataBkgSub(hist_data : dict[np.ndarray], hist_data_err : dict[np.ndarray], mc : cross_section.AnalysisInput, regions : bool, signal_process : str, energy_slices : cross_section.Slices, scale : float, sample_name : str, data_label = "data", mc_label = "mc", book : Plots.PlotBook = Plots.PlotBook.null()):
+def PlotDataBkgSub(hist_data : dict[np.ndarray], hist_data_err : dict[np.ndarray], mc : cross_section.AnalysisInput, regions : bool, signal_process : str, energy_slices : Slices, scale : float, sample_name : str, data_label = "data", mc_label = "mc", book : Plots.PlotBook = Plots.PlotBook.null()):
     labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$", "inc" : "$N_{inc}$"}
 
     histograms_mc_reco = mc.CreateHistograms(energy_slices, signal_process, True, False)
@@ -305,7 +306,7 @@ def EfficiencyErrSys(eff, err, val, val_eff):
     return np.nan_to_num(eff_err)
 
 
-def ApplyEfficiency(energy_slices : cross_section.Slices, efficiencies, unfolding_result, true, norm : float = 1, mc_stat_unc = False, book : Plots.PlotBook = Plots.PlotBook.null()):
+def ApplyEfficiency(energy_slices : Slices, efficiencies, unfolding_result, true, norm : float = 1, mc_stat_unc = False, book : Plots.PlotBook = Plots.PlotBook.null()):
     labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$", "inc" : "$N_{inc}$", "absorption": "$N_{int,abs}$", "charge_exchange" : "$N_{int,cex}$", "single_pion_production" : "$N_{int,spip}$", "pion_production" : "$N_{int,pip}$"}
 
     hist_unfolded_efficiency_corrected = {}
@@ -331,7 +332,7 @@ def ApplyEfficiency(energy_slices : cross_section.Slices, efficiencies, unfoldin
     return hist_unfolded_efficiency_corrected
 
 
-def PlotEfficiency(energy_slices : cross_section.Slices, efficiencies : dict, book : Plots.PlotBook.null()):
+def PlotEfficiency(energy_slices : Slices, efficiencies : dict, book : Plots.PlotBook.null()):
     if book is not None:
         x = energy_slices.pos_overflow - energy_slices.width/2
         for k, v in efficiencies.items():
@@ -342,7 +343,7 @@ def PlotEfficiency(energy_slices : cross_section.Slices, efficiencies : dict, bo
     return
 
 
-def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.AnalysisInput, unfolding_args : dict, signal_process, norm, energy_slices : cross_section.Slices, regions : bool = False, mc_stat_unc : bool = False, mc_cheat : cross_section.AnalysisInput = None, book : Plots.PlotBook = Plots.PlotBook.null()):
+def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.AnalysisInput, unfolding_args : dict, signal_process, norm, energy_slices : Slices, regions : bool = False, mc_stat_unc : bool = False, mc_cheat : cross_section.AnalysisInput = None, book : Plots.PlotBook = Plots.PlotBook.null()):
     labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$", "inc" : "$N_{inc}$", "absorption": "$N_{int,abs}$", "charge_exchange" : "$N_{int,cex}$", "single_pion_production" : "$N_{int,spip}$", "pion_production" : "$N_{int,pip}$"}
 
     true_hists_selected = mc.CreateHistograms(energy_slices, signal_process, False, ~mc.inclusive_process)
@@ -621,7 +622,7 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
                     else:
                         true_hists = templates[k].CreateHistograms(args.energy_slices, p, False, ~templates[k].inclusive_process)
 
-                    xs_true = cross_section.EnergySlice.CrossSection(true_hists["int_ex"][1:], true_hists["int"][1:], true_hists["inc"][1:], cross_section.BetheBloch.meandEdX(args.energy_slices.pos_bins[1:], cross_section.Particle.from_pdgid(211)), args.energy_slices.width)
+                    xs_true = cross_section.EnergySlice.CrossSection(true_hists["int_ex"][1:], true_hists["int"][1:], true_hists["inc"][1:], BetheBloch.meandEdX(args.energy_slices.pos_bins[1:], cross_section.Particle.from_pdgid(211)), args.energy_slices.width)
 
                 _, histograms_reco_obs, histograms_reco_obs_err = BackgroundSubtraction(v, p if p != "all" else "charge_exchange", args.energy_slices, region_fit_result, args.fit["single_bin"], args.fit["regions"], templates[k], args.bkg_sub_mc_stat, book) #? make separate background subtraction function?
 
@@ -656,7 +657,7 @@ def Analyse(args : cross_section.argparse.Namespace, plot : bool = False):
                         true_hists = mc_cheat.CreateHistograms(args.energy_slices, i, False)
                     else:
                         true_hists = templates[k].CreateHistograms(args.energy_slices, i, False, ~templates[k].inclusive_process)
-                    xs_true = cross_section.EnergySlice.CrossSection(true_hists["int_ex"][1:-1], true_hists["int"][1:-1], true_hists["inc"][1:-1], cross_section.BetheBloch.meandEdX(args.energy_slices.pos_bins[1:-1], cross_section.Particle.from_pdgid(211)), args.energy_slices.width)
+                    xs_true = cross_section.EnergySlice.CrossSection(true_hists["int_ex"][1:-1], true_hists["int"][1:-1], true_hists["inc"][1:-1], BetheBloch.meandEdX(args.energy_slices.pos_bins[1:-1], cross_section.Particle.from_pdgid(211)), args.energy_slices.width)
                     cross_section.PlotXSComparison({f"{label_map[k]} Data reco" : process[i], f"{label_map[k]} MC truth" : xs_true}, args.energy_slices, i, {f"{label_map[k]} Data reco" : "C0", f"{label_map[k]} MC truth" : "C1"}, simulation_label = "Geant4 v10.6")
                     book.Save()
             Plots.plt.close("all")

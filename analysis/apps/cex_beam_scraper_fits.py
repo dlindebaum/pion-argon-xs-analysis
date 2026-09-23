@@ -16,7 +16,7 @@ import numpy as np
 from particle import Particle
 from rich import print
 
-from python.analysis import Master, cross_section, Plots, Fitting, Application
+from python.analysis import Master, cross_section, Plots, Fitting, Application, BetheBloch
 
 
 def run(i : int, file_desc : Master.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
@@ -48,7 +48,7 @@ def GetTrueFFKE(KE_tpc : ak.Array, length_to_ff : ak.Array) -> ak.Array:
     Returns:
         ak.Array: true kinetic energy at the front face of the TPC
     """
-    dEdX = cross_section.BetheBloch.meandEdX(KE_tpc, Particle.from_pdgid(211))
+    dEdX = BetheBloch.meandEdX(KE_tpc, Particle.from_pdgid(211))
     return KE_tpc + dEdX * length_to_ff
 
 

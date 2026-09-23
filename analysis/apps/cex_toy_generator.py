@@ -24,8 +24,8 @@ from scipy.interpolate import interp1d
 from scipy.stats import gaussian_kde
 
 from python.analysis.Master import timer, LoadConfiguration, ReadHDF5, LoadObject
-from python.analysis import Fitting, Utils, Application
-from python.analysis.cross_section import BetheBloch, GeantCrossSections, Particle, GEANT_XS
+from python.analysis import Fitting, Utils, Application, BetheBloch
+from python.analysis.cross_section import GeantCrossSections, Particle, GEANT_XS
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # supress annoying pandas warnings
 
