@@ -23,8 +23,8 @@ class process_criteria_geant(CriteriaList):
     @staticmethod
     def get_criteria_values(events : cross_section.Data, pi_KE_lim : float = 0):
 
-        n_pip_true, n_pim_true, n_pi0_true = GetTruePionCountsGeant(events, pi_KE_lim)
-        pi_inel = events.trueParticles.true_beam_endProcess == "pi+Inelastic"
+        n_pip_true, n_pim_true, n_pi0_true = GetTruePionCountsGeant(events, pi_KE_lim) # counts number of pions in events
+        pi_inel = events.trueParticles.true_beam_endProcess == "pi+Inelastic" # used to distinguish interactions from decays/non-pions
         return {"pi_inelastic" : pi_inel, "n_pi_plus" : n_pip_true, "n_pi_minus" : n_pim_true, "n_pi0" : n_pi0_true}
 
 
