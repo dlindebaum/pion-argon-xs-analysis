@@ -19,6 +19,7 @@ import numpy as np
 import pandas as pd
 import pyhf
 import uproot
+import warnings
 
 from cabinetry.fit.results_containers import FitResults
 from particle import Particle
@@ -1106,6 +1107,11 @@ class GeantCrossSections:
 class ThinSlice:
     """ Methods for implementing the thin slice measurement method.
     """
+
+    @staticmethod
+    def deprecation_warning():
+        return warnings.warn("ThinSlice functions are deprecrated!", DeprecationWarning)
+
     @staticmethod
     def CountingExperiment(endPos : ak.Array, channel : ak.Array, slices : Slices) -> tuple[ak.Array, ak.Array]:
         """ Creates the interacting and incident histograms.
@@ -1118,6 +1124,8 @@ class ThinSlice:
         Returns:
             tuple[ak.Array, ak.Array]: n_interact and n_incident histograms
         """
+        ThinSlice.deprecation_warning()
+
         end_slice_pos = slices.pos_to_num(endPos)
         slice_nums = slices.num
 
@@ -1139,6 +1147,7 @@ class ThinSlice:
         Returns:
             tuple[ak.Array, ak.Array]: means slice energy, error in the mean slice energy
         """
+        ThinSlice.deprecation_warning()
         beam_traj_slice = slices.pos_to_num(endPos)
         slice_nums = slices.num
         
@@ -1168,6 +1177,7 @@ class ThinSlice:
         Returns:
             tuple[np.ndarray, np.ndarray]: cross section, statistical uncertainty
         """
+        ThinSlice.deprecation_warning()
         xs = np.log(n_incident / (n_incident - n_interact)) # calculate a dimensionless cross section
 
         v_incident = n_incident # poisson uncertainty
@@ -1193,6 +1203,7 @@ class ThinSlice:
         Returns:
             tuple[np.ndarray, np.ndarray]: cross section and error
         """
+        ThinSlice.deprecation_warning()
         NA = 6.02214076e23
         factor = 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * slice_width)
 
@@ -1330,6 +1341,9 @@ class EnergySlice:
         Returns:
             tuple[np.ndarray, np.ndarray, np.ndarray]: initial counts, end counts and incident counts
         """
+        if slices.reversed is False:
+            raise Exception("Energy slices should be in reverse order.")
+
         init_slice, end_slice = EnergySlice.convert_energy_to_slice(slices, KE_init, KE_end)
 
         init_slice = init_slice[~outside_fv]
