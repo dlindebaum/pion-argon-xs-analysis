@@ -16,25 +16,15 @@ import uproot
 
 from particle import Particle
 from scipy.stats import chi2
+from scipy.interpolate import interp1d
 
 from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, Processing, BetheBloch, ThinSlice, EnergySlice, NtupleProcessing, Slices
 from python.analysis.Master import LoadObject, SaveObject, ReadHDF5, Data, timer, IO, FileDescriptor
+from python.analysis.DetectorGeometry import ProtoDUNESPGeometry
 from python.analysis.Utils import *
 
 GEANT_XS = os.environ["PYTHONPATH"] + "/data/g4_xs_pi_KE_100.root"
 # GEANT_XS = os.environ["PYTHONPATH"] + "/data/g4_xs.root"
-
-
-# required_parset = pyhf.modifiers.staterror.required_parset
-# def to_poisson(func):
-#     def wrapper(*args, **kwargs):
-#       result = required_parset(*args, **kwargs)
-#       result['paramset_type'] = 'constrained_by_poisson'
-#       result['factors'] = result.pop('sigmas')
-#       return result
-#     return wrapper
-
-# pyhf.modifiers.staterror.required_parset = to_poisson(pyhf.modifiers.staterror.required_parset)
 
 class PlotStyler:
     def __init__(self, extend_colors : bool = False, custom_colors : list = None, dpi : int = 100, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):
@@ -444,40 +434,6 @@ class GeantCrossSections:
         else:
             sigma = getattr(self, process)
         return interp1d(self.KE, sigma, fill_value = "extrapolate")
-
-
-
-
-class TPCGeometry:
-    x : tuple[float, float]
-    y : tuple[float, float]
-    z : tuple[float, float]
-
-
-    def __check_bounds__(self, v, v_bounds):
-        return (min(v_bounds) > v) | (v > max(v_bounds))
-
-
-    def outside_tpc_x(self, x):
-        return self.__check_bounds__(x, self.x)
-
-    
-    def outside_tpc_y(self, y):
-        return self.__check_bounds__(y, self.y)
-
-    
-    def outside_tpc_z(self, z):
-        return self.__check_bounds__(z, self.z)
-
-
-    def outside_tpc(self, x, y, z):
-        return self.outside_tpc_x(x) | self.outside_tpc_y(y) | self.outside_tpc_z(z)
-
-
-class ProtoDUNESPGeometry(TPCGeometry):
-    x = [-350, 350]
-    y = [0, 600]
-    z = [0, 700]
 
 
 class Toy:
