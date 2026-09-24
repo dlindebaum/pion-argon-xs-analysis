@@ -39,13 +39,13 @@ class Slices:
 
 
     def __conversion__(self, x):
-        """ convert a value to its slice number.
+        """ Convert a value to its slice number.
 
         Args:
-            x: value, array of float
+            x: Value, array of float.
 
         Returns:
-            slice: slice number/s
+            slice: Slice number/s.
         """
         if hasattr(x, "__iter__"):
             if self.reversed:
@@ -62,13 +62,13 @@ class Slices:
 
 
     def __create_slice__(self, i) -> Slice:
-        """ using the slice number, create the Slice object.
+        """ Using the slice number, create the Slice object.
 
         Args:
-            i (int): slice number/s
+            i (int): Slice number/s.
 
         Returns:
-            Slice: slice
+            Slice: Slice.
         """
         if hasattr(i, "__iter__"):
             if self.reversed:
@@ -97,20 +97,19 @@ class Slices:
 
 
     def __call__(self, x):
-        """ get the slice number for a set of values
+        """ Get the slice number for a set of values
 
         Args:
-            x: values
+            x: Values
 
         Returns:
-            array or int: slice numbers
+            array or int: Slice numbers
         """
         return self.__create_slice__(self.__conversion__(x))
 
 
     def __getitem__(self, i : int) -> Slice:
         """ Creates slices from slice numbers.
-        #! it is possible to return slice -1 but not a slice value exceedin the maximum slice
 
         Args:
             i (int): slice number

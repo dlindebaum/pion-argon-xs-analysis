@@ -20,11 +20,27 @@ class Sample(str, Enum):
     DATA = "data"
 
 
-def file_len(file : str):
+def file_len(file : str) -> int:
+    """ Get number of events of an PDSP Analyser Ntuple file.
+
+    Args:
+        file (str): path of Ntuple.
+
+    Returns:
+        int: Number of events
+    """
     return len(IO(file).Get(["EventID", "event"]))
 
 
-def CalculateBatches(args : argparse.Namespace):
+def CalculateBatches(args : argparse.Namespace) -> dict[str, any]:
+    """ Calculate the number of events to process in eacn batch.
+
+    Args:
+        args (argparse.Namespace): Application Arguments.
+
+    Returns:
+        dict[str, any]: Multiprocessing arguments.
+    """
     if "data" in args.ntuple_files:
         n_data = [file_len(file_desc.file) for file_desc in args.ntuple_files["data"]]
     else:
@@ -47,6 +63,14 @@ def CalculateBatches(args : argparse.Namespace):
 
 
 def MergeOutputs(outputs : list[dict]) -> dict:
+    """ Merge a collection of dictionaries with identical structures into a single dictionary.
+
+    Args:
+        outputs (list[dict]): List of dictionaries to merge.
+
+    Returns:
+        dict: Merged dictionary.
+    """
     def search(collection : dict, output : dict):
         for k, v in collection.items():
             if type(v) is dict:
@@ -75,7 +99,19 @@ def MergeOutputs(outputs : list[dict]) -> dict:
     return merged_output
 
 
-def RunProcess(ntuple_files : list[FileDescriptor], is_data : bool, args : argparse.Namespace, func : callable, merge : bool = True) -> list:
+def RunProcess(ntuple_files : list[FileDescriptor], is_data : bool, args : argparse.Namespace, func : callable, merge : bool = True) -> list[dict] | dict:
+    """ Run a process on Ntuple files.
+
+    Args:
+        ntuple_files (list[FileDescriptor]): Ntuple files.
+        is_data (bool): Whether the Ntuple files are Data or MC.
+        args (argparse.Namespace): Application arguments.
+        func (callable): Process to run.
+        merge (bool, optional): Whether to merge the outputs of the processing. Defaults to True.
+
+    Returns:
+        list[dict] | dict: Output of the processing.
+    """
     func_args = vars(args)
     func_args["data"] = is_data
     output = Processing.mutliprocess(func, ntuple_files, args.batches, args.events, func_args, args.threads)
@@ -84,7 +120,20 @@ def RunProcess(ntuple_files : list[FileDescriptor], is_data : bool, args : argpa
     return output
 
 
-def ApplicationProcessing(samples : list[Sample], outdir : str, args : argparse.Namespace, func : callable, merge : bool, outname : str = "output"):
+def ApplicationProcessing(samples : list[Sample], outdir : str, args : argparse.Namespace, func : callable, merge : bool, outname : str = "output") -> list[dict] | dict:
+    """ Processing specifically for Applications where there is an option to reload processed data rather than fully reprocessing Ntuples.
+
+    Args:
+        samples (list[Sample]): What sample types to process, can be Data, MC or both.
+        outdir (str): Output directory for stored processing outputs.
+        args (argparse.Namespace): Application arguments.
+        func (callable): Process to run.
+        merge (bool): whether to merge the processing outputs.
+        outname (str, optional): Output file name. Defaults to "output".
+
+    Returns:
+        list[dict] | dict: Processing outputs, either loaded from file or processed at runtime.
+    """
     if (args.regen is True) or (os.path.isfile(f"{outdir}{outname}.dill") is False):
         print("Processing Ntuples")
         outputs = {s : RunProcess(args.ntuple_files[s], s == Sample.DATA, args, func, merge) for s in samples}

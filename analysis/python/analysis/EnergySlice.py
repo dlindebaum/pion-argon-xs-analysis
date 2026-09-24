@@ -94,12 +94,21 @@ def incident(n_init : np.ndarray, n_end : np.ndarray) -> np.ndarray:
     return c_init - n_init - c_end + n_end
 
 
-def complete_slice(init_slice : np.ndarray, end_slice : np.ndarray):
+def complete_slice(init_slice : np.ndarray, end_slice : np.ndarray) -> np.ndarray:
+    """ Whether a particle is incident on at least one slice.
+
+    Args:
+        init_slice (np.ndarray): Initial slice.
+        end_slice (np.ndarray): End slice.
+
+    Returns:
+        np.ndarray: Flag to indicate particles with at least one incident slice.
+    """
     return (init_slice != end_slice)
 
 
 def counting_experiment_exclusive(energy_slices : Slices, KE_init : np.ndarray, KE_end : np.ndarray, mask : np.ndarray, outside_fv : np.ndarray) -> np.ndarray:
-    """ perform counting experiment to get the exclusive interacing slices for a particular subset of interactions. 
+    """ Perform counting experiment to get the exclusive interacing slices for a particular subset of interactions. 
 
     Args:
         energy_slices (Slices): Energy slices.
@@ -118,7 +127,7 @@ def counting_experiment_exclusive(energy_slices : Slices, KE_init : np.ndarray, 
 
 
 def counting_experiment(KE_init : np.ndarray, KE_end : np.ndarray, slices : Slices, outside_fv : np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """ perform counting experiment to get initial, end and incident counts.
+    """ Perform counting experiment to get initial, end and incident counts.
 
     Args:
         KE_init (np.ndarray): Initial kinetic energy

@@ -17,7 +17,7 @@ from rich import print
 from apps import cex_toy_generator, cex_toy_parameters
 from pyunfold.callbacks import SplineRegularizer
 from python.analysis import cross_section, Plots, Application, Master, BetheBloch
-from python.analysis import Slices
+from python.analysis import Slices, Unfold
 
 label_map = {"toy" : "toy", "pdsp" : "ProtoDUNE SP"}
 
@@ -391,7 +391,7 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
 
     with cross_section.PlotStyler(extend_colors = False, dark = True).Update(font_scale = 1.1):
         if unfolding_args["method"] == 1: #* Unfold defector effect only
-            resp = cross_section.Unfold.CalculateResponseMatrices(mc, signal_process, energy_slices, regions, book, None)
+            resp = Unfold.CalculateResponseMatrices(mc, signal_process, energy_slices, regions, book, None)
             priors = {k : ak.to_numpy(v) for k, v in true_hists_selected.items()}
             if regions:
                 priors.pop("int_ex")
@@ -399,7 +399,7 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
                     priors[k] = ak.to_numpy(v)
 
         if unfolding_args["method"] == 2: #* Unfold detector effect and efficiency
-            resp = cross_section.Unfold.CalculateResponseMatrices(mc_cheat, signal_process, energy_slices, regions, book, e_copy)
+            resp = Unfold.CalculateResponseMatrices(mc_cheat, signal_process, energy_slices, regions, book, e_copy)
             priors = {k : ak.to_numpy(v) for k, v in true_hists.items()}
             if regions:
                 for k, v in true_hists_process.items():
@@ -417,7 +417,7 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
     if "mc_stat_unc" in unfolding_args:
         unfolding_args.pop("mc_stat_unc")
 
-    result = cross_section.Unfold.Unfold(reco_hists, reco_hists_err, verbose = True, **{k : v for k, v in unfolding_args.items() if k != "method"})
+    result = Unfold.Unfold(reco_hists, reco_hists_err, verbose = True, **{k : v for k, v in unfolding_args.items() if k != "method"})
 
     n_incident_unfolded = cross_section.EnergySlice.NIncident(result["init"]["unfolded"], result["int"]["unfolded"])
     n_incident_unfolded_stat_err = np.sqrt(result["int"]["stat_err"]**2 + np.cumsum(result["init"]["stat_err"]**2 + result["int"]["stat_err"]**2))
@@ -431,7 +431,7 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.Analy
             th = {**th, **true_hists_selected_process}
             th.pop("int_ex")
         for k in result:
-            cross_section.Unfold.PlotUnfoldingResults(reco_hists[k], reco_hists_err[k], ak.to_numpy(norm * th[k]), result[k], energy_slices, labels[k], book)
+            Unfold.PlotUnfoldingResults(reco_hists[k], reco_hists_err[k], ak.to_numpy(norm * th[k]), result[k], energy_slices, labels[k], book)
             Plots.plt.close()
 
     th = true_hists
