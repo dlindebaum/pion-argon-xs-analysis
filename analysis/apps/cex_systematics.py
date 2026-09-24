@@ -445,7 +445,7 @@ class BeamMomentumResolutionSystematic(MCMethod):
         P_reco_smeared = self.P_reco_original * (1 + np.random.normal(0, resolution, len(self.P_reco_original)))
 
         KE_init_reco = cross_section.KE(P_reco_smeared, cross_section.Particle.from_pdgid(211).mass)
-        KE_int_reco = BetheBloch.InteractingKE(KE_init_reco, self.args.toy_template.track_length_reco, 10)
+        KE_int_reco = BetheBloch.KE_end(KE_init_reco, self.args.toy_template.track_length_reco, 10)
 
         self.args.toy_template.KE_ff_reco = KE_init_reco
         self.args.toy_template.KE_init_reco = KE_init_reco
@@ -468,7 +468,7 @@ class TrackLengthResolutionSystematic(MCMethod):
     def RunExperiment(self, analysis_input_data : cross_section.AnalysisInput, resolution : float) -> tuple[dict, dict]:
         track_length_smeared = self.track_length_original * (1 + np.random.normal(0, resolution, len(self.track_length_original)))
 
-        KE_int_reco = BetheBloch.InteractingKE(self.args.toy_template.KE_init_reco, track_length_smeared, 10)
+        KE_int_reco = BetheBloch.KE_end(self.args.toy_template.KE_init_reco, track_length_smeared, 10)
         self.args.toy_template.KE_int_reco = KE_int_reco
 
         if self.args.fit["single_bin"] == False:

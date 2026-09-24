@@ -6,6 +6,7 @@ Author: Shyam Bhuller
 Description: Functions to calculate cross section using the Energy slice method.
 """
 from collections.abc import Iterable
+import warnings
 
 import awkward as ak
 import numpy as np
@@ -15,6 +16,9 @@ from particle import Particle
 from python.analysis import BetheBloch
 from python.analysis.Slices import Slices
 from python.analysis.Utils import nandiv, quadsum, nanlog
+
+def deprecation_warning():
+    return warnings.warn("This function is legacy and should not be used in new implementations.", DeprecationWarning)
 
 
 def process_multiple_array(input : np.ndarray, function : callable) -> np.ndarray:
@@ -167,7 +171,7 @@ def slice_dEdX(energy_slices : Slices, particle : Particle) -> np.ndarray:
     Returns:
         np.ndarray: mean dEdX
     """
-    return BetheBloch.meandEdX(energy_slices.edges - energy_slices.width/2, particle)
+    return BetheBloch.mean_dEdX(energy_slices.edges - energy_slices.width/2, particle)
 
 
 def total_cross_section(n_incident : np.ndarray, n_end : np.ndarray, dEdX : np.ndarray, dE : float) -> tuple[np.ndarray, np.ndarray]:
@@ -208,7 +212,8 @@ def exclusive_cross_section(n_incident : np.ndarray, n_end : np.ndarray, n_int :
 #! Deprecated.
 def NIncident(n_initial : np.ndarray, n_end : np.ndarray) -> np.ndarray:
     """
-        Calculate number of incident particles
+        Calculate number of incident particles.
+        Function is legacy and should not be used in new implementations.
 
     Args:
         n_initial (np.ndarray): initial particle counts
@@ -217,6 +222,7 @@ def NIncident(n_initial : np.ndarray, n_end : np.ndarray) -> np.ndarray:
     Returns:
         np.ndarray: incident counts
     """
+    deprecation_warning()
     n_survived_all = np.cumsum(n_initial - n_end)
     n_incident = n_survived_all + n_end
     return n_incident
@@ -225,6 +231,7 @@ def NIncident(n_initial : np.ndarray, n_end : np.ndarray) -> np.ndarray:
 def SliceNumbers(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak.Array, energy_slices : Slices) -> tuple[np.ndarray, np.ndarray]:
     """
         Convert energies from physical units to slice numbers.
+        Function is legacy and should not be used in new implementations.
 
     Args:
         int_energy (ak.Array): interaction energy
@@ -235,6 +242,7 @@ def SliceNumbers(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak
     Returns:
         tuple[np.ndarray, np.ndarray]: initial slice numbers and interacitng slice numbers
     """
+    deprecation_warning()
     init_slice = energy_slices(init_energy).num + 1 # equivilant to ceil
     int_slice = energy_slices(int_energy).num
 
@@ -249,6 +257,7 @@ def SliceNumbers(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak
 def CountingExperiment(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak.Array, process : ak.Array, energy_slices : Slices, interact_only : bool = False, weights : np.ndarray = None) -> tuple[np.ndarray]:
     """
         Creates the interacting and incident histograms.
+        Function is legacy and should not be used in new implementations.
 
     Args:
         int_energy (ak.Array): interacting enrgy
@@ -262,6 +271,7 @@ def CountingExperiment(int_energy : ak.Array, init_energy : ak.Array, outside_tp
     Returns:
         np.ndarray | tuple[np.ndarray]: exclusive interaction histogram and/or initial histogram, incident histogram and interaction histogram 
     """
+    deprecation_warning()
     init_slice, int_slice = SliceNumbers(int_energy, init_energy, outside_tpc, energy_slices)
 
     slice_bins = np.arange(-1 - 0.5, energy_slices.max_num + 1.5)
@@ -279,56 +289,10 @@ def CountingExperiment(int_energy : ak.Array, init_energy : ak.Array, outside_tp
     else:
         return n_interact_exclusive
 
-@staticmethod
-def CountingExperimentOld(int_energy : ak.Array, ff_energy : ak.Array, outside_tpc : ak.Array, channel : ak.Array, energy_slices : Slices) -> tuple[np.ndarray, np.ndarray]:
-    """ (Legacy) Creates the interacting and incident histograms.
-
-    Args:
-        int_energy (ak.Array): interacting enrgy
-        ff_energy (ak.Array): front facing energy
-        outside_tpc (ak.Array): mask which selects particles decaying outside the tpc
-        channel (ak.Array): mask which selects particles which interact in the channel you are interested in
-        energy_slices (Slices): energy slices
-
-    Returns:
-        tuple[np.ndarray, np.ndarray]: n_interact and n_incident histograms
-    """
-    true_init_slice = energy_slices(ff_energy).num + 1 # equivilant to ceil
-    true_int_slice = energy_slices(int_energy).num
-
-    # just in case we encounter an instance where E_int > E_ini (unphysical)
-    bad_slices = true_int_slice < true_init_slice
-    true_init_slice = ak.where(bad_slices < 0, -1, true_init_slice)
-    true_int_slice = ak.where(bad_slices, -1, true_int_slice)
-
-    n_incident = np.zeros(energy_slices.max_num + 1)
-    n_interact = np.zeros(energy_slices.max_num + 1)
-
-    true_int_slice_in_tpc = true_int_slice[~outside_tpc]
-    true_init_slice_in_tpc = true_init_slice[~outside_tpc]
-
-    #! slowest but most explict version
-    # n_incident = np.zeros(max_slice + 1)
-    # for i in range(len(n_incident)):
-    #     for p in range(len(true_int_slice_in_tpc)):
-    #         if (true_init_slice_in_tpc[p] <= i) and (true_int_slice_in_tpc[p] >= i):
-    #             n_incident[i] += 1
-    #! faster, order log(n) because it skips checking for empty entries
-    # true_init_slice_in_tpc = ak.where(true_init_slice_in_tpc == -1, 0, true_init_slice_in_tpc) #! done because -n index in python means you add to the last nth bin
-    # for p in range(len(true_int_slice_in_tpc)):
-    #     n_incident[true_init_slice_in_tpc[p] : true_int_slice_in_tpc[p] + 1] += 1
-    # print(n_incident)
-
-    #! fastest, vectorised version of the first but c++ loops are faster. 
-    n_incident = np.array([ak.sum(ak.where((true_init_slice_in_tpc <= i) & (true_int_slice_in_tpc > i), 1, 0)) for i in range(energy_slices.max_num + 1)])
-
-    n_interact = np.histogram(np.array(true_int_slice_in_tpc[channel[~outside_tpc]]), range(-1, energy_slices.max_num + 1))[0]
-    n_interact = np.roll(n_interact, -1) # shift the underflow bin to the location of the overflow bin in n_incident i.e. merge them.
-    return n_interact, n_incident + n_interact
-
-#! deprecated
+#! Deprecated
 def CrossSection(n_int_ex : np.ndarray, n_int : np.ndarray, n_inc : np.ndarray, dEdX : np.ndarray, dE : float, n_int_ex_err : np.ndarray = None, n_int_err : np.ndarray = None, n_inc_err : np.ndarray = None) -> tuple[np.ndarray, np.ndarray]:
     """ Compute exclusive cross sections. If interactions errors are not provided, staticial uncertainties are used (poisson for incident, binomial for interactions).
+        Function is legacy and should not be used in new implementations.
 
     Args:
         n_int_ex (np.ndarray): exclusive interactions
@@ -343,6 +307,7 @@ def CrossSection(n_int_ex : np.ndarray, n_int : np.ndarray, n_inc : np.ndarray, 
     Returns:
         tuple[np.ndarray, np.ndarray]: _description_
     """
+    deprecation_warning()
     NA = 6.02214076e23
     factor = np.array(dEdX) * 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * dE)
 

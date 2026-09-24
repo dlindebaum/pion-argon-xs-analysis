@@ -48,7 +48,7 @@ def GetTrueFFKE(KE_tpc : ak.Array, length_to_ff : ak.Array) -> ak.Array:
     Returns:
         ak.Array: true kinetic energy at the front face of the TPC
     """
-    dEdX = BetheBloch.meandEdX(KE_tpc, Particle.from_pdgid(211))
+    dEdX = BetheBloch.mean_dEdX(KE_tpc, Particle.from_pdgid(211))
     return KE_tpc + dEdX * length_to_ff
 
 

@@ -27,8 +27,8 @@ a = 0.19559
 k = 3
 
 
-def densityCorrection(beta : float | ak.Array, gamma : float | ak.Array) -> float | ak.Array:
-    """ Correction to account for th fact a particles electric field flattens and spreads as the energy increases.
+def density_correction(beta : float | ak.Array, gamma : float | ak.Array) -> float | ak.Array:
+    """ Correction to account for the fact a particles electric field flattens and spreads as the energy increases.
 
     Args:
         beta (float | ak.Array): velocity
@@ -56,7 +56,7 @@ def densityCorrection(beta : float | ak.Array, gamma : float | ak.Array) -> floa
     return delta
 
 
-def meandEdX(KE : float | ak.Array, particle : Particle) -> float | ak.Array:
+def mean_dEdX(KE : float | ak.Array, particle : Particle) -> float | ak.Array:
     """ Calculate the mean dEdX for a particle with given kinetic energy.
 
     Args:
@@ -73,7 +73,7 @@ def meandEdX(KE : float | ak.Array, particle : Particle) -> float | ak.Array:
     N = np.divide((rho * K * Z * (particle.charge)**2), (A * (beta**2)))
     A = 0.5 * np.log(2 * me * (gamma**2) * (beta**2) * w_max / ((I) **2))
     B = beta**2
-    C = 0.5 * densityCorrection(beta, gamma)
+    C = 0.5 * density_correction(beta, gamma)
 
     dEdX = N * (A - B - C)
 
@@ -101,7 +101,7 @@ def interp_KE_to_mean_dEdX(inital_KE : float, stepsize : float, particle : Parti
     dEdX = []
     while e >= 0:
         KE.append(e)
-        dEdX.append(meandEdX(e, particle))
+        dEdX.append(mean_dEdX(e, particle))
         e = e - stepsize * dEdX[-1]
         if dEdX[-1] <= 0: break # sometines bethebloch produces an unphysical value when KE is too small, so stop
     KE.append(0)
@@ -123,7 +123,7 @@ def interp_range_to_KE(KE_init : float, precision = 0.05) -> interp1d:
     track_length = [0]
     count = 0
     while KE[-1] > 0:
-        KE.append(KE[-1] - precision * meandEdX(KE[-1], Particle.from_pdgid(-13)))
+        KE.append(KE[-1] - precision * mean_dEdX(KE[-1], Particle.from_pdgid(-13)))
         count += 1
         track_length.append(count * precision)
     track_length = np.array(track_length)
@@ -131,7 +131,7 @@ def interp_range_to_KE(KE_init : float, precision = 0.05) -> interp1d:
     return interp1d(max(track_length) - track_length, KE, fill_value = 0, bounds_error = False)
 
 
-def InteractingKE(KE_init : ak.Array, track_length : ak.Array, n : int) -> ak.Array:
+def KE_end(KE_init : ak.Array, track_length : ak.Array, n : int) -> ak.Array:
     """ Compute the interacting energy from the particles initial kinetic energy and track length.
 
     Args:
@@ -152,7 +152,7 @@ def InteractingKE(KE_init : ak.Array, track_length : ak.Array, n : int) -> ak.Ar
     return KE_int
 
 
-def RangeFromKE(KE_init : np.ndarray, particle : Particle, precision : float = 1) -> ak.Array:
+def range_from_KE(KE_init : np.ndarray, particle : Particle, precision : float = 1) -> ak.Array:
     """ Compute the range of particles from the  initial kinetic energy.
 
     Args:

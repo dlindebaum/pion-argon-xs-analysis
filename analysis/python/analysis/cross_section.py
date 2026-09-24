@@ -335,7 +335,7 @@ def RecoEndEnergy(tracks : ak.Array, KE_init: ak.Array, dEdX : ak.Array | None, 
         KE_end = KE_init - dE
     elif method == "track":
         track_length = TrackLength(pitches=pitches)
-        KE_end = BetheBloch.InteractingKE(KE_init, track_length, 50)
+        KE_end = BetheBloch.KE_end(KE_init, track_length, 50)
     else:
         raise Exception(f"{method} not a valid method, pick 'calo' or 'track'")
     return KE_end
@@ -827,7 +827,7 @@ class AnalysisInput:
         KE_ff_reco = KE_inst_reco - upstream_loss_reco
 
         if min(fiducial_volume) > 0:
-            KE_init_reco = BetheBloch.InteractingKE(KE_ff_reco, min(fiducial_volume) * np.ones_like(KE_ff_reco), 50) # initial kinetic energy in the fiducial volume
+            KE_init_reco = BetheBloch.KE_end(KE_ff_reco, min(fiducial_volume) * np.ones_like(KE_ff_reco), 50) # initial kinetic energy in the fiducial volume
         else:
             KE_init_reco = KE_ff_reco
 
@@ -848,7 +848,7 @@ class AnalysisInput:
             KE_ff_true = events.trueParticles.beam_KE_front_face
 
             if min(fiducial_volume) > 0:
-                KE_init_true = BetheBloch.InteractingKE(KE_ff_true, min(fiducial_volume) * np.ones_like(KE_ff_true), 50) # initial kinetic energy in the fiducial volume
+                KE_init_true = BetheBloch.KE_end(KE_ff_true, min(fiducial_volume) * np.ones_like(KE_ff_true), 50) # initial kinetic energy in the fiducial volume
             else:
                 KE_init_true = KE_ff_true
 
