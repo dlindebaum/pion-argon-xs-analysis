@@ -18,6 +18,7 @@ from apps import cex_toy_generator, cex_toy_parameters
 from pyunfold.callbacks import SplineRegularizer
 from python.analysis import cross_section, Plots, Application, Master, BetheBloch
 from python.analysis import Slices, Unfold
+from python.analysis import RegionFit
 
 label_map = {"toy" : "toy", "pdsp" : "ProtoDUNE SP"}
 
@@ -55,7 +56,7 @@ def CreateInitParams(model : cross_section.pyhf.Model, analysis_input : cross_se
     """
     prefit_pred = cross_section.cabinetry.model_utils.prediction(model)
     template_KE = [np.sum(prefit_pred.model_yields[i], 0) for i in range(len(prefit_pred.model_yields))][:-1]
-    input_data = cross_section.RegionFit.CreateObservedInputData(analysis_input, energy_slices, mean_track_score_bins)
+    input_data = RegionFit.CreateObservedInputData(analysis_input, energy_slices, mean_track_score_bins)
 
     init = model.config.suggested_init()
     mu_init = [np.sum(input_data[i]) / np.sum(template_KE[i]) for i in range(len(template_KE))]
@@ -82,18 +83,18 @@ def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : Slices, me
         cross_section.cabinetry.model_utils.ModelPrediction | cross_section.FitResults: model prediction and or the raw fit result.
     """
     if type(template_input) == cross_section.AnalysisInput:
-        model = cross_section.RegionFit.CreateModel(template_input, energy_slice, mean_track_score_bins, False, template_weights, mc_stat_unc, True, single_bin)
+        model = RegionFit.CreateModel(template_input, energy_slice, mean_track_score_bins, False, template_weights, mc_stat_unc, True, single_bin)
     else:
         model = template_input
 
-    observed = cross_section.RegionFit.GenerateObservations(fit_input, energy_slice, mean_track_score_bins, model, single_bin = single_bin)
+    observed = RegionFit.GenerateObservations(fit_input, energy_slice, mean_track_score_bins, model, single_bin = single_bin)
 
     if suggest_init is True:
         init_params = CreateInitParams(model, fit_input, energy_slice, mean_track_score_bins)
     else:
         init_params = None
 
-    result = cross_section.RegionFit.Fit(observed, model, init_params, [[0, np.inf]]*model.config.npars, verbose = False)
+    result = RegionFit.Fit(observed, model, init_params, [[0, np.inf]]*model.config.npars, verbose = False)
 
     # redo fit, but fix the NPs to their already determined values
     if (mc_stat_unc and fix_np) is True:
@@ -104,7 +105,7 @@ def RegionFit(fit_input : cross_section.AnalysisInput, energy_slice : Slices, me
         if init_params is None:
             init_params = np.ones_like(model.config.par_order, dtype = float)
         init_params[index] = result.bestfit[index]
-        result = cross_section.RegionFit.Fit(observed, model, fix_pars = list(fix), init_params = list(init_params), par_bounds = [[0, np.inf]]*model.config.npars, verbose = False)
+        result = RegionFit.Fit(observed, model, fix_pars = list(fix), init_params = list(init_params), par_bounds = [[0, np.inf]]*model.config.npars, verbose = False)
 
     if return_fit_results is True:
         return cross_section.cabinetry.model_utils.prediction(model, fit_results = result), result
@@ -194,11 +195,11 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
     histograms_reco_obs = data.CreateHistograms(energy_slice, process, True, False)
     histograms_reco_obs_err = {k : np.sqrt(v) for k, v in histograms_reco_obs.items()}
     
-    templates_energy = cross_section.RegionFit.CreateKEIntTemplates(template, energy_slice, False, False, True)
+    templates_energy = RegionFit.CreateKEIntTemplates(template, energy_slice, False, False, True)
 
     if postfit_pred is not None:
         if regions:
-            bkg, bkg_err = cross_section.RegionFit.EstimateBackgroundInRegions(postfit_pred, data)
+            bkg, bkg_err = RegionFit.EstimateBackgroundInRegions(postfit_pred, data)
             if single_bin:
                 bkg_b = {}
                 bkg_err_b = {}
@@ -212,7 +213,7 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
                 PlotBkgRegions(energy_slice, data, bkg, bkg_err, bkg_label, book)
         else:
             print(f"signal: {process}")
-            bkg, bkg_err = cross_section.RegionFit.EstimateBackgroundAllRegions(postfit_pred, template, process)
+            bkg, bkg_err = RegionFit.EstimateBackgroundAllRegions(postfit_pred, template, process)
             if single_bin:
                 bkg, bkg_err, bkg_label = BkgSingleBin(bkg, bkg_err, template, templates_energy, process, mc_stat)
             KE_int_fit, KE_int_fit_err = BkgSubAllRegion(data, energy_slice, bkg, bkg_err)
@@ -226,18 +227,18 @@ def BackgroundSubtraction(data : cross_section.AnalysisInput, process : str, ene
                         actual = {l : data.NInteract(energy_slice, data.exclusive_process[l], mask = data.regions[i], weights = data.weights) for l in data.region_labels}
                         actual_sig = actual[i]
                         actual_bkg = sum(np.array(list(actual.values()))[i != np.array(data.region_labels)])
-                        cross_section.RegionFit.PlotPrefitPostFit(actual_sig, np.sqrt(actual_sig), KE_int_fit[i], KE_int_fit_err[i], energy_bins, f"$N^{{reco}}_{{int,{process_labels[i]}}}$ (MeV)")
+                        RegionFit.PlotPrefitPostFit(actual_sig, np.sqrt(actual_sig), KE_int_fit[i], KE_int_fit_err[i], energy_bins, f"$N^{{reco}}_{{int,{process_labels[i]}}}$ (MeV)")
                         book.Save()
-                        cross_section.RegionFit.PlotPrefitPostFit(actual_bkg, np.sqrt(actual_bkg), np.sum(bkg[i], 0), np.sum(bkg_err[i], 0), energy_bins, "$N^{reco}_{int,bkg}$ (MeV)")
+                        RegionFit.PlotPrefitPostFit(actual_bkg, np.sqrt(actual_bkg), np.sum(bkg[i], 0), np.sum(bkg_err[i], 0), energy_bins, "$N^{reco}_{int,bkg}$ (MeV)")
                         book.Save()
 
                 else:
                     actual = {l : data.NInteract(energy_slice, data.exclusive_process[l], weights = data.weights) for l in data.region_labels}
                     actual_sig = actual[process]
                     actual_bkg = sum(np.array(list(actual.values()))[process != np.array(data.region_labels)])
-                    cross_section.RegionFit.PlotPrefitPostFit(actual_sig, np.sqrt(actual_sig), KE_int_fit, KE_int_fit_err, energy_bins, f"$N^{{reco}}_{{int,{process_labels[process]}}}$ (MeV)")
+                    RegionFit.PlotPrefitPostFit(actual_sig, np.sqrt(actual_sig), KE_int_fit, KE_int_fit_err, energy_bins, f"$N^{{reco}}_{{int,{process_labels[process]}}}$ (MeV)")
                     book.Save()
-                    cross_section.RegionFit.PlotPrefitPostFit(actual_bkg, np.sqrt(actual_bkg), np.sum(bkg, 0), np.sum(bkg_err, 0), energy_bins, "$N^{reco}_{int,bkg}$ (MeV)")
+                    RegionFit.PlotPrefitPostFit(actual_bkg, np.sqrt(actual_bkg), np.sum(bkg, 0), np.sum(bkg_err, 0), energy_bins, "$N^{reco}_{int,bkg}$ (MeV)")
                     book.Save()
 
         if regions:

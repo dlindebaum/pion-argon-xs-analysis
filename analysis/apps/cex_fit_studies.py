@@ -19,6 +19,7 @@ from scipy.ndimage import gaussian_filter1d
 
 from python.analysis import cross_section, Plots, Application
 from python.analysis.Master import DictToHDF5, ReadHDF5, LoadConfiguration
+from  python.analysis import RegionFit
 from python.analysis.Slices import Slices
 from apps import cex_toy_generator
 
@@ -65,8 +66,8 @@ def CreateConfigNormalisation(scales : dict, data_config : dict) -> dict:
 def ModifiedConfigTest(config : dict, energy_slice : Slices, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, mean_track_score_bins : np.array = None, single_bin : np.array = False) -> tuple[dict]:
     toy_alt_pdf = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.run(config)))
     
-    obs = cross_section.RegionFit.GenerateObservations(toy_alt_pdf, energy_slice, mean_track_score_bins, model, False, single_bin)
-    fit_result = cross_section.RegionFit.Fit(obs, model, None, verbose = False, tolerance = 0.1) # relax the tolerance to allow fit to converge for a large parameter space
+    obs = RegionFit.GenerateObservations(toy_alt_pdf, energy_slice, mean_track_score_bins, model, False, single_bin)
+    fit_result = RegionFit.Fit(obs, model, None, verbose = False, tolerance = 0.1) # relax the tolerance to allow fit to converge for a large parameter space
 
     true_process_counts = {}
     for v in toy_alt_pdf.exclusive_process:
@@ -124,9 +125,9 @@ def CountsFractionalError(results, true_counts, model, single_bin = False):
         post_fit_pred = cross_section.cabinetry.model_utils.prediction(model, fit_results = results[s], label = "post-fit")
 
         if mean_track_score:
-            KE_int_prediction = cross_section.RegionFit.SliceModelPrediction(post_fit_pred, slice(-1), "KE_int_postfit") # exclude the channel which is the mean track score
+            KE_int_prediction = RegionFit.SliceModelPrediction(post_fit_pred, slice(-1), "KE_int_postfit") # exclude the channel which is the mean track score
         else:
-            KE_int_prediction = cross_section.RegionFit.SliceModelPrediction(post_fit_pred, slice(0, len(post_fit_pred.model_yields)), "KE_int_postfit")
+            KE_int_prediction = RegionFit.SliceModelPrediction(post_fit_pred, slice(0, len(post_fit_pred.model_yields)), "KE_int_postfit")
 
         pred_counts_err = cross_section.quadsum(np.array(KE_int_prediction.total_stdev_model_bins)[:, :-1], 0)
     
@@ -249,7 +250,7 @@ def PullStudy(template : cross_section.AnalysisInput, model : cross_section.pyhf
 
         expected.append({s : (sum(toy_alt_pdf.exclusive_process[s]) / len(toy_alt_pdf.exclusive_process[s])) / template_fractions[s] for s in toy_alt_pdf.exclusive_process})
 
-        result = cross_section.RegionFit.Fit(cross_section.RegionFit.GenerateObservations(toy_alt_pdf, energy_slices, mean_track_score_bins, model, single_bin = single_bin), model, None, [(0, np.inf)]*model.config.npars, False, tolerance = 0.1)
+        result = RegionFit.Fit(RegionFit.GenerateObservations(toy_alt_pdf, energy_slices, mean_track_score_bins, model, single_bin = single_bin), model, None, [(0, np.inf)]*model.config.npars, False, tolerance = 0.1)
 
         bestfit.append({list(toy_alt_pdf.exclusive_process.keys())[j] : result.bestfit[j] for j in range(len(template.exclusive_process))})
         uncertainty.append({list(toy_alt_pdf.exclusive_process.keys())[j] : result.uncertainty[j] for j in range(len(template.exclusive_process))})
@@ -271,15 +272,15 @@ def PullStudyFast(toys : cross_section.Toy, n_template : int, n_data : int, args
         data = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = toys.df.iloc[np.random.choice(len(toys.df), int(n_data))].reset_index()))
 
         if mean_track_score_bins:
-            model = cross_section.RegionFit.CreateModel(template, args.energy_slices, mean_track_score_bins, False, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
+            model = RegionFit.CreateModel(template, args.energy_slices, mean_track_score_bins, False, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
         else:
-            model = cross_section.RegionFit.CreateModel(template, args.energy_slices, None, False, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
+            model = RegionFit.CreateModel(template, args.energy_slices, None, False, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
 
         template_fractions = {s : (sum(template.exclusive_process[s]) / len(template)) for s in template.exclusive_process}
 
         output["expected"] = {s : (sum(data.exclusive_process[s]) / len(data.exclusive_process[s])) / template_fractions[s] for s in data.exclusive_process}
 
-        result = cross_section.RegionFit.Fit(cross_section.RegionFit.GenerateObservations(data, energy_slices, mean_track_score_bins, model, single_bin = args.fit["single_bin"]), model, None, [(0, np.inf)]*model.config.npars, False, tolerance = 0.1)
+        result = RegionFit.Fit(RegionFit.GenerateObservations(data, energy_slices, mean_track_score_bins, model, single_bin = args.fit["single_bin"]), model, None, [(0, np.inf)]*model.config.npars, False, tolerance = 0.1)
 
         output["bestfit"] = {list(data.exclusive_process.keys())[j] : result.bestfit[j] for j in range(len(template.exclusive_process))}
         output["uncertainty"] = {list(data.exclusive_process.keys())[j] : result.uncertainty[j] for j in range(len(template.exclusive_process))}
@@ -746,9 +747,9 @@ def main(args : cross_section.argparse.Namespace):
 
     models = {}
     if args.fit["mean_track_score"] is True:
-        models["track_score"], templates_energy, tempalates_mean_track_score = cross_section.RegionFit.CreateModel(args.template, args.energy_slices, mean_track_score_bins, True, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
+        models["track_score"], templates_energy, tempalates_mean_track_score = RegionFit.CreateModel(args.template, args.energy_slices, mean_track_score_bins, True, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
     else:
-        models["normal"], templates_energy, tempalates_mean_track_score = cross_section.RegionFit.CreateModel(args.template, args.energy_slices, None, True, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
+        models["normal"], templates_energy, tempalates_mean_track_score = RegionFit.CreateModel(args.template, args.energy_slices, None, True, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
 
 
     if args.toy_data_config:

@@ -16,6 +16,7 @@ from rich.rule import Rule
 
 from python.analysis import cross_section, Plots, Application, BetheBloch, NtupleProcessing
 from python.analysis.Master import DictToHDF5, LoadConfiguration
+from python.analysis import RegionFit
 from python.analysis.Utils import dill_copy, quadsum, round_value_to_error
 from apps import cex_toy_generator, cex_analyse, cex_fit_studies, cex_analysis_input
 
@@ -451,7 +452,7 @@ class BeamMomentumResolutionSystematic(MCMethod):
         self.args.toy_template.KE_int_reco = KE_int_reco
 
         if self.args.fit["single_bin"] == False:
-            self.model = cross_section.RegionFit.CreateModel(self.args.toy_template, self.args.energy_slices, self.args.fit["mean_track_score"], False, self.args.toy_template.weights, self.args.fit["mc_stat_unc"], True, self.args.fit["single_bin"])
+            self.model = RegionFit.CreateModel(self.args.toy_template, self.args.energy_slices, self.args.fit["mean_track_score"], False, self.args.toy_template.weights, self.args.fit["mc_stat_unc"], True, self.args.fit["single_bin"])
         xs = self.Analyse(analysis_input_data, None)
         return xs
     
@@ -471,7 +472,7 @@ class TrackLengthResolutionSystematic(MCMethod):
         self.args.toy_template.KE_int_reco = KE_int_reco
 
         if self.args.fit["single_bin"] == False:
-            self.model = cross_section.RegionFit.CreateModel(self.args.toy_template, self.args.energy_slices, self.args.fit["mean_track_score"], False, self.args.toy_template.weights, self.args.fit["mc_stat_unc"], True, self.args.fit["single_bin"])
+            self.model = RegionFit.CreateModel(self.args.toy_template, self.args.energy_slices, self.args.fit["mean_track_score"], False, self.args.toy_template.weights, self.args.fit["mc_stat_unc"], True, self.args.fit["single_bin"])
         xs = self.Analyse(analysis_input_data, None)
         return xs
     
@@ -873,7 +874,7 @@ def main(args : cross_section.argparse.Namespace):
 
     if args.toy_template:
         args.toy_template = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(file = args.toy_template))
-        model = cross_section.RegionFit.CreateModel(args.toy_template, args.energy_slices, args.fit["mean_track_score"], False, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
+        model = RegionFit.CreateModel(args.toy_template, args.energy_slices, args.fit["mean_track_score"], False, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
     
         toy_nominal = cross_section.Toy(df = cex_toy_generator.run(args.toy_data_config))
         analysis_input_nominal = cross_section.AnalysisInput.CreateAnalysisInputToy(toy_nominal)
