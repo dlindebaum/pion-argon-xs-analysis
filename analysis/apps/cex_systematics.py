@@ -14,8 +14,9 @@ import numpy as np
 from rich import print
 from rich.rule import Rule
 
-from python.analysis import cross_section, Plots, Application
+from python.analysis import cross_section, Plots, Application, BetheBloch, NtupleProcessing
 from python.analysis.Master import DictToHDF5, LoadConfiguration
+from python.analysis import RegionFit
 from python.analysis.Utils import dill_copy, quadsum, round_value_to_error
 from apps import cex_toy_generator, cex_analyse, cex_fit_studies, cex_analysis_input
 
@@ -390,7 +391,7 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
 
         merged_output = []
         for s in split_output:
-            o = cross_section.MergeOutputs(split_output[s])
+            o = NtupleProcessing.MergeOutputs(split_output[s])
             if type(o["name"]) == list:
                 o["name"] = o["name"][0] 
             merged_output.append(o)
@@ -405,9 +406,9 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
             setattr(self.args, k, v)
 
         print("running MC")
-        output_mc = self.__merge(cross_section.RunProcess(self.args.ntuple_files["mc"], False, self.args, self.__run, False))
+        output_mc = self.__merge(NtupleProcessing.RunProcess(self.args.ntuple_files["mc"], False, self.args, self.__run, False))
         print("running Data")
-        output_data = self.__merge(cross_section.RunProcess(self.args.ntuple_files["data"], True, self.args, self.__run, False))
+        output_data = self.__merge(NtupleProcessing.RunProcess(self.args.ntuple_files["data"], True, self.args, self.__run, False))
         return {"mc" : output_mc, "data" : output_data}
 
 
@@ -444,14 +445,14 @@ class BeamMomentumResolutionSystematic(MCMethod):
         P_reco_smeared = self.P_reco_original * (1 + np.random.normal(0, resolution, len(self.P_reco_original)))
 
         KE_init_reco = cross_section.KE(P_reco_smeared, cross_section.Particle.from_pdgid(211).mass)
-        KE_int_reco = cross_section.BetheBloch.InteractingKE(KE_init_reco, self.args.toy_template.track_length_reco, 10)
+        KE_int_reco = BetheBloch.KE_end(KE_init_reco, self.args.toy_template.track_length_reco, 10)
 
         self.args.toy_template.KE_ff_reco = KE_init_reco
         self.args.toy_template.KE_init_reco = KE_init_reco
         self.args.toy_template.KE_int_reco = KE_int_reco
 
         if self.args.fit["single_bin"] == False:
-            self.model = cross_section.RegionFit.CreateModel(self.args.toy_template, self.args.energy_slices, self.args.fit["mean_track_score"], False, self.args.toy_template.weights, self.args.fit["mc_stat_unc"], True, self.args.fit["single_bin"])
+            self.model = RegionFit.CreateModel(self.args.toy_template, self.args.energy_slices, self.args.fit["mean_track_score"], False, self.args.toy_template.weights, self.args.fit["mc_stat_unc"], True, self.args.fit["single_bin"])
         xs = self.Analyse(analysis_input_data, None)
         return xs
     
@@ -467,11 +468,11 @@ class TrackLengthResolutionSystematic(MCMethod):
     def RunExperiment(self, analysis_input_data : cross_section.AnalysisInput, resolution : float) -> tuple[dict, dict]:
         track_length_smeared = self.track_length_original * (1 + np.random.normal(0, resolution, len(self.track_length_original)))
 
-        KE_int_reco = cross_section.BetheBloch.InteractingKE(self.args.toy_template.KE_init_reco, track_length_smeared, 10)
+        KE_int_reco = BetheBloch.KE_end(self.args.toy_template.KE_init_reco, track_length_smeared, 10)
         self.args.toy_template.KE_int_reco = KE_int_reco
 
         if self.args.fit["single_bin"] == False:
-            self.model = cross_section.RegionFit.CreateModel(self.args.toy_template, self.args.energy_slices, self.args.fit["mean_track_score"], False, self.args.toy_template.weights, self.args.fit["mc_stat_unc"], True, self.args.fit["single_bin"])
+            self.model = RegionFit.CreateModel(self.args.toy_template, self.args.energy_slices, self.args.fit["mean_track_score"], False, self.args.toy_template.weights, self.args.fit["mc_stat_unc"], True, self.args.fit["single_bin"])
         xs = self.Analyse(analysis_input_data, None)
         return xs
     
@@ -873,7 +874,7 @@ def main(args : cross_section.argparse.Namespace):
 
     if args.toy_template:
         args.toy_template = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(file = args.toy_template))
-        model = cross_section.RegionFit.CreateModel(args.toy_template, args.energy_slices, args.fit["mean_track_score"], False, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
+        model = RegionFit.CreateModel(args.toy_template, args.energy_slices, args.fit["mean_track_score"], False, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
     
         toy_nominal = cross_section.Toy(df = cex_toy_generator.run(args.toy_data_config))
         analysis_input_nominal = cross_section.AnalysisInput.CreateAnalysisInputToy(toy_nominal)
@@ -1132,4 +1133,5 @@ if __name__ == "__main__":
     args.cv = cross_section.LoadObject(args.cv)
 
     print(vars(args))
+    print(warnings.warn("App is deprecated and likely no longer works!"))
     main(args)

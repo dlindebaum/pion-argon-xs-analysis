@@ -126,9 +126,7 @@
   },
   "bkg_sub_mc_stat": true,
   "ESLICE": {
-    "width": 150,
-    "min": 1400,
-    "max": 1900
+    "edges" : [1300, 1450, 1600, 1750, 1900]
   },
   "UNFOLDING": {
     "method": 1,

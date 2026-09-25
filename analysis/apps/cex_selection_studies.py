@@ -10,7 +10,7 @@ import argparse
 import os
 
 from rich import print as rprint
-from python.analysis import Master, BeamParticleSelection, EventSelection, PFOSelection, Plots, shower_merging, Tags, cross_section, Application
+from python.analysis import Master, BeamParticleSelection, EventSelection, PFOSelection, Plots, shower_merging, Tags, cross_section, Application, NtupleProcessing
 
 import awkward as ak
 import numpy as np
@@ -881,13 +881,13 @@ def main(args):
     outdir = args.out + "selection/"
     cross_section.os.makedirs(outdir, exist_ok = True)
 
-    output_mc = MergeSelectionMasks(MergeOutputs(cross_section.ApplicationProcessing(["mc"], outdir, args, run, False, "output_mc")["mc"]))
+    output_mc = MergeSelectionMasks(MergeOutputs(NtupleProcessing.ApplicationProcessing(["mc"], outdir, args, run, False, "output_mc")["mc"]))
 
     output_data = None
     if "data" in args.ntuple_files:
         if len(args.ntuple_files["data"]) > 0:
             if args.mc_only is False:
-                output_data = MergeSelectionMasks(MergeOutputs(cross_section.ApplicationProcessing(["data"], outdir, args, run, False, "output_data")["data"]))
+                output_data = MergeSelectionMasks(MergeOutputs(NtupleProcessing.ApplicationProcessing(["data"], outdir, args, run, False, "output_data")["data"]))
 
     # tables
     MakeTables(output_mc, args.out + "tables_mc/", "mc")

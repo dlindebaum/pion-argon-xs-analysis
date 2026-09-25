@@ -17,7 +17,7 @@ from rich import print
 
 from scipy.optimize import curve_fit
 
-from python.analysis import Master, cross_section, EventSelection, Tags, SelectionTools, Plots, Fitting, Application
+from python.analysis import Master, cross_section, EventSelection, Tags, SelectionTools, Plots, Fitting, Application, NtupleProcessing
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # hide pesky pandas warnings (performance is actually ok)
 
@@ -323,7 +323,7 @@ def main(args):
     out = args.out + "shower_energy_correction/"
 
     if (not os.path.isfile(out + "photon_energies.hdf5")) or args.regen:
-        output = cross_section.RunProcess(args.ntuple_files["mc"], False, args, run)
+        output = NtupleProcessing.RunProcess(args.ntuple_files["mc"], False, args, run)
 
         output_photons = pd.DataFrame({i : output[i] for i in output if "shower_pairs" not in i and "tags" not in i})
         output_pairs = pd.DataFrame({i : output[i] for i in output if "shower_pairs" in i and "tags" not in i})

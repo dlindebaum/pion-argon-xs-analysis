@@ -24,8 +24,8 @@ from scipy.interpolate import interp1d
 from scipy.stats import gaussian_kde
 
 from python.analysis.Master import timer, LoadConfiguration, ReadHDF5, LoadObject
-from python.analysis import Fitting, Utils, Application
-from python.analysis.cross_section import BetheBloch, GeantCrossSections, Particle, GEANT_XS
+from python.analysis import Fitting, Utils, Application, BetheBloch
+from python.analysis.cross_section import GeantCrossSections, Particle, GEANT_XS
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # supress annoying pandas warnings
 
@@ -83,7 +83,7 @@ def P_int(sigma : np.array, l : float) -> np.array:
     Returns:
         np.array: interaction proabability
     """
-    return 1 - np.exp(-1E-27 * sigma * 6.02214076e23 * BetheBloch.rho * l / BetheBloch.A)
+    return 1 - np.exp(-1E-27 * sigma * 6.02214076e23 * BetheBloch.Constants.rho * l / BetheBloch.Constants.A)
 
 
 def ModifyGeantXS(path = GEANT_XS, scale_factors : dict = None, modified_PDFs : dict[np.array] = None):
