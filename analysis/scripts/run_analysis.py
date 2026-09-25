@@ -6,23 +6,23 @@ Author: Shyam Bhuller
 
 Description: 
 """
+import os
+
 from rich import print
 
 from apps import (
     cex_normalisation,
-    cex_beam_quality_fits, 
+    cex_beam_quality_fits,
     cex_beam_scraper_fits,
     cex_photon_selection,
-    cex_selection_studies, 
-    cex_beam_reweight, 
+    cex_selection_studies,
+    cex_beam_reweight,
     cex_upstream_loss,
     cex_toy_parameters,
     cex_analysis_input,
     cex_mach3_input,
-    cex_analyse
     )
 
-from python.analysis.cross_section import os
 from python.analysis.NtupleProcessing import CalculateBatches, file_len
 from python.analysis.Application import ApplicationArguments, argparse
 from python.analysis.Master import SaveConfiguration, LoadConfiguration
@@ -102,9 +102,7 @@ def template_config():
         },
         "bkg_sub_mc_stat": True,
         "ESLICE":{
-            "width" : None,
-            "min" : None,
-            "max" : None
+            "edges" : [None]
         },
         "UNFOLDING":{
             "method" : 1,
@@ -312,7 +310,7 @@ def template_config():
                 "bin_width" : None
             }
         },
-        "beam_momentum" : "nominal beam momentum in MeV", #! should be deprciated
+        "beam_momentum" : "nominal beam momentum in MeV",
         "P_inst_range" : "plot range",
         "KE_inst_range" : "plot range",
         "KE_init_range" : "plot range",
@@ -581,21 +579,12 @@ def main(args):
             cex_mach3_input.main(args)
         if args.stop == "mach3_input": return
 
-        # if all other prerequisites were met, this should run
-        if check_run(args, "analyse"):
-            print("analyse")
-            args.toy_template = None
-            args.all = False
-            args.pdsp = True # run with PDSP samples (no toys yet)
-            cex_analyse.main(args)
-        if args.stop == "analyse": return
-
     return
 
 
 if __name__ == "__main__":
 
-    analysis_options = ["normalisation", "beam_quality", "beam_scraper", "photon_correction", "selection", "reweight", "upstream_correction", "toy_parameters", "analysis_input", "mach3_input", "analyse"]
+    analysis_options = ["normalisation", "beam_quality", "beam_scraper", "photon_correction", "selection", "reweight", "upstream_correction", "toy_parameters", "analysis_input", "mach3_input"]
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-C", "--create_config", type = str, help = "Create a template configuration with the default selection")
