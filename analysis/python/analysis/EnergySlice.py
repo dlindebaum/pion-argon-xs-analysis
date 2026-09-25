@@ -15,10 +15,7 @@ from particle import Particle
 
 from python.analysis import BetheBloch
 from python.analysis.Slices import Slices
-from python.analysis.Utils import nandiv, quadsum, nanlog
-
-def deprecation_warning():
-    return warnings.warn("This function is legacy and should not be used in new implementations.", DeprecationWarning)
+from python.analysis.Utils import nandiv, quadsum, nanlog, deprecation_warning
 
 
 def process_multiple_array(input : np.ndarray, function : callable) -> np.ndarray:
@@ -196,7 +193,7 @@ def total_cross_section(n_incident : np.ndarray, n_end : np.ndarray, dEdX : np.n
     xs_e = (1/n_incident) * (1/(n_incident - n_end)) * (n_end**2 * v_incident + n_incident**2 * v_interact)**0.5
 
     NA = 6.02214076e23
-    factor = 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * slice_width)
+    factor = 10**27 * BetheBloch.Constants.A  / (BetheBloch.Constants.rho * NA * slice_width)
 
     return factor * xs, abs(factor * xs_e)
 
@@ -227,7 +224,7 @@ def NIncident(n_initial : np.ndarray, n_end : np.ndarray) -> np.ndarray:
     n_incident = n_survived_all + n_end
     return n_incident
 
- #! Deprecated.
+#! Deprecated.
 def SliceNumbers(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak.Array, energy_slices : Slices) -> tuple[np.ndarray, np.ndarray]:
     """
         Convert energies from physical units to slice numbers.
@@ -309,7 +306,7 @@ def CrossSection(n_int_ex : np.ndarray, n_int : np.ndarray, n_inc : np.ndarray, 
     """
     deprecation_warning()
     NA = 6.02214076e23
-    factor = np.array(dEdX) * 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * dE)
+    factor = np.array(dEdX) * 10**27 * BetheBloch.Constants.A  / (BetheBloch.Constants.rho * NA * dE)
 
     n_interact_ratio = nandiv(n_int_ex, n_int)
     n_survived = n_inc - n_int

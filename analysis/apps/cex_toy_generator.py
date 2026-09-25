@@ -83,7 +83,7 @@ def P_int(sigma : np.array, l : float) -> np.array:
     Returns:
         np.array: interaction proabability
     """
-    return 1 - np.exp(-1E-27 * sigma * 6.02214076e23 * BetheBloch.rho * l / BetheBloch.A)
+    return 1 - np.exp(-1E-27 * sigma * 6.02214076e23 * BetheBloch.Constants.rho * l / BetheBloch.Constants.A)
 
 
 def ModifyGeantXS(path = GEANT_XS, scale_factors : dict = None, modified_PDFs : dict[np.array] = None):

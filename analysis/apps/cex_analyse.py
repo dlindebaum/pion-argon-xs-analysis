@@ -7,6 +7,7 @@ Author: Shyam Bhuller
 Description: Runs cross section measurement.
 """
 import os
+import warnings
 
 import awkward as ak
 import numpy as np
@@ -14,7 +15,7 @@ import pandas as pd
 
 from rich import print
 
-from apps import cex_toy_generator, cex_toy_parameters
+from apps import cex_toy_generator
 from pyunfold.callbacks import SplineRegularizer
 from python.analysis import cross_section, Plots, Application, Master, BetheBloch
 from python.analysis import Slices, Unfold
@@ -703,4 +704,5 @@ if __name__ == "__main__":
         raise Exception("if toy template is provided toy data must also be provided")
 
     print(vars(args))
+    print(warnings.warn("App is deprecated and likely no longer works!"))
     main(args)

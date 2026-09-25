@@ -1133,4 +1133,5 @@ if __name__ == "__main__":
     args.cv = cross_section.LoadObject(args.cv)
 
     print(vars(args))
+    print(warnings.warn("App is deprecated and likely no longer works!"))
     main(args)

@@ -543,24 +543,6 @@ class Toy:
         return
 
 
-    def NInteract(self, energy_slice : Slices, process : np.ndarray, mask : np.ndarray = None, weights : np.ndarray = None) -> np.ndarray:
-        """ Exclusive interaction histogram using energy slice method.
-
-        Args:
-            energy_slice (Slices): energy slices
-            process (np.ndarray): exclusive process mask
-            mask (np.ndarray, optional): additional mask to apply. Defaults to None.
-            weights (np.ndarray, optional): event weights. Defaults to None.
-
-        Returns:
-            np.ndarray: exclusive interaction histogram
-        """
-        if mask is None: mask = np.ones(len(self.df), dtype = bool)
-        w = weights if weights is None else weights[mask]
-        n_interact = EnergySlice.CountingExperiment(self.df.KE_int_smeared[mask].values, self.df.KE_init_smeared[mask].values, self.outside_tpc_smeared[mask].values, process[mask].values, energy_slice, interact_only = True, weights = w)
-        return n_interact
-
-
 @dataclass
 class AnalysisInput:
     # masks
@@ -718,6 +700,7 @@ class AnalysisInput:
         Returns:
             np.ndarray: exclusive interaction histogram.
         """
+        deprecation_warning()
         if mask is None: mask = np.ones(len(self.KE_int_reco), dtype = bool)
         if reco is True:
             KE_int = self.KE_int_reco
@@ -757,6 +740,7 @@ class AnalysisInput:
         Returns:
             AnalysisInput: analysis input object.
         """
+        deprecation_warning() #! function wont be supported further.
         inclusive_events = np.array((toy.df.inclusive_process != "decay").values)
 
         regions = {k : np.array(v.values) for k, v in toy.reco_regions.items()}
@@ -1007,6 +991,7 @@ class AnalysisInput:
         Returns:
             dict[np.ndarray]: histograms
         """
+        deprecation_warning()
         KE_int = self.KE_int_true if reco is False else self.KE_int_reco
         KE_init = self.KE_init_true if reco is False else self.KE_init_reco
 

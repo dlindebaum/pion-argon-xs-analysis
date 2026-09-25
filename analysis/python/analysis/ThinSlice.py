@@ -93,7 +93,7 @@ def total_cross_section(n_incident : np.ndarray, n_interact : np.ndarray, slice_
     xs_e = (1/n_incident) * (1/(n_incident - n_interact)) * (n_interact**2 * v_incident + n_incident**2 * v_interact)**0.5
 
     NA = 6.02214076e23
-    factor = 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * slice_width)
+    factor = 10**27 * BetheBloch.Constants.A  / (BetheBloch.Constants.rho * NA * slice_width)
 
     return factor * xs, abs(factor * xs_e)
 
@@ -112,7 +112,7 @@ def CrossSection(n_int_exclusive : np.ndarray, n_int_inclusive : np.ndarray, n_i
     """
     deprecation_warning()
     NA = 6.02214076e23
-    factor = 10**27 * BetheBloch.A  / (BetheBloch.rho * NA * slice_width)
+    factor = 10**27 * BetheBloch.Constants.A  / (BetheBloch.Constants.rho * NA * slice_width)
 
     n_interact_ratio = nandiv(n_int_exclusive, n_int_inclusive)
     n_survived_inclusive = n_inc_inclusive - n_int_inclusive

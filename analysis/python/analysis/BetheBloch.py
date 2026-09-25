@@ -5,6 +5,7 @@ Author: Shyam Bhuller
 
 Description: Calculations involving the Bethe-Bloch formula.
 """
+from dataclasses import dataclass
 
 import awkward as ak
 import numpy as np
@@ -12,48 +13,50 @@ import numpy as np
 from particle import Particle
 from scipy.interpolate import interp1d
 
-rho = 1.39 # [g/cm3] density of LAr
-K = 0.307075 # [MeV cm2 / mol]
-Z = 18 # LAr atomic number
-A = 39.948 # [g/mol] LAr atomic mass
-I = 188E-6 # [MeV] mean excitation energy
-me = Particle.from_pdgid(11).mass # [MeV] electron mass
+@dataclass
+class Constants:
+    rho = 1.39 # [g/cm3] density of LAr
+    K = 0.307075 # [MeV cm2 / mol]
+    Z = 18 # LAr atomic number
+    A = 39.948 # [g/mol] LAr atomic mass
+    I = 188E-6 # [MeV] mean excitation energy
+    me = Particle.from_pdgid(11).mass # [MeV] electron mass
 
-# density correction parameters
-C = 5.2146
-y0 = 0.2
-y1 = 3
-a = 0.19559
-k = 3
+@dataclass
+class DensityCorrectionParameters:
+    C  : float = 5.2146
+    y0 : float = 0.2
+    y1 : float = 3
+    a  : float = 0.19559
+    k  : float = 3
 
+    def density_correction(self, beta : float | ak.Array, gamma : float | ak.Array) -> float | ak.Array:
+        """ Correction to account for the fact a particles electric field flattens and spreads as the energy increases.
 
-def density_correction(beta : float | ak.Array, gamma : float | ak.Array) -> float | ak.Array:
-    """ Correction to account for the fact a particles electric field flattens and spreads as the energy increases.
+        Args:
+            beta (float | ak.Array): velocity
+            gamma (float | ak.Array): relativistic factor
 
-    Args:
-        beta (float | ak.Array): velocity
-        gamma (float | ak.Array): relativistic factor
+        Returns:
+            (float | ak.Array): density correction value
+        """
+        y = np.log10(beta * gamma)
 
-    Returns:
-        (float | ak.Array): density correction value
-    """
-    y = np.log10(beta * gamma)
+        delta_0 = 2 * np.log(10) * y - self.C
+        delta_1 = delta_0 + self.a * (self.y1 - y)**self.k
 
-    delta_0 = 2 * np.log(10) * y - C
-    delta_1 = delta_0 + a * (y1 - y)**k
-
-    if hasattr(y, "__iter__"):
-        delta = ak.where(y >= y1, delta_0, 0) 
-        delta = ak.where((y0 <= y) & (y < y1), delta_1, delta)
-    else:
-        if y >= y1:
-            delta = delta_0
-        elif y < y0:
-            delta = 0
+        if hasattr(y, "__iter__"):
+            delta = ak.where(y >= self.y1, delta_0, 0) 
+            delta = ak.where((self.y0 <= y) & (y < self.y1), delta_1, delta)
         else:
-            delta = delta_1
+            if y >= self.y1:
+                delta = delta_0
+            elif y < self.y0:
+                delta = 0
+            else:
+                delta = delta_1
 
-    return delta
+        return delta
 
 
 def mean_dEdX(KE : float | ak.Array, particle : Particle) -> float | ak.Array:
@@ -69,13 +72,15 @@ def mean_dEdX(KE : float | ak.Array, particle : Particle) -> float | ak.Array:
     gamma = (KE / particle.mass) + 1
     beta = (1 - (1/gamma)**2)**0.5
 
-    w_max = 2 * me * (beta * gamma)**2 / (1 + (2 * me * (gamma/particle.mass)) + (me/particle.mass)**2)
-    N = np.divide((rho * K * Z * (particle.charge)**2), (A * (beta**2)))
-    A = 0.5 * np.log(2 * me * (gamma**2) * (beta**2) * w_max / ((I) **2))
-    B = beta**2
-    C = 0.5 * density_correction(beta, gamma)
+    w_max = 2 * Constants.me * (beta * gamma)**2 / (1 + (2 * Constants.me * (gamma/particle.mass)) + (Constants.me/particle.mass)**2)
+    N = np.divide((Constants.rho * Constants.K * Constants.Z * (particle.charge)**2), (Constants.A * (beta**2)))
+    B = 0.5 * np.log(2 * Constants.me * (gamma**2) * (beta**2) * w_max / ((Constants.I) **2))
+    C = beta**2
 
-    dEdX = N * (A - B - C)
+    delta = DensityCorrectionParameters()
+    D = 0.5 * delta.density_correction(beta, gamma)
+
+    dEdX = N * (B - C - D)
 
     dEdX = np.nan_to_num(dEdX)
     if hasattr(KE, "__iter__"):
