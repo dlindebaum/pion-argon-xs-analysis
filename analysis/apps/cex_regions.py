@@ -34,34 +34,6 @@ def GetTotalPionInelMasks(mc : Master.Data) -> ak.Array:
     particle_tags = Tags.GenerateTrueBeamParticleTags(mc)
     return particle_tags["$\\pi^{+}$:inel"].mask
 
-@Master.timer
-def ComputeQuantities(mc : Master.Data, args : dict) -> dict[dict, dict]:
-    """ Compute Quantities used for the cross section measurement.
-
-    Args:
-        mc (Master.Data): mc events.
-        args (dict): application arguments.
-
-    Returns:
-        dict[dict, dict]: dictionary of quantities, one for reco and truth.
-    """
-    with alive_bar(title = "computng reco quantities") as bar:
-        reco_upstream_loss = cross_section.UpstreamEnergyLoss(cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass), args["upstream_loss_correction_params"]["value"], args["upstream_loss_response"])
-        
-        reco_KE_ff = cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass) - reco_upstream_loss
-        reco_KE_int = cross_section.RecoEndEnergy(mc.recoParticles.beam_calo_pos, reco_KE_ff, mc.recoParticles.beam_dEdX, args["energy_method"])
-        reco_track_length = mc.recoParticles.beam_track_length
-
-    with alive_bar(title = "computng true quantities") as bar:
-        true_KE_ff = mc.trueParticles.beam_KE_front_face
-        true_KE_int = mc.trueParticles.beam_traj_KE[:, -2]
-        true_track_length = mc.trueParticles.beam_track_length
-
-    return {
-        "reco" : {"KE_init" : reco_KE_ff, "KE_int" : reco_KE_int, "z_int" : reco_track_length},
-        "true" : {"KE_init" : true_KE_ff, "KE_int" : true_KE_int, "z_int" : true_track_length}
-    }
-
 
 def run(i : int, file_desc : Master.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
     mc = Master.Data(file_desc, n_events, start)
