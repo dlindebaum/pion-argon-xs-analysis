@@ -66,9 +66,7 @@
     "regions": true
   },
   "ESLICE": {
-    "width": null,
-    "min": null,
-    "max": null
+    "edges": null
   },
   "UNFOLDING": {
     "method": 1,

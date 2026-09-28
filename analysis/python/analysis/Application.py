@@ -200,7 +200,7 @@ class ApplicationArguments:
                 for k, v in value.items():
                     args.fit[k] = v
             elif head == "ESLICE":
-                args.energy_slices = Slices(ak.Array(value["edges"]))
+                args.energy_slices = Slices.Slices(ak.Array(value["edges"]))
             elif head == "ANALYSIS_INPUTS":
                 args.analysis_input = {k : v for k, v in value.items()}
             elif head == "UNFOLDING":

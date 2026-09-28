@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 
 from apps.cex_analysis_input import BeamPionSelection
-from python.analysis import cross_section, Master, Plots, Application
+from python.analysis import cross_section, Master, Plots, Application, NtupleProcessing
 from rich import print
 
 cv_method = {
@@ -93,7 +93,7 @@ def main(args : argparse.Namespace):
     outdir = args.out + "upstream_loss/"
     os.makedirs(outdir, exist_ok = True)
 
-    output_mc = cross_section.ApplicationProcessing(["mc"], outdir, args, run, True)["mc"]
+    output_mc = NtupleProcessing.ApplicationProcessing(["mc"], outdir, args, run, True)["mc"]
 
     if all(v is None for v in output_mc["weights"]):
         output_mc["weights"] = None

@@ -12,7 +12,7 @@ import numpy as np
 
 from rich import print
 
-from python.analysis import Master, cross_section, Plots, SelectionTools, Application
+from python.analysis import Master, cross_section, Plots, SelectionTools, Application, NtupleProcessing
 
 
 def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.array = np.array([0.75, 1.25]), book : Plots.PlotBook = Plots.PlotBook.null()):
@@ -139,7 +139,7 @@ def main(args : cross_section.argparse.Namespace):
     out = args.out + "beam_reweight/"
     os.makedirs(out, exist_ok = True)
 
-    outputs = cross_section.ApplicationProcessing(list(args.ntuple_files.keys()), out, args, run, True)
+    outputs = NtupleProcessing.ApplicationProcessing(list(args.ntuple_files.keys()), out, args, run, True)
 
     for o in outputs:
         for t in outputs[o]["table"]:

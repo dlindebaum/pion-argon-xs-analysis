@@ -17,7 +17,7 @@ import scipy.stats as stats
 
 from alive_progress import alive_bar
 
-from python.analysis import cross_section, Master, Plots, Tags, SelectionTools, RegionDefinitions, Application
+from python.analysis import cross_section, Master, Plots, Tags, SelectionTools, RegionDefinitions, Application, NtupleProcessing
 
 from apps.cex_analysis_input import RegionSelection, BeamPionSelection
 
@@ -401,7 +401,7 @@ def main(args : argparse.Namespace):
         "z_int" : "$l^{res,MC}$ (cm)"
     }
 
-    output_mc = cross_section.ApplicationProcessing(["mc"], out, args, run, True)["mc"]
+    output_mc = NtupleProcessing.ApplicationProcessing(["mc"], out, args, run, True)["mc"]
 
     print(f"{output_mc=}")
 
