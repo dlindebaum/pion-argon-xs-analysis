@@ -6,23 +6,24 @@ Author: Shyam Bhuller
 
 Description: 
 """
+import os
+
 from rich import print
 
 from apps import (
     cex_normalisation,
-    cex_beam_quality_fits, 
+    cex_beam_quality_fits,
     cex_beam_scraper_fits,
     cex_photon_selection,
-    cex_selection_studies, 
-    cex_beam_reweight, 
+    cex_selection_studies,
+    cex_beam_reweight,
     cex_upstream_loss,
-    cex_toy_parameters,
+    cex_regions,
     cex_analysis_input,
     cex_mach3_input,
-    cex_analyse
     )
 
-from python.analysis.cross_section import os, CalculateBatches, file_len
+from python.analysis.NtupleProcessing import CalculateBatches, file_len
 from python.analysis.Application import ApplicationArguments, argparse
 from python.analysis.Master import SaveConfiguration, LoadConfiguration
 
@@ -101,9 +102,7 @@ def template_config():
         },
         "bkg_sub_mc_stat": True,
         "ESLICE":{
-            "width" : None,
-            "min" : None,
-            "max" : None
+            "edges" : [None]
         },
         "UNFOLDING":{
             "method" : 1,
@@ -311,7 +310,7 @@ def template_config():
                 "bin_width" : None
             }
         },
-        "beam_momentum" : "nominal beam momentum in MeV", #! should be deprciated
+        "beam_momentum" : "nominal beam momentum in MeV",
         "P_inst_range" : "plot range",
         "KE_inst_range" : "plot range",
         "KE_init_range" : "plot range",
@@ -537,19 +536,13 @@ def main(args):
             args = update_args(processing_args) # reload config to continue
         if args.stop == "upstream_correction": return
 
-        #* toy parameters
-        can_run_tp = hasattr(args, "toy_parameters") and hasattr(args, "beam_reweight") and ("toy_parameters" not in os.listdir(args.out))
-        if can_run_tp or check_run(args, "toy_parameters"):
-            print("run toy parameters")
-            cex_toy_parameters.main(args)
+        #* region plots
+        can_run_rp = hasattr(args, "region_plots") and ("region_plots" not in os.listdir(args.out))
+        if can_run_rp or check_run(args, "region_plots"):
+            print("run region plots")
+            cex_regions.main(args)
             # special case where the main config is not updated, rather the results from this would be used in the toy configurations
-            selection_type = LoadConfiguration(args.config)["SAMPLE_DEFINITIONS"]["region"]
-            toy_template_config = template_toy_config(os.path.abspath(args.out + "toy_parameters"), int(1E7), 1337, os.cpu_count() - 1, 2, args.beam_momentum, selection_type)
-            data_config = template_toy_config(os.path.abspath(args.out + "toy_parameters"), int(1E6), 1, os.cpu_count() - 1, 2, args.beam_momentum, selection_type)
-            SaveConfiguration(toy_template_config, args.out + "toy_template_config.json")
-            SaveConfiguration(data_config, args.out + "toy_data_config.json")
-            args = update_args(processing_args) # reload config to continue
-        if args.stop == "toy_parameters": return
+        if args.stop == "region_plots": return
 
         #* analysis input
         can_run_ai = (not hasattr(args, "analysis_input")) and (len(n_data) > 0)
@@ -580,21 +573,12 @@ def main(args):
             cex_mach3_input.main(args)
         if args.stop == "mach3_input": return
 
-        # if all other prerequisites were met, this should run
-        if check_run(args, "analyse"):
-            print("analyse")
-            args.toy_template = None
-            args.all = False
-            args.pdsp = True # run with PDSP samples (no toys yet)
-            cex_analyse.main(args)
-        if args.stop == "analyse": return
-
     return
 
 
 if __name__ == "__main__":
 
-    analysis_options = ["normalisation", "beam_quality", "beam_scraper", "photon_correction", "selection", "reweight", "upstream_correction", "toy_parameters", "analysis_input", "mach3_input", "analyse"]
+    analysis_options = ["normalisation", "beam_quality", "beam_scraper", "photon_correction", "selection", "reweight", "upstream_correction", "region_plots", "analysis_input", "mach3_input"]
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-C", "--create_config", type = str, help = "Create a template configuration with the default selection")

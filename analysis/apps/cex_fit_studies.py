@@ -19,6 +19,8 @@ from scipy.ndimage import gaussian_filter1d
 
 from python.analysis import cross_section, Plots, Application
 from python.analysis.Master import DictToHDF5, ReadHDF5, LoadConfiguration
+from  python.analysis import RegionFit
+from python.analysis.Slices import Slices
 from apps import cex_toy_generator
 
 region_colours = {
@@ -61,11 +63,11 @@ def CreateConfigNormalisation(scales : dict, data_config : dict) -> dict:
     return cfg
 
 
-def ModifiedConfigTest(config : dict, energy_slice : cross_section.Slices, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, mean_track_score_bins : np.array = None, single_bin : np.array = False) -> tuple[dict]:
+def ModifiedConfigTest(config : dict, energy_slice : Slices, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, mean_track_score_bins : np.array = None, single_bin : np.array = False) -> tuple[dict]:
     toy_alt_pdf = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.run(config)))
     
-    obs = cross_section.RegionFit.GenerateObservations(toy_alt_pdf, energy_slice, mean_track_score_bins, model, False, single_bin)
-    fit_result = cross_section.RegionFit.Fit(obs, model, None, verbose = False, tolerance = 0.1) # relax the tolerance to allow fit to converge for a large parameter space
+    obs = RegionFit.GenerateObservations(toy_alt_pdf, energy_slice, mean_track_score_bins, model, False, single_bin)
+    fit_result = RegionFit.Fit(obs, model, None, verbose = False, tolerance = 0.1) # relax the tolerance to allow fit to converge for a large parameter space
 
     true_process_counts = {}
     for v in toy_alt_pdf.exclusive_process:
@@ -76,7 +78,7 @@ def ModifiedConfigTest(config : dict, energy_slice : cross_section.Slices, model
     return fit_result, true_process_counts, expected_mus
 
 
-def NormalisationTest(directory : str, data_config : dict, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, energy_slice : cross_section.Slices, mean_track_score_bins : np.ndarray, single_bin : bool):
+def NormalisationTest(directory : str, data_config : dict, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, energy_slice : Slices, mean_track_score_bins : np.ndarray, single_bin : bool):
     for target in folder:
         print(target)
 
@@ -123,9 +125,9 @@ def CountsFractionalError(results, true_counts, model, single_bin = False):
         post_fit_pred = cross_section.cabinetry.model_utils.prediction(model, fit_results = results[s], label = "post-fit")
 
         if mean_track_score:
-            KE_int_prediction = cross_section.RegionFit.SliceModelPrediction(post_fit_pred, slice(-1), "KE_int_postfit") # exclude the channel which is the mean track score
+            KE_int_prediction = RegionFit.SliceModelPrediction(post_fit_pred, slice(-1), "KE_int_postfit") # exclude the channel which is the mean track score
         else:
-            KE_int_prediction = cross_section.RegionFit.SliceModelPrediction(post_fit_pred, slice(0, len(post_fit_pred.model_yields)), "KE_int_postfit")
+            KE_int_prediction = RegionFit.SliceModelPrediction(post_fit_pred, slice(0, len(post_fit_pred.model_yields)), "KE_int_postfit")
 
         pred_counts_err = cross_section.quadsum(np.array(KE_int_prediction.total_stdev_model_bins)[:, :-1], 0)
     
@@ -196,7 +198,7 @@ def CreateModifiedXS(xs_sim : cross_section.GeantCrossSections, process : str, h
         return {"KE" : xs_sim.KE, process : xs}
 
 
-def ShapeTestNew(directory : str, data_config : dict, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, mean_track_score_bins : np.array, xs_sim : cross_section.GeantCrossSections, energy_slices : cross_section.Slices, single_bin):
+def ShapeTestNew(directory : str, data_config : dict, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, mean_track_score_bins : np.array, xs_sim : cross_section.GeantCrossSections, energy_slices : Slices, single_bin):
     n = [0.8, 1, 1.2]
     alpha = [500, 1000]
     x0 = [500, 1000, 1500]
@@ -230,7 +232,7 @@ def ShapeTestNew(directory : str, data_config : dict, model : cross_section.pyhf
     return
 
 
-def PullStudy(template : cross_section.AnalysisInput, model : cross_section.pyhf.Model, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, data_config : dict, n : int, single_bin) -> dict:
+def PullStudy(template : cross_section.AnalysisInput, model : cross_section.pyhf.Model, energy_slices : Slices, mean_track_score_bins : np.ndarray, data_config : dict, n : int, single_bin) -> dict:
     out = {"expected" : None, "scale" : pd.Series(len(template) / data_config["events"]), "bestfit" : None, "uncertainty" : None}
 
     cfg = {k : v for k, v in data_config.items()}
@@ -248,7 +250,7 @@ def PullStudy(template : cross_section.AnalysisInput, model : cross_section.pyhf
 
         expected.append({s : (sum(toy_alt_pdf.exclusive_process[s]) / len(toy_alt_pdf.exclusive_process[s])) / template_fractions[s] for s in toy_alt_pdf.exclusive_process})
 
-        result = cross_section.RegionFit.Fit(cross_section.RegionFit.GenerateObservations(toy_alt_pdf, energy_slices, mean_track_score_bins, model, single_bin = single_bin), model, None, [(0, np.inf)]*model.config.npars, False, tolerance = 0.1)
+        result = RegionFit.Fit(RegionFit.GenerateObservations(toy_alt_pdf, energy_slices, mean_track_score_bins, model, single_bin = single_bin), model, None, [(0, np.inf)]*model.config.npars, False, tolerance = 0.1)
 
         bestfit.append({list(toy_alt_pdf.exclusive_process.keys())[j] : result.bestfit[j] for j in range(len(template.exclusive_process))})
         uncertainty.append({list(toy_alt_pdf.exclusive_process.keys())[j] : result.uncertainty[j] for j in range(len(template.exclusive_process))})
@@ -259,7 +261,7 @@ def PullStudy(template : cross_section.AnalysisInput, model : cross_section.pyhf
     return out
 
 
-def PullStudyFast(toys : cross_section.Toy, n_template : int, n_data : int, args, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, n : int) -> dict:
+def PullStudyFast(toys : cross_section.Toy, n_template : int, n_data : int, args, energy_slices : Slices, mean_track_score_bins : np.ndarray, n : int) -> dict:
     out = {"expected" : None, "scale" : None, "bestfit" : None, "uncertainty" : None}
 
     @cross_section.timer
@@ -270,15 +272,15 @@ def PullStudyFast(toys : cross_section.Toy, n_template : int, n_data : int, args
         data = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = toys.df.iloc[np.random.choice(len(toys.df), int(n_data))].reset_index()))
 
         if mean_track_score_bins:
-            model = cross_section.RegionFit.CreateModel(template, args.energy_slices, mean_track_score_bins, False, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
+            model = RegionFit.CreateModel(template, args.energy_slices, mean_track_score_bins, False, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
         else:
-            model = cross_section.RegionFit.CreateModel(template, args.energy_slices, None, False, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
+            model = RegionFit.CreateModel(template, args.energy_slices, None, False, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
 
         template_fractions = {s : (sum(template.exclusive_process[s]) / len(template)) for s in template.exclusive_process}
 
         output["expected"] = {s : (sum(data.exclusive_process[s]) / len(data.exclusive_process[s])) / template_fractions[s] for s in data.exclusive_process}
 
-        result = cross_section.RegionFit.Fit(cross_section.RegionFit.GenerateObservations(data, energy_slices, mean_track_score_bins, model, single_bin = args.fit["single_bin"]), model, None, [(0, np.inf)]*model.config.npars, False, tolerance = 0.1)
+        result = RegionFit.Fit(RegionFit.GenerateObservations(data, energy_slices, mean_track_score_bins, model, single_bin = args.fit["single_bin"]), model, None, [(0, np.inf)]*model.config.npars, False, tolerance = 0.1)
 
         output["bestfit"] = {list(data.exclusive_process.keys())[j] : result.bestfit[j] for j in range(len(template.exclusive_process))}
         output["uncertainty"] = {list(data.exclusive_process.keys())[j] : result.uncertainty[j] for j in range(len(template.exclusive_process))}
@@ -307,7 +309,7 @@ def PullStudyFast(toys : cross_section.Toy, n_template : int, n_data : int, args
     out["scale"] = pd.DataFrame(scales)
     return out
 
-def PlotShapeExamples(energy_slices : cross_section.Slices, book : Plots.PlotBook = Plots.PlotBook.null()):
+def PlotShapeExamples(energy_slices : Slices, book : Plots.PlotBook = Plots.PlotBook.null()):
     norms = [0.8, 1.2]
     split = 1000
     smooth_amount = 500
@@ -670,7 +672,7 @@ def Summary(directory : str, test_name : str, model_name : str, model : cross_se
     return ymax
 
 
-def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, template : cross_section.AnalysisInput, book : Plots.PlotBook = Plots.PlotBook.null()):
+def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : Slices, mean_track_score_bins : np.ndarray, template : cross_section.AnalysisInput, book : Plots.PlotBook = Plots.PlotBook.null()):
     tags = cross_section.Tags.ExclusiveProcessTags(template.exclusive_process)
     for j, c in Plots.IterMultiPlot(templates_energy):
         for i, s in enumerate(c):
@@ -689,7 +691,7 @@ def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : n
     return
 
 
-def PlotTotalChannel(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : cross_section.Slices, mean_track_score_bins : np.ndarray, book : Plots.PlotBook = Plots.PlotBook.null()):
+def PlotTotalChannel(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : Slices, mean_track_score_bins : np.ndarray, book : Plots.PlotBook = Plots.PlotBook.null()):
     for j, c in Plots.IterMultiPlot(templates_energy):
         Plots.Plot(energy_slices.pos_overflow, sum(c), xlabel = f"$n_{{{j}}}$ (MeV)", ylabel = "Counts", style = "bar", newFigure = False)
     book.Save()
@@ -745,9 +747,9 @@ def main(args : cross_section.argparse.Namespace):
 
     models = {}
     if args.fit["mean_track_score"] is True:
-        models["track_score"], templates_energy, tempalates_mean_track_score = cross_section.RegionFit.CreateModel(args.template, args.energy_slices, mean_track_score_bins, True, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
+        models["track_score"], templates_energy, tempalates_mean_track_score = RegionFit.CreateModel(args.template, args.energy_slices, mean_track_score_bins, True, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
     else:
-        models["normal"], templates_energy, tempalates_mean_track_score = cross_section.RegionFit.CreateModel(args.template, args.energy_slices, None, True, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
+        models["normal"], templates_energy, tempalates_mean_track_score = RegionFit.CreateModel(args.template, args.energy_slices, None, True, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
 
 
     if args.toy_data_config:

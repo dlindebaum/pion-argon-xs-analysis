@@ -8,6 +8,8 @@ Description: random functions which are sometimes useful
 import argparse
 import numpy as np
 import os
+import warnings
+
 import dill
 
 def args_to_dict(args : argparse.Namespace | dict) -> dict:
@@ -78,3 +80,7 @@ def round_value_to_error(v, e) -> str:
     fv = fv if fv > 0 else 0
     f = max(fe, fv)
     return f"${round(v, f):.{f}f} \pm {round(e, f):.{f}f}$"
+
+
+def deprecation_warning():
+    return warnings.warn("This function is legacy and should not be used in new implementations.", DeprecationWarning)
