@@ -79,18 +79,19 @@ def count(slices : Slices, *slice : np.ndarray) -> tuple[np.ndarray]:
     return process_multiple_array(slice, func)
 
 
-def incident(n_init : np.ndarray, n_end : np.ndarray) -> np.ndarray:
+def incident(n_init : np.ndarray, n_end : np.ndarray, axis : int = None) -> np.ndarray:
     """ Calculates the incident counts for each slice.
 
     Args:
         n_init (np.ndarray): Initial counts for each slice.
-        n_end (np.ndarray): End counts for each slice
+        n_end (np.ndarray): End counts for each slice.
+        axis (int): What axis to perform cumulative sum over, Default is None (all axes).
 
     Returns:
         np.ndarray: Incident counts for each slice.
     """
-    c_init = np.cumsum(n_init)
-    c_end = np.cumsum(n_end)
+    c_init = np.cumsum(n_init, axis)
+    c_end = np.cumsum(n_end, axis)
 
     return c_init - n_init - c_end + n_end
 
@@ -123,8 +124,14 @@ def counting_experiment_exclusive(energy_slices : Slices, KE_init : np.ndarray, 
     """
     selected = mask & ~outside_fv
     s_init, s_int = convert_energy_to_slice(energy_slices, KE_init[selected], KE_end[selected])
-    complete_slice = complete_slice(s_init, s_int)
-    return count(energy_slices, s_int[complete_slice])
+    valid_slices = complete_slice(s_init, s_int)
+    return count(energy_slices, s_int[valid_slices])
+
+
+def counting_experiment_exclusive_alt(energy_slices, KE_end : np.ndarray, mask : np.ndarray, outside_fv : np.ndarray) -> tuple[np.ndarray]:
+    selected = mask & ~outside_fv
+    s_end, s_int = convert_energy_to_slice(energy_slices, KE_end[~outside_fv], KE_end[selected])
+    return count(energy_slices, s_end, s_int)
 
 
 def counting_experiment(KE_init : np.ndarray, KE_end : np.ndarray, slices : Slices, outside_fv : np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -195,6 +202,13 @@ def total_cross_section(n_incident : np.ndarray, n_end : np.ndarray, dEdX : np.n
     NA = 6.02214076e23
     factor = 10**27 * BetheBloch.Constants.A  / (BetheBloch.Constants.rho * NA * slice_width)
 
+    if len(xs.shape) == 1:
+        pass
+    elif len(xs.shape) == 2:
+        factor = factor[:, None] # reshape to assume the first axis has equal length to the enegy slices.
+    else:
+        raise Exception(f"Input arrays have incompatible shape, {xs.shape}")
+
     return factor * xs, abs(factor * xs_e)
 
 
@@ -203,6 +217,15 @@ def exclusive_cross_section(n_incident : np.ndarray, n_end : np.ndarray, n_int :
 
     ratio = n_int / n_end
     ratio_err = ratio * (1/n_end + 1/n_int)**0.5
+
+    return ratio * xs,  quadsum([ratio_err, xs_err], 0)
+
+
+def exclusive_cross_section_alt(n_incident : np.ndarray, n_end : np.ndarray, n_end_all : np.ndarray, n_int_all : np.ndarray, dEdX : np.ndarray, dE : float) -> tuple[np.ndarray, np.ndarray]:
+    xs, xs_err = total_cross_section(n_incident, n_end, dEdX, dE)
+
+    ratio = n_int_all / n_end_all
+    ratio_err = ratio * (1/n_end_all + 1/n_int_all)**0.5
 
     return ratio * xs,  quadsum([ratio_err, xs_err], 0)
 

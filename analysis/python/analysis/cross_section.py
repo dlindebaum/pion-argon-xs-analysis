@@ -810,18 +810,24 @@ class AnalysisInput:
         upstream_loss_reco = UpstreamEnergyLoss(KE_inst_reco, upstream_energy_loss_params, upstream_loss_func)
         KE_ff_reco = KE_inst_reco - upstream_loss_reco
 
-        if min(fiducial_volume) > 0:
-            KE_init_reco = BetheBloch.KE_end(KE_ff_reco, min(fiducial_volume) * np.ones_like(KE_ff_reco), 50) # initial kinetic energy in the fiducial volume
-        else:
-            KE_init_reco = KE_ff_reco
-
-        KE_int_reco = RecoEndEnergy(events.recoParticles.beam_calo_pos, KE_ff_reco, events.recoParticles.beam_dEdX, energy_method)
+        track_length_reco = events.recoParticles.beam_track_length
 
         truncated_track_reco = TruncateTrack(events.recoParticles.beam_calo_pos, z_trunc = max(fiducial_volume))
         track_length_truncated_reco = TrackLength(tracks=truncated_track_reco)
-        KE_end_reco = RecoEndEnergy(truncated_track_reco, KE_ff_reco, events.recoParticles.beam_dEdX, energy_method)
 
-        track_length_reco = events.recoParticles.beam_track_length
+        if min(fiducial_volume) > 0:
+            track_start = np.where(track_length_reco > min(fiducial_volume), min(fiducial_volume), track_length_reco)
+
+            KE_init_reco = BetheBloch.KE_end(KE_ff_reco, track_start, 50) # initial kinetic energy in the fiducial volume
+            KE_init_reco = np.where(np.isnan(KE_init_reco), KE_end_reco, KE_init_reco) # for nan, set to KE_end, as KE_end should always be smaller than or equal to KE_int
+
+        else:
+            KE_init_reco = KE_ff_reco
+
+        KE_int_reco = RecoEndEnergy(events.recoParticles.beam_calo_pos, KE_init_reco, events.recoParticles.beam_dEdX, energy_method)
+
+        KE_end_reco = RecoEndEnergy(truncated_track_reco, KE_init_reco, events.recoParticles.beam_dEdX, energy_method)
+
         outside_tpc_reco = ProtoDUNESPGeometry().outside_tpc(events.recoParticles.beam_endPos_SCE.x, events.recoParticles.beam_endPos_SCE.y, events.recoParticles.beam_endPos_SCE.z)
 
         outside_fv_reco = (events.recoParticles.beam_endPos_SCE.z < min(fiducial_volume)) | (events.recoParticles.beam_endPos_SCE.z > max(fiducial_volume))
@@ -830,20 +836,20 @@ class AnalysisInput:
 
         if true_regions is not None:
             KE_ff_true = events.trueParticles.beam_KE_front_face
-
-            if min(fiducial_volume) > 0:
-                KE_init_true = BetheBloch.KE_end(KE_ff_true, min(fiducial_volume) * np.ones_like(KE_ff_true), 50) # initial kinetic energy in the fiducial volume
-            else:
-                KE_init_true = KE_ff_true
-
-
             KE_int_true = events.trueParticles.beam_traj_KE[:, -2]
             track_length_true = events.trueParticles.beam_track_length
             start_pos_true = events.trueParticles.beam_traj_pos[:, 0]
             end_pos_true = events.trueParticles.beam_traj_pos[:, -1]
 
-            outside_tpc_true = ProtoDUNESPGeometry().outside_tpc(events.trueParticles.endPos.x[:, 0], events.trueParticles.endPos.y[:, 0], events.trueParticles.endPos.z[:, 0])
+            if min(fiducial_volume) > 0:
+                track_start = np.where(track_length_true > min(fiducial_volume), min(fiducial_volume), track_length_true)
 
+                KE_init_true = BetheBloch.KE_end(KE_ff_true, track_start, 50) # initial kinetic energy in the fiducial volume
+                KE_init_true = np.where(np.isnan(KE_init_true), KE_end_true, KE_init_true)
+            else:
+                KE_init_true = KE_ff_true
+
+            outside_tpc_true = ProtoDUNESPGeometry().outside_tpc(events.trueParticles.endPos.x[:, 0], events.trueParticles.endPos.y[:, 0], events.trueParticles.endPos.z[:, 0])
 
             outside_fv_true = (events.trueParticles.beam_traj_pos.z[:, -1] < min(fiducial_volume)) | (events.trueParticles.beam_traj_pos.z[:, -1] > max(fiducial_volume))
             inelastic = events.trueParticles.true_beam_endProcess == "pi+Inelastic"
@@ -854,7 +860,6 @@ class AnalysisInput:
             traj_KE = events.trueParticles.beam_traj_KE[events.trueParticles.in_tpc_z]
             KE_end_true = traj_KE[ak.local_index(traj_KE) == (ak.num(truncated_tracks_true)-2)]
             KE_end_true = ak.ravel(ak.fill_none(ak.pad_none(KE_end_true, 1, -1), -999, None)) # current null value for invalid true tracks is -999
-
 
         else:
             KE_int_true = None
@@ -1020,4 +1025,18 @@ class AnalysisInput:
         return output
 
 
+    def get_outside_mask(self, fiducial_volume : tuple[float]) -> ak.Array:
+        """ Get the mask for events not in the ROI for the analysis. Considers FV and TPC boundary masks.
 
+        Args:
+            fiducial_volume (tuple[float]): Fiducial volume, if None, ignores the fiducial volume mask.
+
+        Returns:
+            ak.Array: outside ROI mask.
+        """
+        if fiducial_volume is not None:
+            init_mask = self.end_z_true < min(fiducial_volume)
+            mask = self.outside_tpc_true | init_mask
+        else:
+            mask = self.outside_tpc_true
+        return mask
