@@ -191,9 +191,9 @@ class three_signal_process_bkg_fd(SampleDefinition):
         "absorption" : "Abs",
         "charge_exchange" : "CEx",
         "pion_production" : "Pip",
-        "decay" : "Dec",
+        "decay" : "Decay",
         "escaping" : "Esc",
-        "impurities" : "Imp",
+        "impurities" : "Impure",
     }
 
 
