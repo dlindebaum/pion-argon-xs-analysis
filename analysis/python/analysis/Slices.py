@@ -181,6 +181,15 @@ class Slices:
     def pos_bins(self):
         return np.sort(self.pos_overflow)
 
+    @property
+    def slice_bins(self) -> np.ndarray:
+        """ Bin edges for histogramming slices.
+
+        Returns:
+            np.ndaray: Bin edges.
+        """
+        return np.arange(self.underflow_num - 0.5, self.overflow_num + 1.5)
+
 
     def pos_to_num(self, pos):
         """ Convert slice positions to numbers
