@@ -45,9 +45,9 @@ def make_systematic(proc_info : tuple, init_bin : tuple, end_bin : tuple):
 """
 
 def slices_to_model_bins(energy_slices : cross_section.Slices) -> dict[tuple]:
-    model_bins = energy_slices.edges_all[::-1]
-    model_bins = np.where(model_bins == energy_slices.underflow_pos, 0, model_bins)
-    model_bins = np.where(model_bins == energy_slices.overflow_pos, 999999, model_bins)
+    model_bins = [0] + list(energy_slices.edges[::-1]) + [999999]
+    # model_bins = np.where(model_bins == energy_slices.underflow_pos, 0, model_bins)
+    # model_bins = np.where(model_bins == energy_slices.overflow_pos, 999999, model_bins)
 
     bins = {}
     for i in range(len(model_bins)-1):
