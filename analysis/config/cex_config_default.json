@@ -4,14 +4,14 @@
       {
         "file": "ABSOLUTE file path",
         "type": "PDSPAnalyser or shower_merging",
-        "momentum_scale": "momentum byte of the beam, may need a value different to 1 if MC was not generated properly"
+        "pmom": "momentum byte of the beam, may need a value different to 1 if MC was not generated properly"
       }
     ],
     "data": [
       {
         "file": "ABSOLUTE file path",
         "type": "PDSPAnalyser or shower_merging",
-        "momentum_scale": 1
+        "pmom": 1
       }
     ]
   },
@@ -22,8 +22,14 @@
     700
   ],
   "SAMPLE_DEFINITIONS": {
-    "region" : "default",
-    "process" : "four_signal_process"
+    "region": "region definition to choose",
+    "region_args": {
+      "contains key value pairs of arguments needed to calculate the specified region": null
+    },
+    "process": "region definition to choose",
+    "process_args": {
+      "contains key value pairs of arguments needed to calculate the specified process": null
+    }
   },
   "BEAM_QUALITY_FITS": {
     "truncate": null
@@ -63,17 +69,22 @@
     "mc_stat_unc": true,
     "mean_track_score": null,
     "single_bin": true,
-    "regions": true
+    "regions": true,
+    "fix_np": false
   },
+  "bkg_sub_mc_stat": true,
   "ESLICE": {
-    "edges": null
+    "edges": [
+      null
+    ]
   },
   "UNFOLDING": {
     "method": 1,
     "ts_stop": 0.0001,
     "max_iter": 6,
     "ts": "ks",
-    "covariance": "poisson"
+    "covariance": "poisson",
+    "mc_stat_unc": true
   },
   "signal_process": "charge_exchange",
   "BEAM_PARTICLE_SELECTION": {
@@ -273,11 +284,15 @@
       "op": "<"
     }
   },
-  "MACH3_INPUT": {
-    "KE_int_binning" : {
-        "range" : [null, null],
-        "bin_width" : null
-    }
+  "MACH3": {
+    "KE_int_binning": {
+      "range": [
+        null,
+        null
+      ],
+      "bin_width": null
+    },
+    "fit_output": null
   },
   "beam_momentum": "nominal beam momentum in MeV",
   "P_inst_range": "plot range",

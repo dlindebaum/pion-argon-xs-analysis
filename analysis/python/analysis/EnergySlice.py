@@ -221,6 +221,25 @@ def counting_experiment(KE_init : np.ndarray, KE_end : np.ndarray, slices : Slic
     return init_counts, end_counts, inc_counts
 
 
+def calculate_interaction_tensor(counts : dict[np.ndarray], background_process : list[str] = ["impurities"]) -> np.ndarray:
+    """ Calculate the interaction tensor excluding specified backgrounds.
+
+    Args:
+        counts (dict[np.ndarray]): Counts for each process.
+
+    Returns:
+        np.ndarray: Tensor of counts for the interaction processes.
+    """
+    interaction_tensor = None
+    for k, v in counts.items():
+        if k in background_process: continue # background channel
+        if interaction_tensor is None:
+            interaction_tensor = v
+        else:
+            interaction_tensor = interaction_tensor + v
+    return interaction_tensor
+
+
 def slice_dEdX(energy_slices : Slices, particle : Particle) -> np.ndarray:
     """ Computes the mean dEdX between energy slices.
 

@@ -195,6 +195,7 @@ class three_signal_process_bkg_fd(SampleDefinition):
         "escaping" : "Esc",
         "impurities" : "Impure",
     }
+    signal = ["absorption", "charge_exchange", "pion_production"] # The processes we actually want to measure cross sections for.
 
 
 def GetTruePionCounts(events : cross_section.Data, ke_lim : float = 0):
