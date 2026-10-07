@@ -9,13 +9,11 @@ Description: Extracts cross sections from the analysis inputs. Prefits and Postf
 """
 import os
 
-import awkward as ak
 import numpy as np
-import scipy.stats as stats
 
 from rich import print
 
-from python.analysis import Application, cross_section, Master, Plots, ProcessDefinitions
+from python.analysis import Application, cross_section, Plots, ProcessDefinitions
 from python.analysis.MaCh3FitOutput import MaCh3FitOutput
 
 

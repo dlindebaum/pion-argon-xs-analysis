@@ -21,6 +21,7 @@ from apps import (
     cex_regions,
     cex_analysis_input,
     cex_mach3_input,
+    cex_cross_section
     )
 
 from python.analysis.NtupleProcessing import CalculateBatches, file_len
@@ -282,12 +283,19 @@ def main(args):
             cex_mach3_input.main(args)
         if args.stop == "mach3_input": return
 
+        #* cross section extraction
+        can_run_cross_section = ("xs_measurement" not in os.listdir(args.out))
+        if can_run_cross_section or check_run(args, "cross_section"):
+            print("run cross section extraction")
+            cex_cross_section.main(args)
+        if args.stop == "cross_section": return
+
     return
 
 
 if __name__ == "__main__":
 
-    analysis_options = ["normalisation", "beam_quality", "beam_scraper", "photon_correction", "selection", "reweight", "upstream_correction", "region_plots", "analysis_input", "mach3_input"]
+    analysis_options = ["normalisation", "beam_quality", "beam_scraper", "photon_correction", "selection", "reweight", "upstream_correction", "region_plots", "analysis_input", "mach3_input", "cross_section"]
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-C", "--create_config", type = str, help = "Create a template configuration with the default selection")
