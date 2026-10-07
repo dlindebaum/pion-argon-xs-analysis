@@ -74,6 +74,36 @@ def check_run(args : argparse.Namespace, step : str):
     return ((step in args.run) or (args.force is True)) and (step not in args.skip)
 
 
+def step_plan(args : argparse.Namespace, no_data : bool, n_data : list):
+    existing = os.listdir(args.out) if os.path.isdir(args.out) else []
+    steps = [
+        ("normalisation", (not no_data) and ((args.norm is None) or ("beam_norm" not in existing))),
+        ("beam_quality", (not hasattr(args, "mc_beam_quality_fit")) or ((len(n_data) > 0) and (not hasattr(args, "data_beam_quality_fit")))),
+        ("beam_scraper", not hasattr(args, "mc_beam_scraper_fit")),
+        ("photon_correction", hasattr(args, "shower_correction") and (args.shower_correction["correction_params"] is None)),
+        ("selection", not hasattr(args, "selection_masks")),
+        ("reweight", ("params" not in args.beam_reweight) and (not no_data)),
+        ("upstream_correction", not hasattr(args, "upstream_loss_correction_params")),
+        ("region_plots", hasattr(args, "region_plots") and ("region_plots" not in existing)),
+        ("analysis_input", (not hasattr(args, "analysis_input")) and (len(n_data) > 0)),
+        ("mach3_input", ("mach3_input" not in existing) and (len(n_data) > 0)),
+        ("cross_section", ("xs_measurement" not in existing)),
+    ]
+
+    planned = []
+    for step_name, should_run in steps:
+        if should_run or check_run(args, step_name):
+            planned.append(step_name)
+
+    if args.stop is not None:
+        planned = [
+            step_name for step_name in planned
+            if analysis_options.index(step_name) <= analysis_options.index(args.stop)
+        ]
+
+    return planned
+
+
 def main(args):
     os.makedirs(args.out, exist_ok = True)
     if args.create_config:
@@ -81,7 +111,7 @@ def main(args):
         print(f"template configuration saved as {args.out + args.create_config}")
         exit()
     else:
-        print("run analysis, checking what steps have already been run")
+        print("Checking what steps have already been run")
 
         if "data" in args.ntuple_files:
             n_data = [file_len(file.file) for file in args.ntuple_files["data"]]
@@ -94,9 +124,21 @@ def main(args):
         processing_args = CalculateBatches(args)
         args = update_args(processing_args)
 
+        planned_steps = step_plan(args, no_data, n_data)
+        print("steps to be run before execution:")
+        if not planned_steps:
+            print(f"  - None")
+            print("All required analysis steps have been run, specify which step you would like to run with the --run option, likewise --force to run them all and --stop to indicate at which step to stop at.")
+        else:
+            for step_name in planned_steps:
+                print(f"  - {step_name}")
+
+        if args.debug:
+            print("Running in debug mode, will not execute any analysis steps")
+            return
+
         #* normalisation 
-        can_run_norm = (not no_data) and ((args.norm is None) or ("beam_norm" not in os.listdir(args.out)))
-        if can_run_norm or check_run(args, "normalisation"):
+        if "normalisation" in planned_steps:
             print("calculate beam normalisation")
             cex_normalisation.main(args)
             output_path = args.out + "beam_norm/"
@@ -107,8 +149,7 @@ def main(args):
         if args.stop == "normalisation": return
 
         #* beam quality
-        can_run_bq = (not hasattr(args, "mc_beam_quality_fit")) or ((len(n_data) > 0) and (not hasattr(args, "data_beam_quality_fit")))
-        if can_run_bq or check_run(args, "beam_quality"):
+        if "beam_quality" in planned_steps:
             print("run beam quality fit")
             cex_beam_quality_fits.main(args)
             output_path = args.out + "beam_quality/"
@@ -128,8 +169,7 @@ def main(args):
         if args.stop == "beam_quality": return
 
         #* beam scraper
-        can_run_bs = not hasattr(args, "mc_beam_scraper_fit")
-        if can_run_bs or check_run(args, "beam_scraper"):
+        if "beam_scraper" in planned_steps:
             print("run beam scraper fit")
             cex_beam_scraper_fits.main(args)
             output_path = args.out + "beam_scraper/"
@@ -149,8 +189,7 @@ def main(args):
         if args.stop == "beam_scraper": return
 
         #* photon energy correction
-        can_run_pec = hasattr(args, "shower_correction") and (args.shower_correction["correction_params"] is None)
-        if can_run_pec or check_run(args, "photon_correction"):
+        if "photon_correction" in planned_steps:
             print("run shower correction")
             cex_photon_selection.main(args)
             output_path = args.out + "shower_energy_correction/"
@@ -170,8 +209,7 @@ def main(args):
         if args.stop == "photon_correction": return
 
         #* selection studies
-        can_run_ss = not hasattr(args, "selection_masks")
-        if can_run_ss or check_run(args, "selection"):
+        if "selection" in planned_steps:
             print("run selection")
             args.mc_only = len(n_data) == 0
             args.nbins = 50
@@ -203,8 +241,7 @@ def main(args):
         if args.stop == "selection": return
 
         #* beam reweight
-        can_run_rw = ("params" not in args.beam_reweight) and (not no_data)
-        if can_run_rw or check_run(args, "reweight"):
+        if "reweight" in planned_steps:
             print("run beam reweight")
             cex_beam_reweight.main(args)
             output_path = args.out + "beam_reweight/"
@@ -223,8 +260,7 @@ def main(args):
         if args.stop == "reweight": return
 
         #* upstream correction
-        can_run_uc = not hasattr(args, "upstream_loss_correction_params")
-        if can_run_uc or check_run(args, "upstream_correction"):
+        if "upstream_correction" in planned_steps:
             print("run upstream correction")
             args.no_reweight = (not hasattr(args, "beam_reweight")) or ("params" not in args.beam_reweight) 
             cex_upstream_loss.main(args)
@@ -247,16 +283,14 @@ def main(args):
         if args.stop == "upstream_correction": return
 
         #* region plots
-        can_run_rp = hasattr(args, "region_plots") and ("region_plots" not in os.listdir(args.out))
-        if can_run_rp or check_run(args, "region_plots"):
+        if "region_plots" in planned_steps:
             print("run region plots")
             cex_regions.main(args)
             # special case where the main config is not updated, rather the results from this would be used in the toy configurations
         if args.stop == "region_plots": return
 
         #* analysis input
-        can_run_ai = (not hasattr(args, "analysis_input")) and (len(n_data) > 0)
-        if can_run_ai or check_run(args, "analysis_input"):
+        if "analysis_input" in planned_steps:
             print("run analysis input")
             cex_analysis_input.main(args)
 
@@ -277,15 +311,13 @@ def main(args):
         if args.stop == "analysis_input": return
 
         #* mach3_input
-        can_run_m3 = ("mach3_input" not in os.listdir(args.out)) and (len(n_data) > 0)
-        if can_run_m3 or check_run(args, "mach3_input"):
+        if "mach3_input" in planned_steps:
             print("run mach3_input")
             cex_mach3_input.main(args)
         if args.stop == "mach3_input": return
 
         #* cross section extraction
-        can_run_cross_section = ("xs_measurement" not in os.listdir(args.out))
-        if can_run_cross_section or check_run(args, "cross_section"):
+        if "cross_section" in planned_steps:
             print("run cross section extraction")
             cex_cross_section.main(args)
         if args.stop == "cross_section": return
@@ -306,6 +338,7 @@ if __name__ == "__main__":
     parser.add_argument("--run", type = str, nargs = "+", default = [], choices = analysis_options)
     parser.add_argument("--force", action = "store_true")
     parser.add_argument("--stop", type = str, default = None, choices = analysis_options)
+    parser.add_argument("--debug", action = "store_true", help = "Print the list of apps to execute without running them.")
     parser.add_argument("--cpus", type = int, default = 1)
     parser.add_argument("-R", "--ROOT", dest = "root", action="store_true", help = "Saves the output to ROOT files in addition to the dill files.")
 
