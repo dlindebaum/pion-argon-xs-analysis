@@ -12,10 +12,10 @@ from dataclasses import dataclass, field
 import awkward as ak
 import numpy as np
 import pandas as pd
+import scipy.stats as stats
 import uproot
 
 from particle import Particle
-from scipy.stats import chi2
 from scipy.interpolate import interp1d
 
 from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, Processing, BetheBloch, ThinSlice, EnergySlice, NtupleProcessing, Slices
@@ -179,8 +179,109 @@ def RatioWeights(beam_inst_P : np.ndarray, func : str, params : list, truncate :
     weights = np.where(weights > truncate, truncate, weights)
     return weights
 
+######################### CROSS SECTION PLOTTING CODE #########################
+
+def PlotCrossSection(xs : dict[tuple], energy_slices : Slices, cross_section_name : str, xs_sim_range : tuple[float] = None):
+    """ Plot a set of cross section measurements. Assumed from the same process.
+        # TODO Include chi squared option.
+        # TODO allow more than one process to be plot for same figure plots? (name match the process to xs key for chi2 comparison)
+    Args:
+        xs (dict[tuple]): cross section measurements. Struture is tuple of arrays, weere index 0 is the value, and 1 is the error.
+        energy_slices (Slices): Energy slices.
+        cross_section_name (str): process name to plot from GEANT4 simulation.
+        xs_sim_range (tuple[float], optional): Energy range to plot for the simulation cross section (MeV). Defaults to None (full range).
+    """
+    geant_xs = GeantCrossSections(energy_range=xs_sim_range)
+
+    x = energy_slices.pos - energy_slices.width / 2
+
+    Plots.plt.figure()
+    geant_xs.Plot(cross_section_name, simplified_pion_production=True)
+
+    for label, (y, yerr) in xs.items():
+        Plots.Plot(
+            x,
+            y,
+            xerr=energy_slices.width / 2,
+            yerr=yerr,
+            newFigure=False,
+            marker="o",
+            label=label,
+        )
+    Plots.plt.legend()
+    return
+
+
+def PlotCrossSectionSteps(xs_tensor : tuple[np.ndarray], process : str, xs_prefit : tuple[np.ndarray]):
+    """ Plot the cross section for each MCMC step in histograms, one for each energy bin. Compares to prefit value.
+
+    Args:
+        xs_tensor (np.ndarray): Cross section measurements at each MCMC step.
+        process (str): Process name.
+        xs_prefit (np.ndarray): Prefit cross section.
+    """
+    for i, xs in Plots.IterMultiPlot(xs_tensor[0]):
+        Plots.plt.axvline(xs_prefit[0][i] ,color="k", linestyle="--", label = "Prefit")
+        Plots.plt.axvline(np.mean(xs), color="C1", linestyle="--", label = "Mean value")
+        Plots.PlotHist(xs, color="C0", label="MCMC steps", bins=50, newFigure=False)
+        Plots.plt.xlabel(f"{remove_(process.capitalize())} cross section (mb)")
+    return
+
+
+def PlotCrossSectionMinMax(xs_tensor : tuple[np.ndarray], xs_prefit : tuple[np.ndarray], process : str, energy_slices : Slices):
+    """ Plot the Minimum and Maximum cross sections at each MCMC step. Note that the absolute max and min are taken, not from just one step.
+
+    Args:
+        xs_tensor (tuple[np.ndarray]): Cross section measurements at each MCMC step.
+        xs_prefit (tuple[np.ndarray]): Prefit cross section.
+        process (str): Process name.
+        energy_slices (Slices): Energy slices.
+    """
+    xs_central, xs_err = xs_tensor
+
+    max_xs = ak.max(xs_central, 1)
+    max_xs_err = ak.ravel(
+        ak.Array(xs_err[ak.local_index(xs_err, axis=1) == ak.argmax(xs_central, 1, keepdims=True)])
+    )
+    min_xs = ak.min(xs_central, 1)
+    min_xs_err = ak.ravel(
+        ak.Array(xs_err[ak.local_index(xs_err, axis=1) == ak.argmin(xs_central, 1, keepdims=True)])
+    )
+
+    series = {
+        "prefit" : xs_prefit,
+        "minimum" : (min_xs, min_xs_err),
+        "maximum" : (max_xs, max_xs_err),
+    }
+    PlotCrossSection(series, energy_slices, process, [1000, 2000])
+    return
+
+
+def PlotCrossSectionCL(xs_tensor : tuple[np.ndarray], xs_prefit : tuple[np.ndarray], process : str, energy_slices : Slices, confidence_level : float = 0.68):
+    """ Plot the mean cross section and the error by calculating the Confidence level. Compares to simulation and prefit.
+
+    Args:
+        xs_tensor (tuple[np.ndarray]): Cross section measurements at each MCMC step.
+        xs_prefit (tuple[np.ndarray]): Prefit cross section.
+        process (str): Process name.
+        energy_slices (Slices): Energy slices.
+        confidence_level (float, optional): Confidence level to evaluate the errors at. Defaults to 0.68 (1 sigma).
+    """
+    xs_central, xs_err = xs_tensor # neglect the stat error from propagation.
+
+    mean_xs = np.mean(xs_central, axis=1)
+    ci = stats.t.interval(confidence_level, df=len(xs_central)-1, loc=mean_xs, scale=np.std(xs_central, axis=1, ddof=1) / np.sqrt(len(xs_central)))
+
+    series = {
+        "prefit" : xs_prefit,
+        "postfit" : (mean_xs, abs(mean_xs - np.abs(ci))),
+    }
+    PlotCrossSection(series, energy_slices, process, [1000, 2000])
+    return
+
 
 def PlotXSHists(energy_slices, hist_counts : np.ndarray, hist_counts_err : np.ndarray = None, overflow : bool = True, scale : float = 1, xlabel : str = "$KE$ (MeV)", ylabel : str = "Counts", label : str = None, color : str = None, newFigure : bool = True, title : str = None):
+    deprecation_warning()
     if hist_counts_err is None:
         hist_counts_err = np.sqrt(hist_counts)
 
@@ -196,16 +297,18 @@ def PlotXSHists(energy_slices, hist_counts : np.ndarray, hist_counts_err : np.nd
 
 
 def HypTestXS(cv, error, process, energy_slice, file = GEANT_XS):
+    deprecation_warning()
     xs_sim = GeantCrossSections(file, energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos])
     sim_curve_interp = xs_sim.GetInterpolatedCurve(process)
     x = energy_slice.pos[:-1] - energy_slice.width/2
 
     w_chi_sqr = weighted_chi_sqr(cv, sim_curve_interp(x), error)
 
-    p = chi2.sf((len(x)-1) * w_chi_sqr, len(x) - 1)
+    p = stats.chi2.sf((len(x)-1) * w_chi_sqr, len(x) - 1)
     return {"w_chi2" : w_chi_sqr, "p" : p}
 
 def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", chi2 : bool = True, newFigure : bool = True, cv_only : bool = False, marker_size : float = 6):
+    deprecation_warning()
     if hasattr(energy_slice.width, "__iter__"):
         width = energy_slice.width[:-1][::-1]
         xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos - energy_slice.width[0], energy_slice.max_pos + energy_slice.width[-1]])
@@ -243,6 +346,8 @@ def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, 
     else:
         Plots.plt.xlim(energy_slice.min_pos - (0.2 * width), energy_slice.max_pos + (0.2 * width))
     return chi_sqrs
+
+#################################################################
 
 
 class EnergyCorrection:
