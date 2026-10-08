@@ -6,11 +6,10 @@ Author: Shyam Bhuller
 
 Description: Script that creates the systematics.yaml file for MaCh3 that defines the binning.
 """
-
 import itertools
+import os
 
 from python.analysis import Application, cross_section, ProcessDefinitions
-import numpy as np
 
 def make_systematic(proc_info : tuple, init_bin : tuple, end_bin : tuple):
     init_low, init_high = init_bin[1]
@@ -85,10 +84,10 @@ def main(args : Application.argparse.Namespace):
 
     process_info = get_process_info(args.process_definitions(), args.fiducial_volume)
 
-
-    with open(f"{args.out}/systematics.yaml", "w") as f:
+    outdir = args.out + "/fit_model/"
+    os.makedirs(outdir, exist_ok=True)
+    with open(f"{outdir}PDSPFitModel.yaml", "w") as f: #? might want to look at any modules for parsing yamls.
         f.write("Systematics:\n")
-
         for end_bin, init_bin in itertools.combinations_with_replacement(model_bins.items(), 2):
             for proc_info in process_info.items():
                 f.write(make_systematic(proc_info, init_bin, end_bin))

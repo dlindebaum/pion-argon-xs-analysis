@@ -21,7 +21,8 @@ from apps import (
     cex_regions,
     cex_analysis_input,
     cex_mach3_input,
-    cex_cross_section
+    cex_cross_section,
+    cex_generate_fit_model
     )
 
 from python.analysis.NtupleProcessing import CalculateBatches, file_len
@@ -87,6 +88,7 @@ def step_plan(args : argparse.Namespace, no_data : bool, n_data : list):
         ("region_plots", hasattr(args, "region_plots") and ("region_plots" not in existing)),
         ("analysis_input", (not hasattr(args, "analysis_input")) and (len(n_data) > 0)),
         ("mach3_input", ("mach3_input" not in existing) and (len(n_data) > 0)),
+        ("fit_model", ("fit_model" not in existing)),
         ("cross_section", ("xs_measurement" not in existing)),
     ]
 
@@ -316,6 +318,12 @@ def main(args):
             cex_mach3_input.main(args)
         if args.stop == "mach3_input": return
 
+        #* fit parameter configuration generation
+        if "fit_model" in planned_steps:
+            print("run generate fit model")
+            cex_generate_fit_model.main(args)
+        if args.stop == "cross_section": return
+
         #* cross section extraction
         if "cross_section" in planned_steps:
             print("run cross section extraction")
@@ -327,7 +335,7 @@ def main(args):
 
 if __name__ == "__main__":
 
-    analysis_options = ["normalisation", "beam_quality", "beam_scraper", "photon_correction", "selection", "reweight", "upstream_correction", "region_plots", "analysis_input", "mach3_input", "cross_section"]
+    analysis_options = ["normalisation", "beam_quality", "beam_scraper", "photon_correction", "selection", "reweight", "upstream_correction", "region_plots", "analysis_input", "mach3_input", "fit_model", "cross_section"]
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-C", "--create_config", type = str, help = "Create a template configuration with the default selection")
