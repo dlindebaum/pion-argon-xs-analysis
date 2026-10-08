@@ -9,6 +9,8 @@ Description: Script that creates the systematics.yaml file for MaCh3 that define
 import itertools
 import os
 
+from rich import print
+
 from python.analysis import Application, cross_section, ProcessDefinitions
 
 def make_systematic(proc_info : tuple, init_bin : tuple, end_bin : tuple):

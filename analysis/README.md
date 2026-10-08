@@ -46,6 +46,102 @@ if you are working on DICE, i.e. `sc01.dice.priv` files are located in hdfs
 ```
 
 ---
+## Extracting cross section from premade analysis inputs
+
+**NOTE: This method uses the existing analysis inputs, so plots and results before the fit cannot be made without fully running the analysis stack procedure.**
+
+### Setup
+
+Make sure your environment is loaded:
+```
+source <path to python repo>/pion-argon-xs-analysis/analysis/env.sh
+```
+
+Within the directory `pdsp_2GeV_analysis_inputs/`, you should find two directories:
+
+```
+analysis_input:
+analysis_input_data_selected.dill  analysis_input_mc_cheated.dill  analysis_input_mc_selected.dill
+
+mach3_input:
+pdsp_Rabsorption.root  pdsp_Rcharge_exchange.root  pdsp_Rpion_production.root  pdsp_Runcategorised.root
+```
+
+The `dill` files are used within the Python framework, while the `root` files are the same samples converted to a readable format for MaCh3.
+
+### Create working directory and configuration
+
+Make a directory, and in the directory copy the pre-made 2 GeV configuration:
+
+```
+mkdir analysis_simplified/
+cd analysis_simplified/
+cp <path to python repo>/pion-argon-xs-analysis/analysis/config/cex_analysis_2GeV_config.json .
+```
+
+In the following add the configuration information for the analysis inputs:
+
+```
+"ANALYSIS_INPUTS": {
+    "mc_cheated": "/data/dune/common/pdsp_2GeV_analysis_inputs/analysis_input/analysis_input_mc_cheated.dill",
+    "mc": "/data/dune/common/pdsp_2GeV_analysis_inputs/analysis_input/analysis_input_mc_selected.dill",
+    "data": "/data/dune/common/pdsp_2GeV_analysis_inputs/analysis_input/analysis_input_data_selected.dill"
+}
+```
+
+### Creating fit model
+
+The fit model can be recreated for convenience (e.g. different binning), and to do so, run the following:
+
+```
+cex_generate_fit_model.py -c cex_analysis_2GeV_config.json -o .
+```
+
+You will find the fit model created in the workspace: `fit_model/PDSPFitModel.yaml`
+
+Now, you can update the path for the fit models in the MaCh3 configuration:
+
+from
+```
+XsecCovFile: "Configs/CovObjs/PDSPFitModel.yaml"
+```
+
+to
+```
+XsecCovFile: "<path to analysis workspace>/fit_model/PDSPFitModel.yaml"
+```
+
+### Performing the fit
+
+To perform the fit, follow the instructions in the MaCh3 documentation. Before doing so, ensure the paths in `SampleHandler_PDSP.yaml` are replaced as follows:
+
+```
+mtupleprefix: "<path to analysis inputs>/pdsp_"
+```
+
+Once the fit is performed, you should get an output root file `Test.root`. This needs to be included in the analysis configuration `json` under the MACH3 section:
+
+``` 
+"MACH3": {
+    "KE_int_binning": {
+      "range": [
+        0,
+        2400
+      ],
+      "bin_width": 50
+    },
+    "fit_output": <path to fit output>/Test.root
+  },
+```
+
+### Extract cross section
+
+Run the following:
+
+```
+cex_cross_section.py -c cex_analysis_2GeV_config.json -o .
+```
+
 
 Core modules are Master.py, vector.py and Plots.py (optional). A simple example of how to look at true data is shown in `cex_beam_quality.py`, and the other scripts are more complicated examples of how to analyse nTuples. For further detail on each module you can read the docstrings.
 ## Run cross section analysis
