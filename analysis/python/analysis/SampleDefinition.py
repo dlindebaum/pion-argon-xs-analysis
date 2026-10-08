@@ -6,6 +6,7 @@ Author: Shyam Bhuller
 Description: Module to define categories for samples based on particle counts. 
 """
 import operator
+import re
 from abc import ABC
 from collections import namedtuple
 from dataclasses import dataclass
@@ -68,3 +69,25 @@ class SampleDefinition:
             masks["uncategorised"] = ~SelectionTools.CombineMasks(masks, "or")
 
         return masks
+
+
+    def convert_process_definitions_str(self, s : str) -> dict:
+        pattern = r"(\w+)=criteria\(op='([^']+)',\s*value=([^)]+)\)"
+
+        result = {}
+
+        for key, op, value in re.findall(pattern, s):
+            # convert numeric values where possible
+            try:
+                value = int(value)
+            except ValueError:
+                try:
+                    value = float(value)
+                except ValueError:
+                    value = value.strip()
+
+            result[key] = {
+                "op": op,
+                "value": value,
+            }
+        return result

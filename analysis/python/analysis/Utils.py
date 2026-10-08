@@ -84,3 +84,7 @@ def round_value_to_error(v, e) -> str:
 
 def deprecation_warning():
     return warnings.warn("This function is legacy and should not be used in new implementations.", DeprecationWarning)
+
+
+def dict_reverse(d : dict) -> dict:
+    return {v : k for k, v in d.items()}

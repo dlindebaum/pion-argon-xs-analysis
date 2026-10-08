@@ -323,7 +323,7 @@ def CalculateResponseMatrices(template : cross_section.AnalysisInput, process : 
     Returns:
         dict[np.ndarray]: response matrices with errors for each histogram
     """
-    slice_bins = np.arange(-1 - 0.5, energy_slice.max_num + 1.5)
+    slice_bins = energy_slice.slice_bins
 
     outside_tpc_mask = template.outside_fv_reco | template.outside_fv_true
 

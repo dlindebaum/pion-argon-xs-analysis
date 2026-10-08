@@ -12,10 +12,10 @@ from dataclasses import dataclass, field
 import awkward as ak
 import numpy as np
 import pandas as pd
+import scipy.stats as stats
 import uproot
 
 from particle import Particle
-from scipy.stats import chi2
 from scipy.interpolate import interp1d
 
 from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, SelectionTools, Fitting, Plots, vector, Tags, Processing, BetheBloch, ThinSlice, EnergySlice, NtupleProcessing, Slices
@@ -179,8 +179,109 @@ def RatioWeights(beam_inst_P : np.ndarray, func : str, params : list, truncate :
     weights = np.where(weights > truncate, truncate, weights)
     return weights
 
+######################### CROSS SECTION PLOTTING CODE #########################
+
+def PlotCrossSection(xs : dict[tuple], energy_slices : Slices, cross_section_name : str, xs_sim_range : tuple[float] = None):
+    """ Plot a set of cross section measurements. Assumed from the same process.
+        # TODO Include chi squared option.
+        # TODO allow more than one process to be plot for same figure plots? (name match the process to xs key for chi2 comparison)
+    Args:
+        xs (dict[tuple]): cross section measurements. Struture is tuple of arrays, weere index 0 is the value, and 1 is the error.
+        energy_slices (Slices): Energy slices.
+        cross_section_name (str): process name to plot from GEANT4 simulation.
+        xs_sim_range (tuple[float], optional): Energy range to plot for the simulation cross section (MeV). Defaults to None (full range).
+    """
+    geant_xs = GeantCrossSections(energy_range=xs_sim_range)
+
+    x = energy_slices.pos - energy_slices.width / 2
+
+    Plots.plt.figure()
+    geant_xs.Plot(cross_section_name, simplified_pion_production=True)
+
+    for label, (y, yerr) in xs.items():
+        Plots.Plot(
+            x,
+            y,
+            xerr=energy_slices.width / 2,
+            yerr=yerr,
+            newFigure=False,
+            marker="o",
+            label=label,
+        )
+    Plots.plt.legend()
+    return
+
+
+def PlotCrossSectionSteps(xs_tensor : tuple[np.ndarray], process : str, xs_prefit : tuple[np.ndarray]):
+    """ Plot the cross section for each MCMC step in histograms, one for each energy bin. Compares to prefit value.
+
+    Args:
+        xs_tensor (np.ndarray): Cross section measurements at each MCMC step.
+        process (str): Process name.
+        xs_prefit (np.ndarray): Prefit cross section.
+    """
+    for i, xs in Plots.IterMultiPlot(xs_tensor[0]):
+        Plots.plt.axvline(xs_prefit[0][i] ,color="k", linestyle="--", label = "Prefit")
+        Plots.plt.axvline(np.mean(xs), color="C1", linestyle="--", label = "Mean value")
+        Plots.PlotHist(xs, color="C0", label="MCMC steps", bins=50, newFigure=False)
+        Plots.plt.xlabel(f"{remove_(process.capitalize())} cross section (mb)")
+    return
+
+
+def PlotCrossSectionMinMax(xs_tensor : tuple[np.ndarray], xs_prefit : tuple[np.ndarray], process : str, energy_slices : Slices):
+    """ Plot the Minimum and Maximum cross sections at each MCMC step. Note that the absolute max and min are taken, not from just one step.
+
+    Args:
+        xs_tensor (tuple[np.ndarray]): Cross section measurements at each MCMC step.
+        xs_prefit (tuple[np.ndarray]): Prefit cross section.
+        process (str): Process name.
+        energy_slices (Slices): Energy slices.
+    """
+    xs_central, xs_err = xs_tensor
+
+    max_xs = ak.max(xs_central, 1)
+    max_xs_err = ak.ravel(
+        ak.Array(xs_err[ak.local_index(xs_err, axis=1) == ak.argmax(xs_central, 1, keepdims=True)])
+    )
+    min_xs = ak.min(xs_central, 1)
+    min_xs_err = ak.ravel(
+        ak.Array(xs_err[ak.local_index(xs_err, axis=1) == ak.argmin(xs_central, 1, keepdims=True)])
+    )
+
+    series = {
+        "prefit" : xs_prefit,
+        "minimum" : (min_xs, min_xs_err),
+        "maximum" : (max_xs, max_xs_err),
+    }
+    PlotCrossSection(series, energy_slices, process, [1000, 2000])
+    return
+
+
+def PlotCrossSectionCL(xs_tensor : tuple[np.ndarray], xs_prefit : tuple[np.ndarray], process : str, energy_slices : Slices, confidence_level : float = 0.68):
+    """ Plot the mean cross section and the error by calculating the Confidence level. Compares to simulation and prefit.
+
+    Args:
+        xs_tensor (tuple[np.ndarray]): Cross section measurements at each MCMC step.
+        xs_prefit (tuple[np.ndarray]): Prefit cross section.
+        process (str): Process name.
+        energy_slices (Slices): Energy slices.
+        confidence_level (float, optional): Confidence level to evaluate the errors at. Defaults to 0.68 (1 sigma).
+    """
+    xs_central, xs_err = xs_tensor # neglect the stat error from propagation.
+
+    mean_xs = np.mean(xs_central, axis=1)
+    ci = stats.t.interval(confidence_level, df=len(xs_central)-1, loc=mean_xs, scale=np.std(xs_central, axis=1, ddof=1) / np.sqrt(len(xs_central)))
+
+    series = {
+        "prefit" : xs_prefit,
+        "postfit" : (mean_xs, abs(mean_xs - np.abs(ci))),
+    }
+    PlotCrossSection(series, energy_slices, process, [1000, 2000])
+    return
+
 
 def PlotXSHists(energy_slices, hist_counts : np.ndarray, hist_counts_err : np.ndarray = None, overflow : bool = True, scale : float = 1, xlabel : str = "$KE$ (MeV)", ylabel : str = "Counts", label : str = None, color : str = None, newFigure : bool = True, title : str = None):
+    deprecation_warning()
     if hist_counts_err is None:
         hist_counts_err = np.sqrt(hist_counts)
 
@@ -196,16 +297,18 @@ def PlotXSHists(energy_slices, hist_counts : np.ndarray, hist_counts_err : np.nd
 
 
 def HypTestXS(cv, error, process, energy_slice, file = GEANT_XS):
+    deprecation_warning()
     xs_sim = GeantCrossSections(file, energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos])
     sim_curve_interp = xs_sim.GetInterpolatedCurve(process)
     x = energy_slice.pos[:-1] - energy_slice.width/2
 
     w_chi_sqr = weighted_chi_sqr(cv, sim_curve_interp(x), error)
 
-    p = chi2.sf((len(x)-1) * w_chi_sqr, len(x) - 1)
+    p = stats.chi2.sf((len(x)-1) * w_chi_sqr, len(x) - 1)
     return {"w_chi2" : w_chi_sqr, "p" : p}
 
 def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", chi2 : bool = True, newFigure : bool = True, cv_only : bool = False, marker_size : float = 6):
+    deprecation_warning()
     if hasattr(energy_slice.width, "__iter__"):
         width = energy_slice.width[:-1][::-1]
         xs_sim = GeantCrossSections(energy_range = [energy_slice.min_pos - energy_slice.width[0], energy_slice.max_pos + energy_slice.width[-1]])
@@ -243,6 +346,8 @@ def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, 
     else:
         Plots.plt.xlim(energy_slice.min_pos - (0.2 * width), energy_slice.max_pos + (0.2 * width))
     return chi_sqrs
+
+#################################################################
 
 
 class EnergyCorrection:
@@ -810,18 +915,24 @@ class AnalysisInput:
         upstream_loss_reco = UpstreamEnergyLoss(KE_inst_reco, upstream_energy_loss_params, upstream_loss_func)
         KE_ff_reco = KE_inst_reco - upstream_loss_reco
 
+        track_length_reco = events.recoParticles.beam_track_length
+
+        truncated_track_reco = TruncateTrack(events.recoParticles.beam_calo_pos, z_trunc = max(fiducial_volume))
+        track_length_truncated_reco = TrackLength(tracks=truncated_track_reco)
+
         if min(fiducial_volume) > 0:
-            KE_init_reco = BetheBloch.KE_end(KE_ff_reco, min(fiducial_volume) * np.ones_like(KE_ff_reco), 50) # initial kinetic energy in the fiducial volume
+            track_start = np.where(track_length_reco > min(fiducial_volume), min(fiducial_volume), track_length_reco)
+
+            KE_init_reco = BetheBloch.KE_end(KE_ff_reco, track_start, 50) # initial kinetic energy in the fiducial volume
+
         else:
             KE_init_reco = KE_ff_reco
 
         KE_int_reco = RecoEndEnergy(events.recoParticles.beam_calo_pos, KE_ff_reco, events.recoParticles.beam_dEdX, energy_method)
 
-        truncated_track_reco = TruncateTrack(events.recoParticles.beam_calo_pos, z_trunc = max(fiducial_volume))
-        track_length_truncated_reco = TrackLength(tracks=truncated_track_reco)
         KE_end_reco = RecoEndEnergy(truncated_track_reco, KE_ff_reco, events.recoParticles.beam_dEdX, energy_method)
+        KE_init_reco = np.where(np.isnan(KE_init_reco), KE_end_reco, KE_init_reco) # for nan, set to KE_end, as KE_end should always be smaller than or equal to KE_int
 
-        track_length_reco = events.recoParticles.beam_track_length
         outside_tpc_reco = ProtoDUNESPGeometry().outside_tpc(events.recoParticles.beam_endPos_SCE.x, events.recoParticles.beam_endPos_SCE.y, events.recoParticles.beam_endPos_SCE.z)
 
         outside_fv_reco = (events.recoParticles.beam_endPos_SCE.z < min(fiducial_volume)) | (events.recoParticles.beam_endPos_SCE.z > max(fiducial_volume))
@@ -830,20 +941,19 @@ class AnalysisInput:
 
         if true_regions is not None:
             KE_ff_true = events.trueParticles.beam_KE_front_face
-
-            if min(fiducial_volume) > 0:
-                KE_init_true = BetheBloch.KE_end(KE_ff_true, min(fiducial_volume) * np.ones_like(KE_ff_true), 50) # initial kinetic energy in the fiducial volume
-            else:
-                KE_init_true = KE_ff_true
-
-
             KE_int_true = events.trueParticles.beam_traj_KE[:, -2]
             track_length_true = events.trueParticles.beam_track_length
             start_pos_true = events.trueParticles.beam_traj_pos[:, 0]
             end_pos_true = events.trueParticles.beam_traj_pos[:, -1]
 
-            outside_tpc_true = ProtoDUNESPGeometry().outside_tpc(events.trueParticles.endPos.x[:, 0], events.trueParticles.endPos.y[:, 0], events.trueParticles.endPos.z[:, 0])
+            if min(fiducial_volume) > 0:
+                track_start = np.where(track_length_true > min(fiducial_volume), min(fiducial_volume), track_length_true)
 
+                KE_init_true = BetheBloch.KE_end(KE_ff_true, track_start, 50) # initial kinetic energy in the fiducial volume
+            else:
+                KE_init_true = KE_ff_true
+
+            outside_tpc_true = ProtoDUNESPGeometry().outside_tpc(events.trueParticles.endPos.x[:, 0], events.trueParticles.endPos.y[:, 0], events.trueParticles.endPos.z[:, 0])
 
             outside_fv_true = (events.trueParticles.beam_traj_pos.z[:, -1] < min(fiducial_volume)) | (events.trueParticles.beam_traj_pos.z[:, -1] > max(fiducial_volume))
             inelastic = events.trueParticles.true_beam_endProcess == "pi+Inelastic"
@@ -854,7 +964,7 @@ class AnalysisInput:
             traj_KE = events.trueParticles.beam_traj_KE[events.trueParticles.in_tpc_z]
             KE_end_true = traj_KE[ak.local_index(traj_KE) == (ak.num(truncated_tracks_true)-2)]
             KE_end_true = ak.ravel(ak.fill_none(ak.pad_none(KE_end_true, 1, -1), -999, None)) # current null value for invalid true tracks is -999
-
+            KE_init_true = np.where(np.isnan(KE_init_true), KE_end_true, KE_init_true)
 
         else:
             KE_int_true = None
@@ -1020,4 +1130,18 @@ class AnalysisInput:
         return output
 
 
+    def get_outside_mask(self, fiducial_volume : tuple[float]) -> ak.Array:
+        """ Get the mask for events not in the ROI for the analysis. Considers FV and TPC boundary masks.
 
+        Args:
+            fiducial_volume (tuple[float]): Fiducial volume, if None, ignores the fiducial volume mask.
+
+        Returns:
+            ak.Array: outside ROI mask.
+        """
+        if fiducial_volume is not None:
+            init_mask = self.end_z_true < min(fiducial_volume)
+            mask = self.outside_tpc_true | init_mask
+        else:
+            mask = self.outside_tpc_true
+        return mask
