@@ -35,14 +35,15 @@
       }
     ]
   },
-  "MACH3_INPUT": {
+  "MACH3": {
     "KE_int_binning": {
       "range": [
         0,
         2400
       ],
       "bin_width": 50
-    }
+    },
+    "fit_output": null
   },
   "norm": 0.592,
   "pi_KE_lim": 100,
@@ -126,7 +127,7 @@
   },
   "bkg_sub_mc_stat": true,
   "ESLICE": {
-    "edges" : [1300, 1450, 1600, 1750, 1900]
+    "edges" : [1900, 1750, 1600, 1450, 1300]
   },
   "UNFOLDING": {
     "method": 1,

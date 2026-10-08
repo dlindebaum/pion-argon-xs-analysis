@@ -69,7 +69,7 @@ def run_regression_test(args : argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     ApplicationArguments.Config(parser, required = False, default = f"{os.environ['CONFIG_PATH']}/cex_analysis_2GeV_config.json")
-    parser.add_argument("-d", "--directory", dest = "work_dir", default="/tmp", help="Directory where the test is ran.")
+    parser.add_argument("-d", "--directory", dest = "work_dir", default="/tmp", help="Directory where the test is ran. Defaults to /tmp")
     parser.add_argument("--debug", action = "store_true", help = "dont actually run the test, just verify the file path for the data is found.")
     parser.add_argument("-f", "--files", dest = "root_file_path", required = True, help = "File path the Data and MC root files are stored in (will do a recusive search).")
     parser.add_argument("--cpus", type = int, default = 1)

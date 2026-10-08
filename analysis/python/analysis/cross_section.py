@@ -928,9 +928,9 @@ class AnalysisInput:
         else:
             KE_init_reco = KE_ff_reco
 
-        KE_int_reco = RecoEndEnergy(events.recoParticles.beam_calo_pos, KE_init_reco, events.recoParticles.beam_dEdX, energy_method)
+        KE_int_reco = RecoEndEnergy(events.recoParticles.beam_calo_pos, KE_ff_reco, events.recoParticles.beam_dEdX, energy_method)
 
-        KE_end_reco = RecoEndEnergy(truncated_track_reco, KE_init_reco, events.recoParticles.beam_dEdX, energy_method)
+        KE_end_reco = RecoEndEnergy(truncated_track_reco, KE_ff_reco, events.recoParticles.beam_dEdX, energy_method)
         KE_init_reco = np.where(np.isnan(KE_init_reco), KE_end_reco, KE_init_reco) # for nan, set to KE_end, as KE_end should always be smaller than or equal to KE_int
 
         outside_tpc_reco = ProtoDUNESPGeometry().outside_tpc(events.recoParticles.beam_endPos_SCE.x, events.recoParticles.beam_endPos_SCE.y, events.recoParticles.beam_endPos_SCE.z)

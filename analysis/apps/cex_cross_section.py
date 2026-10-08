@@ -39,7 +39,7 @@ def extract_cross_sections(analysis_input : cross_section.AnalysisInput, energy_
             "KE_init" : analysis_input.KE_init_true,
             "KE_end" : analysis_input.KE_end_true,
             "outside_fv" : analysis_input.get_outside_mask(fiducial_volume),
-        }        
+        }
 
 
     counts = {k : v for k, v in zip(
@@ -81,7 +81,7 @@ def main(args : Application.argparse.Namespace):
 
     with Plots.PlotBook(f"{outdir}cross_section_plots") as book:
         if postfit_cross_sections is None:
-            for k, v in prefit_cross_sections:
+            for k, v in prefit_cross_sections.items():
                 cross_section.PlotCrossSection({"prefit" : v}, args.energy_slices, k, [1000, 2000])
                 book.Save()
         else:

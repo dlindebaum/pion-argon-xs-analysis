@@ -119,7 +119,7 @@ def main(args):
             n_data = []
         no_data = len(n_data) == 0
         if no_data:
-            print("no data file was specified, 'normalisation', 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
+            print("no data file was specified, 'normalisation' and 'beam_reweight' will not run")
 
         processing_args = CalculateBatches(args)
         args = update_args(processing_args)
