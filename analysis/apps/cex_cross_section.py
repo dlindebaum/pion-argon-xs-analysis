@@ -17,7 +17,6 @@ from python.analysis import Application, cross_section, Plots, ProcessDefinition
 from python.analysis.MaCh3FitOutput import MaCh3FitOutput
 
 
-
 def extract_cross_sections(analysis_input : cross_section.AnalysisInput, energy_slices : cross_section.Slices, process_definitions : ProcessDefinitions.SampleDefinition, fiducial_volume : tuple[float], posterior_tensors : np.ndarray, exclude_fiducial_volume : bool = False):
     dEdX = cross_section.BetheBloch.mean_dEdX(energy_slices.pos - energy_slices.width/2, cross_section.Particle.from_pdgid(211))
 
@@ -48,7 +47,7 @@ def extract_cross_sections(analysis_input : cross_section.AnalysisInput, energy_
         )
     }
 
-    interaction_tensor = {k : cross_section.EnergySlice.calculate_interaction_tensor(v) for k, v in counts.items()}
+    interaction_tensor = {k : cross_section.EnergySlice.calculate_interaction_tensor(v) for k, v in counts.items()} # dict[proc_name: np.array.shape(E_init, E_end)], by default it will not create interaction tensors for processes labelled "Impurities".
     interaction_tensor["all"] = np.add(*list(interaction_tensor.values()))
     n_inc = cross_section.EnergySlice.incident(np.sum(interaction_tensor["valid"], 0), np.sum(interaction_tensor["valid"], 1), 0)
 
@@ -59,7 +58,8 @@ def extract_cross_sections(analysis_input : cross_section.AnalysisInput, energy_
     cross_sections = {"total_inelastic" : cross_section.EnergySlice.total_cross_section(n_inc[1:-1], n_end[1:-1], dEdX, energy_slices.width)}
     for k, v in n_int_all.items():
         if k in process_definitions.signal:
-            cross_sections[k] = cross_section.EnergySlice.exclusive_cross_section(n_inc[1:-1], n_end[1:-1], n_end_all[1:-1], v[1:-1], dEdX, energy_slices.width)
+            cross_sections[k] = cross_section.EnergySlice.exclusive_cross_section_from_total(n_end_all[1:-1], v[1:-1], *cross_sections["total_inelastic"])
+            # cross_sections[k] = cross_section.EnergySlice.exclusive_cross_section(n_inc[1:-1], n_end[1:-1], n_end_all[1:-1], v[1:-1], dEdX, energy_slices.width)
     return cross_sections
 
 
@@ -94,8 +94,8 @@ def main(args : Application.argparse.Namespace):
 
                 cross_section.PlotCrossSectionCL(v, prefit_cross_sections[k], k, args.energy_slices)
                 book.Save()
-
     return
+
 
 if __name__ == "__main__":
 

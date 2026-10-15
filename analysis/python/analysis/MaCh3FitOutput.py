@@ -56,7 +56,7 @@ class MaCh3FitOutput:
         for k, v in self.posteriors.items():
             proc, *bins = k.split("-")
             proc = proc.replace("True", "")
-            proc = Utils.dict_reverse(self.process_definitions.short_name)[proc]
+            proc = Utils.dict_inverse(self.process_definitions.short_name)[proc]
 
             index = [self.__fmt_bin__(i.split("_")[-1], self.energy_slices) for i in bins]
             if proc in posterior_tensor:

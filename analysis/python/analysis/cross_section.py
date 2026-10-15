@@ -921,9 +921,9 @@ class AnalysisInput:
         track_length_truncated_reco = TrackLength(tracks=truncated_track_reco)
 
         if min(fiducial_volume) > 0:
-            track_start = np.where(track_length_reco > min(fiducial_volume), min(fiducial_volume), track_length_reco)
+            track_length_min = np.where(events.recoParticles.beam_endPos_SCE.z > min(fiducial_volume), min(fiducial_volume), track_length_reco)
 
-            KE_init_reco = BetheBloch.KE_end(KE_ff_reco, track_start, 50) # initial kinetic energy in the fiducial volume
+            KE_init_reco = BetheBloch.KE_end(KE_ff_reco, track_length_min, 50) # initial kinetic energy in the fiducial volume
 
         else:
             KE_init_reco = KE_ff_reco
@@ -931,7 +931,6 @@ class AnalysisInput:
         KE_int_reco = RecoEndEnergy(events.recoParticles.beam_calo_pos, KE_ff_reco, events.recoParticles.beam_dEdX, energy_method)
 
         KE_end_reco = RecoEndEnergy(truncated_track_reco, KE_ff_reco, events.recoParticles.beam_dEdX, energy_method)
-        KE_init_reco = np.where(np.isnan(KE_init_reco), KE_end_reco, KE_init_reco) # for nan, set to KE_end, as KE_end should always be smaller than or equal to KE_int
 
         outside_tpc_reco = ProtoDUNESPGeometry().outside_tpc(events.recoParticles.beam_endPos_SCE.x, events.recoParticles.beam_endPos_SCE.y, events.recoParticles.beam_endPos_SCE.z)
 
@@ -947,9 +946,9 @@ class AnalysisInput:
             end_pos_true = events.trueParticles.beam_traj_pos[:, -1]
 
             if min(fiducial_volume) > 0:
-                track_start = np.where(track_length_true > min(fiducial_volume), min(fiducial_volume), track_length_true)
+                track_length_min = np.where(events.trueParticles.endPos.z[:, 0] > min(fiducial_volume), min(fiducial_volume), track_length_true)
 
-                KE_init_true = BetheBloch.KE_end(KE_ff_true, track_start, 50) # initial kinetic energy in the fiducial volume
+                KE_init_true = BetheBloch.KE_end(KE_ff_true, track_length_min, 50) # initial kinetic energy in the fiducial volume
             else:
                 KE_init_true = KE_ff_true
 
@@ -964,7 +963,7 @@ class AnalysisInput:
             traj_KE = events.trueParticles.beam_traj_KE[events.trueParticles.in_tpc_z]
             KE_end_true = traj_KE[ak.local_index(traj_KE) == (ak.num(truncated_tracks_true)-2)]
             KE_end_true = ak.ravel(ak.fill_none(ak.pad_none(KE_end_true, 1, -1), -999, None)) # current null value for invalid true tracks is -999
-            KE_init_true = np.where(np.isnan(KE_init_true), KE_end_true, KE_init_true)
+            KE_init_true = np.where(np.isnan(KE_init_true), KE_end_true, KE_init_true) # for nan, set to KE_end, as KE_end should always be smaller than or equal to KE_int. can occur when KE_ff is 0.
 
         else:
             KE_int_true = None

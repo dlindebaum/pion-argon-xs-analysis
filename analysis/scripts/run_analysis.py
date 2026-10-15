@@ -135,8 +135,8 @@ def main(args):
             for step_name in planned_steps:
                 print(f"  - {step_name}")
 
-        if args.debug:
-            print("Running in debug mode, will not execute any analysis steps")
+        if args.dry_run:
+            print("Doing a dry run, will not execute any analysis steps")
             return
 
         #* normalisation 
@@ -346,7 +346,7 @@ if __name__ == "__main__":
     parser.add_argument("--run", type = str, nargs = "+", default = [], choices = analysis_options)
     parser.add_argument("--force", action = "store_true")
     parser.add_argument("--stop", type = str, default = None, choices = analysis_options)
-    parser.add_argument("--debug", action = "store_true", help = "Print the list of apps to execute without running them.")
+    parser.add_argument("--dry-run", dest="dry_run", action = "store_true", help = "Print the list of apps to execute without running them.")
     parser.add_argument("--cpus", type = int, default = 1)
     parser.add_argument("-R", "--ROOT", dest = "root", action="store_true", help = "Saves the output to ROOT files in addition to the dill files.")
 

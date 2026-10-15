@@ -253,7 +253,7 @@ def slice_dEdX(energy_slices : Slices, particle : Particle) -> np.ndarray:
     return BetheBloch.mean_dEdX(energy_slices.edges - energy_slices.width/2, particle)
 
 
-def total_cross_section(n_incident : np.ndarray, n_end : np.ndarray, dEdX : np.ndarray, dE : float) -> tuple[np.ndarray, np.ndarray]:
+def total_cross_section(n_incident : np.ndarray, n_end : np.ndarray, dEdX : np.ndarray, dE : float, error : bool = True) -> tuple[np.ndarray, np.ndarray]:
     """ Calculate total inelastic cross section in mb.
         !Note: the statistical uncertainty propagation does not account for the correlation between end, int end_all and int_all. 
 
@@ -270,11 +270,6 @@ def total_cross_section(n_incident : np.ndarray, n_end : np.ndarray, dEdX : np.n
 
     xs = np.log(n_incident / (n_incident - n_end)) # calculate a dimensionless cross section
 
-    v_incident = n_incident # poisson uncertainty
-    v_interact = n_end * (1- (n_end/n_incident)) # binomial uncertainty
-
-    xs_e = (1/n_incident) * (1/(n_incident - n_end)) * (n_end**2 * v_incident + n_incident**2 * v_interact)**0.5
-
     NA = 6.02214076e23
     factor = 10**27 * BetheBloch.Constants.A  / (BetheBloch.Constants.rho * NA * slice_width)
 
@@ -285,11 +280,38 @@ def total_cross_section(n_incident : np.ndarray, n_end : np.ndarray, dEdX : np.n
     else:
         raise Exception(f"Input arrays have incompatible shape, {xs.shape}")
 
-    return factor * xs, abs(factor * xs_e)
+    if error:
+        v_incident = n_incident # poisson uncertainty
+        v_interact = n_end * (1- (n_end/n_incident)) # binomial uncertainty
+
+        xs_e = (1/n_incident) * (1/(n_incident - n_end)) * (n_end**2 * v_incident + n_incident**2 * v_interact)**0.5
+        return factor * xs, abs(factor * xs_e)
+    else:
+        return factor * xs
 
 
-def exclusive_cross_section(n_incident : np.ndarray, n_end : np.ndarray, n_end_all : np.ndarray, n_int_all : np.ndarray, dEdX : np.ndarray, dE : float) -> tuple[np.ndarray, np.ndarray]:
-    """ Calculate exclusive interaction cross section.
+def exclusive_cross_section_from_total(n_end_all : np.ndarray, n_int_all : np.ndarray, xs : np.ndarray, xs_err : np.ndarray = None) -> tuple[np.ndarray, np.ndarray] | tuple[np.ndarray]:
+    """ Calculate exclusive interaction cross section provided the total cross section.
+
+    Args:
+        n_end_all (np.ndarray): End counts.
+        n_int_all (np.ndarray): Exclusive interaction counts.
+        xs (np.ndarray): Total cross section.
+        xs_err (np.ndarray, optional): Error in the total cross section. Defaults to None.
+
+    Returns:
+        tuple[np.ndarray, np.ndarray] | tuple[np.ndarray]: _description_
+    """
+    ratio = n_int_all / n_end_all
+    if xs_err is not None:
+        ratio_err = ratio * (1/n_end_all + 1/n_int_all)**0.5
+        return ratio * xs, quadsum([ratio_err, xs_err], 0)
+    else:
+        return ratio * xs
+
+
+def exclusive_cross_section(n_incident : np.ndarray, n_end : np.ndarray, n_end_all : np.ndarray, n_int_all : np.ndarray, dEdX : np.ndarray, dE : float, error : bool = True) -> tuple[np.ndarray, np.ndarray]:
+    """ Calculate exclusive interaction cross section provided the interacting and initial counts.
         !Note: the statistical uncertainty propagation does not account for the correlation between end, int end_all and int_all. 
 
     Args:
@@ -306,9 +328,12 @@ def exclusive_cross_section(n_incident : np.ndarray, n_end : np.ndarray, n_end_a
     xs, xs_err = total_cross_section(n_incident, n_end, dEdX, dE)
 
     ratio = n_int_all / n_end_all
-    ratio_err = ratio * (1/n_end_all + 1/n_int_all)**0.5
 
-    return ratio * xs,  quadsum([ratio_err, xs_err], 0)
+    if error:
+        ratio_err = ratio * (1/n_end_all + 1/n_int_all)**0.5
+        return ratio * xs,  quadsum([ratio_err, xs_err], 0)
+    else:
+        return ratio * xs
 
 #! Deprecated.
 def NIncident(n_initial : np.ndarray, n_end : np.ndarray) -> np.ndarray:

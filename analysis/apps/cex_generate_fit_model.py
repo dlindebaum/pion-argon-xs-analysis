@@ -68,14 +68,14 @@ def get_process_info(process : ProcessDefinitions.SampleDefinition, fiducial_vol
     for k, v in process.definitions.items():
         definitions =  process.convert_process_definitions_str(str(v[0]))
         if "beam_escapes" in definitions:
-            if definitions["beam_escapes"]["op"] == "==" and definitions["beam_escapes"]["value"] == 0:
+            if definitions["beam_escapes"]["op"] == "==" and definitions["beam_escapes"]["value"] == 0: # beam particle does not escape, so events for this process must be within the fv.
                 fv = fiducial_volume
-            elif definitions["beam_escapes"]["op"] == "==" and definitions["beam_escapes"]["value"] == 1:
+            elif definitions["beam_escapes"]["op"] == "==" and definitions["beam_escapes"]["value"] == 1: # beam particle escapes fv for this sample.
                 fv = [max(fiducial_volume), 999]
             else:
-                fv = [min(fiducial_volume), 999]
+                fv = [min(fiducial_volume), 999] # ends before fv.
         else:
-            fv = (0, 999)
+            fv = (0, 999) # if beam_escapes is not included, then disregard the fv.
         model_process_info[process.short_name[k]] = {"mode" : process.mode[k], "z_region" : fv}
     return model_process_info
 
