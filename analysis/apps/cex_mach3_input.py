@@ -23,9 +23,9 @@ def main(args : cross_section.argparse.Namespace):
         new_sample = mc.SelectSample(mc.regions[n])
 
         bins = np.arange(
-            min(args.mach3_input["KE_int_binning"]["range"]),
-            max(args.mach3_input["KE_int_binning"]["range"]) + args.mach3_input["KE_int_binning"]["bin_width"],
-            args.mach3_input["KE_int_binning"]["bin_width"]
+            min(args.mach3["KE_int_binning"]["range"]),
+            max(args.mach3["KE_int_binning"]["range"]) + args.mach3["KE_int_binning"]["bin_width"],
+            args.mach3["KE_int_binning"]["bin_width"]
             )
         hists = {f"{n}_DataHist" : np.histogram(np.array(data.KE_int_reco[m]), bins)}
 
