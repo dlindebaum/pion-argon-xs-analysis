@@ -1,0 +1,2 @@
+"""Event-level selection logic."""
+

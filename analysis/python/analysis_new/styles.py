@@ -1,0 +1,2 @@
+"""Style configuration for plotting."""
+
