@@ -14,15 +14,6 @@ from python.analysis import cross_section, SelectionTools, PFOSelection, SampleD
 from rich import print
 
 
-def args_to_dict(args : cross_section.argparse.Namespace | dict) -> dict:
-    if type(args) == cross_section.argparse.Namespace:
-        args_c = vars(args)
-    else:
-        args_c = args
-
-    return args_c
-
-
 @cross_section.timer
 def BeamPionSelection(events : cross_section.Data, args : cross_section.argparse.Namespace | dict, is_mc : bool) -> cross_section.Data:
     """ Apply beam pion selection to ntuples.
