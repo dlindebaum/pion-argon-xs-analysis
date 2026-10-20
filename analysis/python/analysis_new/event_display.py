@@ -12,10 +12,10 @@ import numpy as np
 
 from python.analysis import vector
 
-
 class EventDisplay:
     """ Event display class, an object which produces figures and allows the user.
         to draw various objects on the plot (see methods).
+        #! Use TPCGeometry class for bounds.
     Attributes:
         xlim (tuple): xRange of plots.
         ylim (tuple): yRange of plots.

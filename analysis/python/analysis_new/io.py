@@ -1,8 +1,5 @@
 """Input/output helpers for object and config persistence."""
 
-FileDescriptor = namedtuple("FileDescriptor", ["file", "type", "momentum_scale"])
-
-
 def LoadObject(file : str):
     """ Opens and serialises object saved as a dill file. May be remaned to a more general method if dill files are used more commonly.
 

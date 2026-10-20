@@ -1,5 +1,74 @@
 """NTuple and data container definitions."""
 
+FileDescriptor = namedtuple("FileDescriptor", ["file", "type", "momentum_scale"])
+
+class Sample(str, Enum):
+    MC = "mc"
+    DATA = "data"
+
+
+def file_len(file : str) -> int:
+    """ Get number of events of an PDSP Analyser Ntuple file.
+
+    Args:
+        file (str): path of Ntuple.
+
+    Returns:
+        int: Number of events
+    """
+    return len(IO(file).Get(["EventID", "event"]))
+
+
+def CalculateBatches(args : argparse.Namespace) -> dict[str, any]:
+    """ Calculate the number of events to process in eacn batch.
+
+    Args:
+        args (argparse.Namespace): Application Arguments.
+
+    Returns:
+        dict[str, any]: Multiprocessing arguments.
+    """
+    if "data" in args.ntuple_files:
+        n_data = [file_len(file_desc.file) for file_desc in args.ntuple_files["data"]]
+    else:
+        n_data = []
+
+    if len(n_data) == 0:
+        print("no data file was specified, 'normalisation', 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
+
+    n_mc = [file_len(file_desc.file) for file_desc in args.ntuple_files["mc"]] # must have MC
+
+    processing_args = {"events" : None, "batches" : None, "threads" : args.cpus}
+
+    # pass multiprocessing args
+    # if max([*n_data, *n_mc]) >= 7E5:
+    #     processing_args["events"] = None
+    #     processing_args["batches"] = int(2 * max([*n_data, *n_mc]) // 7E5)
+    #     processing_args["threads"] = args.cpus
+
+    return processing_args
+
+
+def RunProcess(ntuple_files : list[FileDescriptor], is_data : bool, args : argparse.Namespace, func : callable, merge : bool = True) -> list[dict] | dict:
+    """ Run a process on Ntuple files.
+
+    Args:
+        ntuple_files (list[FileDescriptor]): Ntuple files.
+        is_data (bool): Whether the Ntuple files are Data or MC.
+        args (argparse.Namespace): Application arguments.
+        func (callable): Process to run.
+        merge (bool, optional): Whether to merge the outputs of the processing. Defaults to True.
+
+    Returns:
+        list[dict] | dict: Output of the processing.
+    """
+    func_args = vars(args)
+    func_args["data"] = is_data
+    output = Processing.mutliprocess(func, ntuple_files, args.batches, args.events, func_args, args.threads)
+    if merge:
+        output = MergeOutputs(output)
+    return output
+
 class Ntuple_Type(str, Enum):
     PDSP = "PDSPAnalyser"
     SHOWER_MERGING = "shower_merging"

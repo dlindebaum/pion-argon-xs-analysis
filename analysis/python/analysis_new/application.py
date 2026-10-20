@@ -563,3 +563,27 @@ class ApplicationArguments:
             else:
                 continue
         return args
+
+
+def ApplicationProcessing(samples : list[Sample], outdir : str, args : argparse.Namespace, func : callable, merge : bool, outname : str = "output") -> list[dict] | dict:
+    """ Processing specifically for Applications where there is an option to reload processed data rather than fully reprocessing Ntuples.
+
+    Args:
+        samples (list[Sample]): What sample types to process, can be Data, MC or both.
+        outdir (str): Output directory for stored processing outputs.
+        args (argparse.Namespace): Application arguments.
+        func (callable): Process to run.
+        merge (bool): whether to merge the processing outputs.
+        outname (str, optional): Output file name. Defaults to "output".
+
+    Returns:
+        list[dict] | dict: Processing outputs, either loaded from file or processed at runtime.
+    """
+    if (args.regen is True) or (os.path.isfile(f"{outdir}{outname}.dill") is False):
+        print("Processing Ntuples")
+        outputs = {s : RunProcess(args.ntuple_files[s], s == Sample.DATA, args, func, merge) for s in samples}
+        SaveObject(f"{outdir}{outname}.dill", outputs)
+    else:
+        print("Loading existing outputs")
+        outputs = LoadObject(f"{outdir}{outname}.dill")
+    return outputs

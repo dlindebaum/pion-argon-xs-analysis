@@ -12,6 +12,42 @@ import warnings
 
 import dill
 
+import sys
+
+from IPython.core.magic import register_line_magic
+from IPython import get_ipython
+
+@register_line_magic
+def init_notebook(line):
+    ipython = get_ipython()
+    ipython.run_line_magic("matplotlib", "inline") # %matplotlib inline
+    ipython.run_line_magic("load_ext", "autoreload") # %load_ext autoreload
+    ipython.run_line_magic("autoreload", "2") # %autoreload 2
+
+    #* magic to add python path to notebook environment
+    for pypath in sys.path:
+        if pypath.split("/")[-1] == "analysis": break
+    print(pypath)
+    ipython.run_line_magic("env", "PYTHONPATH $pypath") # %env PYTHONPATH $pypath
+    return
+
+
+def Efficiency(selected_count : np.array, total_count : np.array) -> tuple[np.array, np.array]:
+    """ Calcualtes selection efficiency and binomial error.
+
+    Args:
+        selected_count (np.array): number of selected events
+        total_count (np.array): number of total events
+
+    Returns:
+        tuple[np.array, np.array]: efficiency, error
+    """
+    p = selected_count / total_count
+    p = np.nan_to_num(p)
+    error = (p * (1 - p) / total_count)**0.5
+    return p, error
+
+
 def timer(func):
     """ Decorator which times a function.
 
@@ -126,3 +162,24 @@ def deprecation_warning():
 
 def dict_inverse(d : dict) -> dict:
     return {v : k for k, v in d.items()}
+
+
+def ClipJagged(array, min, max):
+    """ Clips a jagged (awkward) array, if the type of aray is an awkward array, returns as an awkward array, otherwise it returns a list of nested arrays
+
+    Args:
+        array: array
+
+    Returns:
+        clipped array
+    """
+    orig_type = type(array)
+    if orig_type != ak.Array:
+        array = ak.Array(array)
+
+    array = ak.where(array < min, min, array)
+    array = ak.where(array > max, max, array)
+
+    if orig_type != ak.Array:
+        array = list(array)
+    return array
