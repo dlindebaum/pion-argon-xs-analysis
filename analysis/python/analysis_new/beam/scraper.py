@@ -1,7 +1,13 @@
 """Beam scraper utilities."""
+import awkward as ak
+import numpy as np
 
-def IsScraper(mc : Data, beam_scraper_args : dict) -> ak.Array:
-    beam_inst_KE = KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
+from particle import Particle
+
+from .. import bethe_bloch, common, fitting, kinematics, selection, ntuple, plots
+
+def IsScraper(mc : ntuple.Data, beam_scraper_args : dict) -> ak.Array:
+    beam_inst_KE = kinematics.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
     true_ffKE = mc.trueParticles.beam_KE_front_face
 
     delta_KE_upstream = beam_inst_KE - true_ffKE
@@ -12,7 +18,7 @@ def IsScraper(mc : Data, beam_scraper_args : dict) -> ak.Array:
         threshold = v["mu_e_res"] + 3 * abs(v["sigma_e_res"])
         
         scraper_ids[k] = scraper_ids[k] & (delta_KE_upstream > threshold)
-    scraper_ids = SelectionTools.CombineMasks(scraper_ids, operator = "or")
+    scraper_ids = selection.CombineMasks(scraper_ids, operator = "or")
     return scraper_ids
 
 
@@ -27,7 +33,7 @@ def GetTrueFFKE(KE_tpc : ak.Array, length_to_ff : ak.Array) -> ak.Array:
     Returns:
         ak.Array: true kinetic energy at the front face of the TPC
     """
-    dEdX = BetheBloch.mean_dEdX(KE_tpc, Particle.from_pdgid(211))
+    dEdX = bethe_bloch.mean_dEdX(KE_tpc, Particle.from_pdgid(211))
     return KE_tpc + dEdX * length_to_ff
 
 
@@ -78,7 +84,7 @@ def GetScraperFits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : 
     Returns:
         dict: fit parameters
     """
-    plot = Plots.MultiPlot(len(ke_bins) - 1)
+    plot = plots.MultiPlot(len(ke_bins) - 1)
 
     scraper_fit = {}
     for i in range(1, len(ke_bins)):
@@ -94,24 +100,24 @@ def GetScraperFits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : 
         print(f"{(max(y), np.nanmedian(data), np.nanstd(data))=}")
 
         next(plot)
-        popt, perr, metrics = Fitting.Fit(cross_section.bin_centers(bin_edges), y, yerr, Fitting.gaussian, method = "dogbox", return_chi_sqr = True)#, plot = True, plot_style = "scatter", xlabel = "$\\Delta E_{upstream}$ (MeV)", title = bin_label, plot_range = residual_range)
-        heights, _ = Plots.PlotHist(data, newFigure = False, bins = fit_bins, range = residual_range, label = "observed")
+        popt, perr, metrics = fitting.Fit(common.bin_centers(bin_edges), y, yerr, fitting.gaussian, method = "dogbox", return_chi_sqr = True)#, plot = True, plot_style = "scatter", xlabel = "$\\Delta E_{upstream}$ (MeV)", title = bin_label, plot_range = residual_range)
+        heights, _ = plots.PlotHist(data, newFigure = False, bins = fit_bins, range = residual_range, label = "observed")
         x_interp = np.linspace(min(data), max(data), 10 * fit_bins)
-        y_interp = Fitting.gaussian.func(x_interp, max(heights), popt[1], popt[2])
-        Plots.Plot(x_interp, y_interp, color = "black", label = "fit", title = bin_label, xlabel = "$\\Delta E_{upstream}$ (MeV)", newFigure = False)
-        plt.axvline(popt[1] + 3 * abs(popt[2]), color = "black", linestyle = "--", label = "$\\mu + 3\\sigma$")
-        plt.xlim(*residual_range)
+        y_interp = fitting.gaussian.func(x_interp, max(heights), popt[1], popt[2])
+        plots.Plot(x_interp, y_interp, color = "black", label = "fit", title = bin_label, xlabel = "$\\Delta E_{upstream}$ (MeV)", newFigure = False)
+        plots.plt.axvline(popt[1] + 3 * abs(popt[2]), color = "black", linestyle = "--", label = "$\\mu + 3\\sigma$")
+        plots.plt.xlim(*residual_range)
 
-        main_legend = plt.legend(loc = "upper left")
+        main_legend = plots.plt.legend(loc = "upper left")
         main_legend.set_zorder(12)
 
         #* add fit metrics to the plot in a second legend
-        plt.gca().add_artist(main_legend)
+        plots.plt.gca().add_artist(main_legend)
         text = ""
         for j in range(len(popt)):
             text += f"\\np{j}: ${popt[j]:.2g}\\pm${perr[j]:.2g}"
         text += "\\n$\\chi^{2}/ndf$ : " + f"{metrics[0]/metrics[1]:.2g}, p : " + f"{metrics[2]:.1g}"
-        legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = "upper right", title = Fitting.gaussian.__name__)
+        legend = plots.plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = "upper right", title = fitting.gaussian.__name__)
         legend.set_zorder(12)
         for l in legend.legend_handles:
             l.set_visible(False)
@@ -138,7 +144,7 @@ def BeamScraperPlots(beam_inst_KE_bins : list, output_mc : dict[ak.Array], scrap
 
     output = {}
 
-    for i in Plots.MultiPlot(len(beam_inst_KE_bins)-1):
+    for i in plots.MultiPlot(len(beam_inst_KE_bins)-1):
         if i == len(beam_inst_KE_bins): continue
         bin_edges = (beam_inst_KE_bins[i], beam_inst_KE_bins[i+1])
         bin_label = "$KE^{reco}_{inst}$:" + f"[{beam_inst_KE_bins[i]},{beam_inst_KE_bins[i+1]}] (MeV)"
@@ -147,8 +153,8 @@ def BeamScraperPlots(beam_inst_KE_bins : list, output_mc : dict[ak.Array], scrap
 
         is_scraper = output_mc["delta_KE_upstream"][e] > (fit_values["mu_e_res"] + 3 * fit_values["sigma_e_res"])
 
-        Plots.Plot(output_mc["beam_inst_x"][e][~is_scraper], output_mc["beam_inst_y"][e][~is_scraper], newFigure = False, linestyle = "", marker = "o", markersize = 2, color = "C0", alpha = 0.5, label = "non-scraper", rasterized = True)
-        Plots.Plot(output_mc["beam_inst_x"][e][is_scraper], output_mc["beam_inst_y"][e][is_scraper], newFigure = False, linestyle = "", marker = "o", markersize = 2, color = "C6", alpha = 0.5, label = "scraper", rasterized = True)
+        plots.Plot(output_mc["beam_inst_x"][e][~is_scraper], output_mc["beam_inst_y"][e][~is_scraper], newFigure = False, linestyle = "", marker = "o", markersize = 2, color = "C0", alpha = 0.5, label = "non-scraper", rasterized = True)
+        plots.Plot(output_mc["beam_inst_x"][e][is_scraper], output_mc["beam_inst_y"][e][is_scraper], newFigure = False, linestyle = "", marker = "o", markersize = 2, color = "C6", alpha = 0.5, label = "scraper", rasterized = True)
 
         mu_x = ak.mean(output_mc["beam_inst_x"][e])
         mu_y = ak.mean(output_mc["beam_inst_y"])
@@ -165,10 +171,10 @@ def BeamScraperPlots(beam_inst_KE_bins : list, output_mc : dict[ak.Array], scrap
             x = r*np.cos(theta) + mu_x
             y = r*np.sin(theta) + mu_y
 
-            Plots.Plot(x, y, linestyle = "--", color = f"C{7+j}", alpha = 1, label = f"{m}$r_{{inst}}$", newFigure = False)
-        plt.xlabel("$X^{reco}_{inst}$ (cm)")
-        plt.ylabel("$Y^{reco}_{inst}$ (cm)")
-        plt.title(bin_label)
-        plt.axis('scaled')
-        plt.legend()
+            plots.Plot(x, y, linestyle = "--", color = f"C{7+j}", alpha = 1, label = f"{m}$r_{{inst}}$", newFigure = False)
+        plots.plt.xlabel("$X^{reco}_{inst}$ (cm)")
+        plots.plt.ylabel("$Y^{reco}_{inst}$ (cm)")
+        plots.plt.title(bin_label)
+        plots.plt.axis('scaled')
+        plots.plt.legend()
     return output

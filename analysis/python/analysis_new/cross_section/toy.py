@@ -1,16 +1,12 @@
 import numpy as np
 import pandas as pd
 
-import Plots
-import Tags
-
-from Master import ReadHDF5
-from utils import CountInRegions
+import io, plots, regions, tags
 
 class Toy:
     def __init__(self, file : str = None, df : str = None) -> None:
         if file is not None:
-            self.df = ReadHDF5(file)
+            self.df = io.ReadHDF5(file)
         elif df is not None:
             self.df = df
         else:
@@ -49,7 +45,7 @@ class Toy:
         """
         reco_regions = Toy.GetRegion(self.df, "reco_regions_")
         true_regions = Toy.GetRegion(self.df, "truth_regions_")
-        return CountInRegions(true_regions, reco_regions)
+        return regions.CountInRegions(true_regions, reco_regions)
 
 
     def SetProperty(self, name : str, value : any):
@@ -108,7 +104,7 @@ class Toy:
             stacked (bool, optional): stack histograms. Defaults to False.
             histtype (str, optional): histogram style. Defaults to "step".
         """
-        for _, r in Plots.IterMultiPlot(reco_regions.columns):
+        for _, r in plots.IterMultiPlot(reco_regions.columns):
             tmp_regions = {t : true_regions[t].values & reco_regions[r].values & (observable > 0) for t in true_regions.columns} # filter the reco events for this region only
-            Plots.PlotTagged(observable, Tags.ExclusiveProcessTags(tmp_regions), bins = 50, newFigure = False, title = f"reco region : {r}", reverse_sort = False, stacked = stacked, histtype = histtype, x_label = label, ncols = 1, norm = norm)
+            plots.PlotTagged(observable, tags.ExclusiveProcessTags(tmp_regions), bins = 50, newFigure = False, title = f"reco region : {r}", reverse_sort = False, stacked = stacked, histtype = histtype, x_label = label, ncols = 1, norm = norm)
         return

@@ -1,4 +1,11 @@
 """Region definitions and utilities."""
+import os
+
+import awkward as ak
+import numpy as np
+import pandas as pd
+
+import common, ntuple, plots, tags
 
 def CountInRegions(true_regions : dict, reco_regions : dict, selection_efficincy : np.ndarray = None) -> np.ndarray:
     """ Computes the counts of each combination of reco and true regions.
@@ -21,8 +28,8 @@ def CountInRegions(true_regions : dict, reco_regions : dict, selection_efficincy
         counts.append(true_counts)
     return counts
 
-@Master.timer
-def GetTotalPionInelMasks(mc : Master.Data) -> ak.Array:
+@common.timer
+def GetTotalPionInelMasks(mc : ntuple.Data) -> ak.Array:
     """ Returns the mask which selects true inelastic pi+.
 
     Args:
@@ -31,10 +38,10 @@ def GetTotalPionInelMasks(mc : Master.Data) -> ak.Array:
     Returns:
         ak.Array: mask.
     """
-    particle_tags = Tags.GenerateTrueBeamParticleTags(mc)
+    particle_tags = tags.GenerateTrueBeamParticleTags(mc)
     return particle_tags["$\\pi^{+}$:inel"].mask
 
-@Master.timer
+@common.timer
 def RecoRegionSelection(region_selections : dict[dict], out : str):
     """ Study which computes a correlation matrix ofthe event faction for reco regions and true regions.
         Saved to file to be used in toy simulation.
@@ -44,7 +51,7 @@ def RecoRegionSelection(region_selections : dict[dict], out : str):
         args (argparse.Namespace): application arguments.
     """
     os.makedirs(out + "reco_regions/", exist_ok = True)
-    pdf = Plots.PlotBook(out + "reco_regions/reco_regions_study")
+    pdf = plots.PlotBook(out + "reco_regions/reco_regions_study")
     pe = {}
     pe_index_labels = None
     for r in region_selections:
@@ -54,12 +61,12 @@ def RecoRegionSelection(region_selections : dict[dict], out : str):
 
         process_keys = [k for k in true_regions if k != "uncategorised"]
         if pe_index_labels is None:
-            tags = Tags.ExclusiveProcessTags({k : None for k in process_keys})
+            tags = tags.ExclusiveProcessTags({k : None for k in process_keys})
             pe_index_labels = tags.name_simple.values
 
-        counts = np.array(cross_section.CountInRegions(true_regions, reco_regions))
-        Plots.plt.figure(figsize = [3 * 6.4, 3 * 4.8])
-        Plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "True process", x_label = "Reco region", title = cross_section.remove_(r), newFigure = False)
+        counts = np.array(CountInRegions(true_regions, reco_regions))
+        plots.plt.figure(figsize = [3 * 6.4, 3 * 4.8])
+        plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "True process", x_label = "Reco region", title = common.remove_(r), newFigure = False)
         pdf.Save()
 
         (a,b)=counts.shape
@@ -71,10 +78,10 @@ def RecoRegionSelection(region_selections : dict[dict], out : str):
         counts = np.pad(counts, padding, mode='constant', constant_values = 0)
 
 
-        pe[cross_section.remove_(r)] = ((np.diag(counts) / np.sum(counts, 0)) * (np.diag(counts) / np.sum(counts, 1)))[:len(true_regions) - 1] # -1 to exlcude the uncategorised species. (purity x efficiency not needed)
+        pe[common.remove_(r)] = ((np.diag(counts) / np.sum(counts, 0)) * (np.diag(counts) / np.sum(counts, 1)))[:len(true_regions) - 1] # -1 to exlcude the uncategorised species. (purity x efficiency not needed)
 
         reco_regions.pop("uncategorised")
-        counts = cross_section.CountInRegions(true_regions, reco_regions)
+        counts = CountInRegions(true_regions, reco_regions)
 
         fractions_df = counts / np.sum(counts, axis = 1)[:, np.newaxis]
         fractions_df = pd.DataFrame(np.array(fractions_df).T, columns = true_regions, index = reco_regions) # columns are the true regions, so index over those to get the fractions

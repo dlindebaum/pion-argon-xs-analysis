@@ -1,5 +1,7 @@
 """Cross-section model-building logic."""
 
+import slices, samples
+
 def make_systematic(proc_info : tuple, init_bin : tuple, end_bin : tuple):
     init_low, init_high = init_bin[1]
     end_low, end_high = end_bin[1]
@@ -32,7 +34,7 @@ def make_systematic(proc_info : tuple, init_bin : tuple, end_bin : tuple):
       MCMC: 0.01
 """
 
-def slices_to_model_bins(energy_slices : cross_section.Slices) -> dict[tuple]:
+def slices_to_model_bins(energy_slices : slices.Slices) -> dict[tuple]:
     model_bins = [0] + list(energy_slices.edges[::-1]) + [999999]
     # model_bins = np.where(model_bins == energy_slices.underflow_pos, 0, model_bins)
     # model_bins = np.where(model_bins == energy_slices.overflow_pos, 999999, model_bins)
@@ -49,7 +51,7 @@ def slices_to_model_bins(energy_slices : cross_section.Slices) -> dict[tuple]:
     return bins
 
 
-def get_process_info(process : ProcessDefinitions.SampleDefinition, fiducial_volume : list[float]) -> dict:
+def get_process_info(process : samples.SampleDefinition, fiducial_volume : list[float]) -> dict:
     model_process_info = {}
 
     for k, v in process.definitions.items():

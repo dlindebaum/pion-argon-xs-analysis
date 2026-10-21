@@ -2,11 +2,10 @@
 
 #!/usr/bin/env python
 
-# Imports
-from python.analysis import vector, PFOSelection
 import numpy as np
 import awkward as ak
 
+import vector
 
 #######################################################################
 #######################################################################

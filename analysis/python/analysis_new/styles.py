@@ -1,3 +1,5 @@
+import plots
+
 class PlotStyler:
     def __init__(self, extend_colors : bool = False, custom_colors : list = None, dpi : int = 100, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):
         self.args = locals()
@@ -28,63 +30,63 @@ class PlotStyler:
 
     @staticmethod
     def SetPlotStyle(extend_colors : bool = False, custom_colors : list = None, dpi : int = 300, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):
-        Plots.plt.style.use("default") # first load the default to reset any previous changes made by other styles
-        Plots.plt.style.use('ggplot')
-        Plots.plt.rcParams.update({'patch.linewidth': 1})
-        Plots.plt.rcParams.update({'font.size': font_scale * 10})
-        Plots.plt.rcParams.update({"axes.titlecolor" : "#555555"})
-        Plots.plt.rcParams.update({"axes.titlesize" : font_scale * 12})
-        Plots.plt.rcParams['figure.dpi'] = dpi
-        Plots.plt.rcParams['legend.fontsize'] = "small"
-        Plots.plt.rcParams["font.family"] = font_style
+        plots.plt.style.use("default") # first load the default to reset any previous changes made by other styles
+        plots.plt.style.use('ggplot')
+        plots.plt.rcParams.update({'patch.linewidth': 1})
+        plots.plt.rcParams.update({'font.size': font_scale * 10})
+        plots.plt.rcParams.update({"axes.titlecolor" : "#555555"})
+        plots.plt.rcParams.update({"axes.titlesize" : font_scale * 12})
+        plots.plt.rcParams['figure.dpi'] = dpi
+        plots.plt.rcParams['legend.fontsize'] = "small"
+        plots.plt.rcParams["font.family"] = font_style
 
-        Plots.plt.rc('text.latex', preamble=r"\\usepackage{amsmath}")
+        plots.plt.rc('text.latex', preamble=r"\\usepackage{amsmath}")
         if custom_colors:
-            Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", custom_colors)})
+            plots.plt.rcParams.update({"axes.prop_cycle" : plots.plt.cycler("color", custom_colors)})
         if dark:
             l_2 = [
-            Plots.matplotlib.cm.get_cmap("tab20c").colors[0],
-            Plots.matplotlib.cm.get_cmap("tab20c").colors[8],
-            Plots.matplotlib.cm.get_cmap("tab20b").colors[13],
-            Plots.matplotlib.cm.get_cmap("tab20b").colors[0],
-            Plots.matplotlib.cm.get_cmap("tab20b").colors[17],
-            Plots.matplotlib.cm.get_cmap("tab20b").colors[4],
-            Plots.matplotlib.cm.get_cmap("tab20c").colors[12],
-            Plots.matplotlib.cm.get_cmap("tab20c").colors[16],
+            plots.matplotlib.cm.get_cmap("tab20c").colors[0],
+            plots.matplotlib.cm.get_cmap("tab20c").colors[8],
+            plots.matplotlib.cm.get_cmap("tab20b").colors[13],
+            plots.matplotlib.cm.get_cmap("tab20b").colors[0],
+            plots.matplotlib.cm.get_cmap("tab20b").colors[17],
+            plots.matplotlib.cm.get_cmap("tab20b").colors[4],
+            plots.matplotlib.cm.get_cmap("tab20c").colors[12],
+            plots.matplotlib.cm.get_cmap("tab20c").colors[16],
             ]
-            Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", l_2)})
+            plots.plt.rcParams.update({"axes.prop_cycle" : plots.plt.cycler("color", l_2)})
         if extend_colors:
-            Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", Plots.matplotlib.cm.get_cmap("tab20").colors)})
+            plots.plt.rcParams.update({"axes.prop_cycle" : plots.plt.cycler("color", plots.matplotlib.cm.get_cmap("tab20").colors)})
         return
 
 
 def SetPlotStyle(extend_colors : bool = False, custom_colors : list = None, dpi : int = 300, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):
-    Plots.plt.style.use("default") # first load the default to reset any previous changes made by other styles
-    Plots.plt.style.use('ggplot')
-    Plots.plt.rcParams.update({'patch.linewidth': 1})
-    Plots.plt.rcParams.update({'font.size': font_scale * 10})
-    Plots.plt.rcParams.update({"axes.titlecolor" : "#555555"})
-    Plots.plt.rcParams.update({"axes.titlesize" : font_scale * 12})
-    Plots.plt.rcParams['figure.dpi'] = dpi
-    Plots.plt.rcParams['legend.fontsize'] = "small"
-    Plots.plt.rcParams["font.family"] = font_style
+    plots.plt.style.use("default") # first load the default to reset any previous changes made by other styles
+    plots.plt.style.use('ggplot')
+    plots.plt.rcParams.update({'patch.linewidth': 1})
+    plots.plt.rcParams.update({'font.size': font_scale * 10})
+    plots.plt.rcParams.update({"axes.titlecolor" : "#555555"})
+    plots.plt.rcParams.update({"axes.titlesize" : font_scale * 12})
+    plots.plt.rcParams['figure.dpi'] = dpi
+    plots.plt.rcParams['legend.fontsize'] = "small"
+    plots.plt.rcParams["font.family"] = font_style
 
-    Plots.plt.rc('text.latex', preamble=r"\\usepackage{amsmath}")
+    plots.plt.rc('text.latex', preamble=r"\\usepackage{amsmath}")
     if custom_colors:
-        Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", custom_colors)})
+        plots.plt.rcParams.update({"axes.prop_cycle" : plots.plt.cycler("color", custom_colors)})
     if dark:
         l_2 = [
-        Plots.matplotlib.cm.get_cmap("tab20c").colors[0],
-        Plots.matplotlib.cm.get_cmap("tab20c").colors[8],
-        Plots.matplotlib.cm.get_cmap("tab20b").colors[13],
-        Plots.matplotlib.cm.get_cmap("tab20b").colors[0],
-        Plots.matplotlib.cm.get_cmap("tab20b").colors[17],
-        Plots.matplotlib.cm.get_cmap("tab20b").colors[4],
-        Plots.matplotlib.cm.get_cmap("tab20c").colors[12],
-        Plots.matplotlib.cm.get_cmap("tab20c").colors[16],
+        plots.matplotlib.cm.get_cmap("tab20c").colors[0],
+        plots.matplotlib.cm.get_cmap("tab20c").colors[8],
+        plots.matplotlib.cm.get_cmap("tab20b").colors[13],
+        plots.matplotlib.cm.get_cmap("tab20b").colors[0],
+        plots.matplotlib.cm.get_cmap("tab20b").colors[17],
+        plots.matplotlib.cm.get_cmap("tab20b").colors[4],
+        plots.matplotlib.cm.get_cmap("tab20c").colors[12],
+        plots.matplotlib.cm.get_cmap("tab20c").colors[16],
         ]
-        Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", l_2)})
+        plots.plt.rcParams.update({"axes.prop_cycle" : plots.plt.cycler("color", l_2)})
     if extend_colors:
-        Plots.plt.rcParams.update({"axes.prop_cycle" : Plots.plt.cycler("color", Plots.matplotlib.cm.get_cmap("tab20").colors)})
+        plots.plt.rcParams.update({"axes.prop_cycle" : plots.plt.cycler("color", plots.matplotlib.cm.get_cmap("tab20").colors)})
 
 

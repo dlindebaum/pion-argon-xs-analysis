@@ -1,11 +1,14 @@
-# Imports
-from python.analysis import Master, PFOSelection, BeamParticleSelection, SelectionTools, Tags
 import time
 import warnings
 import awkward as ak
 import numpy as np
 import pandas as pd
 
+from common import *
+import beam, pfo
+
+from .. import ntuple, tags
+from ..ntuple import Data
 
 #######################################################################
 #######################################################################
@@ -14,7 +17,7 @@ import pandas as pd
 #######################################################################
 
 
-def GenerateTrueFinalStateTags(events : Master.Data = None) -> Tags.Tags:
+def GenerateTrueFinalStateTags(events : Data = None) -> tags.Tags:
     """ Generate truth tags for final state of the beam interaction.
 
     Args:
@@ -23,13 +26,13 @@ def GenerateTrueFinalStateTags(events : Master.Data = None) -> Tags.Tags:
     Returns:
         Tags: tags
     """
-    tags = Tags.Tags()
-    tags["charge_exchange" ] = Tags.Tag("$1\\pi^{0} + 0\\pi^{+}$"              , "charge_exchange" , "#8EBA42", generate_truth_tags(events, 1, 0      , only_diphoton = False) if events is not None else None, 0)
-    tags["absorption"      ] = Tags.Tag("$0\\pi^{0} + 0\\pi^{+}$"              , "absorption"      , "#777777", generate_truth_tags(events, 0, 0      , only_diphoton = False) if events is not None else None, 1)
-    tags["pion_prod_1_pi0" ] = Tags.Tag("$1\\pi^{0} + \\geq 1\\pi^{+}$"         , "pion_prod_1_pi0" , "#E24A33", generate_truth_tags(events, 1, (1,)   , only_diphoton = False) if events is not None else None, 2)
-    tags["pion_prod_0_pi0" ] = Tags.Tag("$0\\pi^{0} + \\geq 1\\pi^{+}$"         , "pion_prod_0_pi0" , "#988ED5", generate_truth_tags(events, 0, (1,)   , only_diphoton = False) if events is not None else None, 3)
-    tags["pion_prod_>1_pi0"] = Tags.Tag("$> 1\\pi^{0} + \\geq 0\\pi^{+}$"       , "pion_prod_>1_pi0", "#348ABD", generate_truth_tags(events, (2,), (0,), only_diphoton = False) if events is not None else None, 4)
-    return tags
+    t = tags.Tags()
+    t["charge_exchange" ] = t.Tag("$1\\pi^{0} + 0\\pi^{+}$"              , "charge_exchange" , "#8EBA42", generate_truth_tags(events, 1, 0      , only_diphoton = False) if events is not None else None, 0)
+    t["absorption"      ] = t.Tag("$0\\pi^{0} + 0\\pi^{+}$"              , "absorption"      , "#777777", generate_truth_tags(events, 0, 0      , only_diphoton = False) if events is not None else None, 1)
+    t["pion_prod_1_pi0" ] = t.Tag("$1\\pi^{0} + \\geq 1\\pi^{+}$"         , "pion_prod_1_pi0" , "#E24A33", generate_truth_tags(events, 1, (1,)   , only_diphoton = False) if events is not None else None, 2)
+    t["pion_prod_0_pi0" ] = t.Tag("$0\\pi^{0} + \\geq 1\\pi^{+}$"         , "pion_prod_0_pi0" , "#988ED5", generate_truth_tags(events, 0, (1,)   , only_diphoton = False) if events is not None else None, 3)
+    t["pion_prod_>1_pi0"] = t.Tag("$> 1\\pi^{0} + \\geq 0\\pi^{+}$"       , "pion_prod_>1_pi0", "#348ABD", generate_truth_tags(events, (2,), (0,), only_diphoton = False) if events is not None else None, 4)
+    return t
 
 
 #######################################################################
@@ -39,16 +42,16 @@ def GenerateTrueFinalStateTags(events : Master.Data = None) -> Tags.Tags:
 #######################################################################
 
 
-def NPhotonCandidateSelection(events : Master.Data, photon_mask : ak.Array, cut : int, op = "==", return_property : bool = False):
+def NPhotonCandidateSelection(events : Data, photon_mask : ak.Array, cut : int, op = "==", return_property : bool = False):
     n_photons = ak.sum(photon_mask, -1)
-    return SelectionTools.CreateMask(cut, op, n_photons, return_property)
+    return CreateMask(cut, op, n_photons, return_property)
 
 
-def Pi0OpeningAngleSelection(events : Master.Data, photon_mask : ak.Array = None, photon_coords : ak.Array = None, cut = [10, 80], op = [">", "<"], return_property : bool = False):
+def Pi0OpeningAngleSelection(events : Data, photon_mask : ak.Array = None, photon_coords : ak.Array = None, cut = [10, 80], op = [">", "<"], return_property : bool = False):
     if photon_mask is not None:
-        shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photon_mask)
+        shower_pairs = ntuple.ShowerPairs(events, shower_pair_mask = photon_mask)
     elif photon_coords is not None:
-        shower_pairs = Master.ShowerPairs(events, pair_coords = photon_coords)
+        shower_pairs = ntuple.ShowerPairs(events, pair_coords = photon_coords)
     else:
         raise Exception("photon mask and photon_coords cannot both be None")
 
@@ -57,14 +60,14 @@ def Pi0OpeningAngleSelection(events : Master.Data, photon_mask : ak.Array = None
         cut = [c * np.pi / 180 for c in cut]
     else:
         cut = cut * np.pi / 180
-    return SelectionTools.CreateMask(cut, op, angle, return_property)
+    return CreateMask(cut, op, angle, return_property)
 
 
-def Pi0MassSelection(events : Master.Data, photon_mask : ak.Array = None, photon_coords : ak.Array = None, cut = [50, 250], op = [">", "<"], correction = None, correction_params : list = None, return_property : bool = False):
+def Pi0MassSelection(events : Data, photon_mask : ak.Array = None, photon_coords : ak.Array = None, cut = [50, 250], op = [">", "<"], correction = None, correction_params : list = None, return_property : bool = False):
     if photon_mask is not None:
-        shower_pairs = Master.ShowerPairs(events, shower_pair_mask = photon_mask)
+        shower_pairs = ntuple.ShowerPairs(events, shower_pair_mask = photon_mask)
     elif photon_coords is not None:
-        shower_pairs = Master.ShowerPairs(events, pair_coords = photon_coords)
+        shower_pairs = ntuple.ShowerPairs(events, pair_coords = photon_coords)
     else:
         raise Exception("photon mask and photon_coords cannot both be None")
 
@@ -77,11 +80,11 @@ def Pi0MassSelection(events : Master.Data, photon_mask : ak.Array = None, photon
 
     mass = shower_pairs.Mass(le, se, shower_pairs.reco_angle)
     mass = ak.fill_none(ak.pad_none(mass, 1, -1), -999, -1)
-    return SelectionTools.CreateMask(cut, op, mass, return_property)
+    return CreateMask(cut, op, mass, return_property)
 
 
 def Pi0Selection(
-    events: Master.Data,
+    events: Data,
     photon_candidates_mask : ak.Array = None,
     photon_candidates_coords : ak.Array = None,
     exact_photon_candidates : bool = True,
@@ -106,14 +109,14 @@ def Pi0Selection(
         arguments.insert(0, {"photon_mask" : photon_candidates_mask, "cut" : n})
 
     print("Pi0Selection")
-    return SelectionTools.CombineSelections(events, selections, 0, arguments, verbose, return_table)
+    return CombineSelections(events, selections, 0, arguments, verbose, return_table)
 
 
 def apply_function(
         name,
         history_list: list,
         func,
-        events: Master.Data,
+        events: Data,
         *args,
         timed=True,
         ts=None,
@@ -132,14 +135,14 @@ def apply_function(
     return result
 
 
-def apply_filter(events: Master.Data, filter, truth_filter=False):
+def apply_filter(events: Data, filter, truth_filter=False):
     filter_true = []
     if truth_filter:
         filter_true = [filter]
     return events.Filter([filter], filter_true)
 
 
-def filter_beam_slice(events: Master.Data):
+def filter_beam_slice(events: Data):
     # TODO vectorise
     slice_mask = [[]] * ak.num(events.recoParticles.beam_number, axis=0)
     for i in range(ak.num(slice_mask, axis=0)):
@@ -166,7 +169,7 @@ def load_and_cut_data(
         truth_pi0_count=None,
         truth_pi_charged_count=None,
         print_summary=True,
-        catch_warnings=True) -> Master.Data:
+        catch_warnings=True) -> Data:
     """
     Loads the ntuple file from `path` and performs the initial cuts,
     returning the result as a `Data` instance.
@@ -205,8 +208,8 @@ def load_and_cut_data(
         A Data instance containing the cut events.
     """
     # TODO add wther truth or MC to names (+ generally better names etc.)
-    fd = Master.FileDescriptor(path, ntuple_type, None)
-    events = Master.Data(fd,
+    fd = ntuple.FileDescriptor(path, ntuple_type, None)
+    events = Data(fd,
                          nEvents=batch_size,
                          start=batch_start)
     # Apply cuts:
@@ -226,7 +229,7 @@ def load_and_cut_data(
         # Beam selection
         if beam_selection:
             ts = time.time()
-            beam_selection_mask = BeamParticleSelection.CreateDefaultSelection(
+            beam_selection_mask = beam.CreateDefaultSelection(
                 events, verbose=True, return_table=False)
             apply_function(
                 "Beam selection (reco)", n,
@@ -235,7 +238,7 @@ def load_and_cut_data(
         # Only accept PFOs with a well reconstructed momentum/direction
         if valid_momenta:
             ts = time.time()
-            valid_filter = PFOSelection.GoodShowerSelection(events)
+            valid_filter = pfo.GoodShowerSelection(events)
             apply_function(
                 "Valid momenta (reco)", n,
                 apply_filter, events, valid_filter,
@@ -250,7 +253,7 @@ def load_and_cut_data(
         if ((not np.isclose(n_hits_cut, 0)) or (not np.isclose(cnn_cut, 0)) or
                 (distance_bounds_cm is not None) or (max_impact_cm is not None)):
             ts = time.time()
-            beam_selection_mask = PFOSelection.InitialPi0PhotonSelection(
+            beam_selection_mask = pfo.InitialPi0PhotonSelection(
                 events,
                 em_cut=cnn_cut,
                 n_hits_cut=n_hits_cut,
@@ -264,7 +267,7 @@ def load_and_cut_data(
                 ts=ts)
         # Require >= 2 PFOs. ETA ~90s:
         ts = time.time()
-        at_least_2_pfos = Master.NPFPMask(events, -1)
+        at_least_2_pfos = ntuple.NPFPMask(events, -1)
         apply_function(
             "PFOs >= 2 (reco)", n,
             apply_filter, events, at_least_2_pfos,
@@ -333,7 +336,7 @@ def count_diphoton_decays(events, beam_daughters=True):
     try:
         pi0_daughters = events.trueParticles.mother_pdg == 111
     except:
-        pi0_daughters = PFOSelection.get_mother_pdgs(events) == 111
+        pi0_daughters = pfo.get_mother_pdgs(events) == 111
     pi0_photon_mothers = events.trueParticles.mother[np.logical_and(
         events.trueParticles.pdg == 22,
         pi0_daughters)]
@@ -441,15 +444,15 @@ def count_pi0_candidates(
     """
     # if shower_pairs is None:
     #     if pair_coords is not None:
-    #         shower_pairs = Master.ShowerPairs(events,
+    #         shower_pairs = ntuple.ShowerPairs(events,
     #                                           pair_coords=pair_coords)
     #     elif photon_mask is not None:
-    #         shower_pairs = Master.ShowerPairs(events,
+    #         shower_pairs = ntuple.ShowerPairs(events,
     #                                           shower_pair_mask=photon_mask)
     #     else:
-    #         shower_pairs = Master.ShowerPairs(
+    #         shower_pairs = ntuple.ShowerPairs(
     #             events,
-    #             shower_pair_mask=PFOSelection.InitialPi0PhotonSelection(
+    #             shower_pair_mask=pfo.InitialPi0PhotonSelection(
     #                 events))
     
     # pass_angle = np.logical_and(
@@ -502,21 +505,21 @@ def count_charged_pi_candidates(
         Events in which to count pi+ occurances.
     track_cut : float, optional
         Track score required for pi+ candidates. If not set, the
-        default value in the `PFOSelection` module is used.
+        default value in the `pfo` module is used.
     n_hits_cut : int, optional
         Minimum number of hits required in pi+ candidates. If not set,
-        the default value in the `PFOSelection` module is used.
+        the default value in the `pfo` module is used.
     dEdX_cuts : tuple (lower, upper), optional
         Lower and upper bounds for energy deposition rate required by
         pi+ candidates. If not set, the default values in the
-        `PFOSelection` module is used.
+        `pfo` module is used.
     min_dEdX : float, optional
         Minimum energy deposition rate required by pi+ candidates. If
-        not set, the default value in the `PFOSelection` module is 
+        not set, the default value in the `pfo` module is 
         used. Overwritten by `dEdX_cuts` if specified.
     max_dEdX : float, optional
         Maximum energy deposition rate required by pi+ candidates. If
-        not set, the default value in the `PFOSelection` module is 
+        not set, the default value in the `pfo` module is 
         used. Overwritten by `dEdX_cuts` if specified.
 
     Returns
@@ -537,7 +540,7 @@ def count_charged_pi_candidates(
             selection_kwargs.update({"min_dEdX":min_dEdX})
         if max_dEdX is not None:
             selection_kwargs.update({"max_dEdX":max_dEdX})
-        reco_pi_mask = PFOSelection.DaughterPiPlusSelection(
+        reco_pi_mask = pfo.DaughterPiPlusSelection(
             events, **selection_kwargs)
         if energy_cut is not None:
             reco_pi_mask = np.logical_and(
@@ -562,7 +565,7 @@ def _generate_selection(cut):
 
 
 def generate_truth_tags(
-        events : Master.Data,
+        events : Data,
         n_pi0,
         n_pi_charged,
         beam_daughters=True,
@@ -648,7 +651,7 @@ def generate_truth_tags(
 
 
 def generate_reco_tags(
-    events : Master.Data,
+    events : Data,
     n_pi0,
     n_pi_charged,
     exactly_two_photons=False,
@@ -729,7 +732,7 @@ def create_regions(pi0_counts, pi_charged_counts):
 
 
 def candidate_photon_pfo_selection(
-        events: Master.Data,
+        events: Data,
         cut_record=[[], [1, 1, 1, 1, 1]],
         n_hits_cut=80,
         cnn_cut=0.5,
@@ -737,7 +740,7 @@ def candidate_photon_pfo_selection(
         max_impact_cm=20.):
     """
     DEPRECATED
-    Use PFOSelection.InitialPi0PhotonSelection to generate a filter and
+    Use pfo.InitialPi0PhotonSelection to generate a filter and
     then apply the generated filter.
 
     Finds a set of PFOs passing cuts on number of hits, cnn score,
@@ -745,7 +748,7 @@ def candidate_photon_pfo_selection(
 
     Parameters
     ----------
-    events : Master.Data
+    events : Data
         Events containing the PFOs to cut on.
     cut record : list, optional
         Record of the number of events cut. Default list avoids errors
@@ -766,7 +769,7 @@ def candidate_photon_pfo_selection(
     warnings.warn("deprecated", DeprecationWarning)
     if max_impact_cm is not None:
         ts = time.time()
-        impacts = PFOSelection.find_beam_impact_parameters(events)
+        impacts = pfo.find_beam_impact_parameters(events)
         impact_mask = impacts < max_impact_cm
         apply_function(
             "Beam impact (reco)", cut_record,
@@ -774,7 +777,7 @@ def candidate_photon_pfo_selection(
             ts=ts)
     if distance_bounds_cm is not None:
         ts = time.time()
-        distances = PFOSelection.find_beam_separations(events)
+        distances = pfo.find_beam_separations(events)
         distance_mask = np.logical_and(distances > distance_bounds_cm[0],
                                        distances < distance_bounds_cm[1])
         apply_function(
@@ -796,7 +799,7 @@ def candidate_photon_pfo_selection(
     return events
 
 
-def get_0_or_1_pi0(events: Master.Data):
+def get_0_or_1_pi0(events: Data):
     warnings.warn("deprecated", DeprecationWarning)
     # Copying the BeamMCFitler here to allow multiple valid numbers
     empty = ak.num(events.trueParticles.number) > 0
@@ -821,11 +824,11 @@ def old_event_selection_truth(events, pion_count, two_photon, cut_record):
     if pion_count == 'one':
         apply_function(
             "single pi0", cut_record,
-            Master.BeamMCFilter, events, returnCopy=False)
+            ntuple.BeamMCFilter, events, returnCopy=False)
     elif pion_count == 'zero':
         apply_function(
             "no pi0s", cut_record,
-            Master.BeamMCFilter, events, n_pi0=0, returnCopy=False)
+            ntuple.BeamMCFilter, events, n_pi0=0, returnCopy=False)
     elif pion_count == 'both':
         apply_function(
             "0 or 1 pi0s", cut_record,
@@ -834,7 +837,7 @@ def old_event_selection_truth(events, pion_count, two_photon, cut_record):
         apply_function(
             "diphoton decays", cut_record,
             apply_filter,
-            events, Master.Pi0TwoBodyDecayMask(events), truth_filter=True)
+            events, ntuple.Pi0TwoBodyDecayMask(events), truth_filter=True)
     # Require a beam particle to exist. ETA ~15s:
     apply_function(
         "beam", cut_record,

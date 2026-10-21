@@ -1,4 +1,13 @@
 """Beam quality analysis helpers."""
+import argparse
+import os
+
+import awkward as ak
+import numpy as np
+
+import common, fitting, plots
+
+from .. import io
 
 def Fit_Vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
     """ Gaussian fit to each component in the vector.
@@ -20,7 +29,7 @@ def Fit_Vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
         y, bins_edges = np.histogram(data, bins = bins, range = sorted([np.nanpercentile(data, 10), np.nanpercentile(data, 90)])) # fit only to data within the 10th and 90th percentile of data to exclude large tails in the distriubtion.
         yerr = np.sqrt(y) # Poisson error
 
-        popt, perr = Fitting.Fit(cross_section.bin_centers(bins_edges), y, yerr, Fitting.gaussian)
+        popt, perr = fitting.Fit(common.bin_centers(bins_edges), y, yerr, fitting.gaussian)
 
         mu[i] = popt[1]
         sigma[i] = abs(popt[2])
@@ -44,19 +53,19 @@ def plot(value : ak.Array, x_label : str, mu : float, sigma : float, color : str
     y, edges = np.histogram(np.array(value), bins = 50, range = [mu - 5 * sigma, mu + 5 * sigma] if range is None else range)
     x = (edges[1:] + edges[:-1]) / 2
 
-    y_pred = Fitting.gaussian.func(x, max(y), mu, sigma)
+    y_pred = fitting.gaussian.func(x, max(y), mu, sigma)
 
     x_interp = np.linspace(min(x), max(x), 200)
-    y_interp = Fitting.gaussian.func(x_interp, max(y), mu, sigma)
+    y_interp = fitting.gaussian.func(x_interp, max(y), mu, sigma)
 
     yerr = (y * (1 - (y / np.sum(y))))**0.5
 
     chisqr = np.sum(((y - y_pred)/ yerr)**2)
     ndf = len(y) - 2
 
-    Plots.Plot(x, y/np.sum(y), yerr = yerr/np.sum(y), color = color, marker = "x", linestyle = "", capsize = 3, newFigure = False)
-    Plots.Plot(x_interp, y_interp / np.sum(y), xlabel = x_label, ylabel = "Counts (area normalised)", color = color, linestyle = "-", label = label + " $\\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2f}", newFigure = False)
-    plt.ylim(0)
+    plots.Plot(x, y/np.sum(y), yerr = yerr/np.sum(y), color = color, marker = "x", linestyle = "", capsize = 3, newFigure = False)
+    plots.Plot(x_interp, y_interp / np.sum(y), xlabel = x_label, ylabel = "Counts (area normalised)", color = color, linestyle = "-", label = label + " $\\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2f}", newFigure = False)
+    plots.plt.ylim(0)
 
 
 def plot_range(mu : float, sigma : float, tolerance : float = 5) -> list:
@@ -83,13 +92,13 @@ def MakePlots(output_mc : dict[ak.Array], mc_fits : dict, output_data : dict[ak.
         data_fits (dict): fits made on data
         out (str): output directory
     """
-    cross_section.PlotStyler.SetPlotStyle()
+    plots.PlotStyler.SetPlotStyle()
 
     label_name = "Beam" if truncate is None else "Truncated beam"
 
-    with Plots.PlotBook(out + "beam_quality_fits.pdf") as pdf:
+    with plots.PlotBook(out + "beam_quality_fits.pdf") as pdf:
         for i in ["x", "y", "z"]:
-            plt.figure()
+            plots.plt.figure()
             mc_ranges = [] if mc_fits is None else plot_range(mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"])
             data_ranges = [] if data_fits is None else plot_range(data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"])
 
@@ -134,7 +143,7 @@ def Fits(args : argparse.Namespace, output : dict, out : str, sample_name : str)
     #* write to json file
     os.makedirs(args.out, exist_ok = True)
     name = out + sample_name + "_beam_quality_fit_values.json"
-    Master.SaveConfiguration(fit_values, name)
+    io.SaveConfiguration(fit_values, name)
     print(f"fit values written to {name}")
 
     return fit_values

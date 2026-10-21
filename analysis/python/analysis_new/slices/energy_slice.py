@@ -12,10 +12,10 @@ import numpy as np
 
 from particle import Particle
 
-from python.analysis import BetheBloch
-from python.analysis.Slices import Slices
-from python.analysis.Utils import nandiv, quadsum, nanlog, deprecation_warning
+from .common import Slices
 
+from python.analysis_new import bethe_bloch
+from python.analysis_new.common import quadsum, nandiv, nanlog, deprecation_warning
 
 def process_multiple_array(input : np.ndarray, function : callable) -> np.ndarray:
     """ Call function on multiple arrays.
@@ -250,7 +250,7 @@ def slice_dEdX(energy_slices : Slices, particle : Particle) -> np.ndarray:
     Returns:
         np.ndarray: mean dEdX
     """
-    return BetheBloch.mean_dEdX(energy_slices.edges - energy_slices.width/2, particle)
+    return bethe_bloch.mean_dEdX(energy_slices.edges - energy_slices.width/2, particle)
 
 
 def total_cross_section(n_incident : np.ndarray, n_end : np.ndarray, dEdX : np.ndarray, dE : float, error : bool = True) -> tuple[np.ndarray, np.ndarray]:
@@ -271,7 +271,7 @@ def total_cross_section(n_incident : np.ndarray, n_end : np.ndarray, dEdX : np.n
     xs = np.log(n_incident / (n_incident - n_end)) # calculate a dimensionless cross section
 
     NA = 6.02214076e23
-    factor = 10**27 * BetheBloch.Constants.A  / (BetheBloch.Constants.rho * NA * slice_width)
+    factor = 10**27 * bethe_bloch.Constants.A  / (bethe_bloch.Constants.rho * NA * slice_width)
 
     if len(xs.shape) == 1:
         pass
@@ -433,7 +433,7 @@ def CrossSection(n_int_ex : np.ndarray, n_int : np.ndarray, n_inc : np.ndarray, 
     """
     deprecation_warning()
     NA = 6.02214076e23
-    factor = np.array(dEdX) * 10**27 * BetheBloch.Constants.A  / (BetheBloch.Constants.rho * NA * dE)
+    factor = np.array(dEdX) * 10**27 * bethe_bloch.Constants.A  / (bethe_bloch.Constants.rho * NA * dE)
 
     n_interact_ratio = nandiv(n_int_ex, n_int)
     n_survived = n_inc - n_int

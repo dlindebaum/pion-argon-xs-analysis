@@ -9,11 +9,11 @@ TODO depreciate BeamQualityCut
 import awkward as ak
 import numpy as np
 
-from python.analysis import vector
-from python.analysis.Master import Data
-from python.analysis.PFOSelection import Median, GoodShowerSelection
-from python.analysis.SelectionTools import *
+from common import *
+from pfo import GoodShowerSelection
 
+from .. import vector
+from ..ntuple import Data
 
 def GetTruncatedDEdX(sample : Data, truncate : float):
     truncated_start = sample.recoParticles.beam_calo_pos.z >= truncate
@@ -42,7 +42,7 @@ def BeamTriggerSelection(events: Data, pdgs : list[int] = [211, 13, -13], use_be
     """ Beam particle selection using beam instrumentation information for Data and truth information if MC.
 
     Args:
-        events (Master.Data): events to study
+        events (ntuple.Data): events to study
         pdgs (list[int], optional): list of particle pdgs. Defaults to [211, 13, -13].
         use_beam_inst (bool, optional): use beam instrumentation (enable if using data). Defaults to False.
         return_property (bool, optional): return beam pdg. Defaults to False.

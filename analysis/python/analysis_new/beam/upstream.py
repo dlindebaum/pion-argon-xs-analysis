@@ -1,11 +1,16 @@
 """Upstream beam corrections and studies."""
+import awkward as ak
+import numpy as np
+import pandas as pd
 
-def UpstreamEnergyLoss(KE_inst : ak.Array, params : np.ndarray, function : Fitting.FitFunction = Fitting.poly2d) -> ak.Array:
+import fitting
+
+def UpstreamEnergyLoss(KE_inst : ak.Array, params : np.ndarray, function : fitting.FitFunction = fitting.poly2d) -> ak.Array:
     """ compute the upstream loss based on a repsonse function and it's fit parameters.
 
     Args:
         KE_inst (ak.Array): kinetic energy measured by the beam instrumentation
-        function (Fitting.FitFunction): repsonse function, defaults to Fitting.poly2d. 
+        function (fitting.FitFunction): repsonse function, defaults to fitting.poly2d. 
         params (np.ndarray): function paramters
 
     Returns:
@@ -15,10 +20,10 @@ def UpstreamEnergyLoss(KE_inst : ak.Array, params : np.ndarray, function : Fitti
 
 cv_method = {
     "None" : None,
-    "gaussian" : cross_section.Fitting.gaussian,
-    "double_gaussian" : cross_section.Fitting.double_gaussian,
-    "student_t" : cross_section.Fitting.student_t,
-    "crystal_ball" : cross_section.Fitting.crystal_ball,
+    "gaussian" : fitting.gaussian,
+    "double_gaussian" : fitting.double_gaussian,
+    "student_t" : fitting.student_t,
+    "crystal_ball" : fitting.crystal_ball,
 }
 
 
@@ -50,7 +55,7 @@ def NumericalCV(bins : np.array, KE_reco_inst : np.array, KE_true_ff : np.array)
     return mean_residual_energy, mean_error_residual_energy
 
 
-def CentralValueEstimation(bins : np.ndarray, KE_reco_inst : np.ndarray, KE_true_ff : np.ndarray, cv_function : cross_section.Fitting.FitFunction = None, weights : np.ndarray = None) -> tuple[np.array, np.array]:
+def CentralValueEstimation(bins : np.ndarray, KE_reco_inst : np.ndarray, KE_true_ff : np.ndarray, cv_function : fitting.FitFunction = None, weights : np.ndarray = None) -> tuple[np.array, np.array]:
     """ Estiamte upstream loss using a reponse function to correct the reco KE at the instrumentaiton to get the KE at the front face of the TPC.
         estiamtes the central value of residuals in bins of KE_reco_inst using a fitting function.
 
@@ -58,7 +63,7 @@ def CentralValueEstimation(bins : np.ndarray, KE_reco_inst : np.ndarray, KE_true
         bins (np.array): reco KE bins
         KE_reco_inst (np.array): reco KE at instrumentation
         KE_true_ff (np.array): true front facing KE
-        cv_function (Fitting.FitFunction, optional): function to fit residuals to in order to get the central value. Defaults to None.
+        cv_function (fitting.FitFunction, optional): function to fit residuals to in order to get the central value. Defaults to None.
 
     Returns:
         tuple[np.array, np.array]: central values in each bin, error in central values
@@ -68,5 +73,5 @@ def CentralValueEstimation(bins : np.ndarray, KE_reco_inst : np.ndarray, KE_true
     else:
         df = pd.DataFrame({"KE_inst" : KE_reco_inst, "true_ffKE" : KE_true_ff})
         df["residual"] = df.KE_inst - df.true_ffKE
-        cv = cross_section.Fitting.ExtractCentralValues_df(df, "KE_inst", "residual", [-250, 250], [cv_function], bins, 50, rms_err = False, weights = weights, bin_units = "(MeV)", bin_label = "$KE^{reco}_{inst}$")
+        cv = fitting.ExtractCentralValues_df(df, "KE_inst", "residual", [-250, 250], [cv_function], bins, 50, rms_err = False, weights = weights, bin_units = "(MeV)", bin_label = "$KE^{reco}_{inst}$")
     return cv

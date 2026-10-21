@@ -1,3 +1,11 @@
+import os
+
+import numpy as np
+import uproot
+
+from scipy.interpolate import interp1d
+
+import common, plots
 
 GEANT_XS = os.environ["PYTHONPATH"] + "/data/g4_xs_pi_KE_100.root"
 # GEANT_XS = os.environ["PYTHONPATH"] + "/data/g4_xs.root"
@@ -50,8 +58,8 @@ class GeantCrossSections:
         """ Plot all cross section channels.
         """
         for k in self.labels.values():
-            Plots.Plot(self.KE, getattr(self, k), label = remove_(k), newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\\sigma$ (mb)", title = title)
-            # Plots.plt.fill_between(self.KE, getattr(self, k) - self.Stat_Error(k), getattr(self, k) + self.Stat_Error(k), color = Plots.plt.gca()._get_lines.get_next_color())
+            plots.Plot(self.KE, getattr(self, k), label = common.remove_(k), newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\\sigma$ (mb)", title = title)
+            # plots.plt.fill_between(self.KE, getattr(self, k) - self.Stat_Error(k), getattr(self, k) + self.Stat_Error(k), color = plots.plt.gca()._get_lines.get_next_color())
 
 
     def Plot(self, xs : str, color : str = None, label : str = None, title : str = None, simplified_pion_production : bool = False):
@@ -77,8 +85,8 @@ class GeantCrossSections:
                 y = self.quasielastic + self.double_charge_exchange + self.pion_production
             else:
                 y = getattr(self, xs)
-            Plots.Plot(self.KE, y, label = label, title = title, newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\\sigma$  (mb)", color = color)
-            # Plots.plt.fill_between(self.KE, getattr(self, xs) - self.Stat_Error(xs), getattr(self, xs) + self.Stat_Error(xs), color = Plots.plt.gca()._get_lines.get_next_color())
+            plots.Plot(self.KE, y, label = label, title = title, newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\\sigma$  (mb)", color = color)
+            # plots.plt.fill_between(self.KE, getattr(self, xs) - self.Stat_Error(xs), getattr(self, xs) + self.Stat_Error(xs), color = plots.plt.gca()._get_lines.get_next_color())
 
 
     def GetInterpolatedCurve(self, process : str) -> interp1d:

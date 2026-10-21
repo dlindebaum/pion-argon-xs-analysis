@@ -4,12 +4,11 @@ import awkward as ak
 import pandas as pd
 import copy
 import functools
-from particle import Particle
-from python.analysis import Tags
+from python.analysis_new import tags
 from typing import TYPE_CHECKING
 import numbers
 if TYPE_CHECKING:
-    from python.analysis import Master
+    from python.analysis_new.ntuple import Data 
 
 
 class MaskIter():
@@ -131,37 +130,11 @@ class CutHandler():
             "remaining", "percentage remaining",
             "relative percentage remaining", "average per event"]
 
-    # @staticmethod
-    # def _init_doc(func):
-    #     documentation = """
-    #     Create new a `CutHandler` object to store applied masks
-    #     and return a table of tracked particles when asked.
-
-    #     Parameters
-    #     ----------
-    #     evts : Master.Data, optional
-    #         Initial events the masks are being applied from.
-    #         If not set here, it must be set for getting a
-    #         table using `self.set_init_evts(evts)`. Default
-    #         is None.
-    #     particles_to_tag : list, optional
-    #         List of pdg codes to be tracked by the tables.
-    #         Default is
-    #     """ + f"{CutHandler._default_particles}." + """
-        
-    #     Returns
-    #     -------
-    #     CutHandler
-    #         New `CutHandler` instance.
-    #     """
-    #     func.__doc__ = documentation
-    #     return func
-    # @_init_doc
     def __init__(
             self,
             evts = None,#: Master.Data = None,
             particles_to_tag: list = _default_particles,
-            tags : Tags = None):
+            tags : tags.Tags = None):
         """
         Create new a `CutHandler` object to store applied masks
         and return a table of tracked particles when asked.
@@ -261,10 +234,6 @@ class CutHandler():
             data = new_data
         return results
 
-    # def GeneratePi0Tags(self, evts : Master.Data):
-    #     photons_mask = evts.trueParticlesBT.pdg == 22
-    #     return Tags.GeneratePi0Tags(evts, photons_mask)
-
     def set_init_evts(self, evts):#: Master.Data):
         """
         Set the initial event counts to be cut using the masks.
@@ -290,7 +259,7 @@ class CutHandler():
         """
         self._init_data = ak.ones_like(evts.recoParticles.number, dtype=bool)
         self._init_data_sig = self._get_mask_signature(self._init_data)
-        self._particle_tags = Tags.GenerateTrueParticleTags(evts)
+        self._particle_tags = tags.GenerateTrueParticleTags(evts)
         self._data_changed = True
         self.init_events_set = True
         return
@@ -518,13 +487,7 @@ class CutHandler():
         if return_table:
             return result, self.get_table()
         else:
-            return result
-    
-    # def get_filters_list(self, application_concat_index=0):
-    #     new_data = data
-    #     for application_func in self._mask_appliers()[self.concat_indicies[application_concat_index]:]:
-    #         mask, _ = application_func(result)
-        
+            return result        
 
     def _gen_table(self):
         if self._init_data is None:
@@ -538,21 +501,12 @@ class CutHandler():
             for t in self._tags:
                 p_data = self._gen_particle_counts(self._tags[t].mask)
                 self._table_data.update(dict((f"{t} {key}", value) for (key, value) in p_data.items()))
-        # for particle in self._particles:
-            # p_data = self._gen_particle_counts(self._particle_tags[f"${Particle.from_pdgid(particle).latex_name}$"].mask)
-            # self._table_data.update(dict((f"{particle} {key}", value) for (key, value) in p_data.items()))
         self._data_changed = False
         return
-
-        # if not self._check_signature(self._get_mask_signature(self._masks[0]), self._init_data_sig):
-        #     raise ValueError(f"Initial data signature {self._init_data_sig} does not match the first avaiable mask {self._get_mask_signature(self._masks[0])}")
     
     def _gen_particle_cols_array(self, pdg):
         return np.array(list(map(lambda c: f"{pdg} {c}", self._particle_table_cols)))
     def _gen_particle_cols_array_read(self, pdg, latex):
-        # if latex:
-        #     return np.array(list(map(lambda c: f"${Particle.from_pdgid(pdg).latex_name}$ {c}", self._particle_table_cols)))
-        # else:
         return np.array(list(map(lambda c: f"{pdg} {c}", self._particle_table_cols)))
 
     def _new_init_events(self, col, index, init_name):

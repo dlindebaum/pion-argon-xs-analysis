@@ -1,10 +1,85 @@
 """NTuple and data container definitions."""
+import argparse
+import itertools
+import warnings
+
+from abc import ABC, abstractmethod
+from collections import namedtuple
+from enum import Enum
+
+import awkward as ak
+import numpy as np
+import pandas as pd
+
+from particle import Particle
+from rich import print
+
+from python.analysis_new import processing, cuts, io, vector
+
+from common import timer, match_dimension
 
 FileDescriptor = namedtuple("FileDescriptor", ["file", "type", "momentum_scale"])
 
 class Sample(str, Enum):
     MC = "mc"
     DATA = "data"
+
+
+def __IsMaskCompatiable__(var : any, mask : ak.Array, verbose : bool = False):
+    mask_shape = ak.num(mask, -1)
+
+    var_shape = ak.num(var, -1)
+    if type(var) == ak.highlevel.Array:
+        if len(var.fields) > 0:
+            var_shape = ak.num(var[var.fields[0]], -1) # assume records are vectors only (should be true)
+
+    if verbose: print(f"{var_shape=}")
+    if verbose: print(f"{mask_shape=}")
+    if (type(var_shape) == np.ndarray) and (type(mask_shape) == np.ndarray): # mask is flat, variable is flat
+        if var_shape == mask_shape:
+            if verbose: print("compatible")
+            return True
+        else:
+            if verbose: print("not compatible, event numbers not the same")
+            return False
+    elif (type(var_shape) == np.ndarray) and (type(mask_shape) != np.ndarray): # mask is not flat, variable is flat
+        if verbose: print("not compatible, mask and variable have different dimensions")
+        return False
+    elif (type(var_shape) != np.ndarray) and (type(mask_shape) == np.ndarray): # mask is flat, variable is not flat
+        if match_dimension(mask_shape, var_shape) == mask_shape:
+            if verbose: print("compatible")
+            return True
+        else:
+            if verbose: print("not compatible, event numbers not the same")
+            return False
+    else: # mask is not flat, variable is not flat
+        if ak.all(match_dimension(mask_shape, var_shape) == mask_shape):
+            if verbose: print("compatible")
+            return True
+        else:
+            if verbose: print("not compatible, length in higher dimensions not equal")
+            return False
+    return
+
+def __GenericFilter__(data, filters: list, verbose : bool = True):
+    """ Applies boolean masks (filters) to data.
+
+    Args:
+        data (any): data class which has instance variables with compatible shapes to the filters
+        filters (list): list of filters
+    """
+    if verbose: print(data)
+    for f in filters:
+        for var in vars(data):
+            if var == "filters": continue # skip filters list
+            if hasattr(getattr(data, var), "__getitem__") and (type(getattr(data, var)) != str):
+                try:
+                    if verbose: print(f"{var, getattr(data, var), type(getattr(data, var))=}")
+                    if __IsMaskCompatiable__(getattr(data, var), f, verbose):
+                        setattr(data, var, getattr(data, var)[f])
+                except:
+                    if verbose: warnings.warn(f"Couldn't apply filters to {var}.")
+    return
 
 
 def file_len(file : str) -> int:
@@ -16,7 +91,7 @@ def file_len(file : str) -> int:
     Returns:
         int: Number of events
     """
-    return len(IO(file).Get(["EventID", "event"]))
+    return len(io.IO(file).Get(["EventID", "event"]))
 
 
 def CalculateBatches(args : argparse.Namespace) -> dict[str, any]:
@@ -64,9 +139,9 @@ def RunProcess(ntuple_files : list[FileDescriptor], is_data : bool, args : argpa
     """
     func_args = vars(args)
     func_args["data"] = is_data
-    output = Processing.mutliprocess(func, ntuple_files, args.batches, args.events, func_args, args.threads)
+    output = processing.mutliprocess(func, ntuple_files, args.batches, args.events, func_args, args.threads)
     if merge:
-        output = MergeOutputs(output)
+        output = processing.MergeOutputs(output)
     return output
 
 class Ntuple_Type(str, Enum):
@@ -137,7 +212,7 @@ class Data:
                     self.momentum_scale = file_descriptor.momentum_scale
                 self.nEvents = nEvents
                 self.start = start
-                self.io = IO(self.filename, self.nEvents, self.start)
+                self.io = io.IO(self.filename, self.nEvents, self.start)
                 self.run = self.io.Get(["Run", "run"])
                 self.subRun = self.io.Get(["SubRun", "subrun"])
                 self.eventNum = self.io.Get(["EventID", "event"])
@@ -146,7 +221,7 @@ class Data:
                 self.trueParticles = TrueParticleData(self)
                 self.recoParticles = RecoParticleData(self)
                 self.trueParticlesBT = TrueParticleDataBT(self)
-                self.cutTable = CutTable.CutHandler(self)
+                self.cutTable = cuts.CutHandler(self)
 
     @property
     def SortedTrueEnergyMask(self) -> ak.Array:
@@ -360,7 +435,7 @@ class Data:
                 self.trueParticlesBT.Filter(reco_filters, returnCopy)
 
             __GenericFilter__(self, reco_filters, self.verbose)
-            CutTable.apply_filters(self, reco_filters)
+            cuts.apply_filters(self, reco_filters)
             self.trueParticles.events = self
             self.recoParticles.events = self
             if hasattr(self, "trueParticlesBT"):
@@ -373,7 +448,7 @@ class Data:
             filtered.momentum_scale = self.momentum_scale
             filtered.nEvents = self.nEvents
             filtered.start = self.start
-            filtered.io = IO(filtered.filename,
+            filtered.io = io.IO(filtered.filename,
                              filtered.nEvents, filtered.start)
             filtered.cutTable = self.cutTable.copy()
             filtered.event_index = self.event_index
@@ -390,7 +465,7 @@ class Data:
                 filtered.trueParticlesBT.events = filtered
             # ? should true_filters also be applied?
             __GenericFilter__(filtered, reco_filters, self.verbose)
-            CutTable.apply_filters(filtered, reco_filters)
+            cuts.apply_filters(filtered, reco_filters)
             return filtered
 
     @timer
@@ -667,7 +742,7 @@ class Data:
         print(f"event indices saved to : {output_path}")
 
     def Load_Selected_Events(self, indices_file : str):
-        selection = ReadHDF5(indices_file).values.flatten()
+        selection = io.ReadHDF5(indices_file).values.flatten()
 
         mask = []
         for i in self.event_index:

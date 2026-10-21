@@ -17,9 +17,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.ticker import AutoMinorLocator, MultipleLocator
 from scipy.stats import iqr
 
-from python.analysis import vector, Tags, Utils
-from python.analysis.SelectionTools import np_to_ak_indicies
-
+import common, tags, vector
 
 class PlotConfig():
 
@@ -1049,7 +1047,7 @@ def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None
     if truncate == True:
         if range is None:
             raise Exception("if truncate is true, range must be provided")
-        data = ClipJagged(data, min(range), max(range))
+        data = common.ClipJagged(data, min(range), max(range))
 
     height, edges, _ = plt.hist(data, bins, label = label, alpha = alpha, density = density, histtype = histtype, stacked = stacked, color = color, range = range if range and len(range) == 2 else None, weights = weights)
     binWidth = round((edges[-1] - edges[0]) / len(edges), sf)
@@ -1296,8 +1294,8 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     mc_error = np.sqrt(abs(h_mc)) # weights can cause the counts to be negative
 
     plt.subplot(212) # ratio plot
-    ratio = Utils.nandiv(h_data, h_mc) # data / MC
-    ratio_err = abs(ratio * np.sqrt(Utils.nandiv(data_err, h_data)**2 + Utils.nandiv(mc_error, h_mc)**2))
+    ratio = common.nandiv(h_data, h_mc) # data / MC
+    ratio_err = abs(ratio * np.sqrt(common.nandiv(data_err, h_data)**2 + common.nandiv(mc_error, h_mc)**2))
     ratio[ratio == np.inf] = -1 # if the ratio is undefined, set it to -1
     plt.errorbar(centres, ratio, ratio_err, c = "black", marker = "o", capsize = 3, linestyle = "")
     plt.ylabel("Data/MC")
@@ -1318,9 +1316,9 @@ def PlotHist2DImshow(x : ak.Array, y : ak.Array, bins : int = 100, x_range : lis
     h, x_e, y_e = np.histogram2d(np.array(x), np.array(y), bins = bins, range = [x_range, y_range])
 
     if norm == "row":
-        h_norm = Utils.nandiv(h, np.nanmax(h, 0)) # normalised by row
+        h_norm = common.nandiv(h, np.nanmax(h, 0)) # normalised by row
     elif norm == "column":
-        h_norm = Utils.nandiv(h, np.nanmax(h, axis = 1)[:, np.newaxis]) # normalised by column
+        h_norm = common.nandiv(h, np.nanmax(h, axis = 1)[:, np.newaxis]) # normalised by column
     else:
         h_norm = h # don't normalise
 
@@ -1421,7 +1419,7 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
             plt.title(key_label)
 
         for (i, j), z in np.ndenumerate(counts):
-            plt.gca().text(j, i, f"{z},\n{Utils.round_value_to_error(fractions[i][j]*100, fractions_err[i][j]*100)}%,\n{Utils.round_value_to_error(c_norm[i][j]*100, c_norm_err[i][j]*100)}%", ha='center', va='center', fontsize = 7)
+            plt.gca().text(j, i, f"{z},\n{common.round_value_to_error(fractions[i][j]*100, fractions_err[i][j]*100)}%,\n{common.round_value_to_error(c_norm[i][j]*100, c_norm_err[i][j]*100)}%", ha='center', va='center', fontsize = 7)
     else:
         plt.title(title)
         for (i, j), z in np.ndenumerate(counts):
@@ -1475,12 +1473,12 @@ def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float
     plt.annotate("", xy = xy1, xytext = xy0, arrowprops=dict(facecolor = color, edgecolor = color, arrowstyle = "->"), xycoords= transform)
 
 
-def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False, title : str = "", newFigure : bool = True, stacked : bool = True, alpha : float = None, truncate : bool = False, histtype : str = "stepfilled", reverse_sort : bool = False, data_weights : np.array = None):
+def PlotTagged(data : np.array, tags : tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False, title : str = "", newFigure : bool = True, stacked : bool = True, alpha : float = None, truncate : bool = False, histtype : str = "stepfilled", reverse_sort : bool = False, data_weights : np.array = None):
     """ Makes a stacked histogram and splits the sample based on tags.
 
     Args:
         data (np.array): data to plot
-        tags (shower_merging.Tags): tags for the data.
+        tags (tags.Tags): tags for the data.
         bins (int, optional): number of bins. Defaults to 100.
         range (list, optional): plot range. Defaults to None.
         y_scale (str, optional): y axis scale. Defaults to "linear".
@@ -1502,7 +1500,7 @@ def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = N
     else:
         split_weights = None
 
-    sorted_tags = Tags.Tags()
+    sorted_tags = tags.Tags()
     for i in sorted_index:
         sorted_tags[tags.number[i].name] = tags.number[i]
 
@@ -1513,7 +1511,7 @@ def PlotTagged(data : np.array, tags : Tags.Tags, bins = 100, x_range : list = N
             colours[i] = "C" + str(i)
 
     if data2 is None:
-        PlotHist(split_data, stacked = stacked, label = [Utils.remove_(i) for i in sorted_tags.name.values], bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, newFigure = newFigure, alpha = alpha, truncate = truncate, histtype = histtype, weights = split_weights)
+        PlotHist(split_data, stacked = stacked, label = [common.remove_(i) for i in sorted_tags.name.values], bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, newFigure = newFigure, alpha = alpha, truncate = truncate, histtype = histtype, weights = split_weights)
         plt.legend(loc = loc, ncols = ncols, labelspacing = 0.25,  columnspacing = 0.25)
     else:
         PlotHistDataMC(ak.ravel(data2), split_data, bins, x_range, stacked, "Data", sorted_tags.name.values, x_label, title, y_scale, loc, ncols, norm, colour = colours, alpha = alpha, truncate = truncate, mc_weights = split_weights)
@@ -1660,7 +1658,7 @@ def PlotStackedBar(bars, labels, xlabel : str = None, colours : list = None, alp
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
-def PlotTags(tags : Tags.Tags, xlabel : str = "name", fraction : bool = True, newFigure : bool = True, display_values : bool = False):
+def PlotTags(tags : tags.Tags, xlabel : str = "name", fraction : bool = True, newFigure : bool = True, display_values : bool = False):
     if newFigure: plt.figure()    
     counts = [ak.sum(m) for m in tags.mask.values]
     yl = "Counts"
@@ -1701,12 +1699,12 @@ class RatioPlot():
         if (self.y1_err is None) and (self.y2_err is not None):
             self.y1_err = np.zeros(len(self.y1))
 
-        ratio = Utils.nandiv(self.y1, self.y2)
+        ratio = common.nandiv(self.y1, self.y2)
         
         if (self.y2_err is None) and (self.y1_err is None):
             ratio_err = None
         else:
-            ratio_err = abs(ratio * np.sqrt(Utils.nandiv(self.y1_err, self.y1)**2 + Utils.nandiv(self.y2_err, self.y2)**2))
+            ratio_err = abs(ratio * np.sqrt(common.nandiv(self.y1_err, self.y1)**2 + common.nandiv(self.y2_err, self.y2)**2))
 
         Plot(self.x, ratio, yerr = ratio_err, xlabel = self.xlabel, ylabel = self.ylabel, marker = "o", color = "black", linestyle = "", newFigure = False)
         ticks = [0, 0.5, 1, 1.5, 2] # hardcode the yaxis to have 5 ticks
@@ -2177,9 +2175,9 @@ def make_truth_comparison_plots(
             y1_label = None
             y2_label = None
 
-        photon_i_indicies = np_to_ak_indicies(
+        photon_i_indicies = common.np_to_ak_indicies(
             photon_indicies[prop][:, 0][valid_events])
-        photon_ii_indicies = np_to_ak_indicies(
+        photon_ii_indicies = common.np_to_ak_indicies(
             photon_indicies[prop][:, 1][valid_events])
 
         # This might contain some useful stuff for moving to trueParticle informatio, rather than trueParticleBT
@@ -2287,7 +2285,7 @@ def plot_region_data(
         Dictionary of containing a mask of which events fall in which
         classification regions. This should be created using
         `EventSelection.creat_regions()`.
-    plt_cfg : Plots.PlotConfig, optional
+    plt_cfg : plots.PlotConfig, optional
         `PlotConfig` instance to control plotting parameters. Default
         is a new PlotConfig instance (no showing or saving).
     title : str or None, optional
@@ -2382,7 +2380,7 @@ def compare_truth_reco_regions(
         Dictionary of containing a mask of which events fall in which
         classification regions from truth data. This should be created
         using `EventSelection.creat_regions()`.
-    plt_cfg : Plots.PlotConfig, optional
+    plt_cfg : plots.PlotConfig, optional
         `PlotConfig` instance to control plotting parameters. Default
         is a new PlotConfig instance (no showing or saving).
     title : str or None, optional

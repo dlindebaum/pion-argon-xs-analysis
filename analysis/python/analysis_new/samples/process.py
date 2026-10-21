@@ -5,10 +5,14 @@ Author: Shyam Bhuller
 
 Description: True process defintions.
 """
-from python.analysis.SampleDefinition import SampleDefinition, CriteriaList, criteria, dataclass
-from python.analysis import cross_section
+from dataclasses import dataclass
 
 import awkward as ak
+
+from particle import Particle
+
+from common import *
+from .. import ntuple, kinematics, vector
 
 @dataclass
 class process_criteria_geant(CriteriaList):
@@ -21,7 +25,7 @@ class process_criteria_geant(CriteriaList):
     n_pi0 : criteria # numbre of pi0's
 
     @staticmethod
-    def get_criteria_values(events : cross_section.Data, pi_KE_lim : float = 0):
+    def get_criteria_values(events : ntuple.Data, pi_KE_lim : float = 0):
 
         n_pip_true, n_pim_true, n_pi0_true = GetTruePionCountsGeant(events, pi_KE_lim) # counts number of pions in events
         pi_inel = events.trueParticles.true_beam_endProcess == "pi+Inelastic" # used to distinguish interactions from decays/non-pions
@@ -38,7 +42,7 @@ class process_criteria(CriteriaList):
     n_pi0 : criteria # numbre of pi0's
 
     @staticmethod
-    def get_criteria_values(events : cross_section.Data, pi_KE_lim : float = 0):
+    def get_criteria_values(events : ntuple.Data, pi_KE_lim : float = 0):
         n_pi_true, n_pi0_true = GetTruePionCounts(events, pi_KE_lim)
         pi_inel = events.trueParticles.true_beam_endProcess == "pi+Inelastic"
         return {"pi_inelastic" : pi_inel, "n_pi" : n_pi_true, "n_pi0" : n_pi0_true}
@@ -56,7 +60,7 @@ class process_criteria_exp(CriteriaList):
     n_pi0 : criteria # numbre of pi0's
 
     @staticmethod
-    def get_criteria_values(events : cross_section.Data, pi_KE_lim : float = 0, fiducial_volume : list[float] = [0, 700]):
+    def get_criteria_values(events : ntuple.Data, pi_KE_lim : float = 0, fiducial_volume : list[float] = [0, 700]):
 
         cvs = process_criteria.get_criteria_values(events, pi_KE_lim)
 
@@ -198,10 +202,10 @@ class three_signal_process_bkg_fd(SampleDefinition):
     signal = ["absorption", "charge_exchange", "pion_production"] # The processes we actually want to measure cross sections for.
 
 
-def GetTruePionCounts(events : cross_section.Data, ke_lim : float = 0):
+def GetTruePionCounts(events : ntuple.Data, ke_lim : float = 0):
     n_pi_true = (events.trueParticles.number != 1) & (abs(events.trueParticles.pdg) == 211) & (events.trueParticles.mother == 1)
 
-    ke = cross_section.KE(cross_section.vector.magnitude(events.trueParticles.momentum), cross_section.Particle.from_pdgid(211).mass)
+    ke = kinematics.KE(vector.magnitude(events.trueParticles.momentum), Particle.from_pdgid(211).mass)
 
     n_pi_true = ak.sum(n_pi_true & (ke > ke_lim), axis = -1)
     n_pi0_true = events.trueParticles.nPi0
@@ -210,7 +214,7 @@ def GetTruePionCounts(events : cross_section.Data, ke_lim : float = 0):
 
 
 def GetTruePionCountsGeant(events, ke_lim : float = 0) -> tuple[ak.Array, ak.Array]:
-    ke = cross_section.KE(cross_section.vector.magnitude(events.trueParticles.momentum), cross_section.Particle.from_pdgid(211).mass)
+    ke = kinematics.KE(vector.magnitude(events.trueParticles.momentum), Particle.from_pdgid(211).mass)
 
     n_pip_true = (events.trueParticles.number != 1) & (events.trueParticles.pdg == 211) & (events.trueParticles.mother == 1)
     n_pim_true = (events.trueParticles.number != 1) & (events.trueParticles.pdg == -211) & (events.trueParticles.mother == 1)

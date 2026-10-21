@@ -1,16 +1,13 @@
 import awkward as ak
 import numpy as np
+
 from scipy import stats
 
 import geant
-import Plots
 
-from Slices import Slices
+from .. import common, slices, plots
 
-
-from Utils import remove_, deprecation_warning, weighted_chi_sqr
-
-def PlotCrossSection(xs : dict[tuple], energy_slices : Slices, cross_section_name : str, xs_sim_range : tuple[float] = None):
+def PlotCrossSection(xs : dict[tuple], energy_slices : slices.Slices, cross_section_name : str, xs_sim_range : tuple[float] = None):
     """ Plot a set of cross section measurements. Assumed from the same process.
         # TODO Include chi squared option.
         # TODO allow more than one process to be plot for same figure plots? (name match the process to xs key for chi2 comparison)
@@ -24,11 +21,11 @@ def PlotCrossSection(xs : dict[tuple], energy_slices : Slices, cross_section_nam
 
     x = energy_slices.pos - energy_slices.width / 2
 
-    Plots.plt.figure()
+    plots.plt.figure()
     geant_xs.Plot(cross_section_name, simplified_pion_production=True)
 
     for label, (y, yerr) in xs.items():
-        Plots.Plot(
+        plots.Plot(
             x,
             y,
             xerr=energy_slices.width / 2,
@@ -37,7 +34,7 @@ def PlotCrossSection(xs : dict[tuple], energy_slices : Slices, cross_section_nam
             marker="o",
             label=label,
         )
-    Plots.plt.legend()
+    plots.plt.legend()
     return
 
 
@@ -49,15 +46,15 @@ def PlotCrossSectionSteps(xs_tensor : tuple[np.ndarray], process : str, xs_prefi
         process (str): Process name.
         xs_prefit (np.ndarray): Prefit cross section.
     """
-    for i, xs in Plots.IterMultiPlot(xs_tensor[0]):
-        Plots.plt.axvline(xs_prefit[0][i] ,color="k", linestyle="--", label = "Prefit")
-        Plots.plt.axvline(np.mean(xs), color="C1", linestyle="--", label = "Mean value")
-        Plots.PlotHist(xs, color="C0", label="MCMC steps", bins=50, newFigure=False)
-        Plots.plt.xlabel(f"{remove_(process.capitalize())} cross section (mb)")
+    for i, xs in plots.IterMultiPlot(xs_tensor[0]):
+        plots.plt.axvline(xs_prefit[0][i] ,color="k", linestyle="--", label = "Prefit")
+        plots.plt.axvline(np.mean(xs), color="C1", linestyle="--", label = "Mean value")
+        plots.PlotHist(xs, color="C0", label="MCMC steps", bins=50, newFigure=False)
+        plots.plt.xlabel(f"{common.remove_(process.capitalize())} cross section (mb)")
     return
 
 
-def PlotCrossSectionMinMax(xs_tensor : tuple[np.ndarray], xs_prefit : tuple[np.ndarray], process : str, energy_slices : Slices):
+def PlotCrossSectionMinMax(xs_tensor : tuple[np.ndarray], xs_prefit : tuple[np.ndarray], process : str, energy_slices : slices.Slices):
     """ Plot the Minimum and Maximum cross sections at each MCMC step. Note that the absolute max and min are taken, not from just one step.
 
     Args:
@@ -86,7 +83,7 @@ def PlotCrossSectionMinMax(xs_tensor : tuple[np.ndarray], xs_prefit : tuple[np.n
     return
 
 
-def PlotCrossSectionCL(xs_tensor : tuple[np.ndarray], xs_prefit : tuple[np.ndarray], process : str, energy_slices : Slices, confidence_level : float = 0.68):
+def PlotCrossSectionCL(xs_tensor : tuple[np.ndarray], xs_prefit : tuple[np.ndarray], process : str, energy_slices : slices.Slices, confidence_level : float = 0.68):
     """ Plot the mean cross section and the error by calculating the Confidence level. Compares to simulation and prefit.
 
     Args:
@@ -110,7 +107,7 @@ def PlotCrossSectionCL(xs_tensor : tuple[np.ndarray], xs_prefit : tuple[np.ndarr
 
 
 def PlotXSHists(energy_slices, hist_counts : np.ndarray, hist_counts_err : np.ndarray = None, overflow : bool = True, scale : float = 1, xlabel : str = "$KE$ (MeV)", ylabel : str = "Counts", label : str = None, color : str = None, newFigure : bool = True, title : str = None):
-    deprecation_warning()
+    common.deprecation_warning()
     if hist_counts_err is None:
         hist_counts_err = np.sqrt(hist_counts)
 
@@ -121,23 +118,23 @@ def PlotXSHists(energy_slices, hist_counts : np.ndarray, hist_counts_err : np.nd
     x = energy_slices.pos_overflow - energy_slices.width/2
     x = x[s]
 
-    Plots.Plot(x, scale * hist_counts[s], yerr = scale * hist_counts_err[s], xlabel = xlabel, newFigure = newFigure, style = "step", label = label, color = color, ylabel = ylabel, title = title)
+    plots.Plot(x, scale * hist_counts[s], yerr = scale * hist_counts_err[s], xlabel = xlabel, newFigure = newFigure, style = "step", label = label, color = color, ylabel = ylabel, title = title)
     return
 
 
 def HypTestXS(cv, error, process, energy_slice, file = geant.GEANT_XS):
-    deprecation_warning()
+    common.deprecation_warning()
     xs_sim = geant.GeantCrossSections(file, energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos])
     sim_curve_interp = xs_sim.GetInterpolatedCurve(process)
     x = energy_slice.pos[:-1] - energy_slice.width/2
 
-    w_chi_sqr = weighted_chi_sqr(cv, sim_curve_interp(x), error)
+    w_chi_sqr = common.weighted_chi_sqr(cv, sim_curve_interp(x), error)
 
     p = stats.chi2.sf((len(x)-1) * w_chi_sqr, len(x) - 1)
     return {"w_chi2" : w_chi_sqr, "p" : p}
 
 def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", chi2 : bool = True, newFigure : bool = True, cv_only : bool = False, marker_size : float = 6):
-    deprecation_warning()
+    common.deprecation_warning()
     if hasattr(energy_slice.width, "__iter__"):
         width = energy_slice.width[:-1][::-1]
         xs_sim = geant.GeantCrossSections(energy_range = [energy_slice.min_pos - energy_slice.width[0], energy_slice.max_pos + energy_slice.width[-1]])
@@ -151,27 +148,27 @@ def PlotXSComparison(xs : dict[np.ndarray], energy_slice, process : str = None, 
     sim_curve_interp = xs_sim.GetInterpolatedCurve(process)
     x = energy_slice.pos[:-1] - width/2
 
-    if newFigure is True: Plots.plt.figure()
+    if newFigure is True: plots.plt.figure()
     chi_sqrs = {}
     for k, v in xs.items():
-        w_chi_sqr = weighted_chi_sqr(v[0], sim_curve_interp(x), v[1])
+        w_chi_sqr = common.weighted_chi_sqr(v[0], sim_curve_interp(x), v[1])
         chi_sqrs[k] = w_chi_sqr
         if (chi2 is True) and (cv_only is False):
             chi2_l = ", $\\chi^{2}/ndf$ = " + f"{w_chi_sqr:.3g}"
         else:
             chi2_l = ""
-        Plots.Plot(x, v[0], xerr = width / 2  if cv_only is False else None, yerr = v[1] if cv_only is False else None, label = k + chi2_l, color = colors[k], linestyle = "", marker = "x", newFigure = False, markersize = marker_size, capsize = marker_size/2)
+        plots.Plot(x, v[0], xerr = width / 2  if cv_only is False else None, yerr = v[1] if cv_only is False else None, label = k + chi2_l, color = colors[k], linestyle = "", marker = "x", newFigure = False, markersize = marker_size, capsize = marker_size/2)
     
     if process == "single_pion_production":
-        Plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = simulation_label, title = "Single pion production" if title is None else title.capitalize(), newFigure = False, xlabel = "$KE (MeV)$", ylabel = "$\\sigma$ (mb)", color = xs_sim_color)
+        plots.Plot(xs_sim.KE, sim_curve_interp(xs_sim.KE), label = simulation_label, title = "Single pion production" if title is None else title.capitalize(), newFigure = False, xlabel = "$KE (MeV)$", ylabel = "$\\sigma$ (mb)", color = xs_sim_color)
     else:
         xs_sim.Plot(process, label = simulation_label, color = xs_sim_color, title = title.capitalize() if type(title) is str else title)
 
-    Plots.plt.ylim(0)
-    if max(Plots.plt.gca().get_ylim()) > np.nanmax(sim_curve_interp(xs_sim.KE).astype(float)) * 2:
-        Plots.plt.ylim(0, max(sim_curve_interp(xs_sim.KE)) * 2)
+    plots.plt.ylim(0)
+    if max(plots.plt.gca().get_ylim()) > np.nanmax(sim_curve_interp(xs_sim.KE).astype(float)) * 2:
+        plots.plt.ylim(0, max(sim_curve_interp(xs_sim.KE)) * 2)
     if hasattr(width, "__iter__"):
-        Plots.plt.xlim(energy_slice.min_pos - (0.2 * width[0]), energy_slice.max_pos + (0.2 * width[-1]))
+        plots.plt.xlim(energy_slice.min_pos - (0.2 * width[0]), energy_slice.max_pos + (0.2 * width[-1]))
     else:
-        Plots.plt.xlim(energy_slice.min_pos - (0.2 * width), energy_slice.max_pos + (0.2 * width))
+        plots.plt.xlim(energy_slice.min_pos - (0.2 * width), energy_slice.max_pos + (0.2 * width))
     return chi_sqrs

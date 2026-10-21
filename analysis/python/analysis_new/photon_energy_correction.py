@@ -1,10 +1,13 @@
+import awkward as ak
 import numpy as np
-import Fitting
+import pandas as pd
+
+import fitting, plots
 
 def LinearCorrection(x, p0):
     return x / p0
 
-class ResponseFit(Fitting.FitFunction):
+class ResponseFit(fitting.FitFunction):
     n_params = 3
 
     @staticmethod
@@ -44,17 +47,17 @@ def CreatePFOMasks(masks : dict[ak.Array]) -> ak.Array:
     return mask
 
 
-def PhotonSelection(df : pd.DataFrame, book : Plots.PlotBook = Plots.PlotBook.null()):
+def PhotonSelection(df : pd.DataFrame, book : plots.PlotBook = plots.PlotBook.null()):
     pi0_mother = df.true_mother == 111
     counts = {"pi0_daughter" : len(pi0_mother[df.pi0_photon]), "other" : len(df.pi0_photon) - len(df.pi0_photon[df.pi0_photon])}
     print(counts)
     print({c : counts[c] / len(df) for c in counts})
 
-    Plots.PlotHist([df[pi0_mother].fractional_error, df[~pi0_mother].fractional_error], stacked = False, histtype = "step", range = [-1, 1], xlabel = "$E^{reco}$ fractional error", label = ["$\\pi^{0}$ daughter", "other"])
+    plots.PlotHist([df[pi0_mother].fractional_error, df[~pi0_mother].fractional_error], stacked = False, histtype = "step", range = [-1, 1], xlabel = "$E^{reco}$ fractional error", label = ["$\\pi^{0}$ daughter", "other"])
     book.Save()
 
     df = df[pi0_mother]
-    Plots.PlotHist2DImshowMarginal(df.reco_shower_energy, df.fractional_error, bins = 100, xlabel = "$E^{reco}$ (MeV)", ylabel = "$E^{reco}$ fractional error", cmap = "plasma", x_range = [0, max(df.reco_shower_energy)], y_range = [-1, 1], norm = False)
+    plots.PlotHist2DImshowMarginal(df.reco_shower_energy, df.fractional_error, bins = 100, xlabel = "$E^{reco}$ (MeV)", ylabel = "$E^{reco}$ fractional error", cmap = "plasma", x_range = [0, max(df.reco_shower_energy)], y_range = [-1, 1], norm = False)
     book.Save()
     return df
 
@@ -79,9 +82,9 @@ def binned_dataframe(df : pd.DataFrame, bins : list, energy_range : list) -> lis
     return binned_data
 
 
-def linear_fit(df : pd.DataFrame, bins : np.ndarray, energy_range : list, book : Plots.PlotBook = Plots.PlotBook.null()) -> float:
+def linear_fit(df : pd.DataFrame, bins : np.ndarray, energy_range : list, book : plots.PlotBook = plots.PlotBook.null()) -> float:
     """ perform linear fit of true energy vs reco energy, equivalent to the correction done in the microboone simulation paper.
-
+        #TODO implment using fitting module instead.
     Args:
         bins (list): reco energy bins
 
@@ -94,33 +97,33 @@ def linear_fit(df : pd.DataFrame, bins : np.ndarray, energy_range : list, book :
     if any(np.isnan(np.concatenate([x, y]))):
         raise Exception(f"binned x and y values contain NaNs. Consider changing the binning range. \n {x, y=}")
 
-    popt, pcov = curve_fit(LinearFit, x, y)
+    popt, pcov = fitting.curve_fit(LinearFit, x, y)
 
     print(popt, pcov**0.5)
     perr = np.array([pcov[i][i] for i in range(len(popt))])**0.5
 
-    Plots.Plot(x, y, marker = "x", linestyle = "")
-    Plots.Plot(x, LinearFit(x, *popt), newFigure = False, label = "fit")
-    Plots.plt.fill_between(x, LinearFit(x, *(popt + perr)), LinearFit(x, *(popt - perr)), color = "C3", alpha = 0.5)
-    Plots.Plot(x, x, newFigure = False, label = "$y = x$", xlabel = "$E^{reco}$ (MeV)", ylabel = "$E^{true}$ (MeV)")
-    Plots.plt.legend()
+    plots.Plot(x, y, marker = "x", linestyle = "")
+    plots.Plot(x, LinearFit(x, *popt), newFigure = False, label = "fit")
+    plots.plt.fill_between(x, LinearFit(x, *(popt + perr)), LinearFit(x, *(popt - perr)), color = "C3", alpha = 0.5)
+    plots.Plot(x, x, newFigure = False, label = "$y = x$", xlabel = "$E^{reco}$ (MeV)", ylabel = "$E^{true}$ (MeV)")
+    plots.plt.legend()
 
 
-    Plots.PlotHist2D(df.true_energy, df.reco_shower_energy, x_range = [0, 1500], y_range = [0, 1500], cmap = "summer")
-    Plots.Plot(x, LinearFit(x, *popt), newFigure = False, label = "fit", color = "C0")
-    Plots.Plot(x, x, newFigure = False, color = "black", label = "$y = x$")
-    Plots.Plot(x, y, marker = "x", linestyle = "", ylabel = "$E^{true}$ (MeV)", xlabel = "$E^{reco}$ (MeV)", newFigure = False, color = "C0")
+    plots.PlotHist2D(df.true_energy, df.reco_shower_energy, x_range = [0, 1500], y_range = [0, 1500], cmap = "summer")
+    plots.Plot(x, LinearFit(x, *popt), newFigure = False, label = "fit", color = "C0")
+    plots.Plot(x, x, newFigure = False, color = "black", label = "$y = x$")
+    plots.Plot(x, y, marker = "x", linestyle = "", ylabel = "$E^{true}$ (MeV)", xlabel = "$E^{reco}$ (MeV)", newFigure = False, color = "C0")
     book.Save()
     return popt[0]
 
 
-def LinearFitPerformance(df : pd.DataFrame, linear_correction : float, book : Plots.PlotBook = Plots.PlotBook.null()):
+def LinearFitPerformance(df : pd.DataFrame, linear_correction : float, book : plots.PlotBook = plots.PlotBook.null()):
     """ Performance plots and metrics of linear correction.
 
     Args:
         linear_correction (float): correction from fit
     """
-    corrected_energy = cross_section.EnergyCorrection.LinearCorrection(df.reco_shower_energy, linear_correction)
+    corrected_energy = LinearCorrection(df.reco_shower_energy, linear_correction)
 
     fe = (df.reco_shower_energy / df.true_energy) - 1
     fec = (corrected_energy / df.true_energy) - 1
@@ -129,11 +132,11 @@ def LinearFitPerformance(df : pd.DataFrame, linear_correction : float, book : Pl
     print(f"mean shower energy fractional error: {np.mean(fe)} +- {np.std(fe)}")
     print(f"mean shower energy fractional error after correction: {np.mean(np.mean(fec))} +- {np.std(fec)}")
 
-    Plots.PlotHistComparison([df.reco_shower_energy, corrected_energy], labels = ["uncorrected", "corrected"], x_range = [0, 2000], xlabel = "$E^{reco}$ (MeV)")
-    Plots.PlotHistComparison([df.reco_shower_energy - df.true_energy, corrected_energy - df.true_energy], labels = ["uncorrected", "corrected"], x_range=[-500, 500], xlabel = "$E^{reco}$ residual (MeV)")
+    plots.PlotHistComparison([df.reco_shower_energy, corrected_energy], labels = ["uncorrected", "corrected"], x_range = [0, 2000], xlabel = "$E^{reco}$ (MeV)")
+    plots.PlotHistComparison([df.reco_shower_energy - df.true_energy, corrected_energy - df.true_energy], labels = ["uncorrected", "corrected"], x_range=[-500, 500], xlabel = "$E^{reco}$ residual (MeV)")
     book.Save()
 
-    Plots.PlotHist2DComparison([df.true_energy, df.true_energy], [fe, fec], [0, 2000], [-1, 1], bins = 50, cmap = "Accent", xlabels = ["$E^{true}$ (MeV)"]*2, ylabels = ["Fractional error"]*2, titles = ["uncorrected", "corrected"])
+    plots.PlotHist2DComparison([df.true_energy, df.true_energy], [fe, fec], [0, 2000], [-1, 1], bins = 50, cmap = "Accent", xlabels = ["$E^{true}$ (MeV)"]*2, ylabels = ["Fractional error"]*2, titles = ["uncorrected", "corrected"])
     book.Save()
     return
 
@@ -173,30 +176,30 @@ def create_bins_df(value : pd.Series, n_entries, v_range : list = None) -> np.nd
     return np.array(bins)
 
 
-def CalculateCentralValues(df : pd.date_range, bins : np.ndarray, book : Plots.PlotBook) -> dict:
+def CalculateCentralValues(df : pd.date_range, bins : np.ndarray, book : plots.PlotBook) -> dict:
     central_values = {}
 
-    with cross_section.PlotStyler().Update(font_scale = 1.3):
-        for k, v in {"student_t" : Fitting.student_t, "gaussian" : Fitting.gaussian}.items():
-            central_values[k] = Fitting.ExtractCentralValues_df(df, "reco_shower_energy", "fractional_error", [-1, 1], [v], bins, 20, bin_label = "$E^{reco}$", bin_units = "(MeV)")
+    with plots.PlotStyler().Update(font_scale = 1.3):
+        for k, v in {"student_t" : fitting.student_t, "gaussian" : fitting.gaussian}.items():
+            central_values[k] = fitting.ExtractCentralValues_df(df, "reco_shower_energy", "fractional_error", [-1, 1], [v], bins, 20, bin_label = "$E^{reco}$", bin_units = "(MeV)")
             book.Save()
-        # central_values["gaussian"] = Fitting.ExtractCentralValues_df(df, "reco_shower_energy", "fractional_error", [-1, 1], [Fitting.gaussian], bins, 20)
+        # central_values["gaussian"] = fitting.ExtractCentralValues_df(df, "reco_shower_energy", "fractional_error", [-1, 1], [fitting.gaussian], bins, 20)
         # book.Save()
         central_values["mean"] = [calculate_mean(df, "fractional_error", [-1, 1], bins), calculate_sem(df, "fractional_error", [-1, 1], bins)]
         book.Save()
     return central_values
 
 
-def ResponseFits(central_values : dict, bins : np.ndarray, book : Plots.PlotBook) -> dict:
+def ResponseFits(central_values : dict, bins : np.ndarray, book : plots.PlotBook) -> dict:
     x = (bins[1:] + bins[:-1]) / 2
     response_params = {}
 
-    for _, cv in Plots.IterMultiPlot(central_values):
+    for _, cv in plots.IterMultiPlot(central_values):
         print(cv)
         print(central_values[cv][1])
-        popt, perr = Fitting.Fit(x, central_values[cv][0], central_values[cv][1], cross_section.EnergyCorrection.ResponseFit, method = "lm", plot = True, xlabel = "$E^{reco}$ (MeV)", ylabel = "Fractional error", maxfev = int(1E6))
-        Plots.plt.ylim(-1, 1)
-        Plots.plt.title(cv)
+        popt, perr = fitting.Fit(x, central_values[cv][0], central_values[cv][1], ResponseFit, method = "lm", plot = True, xlabel = "$E^{reco}$ (MeV)", ylabel = "Fractional error", maxfev = int(1E6))
+        plots.plt.ylim(-1, 1)
+        plots.plt.title(cv)
         response_params[cv] = {"value" : popt, "error" : perr}
 
     print(response_params)
@@ -204,34 +207,34 @@ def ResponseFits(central_values : dict, bins : np.ndarray, book : Plots.PlotBook
 
 
     for cv in central_values:
-        Plots.plt.figure()
-        popt, _ = Fitting.Fit(x, central_values[cv][0], central_values[cv][1], cross_section.EnergyCorrection.ResponseFit, method = "lm", plot = True, xlabel = "$E^{reco}$ (MeV)", ylabel = "Fractional error", maxfev = int(1E6))
-        Plots.plt.ylim(-1, 1)
+        plots.plt.figure()
+        popt, _ = fitting.Fit(x, central_values[cv][0], central_values[cv][1], ResponseFit, method = "lm", plot = True, xlabel = "$E^{reco}$ (MeV)", ylabel = "Fractional error", maxfev = int(1E6))
+        plots.plt.ylim(-1, 1)
         book.Save()
     return response_params
 
 
-def MethodComparison(df : pd.DataFrame, linear_correction : float, response_params : dict, bins : np.ndarray, energy_range : list, book : Plots.PlotBook):
+def MethodComparison(df : pd.DataFrame, linear_correction : float, response_params : dict, bins : np.ndarray, energy_range : list, book : plots.PlotBook):
     energies = {"uncorrected" : df.reco_shower_energy, "linear" : df.reco_shower_energy / linear_correction}
 
     for p in response_params:
-        energies[p] = cross_section.EnergyCorrection.ResponseCorrection(df.reco_shower_energy, *response_params[p]["value"])
+        energies[p] = ResponseCorrection(df.reco_shower_energy, *response_params[p]["value"])
 
     energies = {"uncorrected" : energies["uncorrected"], "gaussian" : energies["gaussian"]}
 
-    Plots.PlotHistComparison(list(energies.values()), labels = list(energies.keys()), x_range = energy_range, xlabel = "$E^{reco}$ (MeV)")
+    plots.PlotHistComparison(list(energies.values()), labels = list(energies.keys()), x_range = energy_range, xlabel = "$E^{reco}$ (MeV)")
 
     fe = {i : (energies[i]/df.true_energy) - 1 for i in energies}
 
-    Plots.PlotHist2DComparison([df.true_energy]*len(fe), list(fe.values()), energy_range, [-1, 1], bins = 50, cmap = "Accent", xlabels = ["$E^{true}$ (MeV)"]*len(fe), ylabels = ["Fractional error"]*len(fe), titles = list(fe.keys()))
+    plots.PlotHist2DComparison([df.true_energy]*len(fe), list(fe.values()), energy_range, [-1, 1], bins = 50, cmap = "Accent", xlabels = ["$E^{true}$ (MeV)"]*len(fe), ylabels = ["Fractional error"]*len(fe), titles = list(fe.keys()))
     book.Save()
 
-    Plots.PlotHist2DComparison([df.reco_shower_energy]*len(fe), list(fe.values()), energy_range, [-1, 1], bins = 50, cmap = "Accent", xlabels = ["Uncorrected reco shower energy (MeV)"]*len(fe), ylabels = ["Fractional error"]*len(fe), titles = list(fe.keys()))
+    plots.PlotHist2DComparison([df.reco_shower_energy]*len(fe), list(fe.values()), energy_range, [-1, 1], bins = 50, cmap = "Accent", xlabels = ["Uncorrected reco shower energy (MeV)"]*len(fe), ylabels = ["Fractional error"]*len(fe), titles = list(fe.keys()))
     book.Save()
 
-    for _, (l, e) in Plots.IterMultiPlot(energies.items()):
-        Plots.PlotHist2D(e, df.true_energy, bins = 100, title = l, xlabel = "$E^{reco}$ (MeV)", ylabel = "$E^{true}$ (MeV)", x_range = energy_range, y_range = energy_range, cmap = "summer", newFigure = False)
-        Plots.plt.plot(energy_range, energy_range)
+    for _, (l, e) in plots.IterMultiPlot(energies.items()):
+        plots.PlotHist2D(e, df.true_energy, bins = 100, title = l, xlabel = "$E^{reco}$ (MeV)", ylabel = "$E^{true}$ (MeV)", x_range = energy_range, y_range = energy_range, cmap = "summer", newFigure = False)
+        plots.plt.plot(energy_range, energy_range)
     book.Save()
 
     tab = {}
@@ -240,23 +243,23 @@ def MethodComparison(df : pd.DataFrame, linear_correction : float, response_para
         tab[l] = {"$\\mu$" : v.mean(), "$\\sigma$" : v.std()}
     tab = pd.DataFrame(tab)
 
-    for i, f in Plots.IterMultiPlot(fe):
+    for i, f in plots.IterMultiPlot(fe):
         binned_data = [fe[f][(df.reco_shower_energy > bins[i + 0]) & (df.reco_shower_energy < bins[i + 1])] for i in range(len(bins)-1)]
 
         mean = [d.mean() for d in binned_data]
         sem = [d.std()/(len(d)**0.5) for d in binned_data]
-        Plots.Plot((bins[1:] + bins[:-1]) / 2, mean, yerr = sem, marker = "x", capsize = 3, newFigure = False)
-        Plots.PlotHist2D(df.reco_shower_energy, fe[f], bins = [bins, 50], x_range = energy_range, y_range = [-1, 1], newFigure = False, xlabel = "Uncorrected reco energy (MeV)", ylabel = "Fractional error", title = f)
+        plots.Plot((bins[1:] + bins[:-1]) / 2, mean, yerr = sem, marker = "x", capsize = 3, newFigure = False)
+        plots.PlotHist2D(df.reco_shower_energy, fe[f], bins = [bins, 50], x_range = energy_range, y_range = [-1, 1], newFigure = False, xlabel = "Uncorrected reco energy (MeV)", ylabel = "Fractional error", title = f)
     book.Save()
 
-    Plots.plt.figure()
+    plots.plt.figure()
     for i, f in enumerate(fe):
         binned_data = [fe[f][(df.reco_shower_energy > bins[i + 0]) & (df.reco_shower_energy < bins[i + 1])] for i in range(len(bins)-1)]
         mean = [d.mean() for d in binned_data]
         sem = [d.std()/(len(d)**0.5) for d in binned_data]
-        Plots.Plot((bins[1:] + bins[:-1]) / 2, mean, yerr = sem, marker = "x", capsize = 3, label = f, newFigure = False)
-        Plots.plt.xlabel("Uncorrected reco energy (MeV)")
-        Plots.plt.ylabel("Fractional error")
-        Plots.plt.legend()
+        plots.Plot((bins[1:] + bins[:-1]) / 2, mean, yerr = sem, marker = "x", capsize = 3, label = f, newFigure = False)
+        plots.plt.xlabel("Uncorrected reco energy (MeV)")
+        plots.plt.ylabel("Fractional error")
+        plots.plt.legend()
     book.Save()
     return tab

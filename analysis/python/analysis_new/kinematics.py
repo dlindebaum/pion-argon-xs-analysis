@@ -1,4 +1,7 @@
 """Kinematic helpers."""
+import awkward as ak
+
+import bethe_bloch, selection, vector
 
 def KE(p, m):
     return (p**2 + m**2)**0.5 - m
@@ -23,8 +26,8 @@ def TruncateTrack(tracks : ak.Array, x_trunc = None, y_trunc = None, z_trunc = N
     masks = {}
     for k, v in trunc.items():
         if v is None: continue
-        masks[k] = (SelectionTools.cuts_to_func(trunc[k], "<")(tracks[k]))
-    mask = SelectionTools.CombineMasks(masks, "and")
+        masks[k] = (selection.cuts_to_func(trunc[k], "<")(tracks[k]))
+    mask = selection.CombineMasks(masks, "and")
 
     index = ak.local_index(mask)
     max_ind = ak.argmin(~mask == False, -1) 
@@ -51,7 +54,7 @@ def RecoEndEnergy(tracks : ak.Array, KE_init: ak.Array, dEdX : ak.Array | None, 
         KE_end = KE_init - dE
     elif method == "track":
         track_length = TrackLength(pitches=pitches)
-        KE_end = BetheBloch.KE_end(KE_init, track_length, 50)
+        KE_end = bethe_bloch.KE_end(KE_init, track_length, 50)
     else:
         raise Exception(f"{method} not a valid method, pick 'calo' or 'track'")
     return KE_end

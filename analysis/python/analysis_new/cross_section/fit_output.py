@@ -7,13 +7,15 @@ Description: Class to read and process MaCh3Fit input data.
 """
 import numpy as np
 
-from python.analysis import Master, Slices, Utils, ProcessDefinitions
+import uproot
+
+from .. import common, samples, slices
 
 class MaCh3FitOutput:
-    def __init__(self, file : str, process_definitions : ProcessDefinitions.SampleDefinition, energy_slices : Slices):
+    def __init__(self, file : str, process_definitions : samples.SampleDefinition, energy_slices : slices.Slices):
         self.process_definitions = process_definitions
         self.energy_slices = energy_slices
-        with Master.uproot.open(file) as fit_output:
+        with uproot.open(file) as fit_output:
 
             self.param_labels = fit_output["CovarianceFolder"]["xsec_cov_Corr"].axis("x").labels()
 
@@ -26,7 +28,7 @@ class MaCh3FitOutput:
         pass
 
 
-    def __fmt_bin__(self, str_bin : str, slices : Slices) -> int:
+    def __fmt_bin__(self, str_bin : str, slices : slices.Slices) -> int:
         """ Convert back from the binning scheme in MaCh3 to Slices.
 
         Args:
@@ -56,7 +58,7 @@ class MaCh3FitOutput:
         for k, v in self.posteriors.items():
             proc, *bins = k.split("-")
             proc = proc.replace("True", "")
-            proc = Utils.dict_inverse(self.process_definitions.short_name)[proc]
+            proc = common.dict_inverse(self.process_definitions.short_name)[proc]
 
             index = [self.__fmt_bin__(i.split("_")[-1], self.energy_slices) for i in bins]
             if proc in posterior_tensor:

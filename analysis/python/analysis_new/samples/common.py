@@ -7,14 +7,14 @@ Description: Module to define categories for samples based on particle counts.
 """
 import operator
 import re
+
 from abc import ABC
 from collections import namedtuple
 from dataclasses import dataclass
 
 import awkward as ak
-import numpy as np
 
-from python.analysis import SelectionTools
+from .. import selection
 
 criteria = namedtuple("criteria", ["op", "value"]) # criteria is defined using an operator and value (particle count)
 
@@ -66,7 +66,7 @@ class SampleDefinition:
             masks[n] = ak.any(defs, 0)
 
         if uncategorised:
-            masks["uncategorised"] = ~SelectionTools.CombineMasks(masks, "or")
+            masks["uncategorised"] = ~selection.CombineMasks(masks, "or")
 
         return masks
 
@@ -91,3 +91,9 @@ class SampleDefinition:
                 "value": value,
             }
         return result
+
+__all__ = [
+    "criteria",
+    "CriteriaList",
+    "SampleDefinition",
+]

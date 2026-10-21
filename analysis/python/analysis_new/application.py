@@ -7,13 +7,12 @@ Description: Module for classes and functions which compose applications.
 """
 import argparse
 import copy
-import numbers
+import os
 
 import awkward as ak
 
-from python.analysis.Master import LoadConfiguration, LoadObject, FileDescriptor
-from python.analysis.cross_section import EnergyCorrection, Slices
-from python.analysis import BeamParticleSelection, PFOSelection, EventSelection, Fitting, RegionDefinitions, ProcessDefinitions, Processing
+from . import io
+import fitting, ntuple, photon_energy_correction, samples, selection, slices
 
 template_config = {
         "NTUPLE_FILES":{
@@ -349,7 +348,7 @@ class ApplicationArguments:
             args_copy = argparse.Namespace()
             for a, v in args._get_kwargs():
                 setattr(args_copy, a, v)
-            args = ApplicationArguments.ResolveConfig(LoadConfiguration(args.config))
+            args = ApplicationArguments.ResolveConfig(io.LoadConfiguration(args.config))
             for a, v in args_copy._get_kwargs():
                 if a not in args:
                     setattr(args, a, v)
@@ -416,34 +415,34 @@ class ApplicationArguments:
             if head == "NTUPLE_FILES":
                 ntuple_files = value
                 for k in ntuple_files:
-                    ntuple_files[k] = [FileDescriptor(**i) for i in ntuple_files[k]]
+                    ntuple_files[k] = [ntuple.FileDescriptor(**i) for i in ntuple_files[k]]
                 args.ntuple_files = ntuple_files
             elif head == "SAMPLE_DEFINITIONS":
-                args.region_definitions = RegionDefinitions.regions[value["region"]]
-                args.process_definitions = ProcessDefinitions.processes[value["process"]]
+                args.region_definitions = samples.RegionDefinitions.regions[value["region"]]
+                args.process_definitions = samples.ProcessDefinitions.processes[value["process"]]
                 args.process_args = value["process_args"]
                 args.region_args = value["region_args"]
             elif head == "BEAM_PARTICLE_SELECTION":
-                args.beam_selection = ApplicationArguments.__CreateSelection(value, BeamParticleSelection)
+                args.beam_selection = ApplicationArguments.__CreateSelection(value, selection.beam)
             elif head == "HAS_FINAL_STATE_PFO_SELECTION":
                 args.has_final_state_pfo_selection = value["enable"]
             elif head == "VALID_PFO_SELECTION":
                 args.valid_pfo_selection = value["enable"]
             elif head == "FINAL_STATE_PIPLUS_SELECTION":
-                args.piplus_selection = ApplicationArguments.__CreateSelection(value, PFOSelection)
+                args.piplus_selection = ApplicationArguments.__CreateSelection(value, selection.pfo)
             elif head == "FINAL_STATE_PHOTON_SELECTION":
-                args.photon_selection = ApplicationArguments.__CreateSelection(value, PFOSelection)
+                args.photon_selection = ApplicationArguments.__CreateSelection(value, selection.pfo)
             elif head == "FINAL_STATE_LOOSE_PION_SELECTION":
-                args.loose_pion_selection = ApplicationArguments.__CreateSelection(value, PFOSelection)
+                args.loose_pion_selection = ApplicationArguments.__CreateSelection(value, selection.pfo)
             elif head == "FINAL_STATE_LOOSE_PHOTON_SELECTION":
-                args.loose_photon_selection = ApplicationArguments.__CreateSelection(value, PFOSelection)
+                args.loose_photon_selection = ApplicationArguments.__CreateSelection(value, selection.pfo)
             elif head == "FINAL_STATE_PI0_SELECTION":
-                args.pi0_selection = ApplicationArguments.__CreateSelection(value, EventSelection)
+                args.pi0_selection = ApplicationArguments.__CreateSelection(value, selection.pfo)
             elif head == "BEAM_QUALITY_FITS":
                 if "mc" in value:
-                    args.mc_beam_quality_fit = LoadConfiguration(value["mc"]) # generally expected to have MC at a minimum
+                    args.mc_beam_quality_fit = io.LoadConfiguration(value["mc"]) # generally expected to have MC at a minimum
                 if "data" in value:
-                    args.data_beam_quality_fit = LoadConfiguration(value["data"])
+                    args.data_beam_quality_fit = io.LoadConfiguration(value["data"])
                 args.beam_quality_truncate = value["truncate"]
             elif head == "BEAM_SCRAPER_FITS":
                 args.beam_scraper_energy_range = value["energy_range"]
@@ -451,34 +450,34 @@ class ApplicationArguments:
                 if not hasattr(args.beam_scraper_energy_bins, "__iter__"):
                     raise Exception("energy_bins must be a list of beam energy bin ranges in MeV")
                 if "mc" in value:
-                    args.mc_beam_scraper_fit = LoadConfiguration(value["mc"])
+                    args.mc_beam_scraper_fit = io.LoadConfiguration(value["mc"])
             elif head == "ENERGY_CORRECTION":
                 args.shower_correction = {}
                 for k, v in value.items():
                     args.shower_correction[k] = v
             elif head == "UPSTREAM_ENERGY_LOSS":
                 args.upstream_loss_cv_function = value["cv_function"]
-                args.upstream_loss_response = getattr(Fitting, value["response"])
+                args.upstream_loss_response = getattr(fitting, value["response"])
                 if value["bins"] is None:
                     raise Exception("Upstream energy loss KE bins need to be provided (in MeV)")
                 args.upstream_loss_bins = value["bins"]
                 if "correction_params" in value:
-                    args.upstream_loss_correction_params = LoadConfiguration(value["correction_params"])
+                    args.upstream_loss_correction_params = io.LoadConfiguration(value["correction_params"])
             elif head == "BEAM_REWEIGHT":
                 args.beam_reweight = {}
                 if value["params"] is not None:
-                    args.beam_reweight["params"] = LoadConfiguration(value["params"])
+                    args.beam_reweight["params"] = io.LoadConfiguration(value["params"])
                 args.beam_reweight["strength"] = value["strength"]
 
             elif head == "SELECTION_MASKS":
                 args.selection_masks = {}
                 for k, v in value.items():
-                    args.selection_masks[k] = {i : LoadObject(j) for i, j in v.items()}
+                    args.selection_masks[k] = {i : io.LoadObject(j) for i, j in v.items()}
             elif head == "TOY_PARAMETERS":
                 args.toy_parameters = {}
                 for k, v in value.items():
                     if k == "beam_profile": 
-                        args.toy_parameters[k] = getattr(Fitting, v)
+                        args.toy_parameters[k] = getattr(fitting, v)
                     else:
                         for k1, v1 in v.items():
                             if not ((hasattr(v1, "__iter__")) and (len(v1) == 2)):
@@ -489,7 +488,7 @@ class ApplicationArguments:
                 for k, v in value.items():
                     args.fit[k] = v
             elif head == "ESLICE":
-                args.energy_slices = Slices.Slices(ak.Array(value["edges"]))
+                args.energy_slices = slices.Slices(ak.Array(value["edges"]))
             elif head == "ANALYSIS_INPUTS":
                 args.analysis_input = {k : v for k, v in value.items()}
             elif head == "UNFOLDING":
@@ -529,8 +528,8 @@ class ApplicationArguments:
     @staticmethod
     def AddEnergyCorrection(args):
         if hasattr(args, "shower_correction") and (args.shower_correction["correction_params"] != None):
-            method = EnergyCorrection.shower_energy_correction[args.shower_correction["correction"]]
-            params = LoadConfiguration(args.shower_correction["correction_params"])
+            method = photon_energy_correction.shower_energy_correction[args.shower_correction["correction"]]
+            params = io.LoadConfiguration(args.shower_correction["correction_params"])
         else:
             method = None
             params = None
@@ -551,12 +550,12 @@ class ApplicationArguments:
                     getattr(args, a).pop("arguments")
 
         for i, s in args.beam_selection["selections"].items():
-            if s in [BeamParticleSelection.BeamQualityCut, BeamParticleSelection.DxyCut, BeamParticleSelection.DzCut, BeamParticleSelection.CosThetaCut]:
+            if s in [selection.beam.BeamQualityCut, selection.beam.DxyCut, selection.beam.DzCut, selection.beam.CosThetaCut]:
                 if hasattr(args, "mc_beam_quality_fit"): 
                     args.beam_selection["mc_arguments"][i]["fits"] = args.mc_beam_quality_fit
                 if hasattr(args, "data_beam_quality_fit"): 
                     args.beam_selection["data_arguments"][i]["fits"] = args.data_beam_quality_fit
-            elif s == BeamParticleSelection.BeamScraperCut:
+            elif s == selection.beam.BeamScraperCut:
                 if hasattr(args, "mc_beam_scraper_fit"): 
                     args.beam_selection["mc_arguments"][i]["fits"] = args.mc_beam_scraper_fit
                     args.beam_selection["data_arguments"][i]["fits"] = args.mc_beam_scraper_fit
@@ -565,7 +564,7 @@ class ApplicationArguments:
         return args
 
 
-def ApplicationProcessing(samples : list[Sample], outdir : str, args : argparse.Namespace, func : callable, merge : bool, outname : str = "output") -> list[dict] | dict:
+def ApplicationProcessing(samples : list[ntuple.Sample], outdir : str, args : argparse.Namespace, func : callable, merge : bool, outname : str = "output") -> list[dict] | dict:
     """ Processing specifically for Applications where there is an option to reload processed data rather than fully reprocessing Ntuples.
 
     Args:
@@ -581,9 +580,9 @@ def ApplicationProcessing(samples : list[Sample], outdir : str, args : argparse.
     """
     if (args.regen is True) or (os.path.isfile(f"{outdir}{outname}.dill") is False):
         print("Processing Ntuples")
-        outputs = {s : RunProcess(args.ntuple_files[s], s == Sample.DATA, args, func, merge) for s in samples}
-        SaveObject(f"{outdir}{outname}.dill", outputs)
+        outputs = {s : ntuple.RunProcess(args.ntuple_files[s], s == ntuple.Sample.DATA, args, func, merge) for s in samples}
+        io.SaveObject(f"{outdir}{outname}.dill", outputs)
     else:
         print("Loading existing outputs")
-        outputs = LoadObject(f"{outdir}{outname}.dill")
+        outputs = io.LoadObject(f"{outdir}{outname}.dill")
     return outputs

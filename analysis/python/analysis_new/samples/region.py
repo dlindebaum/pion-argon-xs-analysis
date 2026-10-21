@@ -5,10 +5,10 @@ Author: Shyam Bhuller
 
 Description: Reconstructed region defintions.
 """
-from python.analysis.SampleDefinition import SampleDefinition, CriteriaList, criteria, dataclass
-from python.analysis.SelectionTools import GetPFOCounts
-from python.analysis.Master import Data
+from dataclasses import dataclass
 
+from common import *
+from .. import ntuple, selection
 
 @dataclass
 class region_criteria(CriteriaList):
@@ -19,11 +19,11 @@ class region_criteria(CriteriaList):
     n_pi0 : criteria
 
     @staticmethod
-    def get_criteria_values(events : Data, selection_masks: dict, **kwargs) -> dict:
+    def get_criteria_values(events : ntuple.Data, selection_masks: dict, **kwargs) -> dict:
         counts = {}
         for obj in selection_masks:
             if obj in ["beam", "null_pfo", "fiducial"]: continue
-            counts[f"n_{obj}"] = GetPFOCounts(selection_masks[obj][events.filename])
+            counts[f"n_{obj}"] = selection.GetPFOCounts(selection_masks[obj][events.filename])
         return counts
 
 @dataclass
@@ -31,7 +31,7 @@ class region_criteria_esc(region_criteria):
     escapes : criteria
 
     @staticmethod
-    def get_criteria_values(events : Data, selection_masks: dict, **kwargs) -> dict:
+    def get_criteria_values(events : ntuple.Data, selection_masks: dict, **kwargs) -> dict:
         values = region_criteria.get_criteria_values(events, selection_masks, **kwargs)
         values["escapes"] = events.recoParticles.beam_endPos_SCE.z >= max(kwargs["fiducial_volume"])
         return values

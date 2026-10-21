@@ -16,8 +16,7 @@ from scipy.optimize import curve_fit
 from scipy.special import gamma, erf
 from scipy.stats import ks_2samp, chi2, norm, lognorm
 
-
-from python.analysis import Plots, Utils
+import common, plots
 
 class FitFunction(ABC):
     """ An abstract class for defining function pass to Fit(). Contains the following:
@@ -186,7 +185,7 @@ class crystal_ball(FitFunction):
 
         N = 1 / (C + D) # should be 1 / sigma * (C + D), but I dont want to normalise the function
 
-        y = np.where(t > -p3, np.exp(-t**2 / 2), A * Utils.fpower(B - t, -p4))
+        y = np.where(t > -p3, np.exp(-t**2 / 2), A * common.fpower(B - t, -p4))
         return p0 * N * y
 
     @staticmethod
@@ -301,8 +300,8 @@ class double_crystal_ball(FitFunction):
         z = (x - p1) / p2
         A, B = double_crystal_ball.ExponentNormalisation(p3, p4)
         C, D = double_crystal_ball.ExponentNormalisation(p5, p6)
-        E1 = A * Utils.fpower(B - z, -p4)
-        E2 = C * Utils.fpower(D + z, -p6)
+        E1 = A * common.fpower(B - z, -p4)
+        E2 = C * common.fpower(D + z, -p6)
         y = np.exp(-0.5*(z**2))
         y = np.where(z < -p3, E1, y)
         y = np.where(z > p5, E2, y)
@@ -451,7 +450,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
     if plot is True:
         #* main plotting
         x_interp = np.linspace(min(x), max(x), 1000)
-        Plots.Plot(x_interp, func.func(x_interp, *popt), newFigure = False, x_scale = "linear", ylabel = ylabel, color = "#1f77b4", zorder = 11, label = "fit", title = title)
+        plots.Plot(x_interp, func.func(x_interp, *popt), newFigure = False, x_scale = "linear", ylabel = ylabel, color = "#1f77b4", zorder = 11, label = "fit", title = title)
         
         p_min = popt - perr #(perr * chisqr/ndf)
         p_max = popt + perr #(perr * chisqr/ndf)
@@ -463,12 +462,12 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
             colour = "black"
             label = "observed\nuncertainty"
             widths = (x[1] - x[0])/2
-            # Plots.PlotHist(x - widths, x - widths, weights = y_obs, color = "#d62728", label = "observed", newFigure = False, range = plot_range)
-            Plots.Plot(x, y_obs, style = "bar", linestyle = "", color = "#d62728", xlabel = xlabel, label = "observed", newFigure = False)
+            # plots.PlotHist(x - widths, x - widths, weights = y_obs, color = "#d62728", label = "observed", newFigure = False, range = plot_range)
+            plots.Plot(x, y_obs, style = "bar", linestyle = "", color = "#d62728", xlabel = xlabel, label = "observed", newFigure = False)
 
             # automatically calculate cap size to match bin width
             w = x[1] - x[0] # bin width
-            ax = Plots.plt.gca()
+            ax = plots.plt.gca()
             t = ax.transData.transform # tranform units to distance on page
             ppd = 72 / ax.figure.dpi # points per distance (same point used in font sizes)
             capsize =  0.5 * (ppd * (t([w, 0]) - t([0, 0])))[0] # factor of 0.5 because cap size is in units of half-pints 
@@ -478,7 +477,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
             label = "observed"
             capsize = 3
 
-        Plots.Plot(x, y_obs, yerr = y_err, marker = marker, linestyle = "", color = colour, xlabel = xlabel, label = label, newFigure = False, capsize = capsize / 2)
+        plots.Plot(x, y_obs, yerr = y_err, marker = marker, linestyle = "", color = colour, xlabel = xlabel, label = label, newFigure = False, capsize = capsize / 2)
         if ylim:
             plt.ylim(*sorted(ylim))
         # if plot_range:
@@ -493,7 +492,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         for j in range(len(popt)):
             text += f"\n$p_{{{j}}}$: ${popt[j]:.2g}\pm${perr[j]:.2g}"
         text += "\n$\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2g}, p : " + f"{p_value:.1g}"
-        legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = loc, title = Utils.remove_(func.__name__))
+        legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = loc, title = common.remove_(func.__name__))
         legend.set_zorder(12)
         for l in legend.legend_handles:
             l.set_visible(False)
@@ -523,7 +522,7 @@ def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : st
     cv_err = []
     fig_handles = None
     fig_labels = None
-    for i in Plots.MultiPlot(len(data_bins) - 1, orientation = "vertical"):
+    for i in plots.MultiPlot(len(data_bins) - 1, orientation = "vertical"):
         if i == len(data_bins): continue
         print_log(i)
         mask = (df[bin_variable] > data_bins[i]) & (df[bin_variable] < data_bins[i+1])
@@ -583,10 +582,10 @@ def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : st
             y_pred = best_f.func(x, *best_popt)
             y_pred_interp = best_f.func(x_interp, *best_popt)
 
-            Plots.Plot(x_interp, y_pred_interp, marker = "", color = "black", newFigure = False, label = "fit")
+            plots.Plot(x_interp, y_pred_interp, marker = "", color = "black", newFigure = False, label = "fit")
             plt.axvline(mean, color = "black", linestyle = "--", label = "central value")
-        # Plots.PlotHist(binned_data[variable], bins = hist_bins, newFigure = False, title = f"{bin_label} : {[data_bins[i], data_bins[i+1]]} {bin_units}", range = [min(v_range), max(v_range)], weights = binned_weights, color = "C0")
-        Plots.Plot(x, y, yerr = np.sqrt(y), newFigure = False, color = "C0", style = "bar", title = f"{bin_label} : {[data_bins[i], data_bins[i+1]]} {bin_units}")
+        # plots.PlotHist(binned_data[variable], bins = hist_bins, newFigure = False, title = f"{bin_label} : {[data_bins[i], data_bins[i+1]]} {bin_units}", range = [min(v_range), max(v_range)], weights = binned_weights, color = "C0")
+        plots.Plot(x, y, yerr = np.sqrt(y), newFigure = False, color = "C0", style = "bar", title = f"{bin_label} : {[data_bins[i], data_bins[i+1]]} {bin_units}")
 
         plt.axvline(np.mean(binned_data[variable]), linestyle = "--", color = "C1", label = "mean")
 
