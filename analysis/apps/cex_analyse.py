@@ -33,6 +33,7 @@ from python.analysis import selection
 from python.analysis import slices
 from python.analysis import styles
 from python.analysis import tags
+from python.legacy import Unfold
 
 label_map = {"toy" : "toy", "pdsp" : "ProtoDUNE SP"}
 

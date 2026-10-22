@@ -28,6 +28,7 @@ from python.analysis import slices
 from python.analysis import styles
 from python.analysis import tags
 from python.analysis import toy
+from python.legacy import RegionFit
 from apps import cex_toy_generator
 
 region_colours = {

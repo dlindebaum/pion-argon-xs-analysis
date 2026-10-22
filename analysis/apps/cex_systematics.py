@@ -27,9 +27,11 @@ from python.analysis import kinematics
 from python.analysis import io
 from python.analysis import ntuple
 from python.analysis import plots
+from python.analysis import processing
 from python.analysis import selection
 from python.analysis import styles
 from python.analysis import toy
+from python.legacy import RegionFit
 
 from python.analysis.cross_section import analysis_input, plotting, geant
 from apps import cex_toy_generator, cex_analyse, cex_fit_studies, cex_analysis_input
@@ -415,7 +417,7 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
     def CreateAltPi0Selections(self):
 
         self.args.cpus = 1
-        processing_args = CalculateBatches(self.args)
+        processing_args = processing.CalculateBatches(self.args)
         for k, v in processing_args.items():
             setattr(self.args, k, v)
 
