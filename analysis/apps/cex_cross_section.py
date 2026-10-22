@@ -11,14 +11,21 @@ import os
 
 import numpy as np
 
+from particle import Particle
 from rich import print
 
-from python.analysis import Application, cross_section, Plots, ProcessDefinitions
-from python.analysis.MaCh3FitOutput import MaCh3FitOutput
+from python.analysis import application
+from python.analysis import bethe_bloch
+from python.analysis import cross_section
+from python.analysis import io
+from python.analysis import plots
+from python.analysis import samples
+from python.analysis import slices
+from python.analysis import styles
+from python.analysis.cross_section import analysis_input, fit_output, plotting
 
-
-def extract_cross_sections(analysis_input : cross_section.AnalysisInput, energy_slices : cross_section.Slices, process_definitions : ProcessDefinitions.SampleDefinition, fiducial_volume : tuple[float], posterior_tensors : np.ndarray, exclude_fiducial_volume : bool = False):
-    dEdX = cross_section.BetheBloch.mean_dEdX(energy_slices.pos - energy_slices.width/2, cross_section.Particle.from_pdgid(211))
+def extract_cross_sections(analysis_input : analysis_input.AnalysisInput, energy_slices : slices.Slices, process_definitions : samples.SampleDefinition, fiducial_volume : tuple[float], posterior_tensors : np.ndarray, exclude_fiducial_volume : bool = False):
+    dEdX = bethe_bloch.mean_dEdX(energy_slices.pos - energy_slices.width/2, Particle.from_pdgid(211))
 
     args = {
         "slices" : energy_slices,
@@ -43,35 +50,35 @@ def extract_cross_sections(analysis_input : cross_section.AnalysisInput, energy_
 
     counts = {k : v for k, v in zip(
         ["valid", "invalid"],
-        cross_section.EnergySlice.counting_experiment_tensor_process(**args)
+        slices.energy_slice.counting_experiment_tensor_process(**args)
         )
     }
 
-    interaction_tensor = {k : cross_section.EnergySlice.calculate_interaction_tensor(v) for k, v in counts.items()} # dict[proc_name: np.array.shape(E_init, E_end)], by default it will not create interaction tensors for processes labelled "Impurities".
+    interaction_tensor = {k : slices.energy_slice.calculate_interaction_tensor(v) for k, v in counts.items()} # dict[proc_name: np.array.shape(E_init, E_end)], by default it will not create interaction tensors for processes labelled "Impurities".
     interaction_tensor["all"] = np.add(*list(interaction_tensor.values()))
-    n_inc = cross_section.EnergySlice.incident(np.sum(interaction_tensor["valid"], 0), np.sum(interaction_tensor["valid"], 1), 0)
+    n_inc = slices.energy_slice.incident(np.sum(interaction_tensor["valid"], 0), np.sum(interaction_tensor["valid"], 1), 0)
 
     n_end = np.sum(interaction_tensor["valid"], 1)
     n_end_all = np.sum(interaction_tensor["all"], 1)
     n_int_all = {k : np.sum(v + counts["invalid"][k], 1) for k, v in counts["valid"].items()}
 
-    cross_sections = {"total_inelastic" : cross_section.EnergySlice.total_cross_section(n_inc[1:-1], n_end[1:-1], dEdX, energy_slices.width)}
+    cross_sections = {"total_inelastic" : slices.energy_slice.total_cross_section(n_inc[1:-1], n_end[1:-1], dEdX, energy_slices.width)}
     for k, v in n_int_all.items():
         if k in process_definitions.signal:
-            cross_sections[k] = cross_section.EnergySlice.exclusive_cross_section_from_total(n_end_all[1:-1], v[1:-1], *cross_sections["total_inelastic"])
-            # cross_sections[k] = cross_section.EnergySlice.exclusive_cross_section(n_inc[1:-1], n_end[1:-1], n_end_all[1:-1], v[1:-1], dEdX, energy_slices.width)
+            cross_sections[k] = slices.energy_slice.exclusive_cross_section_from_total(n_end_all[1:-1], v[1:-1], *cross_sections["total_inelastic"])
+            # cross_sections[k] = slices.energy_slice.exclusive_cross_section(n_inc[1:-1], n_end[1:-1], n_end_all[1:-1], v[1:-1], dEdX, energy_slices.width)
     return cross_sections
 
 
-def main(args : Application.argparse.Namespace):
-    cross_section.PlotStyler.SetPlotStyle(dark = True)
+def main(args : application.argparse.Namespace):
+    styles.PlotStyler.SetPlotStyle(dark = True)
 
-    ais = {k : cross_section.LoadObject(v) for k, v in args.analysis_input.items() if "mc" in k}
+    ais = {k : io.LoadObject(v) for k, v in args.analysis_input.items() if "mc" in k}
 
     prefit_cross_sections = extract_cross_sections(ais["mc_cheated"], args.energy_slices, args.process_definitions, args.fiducial_volume, None, True)
 
     if args.mach3["fit_output"] is not None:
-        postfit_tensors = MaCh3FitOutput(args.mach3["fit_output"], args.process_definitions, args.energy_slices).posterior_tensors()
+        postfit_tensors = fit_output.MaCh3FitOutput(args.mach3["fit_output"], args.process_definitions, args.energy_slices).posterior_tensors()
         postfit_cross_sections = extract_cross_sections(ais["mc_cheated"], args.energy_slices, args.process_definitions, args.fiducial_volume, postfit_tensors, True)
     else:
         postfit_cross_sections = None
@@ -79,32 +86,32 @@ def main(args : Application.argparse.Namespace):
     outdir = args.out + "xs_measurement/"
     os.makedirs(outdir, exist_ok = True)
 
-    with Plots.PlotBook(f"{outdir}cross_section_plots") as book:
+    with plots.PlotBook(f"{outdir}cross_section_plots") as book:
         if postfit_cross_sections is None:
             for k, v in prefit_cross_sections.items():
-                cross_section.PlotCrossSection({"prefit" : v}, args.energy_slices, k, [1000, 2000])
+                plotting.PlotCrossSection({"prefit" : v}, args.energy_slices, k, [1000, 2000])
                 book.Save()
         else:
             for k, v in postfit_cross_sections.items():
-                cross_section.PlotCrossSectionSteps(v, k, prefit_cross_sections[k])
+                plotting.PlotCrossSectionSteps(v, k, prefit_cross_sections[k])
                 book.Save()
 
-                cross_section.PlotCrossSectionMinMax(v, prefit_cross_sections[k], k, args.energy_slices)
+                plotting.PlotCrossSectionMinMax(v, prefit_cross_sections[k], k, args.energy_slices)
                 book.Save()
 
-                cross_section.PlotCrossSectionCL(v, prefit_cross_sections[k], k, args.energy_slices)
+                plotting.PlotCrossSectionCL(v, prefit_cross_sections[k], k, args.energy_slices)
                 book.Save()
     return
 
 
 if __name__ == "__main__":
 
-    parser = Application.argparse.ArgumentParser(description = "Computes normalisation for beam pion analysis.", formatter_class = Application.argparse.RawDescriptionHelpFormatter)
+    parser = application.argparse.ArgumentParser(description = "Computes normalisation for beam pion analysis.", formatter_class = application.argparse.RawDescriptionHelpFormatter)
 
-    Application.ApplicationArguments.Config(parser, True)
-    # Application.ApplicationArguments.Processing(parser) do we need multiprocessing? Likely not.
-    Application.ApplicationArguments.Output(parser)
+    application.ApplicationArguments.Config(parser, True)
+    # application.ApplicationArguments.Processing(parser) do we need multiprocessing? Likely not.
+    application.ApplicationArguments.Output(parser)
 
-    args = Application.ApplicationArguments.ResolveArgs(parser.parse_args())
+    args = application.ApplicationArguments.ResolveArgs(parser.parse_args())
     print(vars(args))
     main(args)

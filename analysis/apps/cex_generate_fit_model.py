@@ -11,7 +11,9 @@ import os
 
 from rich import print
 
-from python.analysis import Application, cross_section, ProcessDefinitions
+from python.analysis import application
+from python.analysis import cross_section
+from python.analysis import samples
 
 def make_systematic(proc_info : tuple, init_bin : tuple, end_bin : tuple):
     init_low, init_high = init_bin[1]
@@ -62,7 +64,7 @@ def slices_to_model_bins(energy_slices : cross_section.Slices) -> dict[tuple]:
     return bins
 
 
-def get_process_info(process : ProcessDefinitions.SampleDefinition, fiducial_volume : list[float]) -> dict:
+def get_process_info(process : samples.SampleDefinition, fiducial_volume : list[float]) -> dict:
     model_process_info = {}
 
     for k, v in process.definitions.items():
@@ -80,7 +82,7 @@ def get_process_info(process : ProcessDefinitions.SampleDefinition, fiducial_vol
     return model_process_info
 
 
-def main(args : Application.argparse.Namespace):
+def main(args : application.argparse.Namespace):
 
     model_bins = slices_to_model_bins(args.energy_slices)
 
@@ -99,10 +101,10 @@ def main(args : Application.argparse.Namespace):
 
 if __name__ == "__main__":
 
-    parser = Application.argparse.ArgumentParser("Creates systematics yaml file for use with MaCh3.")
-    Application.ApplicationArguments.Config(parser)
-    Application.ApplicationArguments.Output(parser)
+    parser = application.argparse.ArgumentParser("Creates systematics yaml file for use with MaCh3.")
+    application.ApplicationArguments.Config(parser)
+    application.ApplicationArguments.Output(parser)
 
-    args = Application.ApplicationArguments.ResolveArgs(parser.parse_args())
+    args = application.ApplicationArguments.ResolveArgs(parser.parse_args())
     print(vars(args))
     main(args)

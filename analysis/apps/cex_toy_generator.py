@@ -18,14 +18,19 @@ import numpy as np
 import pandas as pd
 
 from alive_progress import alive_it
+from particle import Particle
 from pathos.pools import ProcessPool
 from rich import print
 from scipy.interpolate import interp1d
 from scipy.stats import gaussian_kde
 
-from python.analysis.Master import timer, LoadConfiguration, ReadHDF5, LoadObject
-from python.analysis import Fitting, Utils, Application, BetheBloch
-from python.analysis.cross_section import GeantCrossSections, Particle, GEANT_XS
+from python.analysis import application
+from python.analysis import bethe_bloch
+from python.analysis import fitting
+from python.analysis import io
+from python.analysis import plots
+from python.analysis.common import timer, nandiv
+from python.analysis.cross_section import geant
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # supress annoying pandas warnings
 
@@ -50,19 +55,19 @@ def ResolveConfig(config : dict) -> argparse.Namespace:
         if k == "smearing_params":
             args.smearing_params = {}
             for i in v:
-                args.smearing_params[i] = LoadConfiguration(v[i])
-                args.smearing_params[i]["function"] = getattr(Fitting, args.smearing_params[i]["function"])
+                args.smearing_params[i] = io.LoadConfiguration(v[i])
+                args.smearing_params[i]["function"] = getattr(fitting, args.smearing_params[i]["function"])
         elif k == "reco_region_fractions":
-            args.reco_region_fractions = ReadHDF5(v)
+            args.reco_region_fractions = io.ReadHDF5(v)
         elif k == "beam_selection_efficiencies":
             #* that complex unpacking with pytables
-            args.beam_selection_efficiencies = ReadHDF5(v)
+            args.beam_selection_efficiencies = io.ReadHDF5(v)
         elif k == "mean_track_score_kde":
-            setattr(args, k, LoadObject(v))
+            setattr(args, k, io.LoadObject(v))
         elif k == "beam_profile":
             if v not in ["gaussian", "uniform"]:
-                args.beam_profile = LoadConfiguration(v)
-                args.beam_profile["function"] = getattr(Fitting, args.beam_profile["function"])
+                args.beam_profile = io.LoadConfiguration(v)
+                args.beam_profile["function"] = getattr(fitting, args.beam_profile["function"])
             else:
                 setattr(args, k, v)
         else:
@@ -83,11 +88,11 @@ def P_int(sigma : np.array, l : float) -> np.array:
     Returns:
         np.array: interaction proabability
     """
-    return 1 - np.exp(-1E-27 * sigma * 6.02214076e23 * BetheBloch.Constants.rho * l / BetheBloch.Constants.A)
+    return 1 - np.exp(-1E-27 * sigma * 6.02214076e23 * bethe_bloch.Constants.rho * l / bethe_bloch.Constants.A)
 
 
-def ModifyGeantXS(path = GEANT_XS, scale_factors : dict = None, modified_PDFs : dict[np.array] = None):
-    xs_sim = GeantCrossSections(file = path)
+def ModifyGeantXS(path = geant.GEANT_XS, scale_factors : dict = None, modified_PDFs : dict[np.array] = None):
+    xs_sim = geant.GeantCrossSections(file = path)
 
     if modified_PDFs is not None:
         if "KE" not in modified_PDFs:
@@ -105,7 +110,7 @@ def ModifyGeantXS(path = GEANT_XS, scale_factors : dict = None, modified_PDFs : 
         sum_xs = np.zeros(len(xs_sim.KE))
         for k, v in scale_factors.items():
             sum_xs = sum_xs + v * getattr(xs_sim, k)
-        ratio = Utils.nandiv(sum_xs, xs_sim.total_inelastic) # the amount per data point to scale each exclusive process by, such that the total inelastic cross section remains unchanged
+        ratio = nandiv(sum_xs, xs_sim.total_inelastic) # the amount per data point to scale each exclusive process by, such that the total inelastic cross section remains unchanged
     else:
         ratio = 1
 
@@ -120,7 +125,7 @@ def ModifyGeantXS(path = GEANT_XS, scale_factors : dict = None, modified_PDFs : 
     return xs_sim
 
 
-def GenerateStackedPDFs(l : float, path = GEANT_XS, scale_factors : dict = None, modified_PDFs : dict[np.array] = None) -> dict:
+def GenerateStackedPDFs(l : float, path = geant.GEANT_XS, scale_factors : dict = None, modified_PDFs : dict[np.array] = None) -> dict:
     """ Creates a PDF of the inclusive cross section and a stacked PDF of the exclusive process,
         such that rejection sampling can be used to allocate an exclusive process for a given inclusive process.
 
@@ -173,7 +178,7 @@ def GenerateIntialKEs(n : int, particle : Particle, cv : float, width : float, p
         else:
             raise ValueError(f"{profile} not a valid beam profile")
     else:
-        return Fitting.RejectionSampling(n, profile["min"], profile["max"], profile["function"], profile["parameters"], rng = rng)
+        return fitting.RejectionSampling(n, profile["min"], profile["max"], profile["function"], profile["parameters"], rng = rng)
 
 
 def Simulate(seed : int, KE_init : np.array, step_size : float, pdfs : dict, smearing_params : dict) -> tuple:
@@ -193,7 +198,7 @@ def Simulate(seed : int, KE_init : np.array, step_size : float, pdfs : dict, sme
     """
     rng = np.random.default_rng(seed)
 
-    interpolated_energy_loss = BetheBloch.interp_KE_to_mean_dEdX(2*max(KE_init), step_size/2) # precompute the energy loss and create a function to interpolate between them
+    interpolated_energy_loss = bethe_bloch.interp_KE_to_mean_dEdX(2*max(KE_init), step_size/2) # precompute the energy loss and create a function to interpolate between them
 
     survived = ~np.zeros(len(KE_init), dtype = bool) # keep track of which particles survived
     i = np.zeros(len(KE_init), dtype = int) # slab number i.e. position each particle interacted at
@@ -272,9 +277,9 @@ def Smearing(n : int, resolutions : dict, rng : np.random.Generator) -> pd.DataF
         pd.DataFrame: smearing terms
     """
     return pd.DataFrame({
-        "KE_int_smearing" : Fitting.RejectionSampling(n, min(resolutions["KE_int"]["range"]), max(resolutions["KE_int"]["range"]), resolutions["KE_int"]["function"], resolutions["KE_int"]["values"], rng = rng),
-        "KE_init_smearing" : Fitting.RejectionSampling(n, min(resolutions["KE_init"]["range"]), max(resolutions["KE_init"]["range"]), resolutions["KE_init"]["function"], resolutions["KE_init"]["values"], rng = rng),
-        "z_int_smearing" : Fitting.RejectionSampling(n, min(resolutions["z_int"]["range"]), max(resolutions["z_int"]["range"]), resolutions["z_int"]["function"], resolutions["z_int"]["values"], rng = rng),
+        "KE_int_smearing" : fitting.RejectionSampling(n, min(resolutions["KE_int"]["range"]), max(resolutions["KE_int"]["range"]), resolutions["KE_int"]["function"], resolutions["KE_int"]["values"], rng = rng),
+        "KE_init_smearing" : fitting.RejectionSampling(n, min(resolutions["KE_init"]["range"]), max(resolutions["KE_init"]["range"]), resolutions["KE_init"]["function"], resolutions["KE_init"]["values"], rng = rng),
+        "z_int_smearing" : fitting.RejectionSampling(n, min(resolutions["z_int"]["range"]), max(resolutions["z_int"]["range"]), resolutions["z_int"]["function"], resolutions["z_int"]["values"], rng = rng),
     })
 
 
@@ -520,10 +525,10 @@ def main(args : argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Generates toy events for inelastic pion interactions.")
     parser.add_argument("-c", "--config", type = str, default = None, help = "Config json file.")
-    Application.ApplicationArguments.Output(parser, default = "toy_sample", file = True)
+    application.ApplicationArguments.Output(parser, default = "toy_sample", file = True)
 
     args = parser.parse_args()
-    config = LoadConfiguration(args.config)
+    config = io.LoadConfiguration(args.config)
     args = argparse.Namespace(**vars(args), **vars(ResolveConfig(config)))
     if args.out is None:
         args.out = "toy_mc"

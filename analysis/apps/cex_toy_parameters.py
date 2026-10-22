@@ -16,30 +16,43 @@ import pandas as pd
 import scipy.stats as stats
 
 from alive_progress import alive_bar
+from particle import Particle
 
-from python.analysis import cross_section, Master, Plots, Tags, SelectionTools, RegionDefinitions, Application, NtupleProcessing
+from python.analysis import application
+from python.analysis import common
+from python.analysis import fitting
+from python.analysis import kinematics
+from python.analysis import io
+from python.analysis import ntuple
+from python.analysis import plots
+from python.analysis import regions
+from python.analysis import samples
+from python.analysis import selection
+from python.analysis import styles
+from python.analysis import tags
 
+from python.analysis import beam
 from apps.cex_analysis_input import RegionSelection, BeamPionSelection
 
 from rich import print
 
 
-@Master.timer
-def ComputeQuantities(mc : Master.Data, args : dict) -> dict[dict, dict]:
+@common.timer
+def ComputeQuantities(mc : ntuple.Data, args : dict) -> dict[dict, dict]:
     """ Compute Quantities used for the cross section measurement.
 
     Args:
-        mc (Master.Data): mc events.
+        mc (ntuple.Data): mc events.
         args (dict): application arguments.
 
     Returns:
         dict[dict, dict]: dictionary of quantities, one for reco and truth.
     """
     with alive_bar(title = "computng reco quantities") as bar:
-        reco_upstream_loss = cross_section.UpstreamEnergyLoss(cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass), args["upstream_loss_correction_params"]["value"], args["upstream_loss_response"])
+        reco_upstream_loss = beam.upstream.UpstreamEnergyLoss(kinematics.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass), args["upstream_loss_correction_params"]["value"], args["upstream_loss_response"])
         
-        reco_KE_ff = cross_section.KE(mc.recoParticles.beam_inst_P, cross_section.Particle.from_pdgid(211).mass) - reco_upstream_loss
-        reco_KE_int = cross_section.RecoEndEnergy(mc.recoParticles.beam_calo_pos, reco_KE_ff, mc.recoParticles.beam_dEdX, args["energy_method"])
+        reco_KE_ff = kinematics.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) - reco_upstream_loss
+        reco_KE_int = kinematics.RecoEndEnergy(mc.recoParticles.beam_calo_pos, reco_KE_ff, mc.recoParticles.beam_dEdX, args["energy_method"])
         reco_track_length = mc.recoParticles.beam_track_length
 
     with alive_bar(title = "computng true quantities") as bar:
@@ -53,8 +66,8 @@ def ComputeQuantities(mc : Master.Data, args : dict) -> dict[dict, dict]:
     }
 
 
-def run(i : int, file_desc : Master.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
-    mc = Master.Data(file_desc, n_events, start)
+def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
+    mc = ntuple.Data(file_desc, n_events, start)
 
     true_pion_mask = mc.trueParticles.pdg[:, 0] == 211
 
@@ -63,7 +76,7 @@ def run(i : int, file_desc : Master.FileDescriptor, n_events : int, start : int,
     cross_section_quantities = ComputeQuantities(mc, args)
 
     ri = {}
-    for r, v in RegionDefinitions.regions.items():
+    for r, v in samples.region.regions.items():
         print(r)
         reco_regions, true_regions = RegionSelection(mc, args, True, v, None, True) # should we generate permutations of the true process as well?
         ri[r] = {"reco_regions" : reco_regions, "true_regions" : true_regions}
@@ -73,7 +86,7 @@ def run(i : int, file_desc : Master.FileDescriptor, n_events : int, start : int,
     mean_track_score = ak.fill_none(ak.mean(mc_copy.recoParticles.track_score, axis = -1), -0.05)
 
     selection = args["selection_masks"]["mc"]["beam"][file_desc.file]
-    mask = SelectionTools.CombineMasks(selection)
+    mask = selection.CombineMasks(selection)
 
     return {"kinematic_quantities" : cross_section_quantities, "true_pion_mask" : true_pion_mask, "pion_inel_mask" : pion_inel_mask, "region_identification" : ri, "mean_track_score" : mean_track_score, "beam_selection_mask" : mask}
 
@@ -91,18 +104,18 @@ def CreateFitTable(params, errors):
     return pd.DataFrame(table, index = [0])
 
 
-def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_quantity : ak.Array, mask : ak.Array = None, label = "quantity(units)", plot_range = None, residual_range = None, fit_functions : list[cross_section.Fitting.FitFunction] = [cross_section.Fitting.gaussian, cross_section.Fitting.student_t]) -> dict:
+def ResolutionStudy(plot_book : plots.PlotBook, reco_quantity : ak.Array, true_quantity : ak.Array, mask : ak.Array = None, label = "quantity(units)", plot_range = None, residual_range = None, fit_functions : list[fitting.FitFunction] = [fitting.gaussian, fitting.student_t]) -> dict:
     """ Study of residuals of cross section inputs, used to smear toy observables. Done by fitting a curve to the residual, returning the fit parameters.
 
     Args:
-        plot_book (Plots.PlotBook): object to save plots to pdf file
+        plot_book (plots.PlotBook): object to save plots to pdf file
         reco_quantity (ak.Array): reco quantity
         true_quantity (ak.Array): truth quantity
         mask (ak.Array, optional): mask to apply to quantity. Defaults to None.
         label (str, optional): plot label. Defaults to "quantity(units)".
         plot_range (_type_, optional): plot range. Defaults to None.
         residual_range (_type_, optional): range of residual to fit to. Defaults to None.
-        fit_functions (list[cross_section.Fitting.FitFunction], optional): fit functions to try fit to the residuals. Defaults to [cross_section.Fitting.gaussian, cross_section.Fitting.student_t].
+        fit_functions (list[fitting.FitFunction], optional): fit functions to try fit to the residuals. Defaults to [fitting.gaussian, fitting.student_t].
 
     Returns:
         dict: fit parameters for each fit functions. 
@@ -110,11 +123,11 @@ def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_q
     residual = reco_quantity - true_quantity
     if mask is not None:
         residual = residual[mask]
-    Plots.PlotHistComparison([reco_quantity, true_quantity], labels = ["reco", "true"], xlabel = label, x_range = plot_range)
+    plots.PlotHistComparison([reco_quantity, true_quantity], labels = ["reco", "true"], xlabel = label, x_range = plot_range)
     plot_book.Save()
-    Plots.PlotHist(residual, xlabel = label, range = residual_range)
+    plots.PlotHist(residual, xlabel = label, range = residual_range)
     plot_book.Save()
-    Plots.PlotHist(residual, xlabel = label, range = residual_range, y_scale = "log")
+    plots.PlotHist(residual, xlabel = label, range = residual_range, y_scale = "log")
     plot_book.Save()
 
     counts, edges = np.histogram(np.array(residual), 100, range = residual_range)
@@ -125,14 +138,14 @@ def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_q
     tables = {}
     for f in fit_functions:
         try:
-            Plots.plt.figure()
-            params[f.__name__], errors[f.__name__] = cross_section.Fitting.Fit(centers, counts, np.sqrt(counts), f, plot = True, xlabel = label, ylabel = "Counts", plot_style = "hist", plot_range = residual_range)
+            plots.plt.figure()
+            params[f.__name__], errors[f.__name__] = fitting.Fit(centers, counts, np.sqrt(counts), f, plot = True, xlabel = label, ylabel = "Counts", plot_style = "hist", plot_range = residual_range)
             tables[f.__name__] = CreateFitTable(params[f.__name__], errors[f.__name__])
         except ValueError as e:
             print(f"fit not successful for {f.__name__}, reason: \n {e}")
         
         plot_book.Save()
-        Plots.plt.close()
+        plots.plt.close()
 
     params_formatted = {p : {"function" : p, "values" : {f"p{i}" : params[p][i] for i in range(len(params[p]))}} for p in params}
 
@@ -147,7 +160,7 @@ def ResolutionStudy(plot_book : Plots.PlotBook, reco_quantity : ak.Array, true_q
 
     return params_formatted, tables
 
-@Master.timer
+@common.timer
 def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : argparse.Namespace, labels : dict, out : str):
     """ Smearing study, fits functions to residuals of cross section quantities and saves the fit parameters of the best fit to file.
         (Best is double crystal ball).
@@ -164,11 +177,11 @@ def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : 
 
     os.makedirs(out + "smearing/", exist_ok = True)
     
-    trial_functions = [cross_section.Fitting.gaussian, cross_section.Fitting.student_t, cross_section.Fitting.crystal_ball, cross_section.Fitting.double_crystal_ball]
+    trial_functions = [fitting.gaussian, fitting.student_t, fitting.crystal_ball, fitting.double_crystal_ball]
 
     params = {}
     tables = {}
-    with Plots.PlotBook(out + "smearing/smearing_study") as pdf:
+    with plots.PlotBook(out + "smearing/smearing_study") as pdf:
         for k in labels:
             print(f"{k=}")
             params[k], tables[k] = ResolutionStudy(pdf, selected_quantities["reco"][k], selected_quantities["true"][k], selected_quantities["reco"][k] != 0, labels[k], args.toy_parameters["plot_ranges"][k], args.toy_parameters["smearing_residual_ranges"][k], trial_functions)
@@ -177,23 +190,23 @@ def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : 
         sout = out + f"smearing/{q}/"
         os.makedirs(sout, exist_ok = True)
         for k in params[q]:
-            Master.SaveConfiguration(params[q][k], sout + f"{k}.json")
+            io.SaveConfiguration(params[q][k], sout + f"{k}.json")
         
         for k in tables[q]:
             tables[q][k].style.hide(axis = "index").to_latex(sout + f"{k}.tex")
     return
 
-@Master.timer
-def GetTotalPionInelMasks(mc : Master.Data) -> ak.Array:
+@common.timer
+def GetTotalPionInelMasks(mc : ntuple.Data) -> ak.Array:
     """ Returns the mask which selects true inelastic pi+.
 
     Args:
-        mc (Master.Data): mc events.
+        mc (ntuple.Data): mc events.
 
     Returns:
         ak.Array: mask.
     """
-    particle_tags = Tags.GenerateTrueBeamParticleTags(mc)
+    particle_tags = tags.GenerateTrueBeamParticleTags(mc)
     return particle_tags["$\\pi^{+}$:inel"].mask
 
 
@@ -212,7 +225,7 @@ def GetTotalPionCounts(pion_mask : ak.Array, quantities : dict[str, ak.Array], b
     counts = {q : np.histogram(np.array(quantities[q][pion_mask]), bins[q], range = ranges[q])[0] for q in quantities}
     return counts
 
-@Master.timer
+@common.timer
 def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, beam_selection_mask : ak.Array, args : argparse.Namespace, ranges : dict, labels : dict, bins : dict, out : str):
     """ Study which looks at the beam selection efficiency as a function of each cross section quantity, then saves the per bin efficiencies to file to use for the toy simulation.
 
@@ -237,13 +250,13 @@ def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, beam_s
     selected_counts_true = GetTotalPionCounts(selected_pion_inel_mask, selected_quantities, bins, ranges)
 
     os.makedirs(out + "pi_beam_efficiency/", exist_ok = True)
-    pdf = Plots.PlotBook(out + "pi_beam_efficiency/efficiency_study")
+    pdf = plots.PlotBook(out + "pi_beam_efficiency/efficiency_study")
 
     x = {i : (bins[i][1:] + bins[i][:-1])/2 for i in initial_counts_true}
-    e = {i : cross_section.Efficiency(selected_counts_true[i], initial_counts_true[i]) for i in initial_counts_true}
+    e = {i : common.Efficiency(selected_counts_true[i], initial_counts_true[i]) for i in initial_counts_true}
 
-    for _, i in Plots.IterMultiPlot(initial_counts_true):
-        Plots.Plot(x[i], e[i][0], yerr = e[i][1], xlabel = "true" + labels[i], ylabel = "beam $\\pi^{+}$:inel selection efficiency", newFigure = False)
+    for _, i in plots.IterMultiPlot(initial_counts_true):
+        plots.Plot(x[i], e[i][0], yerr = e[i][1], xlabel = "true" + labels[i], ylabel = "beam $\\pi^{+}$:inel selection efficiency", newFigure = False)
     pdf.Save()
     pdf.close()
 
@@ -253,21 +266,21 @@ def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, beam_s
         "error" : pd.DataFrame({i : e[i][1] for i in e})
     }
 
-    Master.DictToHDF5(selection_efficiency_info, out + "pi_beam_efficiency/beam_selection_efficiencies_true.hdf5")
+    io.DictToHDF5(selection_efficiency_info, out + "pi_beam_efficiency/beam_selection_efficiencies_true.hdf5")
     return
 
 
-@Master.timer
+@common.timer
 def RecoRegionSelection(region_selections : dict[dict], args : argparse.Namespace, out : str):
     """ Study which computes a correlation matrix ofthe event faction for reco regions and true regions.
         Saved to file to be used in toy simulation.
 
     Args:
-        mc (Master.Data): mc events.
+        mc (ntuple.Data): mc events.
         args (argparse.Namespace): application arguments.
     """
     os.makedirs(out + "reco_regions/", exist_ok = True)
-    pdf = Plots.PlotBook(out + "reco_regions/reco_regions_study")
+    pdf = plots.PlotBook(out + "reco_regions/reco_regions_study")
     pe = {}
     pe_index_labels = None
     for r in region_selections:
@@ -277,12 +290,12 @@ def RecoRegionSelection(region_selections : dict[dict], args : argparse.Namespac
 
         process_keys = [k for k in true_regions if k != "uncategorised"]
         if pe_index_labels is None:
-            tags = Tags.ExclusiveProcessTags({k : None for k in process_keys})
+            tags = tags.ExclusiveProcessTags({k : None for k in process_keys})
             pe_index_labels = tags.name_simple.values
 
-        counts = np.array(cross_section.CountInRegions(true_regions, reco_regions))
-        Plots.plt.figure(figsize = [3 * 6.4, 3 * 4.8])
-        Plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "True process", x_label = "Reco region", title = cross_section.remove_(r), newFigure = False)
+        counts = np.array(regions.CountInRegions(true_regions, reco_regions))
+        plots.plt.figure(figsize = [3 * 6.4, 3 * 4.8])
+        plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "True process", x_label = "Reco region", title = common.remove_(r), newFigure = False)
         pdf.Save()
 
         (a,b)=counts.shape
@@ -294,10 +307,10 @@ def RecoRegionSelection(region_selections : dict[dict], args : argparse.Namespac
         counts = np.pad(counts, padding, mode='constant', constant_values = 0)
 
 
-        pe[cross_section.remove_(r)] = ((np.diag(counts) / np.sum(counts, 0)) * (np.diag(counts) / np.sum(counts, 1)))[:len(true_regions) - 1] # -1 to exlcude the uncategorised species. (purity x efficiency not needed)
+        pe[common.remove_(r)] = ((np.diag(counts) / np.sum(counts, 0)) * (np.diag(counts) / np.sum(counts, 1)))[:len(true_regions) - 1] # -1 to exlcude the uncategorised species. (purity x efficiency not needed)
 
         reco_regions.pop("uncategorised")
-        counts = cross_section.CountInRegions(true_regions, reco_regions)
+        counts = regions.CountInRegions(true_regions, reco_regions)
 
         fractions_df = counts / np.sum(counts, axis = 1)[:, np.newaxis]
         fractions_df = pd.DataFrame(np.array(fractions_df).T, columns = true_regions, index = reco_regions) # columns are the true regions, so index over those to get the fractions
@@ -308,16 +321,16 @@ def RecoRegionSelection(region_selections : dict[dict], args : argparse.Namespac
     pd.DataFrame(pe, index = pe_index_labels).style.format(precision = 2).to_latex(out + "reco_regions/pe.tex")
     return
 
-@Master.timer
+@common.timer
 def MeanTrackScoreKDE(mean_track_score : ak.Array, true_processes : dict[ak.Array], args : argparse.Namespace, out : str):
     """ Derives mean track score kernels from mc.
 
     Args:
-        mc (Master.Data): mc sample
+        mc (ntuple.Data): mc sample
         args (argparse.Namespace): application arguments.
     """
     true_processes_filtered = {k : v for k, v in true_processes.items() if k != "uncategorised"}
-    tags = Tags.ExclusiveProcessTags(true_processes_filtered)
+    tags = tags.ExclusiveProcessTags(true_processes_filtered)
 
     kdes = {}
     for k, v in true_processes_filtered.items():
@@ -325,30 +338,30 @@ def MeanTrackScoreKDE(mean_track_score : ak.Array, true_processes : dict[ak.Arra
         kdes[k].set_bandwidth(0.2)
 
     os.makedirs(out + "meanTrackScoreKDE/", exist_ok = True)
-    with Plots.PlotBook(out + "meanTrackScoreKDE/plots.pdf", True) as book:
-        Plots.PlotTagged(mean_track_score, tags, 21, [0, 1], x_label = "mean track score", stacked = False, histtype = "step", norm = True)
+    with plots.PlotBook(out + "meanTrackScoreKDE/plots.pdf", True) as book:
+        plots.PlotTagged(mean_track_score, tags, 21, [0, 1], x_label = "mean track score", stacked = False, histtype = "step", norm = True)
         book.Save()
 
         x = np.linspace(0, 1, 1000)
 
-        Plots.PlotTagged(mean_track_score, tags, 21, [0, 1], x_label = "mean track score", stacked = False, histtype = "step", norm = True)
+        plots.PlotTagged(mean_track_score, tags, 21, [0, 1], x_label = "mean track score", stacked = False, histtype = "step", norm = True)
         for tag in tags:
-            Plots.Plot(x, kdes[tag].evaluate(x), color = tags[tag].colour, label = cross_section.remove_(tag) + " KDE", newFigure = False)
+            plots.Plot(x, kdes[tag].evaluate(x), color = tags[tag].colour, label = common.remove_(tag) + " KDE", newFigure = False)
         book.Save()
 
-    cross_section.SaveObject(out + "meanTrackScoreKDE/kdes.dill", kdes)
+    io.SaveObject(out + "meanTrackScoreKDE/kdes.dill", kdes)
     return
 
 
-def FitBeamProfile(KE_init : np.array, func : cross_section.Fitting.FitFunction, KE_range : list, bins : int, book : Plots.PlotBook = Plots.PlotBook.null()) -> dict:
+def FitBeamProfile(KE_init : np.array, func : fitting.FitFunction, KE_range : list, bins : int, book : plots.PlotBook = plots.PlotBook.null()) -> dict:
     """ Fit the MC beam profile for use increating KE init.
 
     Args:
         KE_init (np.array): initial kinetic energy.
-        func (cross_section.Fitting.FitFunction): fit function
+        func (fitting.FitFunction): fit function
         KE_range (list): kinetic energy range
         bins (int): bin numbers
-        book (Plots.PlotBook, optional): plot book. Defaults to Plots.PlotBook.null().
+        book (plots.PlotBook, optional): plot book. Defaults to plots.PlotBook.null().
 
     Returns:
         dict: _description_
@@ -356,9 +369,9 @@ def FitBeamProfile(KE_init : np.array, func : cross_section.Fitting.FitFunction,
     x = np.linspace(min(KE_range), max(KE_range), bins)
     y = np.histogram(KE_init, bins = x)[0]
 
-    Plots.plt.figure()
+    plots.plt.figure()
     print(f"{book.open=}")
-    params, error = cross_section.Fitting.Fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = book.is_open, plot_style = "hist", xlabel = "$KE^{true}_{ff}$ (MeV)", ylabel = "Counts")
+    params, error = fitting.Fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = book.is_open, plot_style = "hist", xlabel = "$KE^{true}_{ff}$ (MeV)", ylabel = "Counts")
     book.Save()
 
     table = CreateFitTable(params, error)
@@ -370,29 +383,29 @@ def FitBeamProfile(KE_init : np.array, func : cross_section.Fitting.FitFunction,
         "max" : max(KE_range)
         }, table
 
-@Master.timer
-def BeamProfileStudy(quantities : dict, args : argparse.Namespace, true_beam_mask : ak.Array, func : cross_section.Fitting.FitFunction, KE_range : list, out : str):
+@common.timer
+def BeamProfileStudy(quantities : dict, args : argparse.Namespace, true_beam_mask : ak.Array, func : fitting.FitFunction, KE_range : list, out : str):
     """ Try to fit various fit functions to the MC beam profile.
 
     Args:
         quantities (dict): analysis quanitites.
         args (argparse.Namespace): application arguments.
         true_beam_mask (ak.Array): mask which selects true beam pions.
-        func (cross_section.Fitting.FitFunction): fit function to try.
+        func (fitting.FitFunction): fit function to try.
         KE_range (list): kinetic energy range.
     """
     os.makedirs(out + "beam_profile/", exist_ok = True)
-    with Plots.PlotBook(out + "beam_profile/beam_profile.pdf") as book:
+    with plots.PlotBook(out + "beam_profile/beam_profile.pdf") as book:
         beam_profile, table = FitBeamProfile(quantities["true"]["KE_init"][true_beam_mask], func, KE_range, 50, book)
-        Master.SaveConfiguration(beam_profile, out + "beam_profile/beam_profile.json")
+        io.SaveConfiguration(beam_profile, out + "beam_profile/beam_profile.json")
         table.style.hide(axis = "index").to_latex(out + "beam_profile/fit.tex")
     return
 
-@Master.timer
+@common.timer
 def main(args : argparse.Namespace):
-    cross_section.PlotStyler.SetPlotStyle(True)
+    styles.PlotStyler.SetPlotStyle(True)
     out = args.out + "toy_parameters/"
-    cross_section.os.makedirs(out, exist_ok = True)
+    os.makedirs(out, exist_ok = True)
 
     bins = {r : np.linspace(min(args.toy_parameters["plot_ranges"][r]), max(args.toy_parameters["plot_ranges"][r]), 50) for r in args.toy_parameters["plot_ranges"]}
     labels = {
@@ -401,7 +414,7 @@ def main(args : argparse.Namespace):
         "z_int" : "$l^{res,MC}$ (cm)"
     }
 
-    output_mc = NtupleProcessing.ApplicationProcessing(["mc"], out, args, run, True)["mc"]
+    output_mc = application.ApplicationProcessing(["mc"], out, args, run, True)["mc"]
 
     print(f"{output_mc=}")
 
@@ -419,13 +432,13 @@ def main(args : argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Analyses MC ntuples in order to determine parameters used to emulate selection efficiency and detector effects for the toy model.")
 
-    Application.ApplicationArguments.Config(parser, True)
-    Application.ApplicationArguments.Output(parser)
-    Application.ApplicationArguments.Regen(parser)
-    Application.ApplicationArguments.Processing(parser)
+    application.ApplicationArguments.Config(parser, True)
+    application.ApplicationArguments.Output(parser)
+    application.ApplicationArguments.Regen(parser)
+    application.ApplicationArguments.Processing(parser)
 
     args = parser.parse_args()
-    args = Application.ApplicationArguments.ResolveArgs(args)
+    args = application.ApplicationArguments.ResolveArgs(args)
 
     print(vars(args))
     main(args)

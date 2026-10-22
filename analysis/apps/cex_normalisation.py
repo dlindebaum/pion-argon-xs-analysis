@@ -14,49 +14,56 @@ import awkward as ak
 
 from rich import print
 
-from python.analysis import Master, Plots, cross_section, BeamParticleSelection, Tags, Application, NtupleProcessing
+from python.analysis import application
+from python.analysis import common
+from python.analysis import io
+from python.analysis import ntuple
+from python.analysis import plots
+from python.analysis import styles
+from python.analysis import tags
+from python.analysis.selection import beam
 
 
-def run(i : int, file_desc : Master.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
-    events = Master.Data(file_desc, n_events, start)
-    mask = BeamParticleSelection.PiBeamSelection(events, args["data"])
+def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
+    events = ntuple.Data(file_desc, n_events, start)
+    mask = beam.PiBeamSelection(events, args["data"])
     if args["data"] is False:
-        tags = Tags.GenerateTrueBeamParticleTags(events)
+        event_tags = tags.GenerateTrueBeamParticleTags(events)
     else:
-        tags = None
-    return {"mask" : mask, "tags" : tags}
+        event_tags = None
+    return {"mask" : mask, "tags" : event_tags}
 
 
-@Master.timer
+@common.timer
 def main(args):
-    cross_section.PlotStyler.SetPlotStyle(extend_colors = True)
+    styles.PlotStyler.SetPlotStyle(extend_colors = True)
     outdir = args.out + "beam_norm/"
     os.makedirs(outdir, exist_ok = True)
 
-    outputs = NtupleProcessing.ApplicationProcessing(list(args.ntuple_files.keys()), outdir, args, run, True)
+    outputs = application.ApplicationProcessing(list(args.ntuple_files.keys()), outdir, args, run, True)
 
     n_data = ak.sum(outputs["data"]["mask"])
     n_mc = ak.sum(outputs["mc"]["mask"])
     norm = round(n_data / n_mc, 3)
 
-    with Plots.PlotBook(outdir + "plots.pdf") as book:
-        Plots.PlotTags(outputs["mc"]["tags"], "True particle ID")
+    with plots.PlotBook(outdir + "plots.pdf") as book:
+        plots.PlotTags(outputs["mc"]["tags"], "True particle ID")
         book.Save()
 
-    Master.SaveConfiguration({"norm" : norm, "mc" : int(n_mc), "data" : int(n_data)}, outdir + "norm.json")
+    io.SaveConfiguration({"norm" : norm, "mc" : int(n_mc), "data" : int(n_data)}, outdir + "norm.json")
 
     return
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Computes normalisation for beam pion analysis.", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    Application.ApplicationArguments.Config(parser, True)
-    Application.ApplicationArguments.Processing(parser)
-    Application.ApplicationArguments.Output(parser)
-    Application.ApplicationArguments.Regen(parser)
+    application.ApplicationArguments.Config(parser, True)
+    application.ApplicationArguments.Processing(parser)
+    application.ApplicationArguments.Output(parser)
+    application.ApplicationArguments.Regen(parser)
 
     args = parser.parse_args()
 
-    args = Application.ApplicationArguments.ResolveArgs(args)
+    args = application.ApplicationArguments.ResolveArgs(args)
     print(vars(args))
     main(args)

@@ -6,21 +6,28 @@ Author: Shyam Bhuller
 
 Description: app which performs cross checks for the region fit using toys.
 """
+import argparse
 import os
 
+import cabinetry
 import itertools
 import numpy as np
 import pandas as pd
+import pyhf
 
-from pathos.pools import ProcessPool
 from rich import print, rule
 from scipy.ndimage import gaussian_filter1d
 
-
-from python.analysis import cross_section, Plots, Application
-from python.analysis.Master import DictToHDF5, ReadHDF5, LoadConfiguration
-from  python.analysis import RegionFit
-from python.analysis.Slices import Slices
+from python.analysis import application
+from python.analysis import common
+from python.analysis import cross_section
+from python.analysis import fitting
+from python.analysis import io
+from python.analysis import plots
+from python.analysis import slices
+from python.analysis import styles
+from python.analysis import tags
+from python.analysis import toy
 from apps import cex_toy_generator
 
 region_colours = {
@@ -63,8 +70,8 @@ def CreateConfigNormalisation(scales : dict, data_config : dict) -> dict:
     return cfg
 
 
-def ModifiedConfigTest(config : dict, energy_slice : Slices, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, mean_track_score_bins : np.array = None, single_bin : np.array = False) -> tuple[dict]:
-    toy_alt_pdf = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.run(config)))
+def ModifiedConfigTest(config : dict, energy_slice : slices.Slices, model : pyhf.Model, toy_template : cross_section.analysis_input.AnalysisInput, mean_track_score_bins : np.array = None, single_bin : np.array = False) -> tuple[dict]:
+    toy_alt_pdf = cross_section.analysis_input.AnalysisInput.CreateAnalysisInputToy(toy.Toy(df = cex_toy_generator.run(config)))
     
     obs = RegionFit.GenerateObservations(toy_alt_pdf, energy_slice, mean_track_score_bins, model, False, single_bin)
     fit_result = RegionFit.Fit(obs, model, None, verbose = False, tolerance = 0.1) # relax the tolerance to allow fit to converge for a large parameter space
@@ -78,7 +85,7 @@ def ModifiedConfigTest(config : dict, energy_slice : Slices, model : cross_secti
     return fit_result, true_process_counts, expected_mus
 
 
-def NormalisationTest(directory : str, data_config : dict, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, energy_slice : Slices, mean_track_score_bins : np.ndarray, single_bin : bool):
+def NormalisationTest(directory : str, data_config : dict, model : pyhf.Model, toy_template : cross_section.analysis_input.AnalysisInput, energy_slice : slices.Slices, mean_track_score_bins : np.ndarray, single_bin : bool):
     for target in folder:
         print(target)
 
@@ -101,16 +108,16 @@ def NormalisationTest(directory : str, data_config : dict, model : cross_section
                 config = CreateConfigNormalisation(scales, data_config)
             results[i], true_counts[i], expected_mus[i] = ModifiedConfigTest(config, energy_slice, model, toy_template, mean_track_score_bins, single_bin)
 
-        cross_section.SaveObject(f"{directory}fit_results_{folder[target]}.dill", {"results" : results, "true_counts" : true_counts, "expected_mus" : expected_mus})
+        io.SaveObject(f"{directory}fit_results_{folder[target]}.dill", {"results" : results, "true_counts" : true_counts, "expected_mus" : expected_mus})
     return
 
 
-def FitSimulationCurve(xs_sim, sampling_factor : int, process : str, function : cross_section.Fitting.FitFunction, plot : bool = False):
+def FitSimulationCurve(xs_sim, sampling_factor : int, process : str, function : fitting.FitFunction, plot : bool = False):
     x = xs_sim.KE[::sampling_factor]/1000
     y = getattr(xs_sim, process)[::sampling_factor]/1000
 
-    if plot is True: Plots.plt.figure()
-    results = cross_section.Fitting.Fit(x, y, None, function, method = "dogbox", plot = plot, xlabel = "$KE$(GeV)", ylabel = "$\\sigma$ (b)", title = process)
+    if plot is True: plots.plt.figure()
+    results = fitting.Fit(x, y, None, function, method = "dogbox", plot = plot, xlabel = "$KE$(GeV)", ylabel = "$\\sigma$ (b)", title = process)
     return results
 
 
@@ -122,14 +129,14 @@ def CountsFractionalError(results, true_counts, model, single_bin = False):
 
     for s in results:
         true_counts_arr = np.array(list(true_counts[s].values()))
-        post_fit_pred = cross_section.cabinetry.model_utils.prediction(model, fit_results = results[s], label = "post-fit")
+        post_fit_pred = cabinetry.model_utils.prediction(model, fit_results = results[s], label = "post-fit")
 
         if mean_track_score:
             KE_int_prediction = RegionFit.SliceModelPrediction(post_fit_pred, slice(-1), "KE_int_postfit") # exclude the channel which is the mean track score
         else:
             KE_int_prediction = RegionFit.SliceModelPrediction(post_fit_pred, slice(0, len(post_fit_pred.model_yields)), "KE_int_postfit")
 
-        pred_counts_err = cross_section.quadsum(np.array(KE_int_prediction.total_stdev_model_bins)[:, :-1], 0)
+        pred_counts_err = common.quadsum(np.array(KE_int_prediction.total_stdev_model_bins)[:, :-1], 0)
     
         if single_bin is True:
             t = np.sum(true_counts_arr, 1)
@@ -137,13 +144,13 @@ def CountsFractionalError(results, true_counts, model, single_bin = False):
         else:
             t = true_counts_arr
 
-        fe_err.append(cross_section.nandiv(pred_counts_err, t))
+        fe_err.append(common.nandiv(pred_counts_err, t))
 
         pred_counts = np.sum(np.array(KE_int_prediction.model_yields), 0)
         if single_bin:
             pred_counts = pred_counts.flatten()
 
-        fe.append(np.array([cross_section.nandiv(pred_counts[i] - v, v) for i, v in enumerate(t)]))
+        fe.append(np.array([common.nandiv(pred_counts[i] - v, v) for i, v in enumerate(t)]))
     fe_err = np.swapaxes(np.array(fe_err), 0, 1)
     fe = np.swapaxes(np.array(fe), 0, 1)
     return fe, fe_err
@@ -175,11 +182,11 @@ def SmoothStep(x : np.ndarray, high : float, low : float, split : float, smooth_
         return gaussian_filter1d(step, smooth_amount)
 
 
-def CreateModifiedXS(xs_sim : cross_section.GeantCrossSections, process : str, high : float, low : float, split : float, smooth_amount : float) -> dict:
+def CreateModifiedXS(xs_sim : cross_section.geant.GeantCrossSections, process : str, high : float, low : float, split : float, smooth_amount : float) -> dict:
     """ Create a modified cross section curve based on a smoothstep function.
 
     Args:
-        xs_sim (cross_section.GeantCrossSections): GEANT cross sections.
+        xs_sim (cross_section.geant.GeantCrossSections): GEANT cross sections.
         process (str): Processes cross section to modify.
         high (float): High value of the smoothstep.
         low (float): Low value of the smoothstep.
@@ -198,7 +205,7 @@ def CreateModifiedXS(xs_sim : cross_section.GeantCrossSections, process : str, h
         return {"KE" : xs_sim.KE, process : xs}
 
 
-def ShapeTestNew(directory : str, data_config : dict, model : cross_section.pyhf.Model, toy_template : cross_section.AnalysisInput, mean_track_score_bins : np.array, xs_sim : cross_section.GeantCrossSections, energy_slices : Slices, single_bin):
+def ShapeTestNew(directory : str, data_config : dict, model : pyhf.Model, toy_template : cross_section.analysis_input.AnalysisInput, mean_track_score_bins : np.array, xs_sim : cross_section.geant.GeantCrossSections, energy_slices : slices.Slices, single_bin):
     n = [0.8, 1, 1.2]
     alpha = [500, 1000]
     x0 = [500, 1000, 1500]
@@ -228,11 +235,11 @@ def ShapeTestNew(directory : str, data_config : dict, model : cross_section.pyhf
                 config = CreateConfigShapeTest(data_config, CreateModifiedXS(xs_sim, target, i[0], i[1], i[3], i[2]))
 
             results[i], true_counts[i], expected_mus[i] = ModifiedConfigTest(config, energy_slices, model, toy_template, mean_track_score_bins, single_bin)
-        cross_section.SaveObject(f"{directory}fit_results_{folder[target]}.dill", {"results" : results, "true_counts" : true_counts, "expected_mus" : expected_mus})
+        io.SaveObject(f"{directory}fit_results_{folder[target]}.dill", {"results" : results, "true_counts" : true_counts, "expected_mus" : expected_mus})
     return
 
 
-def PullStudy(template : cross_section.AnalysisInput, model : cross_section.pyhf.Model, energy_slices : Slices, mean_track_score_bins : np.ndarray, data_config : dict, n : int, single_bin) -> dict:
+def PullStudy(template : cross_section.analysis_input.AnalysisInput, model : pyhf.Model, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, data_config : dict, n : int, single_bin) -> dict:
     out = {"expected" : None, "scale" : pd.Series(len(template) / data_config["events"]), "bestfit" : None, "uncertainty" : None}
 
     cfg = {k : v for k, v in data_config.items()}
@@ -246,7 +253,7 @@ def PullStudy(template : cross_section.AnalysisInput, model : cross_section.pyhf
 
     for i in range(n):
         print(rule.Rule(f"iteration : {i} | total : {n}"))
-        toy_alt_pdf = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = cex_toy_generator.run(cfg)))
+        toy_alt_pdf = cross_section.analysis_input.AnalysisInput.CreateAnalysisInputToy(toy.Toy(df = cex_toy_generator.run(cfg)))
 
         expected.append({s : (sum(toy_alt_pdf.exclusive_process[s]) / len(toy_alt_pdf.exclusive_process[s])) / template_fractions[s] for s in toy_alt_pdf.exclusive_process})
 
@@ -261,15 +268,15 @@ def PullStudy(template : cross_section.AnalysisInput, model : cross_section.pyhf
     return out
 
 
-def PullStudyFast(toys : cross_section.Toy, n_template : int, n_data : int, args, energy_slices : Slices, mean_track_score_bins : np.ndarray, n : int) -> dict:
+def PullStudyFast(toys : toy.Toy, n_template : int, n_data : int, args, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, n : int) -> dict:
     out = {"expected" : None, "scale" : None, "bestfit" : None, "uncertainty" : None}
 
-    @cross_section.timer
+    @common.timer
     def Pull():
         output = {"expected" : None, "bestfit" : None, "uncertainty" : None}
         print(rule.Rule(f"iteration : {i} | total : {n}"))
-        template = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = toys.df.iloc[np.random.choice(len(toys.df), int(n_template))].reset_index()))
-        data = cross_section.AnalysisInput.CreateAnalysisInputToy(cross_section.Toy(df = toys.df.iloc[np.random.choice(len(toys.df), int(n_data))].reset_index()))
+        template = cross_section.analysis_input.AnalysisInput.CreateAnalysisInputToy(toy.Toy(df = toys.df.iloc[np.random.choice(len(toys.df), int(n_template))].reset_index()))
+        data = cross_section.analysis_input.AnalysisInput.CreateAnalysisInputToy(toy.Toy(df = toys.df.iloc[np.random.choice(len(toys.df), int(n_data))].reset_index()))
 
         if mean_track_score_bins:
             model = RegionFit.CreateModel(template, args.energy_slices, mean_track_score_bins, False, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
@@ -309,19 +316,19 @@ def PullStudyFast(toys : cross_section.Toy, n_template : int, n_data : int, args
     out["scale"] = pd.DataFrame(scales)
     return out
 
-def PlotShapeExamples(energy_slices : Slices, book : Plots.PlotBook = Plots.PlotBook.null()):
+def PlotShapeExamples(energy_slices : slices.Slices, book : plots.PlotBook = plots.PlotBook.null()):
     norms = [0.8, 1.2]
     split = 1000
     smooth_amount = 500
-    xs_sim = cross_section.GeantCrossSections(energy_range = [0, energy_slices.max + energy_slices.width])
+    xs_sim = cross_section.geant.GeantCrossSections(energy_range = [0, energy_slices.max + energy_slices.width])
 
     def plot_curves(curves : dict, geant : bool, label : str, ylabel : str):
-        Plots.plt.figure()
+        plots.plt.figure()
         for k, v in curves.items():
-            Plots.Plot(xs_sim.KE, v, "KE (MeV)", ylabel = ylabel, label = f"{label} : {k}", newFigure = False)
+            plots.Plot(xs_sim.KE, v, "KE (MeV)", ylabel = ylabel, label = f"{label} : {k}", newFigure = False)
         if geant:
             xs_sim.Plot(proc, label = "Geant4", color = "k")
-            Plots.plt.fill_between(xs_sim.KE, norms[0] * y, norms[1] * y, color = "k", alpha = 0.5)
+            plots.plt.fill_between(xs_sim.KE, norms[0] * y, norms[1] * y, color = "k", alpha = 0.5)
         return
 
     plot_curves({i : SmoothStep(xs_sim.KE, norms[1], norms[0], split, i) for i in [0, 100, 250, 500, 1000]}, False, "$\\alpha$", "$\\mathcal{N}(E)$")
@@ -339,104 +346,104 @@ def PlotShapeExamples(energy_slices : Slices, book : Plots.PlotBook = Plots.Plot
         plot_curves({i : y * SmoothStep(xs_sim.KE, norms[1], norms[0], i, smooth_amount) for i in [100, 500, 1000, 1500, 1900]}, True, "$x_{0}$", "")
         book.Save()
 
-        Plots.plt.figure()
+        plots.plt.figure()
         for i, j in itertools.combinations([0.8, 1, 1.2], 2):
             smooth_factors = SmoothStep(xs_sim.KE, j, i, split, smooth_amount)
-            Plots.Plot(xs_sim.KE, y*smooth_factors, label = f"$n_{{-}} = {i}, n_{{+}} = {j},$", newFigure = False)
-            Plots.Plot(xs_sim.KE, y*(smooth_factors[::-1]), label = f"$n_{{-}} = {j}, n_{{+}} = {i},$", newFigure = False)
+            plots.Plot(xs_sim.KE, y*smooth_factors, label = f"$n_{{-}} = {i}, n_{{+}} = {j},$", newFigure = False)
+            plots.Plot(xs_sim.KE, y*(smooth_factors[::-1]), label = f"$n_{{-}} = {j}, n_{{+}} = {i},$", newFigure = False)
         xs_sim.Plot(proc, label = "nominal", color = "k")
-        Plots.plt.fill_between(xs_sim.KE, norms[0] * y, norms[1] * y, color = "k", alpha = 0.5)
+        plots.plt.fill_between(xs_sim.KE, norms[0] * y, norms[1] * y, color = "k", alpha = 0.5)
         book.Save()
     return
 
-@cross_section.timer
-def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.ndarray, pdf : Plots.PlotBook = Plots.PlotBook.null(), single_bin : bool = False, ylim = None):
+@common.timer
+def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.ndarray, pdf : plots.PlotBook = plots.PlotBook.null(), single_bin : bool = False, ylim = None):
     x = data.index.values
 
     xt = np.arange(min(x), max(x)+0.1, 0.1)
 
     # Plot the fit value for each scale factor 
-    Plots.plt.figure()
+    plots.plt.figure()
     for i in range(4):
-        Plots.Plot(x, data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], newFigure = False, label = f"${process_map[i]}$", marker = "o", ylabel = "$\\mu^{fit}_{s}$", color = list(region_colours.values())[i], linestyle = "")
-    Plots.plt.legend(title = "$s$")
-    Plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
-    Plots.plt.xlabel(xlabel)
+        plots.Plot(x, data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], newFigure = False, label = f"${process_map[i]}$", marker = "o", ylabel = "$\\mu^{fit}_{s}$", color = list(region_colours.values())[i], linestyle = "")
+    plots.plt.legend(title = "$s$")
+    plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
+    plots.plt.xlabel(xlabel)
     pdf.Save()
 
     # same as above, in separate plots
-    for i in Plots.MultiPlot(4):
-        Plots.Plot(x, data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], newFigure = False, marker = "o", xlabel = xlabel, ylabel = f"$\\mu^{{fit}}_{{{process_map[i]}}}$", color = list(region_colours.values())[i], linestyle = "")
-        Plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
+    for i in plots.MultiPlot(4):
+        plots.Plot(x, data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], newFigure = False, marker = "o", xlabel = xlabel, ylabel = f"$\\mu^{{fit}}_{{{process_map[i]}}}$", color = list(region_colours.values())[i], linestyle = "")
+        plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
     pdf.Save()
 
     # plot true process residual
-    for n in Plots.MultiPlot(4):
-        Plots.Plot(x, data[f"true_counts_{n}"] * data[f"fe_total_{n}"], yerr = data[f"true_counts_{n}"] * data[f"fe_err_total_{n}"], title = f"$N_{{{process_map[n]}}}^{{pred}}$", xlabel = xlabel, ylabel = "residual", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
-        Plots.plt.axhline(0, color = "black", linestyle = "--")
-        Plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
+    for n in plots.MultiPlot(4):
+        plots.Plot(x, data[f"true_counts_{n}"] * data[f"fe_total_{n}"], yerr = data[f"true_counts_{n}"] * data[f"fe_err_total_{n}"], title = f"$N_{{{process_map[n]}}}^{{pred}}$", xlabel = xlabel, ylabel = "residual", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
+        plots.plt.axhline(0, color = "black", linestyle = "--")
+        plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
     pdf.Save()
 
     # plot true process fractional error
-    Plots.plt.figure()
-    for n in Plots.MultiPlot(4):
-        Plots.Plot(x, data[f"fe_total_{n}"], yerr = data[f"fe_err_total_{n}"], xlabel = xlabel, ylabel = f"$f_{{{process_map[n]}}}$", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
-        Plots.plt.axhline(0, color = "black", linestyle = "--")
-        Plots.plt.ylim(1.5 * np.min(data.filter(regex = "fe_total_").values), 1.5 * np.max(data.filter(regex = "fe_total_").values))
-        Plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
-        if ylim: Plots.plt.ylim(ylim)
+    plots.plt.figure()
+    for n in plots.MultiPlot(4):
+        plots.Plot(x, data[f"fe_total_{n}"], yerr = data[f"fe_err_total_{n}"], xlabel = xlabel, ylabel = f"$f_{{{process_map[n]}}}$", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
+        plots.plt.axhline(0, color = "black", linestyle = "--")
+        plots.plt.ylim(1.5 * np.min(data.filter(regex = "fe_total_").values), 1.5 * np.max(data.filter(regex = "fe_total_").values))
+        plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
+        if ylim: plots.plt.ylim(ylim)
     pdf.Save()
 
     # plot true process fractional error
-    Plots.plt.figure()
+    plots.plt.figure()
     for n in range(4):
-        Plots.Plot(x, data[f"fe_total_{n}"], yerr = data[f"fe_err_total_{n}"], label = f"${process_map[n]}$", xlabel = xlabel, ylabel = "$f_{s}$", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
-        Plots.plt.axhline(0, color = "black", linestyle = "--")
-        Plots.plt.ylim(1.5 * np.min(data.filter(regex = "fe_total_").values), 1.5 * np.max(data.filter(regex = "fe_total_").values))
-    Plots.plt.legend(title = "$s$")
-    Plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
-    if ylim: Plots.plt.ylim(ylim)
+        plots.Plot(x, data[f"fe_total_{n}"], yerr = data[f"fe_err_total_{n}"], label = f"${process_map[n]}$", xlabel = xlabel, ylabel = "$f_{s}$", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
+        plots.plt.axhline(0, color = "black", linestyle = "--")
+        plots.plt.ylim(1.5 * np.min(data.filter(regex = "fe_total_").values), 1.5 * np.max(data.filter(regex = "fe_total_").values))
+    plots.plt.legend(title = "$s$")
+    plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
+    if ylim: plots.plt.ylim(ylim)
     pdf.Save()
 
-    Plots.plt.figure()
-    for i in Plots.MultiPlot(4):
-        Plots.Plot(data[f"mu_exp_{i}"], data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], linestyle = "", marker = "o", xlabel = f"$\\mu^{{exp}}_{process_map[i]}$", ylabel = "$\\mu^{fit}_{s}$", label = f"${process_map[i]}$", color = list(region_colours.values())[i], newFigure = False)
-        yl = Plots.plt.gca().get_ylim()
-        xl = Plots.plt.gca().get_xlim()
+    plots.plt.figure()
+    for i in plots.MultiPlot(4):
+        plots.Plot(data[f"mu_exp_{i}"], data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], linestyle = "", marker = "o", xlabel = f"$\\mu^{{exp}}_{process_map[i]}$", ylabel = "$\\mu^{fit}_{s}$", label = f"${process_map[i]}$", color = list(region_colours.values())[i], newFigure = False)
+        yl = plots.plt.gca().get_ylim()
+        xl = plots.plt.gca().get_xlim()
 
-        Plots.plt.axline([0, 0], [1, 1], linestyle = "--", color = "k", label = "$y = x$")
-        Plots.plt.xlim(xl)
-        Plots.plt.ylim(yl)
-        Plots.plt.legend(title = "$s$")
+        plots.plt.axline([0, 0], [1, 1], linestyle = "--", color = "k", label = "$y = x$")
+        plots.plt.xlim(xl)
+        plots.plt.ylim(yl)
+        plots.plt.legend(title = "$s$")
 
     pdf.Save()
 
     if single_bin is False:
-        Plots.plt.figure()
-        for i, s in Plots.IterMultiPlot(process_map):
+        plots.plt.figure()
+        for i, s in plots.IterMultiPlot(process_map):
             for l, y, e in zip(x, data_energy["fe"][i], data_energy["fe_err"][i]):
-                Plots.Plot(energy_overflow, data[f"true_counts_{s}"] * y, yerr = data[f"true_counts_{s}"] * e, label = l, ylabel = "residual", newFigure = False)
-            Plots.plt.axhline(0, color = "black", linestyle = "--")
-            Plots.plt.xlabel("$KE$ (MeV)")
-            Plots.plt.title(f"$N_{{{process_map[i]}}}$")
-            Plots.plt.legend(title = xlabel)
-            if ylim: Plots.plt.ylim(ylim)
+                plots.Plot(energy_overflow, data[f"true_counts_{s}"] * y, yerr = data[f"true_counts_{s}"] * e, label = l, ylabel = "residual", newFigure = False)
+            plots.plt.axhline(0, color = "black", linestyle = "--")
+            plots.plt.xlabel("$KE$ (MeV)")
+            plots.plt.title(f"$N_{{{process_map[i]}}}$")
+            plots.plt.legend(title = xlabel)
+            if ylim: plots.plt.ylim(ylim)
         pdf.Save()
 
-        Plots.plt.figure()
-        for i, s in Plots.IterMultiPlot(process_map):
+        plots.plt.figure()
+        for i, s in plots.IterMultiPlot(process_map):
             for l, y, e in zip(x, data_energy["fe"][i], data_energy["fe_err"][i]):
-                Plots.Plot(energy_overflow, y, yerr = e, label = l, ylabel = "$f$", newFigure = False)
-            Plots.plt.axhline(0, color = "black", linestyle = "--")
-            Plots.plt.xlabel("$KE$ (MeV)")
-            Plots.plt.title(f"$N_{{{process_map[i]}}}$")
-            Plots.plt.legend(title = xlabel)
-            if ylim: Plots.plt.ylim(ylim)
+                plots.Plot(energy_overflow, y, yerr = e, label = l, ylabel = "$f$", newFigure = False)
+            plots.plt.axhline(0, color = "black", linestyle = "--")
+            plots.plt.xlabel("$KE$ (MeV)")
+            plots.plt.title(f"$N_{{{process_map[i]}}}$")
+            plots.plt.legend(title = xlabel)
+            if ylim: plots.plt.ylim(ylim)
         pdf.Save()
     return
 
 
-def ProcessResults(template_counts : int, results : dict, true_counts : dict, expected_mu : dict, model : cross_section.pyhf.Model, single_bin : bool):
+def ProcessResults(template_counts : int, results : dict, true_counts : dict, expected_mu : dict, model : pyhf.Model, single_bin : bool):
     true_counts_all = {}
     for t in true_counts:
         true_counts_all[t] = {f"true_counts_{i}" : np.sum(v) for i, v in enumerate(true_counts[t].values())}
@@ -461,7 +468,7 @@ def ProcessResults(template_counts : int, results : dict, true_counts : dict, ex
         fe_err_total = fe_err
     else:
         fe_total = np.nansum(fe * tc_arr, 2) / np.sum(tc_arr, 2)
-        fe_err_total = cross_section.nanquadsum(fe_err * tc_arr, 2) / np.sum(tc_arr, 2)
+        fe_err_total = common.nanquadsum(fe_err * tc_arr, 2) / np.sum(tc_arr, 2)
 
     data = pd.concat([
         pd.DataFrame(scale_factors, index = ['scale_factors']),
@@ -492,8 +499,8 @@ def MeanProcessedResults(total, energy):
     return total, energy_mean
 
 
-@cross_section.timer
-def PlotDataShapeTestEnergy(data : tuple, energy_overflow : np.ndarray, book : Plots.PlotBook.null()):
+@common.timer
+def PlotDataShapeTestEnergy(data : tuple, energy_overflow : np.ndarray, book : plots.PlotBook):
 
     def remove_zero(a):
         return a[a != 0]
@@ -508,21 +515,21 @@ def PlotDataShapeTestEnergy(data : tuple, energy_overflow : np.ndarray, book : P
 
         x = np.array(x)
         unique_values = [np.unique(x[:, i]) for i in range(x.shape[1])]
-        Plots.plt.subplots(len(remove_zero(unique_values[2])), len(remove_zero(unique_values[3])), figsize = [4.8 * len(remove_zero(unique_values[3])), 4.8 * len(remove_zero(unique_values[2]))], sharex = True, sharey = True)
+        plots.plt.subplots(len(remove_zero(unique_values[2])), len(remove_zero(unique_values[3])), figsize = [4.8 * len(remove_zero(unique_values[3])), 4.8 * len(remove_zero(unique_values[2]))], sharex = True, sharey = True)
         for p, ((ia, a), (ib, b)) in enumerate(itertools.product(enumerate(remove_zero(unique_values[2])), enumerate(remove_zero(unique_values[3])))):
-            Plots.plt.subplot(len(remove_zero(unique_values[2])), len(remove_zero(unique_values[3])), p+1)
+            plots.plt.subplot(len(remove_zero(unique_values[2])), len(remove_zero(unique_values[3])), p+1)
             
             for i, j in enumerate(x):
                 if (j[2] == a) and (j[3] == b):
-                    Plots.Plot(energy_overflow, y[i], yerr = y_err[i], label = f"{x[i][0]}, {x[i][1]}", newFigure = False)
-            Plots.plt.fill_between(energy_overflow, 0, linestyle = "--", color = "k")
+                    plots.Plot(energy_overflow, y[i], yerr = y_err[i], label = f"{x[i][0]}, {x[i][1]}", newFigure = False)
+            plots.plt.fill_between(energy_overflow, 0, linestyle = "--", color = "k")
 
             if ia == len(remove_zero(unique_values[2])) - 1:
-                Plots.plt.xlabel("$N_{int}$(MeV)" + f"\n\n $x0$ : {b}")
+                plots.plt.xlabel("$N_{int}$(MeV)" + f"\n\n $x0$ : {b}")
             if ib == 0:
-                Plots.plt.ylabel(f"$\\alpha$ : {a}\n\n" + "fractional error")
-        Plots.plt.suptitle(f"$N_{{{process_map[d]}}}$", size = 20)
-        Plots.plt.tight_layout()
+                plots.plt.ylabel(f"$\\alpha$ : {a}\n\n" + "fractional error")
+        plots.plt.suptitle(f"$N_{{{process_map[d]}}}$", size = 20)
+        plots.plt.tight_layout()
         book.Save()
     return
 
@@ -542,10 +549,10 @@ def PlotDataShapeTest(data, key, label, vmin = None, vmax = None):
     unique_values = [np.unique(x[:, i]) for i in range(x.shape[1])]
     grid = np.meshgrid(unique_values[0], unique_values[1]) #* 0 = high, 1 = low
 
-    fig, axes = Plots.plt.subplots(len(remove_zero(unique_values[2])), len(remove_zero(unique_values[3])), figsize = [4.8 * len(remove_zero(unique_values[3])), 4.8 * len(remove_zero(unique_values[2]))], sharex = True, sharey = True)
+    fig, axes = plots.plt.subplots(len(remove_zero(unique_values[2])), len(remove_zero(unique_values[3])), figsize = [4.8 * len(remove_zero(unique_values[3])), 4.8 * len(remove_zero(unique_values[2]))], sharex = True, sharey = True)
 
     for p, ((ia, a), (ib, b)) in enumerate(itertools.product(enumerate(remove_zero(unique_values[2])), enumerate(remove_zero(unique_values[3])))):
-        Plots.plt.subplot(len(remove_zero(unique_values[2])), len(remove_zero(unique_values[3])), p+1)
+        plots.plt.subplot(len(remove_zero(unique_values[2])), len(remove_zero(unique_values[3])), p+1)
         im = np.zeros(grid[0].shape)
         for i, j in zip(x, y):
             if i[2] not in [0, a] : continue
@@ -553,32 +560,32 @@ def PlotDataShapeTest(data, key, label, vmin = None, vmax = None):
             loc = np.argwhere((grid[0] == i[0]) & (grid[1] == i[1]))[0]
             im[loc[0], loc[1]] = j
 
-        im_c = Plots.plt.imshow(np.where(im == 0, np.nan, im), cmap = "plasma", vmin = vmin, vmax = vmax)
+        im_c = plots.plt.imshow(np.where(im == 0, np.nan, im), cmap = "plasma", vmin = vmin, vmax = vmax)
 
-        Plots.plt.grid(False)
+        plots.plt.grid(False)
         if ia == len(remove_zero(unique_values[2])) - 1:
-            Plots.plt.xlabel("$n_{-}$" + f"\n\n $x0$ : {b}")
+            plots.plt.xlabel("$n_{-}$" + f"\n\n $x0$ : {b}")
         if ib == 0:
-            Plots.plt.ylabel(f"$\\alpha$ : {a}\n\n" + "$n_{+}$")
+            plots.plt.ylabel(f"$\\alpha$ : {a}\n\n" + "$n_{+}$")
 
 
-        Plots.plt.yticks(ticks = range(len(unique_values[0])), labels = unique_values[0])
-        Plots.plt.xticks(ticks = range(len(unique_values[1])), labels = unique_values[1])
+        plots.plt.yticks(ticks = range(len(unique_values[0])), labels = unique_values[0])
+        plots.plt.xticks(ticks = range(len(unique_values[1])), labels = unique_values[1])
 
         for (i, j), z in np.ndenumerate(im):
             if z != 0:
-                Plots.plt.gca().text(j, i, f"{z:.2f}", ha='center', va='center', fontsize = 12, color = "limegreen", weight = "bold")
-        Plots.plt.grid(False)
+                plots.plt.gca().text(j, i, f"{z:.2f}", ha='center', va='center', fontsize = 12, color = "limegreen", weight = "bold")
+        plots.plt.grid(False)
 
 
-    Plots.plt.subplots_adjust(wspace = 0, hspace = 0)
+    plots.plt.subplots_adjust(wspace = 0, hspace = 0)
     cbar_ax = fig.add_axes([1, 0.15, 0.05, 0.7])
     fig.suptitle(label, size = 20)
     fig.colorbar(im_c, label = label, cax = cbar_ax)
     fig.tight_layout()
 
-@cross_section.timer
-def PlotCrossCheckResultsShape(results_total, results_bins, energy_overflow : np.ndarray, single_bin : bool, book : Plots.PlotBook.null()):
+@common.timer
+def PlotCrossCheckResultsShape(results_total, results_bins, energy_overflow : np.ndarray, single_bin : bool, book : plots.PlotBook):
 
     for p in process_map:
         PlotDataShapeTest(results_total, f"mu_{p}", f"$\\mu_{{{process_map[p]}}}$")
@@ -589,8 +596,8 @@ def PlotCrossCheckResultsShape(results_total, results_bins, energy_overflow : np
     return
 
 
-@cross_section.timer
-def PredictedCountsSummary(template_counts : float, model : cross_section.pyhf.Model, test_name : str, model_name : str, workdirs : str, single_bin : bool):
+@common.timer
+def PredictedCountsSummary(template_counts : float, model : pyhf.Model, test_name : str, model_name : str, workdirs : str, single_bin : bool):
     pr, pr_energy = CalculateResultsFromFile(workdirs, test_name, model_name, template_counts, model, single_bin)    
 
     n_fe_total_max = {}
@@ -615,7 +622,7 @@ def PredictedCountsSummary(template_counts : float, model : cross_section.pyhf.M
     return n_fe_max, n_fe_total_max
 
 def CreateSummaryTables(total_summaries, row_names):
-    proc_tags = cross_section.Tags.ExclusiveProcessTags({k : None for k in dict.fromkeys(list(row_names) + list(total_summaries.keys()))})
+    proc_tags = tags.ExclusiveProcessTags({k : None for k in dict.fromkeys(list(row_names) + list(total_summaries.keys()))})
 
     table_fe = pd.DataFrame({k : v[0] for k, v in total_summaries.items()}, index = row_names)
     table_err = pd.DataFrame({k : v[1] for k, v in total_summaries.items()}, index = row_names)
@@ -638,7 +645,7 @@ def SaveSummaryTables(directory : str, tables : tuple[pd.DataFrame], name : str)
     return
 
 
-def Summary(directory : str, test_name : str, model_name : str, model : cross_section.pyhf.Model, energy_overflow : np.ndarray, template_counts : float, single_bin : bool, book : Plots.PlotBook = Plots.PlotBook.null(), ymax = None):
+def Summary(directory : str, test_name : str, model_name : str, model : pyhf.Model, energy_overflow : np.ndarray, template_counts : float, single_bin : bool, book : plots.PlotBook = plots.PlotBook.null(), ymax = None):
 
     n_fe_max, n_fe_total_max = PredictedCountsSummary(template_counts, model, test_name, model_name, args.workdir, single_bin)
 
@@ -653,51 +660,51 @@ def Summary(directory : str, test_name : str, model_name : str, model : cross_se
         ymax = np.max([n_fe_max[t][0] for t in n_fe_max])
 
     if single_bin is False:
-        for i, p in Plots.IterMultiPlot(indices):
+        for i, p in plots.IterMultiPlot(indices):
             for j, t in enumerate(n_fe_max):
                 y = n_fe_max[t][0]
                 err = n_fe_max[t][1]
-                Plots.Plot(energy_overflow, y[i], yerr = err[i], color = f"C{j}", label = cross_section.remove_(t), ylabel = "fractional error in fitted counts", xlabel = xlabel, title = f"process : {cross_section.remove_(p)}", newFigure = False)
-            Plots.plt.legend(title = f"{test_name} test")
-            Plots.plt.ylim(0, 1.1 * ymax)
+                plots.Plot(energy_overflow, y[i], yerr = err[i], color = f"C{j}", label = common.remove_(t), ylabel = "fractional error in fitted counts", xlabel = xlabel, title = f"process : {common.remove_(p)}", newFigure = False)
+            plots.plt.legend(title = f"{test_name} test")
+            plots.plt.ylim(0, 1.1 * ymax)
         book.Save()
 
-        for i, t in Plots.IterMultiPlot(n_fe_max):
+        for i, t in plots.IterMultiPlot(n_fe_max):
             for j, p in enumerate(indices):
                 y = n_fe_max[t][0]
                 err = n_fe_max[t][1]
-                Plots.Plot(energy_overflow, y[j], yerr = err[j], xlabel = xlabel, ylabel = "$|f_{bs}|$", label = cross_section.remove_(p), title = f"{test_name} test : {cross_section.remove_(t)}", newFigure = False)
-            Plots.plt.legend(title = "process")
+                plots.Plot(energy_overflow, y[j], yerr = err[j], xlabel = xlabel, ylabel = "$|f_{bs}|$", label = common.remove_(p), title = f"{test_name} test : {common.remove_(t)}", newFigure = False)
+            plots.plt.legend(title = "process")
         book.Save()
     return ymax
 
 
-def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : Slices, mean_track_score_bins : np.ndarray, template : cross_section.AnalysisInput, book : Plots.PlotBook = Plots.PlotBook.null()):
-    tags = cross_section.Tags.ExclusiveProcessTags(template.exclusive_process)
-    for j, c in Plots.IterMultiPlot(templates_energy):
+def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, template : cross_section.analysis_input.AnalysisInput, book : plots.PlotBook = plots.PlotBook.null()):
+    tags = tags.ExclusiveProcessTags(template.exclusive_process)
+    for j, c in plots.IterMultiPlot(templates_energy):
         for i, s in enumerate(c):
-            Plots.Plot(energy_slices.pos_overflow, s/np.sum(templates_energy), color = tags.number[i].colour, label = f"$\\lambda_{{{process_map[j]},{process_map[i]}}}$", xlabel = f"$\\lambda_{{{process_map[j]},s}}$ (MeV)", ylabel = "normalised counts", style = "step", newFigure = False)
-        Plots.plt.title(f"region : {process_map[j]}")
-        Plots.plt.legend(title = "process")
+            plots.Plot(energy_slices.pos_overflow, s/np.sum(templates_energy), color = tags.number[i].colour, label = f"$\\lambda_{{{process_map[j]},{process_map[i]}}}$", xlabel = f"$\\lambda_{{{process_map[j]},s}}$ (MeV)", ylabel = "normalised counts", style = "step", newFigure = False)
+        plots.plt.title(f"region : {process_map[j]}")
+        plots.plt.legend(title = "process")
     book.Save()
 
     if tempalates_mean_track_score is not None:
-        Plots.plt.figure()
+        plots.plt.figure()
         for i, s in enumerate(tempalates_mean_track_score):
-            Plots.Plot(cross_section.bin_centers(mean_track_score_bins), s/np.sum(tempalates_mean_track_score), color = tags.number[i].colour, label = f"$\\lambda_{{t,{process_map[i]}}}$", xlabel = f"$\\lambda_{{t,s}}$", ylabel = "normalised counts", style = "step", newFigure = False)
-        Plots.plt.legend(loc = "upper left")
+            plots.Plot(common.bin_centers(mean_track_score_bins), s/np.sum(tempalates_mean_track_score), color = tags.number[i].colour, label = f"$\\lambda_{{t,{process_map[i]}}}$", xlabel = f"$\\lambda_{{t,s}}$", ylabel = "normalised counts", style = "step", newFigure = False)
+        plots.plt.legend(loc = "upper left")
         book.Save()
         book.close()
     return
 
 
-def PlotTotalChannel(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : Slices, mean_track_score_bins : np.ndarray, book : Plots.PlotBook = Plots.PlotBook.null()):
-    for j, c in Plots.IterMultiPlot(templates_energy):
-        Plots.Plot(energy_slices.pos_overflow, sum(c), xlabel = f"$n_{{{j}}}$ (MeV)", ylabel = "Counts", style = "bar", newFigure = False)
+def PlotTotalChannel(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, book : plots.PlotBook = plots.PlotBook.null()):
+    for j, c in plots.IterMultiPlot(templates_energy):
+        plots.Plot(energy_slices.pos_overflow, sum(c), xlabel = f"$n_{{{j}}}$ (MeV)", ylabel = "Counts", style = "bar", newFigure = False)
     book.Save()
 
     if tempalates_mean_track_score is not None:
-        Plots.Plot(cross_section.bin_centers(mean_track_score_bins), sum(tempalates_mean_track_score), xlabel = f"$n_{{ts}}$", ylabel = "Counts", style = "bar")
+        plots.Plot(common.bin_centers(mean_track_score_bins), sum(tempalates_mean_track_score), xlabel = f"$n_{{ts}}$", ylabel = "Counts", style = "bar")
         book.Save()
     book.close()
     return
@@ -708,7 +715,7 @@ def CalculateResultsFromFile(workdirs, test_name, model_name, template_counts, m
     for d in workdirs:
         directory = d + f"{test_name}_test_{model_name}/"
         rf = {}
-        for i in cross_section.os.listdir(directory):
+        for i in os.listdir(directory):
             if "dill" in i:
                 for k in target_map:
                     if k in i:
@@ -719,7 +726,7 @@ def CalculateResultsFromFile(workdirs, test_name, model_name, template_counts, m
     results_bins = {k : [] for k in results_files[0]}
     for d, files in zip(workdirs, results_files):
         for f in files:
-            fit_result = cross_section.LoadObject(d + f"{test_name}_test_{model_name}/" + files[f])
+            fit_result = io.LoadObject(d + f"{test_name}_test_{model_name}/" + files[f])
             r = ProcessResults(template_counts, fit_result["results"], fit_result["true_counts"], fit_result["expected_mus"], model, single_bin)
             results_total[f].append(r[0])
             results_bins[f].append(r[1])
@@ -737,11 +744,11 @@ def CalculateResultsFromFile(workdirs, test_name, model_name, template_counts, m
 
 
 
-@cross_section.timer
-def main(args : cross_section.argparse.Namespace):
-    cross_section.PlotStyler.SetPlotStyle(extend_colors = True, dark = True, font_scale = 1.4)
-    toys = cross_section.Toy(file = args.template)
-    args.template = cross_section.AnalysisInput.CreateAnalysisInputToy(toys)
+@common.timer
+def main(args : argparse.Namespace):
+    styles.PlotStyler.SetPlotStyle(extend_colors = True, dark = True, font_scale = 1.4)
+    toys = toy.Toy(file = args.template)
+    args.template = cross_section.analysis_input.AnalysisInput.CreateAnalysisInputToy(toys)
 
     mean_track_score_bins = np.linspace(0, 1, 21, True)
 
@@ -772,7 +779,7 @@ def main(args : cross_section.argparse.Namespace):
                     args.fit["single_bin"])
 
             if "shape" not in args.skip:
-                xs_sim = cross_section.GeantCrossSections(energy_range = [0, max(args.energy_slices.pos) + args.energy_slices.width])
+                xs_sim = cross_section.geant.GeantCrossSections(energy_range = [0, max(args.energy_slices.pos) + args.energy_slices.width])
 
                 os.makedirs(args.out + f"shape_test_{m}/", exist_ok = True)
                 ShapeTestNew(
@@ -787,7 +794,7 @@ def main(args : cross_section.argparse.Namespace):
             if "pulls" not in args.skip:
                 pull_results = PullStudyFast(toys, int(5E6), int(1E6), args, args.energy_slices, mean_track_score_bins if m == "track_score" else None, 500)
                 os.makedirs(args.out + f"pull_test_{m}/", exist_ok = True)
-                DictToHDF5(pull_results, args.out + f"pull_test_{m}/" + "pull_results.hdf5")
+                io.DictToHDF5(pull_results, args.out + f"pull_test_{m}/" + "pull_results.hdf5")
 
 
     if args.workdir:
@@ -802,19 +809,19 @@ def main(args : cross_section.argparse.Namespace):
             outdir = args.out
 
         if args.fit["single_bin"] is False:
-            with Plots.PlotBook(outdir + "templates") as book:
+            with plots.PlotBook(outdir + "templates") as book:
                 PlotTemplates(templates_energy, tempalates_mean_track_score, args.energy_slices, mean_track_score_bins, args.template, book)
 
-            with Plots.PlotBook(outdir + "observation_exmaple") as book:
+            with plots.PlotBook(outdir + "observation_exmaple") as book:
                 PlotTotalChannel(templates_energy, tempalates_mean_track_score, args.energy_slices, mean_track_score_bins, book)
 
-            with Plots.PlotBook(outdir + "xs_curves") as book:
+            with plots.PlotBook(outdir + "xs_curves") as book:
                 PlotShapeExamples(args.energy_slices, book)
 
         if (hasattr(args.template, "exclusive_process")) and (type(args.template.exclusive_process) == dict):
-            tags = cross_section.Tags.ExclusiveProcessTags({k : None for k in args.template.exclusive_process.keys()})
+            tags = tags.ExclusiveProcessTags({k : None for k in args.template.exclusive_process.keys()})
         else:
-            tags = cross_section.Tags.ExclusiveProcessTags({k : None for k in args.template.regions.keys()})
+            tags = tags.ExclusiveProcessTags({k : None for k in args.template.regions.keys()})
 
         test = ["shape", "normalisation", "pulls"] 
 
@@ -826,8 +833,8 @@ def main(args : cross_section.argparse.Namespace):
             if t in args.skip: continue
             for m in models:
                 if t == "pulls":
-                    with Plots.PlotBook(outdir + f"pull_test_{m}/pulls.pdf", True) as book:
-                        pull_results = ReadHDF5(outdir + f"pull_test_{m}/" + "pull_results.hdf5")
+                    with plots.PlotBook(outdir + f"pull_test_{m}/pulls.pdf", True) as book:
+                        pull_results = io.ReadHDF5(outdir + f"pull_test_{m}/" + "pull_results.hdf5")
 
                         pulls = (pull_results["bestfit"] - (pull_results["expected"] / pull_results["scale"])) / pull_results["uncertainty"]
                         res = (pull_results["scale"] * pull_results["bestfit"]) - pull_results["expected"]
@@ -841,13 +848,13 @@ def main(args : cross_section.argparse.Namespace):
                         stds = {}
 
                         for c in pulls.columns:
-                            Plots.plt.figure()
+                            plots.plt.figure()
                             y, edges = np.histogram(pulls[c], bins = 10)
                             x = (edges[1:] + edges[:-1]) / 2
-                            popt, perr = cross_section.Fitting.Fit(x, y, np.sqrt(y), cross_section.Fitting.gaussian, plot = True, plot_style = "hist", method = "trf", xlabel = "$\\theta$", ylabel = "Number of entries")
+                            popt, perr = fitting.Fit(x, y, np.sqrt(y), fitting.gaussian, plot = True, plot_style = "hist", method = "trf", xlabel = "$\\theta$", ylabel = "Number of entries")
                             book.Save()
 
-                        for _, k in Plots.IterMultiPlot(pulls.columns):
+                        for _, k in plots.IterMultiPlot(pulls.columns):
                             mean_res[folder[k]] = f"{np.mean(res[k]):.3g}"
                             mean_fe[folder[k]] = f"{np.mean(fe[k]):.3g}"
                             mean_fe_err[folder[k]] = f"{np.mean(fe_err[k]):.3g}"
@@ -858,18 +865,18 @@ def main(args : cross_section.argparse.Namespace):
                             print(folder[k])
                             means[folder[k]] = f"{mean:.{p}g} $\\pm$ {sem:.1g}"
                             stds[folder[k]] = f"{std:.3g}"
-                            # Plots.PlotHist(pulls[k], bins = 10, title = f"$\\mu_{{{tags[k].name_simple}}}$ | mean : {mean:.3g} $\\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = False)
-                            Plots.PlotHist(pulls[k], bins = 10, xlabel = "$\\theta$", newFigure = False)
+                            # plots.PlotHist(pulls[k], bins = 10, title = f"$\\mu_{{{tags[k].name_simple}}}$ | mean : {mean:.3g} $\\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = False)
+                            plots.PlotHist(pulls[k], bins = 10, xlabel = "$\\theta$", newFigure = False)
 
                         book.Save()
                         for k in pulls.columns:
                             mean = np.mean(pulls[k])
                             std = np.std(pulls[k])
                             sem = std / np.sqrt(len(pulls[k]))
-                            Plots.plt.figure(figsize = (6.4, 5))
-                            # Plots.PlotHist(pulls[k], bins = 10, title = f"$\\mu_{{{tags[k].name_simple}}}$ | mean : {mean:.3g} $\\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = True)
-                            Plots.PlotHist(pulls[k], bins = 10, xlabel = "$\\theta$", newFigure = False)
-                            # Plots.plt.ylabel(Plots.plt.gca().yaxis.get_label_text(), loc = "bottom")
+                            plots.plt.figure(figsize = (6.4, 5))
+                            # plots.PlotHist(pulls[k], bins = 10, title = f"$\\mu_{{{tags[k].name_simple}}}$ | mean : {mean:.3g} $\\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = True)
+                            plots.PlotHist(pulls[k], bins = 10, xlabel = "$\\theta$", newFigure = False)
+                            # plots.plt.ylabel(plots.plt.gca().yaxis.get_label_text(), loc = "bottom")
                             book.Save()
 
                         table = pd.DataFrame({"mean" : means, "st.dev" : stds, "mean residual" : mean_res, "mean fractional error" : mean_fe, "mean_fractional_error_error" : mean_fe_err}).T
@@ -882,24 +889,24 @@ def main(args : cross_section.argparse.Namespace):
 
                     for f in results_total:
                         os.makedirs(outdir + f"{t}_test_{m}/", exist_ok = True)
-                        with Plots.PlotBook(outdir + f"{t}_test_{m}/" + f + ".pdf", True) as pdf:
+                        with plots.PlotBook(outdir + f"{t}_test_{m}/" + f + ".pdf", True) as pdf:
                             if (t == "shape"):
                                 PlotCrossCheckResultsShape(results_total[f], results_bins[f], args.energy_slices.pos_overflow, args.fit["single_bin"], pdf)
                             else:
                                 PlotCrossCheckResults(f"$\\mathcal{{N}}_{{{tags[f].name_simple}}}$", results_total[f], results_bins[f], args.energy_slices.pos_overflow, pdf, args.fit["single_bin"], [-0.02, 0.06])
-                        Plots.plt.close("all")
+                        plots.plt.close("all")
                 
-                    with Plots.PlotBook(outdir + f"{t}_test_{m}/summary_plots.pdf", True) as book:
+                    with plots.PlotBook(outdir + f"{t}_test_{m}/summary_plots.pdf", True) as book:
                         Summary(outdir + f"{t}_test_{m}/", t, m, models[m], args.energy_slices.pos_overflow, template_counts, args.fit["single_bin"], book, ymax = ymax[t])
-                    Plots.plt.close("all")
+                    plots.plt.close("all")
 
     return
 
 
 if __name__ == "__main__":
-    parser = cross_section.argparse.ArgumentParser("app which performs cross checks for the region fit using toys.")
+    parser = argparse.ArgumentParser("app which performs cross checks for the region fit using toys.")
     
-    Application.ApplicationArguments.Config(parser, True)
+    application.ApplicationArguments.Config(parser, True)
 
     parser.add_argument("--template", "-t", dest = "template", type = str, help = "toy template hdf5 file", required = True)
 
@@ -914,9 +921,9 @@ if __name__ == "__main__":
 
     parser.add_argument("--skip", dest = "skip", type = str, choices = ["normalisation", "shape", "pulls"], nargs = "+", default = [], help = "test to skip")
 
-    Application.ApplicationArguments.Output(parser, None)
+    application.ApplicationArguments.Output(parser, None)
 
-    args = Application.ApplicationArguments.ResolveArgs(parser.parse_args(), False)
+    args = application.ApplicationArguments.ResolveArgs(parser.parse_args(), False)
 
     if (not args.toy_data_config) and (not args.workdir):
         raise Exception("--toy_data_config or --workdir or both must be supplied")
@@ -924,7 +931,7 @@ if __name__ == "__main__":
     if args.events: args.events = int(args.events)
 
     if args.toy_data_config:
-        args.toy_data_config = Master.LoadConfiguration(args.toy_data_config)
+        args.toy_data_config = io.LoadConfiguration(args.toy_data_config)
         OverrideConfig(args)
 
     if args.workdir:

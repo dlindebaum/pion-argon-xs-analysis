@@ -5,7 +5,7 @@
 import numpy as np
 import awkward as ak
 
-import vector
+import vector, selection
 
 #######################################################################
 #######################################################################
@@ -564,7 +564,7 @@ def paired_beam_impact(shower_pairs, type="reco"):
         data.shower_start_pos[shower_pairs.leading],
         data.shower_start_pos[shower_pairs.subleading])
     # Impact parameter between the PFOs and corresponding beam vertex
-    return PFOSelection.get_impact_parameter(
+    return selection.pfo.get_impact_parameter(
         dir, shared_vertex, beam_vertex)
 
 
