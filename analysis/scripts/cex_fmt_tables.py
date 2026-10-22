@@ -15,9 +15,9 @@ import pandas as pd
 
 from rich import print
 
-from python.analysis.Master import ReadHDF5, LoadConfiguration
-from python.analysis.Application import ApplicationArguments
-from python.analysis import Utils
+from python.analysis.io import ReadHDF5, LoadConfiguration
+from python.analysis.application import ApplicationArguments
+from python.analysis import common
 
 selection_map = {
     "no selection" : "No selection",
@@ -147,7 +147,7 @@ def selection_names_criteria(df : pd.DataFrame, name : str):
 
 def eff_err(p, n):
     p_err = (p * (1 - p) / n)**0.5
-    p_err = pd.Series([Utils.quadsum(p_err[:i+1]) for i in range(len(p_err))])
+    p_err = pd.Series([common.quadsum(p_err[:i+1]) for i in range(len(p_err))])
     return p_err
 
 
@@ -270,7 +270,7 @@ def bq_xy(values : dict):
     t = {}
     for i, e in zip(["mu", "sigma"], [1, 2]):
         for j in ["x", "y"]:
-            t[f"$p_{{{e}}}^{{{j}}}$"] = Utils.round_value_to_error(values[f"{i}_{j}"], values[f"{i}_err_{j}"])
+            t[f"$p_{{{e}}}^{{{j}}}$"] = common.round_value_to_error(values[f"{i}_{j}"], values[f"{i}_err_{j}"])
 
     return t
 
@@ -281,14 +281,14 @@ def bq_angle(values : dict):
         v = values[f"mu_dir_{j}"]
         e = values[f"mu_dir_err_{j}"]
 
-        t[f"$\mu_{{\hat{{n}}_{{{j}}}}}$"] = Utils.round_value_to_error(values[f"mu_dir_{j}"], values[f"mu_dir_err_{j}"])
+        t[f"$\mu_{{\hat{{n}}_{{{j}}}}}$"] = common.round_value_to_error(values[f"mu_dir_{j}"], values[f"mu_dir_err_{j}"])
     return t
 
 
 def brw_table(brw : dict):
     table = {}
     for i, p in enumerate(brw):
-        table[f"$p_{{{i}}}$"] = Utils.round_value_to_error(brw[p]["value"], brw[p]["error"])
+        table[f"$p_{{{i}}}$"] = common.round_value_to_error(brw[p]["value"], brw[p]["error"])
 
     table = pd.DataFrame(table, index = [0])
     return table
@@ -296,7 +296,7 @@ def brw_table(brw : dict):
 def upl_table(upl : dict):
     table = {}
     for i in range(args.upstream_loss_response.n_params):
-        table[f"$p_{{{i}}}$"] = Utils.round_value_to_error(upl["value"][f"p{i}"], upl["error"][f"p{i}"])
+        table[f"$p_{{{i}}}$"] = common.round_value_to_error(upl["value"][f"p{i}"], upl["error"][f"p{i}"])
     table = pd.DataFrame(table, index = [0])
     return table
 
@@ -369,7 +369,7 @@ def main(args : argparse.Namespace):
     t_angle.style.to_latex(f"{outp}/angle.tex")
     FormatTable(f"{outp}/angle.tex")
 
-    for f in Utils.ls_recursive(f"{path}/shower_energy_correction/"):
+    for f in common.ls_recursive(f"{path}/shower_energy_correction/"):
         if f.split("/")[-1].split(".")[0] == "table":
             cols = True
         else:
@@ -378,7 +378,7 @@ def main(args : argparse.Namespace):
             copy_table(f, f"{out}/shower_correction/", bf_cols = cols)
 
 
-    for f in Utils.ls_recursive(f"{path}/toy_parameters/smearing/"):
+    for f in common.ls_recursive(f"{path}/toy_parameters/smearing/"):
         if (".tex" in f):
             copy_table(f, f"{out}/smearing/{f.split('/')[-2]}/", bf_cols = False)
 
@@ -391,7 +391,7 @@ def main(args : argparse.Namespace):
     copy_table(f"{path}/measurement/pdsp/fit_results_POI.tex", f"{out}/data_fit/", bf_cols = False)
     copy_table(f"{path}/measurement/pdsp/regions.tex", f"{out}/")
 
-    for f in Utils.ls_recursive(f'{path}'):
+    for f in common.ls_recursive(f'{path}'):
         if out in f: continue
         if "table_processes_fmt.tex" in f:
             copy_table(f, f"{out}", "normalisation_test_summary.tex")
@@ -404,7 +404,7 @@ def main(args : argparse.Namespace):
         copy_table(f"{path}/systematics/track_length/fit_params.tex", f"{out}/track_length_resolution/", bf_cols = False)
 
     if os.path.isdir(f"{path}/systematics/combined/"):
-        for f in Utils.ls_recursive(f"{path}/systematics/combined/"):
+        for f in common.ls_recursive(f"{path}/systematics/combined/"):
             if ".tex" in f:
                 copy_table(f, f"{out}/systematics/", bf_cols = True)
 

@@ -25,9 +25,9 @@ from apps import (
     cex_generate_fit_model
     )
 
-from python.analysis.NtupleProcessing import CalculateBatches, file_len
-from python.analysis.Application import ApplicationArguments, argparse, template_config
-from python.analysis.Master import SaveConfiguration, LoadConfiguration
+from python.analysis.ntuple import CalculateBatches, file_len
+from python.analysis.application import ApplicationArguments, argparse, template_config
+from python.analysis.io import SaveConfiguration, LoadConfiguration
 
 
 def template_toy_config(toy_parameters_dir : str, nEvents : int, seed : int, max_cpus : int, step : float, p_init : float, region_selection : str):
