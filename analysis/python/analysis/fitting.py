@@ -16,7 +16,7 @@ from scipy.optimize import curve_fit
 from scipy.special import gamma, erf
 from scipy.stats import ks_2samp, chi2, norm, lognorm
 
-import common, plots
+from python.analysis import common, plots
 
 class FitFunction(ABC):
     """ An abstract class for defining function pass to Fit(). Contains the following:

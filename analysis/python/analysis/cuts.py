@@ -4,11 +4,13 @@ import awkward as ak
 import pandas as pd
 import copy
 import functools
-from python.analysis_new import tags
+
+from python.analysis import tags
+
 from typing import TYPE_CHECKING
 import numbers
 if TYPE_CHECKING:
-    from python.analysis_new.ntuple import Data 
+    from python.analysis.ntuple import Data 
 
 
 class MaskIter():

@@ -4,11 +4,11 @@ import awkward as ak
 import numpy as np
 import pandas as pd
 
-from common import *
-import beam, pfo
+from .common import *
+from . import beam, pfo
 
-from .. import ntuple, tags
-from ..ntuple import Data
+from python.analysis import ntuple, tags
+from python.analysis.ntuple import Data
 
 #######################################################################
 #######################################################################

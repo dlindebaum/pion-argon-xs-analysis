@@ -2,7 +2,7 @@ import awkward as ak
 import numpy as np
 import pandas as pd
 
-import fitting, plots
+from python.analysis import fitting, plots
 
 def LinearCorrection(x, p0):
     return x / p0

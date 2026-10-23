@@ -1,11 +1,73 @@
 """Region definitions and utilities."""
 import os
 
+from argparse import Namespace
+
 import awkward as ak
 import numpy as np
 import pandas as pd
 
-import common, ntuple, plots, tags
+from python.analysis import common, ntuple, plots, samples, selection, tags
+
+@common.timer
+def RegionSelection(events : ntuple.Data, args : Namespace | dict, is_mc : bool, region_type : samples.SampleDefinition = None, process_type : samples.SampleDefinition = None, removed : bool = False) -> dict[np.ndarray]:
+    """ Get reco and true regions (if possible) for ntuple.
+
+    Args:
+        events (Master.Data): events before beam pion selection.
+        args (Namespace): application arguements
+        is_mc (bool): if ntuple is MC or Data.
+
+    Returns:
+        tuple[dict, dict]: regions
+    """
+
+    args_c = common.args_to_dict(args)
+
+    if is_mc:
+        key = "mc"
+    else:
+        key = "data"
+
+    selection_masks = args_c["selection_masks"][key]
+
+    events_copy = events.Filter(returnCopy = True)
+    
+    if "fiducial" in selection_masks and (len(selection_masks["fiducial"]) > 0):
+        mask = selection.CombineMasks(selection_masks["fiducial"][events_copy.filename])
+        events_copy.Filter([mask], [mask])
+
+    mask = selection.CombineMasks(selection_masks["beam"][events_copy.filename])
+    events_copy.Filter([mask], [mask])
+
+    # counts = {}
+    # for obj in selection_masks:
+    #     if obj in ["beam", "null_pfo", "fiducial"]: continue
+    #     counts[f"n_{obj}"] = SelectionTools.GetPFOCounts(selection_masks[obj][events.filename])
+
+    if region_type is None:
+        region_def = args_c["region_definitions"]
+    else:
+        region_def = region_type
+
+    reco_regions = region_def.CreateDefinitions(region_def.criteria_list.get_criteria_values(events_copy, selection_masks, **args["region_args"]), uncategorised = removed)
+    
+    if is_mc:
+        if process_type is None:
+            process_def = args_c["process_definitions"]
+        else:
+            process_def = process_type
+
+        true_regions = process_def.CreateDefinitions(process_def.criteria_list.get_criteria_values(events_copy, **args["process_args"]), uncategorised = removed)
+
+        for k in true_regions:
+            true_regions[k] = true_regions[k]
+        for k in reco_regions:
+            reco_regions[k] = reco_regions[k]
+        return reco_regions, true_regions
+    else:
+        return reco_regions
+
 
 def CountInRegions(true_regions : dict, reco_regions : dict, selection_efficincy : np.ndarray = None) -> np.ndarray:
     """ Computes the counts of each combination of reco and true regions.
@@ -48,7 +110,7 @@ def RecoRegionSelection(region_selections : dict[dict], out : str):
 
     Args:
         mc (Master.Data): mc events.
-        args (argparse.Namespace): application arguments.
+        args (Namespace): application arguments.
     """
     os.makedirs(out + "reco_regions/", exist_ok = True)
     pdf = plots.PlotBook(out + "reco_regions/reco_regions_study")

@@ -12,7 +12,7 @@ import awkward as ak
 import numpy as np
 import pandas as pd
 
-from python.analysis.Master import Data
+from python.analysis import ntuple, vector
 
 def CombineMasks(masks : dict, operator : str = "and") -> ak.Array:
     mask = None
@@ -71,7 +71,7 @@ def CountsWrapper(f):
     return wrapper
 
 
-def CombineSelections(events : Data, selection: list, levels: int, args: list = None, verbose: bool = False, return_table: bool = False) -> ak.Array:
+def CombineSelections(events : ntuple.Data, selection: list, levels: int, args: list = None, verbose: bool = False, return_table: bool = False) -> ak.Array:
     """ Combines multiple beam particle selections.
 
     Args:
@@ -554,7 +554,7 @@ def get_impact_parameter(direction, start_pos, beam_vertex):
     return vector.magnitude(cross)
 
 
-def find_beam_impact_parameters(events : Master.Data):
+def find_beam_impact_parameters(events : ntuple.Data):
     """
     Finds the impact parameter of each reconstructed PFO in `events`
     with the reconstructed beam vertex.

@@ -14,8 +14,8 @@ from particle import Particle
 
 from .common import Slices
 
-from python.analysis_new import bethe_bloch
-from python.analysis_new.common import quadsum, nandiv, nanlog, deprecation_warning
+from python.analysis import bethe_bloch
+from python.analysis.common import quadsum, nandiv, nanlog, deprecation_warning
 
 def process_multiple_array(input : np.ndarray, function : callable) -> np.ndarray:
     """ Call function on multiple arrays.

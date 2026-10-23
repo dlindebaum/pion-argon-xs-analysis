@@ -2,7 +2,8 @@
 import argparse
 import numpy as np
 
-import common, fitting, plots
+from python.analysis import common, fitting, plots
+
 
 def RatioWeights(beam_inst_P : np.ndarray, func : str, params : list, truncate : int = 10):
     weights = 1/getattr(fitting, func)(beam_inst_P, *params)

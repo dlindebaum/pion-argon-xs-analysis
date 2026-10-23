@@ -13,8 +13,8 @@ import numpy as np
 
 from .common import Slices
 
-from python.analysis_new import bethe_bloch
-from python.analysis_new.common import nandiv
+from python.analysis import bethe_bloch
+from python.analysis.common import nandiv
 
 
 def deprecation_warning():

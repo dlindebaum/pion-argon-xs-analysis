@@ -14,9 +14,9 @@ import pandas as pd
 from particle import Particle
 from rich import print
 
-from python.analysis_new import processing, cuts, io, vector
+from python.analysis import cuts, io, vector
 
-from common import timer, match_dimension
+from python.analysis.common import timer, match_dimension
 
 FileDescriptor = namedtuple("FileDescriptor", ["file", "type", "momentum_scale"])
 
@@ -93,56 +93,6 @@ def file_len(file : str) -> int:
     """
     return len(io.IO(file).Get(["EventID", "event"]))
 
-
-def CalculateBatches(args : argparse.Namespace) -> dict[str, any]:
-    """ Calculate the number of events to process in eacn batch.
-
-    Args:
-        args (argparse.Namespace): Application Arguments.
-
-    Returns:
-        dict[str, any]: Multiprocessing arguments.
-    """
-    if "data" in args.ntuple_files:
-        n_data = [file_len(file_desc.file) for file_desc in args.ntuple_files["data"]]
-    else:
-        n_data = []
-
-    if len(n_data) == 0:
-        print("no data file was specified, 'normalisation', 'beam_reweight', 'toy_parameters' and 'analyse' will not run")
-
-    n_mc = [file_len(file_desc.file) for file_desc in args.ntuple_files["mc"]] # must have MC
-
-    processing_args = {"events" : None, "batches" : None, "threads" : args.cpus}
-
-    # pass multiprocessing args
-    # if max([*n_data, *n_mc]) >= 7E5:
-    #     processing_args["events"] = None
-    #     processing_args["batches"] = int(2 * max([*n_data, *n_mc]) // 7E5)
-    #     processing_args["threads"] = args.cpus
-
-    return processing_args
-
-
-def RunProcess(ntuple_files : list[FileDescriptor], is_data : bool, args : argparse.Namespace, func : callable, merge : bool = True) -> list[dict] | dict:
-    """ Run a process on Ntuple files.
-
-    Args:
-        ntuple_files (list[FileDescriptor]): Ntuple files.
-        is_data (bool): Whether the Ntuple files are Data or MC.
-        args (argparse.Namespace): Application arguments.
-        func (callable): Process to run.
-        merge (bool, optional): Whether to merge the outputs of the processing. Defaults to True.
-
-    Returns:
-        list[dict] | dict: Output of the processing.
-    """
-    func_args = vars(args)
-    func_args["data"] = is_data
-    output = processing.mutliprocess(func, ntuple_files, args.batches, args.events, func_args, args.threads)
-    if merge:
-        output = processing.MergeOutputs(output)
-    return output
 
 class Ntuple_Type(str, Enum):
     PDSP = "PDSPAnalyser"
@@ -2671,212 +2621,15 @@ class ShowerPairs:
         self.CalculateAll().to_csv(name.split(".csv")[0] + ".csv")
 
 
-def NPFPMask(events: Data, nObjects: int = None) -> ak.Array:
-    """ Create a boolean mask of events with a specific number of objects.
-
-    Args:
-        events (Data): events to filter
-        nObjects (int, optional): keep events with specific number of daughters. Defaults to None.
-
-    Returns:
-        ak.Array: mask of events to filter
-    """
-    null_dir = events.recoParticles.shower_direction.x != -999
-    null_pos = events.recoParticles.shower_start_pos.x != -999
-    nObj = np.logical_and(null_dir, null_pos)
-    # get number of showers which have a valid direction
-    nObj = ak.num(nObj[nObj])
-
-    if nObjects == None:
-        r_mask = nObj > 1
-    elif nObjects < 0:
-        r_mask = nObj > abs(nObjects)
-    else:
-        r_mask = nObj == nObjects
-    return r_mask
-
-
-def Pi0TwoBodyDecayMask(events: Data) -> ak.Array:
-    """ Create boolean mask of events where pi0's have decayed in their primary decay mode
-        i.e. pi0 -> gamma gamma
-
-    Args:
-        events (Data): events to filter
-
-    Returns:
-        ak.Array: mask of events to filter
-    """
-    mask = ak.num(
-        events.trueParticles.truePhotonMask[events.trueParticles.truePhotonMask], -1) == 2  # exclude pi0 -> e+ + e- + photons
-    print(f"number of dalitz decays: {ak.count(mask[np.logical_not(mask)])}")
-    return mask
-
-
-@timer
-def Pi0MCMask(events: Data, nObjects: int = None) -> ak.Array:
-    """ A filter for Pi0 MC dataset, selects events with a specific number of objects
-        which have a valid direction vector and removes events with the 3 body pi0 decay.
-
-    Args:
-        events (Event): events being studied
-        nObjects (int): keep events with specific number of daughters. Defaults to None
-
-    Returns:
-        ak.Array: mask of events to filter
-    """
-    r_mask = NPFPMask(events, nObjects)
-    t_mask = Pi0TwoBodyDecayMask(events)
-    valid = np.logical_and(r_mask, t_mask)
-    return valid
-
-
-def FractionalError(reco: ak.Array, true: ak.Array, null: ak.Array) -> tuple:
-    """Calcuate fractional error, filter null data and format data for plotting.
-
-    Args:
-        reco (ak.Array): reconstructed quantity
-        true (ak.Array): true quantity
-        null (ak.Array): mask for events without shower pairs, reco direction or energy
-
-    Returns:
-        tuple of np.array: flattened numpy array of errors, reco and truth
-    """
-    true = true[null]
-    true = ak.where(ak.num(true, 1) > 0, true, np.nan)
-    reco = ak.flatten(reco, 1)[null]
-    print(f"number of reco pairs: {len(reco)}")
-    print(f"number of true pairs: {len(true)}")
-    error = (reco / true) - 1
-    return ak.to_numpy(ak.ravel(error)), ak.to_numpy(ak.ravel(reco)), ak.to_numpy(ak.ravel(true))
-
-
-@timer
-def CalculateQuantities(events: Data, backtrackedTruth: bool = False) -> tuple:
-    """ Calcaulte reco/ true quantities of shower pairs, and format them for plotting
-
-    Args:
-        events (Master.Event): events to look at
-        names (str): quantity names
-        backtrackedTruth (bool): calculate truth quantities from backtracked truth
-
-    Returns:
-        tuple of np.arrays: quantities to plot
-    """
-    names = ["inv_mass", "angle", "lead_energy", "sub_energy", "pi0_mom"]
-    if backtrackedTruth is True:
-        mct = events.trueParticlesBT.CalculatePairQuantities()
-    else:
-        mct = events.trueParticles.CalculatePairQuantities()
-    rmc = events.recoParticles.CalculatePairQuantities(useBT=True)
-
-    # keep track of events with no shower pairs
-    null = ak.flatten(rmc[-1], -1)
-    null = ak.num(null, 1) > 0
-
-    error = []
-    reco = []
-    true = []
-    for i in range(len(names)):
-        print(names[i])
-        e, r, t = FractionalError(rmc[i], mct[i], null)
-        error.append(e)
-        reco.append(r)
-        true.append(t)
-
-    error = np.nan_to_num(error, nan=-999)
-    reco = np.nan_to_num(reco, nan=-999)
-    true = np.nan_to_num(true, nan=-999)
-    return true, reco, error
-
-
-def ShowerMergePerformance(events: Data, best_match: ak.Array) -> float:
-    """ Checks the fraction of correctly merged showers. 
-        Does so by checking if the showers to merge have the 
-        same true particle number as the target shower.
-
-    Args:
-        events (Data): events to study
-        best_match (ak.Array): target PFP's to merge to.
-    """
-    if bool(ak.all(ak.num(events.recoParticles.shower_energy[events.recoParticles.shower_energy != -999]) == 2)) is True:
-        counts = 0
-    else:
-        counts = 1
-    index = ak.local_index(events.recoParticles.shower_energy)
-    to_merge = [ak.where(index == best_match[:, i], False, True)
-                for i in range(2)]
-    to_merge = np.logical_and(*to_merge)
-
-    # * calculate angle between each best matched shower and the showers to merge
-    best_match_dir = events.recoParticles.shower_direction[best_match]
-    to_merge_dir = events.recoParticles.shower_direction[to_merge]
-    not_null = to_merge_dir.x != -999
-    to_merge_dir = to_merge_dir[not_null]
-
-    angles = [ak.unflatten(vector.angle(
-        to_merge_dir, best_match_dir[:, i]), counts, -1) for i in range(2)]
-    angles = ak.concatenate(angles, -1)
-    # check which angle is the smallest i.e. decide which main shower to merge to
-    minMask_angle = ak.min(angles, -1) == angles
-
-    index_to_merge = [(index[to_merge])[minMask_angle[:, :, i]]
-                      for i in range(2)]
-
-    targetParticleNumber = events.trueParticlesBT.particleNumber[best_match]
-
-    correct_merge = [events.trueParticlesBT.particleNumber[index_to_merge[i]]
-                     == targetParticleNumber[:, i] for i in range(2)]
-
-    correctlyMerged = ak.count(
-        correct_merge[0][correct_merge[0]]) + ak.count(correct_merge[1][correct_merge[1]])
-    total = ak.count(correct_merge[0]) + ak.count(correct_merge[1])
-    if total > 0:
-        correct_merge = (correctlyMerged/total) * 100
-    else:
-        correct_merge = 100
-    print(f"nPFP's correctly merged: {correct_merge:.2f}%")
-    return correct_merge
-
-
-@timer
-def SelectSample(events: Data, nDaughters: int, merge: bool = False, backtracked: bool = False, cheatMerging: bool = False) -> Data:
-    """ Applies MC matching and shower merging to events with
-        specificed number of objects
-
-    Args:
-        events (Master.Data): events to look at
-        nDaughters (int): number of objects per event
-        merge (bool, optional): should we do shower merging?. Defaults to False.
-
-    Returns:
-        Master.Data: selected sample
-    """
-    valid = Pi0MCMask(events, nDaughters)  # get mask of events
-    filtered = events.Filter([valid], [valid], True)  # filter events with mask
-
-    if backtracked == False:
-        matched, unmatched, selection = filtered.MCMatching(applyFilters=False)
-        filtered.Filter([selection], [selection])  # apply the selection
-    else:
-        singleMatchedEvents = filtered.trueParticlesBT.SingleMatch
-        filtered.Filter([singleMatchedEvents], [singleMatchedEvents])
-        best_match, selection = filtered.MatchByAngleBT()
-        filtered.Filter([selection], [selection])
-
-    if merge is True and backtracked is False:
-        filtered = filtered.mergeShower(
-            filtered, matched[selection], unmatched[selection], 1, False)
-
-    if merge is True and backtracked is True:
-        if cheatMerging is True:
-            filtered, null = filtered.MergePFOCheat()
-            filtered.Filter([null], [null])
-        else:
-            filtered = filtered.MergeShowerBT(best_match[selection])
-
-    # if we don't merge showers, just get the showers matched to MC
-    if merge is False and backtracked is False:
-        filtered.Filter([matched[selection]])
-    if merge is False and backtracked is True:
-        filtered.Filter([best_match[selection]])
-    return filtered
+__all__ = [
+    "FileDescriptor",
+    "Sample",
+    "file_len",
+    "Ntuple_Type",
+    "Data",
+    "ParticleData",
+    "TrueParticleData",
+    "RecoParticleData",
+    "TrueParticleDataBT",
+    "ShowerPairs",
+]

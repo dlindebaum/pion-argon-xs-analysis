@@ -8,9 +8,9 @@ import awkward as ak
 
 from particle import Particle
 
-from toy import Toy
+from .toy import Toy
 
-from .. import bethe_bloch, beam, common, fitting, geometry, io, kinematics, ntuple, processing, samples, selection, slices, toy
+from python.analysis import bethe_bloch, beam, common, fitting, geometry, io, kinematics, ntuple, processing, regions, selection, slices
 
 @dataclass
 class AnalysisInput:
@@ -513,6 +513,7 @@ class AnalysisInput:
 @common.timer
 def BeamPionSelection(events : ntuple.Data, args : argparse.Namespace | dict, is_mc : bool) -> ntuple.Data:
     """ Apply beam pion selection to ntuples.
+        #! This needs to be somewhere else. It really is a helper to apply any beam selection from configuration to a sample (perhaps in ntuples or selection/common?)
 
     Args:
         events (ntuple.Data): analysis ntuple
@@ -554,66 +555,6 @@ def BeamPionSelection(events : ntuple.Data, args : argparse.Namespace | dict, is
     return events_copy
 
 
-@common.timer
-def RegionSelection(events : ntuple.Data, args : argparse.Namespace | dict, is_mc : bool, region_type : samples.SampleDefinition = None, process_type : samples.SampleDefinition = None, removed : bool = False) -> dict[np.ndarray]:
-    """ Get reco and true regions (if possible) for ntuple.
-
-    Args:
-        events (Master.Data): events before beam pion selection.
-        args (argparse.Namespace): application arguements
-        is_mc (bool): if ntuple is MC or Data.
-
-    Returns:
-        tuple[dict, dict]: regions
-    """
-
-    args_c = common.args_to_dict(args)
-
-    if is_mc:
-        key = "mc"
-    else:
-        key = "data"
-
-    selection_masks = args_c["selection_masks"][key]
-
-    events_copy = events.Filter(returnCopy = True)
-    
-    if "fiducial" in selection_masks and (len(selection_masks["fiducial"]) > 0):
-        mask = selection.CombineMasks(selection_masks["fiducial"][events_copy.filename])
-        events_copy.Filter([mask], [mask])
-
-    mask = selection.CombineMasks(selection_masks["beam"][events_copy.filename])
-    events_copy.Filter([mask], [mask])
-
-    # counts = {}
-    # for obj in selection_masks:
-    #     if obj in ["beam", "null_pfo", "fiducial"]: continue
-    #     counts[f"n_{obj}"] = SelectionTools.GetPFOCounts(selection_masks[obj][events.filename])
-
-    if region_type is None:
-        region_def = args_c["region_definitions"]
-    else:
-        region_def = region_type
-
-    reco_regions = region_def.CreateDefinitions(region_def.criteria_list.get_criteria_values(events_copy, selection_masks, **args["region_args"]), uncategorised = removed)
-    
-    if is_mc:
-        if process_type is None:
-            process_def = args_c["process_definitions"]
-        else:
-            process_def = process_type
-
-        true_regions = process_def.CreateDefinitions(process_def.criteria_list.get_criteria_values(events_copy, **args["process_args"]), uncategorised = removed)
-
-        for k in true_regions:
-            true_regions[k] = true_regions[k]
-        for k in reco_regions:
-            reco_regions[k] = reco_regions[k]
-        return reco_regions, true_regions
-    else:
-        return reco_regions
-
-
 def CreateAnalysisInput(sample : ntuple.Data, args : argparse.Namespace | dict, is_mc : bool) -> AnalysisInput:
     """ Create analysis input from ntuple sample.
 
@@ -627,15 +568,15 @@ def CreateAnalysisInput(sample : ntuple.Data, args : argparse.Namespace | dict, 
     """
     args_c = common.args_to_dict(args)
 
-    if type(sample) == toy.Toy:
+    if type(sample) == Toy:
         ai = AnalysisInput.CreateAnalysisInputToy(sample)
     elif type(sample) == ntuple.Data:
         sample_selected = BeamPionSelection(sample, args_c, is_mc)
         if is_mc:
-            reco_regions, true_regions = RegionSelection(sample, args_c, True, removed = True)
+            reco_regions, true_regions = regions.RegionSelection(sample, args_c, True, removed = True)
             reweight_params = [args_c["beam_reweight"]["params"][k]["value"] for k in args_c["beam_reweight"]["params"]]
         else:
-            reco_regions = RegionSelection(sample, args_c, False, removed = True)
+            reco_regions = regions.RegionSelection(sample, args_c, False, removed = True)
             true_regions = None
             reweight_params = None
         ai = AnalysisInput.CreateAnalysisInputNtuple(sample_selected, args_c["upstream_loss_correction_params"]["value"], reco_regions, true_regions, reweight_params, args_c["beam_reweight"]["strength"], args_c["fiducial_volume"], args_c["upstream_loss_response"], args_c["energy_method"])

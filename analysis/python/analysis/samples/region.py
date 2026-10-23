@@ -7,8 +7,9 @@ Description: Reconstructed region defintions.
 """
 from dataclasses import dataclass
 
-from common import *
-from .. import ntuple, selection
+from .common import *
+
+from python.analysis import ntuple, selection
 
 @dataclass
 class region_criteria(CriteriaList):

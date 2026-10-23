@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-import io, plots, regions, tags
+from python.analysis import io, plots, regions, tags
 
 class Toy:
     def __init__(self, file : str = None, df : str = None) -> None:

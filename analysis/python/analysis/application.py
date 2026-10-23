@@ -11,8 +11,7 @@ import os
 
 import awkward as ak
 
-from . import io
-import fitting, ntuple, photon_energy_correction, samples, selection, slices
+from python.analysis import io, fitting, ntuple, photon_energy_correction, samples, selection, slices
 
 template_config = {
         "NTUPLE_FILES":{
@@ -418,8 +417,8 @@ class ApplicationArguments:
                     ntuple_files[k] = [ntuple.FileDescriptor(**i) for i in ntuple_files[k]]
                 args.ntuple_files = ntuple_files
             elif head == "SAMPLE_DEFINITIONS":
-                args.region_definitions = samples.RegionDefinitions.regions[value["region"]]
-                args.process_definitions = samples.ProcessDefinitions.processes[value["process"]]
+                args.region_definitions = samples.regions[value["region"]]
+                args.process_definitions = samples.processes[value["process"]]
                 args.process_args = value["process_args"]
                 args.region_args = value["region_args"]
             elif head == "BEAM_PARTICLE_SELECTION":
@@ -437,7 +436,7 @@ class ApplicationArguments:
             elif head == "FINAL_STATE_LOOSE_PHOTON_SELECTION":
                 args.loose_photon_selection = ApplicationArguments.__CreateSelection(value, selection.pfo)
             elif head == "FINAL_STATE_PI0_SELECTION":
-                args.pi0_selection = ApplicationArguments.__CreateSelection(value, selection.pfo)
+                args.pi0_selection = ApplicationArguments.__CreateSelection(value, selection.event)
             elif head == "BEAM_QUALITY_FITS":
                 if "mc" in value:
                     args.mc_beam_quality_fit = io.LoadConfiguration(value["mc"]) # generally expected to have MC at a minimum

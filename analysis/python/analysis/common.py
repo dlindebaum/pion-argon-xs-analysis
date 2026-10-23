@@ -19,7 +19,12 @@ import sys
 from IPython.core.magic import register_line_magic
 from IPython import get_ipython
 
-@register_line_magic
+def register_line_magic_safe(func):
+    if get_ipython() is not None:
+        return register_line_magic(func)
+    return func
+
+@register_line_magic_safe
 def init_notebook(line):
     ipython = get_ipython()
     ipython.run_line_magic("matplotlib", "inline") # %matplotlib inline
@@ -155,7 +160,7 @@ def round_value_to_error(v, e) -> str:
     fv = sf(v)
     fv = fv if fv > 0 else 0
     f = max(fe, fv)
-    return f"${round(v, f):.{f}f} \pm {round(e, f):.{f}f}$"
+    return f"${round(v, f):.{f}f} \\pm {round(e, f):.{f}f}$"
 
 
 def deprecation_warning():

@@ -17,7 +17,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.ticker import AutoMinorLocator, MultipleLocator
 from scipy.stats import iqr
 
-import common, tags, vector
+from python.analysis import common, tags, vector
 
 class PlotConfig():
 

@@ -9,14 +9,7 @@ Description: Plots regions information for different combination of region defin
 import argparse
 import os
 
-from python.analysis import application
-from python.analysis import common
-from python.analysis import ntuple
-from python.analysis import regions
-from python.analysis import samples
-from python.analysis import styles
-
-from apps.cex_analysis_input import RegionSelection
+from python.analysis import application, common, ntuple, regions, samples, styles
 
 from rich import print
 
@@ -25,9 +18,9 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
     mc = ntuple.Data(file_desc, n_events, start)
 
     ri = {}
-    for r, v in samples.region.regions.items():
+    for r, v in samples.regions.items():
         print(r)
-        reco_regions, true_regions = RegionSelection(mc, args, True, v, None, True) # should we generate permutations of the true process as well?
+        reco_regions, true_regions = regions.RegionSelection(mc, args, True, v, None, True) # should we generate permutations of the true process as well?
         ri[r] = {"reco_regions" : reco_regions, "true_regions" : true_regions}
 
     return ri

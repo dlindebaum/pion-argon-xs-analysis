@@ -9,9 +9,9 @@ TODO Documentation.
 import awkward as ak
 import numpy as np
 
-from common import *
+from .common import *
 
-from ..ntuple import Data, Ntuple_Type
+from python.analysis.ntuple import Data, Ntuple_Type
 
 def ValidRecoEnergyCut(events : Data) -> ak.Array:
     return events.recoParticles.shower_energy != -999

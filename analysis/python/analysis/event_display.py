@@ -10,7 +10,7 @@ import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
 import numpy as np
 
-import vector
+from python.analysis import vector
 
 class EventDisplay:
     """ Event display class, an object which produces figures and allows the user.

@@ -11,9 +11,7 @@ import os
 
 from rich import print
 
-from python.analysis import application
-from python.analysis import cross_section
-from python.analysis import samples
+from python.analysis import application, samples, slices
 
 def make_systematic(proc_info : tuple, init_bin : tuple, end_bin : tuple):
     init_low, init_high = init_bin[1]
@@ -47,7 +45,7 @@ def make_systematic(proc_info : tuple, init_bin : tuple, end_bin : tuple):
       MCMC: 0.01
 """
 
-def slices_to_model_bins(energy_slices : cross_section.Slices) -> dict[tuple]:
+def slices_to_model_bins(energy_slices : slices.Slices) -> dict[tuple]:
     model_bins = [0] + list(energy_slices.edges[::-1]) + [999999]
     # model_bins = np.where(model_bins == energy_slices.underflow_pos, 0, model_bins)
     # model_bins = np.where(model_bins == energy_slices.overflow_pos, 999999, model_bins)

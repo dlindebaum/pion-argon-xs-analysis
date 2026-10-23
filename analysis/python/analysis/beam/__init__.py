@@ -1,1 +1,1 @@
-import quality, reweight, scraper, upstream
+from . import quality, reweight, scraper, upstream

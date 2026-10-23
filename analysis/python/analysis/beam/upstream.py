@@ -3,7 +3,7 @@ import awkward as ak
 import numpy as np
 import pandas as pd
 
-import fitting
+from python.analysis import fitting
 
 def UpstreamEnergyLoss(KE_inst : ak.Array, params : np.ndarray, function : fitting.FitFunction = fitting.poly2d) -> ak.Array:
     """ compute the upstream loss based on a repsonse function and it's fit parameters.

@@ -12,7 +12,7 @@ from particle import Particle
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from python.analysis_new.ntuple import Data
+    from python.analysis.ntuple import Data
 
 @dataclass(slots = True)
 class Tag:

@@ -9,11 +9,11 @@ TODO depreciate BeamQualityCut
 import awkward as ak
 import numpy as np
 
-from common import *
-from pfo import GoodShowerSelection
+from .common import *
+from .pfo import GoodShowerSelection
 
-from .. import vector
-from ..ntuple import Data
+from python.analysis import vector
+from python.analysis.ntuple import Data
 
 def GetTruncatedDEdX(sample : Data, truncate : float):
     truncated_start = sample.recoParticles.beam_calo_pos.z >= truncate

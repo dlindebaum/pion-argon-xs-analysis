@@ -4,7 +4,8 @@ import numpy as np
 
 from particle import Particle
 
-from .. import bethe_bloch, common, fitting, kinematics, selection, ntuple, plots
+from python.analysis import bethe_bloch, common, fitting, kinematics, selection, ntuple, plots
+
 
 def IsScraper(mc : ntuple.Data, beam_scraper_args : dict) -> ak.Array:
     beam_inst_KE = kinematics.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation

@@ -1,7 +1,7 @@
 """Kinematic helpers."""
 import awkward as ak
 
-import bethe_bloch, selection, vector
+from python.analysis import bethe_bloch, selection, vector
 
 def KE(p, m):
     return (p**2 + m**2)**0.5 - m

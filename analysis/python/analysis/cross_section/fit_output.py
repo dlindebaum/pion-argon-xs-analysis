@@ -9,7 +9,7 @@ import numpy as np
 
 import uproot
 
-from .. import common, samples, slices
+from python.analysis import common, samples, slices
 
 class MaCh3FitOutput:
     def __init__(self, file : str, process_definitions : samples.SampleDefinition, energy_slices : slices.Slices):

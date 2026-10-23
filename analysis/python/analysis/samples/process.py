@@ -11,8 +11,8 @@ import awkward as ak
 
 from particle import Particle
 
-from common import *
-from .. import ntuple, kinematics, vector
+from .common import *
+from python.analysis import ntuple, kinematics, vector
 
 @dataclass
 class process_criteria_geant(CriteriaList):

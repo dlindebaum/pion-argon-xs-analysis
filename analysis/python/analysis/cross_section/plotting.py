@@ -3,9 +3,9 @@ import numpy as np
 
 from scipy import stats
 
-import geant
+from . import geant
 
-from .. import common, slices, plots
+from python.analysis import common, slices, plots
 
 def PlotCrossSection(xs : dict[tuple], energy_slices : slices.Slices, cross_section_name : str, xs_sim_range : tuple[float] = None):
     """ Plot a set of cross section measurements. Assumed from the same process.

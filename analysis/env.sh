@@ -1,6 +1,7 @@
 MY_DIR=`(realpath $BASH_SOURCE | xargs dirname) || pwd`
 export MY_DIR
 export PYTHONPATH=$MY_DIR
+export PYTHONPATH=$MY_DIR/python/analysis:$PYTHONPATH
 export CONFIG_PATH=$MY_DIR/config
 export PATH=$MY_DIR/apps:$PATH
 export PATH=$MY_DIR/test:$PATH

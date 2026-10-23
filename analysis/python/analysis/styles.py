@@ -1,4 +1,4 @@
-import plots
+from python.analysis import plots
 
 class PlotStyler:
     def __init__(self, extend_colors : bool = False, custom_colors : list = None, dpi : int = 100, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):

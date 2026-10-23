@@ -7,11 +7,10 @@ import pandas as pd
 
 from rich import print as rprint
 
-import beam, event
+from . import beam, event
 
-from .. import cuts, io, ntuple, photon_energy_correction, tags
-
-from ..beam import scraper
+from python.analysis import cuts, io, ntuple, photon_energy_correction, tags
+from python.analysis.beam import scraper
 
 def merge_multiproccess_output(outputs : list) -> dict:
     """ Merge multiprocessing output into a single dictionary.

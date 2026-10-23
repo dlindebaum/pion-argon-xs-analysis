@@ -1,6 +1,6 @@
 """Cross-section model-building logic."""
 
-import slices, samples
+from python.analysis import slices, samples
 
 def make_systematic(proc_info : tuple, init_bin : tuple, end_bin : tuple):
     init_low, init_high = init_bin[1]

@@ -76,7 +76,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
     cross_section_quantities = ComputeQuantities(mc, args)
 
     ri = {}
-    for r, v in samples.region.regions.items():
+    for r, v in samples.regions.items():
         print(r)
         reco_regions, true_regions = RegionSelection(mc, args, True, v, None, True) # should we generate permutations of the true process as well?
         ri[r] = {"reco_regions" : reco_regions, "true_regions" : true_regions}

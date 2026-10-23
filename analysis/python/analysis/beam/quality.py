@@ -5,9 +5,8 @@ import os
 import awkward as ak
 import numpy as np
 
-import common, fitting, plots
+from python.analysis import common, fitting, io, plots
 
-from .. import io
 
 def Fit_Vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
     """ Gaussian fit to each component in the vector.

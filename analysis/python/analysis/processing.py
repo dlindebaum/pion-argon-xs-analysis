@@ -16,7 +16,7 @@ import awkward as ak
 from pathos.multiprocessing import ProcessPool
 from rich import print
 
-import common, ntuple, tags
+from python.analysis import common, ntuple, tags
 
 def log_process(func):
     """ Function wrapper to redirect printout from a process to a log file.

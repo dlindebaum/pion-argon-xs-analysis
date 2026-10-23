@@ -14,7 +14,7 @@ from dataclasses import dataclass
 
 import awkward as ak
 
-from .. import selection
+from python.analysis import selection
 
 criteria = namedtuple("criteria", ["op", "value"]) # criteria is defined using an operator and value (particle count)
 

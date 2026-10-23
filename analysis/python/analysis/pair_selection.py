@@ -5,7 +5,7 @@
 import numpy as np
 import awkward as ak
 
-import vector, selection
+from python.analysis import vector, selection
 
 #######################################################################
 #######################################################################

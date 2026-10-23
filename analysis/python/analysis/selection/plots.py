@@ -5,7 +5,7 @@ import awkward as ak
 import numpy as np
 import pandas as pd
 
-from .. import plots
+from python.analysis import plots
 
 x_label = {
     "track_score_all" : "Track score", 
