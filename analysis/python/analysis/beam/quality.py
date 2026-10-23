@@ -5,7 +5,7 @@ import os
 import awkward as ak
 import numpy as np
 
-from python.analysis import common, fitting, io, plots
+from python.analysis import common, fitting, io, plotting
 
 
 def Fit_Vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
@@ -62,9 +62,9 @@ def plot(value : ak.Array, x_label : str, mu : float, sigma : float, color : str
     chisqr = np.sum(((y - y_pred)/ yerr)**2)
     ndf = len(y) - 2
 
-    plots.Plot(x, y/np.sum(y), yerr = yerr/np.sum(y), color = color, marker = "x", linestyle = "", capsize = 3, newFigure = False)
-    plots.Plot(x_interp, y_interp / np.sum(y), xlabel = x_label, ylabel = "Counts (area normalised)", color = color, linestyle = "-", label = label + " $\\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2f}", newFigure = False)
-    plots.plt.ylim(0)
+    plotting.plots.Plot(x, y/np.sum(y), yerr = yerr/np.sum(y), color = color, marker = "x", linestyle = "", capsize = 3, newFigure = False)
+    plotting.plots.Plot(x_interp, y_interp / np.sum(y), xlabel = x_label, ylabel = "Counts (area normalised)", color = color, linestyle = "-", label = label + " $\\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2f}", newFigure = False)
+    plotting.plots.plt.ylim(0)
 
 
 def plot_range(mu : float, sigma : float, tolerance : float = 5) -> list:
@@ -91,13 +91,13 @@ def MakePlots(output_mc : dict[ak.Array], mc_fits : dict, output_data : dict[ak.
         data_fits (dict): fits made on data
         out (str): output directory
     """
-    plots.PlotStyler.SetPlotStyle()
+    plotting.styles.PlotStyler.SetPlotStyle()
 
     label_name = "Beam" if truncate is None else "Truncated beam"
 
-    with plots.PlotBook(out + "beam_quality_fits.pdf") as pdf:
+    with plotting.PlotBook(out + "beam_quality_fits.pdf") as pdf:
         for i in ["x", "y", "z"]:
-            plots.plt.figure()
+            plotting.plots.plt.figure()
             mc_ranges = [] if mc_fits is None else plot_range(mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"])
             data_ranges = [] if data_fits is None else plot_range(data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"])
 

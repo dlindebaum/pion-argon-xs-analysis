@@ -7,7 +7,8 @@ import awkward as ak
 import numpy as np
 import pandas as pd
 
-from python.analysis import common, ntuple, plots, samples, selection, tags
+from python.analysis import common, ntuple, plotting, samples, selection, tags
+from python.analysis.plotting import plots
 
 @common.timer
 def RegionSelection(events : ntuple.Data, args : Namespace | dict, is_mc : bool, region_type : samples.SampleDefinition = None, process_type : samples.SampleDefinition = None, removed : bool = False) -> dict[np.ndarray]:
@@ -113,7 +114,7 @@ def RecoRegionSelection(region_selections : dict[dict], out : str):
         args (Namespace): application arguments.
     """
     os.makedirs(out + "reco_regions/", exist_ok = True)
-    pdf = plots.PlotBook(out + "reco_regions/reco_regions_study")
+    pdf = plotting.PlotBook(out + "reco_regions/reco_regions_study")
     pe = {}
     pe_index_labels = None
     for r in region_selections:

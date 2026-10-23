@@ -23,13 +23,15 @@ from python.analysis import common
 from python.analysis import cross_section
 from python.analysis import fitting
 from python.analysis import io
-from python.analysis import plots
+from python.analysis import plotting
 from python.analysis import slices
 from python.analysis import styles
 from python.analysis import tags
 from python.analysis import toy
 from python.legacy import RegionFit
 from apps import cex_toy_generator
+
+from python.analysis.plotting import plots
 
 region_colours = {
     "absorption"      : "#777777",
@@ -317,7 +319,7 @@ def PullStudyFast(toys : toy.Toy, n_template : int, n_data : int, args, energy_s
     out["scale"] = pd.DataFrame(scales)
     return out
 
-def PlotShapeExamples(energy_slices : slices.Slices, book : plots.PlotBook = plots.PlotBook.null()):
+def PlotShapeExamples(energy_slices : slices.Slices, book : plotting.PlotBook = plotting.PlotBook.null()):
     norms = [0.8, 1.2]
     split = 1000
     smooth_amount = 500
@@ -358,7 +360,7 @@ def PlotShapeExamples(energy_slices : slices.Slices, book : plots.PlotBook = plo
     return
 
 @common.timer
-def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.ndarray, pdf : plots.PlotBook = plots.PlotBook.null(), single_bin : bool = False, ylim = None):
+def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.ndarray, pdf : plotting.PlotBook = plotting.PlotBook.null(), single_bin : bool = False, ylim = None):
     x = data.index.values
 
     xt = np.arange(min(x), max(x)+0.1, 0.1)
@@ -501,7 +503,7 @@ def MeanProcessedResults(total, energy):
 
 
 @common.timer
-def PlotDataShapeTestEnergy(data : tuple, energy_overflow : np.ndarray, book : plots.PlotBook):
+def PlotDataShapeTestEnergy(data : tuple, energy_overflow : np.ndarray, book : plotting.PlotBook):
 
     def remove_zero(a):
         return a[a != 0]
@@ -586,7 +588,7 @@ def PlotDataShapeTest(data, key, label, vmin = None, vmax = None):
     fig.tight_layout()
 
 @common.timer
-def PlotCrossCheckResultsShape(results_total, results_bins, energy_overflow : np.ndarray, single_bin : bool, book : plots.PlotBook):
+def PlotCrossCheckResultsShape(results_total, results_bins, energy_overflow : np.ndarray, single_bin : bool, book : plotting.PlotBook):
 
     for p in process_map:
         PlotDataShapeTest(results_total, f"mu_{p}", f"$\\mu_{{{process_map[p]}}}$")
@@ -646,7 +648,7 @@ def SaveSummaryTables(directory : str, tables : tuple[pd.DataFrame], name : str)
     return
 
 
-def Summary(directory : str, test_name : str, model_name : str, model : pyhf.Model, energy_overflow : np.ndarray, template_counts : float, single_bin : bool, book : plots.PlotBook = plots.PlotBook.null(), ymax = None):
+def Summary(directory : str, test_name : str, model_name : str, model : pyhf.Model, energy_overflow : np.ndarray, template_counts : float, single_bin : bool, book : plotting.PlotBook = plotting.PlotBook.null(), ymax = None):
 
     n_fe_max, n_fe_total_max = PredictedCountsSummary(template_counts, model, test_name, model_name, args.workdir, single_bin)
 
@@ -680,7 +682,7 @@ def Summary(directory : str, test_name : str, model_name : str, model : pyhf.Mod
     return ymax
 
 
-def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, template : cross_section.analysis_input.AnalysisInput, book : plots.PlotBook = plots.PlotBook.null()):
+def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, template : cross_section.analysis_input.AnalysisInput, book : plotting.PlotBook = plotting.PlotBook.null()):
     tags = tags.ExclusiveProcessTags(template.exclusive_process)
     for j, c in plots.IterMultiPlot(templates_energy):
         for i, s in enumerate(c):
@@ -699,7 +701,7 @@ def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : n
     return
 
 
-def PlotTotalChannel(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, book : plots.PlotBook = plots.PlotBook.null()):
+def PlotTotalChannel(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, book : plotting.PlotBook = plotting.PlotBook.null()):
     for j, c in plots.IterMultiPlot(templates_energy):
         plots.Plot(energy_slices.pos_overflow, sum(c), xlabel = f"$n_{{{j}}}$ (MeV)", ylabel = "Counts", style = "bar", newFigure = False)
     book.Save()
@@ -810,13 +812,13 @@ def main(args : argparse.Namespace):
             outdir = args.out
 
         if args.fit["single_bin"] is False:
-            with plots.PlotBook(outdir + "templates") as book:
+            with plotting.PlotBook(outdir + "templates") as book:
                 PlotTemplates(templates_energy, tempalates_mean_track_score, args.energy_slices, mean_track_score_bins, args.template, book)
 
-            with plots.PlotBook(outdir + "observation_exmaple") as book:
+            with plotting.PlotBook(outdir + "observation_exmaple") as book:
                 PlotTotalChannel(templates_energy, tempalates_mean_track_score, args.energy_slices, mean_track_score_bins, book)
 
-            with plots.PlotBook(outdir + "xs_curves") as book:
+            with plotting.PlotBook(outdir + "xs_curves") as book:
                 PlotShapeExamples(args.energy_slices, book)
 
         if (hasattr(args.template, "exclusive_process")) and (type(args.template.exclusive_process) == dict):
@@ -834,7 +836,7 @@ def main(args : argparse.Namespace):
             if t in args.skip: continue
             for m in models:
                 if t == "pulls":
-                    with plots.PlotBook(outdir + f"pull_test_{m}/pulls.pdf", True) as book:
+                    with plotting.PlotBook(outdir + f"pull_test_{m}/pulls.pdf", True) as book:
                         pull_results = io.ReadHDF5(outdir + f"pull_test_{m}/" + "pull_results.hdf5")
 
                         pulls = (pull_results["bestfit"] - (pull_results["expected"] / pull_results["scale"])) / pull_results["uncertainty"]
@@ -890,14 +892,14 @@ def main(args : argparse.Namespace):
 
                     for f in results_total:
                         os.makedirs(outdir + f"{t}_test_{m}/", exist_ok = True)
-                        with plots.PlotBook(outdir + f"{t}_test_{m}/" + f + ".pdf", True) as pdf:
+                        with plotting.PlotBook(outdir + f"{t}_test_{m}/" + f + ".pdf", True) as pdf:
                             if (t == "shape"):
                                 PlotCrossCheckResultsShape(results_total[f], results_bins[f], args.energy_slices.pos_overflow, args.fit["single_bin"], pdf)
                             else:
                                 PlotCrossCheckResults(f"$\\mathcal{{N}}_{{{tags[f].name_simple}}}$", results_total[f], results_bins[f], args.energy_slices.pos_overflow, pdf, args.fit["single_bin"], [-0.02, 0.06])
                         plots.plt.close("all")
                 
-                    with plots.PlotBook(outdir + f"{t}_test_{m}/summary_plots.pdf", True) as book:
+                    with plotting.PlotBook(outdir + f"{t}_test_{m}/summary_plots.pdf", True) as book:
                         Summary(outdir + f"{t}_test_{m}/", t, m, models[m], args.energy_slices.pos_overflow, template_counts, args.fit["single_bin"], book, ymax = ymax[t])
                     plots.plt.close("all")
 

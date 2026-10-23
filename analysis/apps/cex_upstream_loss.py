@@ -18,7 +18,7 @@ from python.analysis import fitting
 from python.analysis import io
 from python.analysis import kinematics
 from python.analysis import ntuple
-from python.analysis import plots
+from python.analysis import plotting
 from python.analysis import styles
 from python.analysis.beam import reweight, upstream
 from python.analysis.cross_section.analysis_input import BeamPionSelection
@@ -50,13 +50,13 @@ def main(args : argparse.Namespace):
     bins = ak.Array(args.upstream_loss_bins)
     x = (bins[1:] + bins[:-1]) / 2
 
-    with plots.PlotBook(outdir + "cex_upstream_loss_plots.pdf") as pdf:
+    with plotting.PlotBook(outdir + "cex_upstream_loss_plots.pdf") as pdf:
         reco_KE_inst = kinematics.KE(output_mc["p_inst"], Particle.from_pdgid(211).mass)
         with styles.PlotStyler().Update(font_scale = 1.3):
             cv = upstream.CentralValueEstimation(bins, reco_KE_inst, output_mc["KE_ff"], upstream.cv_method[args.upstream_loss_cv_function], output_mc["weights"])
         pdf.Save()
 
-        plots.plt.figure()
+        plotting.plots.plt.figure()
         params = fitting.Fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\\mu(\Delta E_{upstream})$ (MeV)", loc = "upper center")
         pdf.Save()
 
@@ -67,9 +67,9 @@ def main(args : argparse.Namespace):
 
         reco_KE_ff =  reco_KE_inst - upstream.UpstreamEnergyLoss(reco_KE_inst, params_dict["value"], args.upstream_loss_response)
 
-        plots.PlotHistComparison([reco_KE_ff, output_mc["KE_ff"]], labels = ["$KE^{reco}_{init}$", "$KE^{true}_{init}$"], x_range = [bins[0], bins[-1]], xlabel = "Kinetic energy (MeV)", weights = [output_mc["weights"], output_mc["weights"]])
+        plotting.plots.PlotHistComparison([reco_KE_ff, output_mc["KE_ff"]], labels = ["$KE^{reco}_{init}$", "$KE^{true}_{init}$"], x_range = [bins[0], bins[-1]], xlabel = "Kinetic energy (MeV)", weights = [output_mc["weights"], output_mc["weights"]])
         pdf.Save()
-    plots.plt.close("all")
+    plotting.plots.plt.close("all")
     print(f"fitted parameters : {params_dict}")
     io.SaveConfiguration(params_dict, outdir + "fit_parameters.json")
     return

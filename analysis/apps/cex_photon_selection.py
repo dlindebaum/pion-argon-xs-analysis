@@ -17,14 +17,12 @@ from rich import print
 
 from python.analysis import application
 from python.analysis import common
-from python.analysis import fitting
 from python.analysis import ntuple
-from python.analysis import plots
 from python.analysis import selection
 from python.analysis import tags
 from python.analysis import io
-from python.analysis import styles
 from python.analysis import photon_energy_correction as pec
+from python.analysis import plotting
 
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # hide pesky pandas warnings (performance is actually ok)
 
@@ -89,7 +87,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
 @common.timer
 def main(args):
-    styles.PlotStyler.SetPlotStyle(False)
+    plotting.styles.PlotStyler.SetPlotStyle(False)
     out = args.out + "shower_energy_correction/"
 
     if (not os.path.isfile(out + "photon_energies.hdf5")) or args.regen:
@@ -112,7 +110,7 @@ def main(args):
     df["residual"] = df.reco_shower_energy - df.true_energy
     df["fractional_error"] = (df.reco_shower_energy / df.true_energy) - 1
 
-    with plots.PlotBook(out + "plots.pdf") as book:
+    with plotting.PlotBook(out + "plots.pdf") as book:
         #* initial plots
         pec.PhotonSelection(df, book)
 

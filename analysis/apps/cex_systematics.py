@@ -61,7 +61,7 @@ class MCMethod(ABC):
         self.data_config = data_config
         pass
 
-    def Analyse(self, analysis_input : analysis_input.AnalysisInput, book : plots.PlotBook = plots.PlotBook.null()):
+    def Analyse(self, analysis_input : analysis_input.AnalysisInput, book : plotting.PlotBook = plotting.PlotBook.null()):
 
         region_fit_result = cex_analyse.RegionFit(analysis_input, self.args.energy_slices, self.args.fit["mean_track_score"], self.model, mc_stat_unc = self.args.fit["mc_stat_unc"], single_bin = self.args.fit["single_bin"])
 
@@ -99,7 +99,7 @@ class MCMethod(ABC):
         return xs
 
 
-    def CalculateSysCov(self, results : list[dict], book : plots.PlotBook = plots.PlotBook.null()):
+    def CalculateSysCov(self, results : list[dict], book : plotting.PlotBook = plotting.PlotBook.null()):
         values = {k : [] for k in results[0]}
         for i in results:
             for k in i:
@@ -190,7 +190,7 @@ class DataAnalysis(ABC):
         return xs
 
 
-    def PlotResults(self, xs_nominal : dict, result : dict, book : plots.PlotBook = plots.PlotBook.null()):
+    def PlotResults(self, xs_nominal : dict, result : dict, book : plotting.PlotBook = plotting.PlotBook.null()):
         for p in xs_nominal["pdsp"]:
             plotting.PlotXSComparison({"low" : result["low"][p], "nominal" : xs_nominal["pdsp"][p], "high" : result["high"][p]}, self.args.energy_slices, p, cv_only = True, marker_size = 12)
             book.Save()
@@ -286,7 +286,7 @@ class NuisanceParameters:
         return np_sys
 
 
-    def PlotXSMCStat(self, result, book : plots.PlotBook = plots.PlotBook.null()):
+    def PlotXSMCStat(self, result, book : plotting.PlotBook = plotting.PlotBook.null()):
         for p in result["np"]:
             plotting.PlotXSComparison({"Data stat + MC stat" : result["np"][p], "Data stat" : result["no_np"][p]}, self.args.energy_slices, process = p)
             book.Save()
@@ -493,7 +493,7 @@ class TrackLengthResolutionSystematic(MCMethod):
         return xs
     
 
-    def CalculateResolution(self, book : plots.PlotBook = plots.PlotBook.null()):
+    def CalculateResolution(self, book : plotting.PlotBook = plotting.PlotBook.null()):
         ai_mc = analysis_input.AnalysisInput.FromFile(self.args.analysis_input["mc"])
 
         r = np.array(common.nandiv(ai_mc.track_length_reco - ai_mc.track_length_true, ai_mc.track_length_reco))
@@ -591,7 +591,7 @@ class NormalisationSystematic(MCMethod):
         return {"cv" : cvs, "true_cv" : true_cvs}
 
     @staticmethod
-    def PlotNormalisationTestResults(results : dict, args : argparse.Namespace, xs_nominal : dict, book : plots.PlotBook = plots.PlotBook.null()):
+    def PlotNormalisationTestResults(results : dict, args : argparse.Namespace, xs_nominal : dict, book : plotting.PlotBook = plotting.PlotBook.null()):
         xs_sim = geant.GeantCrossSections()
         scale_factors = {"absorption" : 1, "charge_exchange" : 1, "pion_production" : 1, "double_charge_exchange" : 1, "quasielastic" : 1}
         for r in results["cv"]:
@@ -791,7 +791,7 @@ def SaveSystematicTables(systematic_tables : dict[pd.DataFrame], out : str):
     return
 
 
-def PlotSysHist(systematic_table : dict[pd.DataFrame], book : plots.PlotBook = plots.PlotBook.null()):
+def PlotSysHist(systematic_table : dict[pd.DataFrame], book : plotting.PlotBook = plotting.PlotBook.null()):
     for t in systematic_table:
         plots.plt.figure()
         c = 0
@@ -841,7 +841,7 @@ def PlotSysHist(systematic_table : dict[pd.DataFrame], book : plots.PlotBook = p
     return
 
 
-def FinalPlots(cv, systematics_table : dict[pd.DataFrame], energy_slices, book : plots.PlotBook = plots.PlotBook.null(), alt_xs : bool = False):
+def FinalPlots(cv, systematics_table : dict[pd.DataFrame], energy_slices, book : plotting.PlotBook = plotting.PlotBook.null(), alt_xs : bool = False):
     goodness_of_fit = {}
     if alt_xs:
         xs_alt = geant.GeantCrossSections(geant.GEANT_XS, energy_range = [energy_slices.min_pos - energy_slices.width, energy_slices.max_pos])
@@ -913,7 +913,7 @@ def main(args : argparse.Namespace):
 
             sys = mc_stat.CalculateSysError(result)
             SaveSystematicError(sys, None, f"{outdir}sys.dill")
-            with plots.PlotBook(f"{outdir}plots.pdf") as book:
+            with plotting.PlotBook(f"{outdir}plots.pdf") as book:
                 mc_stat.PlotXSMCStat(result, book)
             tables = mc_stat.MCStatTables(result)
             SaveTables(tables, outdir, 2)
@@ -933,7 +933,7 @@ def main(args : argparse.Namespace):
 
             sys = sc.CalculateSysErrorAsym(args.cv, result)
             SaveSystematicError(sys, None, f"{outdir}sys.dill")
-            with plots.PlotBook(f"{outdir}plots.pdf") as book:
+            with plotting.PlotBook(f"{outdir}plots.pdf") as book:
                 sc.PlotResults(args.cv, result, book)
             tables = sc.DataAnalysisTables(args.cv, sys, "Shower energy")
             SaveTables(tables, outdir, 2)
@@ -955,7 +955,7 @@ def main(args : argparse.Namespace):
 
             sys = upl.CalculateSysErrorAsym(args.cv, result)
             SaveSystematicError(sys, None, f"{outdir}sys.dill")
-            with plots.PlotBook(f"{outdir}plots.pdf") as book:
+            with plotting.PlotBook(f"{outdir}plots.pdf") as book:
                 upl.PlotResults(args.cv, result, book)
             tables = upl.DataAnalysisTables(args.cv, sys, "Upstream")
             SaveTables(tables, outdir, 2)
@@ -977,7 +977,7 @@ def main(args : argparse.Namespace):
 
             sys = brw.CalculateSysErrorAsym(args.cv, result)
             SaveSystematicError(sys, None, f"{outdir}sys.dill")
-            with plots.PlotBook(f"{outdir}plots.pdf") as book:
+            with plotting.PlotBook(f"{outdir}plots.pdf") as book:
                 brw.PlotResults(args.cv, result, book)
             tables = brw.DataAnalysisTables(args.cv, sys, "Reweight")
             SaveTables(tables, outdir, 2)
@@ -987,7 +987,7 @@ def main(args : argparse.Namespace):
             os.makedirs(outdir, exist_ok = True)
             trk = TrackLengthResolutionSystematic(args, model, args.toy_data_config)
 
-            with plots.PlotBook(outdir + "trk_res.pdf") as book:
+            with plotting.PlotBook(outdir + "trk_res.pdf") as book:
                 trk.CalculateResolution(book)
             table = {}
             for i in range(len(trk.popt[0])):
@@ -1001,7 +1001,7 @@ def main(args : argparse.Namespace):
                 result = io.LoadObject(f"{outdir}results.dill")
 
             if len(result) > 1:
-                with plots.PlotBook(f"{outdir}cov_mat") as book:
+                with plotting.PlotBook(f"{outdir}cov_mat") as book:
                     sys = trk.CalculateSysCov(result, book)
                 SaveSystematicError(sys, None, f"{outdir}sys.dill")
 
@@ -1025,7 +1025,7 @@ def main(args : argparse.Namespace):
                 result = io.LoadObject(f"{outdir}results.dill")
 
             if len(result) > 1:
-                with plots.PlotBook(f"{outdir}cov_mat") as book:
+                with plotting.PlotBook(f"{outdir}cov_mat") as book:
                     sys = bm.CalculateSysCov(result, book)
                 SaveSystematicError(sys, None, f"{outdir}sys.dill")
 
@@ -1048,7 +1048,7 @@ def main(args : argparse.Namespace):
                 result = io.LoadObject(f"{outdir}results.dill")
 
             if len(result) > 1:
-                with plots.PlotBook(f"{outdir}cov_mat") as book:
+                with plotting.PlotBook(f"{outdir}cov_mat") as book:
                     sys = ts.CalculateSysCov(result, book)
                 SaveSystematicError(sys, None, f"{outdir}sys.dill")
 
@@ -1082,7 +1082,7 @@ def main(args : argparse.Namespace):
                 SaveSystematicError(sys_err, frac_err, f"{outdir}sys.dill")
                 sys = io.LoadObject(f"{outdir}sys.dill")
 
-                with plots.PlotBook(f"{outdir}plots", True) as book:
+                with plotting.PlotBook(f"{outdir}plots", True) as book:
                     #! use styler properly
                     styles.PlotStyler.SetPlotStyle(dark = False, extend_colors = True)
                     NormalisationSystematic.PlotNormalisationTestResults(result, args, xs_nominal, book)
@@ -1100,10 +1100,10 @@ def main(args : argparse.Namespace):
         tables = CreateSystematicTable(out, args.cv, args)
         SaveSystematicTables(tables, outdir)
 
-        with plots.PlotBook(outdir + "systematic_plots.pdf") as book:
+        with plotting.PlotBook(outdir + "systematic_plots.pdf") as book:
             with plots.matplotlib.rc_context({"axes.prop_cycle" : plots.plt.cycler("color", plots.matplotlib.colormaps["tab20"].colors)}):
                 PlotSysHist(tables, book)
-        with plots.PlotBook(outdir + "final_plots.pdf", watermark = "DUNE: Work in Progress") as book:
+        with plotting.PlotBook(outdir + "final_plots.pdf", watermark = "DUNE: Work in Progress") as book:
             table, table_alt = FinalPlots(args.cv["pdsp"], tables, args.energy_slices, book, alt_xs = False)
 
         tags = tags.ExclusiveProcessTags({k : None for k in table.columns})

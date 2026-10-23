@@ -27,19 +27,19 @@ from python.analysis import bethe_bloch
 from python.analysis import common
 from python.analysis import cross_section
 from python.analysis import io
-from python.analysis import plots
+from python.analysis import plotting
 from python.analysis import regions
 from python.analysis import selection
 from python.analysis import slices
-from python.analysis import styles
 from python.analysis import tags
 from python.legacy import Unfold
+from python.analysis.plotting import plots
 
 label_map = {"toy" : "toy", "pdsp" : "ProtoDUNE SP"}
 
 process_labels = {"absorption": "abs", "charge_exchange" : "cex", "single_pion_production" : "spip", "pion_production" : "pip"}
 
-def PlotKEs(mc : cross_section.analysis_input.AnalysisInput, data : cross_section.analysis_input.AnalysisInput, args : argparse.Namespace, book : plots.PlotBook):
+def PlotKEs(mc : cross_section.analysis_input.AnalysisInput, data : cross_section.analysis_input.AnalysisInput, args : argparse.Namespace, book : plotting.PlotBook):
     def PlotDataMCTruth(mc, data, truth, bins, xlabel, x_range, norm, weights, mc_label = "MC reco", data_label = "Data reco", truth_label = "MC truth"):
         plots.PlotHistDataMC(data, mc, bins = bins, x_range = x_range, norm = norm, xlabel = xlabel, mc_labels = mc_label, data_label = data_label, mc_weights = weights)
 
@@ -175,7 +175,7 @@ def BkgSingleBin(N_bkg_s : np.ndarray, N_bkg_err_s : np.ndarray, template : cros
     return N_bkg, np.sqrt(N_bkg_var), labels
 
 
-def PlotBkgRegions(energy_slices : slices.Slies, data : cross_section.analysis_input.AnalysisInput, bkg : dict[np.ndarray], bkg_err : dict[np.ndarray], bkg_label : dict[list[str]], book : plots.PlotBook):
+def PlotBkgRegions(energy_slices : slices.Slies, data : cross_section.analysis_input.AnalysisInput, bkg : dict[np.ndarray], bkg_err : dict[np.ndarray], bkg_label : dict[list[str]], book : plotting.PlotBook):
 
     N_int_regions = {k : data.NInteract(energy_slices, v, None, True) for k, v in data.regions.items()}
 
@@ -190,7 +190,7 @@ def PlotBkgRegions(energy_slices : slices.Slies, data : cross_section.analysis_i
     return
 
 
-def BackgroundSubtraction(data : cross_section.analysis_input.AnalysisInput, process : str, energy_slice : slices.Slies, postfit_pred : cabinetry.model_utils.ModelPrediction = None, single_bin : bool = False, regions : bool = False, template : cross_section.analysis_input.AnalysisInput = None, mc_stat : bool = True, book : plots.PlotBook = plots.PlotBook.null()) -> tuple[np.ndarray]:
+def BackgroundSubtraction(data : cross_section.analysis_input.AnalysisInput, process : str, energy_slice : slices.Slies, postfit_pred : cabinetry.model_utils.ModelPrediction = None, single_bin : bool = False, regions : bool = False, template : cross_section.analysis_input.AnalysisInput = None, mc_stat : bool = True, book : plotting.PlotBook = plotting.PlotBook.null()) -> tuple[np.ndarray]:
     """ Background subtraction using the fit if a fit result is specified.
 
     Args:
@@ -198,7 +198,7 @@ def BackgroundSubtraction(data : cross_section.analysis_input.AnalysisInput, pro
         process (str): signal process
         energy_slice (slices.Slies): energy slices
         fit_results (cabinetry.model_utils.ModelPrediction, optional): fit predictions. Defaults to None.
-        book (plots.PlotBook, optional): plot book. Defaults to plots.PlotBook.null().
+        book (plotting.PlotBook, optional): plot book. Defaults to plotting.PlotBook.null().
 
     Returns:
         tuple[np.array]: true histograms (if data is mc), reco histograms postfit, error in reco hitograms postfit
@@ -266,7 +266,7 @@ def BackgroundSubtraction(data : cross_section.analysis_input.AnalysisInput, pro
     return histograms_true_obs, histograms_reco_obs, histograms_reco_obs_err
 
 
-def PlotDataBkgSub(hist_data : dict[np.ndarray], hist_data_err : dict[np.ndarray], mc : cross_section.analysis_input.AnalysisInput, regions : bool, signal_process : str, energy_slices : slices.Slies, scale : float, sample_name : str, data_label = "data", mc_label = "mc", book : plots.PlotBook = plots.PlotBook.null()):
+def PlotDataBkgSub(hist_data : dict[np.ndarray], hist_data_err : dict[np.ndarray], mc : cross_section.analysis_input.AnalysisInput, regions : bool, signal_process : str, energy_slices : slices.Slies, scale : float, sample_name : str, data_label = "data", mc_label = "mc", book : plotting.PlotBook = plotting.PlotBook.null()):
     labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$", "inc" : "$N_{inc}$"}
 
     histograms_mc_reco = mc.CreateHistograms(energy_slices, signal_process, True, False)
@@ -322,7 +322,7 @@ def EfficiencyErrSys(eff, err, val, val_eff):
     return np.nan_to_num(eff_err)
 
 
-def ApplyEfficiency(energy_slices : slices.Slies, efficiencies, unfolding_result, true, norm : float = 1, mc_stat_unc = False, book : plots.PlotBook = plots.PlotBook.null()):
+def ApplyEfficiency(energy_slices : slices.Slies, efficiencies, unfolding_result, true, norm : float = 1, mc_stat_unc = False, book : plotting.PlotBook = plotting.PlotBook.null()):
     labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$", "inc" : "$N_{inc}$", "absorption": "$N_{int,abs}$", "charge_exchange" : "$N_{int,cex}$", "single_pion_production" : "$N_{int,spip}$", "pion_production" : "$N_{int,pip}$"}
 
     hist_unfolded_efficiency_corrected = {}
@@ -348,7 +348,7 @@ def ApplyEfficiency(energy_slices : slices.Slies, efficiencies, unfolding_result
     return hist_unfolded_efficiency_corrected
 
 
-def PlotEfficiency(energy_slices : slices.Slies, efficiencies : dict, book : plots.PlotBook):
+def PlotEfficiency(energy_slices : slices.Slies, efficiencies : dict, book : plotting.PlotBook):
     if book is not None:
         x = energy_slices.pos_overflow - energy_slices.width/2
         for k, v in efficiencies.items():
@@ -359,7 +359,7 @@ def PlotEfficiency(energy_slices : slices.Slies, efficiencies : dict, book : plo
     return
 
 
-def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.analysis_input.AnalysisInput, unfolding_args : dict, signal_process, norm, energy_slices : slices.Slies, regions : bool = False, mc_stat_unc : bool = False, mc_cheat : cross_section.analysis_input.AnalysisInput = None, book : plots.PlotBook = plots.PlotBook.null()):
+def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.analysis_input.AnalysisInput, unfolding_args : dict, signal_process, norm, energy_slices : slices.Slies, regions : bool = False, mc_stat_unc : bool = False, mc_cheat : cross_section.analysis_input.AnalysisInput = None, book : plotting.PlotBook = plotting.PlotBook.null()):
     labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$", "inc" : "$N_{inc}$", "absorption": "$N_{int,abs}$", "charge_exchange" : "$N_{int,cex}$", "single_pion_production" : "$N_{int,spip}$", "pion_production" : "$N_{int,pip}$"}
 
     true_hists_selected = mc.CreateHistograms(energy_slices, signal_process, False, ~mc.inclusive_process)
@@ -405,7 +405,7 @@ def Unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.analy
         print("using default options for unfolding")
         unfolding_args = {"ts_stop" : 0.01, "max_iter" : 100, "ts" : "ks", "method" : 1}
 
-    with styles.PlotStyler(extend_colors = False, dark = True).Update(font_scale = 1.1):
+    with plotting.styles.PlotStyler(extend_colors = False, dark = True).Update(font_scale = 1.1):
         if unfolding_args["method"] == 1: #* Unfold defector effect only
             resp = Unfold.CalculateResponseMatrices(mc, signal_process, energy_slices, regions, book, None)
             priors = {k : ak.to_numpy(v) for k, v in true_hists_selected.items()}
@@ -511,7 +511,7 @@ def LoadToy(file):
     return cross_section.analysis_input.AnalysisInput.CreateAnalysisInputToy(toy)
 
 
-def PlotRegions(mc : cross_section.analysis_input.AnalysisInput, book : plots.PlotBook):
+def PlotRegions(mc : cross_section.analysis_input.AnalysisInput, book : plotting.PlotBook):
     counts = regions.CountInRegions(mc.exclusive_process, mc.regions)
     plots.PlotConfusionMatrix(counts, list(mc.regions.keys()), list(mc.exclusive_process.keys()), y_label = "True process", x_label = "Reco region")
     book.Save()
@@ -570,7 +570,7 @@ def Analyse(args : argparse.Namespace, plot : bool = False):
 
         #* should some pre-requisit plots be made?
         if k == "pdsp":
-            with plots.PlotBook(outdir + f"pre_plots_{k}.pdf", plot) as book:
+            with plotting.PlotBook(outdir + f"pre_plots_{k}.pdf", plot) as book:
                 PlotKEs(templates[k], samples[k], args, book)
                 PlotRegions(templates[k], book)
 
@@ -631,7 +631,7 @@ def Analyse(args : argparse.Namespace, plot : bool = False):
             process = {args.signal_process : None}
 
         for p in process:
-            with plots.PlotBook(outdir + f"plots_{p}.pdf", plot) as book, styles.PlotStyler(extend_colors = False, dark = True).Update(font_scale = 1.1):
+            with plotting.PlotBook(outdir + f"plots_{p}.pdf", plot) as book, plotting.plotting.styles.PlotStyler(extend_colors = False, dark = True).Update(font_scale = 1.1):
                 if p != "all":
                     if k == "pdsp":
                         true_hists = mc_cheat.CreateHistograms(args.energy_slices, p, False, ~mc_cheat.inclusive_process)
@@ -667,7 +667,7 @@ def Analyse(args : argparse.Namespace, plot : bool = False):
             plots.plt.close("all")
         if args.fit["regions"] is True:
             process = {i : j for i, j in process["all"].items()}
-            with plots.PlotBook(outdir + "results_all_regions.pdf", plot) as book:
+            with plotting.PlotBook(outdir + "results_all_regions.pdf", plot) as book:
                 for i in process:
                     if k == "pdsp":
                         true_hists = mc_cheat.CreateHistograms(args.energy_slices, i, False)
@@ -683,14 +683,14 @@ def Analyse(args : argparse.Namespace, plot : bool = False):
     return xs
 
 def main(args):
-    styles.PlotStyler.SetPlotStyle(extend_colors = False, dark = True)
+    plotting.plotting.styles.PlotStyler.SetPlotStyle(extend_colors = False, dark = True)
     args.out = args.out + "measurement/"
 
     xs = Analyse(args, True)
 
     io.SaveObject(args.out + "xs.dill", xs)
 
-    with plots.PlotBook(args.out + "results.pdf") as book:
+    with plotting.PlotBook(args.out + "results.pdf") as book:
         colours = {f"{label_map[k]} Data" : f"C{i}" for i, k in enumerate(xs.keys())}
         for p in list(xs.values())[0]:
             data = {f"{label_map[k]} Data" : xs[k][p] for k in xs.keys()}

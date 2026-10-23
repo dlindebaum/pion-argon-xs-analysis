@@ -5,7 +5,8 @@ import awkward as ak
 import numpy as np
 import pandas as pd
 
-from python.analysis import plots
+from python.analysis import plotting
+from python.analysis.plotting import plots
 
 x_label = {
     "track_score_all" : "Track score", 
@@ -149,7 +150,7 @@ def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, n
         norm (float): plot normalisation
     """
     norm = False if output_data is None else norm
-    with plots.PlotBook(outDir + f"{book_name}.pdf") as pdf:
+    with plotting.PlotBook(outDir + f"{book_name}.pdf") as pdf:
 
         for p in ["PiBeamSelection_endz", "no_selection_endz", "selection_endz"]:
             if p in output_mc:
@@ -202,7 +203,7 @@ def MakeBeamSelectionPlots(output_mc : dict, output_data : dict, outDir : str, n
 def MakePFOSelectionPlots(output_mc : dict, output_data : dict, outDir : str, norm : float, book_name : str):
     norm = False if output_data is None else norm
 
-    with plots.PlotBook(outDir + book_name) as pdf:
+    with plotting.PlotBook(outDir + book_name) as pdf:
 
         for p in output_mc:
             if p in x_label:
@@ -223,7 +224,7 @@ def MakePFOSelectionPlots(output_mc : dict, output_data : dict, outDir : str, no
 def MakePFOSelectionPlotsConsdensed(output_mc : dict, output_mc_loose : dict, output_data : dict, output_data_loose : dict, outDir : str, norm : float, book_name : str):
     norm = False if output_data is None else norm
 
-    with plots.PlotBook(outDir + book_name) as pdf:
+    with plotting.PlotBook(outDir + book_name) as pdf:
 
         for p in output_mc_loose:
             if p in x_label:
@@ -263,7 +264,7 @@ def MakePi0SelectionPlots(output_mc : dict, output_data : dict, outDir : str, no
     """
     norm = False if output_data is None else norm
 
-    with plots.PlotBook(outDir + "pi0.pdf") as pdf:
+    with plotting.PlotBook(outDir + "pi0.pdf") as pdf:
         if "NPhotonCandidateSelection" in output_mc:
             if output_data is not None:
                 scale = ak.count(output_data["NPhotonCandidateSelection"]["value"]) / ak.count(output_mc["NPhotonCandidateSelection"]["value"])
@@ -305,7 +306,7 @@ def MakeRegionPlots(outputs_mc_masks : dict, outputs_data_masks : dict, outDir :
         outputs_data_masks (dict): data masks for each region
         outDir (str): output directory
     """
-    with plots.PlotBook(outDir + "regions.pdf") as pdf:
+    with plotting.PlotBook(outDir + "regions.pdf") as pdf:
         # Visualise the regions
         plots.plot_region_data(outputs_mc_masks["truth_regions"], compare_max=0, title="truth regions")
         pdf.Save()

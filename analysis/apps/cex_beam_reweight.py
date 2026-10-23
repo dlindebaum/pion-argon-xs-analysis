@@ -19,11 +19,11 @@ from python.analysis import common
 from python.analysis import fitting
 from python.analysis import io
 from python.analysis import ntuple
-from python.analysis import plots
+from python.analysis import plotting
 from python.analysis import selection
 from python.analysis import tags
 from python.analysis.beam import reweight
-
+from python.analysis.plotting import plots
 
 def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
 
@@ -95,7 +95,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
 @common.timer
 def main(args : argparse.Namespace):
-    plots.PlotStyler.SetPlotStyle(extend_colors = True, dpi = 100)
+    plotting.styles.PlotStyler.SetPlotStyle(extend_colors = True, dpi = 100)
     out = args.out + "beam_reweight/"
     os.makedirs(out, exist_ok = True)
 
@@ -119,11 +119,11 @@ def main(args : argparse.Namespace):
     table_mc.to_hdf(out + "selection_mc.hdf5", key = "df")
     os.makedirs(out + "plots/", exist_ok = True)
 
-    with plots.PlotBook(out + "plots/" + "reweight_fits.pdf", True) as book:
+    with plotting.PlotBook(out + "plots/" + "reweight_fits.pdf", True) as book:
         results = reweight.ReWeight(output_mc["sideband"]["p_inst"], output_data["sideband"]["p_inst"], args.beam_momentum, 20, np.array([0.75, 1.25]), book = book)
 
     for r in results:
-        with plots.PlotBook(out + "plots/" + f"reweight_results_{r}.pdf", True) as book:
+        with plotting.PlotBook(out + "plots/" + f"reweight_results_{r}.pdf", True) as book:
             reweight.ReWeightResults(output_mc["sideband"], output_data["sideband"], args, 25, results, r, book = book)
             reweight.ReWeightResults(output_mc["analysis"], output_data["analysis"], args, 50, results, r, book = book)
             reweight_params = {f"p{i}" : {"value" : results[r][0][i], "error" : results[r][1][i]} for i in range(getattr(fitting, r).n_params)}

@@ -5,7 +5,8 @@ import uproot
 
 from scipy.interpolate import interp1d
 
-from python.analysis import common, plots
+from python.analysis import common
+from python.analysis.plotting import plots
 
 GEANT_XS = os.environ["PYTHONPATH"] + "/data/g4_xs_pi_KE_100.root"
 # GEANT_XS = os.environ["PYTHONPATH"] + "/data/g4_xs.root"

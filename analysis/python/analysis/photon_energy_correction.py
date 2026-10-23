@@ -2,7 +2,8 @@ import awkward as ak
 import numpy as np
 import pandas as pd
 
-from python.analysis import fitting, plots
+from python.analysis import fitting, plotting
+from python.analysis.plotting import plots
 
 def LinearCorrection(x, p0):
     return x / p0
@@ -47,7 +48,7 @@ def CreatePFOMasks(masks : dict[ak.Array]) -> ak.Array:
     return mask
 
 
-def PhotonSelection(df : pd.DataFrame, book : plots.PlotBook = plots.PlotBook.null()):
+def PhotonSelection(df : pd.DataFrame, book : plotting.PlotBook = plotting.PlotBook.null()):
     pi0_mother = df.true_mother == 111
     counts = {"pi0_daughter" : len(pi0_mother[df.pi0_photon]), "other" : len(df.pi0_photon) - len(df.pi0_photon[df.pi0_photon])}
     print(counts)
@@ -82,7 +83,7 @@ def binned_dataframe(df : pd.DataFrame, bins : list, energy_range : list) -> lis
     return binned_data
 
 
-def linear_fit(df : pd.DataFrame, bins : np.ndarray, energy_range : list, book : plots.PlotBook = plots.PlotBook.null()) -> float:
+def linear_fit(df : pd.DataFrame, bins : np.ndarray, energy_range : list, book : plotting.PlotBook = plotting.PlotBook.null()) -> float:
     """ perform linear fit of true energy vs reco energy, equivalent to the correction done in the microboone simulation paper.
         #TODO implment using fitting module instead.
     Args:
@@ -117,7 +118,7 @@ def linear_fit(df : pd.DataFrame, bins : np.ndarray, energy_range : list, book :
     return popt[0]
 
 
-def LinearFitPerformance(df : pd.DataFrame, linear_correction : float, book : plots.PlotBook = plots.PlotBook.null()):
+def LinearFitPerformance(df : pd.DataFrame, linear_correction : float, book : plotting.PlotBook = plotting.PlotBook.null()):
     """ Performance plots and metrics of linear correction.
 
     Args:
@@ -176,7 +177,7 @@ def create_bins_df(value : pd.Series, n_entries, v_range : list = None) -> np.nd
     return np.array(bins)
 
 
-def CalculateCentralValues(df : pd.date_range, bins : np.ndarray, book : plots.PlotBook) -> dict:
+def CalculateCentralValues(df : pd.date_range, bins : np.ndarray, book : plotting.PlotBook) -> dict:
     central_values = {}
 
     with plots.PlotStyler().Update(font_scale = 1.3):
@@ -190,7 +191,7 @@ def CalculateCentralValues(df : pd.date_range, bins : np.ndarray, book : plots.P
     return central_values
 
 
-def ResponseFits(central_values : dict, bins : np.ndarray, book : plots.PlotBook) -> dict:
+def ResponseFits(central_values : dict, bins : np.ndarray, book : plotting.PlotBook) -> dict:
     x = (bins[1:] + bins[:-1]) / 2
     response_params = {}
 
@@ -214,7 +215,7 @@ def ResponseFits(central_values : dict, bins : np.ndarray, book : plots.PlotBook
     return response_params
 
 
-def MethodComparison(df : pd.DataFrame, linear_correction : float, response_params : dict, bins : np.ndarray, energy_range : list, book : plots.PlotBook):
+def MethodComparison(df : pd.DataFrame, linear_correction : float, response_params : dict, bins : np.ndarray, energy_range : list, book : plotting.PlotBook):
     energies = {"uncorrected" : df.reco_shower_energy, "linear" : df.reco_shower_energy / linear_correction}
 
     for p in response_params:

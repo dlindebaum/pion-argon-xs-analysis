@@ -86,7 +86,7 @@ def main(args : application.argparse.Namespace):
     outdir = args.out + "xs_measurement/"
     os.makedirs(outdir, exist_ok = True)
 
-    with plots.PlotBook(f"{outdir}cross_section_plots") as book:
+    with plotting.PlotBook(f"{outdir}cross_section_plots") as book:
         if postfit_cross_sections is None:
             for k, v in prefit_cross_sections.items():
                 plotting.PlotCrossSection({"prefit" : v}, args.energy_slices, k, [1000, 2000])

@@ -2,7 +2,8 @@
 import argparse
 import numpy as np
 
-from python.analysis import common, fitting, plots
+from python.analysis import common, fitting, plotting
+from python.analysis.plotting import plots
 
 
 def RatioWeights(beam_inst_P : np.ndarray, func : str, params : list, truncate : int = 10):
@@ -11,7 +12,7 @@ def RatioWeights(beam_inst_P : np.ndarray, func : str, params : list, truncate :
     return weights
 
 
-def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.array = np.array([0.75, 1.25]), book : plots.PlotBook = plots.PlotBook.null()):
+def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.array = np.array([0.75, 1.25]), book : plotting.PlotBook = plotting.PlotBook.null()):
     p_mc, edges = np.histogram(np.array(p_MC), bins, range = p_nominal * p_range)
     p_data = np.histogram(np.array(p_Data), bins, range = p_nominal * p_range)[0]
 
@@ -36,7 +37,7 @@ def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.arra
     return results
 
 
-def ReWeightResults(sideband_mc : dict, sideband_data : dict, args : argparse.Namespace, bins : int, reweight_results : dict, reweight_func : str, book : plots.PlotBook = plots.PlotBook.null()):
+def ReWeightResults(sideband_mc : dict, sideband_data : dict, args : argparse.Namespace, bins : int, reweight_results : dict, reweight_func : str, book : plotting.PlotBook = plotting.PlotBook.null()):
     weights = RatioWeights(np.array(sideband_mc["p_inst"]), reweight_func, reweight_results[reweight_func][0], args.beam_reweight["strength"])
 
     plot_range = [args.beam_momentum * 0.75, args.beam_momentum * 1.25]

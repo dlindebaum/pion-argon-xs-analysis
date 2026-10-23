@@ -4,7 +4,8 @@ import numpy as np
 
 from particle import Particle
 
-from python.analysis import bethe_bloch, common, fitting, kinematics, selection, ntuple, plots
+from python.analysis import bethe_bloch, common, fitting, kinematics, selection, ntuple
+from python.analysis.plotting import plots
 
 
 def IsScraper(mc : ntuple.Data, beam_scraper_args : dict) -> ak.Array:

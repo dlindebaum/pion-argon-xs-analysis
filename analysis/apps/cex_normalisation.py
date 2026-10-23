@@ -18,7 +18,7 @@ from python.analysis import application
 from python.analysis import common
 from python.analysis import io
 from python.analysis import ntuple
-from python.analysis import plots
+from python.analysis import plotting
 from python.analysis import styles
 from python.analysis import tags
 from python.analysis.selection import beam
@@ -46,8 +46,8 @@ def main(args):
     n_mc = ak.sum(outputs["mc"]["mask"])
     norm = round(n_data / n_mc, 3)
 
-    with plots.PlotBook(outdir + "plots.pdf") as book:
-        plots.PlotTags(outputs["mc"]["tags"], "True particle ID")
+    with plotting.PlotBook(outdir + "plots.pdf") as book:
+        plotting.plots.PlotTags(outputs["mc"]["tags"], "True particle ID")
         book.Save()
 
     io.SaveConfiguration({"norm" : norm, "mc" : int(n_mc), "data" : int(n_data)}, outdir + "norm.json")
