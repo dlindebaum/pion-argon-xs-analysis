@@ -12,6 +12,56 @@ from . import beam, event
 from python.analysis import cuts, io, ntuple, photon_energy_correction, tags
 from python.analysis.beam import scraper
 
+
+def MergeSelectionMasks(output):
+    files = output["name"]
+
+    masks ={}
+    for k, v in output.items():
+        if (k not in ["name", "regions"]) and (len(v) > 0):
+            masks[k] = v["masks"]
+
+    unique_files = np.unique(files)
+
+    merged_masks = {}
+
+    for i, file in enumerate(unique_files):
+        merged_masks[file] = {} 
+        for k, v in masks.items():
+            merged_v = []
+            for j, f in zip(v, files):
+                if f == file:
+                    merged_v.append(j)
+            merged_masks[file][k] = merged_v
+
+    for f in merged_masks:
+        selection_masks = {}
+        for t in merged_masks[f]:
+            m = {}
+            for i in merged_masks[f][t]:
+                for k, v in i.items():
+                    if k not in m:
+                        m[k] = v
+                    else:
+                        m[k] = ak.concatenate([m[k], v])
+            selection_masks[t] = m
+        merged_masks[f] = selection_masks
+
+    sorted_masks = {}
+    for f in merged_masks:
+        for k, v in merged_masks[f].items():
+            if k not in sorted_masks:
+                sorted_masks[k] = [v]
+            else:
+                sorted_masks[k].append(v)
+
+    for k in output:
+        if (k not in ["name", "regions"]) and (k in sorted_masks):
+            output[k]["masks"] = sorted_masks[k]
+    output["name"] = list(merged_masks.keys())
+    return output
+
+
 def merge_multiproccess_output(outputs : list) -> dict:
     """ Merge multiprocessing output into a single dictionary.
 
@@ -96,7 +146,7 @@ def SaveMasks(output : dict, out : str):
         io.SaveObject(out + f"{k}_selection_masks.dill", masks[k])
 
 
-def MakeOutput(value : ak.Array, tags : tags.Tags, cuts : list = [], op : list = [], fs_tags : tags.Tags = None) -> dict:
+def MakeOutput(value : ak.Array, event_tags : tags.Tags, cuts : list = [], op : list = [], fs_tags : tags.Tags = None) -> dict:
     """ Output dictionary for multiprocessing class, if we want to be fancy this can be a dataclass instead.
         Generally the data stored in this dictionary should be before any cuts are applied, for plotting purposes.
 
@@ -110,13 +160,13 @@ def MakeOutput(value : ak.Array, tags : tags.Tags, cuts : list = [], op : list =
     Returns:
         dict: dictionary of data.
     """
-    return {"value" : value, "tags" : tags, "cuts" : cuts, "op" : op, "fs_tags" : fs_tags}
+    return {"value" : value, "tags" : event_tags, "cuts" : cuts, "op" : op, "fs_tags" : fs_tags}
 
 
 def AnalyseBeamFiducialCut(events : ntuple.Data, beam_instrumentation : bool, functions : dict, args : dict):
     output = {}
     masks = {}
-    cut_table = cuts.CutHandler(events, tags = tags.GenerateTrueBeamParticleTags(events) if beam_instrumentation is False else None)
+    cut_table = cuts.CutHandler(events, particle_tags = tags.GenerateTrueBeamParticleTags(events) if beam_instrumentation is False else None)
     output["no_selection"] = MakeOutput(None, tags.GenerateTrueBeamParticleTags(events), None, None, event.GenerateTrueFinalStateTags(events))
     if "TrueFiducialCut" in args:
         masks = {k : functions[k](events, **v) for k, v in args.items() if k in ["APA3Cut", "TrueFiducialCut"]}
@@ -151,7 +201,7 @@ def AnalyseBeamSelection(events : ntuple.Data, beam_instrumentation : bool, func
         dict: output data.
     """
     output = {}
-    cut_table = cuts.CutHandler(events, tags = tags.GenerateTrueBeamParticleTags(events) if beam_instrumentation is False else None)
+    cut_table = cuts.CutHandler(events, particle_tags = tags.GenerateTrueBeamParticleTags(events) if beam_instrumentation is False else None)
 
     output["no_selection"] = MakeOutput(None, tags.GenerateTrueBeamParticleTags(events), None, None, event.GenerateTrueFinalStateTags(events))
     output["no_selection_endz"] = MakeOutput(events.recoParticles.beam_endPos_SCE.z, tags.GenerateTrueBeamParticleTags(events), None, None)
@@ -206,7 +256,7 @@ def AnalysePFOSelection(events : ntuple.Data, data : bool, functions : dict, arg
         dict: output data
     """
     output = {}
-    cut_table = cuts.CutHandler(events, tags = tags.GenerateTrueParticleTagsInterestingPFOs(events))
+    cut_table = cuts.CutHandler(events, particle_tags = tags.GenerateTrueParticleTagsInterestingPFOs(events))
 
     for a in args:
         if a in ["NHitsCut", "BeamParticleIPCut"]:
@@ -238,7 +288,7 @@ def AnalysePiPlusSelection(events : ntuple.Data, data : bool, functions : dict, 
         dict: output data
     """
     output = {}
-    cut_table = cuts.CutHandler(events, tags = tags.GenerateTrueParticleTagsPiPlus(events))
+    cut_table = cuts.CutHandler(events, particle_tags = tags.GenerateTrueParticleTagsPiPlus(events))
 
     for a in args:
         if a == "NHitsCut":
@@ -270,7 +320,7 @@ def AnalysePhotonCandidateSelection(events : ntuple.Data, data : bool, functions
         dict: output data
     """
     output = {}
-    cut_table = cuts.CutHandler(events, tags = tags.GenerateTrueParticleTagsPi0Shower(events) if data is False else None)
+    cut_table = cuts.CutHandler(events, particle_tags = tags.GenerateTrueParticleTagsPi0Shower(events) if data is False else None)
 
     for a in args:
         if a in ["NHitsCut", "BeamParticleIPCut"]:
@@ -311,7 +361,7 @@ def AnalysePi0Selection(events : ntuple.Data, data : bool, functions : dict, arg
 
     output = {}
     photonCandidates = ak.Array(photon_mask)
-    cut_table = cuts.CutHandler(events, tags = tags.GeneratePi0Tags(events, photon_mask) if data is False else None)
+    cut_table = cuts.CutHandler(events, particle_tags = tags.GeneratePi0Tags(events, photon_mask) if data is False else None)
 
     for a in args:
         if a == "Pi0MassSelection":
@@ -324,16 +374,16 @@ def AnalysePi0Selection(events : ntuple.Data, data : bool, functions : dict, arg
         cut_table.add_mask(mask, a)
         cut_values = args[a]["cut"] if "cut" in args[a] else None
         operations = args[a]["op"] if "op" in args[a] else None
-        tags = null_tag() if data else tags.GeneratePi0Tags(events, photonCandidates)
-        output[a] = MakeOutput(property, tags, cut_values, operations)
+        pi0_tags = null_tag() if data else tags.GeneratePi0Tags(events, photonCandidates)
+        output[a] = MakeOutput(property, pi0_tags, cut_values, operations)
         events.Filter([mask], [mask])
         photonCandidates = photonCandidates[mask]
         output[a]["fs_tags"] = event.GenerateTrueFinalStateTags(events)
 
     #* final counts
     output["event_tag"] = MakeOutput(None, event.GenerateTrueFinalStateTags(events), None, None)
-    tags = null_tag() if data else tags.GeneratePi0Tags(events, photonCandidates)
-    output["final_tags"] = MakeOutput(None, tags, None, None)
+    pi0_tags = null_tag() if data else tags.GeneratePi0Tags(events, photonCandidates)
+    output["final_tags"] = MakeOutput(None, pi0_tags, None, None)
 
     df = cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, pfos = False)
     print(df)

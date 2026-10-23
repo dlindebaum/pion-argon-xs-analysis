@@ -1422,7 +1422,7 @@ def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float
     plt.annotate("", xy = xy1, xytext = xy0, arrowprops=dict(facecolor = color, edgecolor = color, arrowstyle = "->"), xycoords= transform)
 
 
-def PlotTagged(data : np.array, tags : tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False, title : str = "", newFigure : bool = True, stacked : bool = True, alpha : float = None, truncate : bool = False, histtype : str = "stepfilled", reverse_sort : bool = False, data_weights : np.array = None):
+def PlotTagged(data : np.array, sample_tags : tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False, title : str = "", newFigure : bool = True, stacked : bool = True, alpha : float = None, truncate : bool = False, histtype : str = "stepfilled", reverse_sort : bool = False, data_weights : np.array = None):
     """ Makes a stacked histogram and splits the sample based on tags.
 
     Args:
@@ -1436,7 +1436,7 @@ def PlotTagged(data : np.array, tags : tags.Tags, bins = 100, x_range : list = N
         ncols (int, optional): number of columns in legend. Defaults to 2.
         data2 (np.array): second sample to plot. if specified it will make a data MC plot (data is MC, data2 is Data).
     """
-    split_data = [ak.ravel(data[tags[t].mask]) for t in tags]
+    split_data = [ak.ravel(data[sample_tags[t].mask]) for t in sample_tags]
 
     sorted_index = np.argsort(ak.num(split_data))[::-1]
     if reverse_sort:
@@ -1444,14 +1444,14 @@ def PlotTagged(data : np.array, tags : tags.Tags, bins = 100, x_range : list = N
     split_data = [split_data[i] for i in sorted_index]
 
     if data_weights is not None:
-        split_weights = [ak.ravel(data_weights[tags[t].mask]) for t in tags]
+        split_weights = [ak.ravel(data_weights[sample_tags[t].mask]) for t in sample_tags]
         split_weights = [np.array(split_weights[i]) for i in sorted_index]
     else:
         split_weights = None
 
     sorted_tags = tags.Tags()
     for i in sorted_index:
-        sorted_tags[tags.number[i].name] = tags.number[i]
+        sorted_tags[sample_tags.number[i].name] = sample_tags.number[i]
 
     colours = sorted_tags.colour.values
     if ak.any(ak.is_none(colours)):
@@ -1607,14 +1607,14 @@ def PlotStackedBar(bars, labels, xlabel : str = None, colours : list = None, alp
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
-def PlotTags(tags : tags.Tags, xlabel : str = "name", fraction : bool = True, newFigure : bool = True, display_values : bool = False):
+def PlotTags(sample_tags : tags.Tags, xlabel : str = "name", fraction : bool = True, newFigure : bool = True, display_values : bool = False):
     if newFigure: plt.figure()    
-    counts = [ak.sum(m) for m in tags.mask.values]
+    counts = [ak.sum(m) for m in sample_tags.mask.values]
     yl = "Counts"
     if fraction is True:
         counts = counts / np.sum(counts)
         yl = "Fractional counts"
-    bar = plt.bar(tags.name.values, counts, color = tags.colour.values)
+    bar = plt.bar(sample_tags.name.values, counts, color = sample_tags.colour.values)
     plt.xlabel(xlabel)
     plt.ylabel(yl)
     if display_values: plt.bar_label(bar)

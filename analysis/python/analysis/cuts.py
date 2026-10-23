@@ -136,7 +136,7 @@ class CutHandler():
             self,
             evts = None,#: Master.Data = None,
             particles_to_tag: list = _default_particles,
-            tags : tags.Tags = None):
+            particle_tags : tags.Tags = None):
         """
         Create new a `CutHandler` object to store applied masks
         and return a table of tracked particles when asked.
@@ -179,7 +179,7 @@ class CutHandler():
 
         self._table_data = {}
 
-        self._tags = tags
+        self._tags = particle_tags
 
         return
 

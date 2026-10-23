@@ -290,8 +290,8 @@ def RecoRegionSelection(region_selections : dict[dict], args : argparse.Namespac
 
         process_keys = [k for k in true_regions if k != "uncategorised"]
         if pe_index_labels is None:
-            tags = tags.ExclusiveProcessTags({k : None for k in process_keys})
-            pe_index_labels = tags.name_simple.values
+            process_tags = tags.ExclusiveProcessTags({k : None for k in process_keys})
+            pe_index_labels = process_tags.name_simple.values
 
         counts = np.array(regions.CountInRegions(true_regions, reco_regions))
         plots.plt.figure(figsize = [3 * 6.4, 3 * 4.8])
@@ -330,7 +330,7 @@ def MeanTrackScoreKDE(mean_track_score : ak.Array, true_processes : dict[ak.Arra
         args (argparse.Namespace): application arguments.
     """
     true_processes_filtered = {k : v for k, v in true_processes.items() if k != "uncategorised"}
-    tags = tags.ExclusiveProcessTags(true_processes_filtered)
+    process_tags = tags.ExclusiveProcessTags(true_processes_filtered)
 
     kdes = {}
     for k, v in true_processes_filtered.items():
@@ -339,14 +339,14 @@ def MeanTrackScoreKDE(mean_track_score : ak.Array, true_processes : dict[ak.Arra
 
     os.makedirs(out + "meanTrackScoreKDE/", exist_ok = True)
     with plotting.PlotBook(out + "meanTrackScoreKDE/plots.pdf", True) as book:
-        plots.PlotTagged(mean_track_score, tags, 21, [0, 1], x_label = "mean track score", stacked = False, histtype = "step", norm = True)
+        plots.PlotTagged(mean_track_score, process_tags, 21, [0, 1], x_label = "mean track score", stacked = False, histtype = "step", norm = True)
         book.Save()
 
         x = np.linspace(0, 1, 1000)
 
-        plots.PlotTagged(mean_track_score, tags, 21, [0, 1], x_label = "mean track score", stacked = False, histtype = "step", norm = True)
-        for tag in tags:
-            plots.Plot(x, kdes[tag].evaluate(x), color = tags[tag].colour, label = common.remove_(tag) + " KDE", newFigure = False)
+        plots.PlotTagged(mean_track_score, process_tags, 21, [0, 1], x_label = "mean track score", stacked = False, histtype = "step", norm = True)
+        for tag in process_tags:
+            plots.Plot(x, kdes[tag].evaluate(x), color = process_tags[tag].colour, label = common.remove_(tag) + " KDE", newFigure = False)
         book.Save()
 
     io.SaveObject(out + "meanTrackScoreKDE/kdes.dill", kdes)

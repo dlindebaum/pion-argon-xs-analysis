@@ -27,11 +27,11 @@ def GenerateTrueFinalStateTags(events : Data = None) -> tags.Tags:
         Tags: tags
     """
     t = tags.Tags()
-    t["charge_exchange" ] = t.Tag("$1\\pi^{0} + 0\\pi^{+}$"              , "charge_exchange" , "#8EBA42", generate_truth_tags(events, 1, 0      , only_diphoton = False) if events is not None else None, 0)
-    t["absorption"      ] = t.Tag("$0\\pi^{0} + 0\\pi^{+}$"              , "absorption"      , "#777777", generate_truth_tags(events, 0, 0      , only_diphoton = False) if events is not None else None, 1)
-    t["pion_prod_1_pi0" ] = t.Tag("$1\\pi^{0} + \\geq 1\\pi^{+}$"         , "pion_prod_1_pi0" , "#E24A33", generate_truth_tags(events, 1, (1,)   , only_diphoton = False) if events is not None else None, 2)
-    t["pion_prod_0_pi0" ] = t.Tag("$0\\pi^{0} + \\geq 1\\pi^{+}$"         , "pion_prod_0_pi0" , "#988ED5", generate_truth_tags(events, 0, (1,)   , only_diphoton = False) if events is not None else None, 3)
-    t["pion_prod_>1_pi0"] = t.Tag("$> 1\\pi^{0} + \\geq 0\\pi^{+}$"       , "pion_prod_>1_pi0", "#348ABD", generate_truth_tags(events, (2,), (0,), only_diphoton = False) if events is not None else None, 4)
+    t["charge_exchange" ] = tags.Tag("$1\\pi^{0} + 0\\pi^{+}$"              , "charge_exchange" , "#8EBA42", generate_truth_tags(events, 1, 0      , only_diphoton = False) if events is not None else None, 0)
+    t["absorption"      ] = tags.Tag("$0\\pi^{0} + 0\\pi^{+}$"              , "absorption"      , "#777777", generate_truth_tags(events, 0, 0      , only_diphoton = False) if events is not None else None, 1)
+    t["pion_prod_1_pi0" ] = tags.Tag("$1\\pi^{0} + \\geq 1\\pi^{+}$"         , "pion_prod_1_pi0" , "#E24A33", generate_truth_tags(events, 1, (1,)   , only_diphoton = False) if events is not None else None, 2)
+    t["pion_prod_0_pi0" ] = tags.Tag("$0\\pi^{0} + \\geq 1\\pi^{+}$"         , "pion_prod_0_pi0" , "#988ED5", generate_truth_tags(events, 0, (1,)   , only_diphoton = False) if events is not None else None, 3)
+    t["pion_prod_>1_pi0"] = tags.Tag("$> 1\\pi^{0} + \\geq 0\\pi^{+}$"       , "pion_prod_>1_pi0", "#348ABD", generate_truth_tags(events, (2,), (0,), only_diphoton = False) if events is not None else None, 4)
     return t
 
 

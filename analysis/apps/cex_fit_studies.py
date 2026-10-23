@@ -683,10 +683,10 @@ def Summary(directory : str, test_name : str, model_name : str, model : pyhf.Mod
 
 
 def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, template : cross_section.analysis_input.AnalysisInput, book : plotting.PlotBook = plotting.PlotBook.null()):
-    tags = tags.ExclusiveProcessTags(template.exclusive_process)
+    process_tags = tags.ExclusiveProcessTags(template.exclusive_process)
     for j, c in plots.IterMultiPlot(templates_energy):
         for i, s in enumerate(c):
-            plots.Plot(energy_slices.pos_overflow, s/np.sum(templates_energy), color = tags.number[i].colour, label = f"$\\lambda_{{{process_map[j]},{process_map[i]}}}$", xlabel = f"$\\lambda_{{{process_map[j]},s}}$ (MeV)", ylabel = "normalised counts", style = "step", newFigure = False)
+            plots.Plot(energy_slices.pos_overflow, s/np.sum(templates_energy), color = process_tags.number[i].colour, label = f"$\\lambda_{{{process_map[j]},{process_map[i]}}}$", xlabel = f"$\\lambda_{{{process_map[j]},s}}$ (MeV)", ylabel = "normalised counts", style = "step", newFigure = False)
         plots.plt.title(f"region : {process_map[j]}")
         plots.plt.legend(title = "process")
     book.Save()
@@ -694,7 +694,7 @@ def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : n
     if tempalates_mean_track_score is not None:
         plots.plt.figure()
         for i, s in enumerate(tempalates_mean_track_score):
-            plots.Plot(common.bin_centers(mean_track_score_bins), s/np.sum(tempalates_mean_track_score), color = tags.number[i].colour, label = f"$\\lambda_{{t,{process_map[i]}}}$", xlabel = f"$\\lambda_{{t,s}}$", ylabel = "normalised counts", style = "step", newFigure = False)
+            plots.Plot(common.bin_centers(mean_track_score_bins), s/np.sum(tempalates_mean_track_score), color = process_tags.number[i].colour, label = f"$\\lambda_{{t,{process_map[i]}}}$", xlabel = f"$\\lambda_{{t,s}}$", ylabel = "normalised counts", style = "step", newFigure = False)
         plots.plt.legend(loc = "upper left")
         book.Save()
         book.close()
@@ -822,9 +822,9 @@ def main(args : argparse.Namespace):
                 PlotShapeExamples(args.energy_slices, book)
 
         if (hasattr(args.template, "exclusive_process")) and (type(args.template.exclusive_process) == dict):
-            tags = tags.ExclusiveProcessTags({k : None for k in args.template.exclusive_process.keys()})
+            data_tags = tags.ExclusiveProcessTags({k : None for k in args.template.exclusive_process.keys()})
         else:
-            tags = tags.ExclusiveProcessTags({k : None for k in args.template.regions.keys()})
+            data_tags = tags.ExclusiveProcessTags({k : None for k in args.template.regions.keys()})
 
         test = ["shape", "normalisation", "pulls"] 
 
@@ -868,7 +868,7 @@ def main(args : argparse.Namespace):
                             print(folder[k])
                             means[folder[k]] = f"{mean:.{p}g} $\\pm$ {sem:.1g}"
                             stds[folder[k]] = f"{std:.3g}"
-                            # plots.PlotHist(pulls[k], bins = 10, title = f"$\\mu_{{{tags[k].name_simple}}}$ | mean : {mean:.3g} $\\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = False)
+                            # plots.PlotHist(pulls[k], bins = 10, title = f"$\\mu_{{{data_tags[k].name_simple}}}$ | mean : {mean:.3g} $\\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = False)
                             plots.PlotHist(pulls[k], bins = 10, xlabel = "$\\theta$", newFigure = False)
 
                         book.Save()
@@ -877,7 +877,7 @@ def main(args : argparse.Namespace):
                             std = np.std(pulls[k])
                             sem = std / np.sqrt(len(pulls[k]))
                             plots.plt.figure(figsize = (6.4, 5))
-                            # plots.PlotHist(pulls[k], bins = 10, title = f"$\\mu_{{{tags[k].name_simple}}}$ | mean : {mean:.3g} $\\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = True)
+                            # plots.PlotHist(pulls[k], bins = 10, title = f"$\\mu_{{{data_tags[k].name_simple}}}$ | mean : {mean:.3g} $\\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = True)
                             plots.PlotHist(pulls[k], bins = 10, xlabel = "$\\theta$", newFigure = False)
                             # plots.plt.ylabel(plots.plt.gca().yaxis.get_label_text(), loc = "bottom")
                             book.Save()
@@ -896,7 +896,7 @@ def main(args : argparse.Namespace):
                             if (t == "shape"):
                                 PlotCrossCheckResultsShape(results_total[f], results_bins[f], args.energy_slices.pos_overflow, args.fit["single_bin"], pdf)
                             else:
-                                PlotCrossCheckResults(f"$\\mathcal{{N}}_{{{tags[f].name_simple}}}$", results_total[f], results_bins[f], args.energy_slices.pos_overflow, pdf, args.fit["single_bin"], [-0.02, 0.06])
+                                PlotCrossCheckResults(f"$\\mathcal{{N}}_{{{data_tags[f].name_simple}}}$", results_total[f], results_bins[f], args.energy_slices.pos_overflow, pdf, args.fit["single_bin"], [-0.02, 0.06])
                         plots.plt.close("all")
                 
                     with plotting.PlotBook(outdir + f"{t}_test_{m}/summary_plots.pdf", True) as book:

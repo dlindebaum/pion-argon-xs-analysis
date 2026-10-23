@@ -124,8 +124,8 @@ def RecoRegionSelection(region_selections : dict[dict], out : str):
 
         process_keys = [k for k in true_regions if k != "uncategorised"]
         if pe_index_labels is None:
-            tags = tags.ExclusiveProcessTags({k : None for k in process_keys})
-            pe_index_labels = tags.name_simple.values
+            process_tags = tags.ExclusiveProcessTags({k : None for k in process_keys})
+            pe_index_labels = process_tags.name_simple.values
 
         counts = np.array(CountInRegions(true_regions, reco_regions))
         plots.plt.figure(figsize = [3 * 6.4, 3 * 4.8])

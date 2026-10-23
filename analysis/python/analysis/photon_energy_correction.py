@@ -180,7 +180,7 @@ def create_bins_df(value : pd.Series, n_entries, v_range : list = None) -> np.nd
 def CalculateCentralValues(df : pd.date_range, bins : np.ndarray, book : plotting.PlotBook) -> dict:
     central_values = {}
 
-    with plots.PlotStyler().Update(font_scale = 1.3):
+    with plotting.styles.PlotStyler().Update(font_scale = 1.3):
         for k, v in {"student_t" : fitting.student_t, "gaussian" : fitting.gaussian}.items():
             central_values[k] = fitting.ExtractCentralValues_df(df, "reco_shower_energy", "fractional_error", [-1, 1], [v], bins, 20, bin_label = "$E^{reco}$", bin_units = "(MeV)")
             book.Save()

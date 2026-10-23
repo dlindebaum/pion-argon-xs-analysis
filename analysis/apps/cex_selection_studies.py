@@ -52,7 +52,7 @@ def run(i, file : ntuple.FileDescriptor, n_events, start, selected_events, args)
     if "valid_pfo_selection" in args:
         print("PFO pre-selection")
         good_PFO_mask = selection.pfo.GoodShowerSelection(events)
-        good_PFO_cut_table = cuts.CutHandler(events, tags = None)
+        good_PFO_cut_table = cuts.CutHandler(events, particle_tags = None)
         good_PFO_cut_table.add_mask(good_PFO_mask, "GoodShowerSelection")
         events.Filter([good_PFO_mask])
         output["null_pfo"] = {"table" : good_PFO_cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, events = False), "masks" : {"ValidPFOSelection" : good_PFO_mask}}

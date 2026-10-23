@@ -76,10 +76,10 @@ class GeantCrossSections:
             self.__PlotAll(title = title)
         else:
             if label is None:
-                label = remove_(xs)
+                label = common.remove_(xs)
             else:
                 if title is None:
-                    title = remove_(xs).capitalize()
+                    title = common.remove_(xs).capitalize()
             if xs == "single_pion_production":
                 y = self.quasielastic + self.double_charge_exchange
             elif xs == "pion_production" and simplified_pion_production is True:

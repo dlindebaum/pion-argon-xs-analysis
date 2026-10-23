@@ -182,9 +182,9 @@ def PlotBkgRegions(energy_slices : slices.Slies, data : cross_section.analysis_i
     exclusive_tags = tags.ExclusiveProcessTags({k : None for k in N_int_regions.keys()})
 
     for r in N_int_regions:
-        cross_section.plotting.PlotXSHists(energy_slices, N_int_regions[r], xlabel = "$KE$ (MeV)", label = f"$N^{{Data}}_{{{exclusive_tags[r].name_simple}}}$", title = common.remove_(r).capitalize(), color = "k")
+        cross_section.plots.PlotXSHists(energy_slices, N_int_regions[r], xlabel = "$KE$ (MeV)", label = f"$N^{{Data}}_{{{exclusive_tags[r].name_simple}}}$", title = common.remove_(r).capitalize(), color = "k")
         for b, be, bl in zip(bkg[r], bkg_err[r], bkg_label[r]):
-            cross_section.plotting.PlotXSHists(energy_slices, b, be, label = f"$N^{{Bkg}}_{{{exclusive_tags[bl].name_simple}}}$", newFigure = False, color = tags[bl].colour)
+            cross_section.plots.PlotXSHists(energy_slices, b, be, label = f"$N^{{Bkg}}_{{{exclusive_tags[bl].name_simple}}}$", newFigure = False, color = tags[bl].colour)
         plots.plt.legend(fontsize = 12, ncols = 1, loc = "upper left")
         book.Save()
     return
@@ -275,8 +275,8 @@ def PlotDataBkgSub(hist_data : dict[np.ndarray], hist_data_err : dict[np.ndarray
         histograms_mc_reco.pop("int_ex")
         N_ex_MC = {l : mc.NInteract(energy_slices, mc.exclusive_process[l], mask = mc.regions[l], weights = mc.weights) for l in mc.regions}
         for i in histograms_mc_reco:
-            cross_section.plotting.PlotXSHists(energy_slices, histograms_mc_reco[i], None, True, scale, label = mc_label, color = "C1", title = labels[i])
-            cross_section.plotting.PlotXSHists(energy_slices, hist_data[i], hist_data_err[i], True, newFigure = False, label = data_label, color = "k")
+            cross_section.plots.PlotXSHists(energy_slices, histograms_mc_reco[i], None, True, scale, label = mc_label, color = "C1", title = labels[i])
+            cross_section.plots.PlotXSHists(energy_slices, hist_data[i], hist_data_err[i], True, newFigure = False, label = data_label, color = "k")
             plots.plt.legend(loc = "upper left")
             book.Save()
         for i in N_ex_MC:
@@ -284,18 +284,18 @@ def PlotDataBkgSub(hist_data : dict[np.ndarray], hist_data_err : dict[np.ndarray
             print(f'data : {sum(hist_data["int_ex"][i])}')
             print(f'mc : {scale * sum(N_ex_MC[i])}')
             print(sum(hist_data["int_ex"][i]) / (scale * sum(N_ex_MC[i])))
-            cross_section.plotting.PlotXSHists(energy_slices, N_ex_MC[i], title = f"$N_{{int, {process_labels[i]}}}$", label = mc_label, color = "C1", scale = scale)
-            cross_section.plotting.PlotXSHists(energy_slices, hist_data["int_ex"][i], hist_data_err["int_ex"][i], newFigure = False, label = data_label, color = "k")
+            cross_section.plots.PlotXSHists(energy_slices, N_ex_MC[i], title = f"$N_{{int, {process_labels[i]}}}$", label = mc_label, color = "C1", scale = scale)
+            cross_section.plots.PlotXSHists(energy_slices, hist_data["int_ex"][i], hist_data_err["int_ex"][i], newFigure = False, label = data_label, color = "k")
             plots.plt.legend(loc = "upper left")
             book.Save()
     else:
         for i in hist_data:
-            cross_section.plotting.PlotXSHists(energy_slices, histograms_mc_reco[i], scale = scale, title = labels[i], label = mc_label, color = "C1")
-            cross_section.plotting.PlotXSHists(energy_slices, hist_data[i], hist_data_err[i], newFigure = False, label = data_label, color = "k")
+            cross_section.plots.PlotXSHists(energy_slices, histograms_mc_reco[i], scale = scale, title = labels[i], label = mc_label, color = "C1")
+            cross_section.plots.PlotXSHists(energy_slices, hist_data[i], hist_data_err[i], newFigure = False, label = data_label, color = "k")
             book.Save()
 
-        cross_section.plotting.PlotXSHists(energy_slices, histograms_mc_reco["int_ex"], scale = scale, title = labels["int_ex"]  + ":" + sample_name, label = mc_label, color = "C1")
-        cross_section.plotting.PlotXSHists(energy_slices,hist_data["int_ex"], hist_data_err["int_ex"], newFigure = False, label = f"{data_label}, background subtracted", color = "k")
+        cross_section.plots.PlotXSHists(energy_slices, histograms_mc_reco["int_ex"], scale = scale, title = labels["int_ex"]  + ":" + sample_name, label = mc_label, color = "C1")
+        cross_section.plots.PlotXSHists(energy_slices,hist_data["int_ex"], hist_data_err["int_ex"], newFigure = False, label = f"{data_label}, background subtracted", color = "k")
         plots.plt.legend(loc = "upper left")
         book.Save()
 
@@ -340,8 +340,8 @@ def ApplyEfficiency(energy_slices : slices.Slies, efficiencies, unfolding_result
                 err = common.quadsum([hist_unfolded_efficiency_corrected[k]["stat_err"], hist_unfolded_efficiency_corrected[k]["sys_err"]], 0)
             else:
                 err = hist_unfolded_efficiency_corrected[k]["stat_err"]
-            cross_section.plotting.PlotXSHists(energy_slices, hist_unfolded_efficiency_corrected[k]["unfolded"], err, False, color = "C4", label = "Data unfolded, efficiency corrected", newFigure = True)
-            cross_section.plotting.PlotXSHists(energy_slices, true[k], None, False, norm, color = "C1", label = "true, scaled to data", newFigure = False, title = labels[k])
+            cross_section.plots.PlotXSHists(energy_slices, hist_unfolded_efficiency_corrected[k]["unfolded"], err, False, color = "C4", label = "Data unfolded, efficiency corrected", newFigure = True)
+            cross_section.plots.PlotXSHists(energy_slices, true[k], None, False, norm, color = "C1", label = "true, scaled to data", newFigure = False, title = labels[k])
             plots.plt.ylim(top = 1.1 * max(plots.plt.gca().get_ylim()))
             plots.plt.legend(loc = "upper left")
             book.Save()
@@ -662,7 +662,7 @@ def Analyse(args : argparse.Namespace, plot : bool = False):
 
                 process[p] = XSUnfold(unfolding_result, args.energy_slices, unfolding_stat, True, regions = args.fit["regions"])
                 if args.fit["regions"] is False:
-                    cross_section.plotting.PlotXSComparison({f"{label_map[k]} Data reco" : process[p], f"{label_map[k]} MC truth" : xs_true}, args.energy_slices, p, {f"{label_map[k]} Data reco" : "C0", f"{label_map[k]} MC truth" : "C1"}, simulation_label = "Geant4 v10.6")
+                    cross_section.plots.PlotXSComparison({f"{label_map[k]} Data reco" : process[p], f"{label_map[k]} MC truth" : xs_true}, args.energy_slices, p, {f"{label_map[k]} Data reco" : "C0", f"{label_map[k]} MC truth" : "C1"}, simulation_label = "Geant4 v10.6")
                     book.Save()
             plots.plt.close("all")
         if args.fit["regions"] is True:
@@ -674,7 +674,7 @@ def Analyse(args : argparse.Namespace, plot : bool = False):
                     else:
                         true_hists = templates[k].CreateHistograms(args.energy_slices, i, False, ~templates[k].inclusive_process)
                     xs_true = slices.energy_slice.CrossSection(true_hists["int_ex"][1:-1], true_hists["int"][1:-1], true_hists["inc"][1:-1], bethe_bloch.mean_dEdX(args.energy_slices.pos_bins[1:-1], Particle.from_pdgid(211)), args.energy_slices.width)
-                    cross_section.plotting.PlotXSComparison({f"{label_map[k]} Data reco" : process[i], f"{label_map[k]} MC truth" : xs_true}, args.energy_slices, i, {f"{label_map[k]} Data reco" : "C0", f"{label_map[k]} MC truth" : "C1"}, simulation_label = "Geant4 v10.6")
+                    cross_section.plots.PlotXSComparison({f"{label_map[k]} Data reco" : process[i], f"{label_map[k]} MC truth" : xs_true}, args.energy_slices, i, {f"{label_map[k]} Data reco" : "C0", f"{label_map[k]} MC truth" : "C1"}, simulation_label = "Geant4 v10.6")
                     book.Save()
             plots.plt.close("all")
         print(f"{process=}")
@@ -694,7 +694,7 @@ def main(args):
         colours = {f"{label_map[k]} Data" : f"C{i}" for i, k in enumerate(xs.keys())}
         for p in list(xs.values())[0]:
             data = {f"{label_map[k]} Data" : xs[k][p] for k in xs.keys()}
-            cross_section.plotting.PlotXSComparison(data, args.energy_slices, p, colours, simulation_label = "Geant4 v10.6")
+            cross_section.plots.PlotXSComparison(data, args.energy_slices, p, colours, simulation_label = "Geant4 v10.6")
             book.Save()
     return
 

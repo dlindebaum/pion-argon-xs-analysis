@@ -16,13 +16,11 @@ from rich import print
 
 from python.analysis import application
 from python.analysis import bethe_bloch
-from python.analysis import cross_section
 from python.analysis import io
-from python.analysis import plots
+from python.analysis import plotting
 from python.analysis import samples
 from python.analysis import slices
-from python.analysis import styles
-from python.analysis.cross_section import analysis_input, fit_output, plotting
+from python.analysis.cross_section import analysis_input, fit_output, plots
 
 def extract_cross_sections(analysis_input : analysis_input.AnalysisInput, energy_slices : slices.Slices, process_definitions : samples.SampleDefinition, fiducial_volume : tuple[float], posterior_tensors : np.ndarray, exclude_fiducial_volume : bool = False):
     dEdX = bethe_bloch.mean_dEdX(energy_slices.pos - energy_slices.width/2, Particle.from_pdgid(211))
@@ -71,7 +69,7 @@ def extract_cross_sections(analysis_input : analysis_input.AnalysisInput, energy
 
 
 def main(args : application.argparse.Namespace):
-    styles.PlotStyler.SetPlotStyle(dark = True)
+    plotting.styles.PlotStyler.SetPlotStyle(dark = True)
 
     ais = {k : io.LoadObject(v) for k, v in args.analysis_input.items() if "mc" in k}
 
@@ -89,17 +87,17 @@ def main(args : application.argparse.Namespace):
     with plotting.PlotBook(f"{outdir}cross_section_plots") as book:
         if postfit_cross_sections is None:
             for k, v in prefit_cross_sections.items():
-                plotting.PlotCrossSection({"prefit" : v}, args.energy_slices, k, [1000, 2000])
+                plots.PlotCrossSection({"prefit" : v}, args.energy_slices, k, [1000, 2000])
                 book.Save()
         else:
             for k, v in postfit_cross_sections.items():
-                plotting.PlotCrossSectionSteps(v, k, prefit_cross_sections[k])
+                plots.PlotCrossSectionSteps(v, k, prefit_cross_sections[k])
                 book.Save()
 
-                plotting.PlotCrossSectionMinMax(v, prefit_cross_sections[k], k, args.energy_slices)
+                plots.PlotCrossSectionMinMax(v, prefit_cross_sections[k], k, args.energy_slices)
                 book.Save()
 
-                plotting.PlotCrossSectionCL(v, prefit_cross_sections[k], k, args.energy_slices)
+                plots.PlotCrossSectionCL(v, prefit_cross_sections[k], k, args.energy_slices)
                 book.Save()
     return
 

@@ -456,7 +456,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         p_min = popt - perr #(perr * chisqr/ndf)
         p_max = popt + perr #(perr * chisqr/ndf)
 
-        plt.fill_between(x_interp, func.func(x_interp, *p_max), func.func(x_interp, *p_min), color = "#7f7f7f", alpha = 0.5, zorder = 10, label = "$1\sigma$ error region")
+        plt.fill_between(x_interp, func.func(x_interp, *p_max), func.func(x_interp, *p_min), color = "#7f7f7f", alpha = 0.5, zorder = 10, label = "$1\\sigma$ error region")
 
         if plot_style == "hist":
             marker = ""
@@ -491,8 +491,8 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         plt.gca().add_artist(main_legend)
         text = ""
         for j in range(len(popt)):
-            text += f"\n$p_{{{j}}}$: ${popt[j]:.2g}\pm${perr[j]:.2g}"
-        text += "\n$\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2g}, p : " + f"{p_value:.1g}"
+            text += f"\n$p_{{{j}}}$: ${popt[j]:.2g}\\pm${perr[j]:.2g}"
+        text += "\n$\\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2g}, p : " + f"{p_value:.1g}"
         legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], loc = loc, title = common.remove_(func.__name__))
         legend.set_zorder(12)
         for l in legend.legend_handles:
@@ -595,7 +595,7 @@ def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : st
         if best_popt is not None:
             text = ""
             for j in range(len(best_popt)):
-                text += f"\np{j}: ${best_popt[j]:.2f}\pm${best_perr[j]:.2f}"
+                text += f"\np{j}: ${best_popt[j]:.2f}\\pm${best_perr[j]:.2f}"
             text += f"\nks : {k_best:.2f}, p : {p_best:.2f}"
             legend = plt.gca().legend(handlelength = 0, labels = [text[1:]], title = best_f.__name__.replace("_", " "))
             for l in legend.legend_handles:

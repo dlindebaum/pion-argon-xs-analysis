@@ -30,6 +30,7 @@ from python.analysis import plots
 from python.analysis import processing
 from python.analysis import selection
 from python.analysis import styles
+from python.analysis import tags
 from python.analysis import toy
 from python.legacy import RegionFit
 
@@ -698,7 +699,7 @@ class NormalisationSystematic(MCMethod):
         data_stat_err = pd.DataFrame({p : xs_nominal["pdsp"][p][1] for p in xs_nominal["pdsp"]})
 
         process_keys = list(xs_nominal["pdsp"].keys())
-        tags = tags.ExclusiveProcessTags({k : None for k in process_keys})
+        process_tags = tags.ExclusiveProcessTags({k : None for k in process_keys})
 
         tables = {}
         for p in xs_nominal["pdsp"]:
@@ -1106,7 +1107,7 @@ def main(args : argparse.Namespace):
         with plotting.PlotBook(outdir + "final_plots.pdf", watermark = "DUNE: Work in Progress") as book:
             table, table_alt = FinalPlots(args.cv["pdsp"], tables, args.energy_slices, book, alt_xs = False)
 
-        tags = tags.ExclusiveProcessTags({k : None for k in table.columns})
+        process_tags = tags.ExclusiveProcessTags({k : None for k in table.columns})
         table = table.rename(index = {"w_chi2" : "$\\chi^{2}/ndf$", "p" : "$p$"}, columns={t : tags[t].name_simple.capitalize() for t in tags})
         table.style.format("{:.3g}").to_latex(outdir + "goodness_of_fit.tex")
 

@@ -10,7 +10,7 @@ from particle import Particle
 
 from .toy import Toy
 
-from python.analysis import bethe_bloch, beam, common, fitting, geometry, io, kinematics, ntuple, processing, regions, selection, slices
+from python.analysis import bethe_bloch, beam, common, fitting, geometry, io, kinematics, ntuple, processing, regions, selection, slices, vector
 
 @dataclass
 class AnalysisInput:
