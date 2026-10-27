@@ -82,7 +82,7 @@ def CreateInitParams(model : pyhf.Model, analysis_input : cross_section.analysis
     return init
 
 
-def RegionFit(fit_input : cross_section.analysis_input.AnalysisInput, energy_slice : slices.Slies, mean_track_score_bins : np.array, template_input : cross_section.analysis_input.AnalysisInput | pyhf.Model, suggest_init : bool = False, template_weights : np.array = None, return_fit_results : bool = False, mc_stat_unc : bool = False, single_bin : bool = False, fix_np : bool = False) -> cabinetry.model_utils.ModelPrediction | cross_section.FitResults:
+def RegionFit(fit_input : cross_section.analysis_input.AnalysisInput, energy_slice : slices.Slies, mean_track_score_bins : np.array, template_input : cross_section.analysis_input.AnalysisInput | pyhf.Model, suggest_init : bool = False, template_weights : np.array = None, return_fit_results : bool = False, mc_stat_unc : bool = False, single_bin : bool = False, fix_np : bool = False) -> cabinetry.model_utils.ModelPrediction | RegionFit.FitResults:
     """ Fit model to analysis input to predict the normalaisations of each process.
 
     Args:
@@ -95,7 +95,7 @@ def RegionFit(fit_input : cross_section.analysis_input.AnalysisInput, energy_sli
         return_fit_results (bool, optional): return the raw fit results as  well as the prediction. Defaults to False.
 
     Returns:
-        cabinetry.model_utils.ModelPrediction | cross_section.FitResults: model prediction and or the raw fit result.
+        cabinetry.model_utils.ModelPrediction | RegionFit.FitResults: model prediction and or the raw fit result.
     """
     if type(template_input) == cross_section.analysis_input.AnalysisInput:
         model = RegionFit.CreateModel(template_input, energy_slice, mean_track_score_bins, False, template_weights, mc_stat_unc, True, single_bin)
