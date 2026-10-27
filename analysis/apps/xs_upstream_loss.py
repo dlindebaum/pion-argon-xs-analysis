@@ -50,7 +50,7 @@ def main(args : argparse.Namespace):
     bins = ak.Array(args.upstream_loss_bins)
     x = (bins[1:] + bins[:-1]) / 2
 
-    with plotting.PlotBook(outdir + "cex_upstream_loss_plots.pdf") as pdf:
+    with plotting.PlotBook(outdir + "xs_upstream_loss_plots.pdf") as pdf:
         reco_KE_inst = kinematics.KE(output_mc["p_inst"], Particle.from_pdgid(211).mass)
         with styles.PlotStyler().Update(font_scale = 1.3):
             cv = upstream.CentralValueEstimation(bins, reco_KE_inst, output_mc["KE_ff"], upstream.cv_method[args.upstream_loss_cv_function], output_mc["weights"])

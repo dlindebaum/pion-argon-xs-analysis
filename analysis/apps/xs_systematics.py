@@ -35,7 +35,7 @@ from python.analysis import toy
 from python.legacy import RegionFit
 
 from python.analysis.cross_section import analysis_input, plotting, geant
-from apps import cex_toy_generator, cex_analyse, cex_fit_studies, cex_analysis_input
+from apps import xs_toy_generator, xs_analyse, xs_fit_studies, xs_analysis_input
 
 systematics = ["mc_stat", "upstream", "beam_reweight", "shower_energy", "track_length", "beam_res", "fit_inaccuracy", "theory", "all"]
 systematics_label = {"mc_stat" : "MC stat", "fit_inaccuracy" : "Fit inaccuracy", "upstream" : "Upstream", "beam_reweight" : "Reweight", "shower_energy" : "Shower energy", "track_length" : "Track length", "beam_res" : "Beam momentum", "theory" : "Theory"}
@@ -64,9 +64,9 @@ class MCMethod(ABC):
 
     def Analyse(self, analysis_input : analysis_input.AnalysisInput, book : plotting.PlotBook = plotting.PlotBook.null()):
 
-        region_fit_result = cex_analyse.RegionFit(analysis_input, self.args.energy_slices, self.args.fit["mean_track_score"], self.model, mc_stat_unc = self.args.fit["mc_stat_unc"], single_bin = self.args.fit["single_bin"])
+        region_fit_result = xs_analyse.RegionFit(analysis_input, self.args.energy_slices, self.args.fit["mean_track_score"], self.model, mc_stat_unc = self.args.fit["mc_stat_unc"], single_bin = self.args.fit["single_bin"])
 
-        _, histograms_reco_obs, histograms_reco_obs_err = cex_analyse.BackgroundSubtraction(analysis_input, self.args.signal_process, self.args.energy_slices, region_fit_result, self.args.fit["single_bin"], self.args.fit["regions"], self.args.toy_template, args.bkg_sub_mc_stat, book)
+        _, histograms_reco_obs, histograms_reco_obs_err = xs_analyse.BackgroundSubtraction(analysis_input, self.args.signal_process, self.args.energy_slices, region_fit_result, self.args.fit["single_bin"], self.args.fit["regions"], self.args.toy_template, args.bkg_sub_mc_stat, book)
 
 
         if self.args.fit["regions"]:
@@ -75,16 +75,16 @@ class MCMethod(ABC):
             histograms_reco_obs_err = {**histograms_reco_obs_err, **histograms_reco_obs_err["int_ex"]}
             histograms_reco_obs_err.pop("int_ex")
 
-        unfolding_result = cex_analyse.Unfolding(histograms_reco_obs, histograms_reco_obs_err, self.args.toy_template, self.args.unfolding, self.args.signal_process, len(analysis_input.KE_init_reco)/len(self.args.toy_template.KE_init_reco), self.args.energy_slices, self.args.fit["regions"], self.args.fit["mc_stat_unc"], None, book)
+        unfolding_result = xs_analyse.Unfolding(histograms_reco_obs, histograms_reco_obs_err, self.args.toy_template, self.args.unfolding, self.args.signal_process, len(analysis_input.KE_init_reco)/len(self.args.toy_template.KE_init_reco), self.args.energy_slices, self.args.fit["regions"], self.args.fit["mc_stat_unc"], None, book)
 
         if book is not None:
-            for p in cex_analyse.process_labels:
+            for p in xs_analyse.process_labels:
                 hist_true = analysis_input.CreateHistograms(self.args.energy_slices, p, False, None)["int_ex"]
-                plots.Plot(self.args.energy_slices.pos_overflow, unfolding_result[p]["unfolded"], yerr = common.quadsum([unfolding_result[p]["stat_err"], unfolding_result[p]["sys_err"]], 0), xlabel = f"$N_{{int, {cex_analyse.process_labels[p]}}}$ (MeV)", ylabel = "Counts", label = "unfolded", style = "step", color = "C6")
+                plots.Plot(self.args.energy_slices.pos_overflow, unfolding_result[p]["unfolded"], yerr = common.quadsum([unfolding_result[p]["stat_err"], unfolding_result[p]["sys_err"]], 0), xlabel = f"$N_{{int, {xs_analyse.process_labels[p]}}}$ (MeV)", ylabel = "Counts", label = "unfolded", style = "step", color = "C6")
                 plots.Plot(self.args.energy_slices.pos_overflow, hist_true, label = "true", style = "step", color = "C0", newFigure = False)
                 book.Save()
 
-        xs = cex_analyse.XSUnfold(unfolding_result, self.args.energy_slices, True, True, self.args.fit["regions"])
+        xs = xs_analyse.XSUnfold(unfolding_result, self.args.energy_slices, True, True, self.args.fit["regions"])
         return xs
 
     @abstractmethod
@@ -182,7 +182,7 @@ class DataAnalysis(ABC):
         args_copy.toy_template = None
         args_copy.out = ""
         args_copy.all = False
-        xs = cex_analyse.Analyse(args_copy, False)["pdsp"]
+        xs = xs_analyse.Analyse(args_copy, False)["pdsp"]
         return xs
 
 
@@ -270,7 +270,7 @@ class NuisanceParameters:
         args_copy.out = ""
         args_copy.all = False
 
-        xs = cex_analyse.Analyse(args_copy, False)["pdsp"]
+        xs = xs_analyse.Analyse(args_copy, False)["pdsp"]
         return xs
 
 
@@ -332,7 +332,7 @@ class UpstreamCorrectionSystematic(DataAnalysis):
         for k, v in upl.items():
             args_copy.upstream_loss_correction_params["value"] = v
             args_copy.out = f"{outdir}{self.name}_{k}/"
-            cex_analysis_input.main(args_copy)
+            xs_analysis_input.main(args_copy)
         return
 
 
@@ -351,7 +351,7 @@ class BeamReweightSystematic(DataAnalysis):
                 args_copy.beam_reweight["params"][p]["value"] = v[p]
             print(args_copy.beam_reweight["params"])
             args_copy.out = f"{outdir}{self.name}_{k}/"
-            cex_analysis_input.main(args_copy)
+            xs_analysis_input.main(args_copy)
         return
 
 
@@ -446,7 +446,7 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
 
         for k, v in args_copy.items():
             v.out = f"{outdir}{self.name}_{k}/"
-            cex_analysis_input.main(v)
+            xs_analysis_input.main(v)
         return
 
 
@@ -548,10 +548,10 @@ class NormalisationSystematic(MCMethod):
     def RunExperiment(self, config : dict) -> tuple[dict, dict]:
         x = self.args.energy_slices.pos[:-1] - self.args.energy_slices.width / 2
 
-        ai = analysis_input.AnalysisInput.CreateAnalysisInputToy(toy.Toy(df = cex_toy_generator.run(config)))
+        ai = analysis_input.AnalysisInput.CreateAnalysisInputToy(toy.Toy(df = xs_toy_generator.run(config)))
 
         xs = self.Analyse(ai, None)
-        xs_sim_mod = cex_toy_generator.ModifyGeantXS(scale_factors = config["pdf_scale_factors"])
+        xs_sim_mod = xs_toy_generator.ModifyGeantXS(scale_factors = config["pdf_scale_factors"])
 
         if self.args.fit["regions"]:
             xs_true = {k : xs_sim_mod.GetInterpolatedCurve(k)(x) for k in exclusive_proc}
@@ -579,7 +579,7 @@ class NormalisationSystematic(MCMethod):
                             scales["double_charge_exchange"] = i
                         else:
                             scales[target] = i
-                        config = cex_fit_studies.CreateConfigNormalisation(scales, self.data_config)
+                        config = xs_fit_studies.CreateConfigNormalisation(scales, self.data_config)
 
                     if repeats != 1:
                         config["seed"] = j + 1
@@ -604,7 +604,7 @@ class NormalisationSystematic(MCMethod):
                         mod_norm["quasielastic"] = n
                     else:
                         mod_norm[r] = n
-                    mod_sim = cex_toy_generator.ModifyGeantXS(scale_factors = mod_norm, modified_PDFs = None)
+                    mod_sim = xs_toy_generator.ModifyGeantXS(scale_factors = mod_norm, modified_PDFs = None)
 
                     if p == "single_pion_production":
                         gxs = getattr(mod_sim, "double_charge_exchange") + getattr(mod_sim, "quasielastic")
@@ -893,7 +893,7 @@ def main(args : argparse.Namespace):
         args.toy_template = analysis_input.AnalysisInput.CreateAnalysisInputToy(toy.Toy(file = args.toy_template))
         model = RegionFit.CreateModel(args.toy_template, args.energy_slices, args.fit["mean_track_score"], False, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
     
-        toy_nominal = toy.Toy(df = cex_toy_generator.run(args.toy_data_config))
+        toy_nominal = toy.Toy(df = xs_toy_generator.run(args.toy_data_config))
         analysis_input_nominal = analysis_input.AnalysisInput.CreateAnalysisInputToy(toy_nominal)
 
 

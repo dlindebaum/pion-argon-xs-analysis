@@ -32,7 +32,7 @@ from python.analysis import tags
 from python.analysis import beam
 from python.analysis.plotting import plots
 
-from apps.cex_analysis_input import RegionSelection, BeamPionSelection
+from apps.xs_analysis_input import RegionSelection, BeamPionSelection
 
 from rich import print
 

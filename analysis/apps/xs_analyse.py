@@ -20,7 +20,7 @@ import pyhf
 from particle import Particle
 from rich import print
 
-from apps import cex_toy_generator
+from apps import xs_toy_generator
 from pyunfold.callbacks import SplineRegularizer
 from python.analysis import application
 from python.analysis import bethe_bloch
@@ -505,7 +505,7 @@ def LoadToy(file):
     if file.split(".")[-1] == "hdf5":
         toy = toy.Toy(file = file)
     elif file.split(".")[-1] == "json":
-        toy = toy.Toy(df = cex_toy_generator.run(io.LoadConfiguration(file)))
+        toy = toy.Toy(df = xs_toy_generator.run(io.LoadConfiguration(file)))
     else:
         raise Exception("toy file format not recognised")
     return cross_section.analysis_input.AnalysisInput.CreateAnalysisInputToy(toy)

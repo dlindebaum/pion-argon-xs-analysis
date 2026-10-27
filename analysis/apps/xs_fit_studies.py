@@ -29,7 +29,7 @@ from python.analysis import styles
 from python.analysis import tags
 from python.analysis import toy
 from python.legacy import RegionFit
-from apps import cex_toy_generator
+from apps import xs_toy_generator
 
 from python.analysis.plotting import plots
 
@@ -74,7 +74,7 @@ def CreateConfigNormalisation(scales : dict, data_config : dict) -> dict:
 
 
 def ModifiedConfigTest(config : dict, energy_slice : slices.Slices, model : pyhf.Model, toy_template : cross_section.analysis_input.AnalysisInput, mean_track_score_bins : np.array = None, single_bin : np.array = False) -> tuple[dict]:
-    toy_alt_pdf = cross_section.analysis_input.AnalysisInput.CreateAnalysisInputToy(toy.Toy(df = cex_toy_generator.run(config)))
+    toy_alt_pdf = cross_section.analysis_input.AnalysisInput.CreateAnalysisInputToy(toy.Toy(df = xs_toy_generator.run(config)))
     
     obs = RegionFit.GenerateObservations(toy_alt_pdf, energy_slice, mean_track_score_bins, model, False, single_bin)
     fit_result = RegionFit.Fit(obs, model, None, verbose = False, tolerance = 0.1) # relax the tolerance to allow fit to converge for a large parameter space
@@ -256,7 +256,7 @@ def PullStudy(template : cross_section.analysis_input.AnalysisInput, model : pyh
 
     for i in range(n):
         print(rule.Rule(f"iteration : {i} | total : {n}"))
-        toy_alt_pdf = cross_section.analysis_input.AnalysisInput.CreateAnalysisInputToy(toy.Toy(df = cex_toy_generator.run(cfg)))
+        toy_alt_pdf = cross_section.analysis_input.AnalysisInput.CreateAnalysisInputToy(toy.Toy(df = xs_toy_generator.run(cfg)))
 
         expected.append({s : (sum(toy_alt_pdf.exclusive_process[s]) / len(toy_alt_pdf.exclusive_process[s])) / template_fractions[s] for s in toy_alt_pdf.exclusive_process})
 
