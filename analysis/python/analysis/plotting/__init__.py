@@ -1,2 +1,2 @@
 from .book import PlotBook
-from . import plots, styles
+from . import plots, styles, event_display
