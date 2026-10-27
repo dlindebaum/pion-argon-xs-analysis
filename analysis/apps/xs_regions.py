@@ -9,7 +9,7 @@ Description: Plots regions information for different combination of region defin
 import argparse
 import os
 
-from python.analysis import application, common, ntuple, regions, samples, styles
+from python.analysis import application, common, ntuple, plotting, regions, samples
 
 from rich import print
 
@@ -27,7 +27,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
 @common.timer
 def main(args : argparse.Namespace):
-    styles.PlotStyler.SetPlotStyle(True)
+    plotting.styles.PlotStyler.SetPlotStyle(True)
     out = args.out + "region_plots/"
     os.makedirs(out, exist_ok = True)
 

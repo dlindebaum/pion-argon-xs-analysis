@@ -26,10 +26,9 @@ from python.analysis import fitting
 from python.analysis import kinematics
 from python.analysis import io
 from python.analysis import ntuple
-from python.analysis import plots
+from python.analysis import plotting
 from python.analysis import processing
 from python.analysis import selection
-from python.analysis import styles
 from python.analysis import tags
 from python.analysis import toy
 from python.legacy import RegionFit
@@ -80,8 +79,8 @@ class MCMethod(ABC):
         if book is not None:
             for p in xs_analyse.process_labels:
                 hist_true = analysis_input.CreateHistograms(self.args.energy_slices, p, False, None)["int_ex"]
-                plots.Plot(self.args.energy_slices.pos_overflow, unfolding_result[p]["unfolded"], yerr = common.quadsum([unfolding_result[p]["stat_err"], unfolding_result[p]["sys_err"]], 0), xlabel = f"$N_{{int, {xs_analyse.process_labels[p]}}}$ (MeV)", ylabel = "Counts", label = "unfolded", style = "step", color = "C6")
-                plots.Plot(self.args.energy_slices.pos_overflow, hist_true, label = "true", style = "step", color = "C0", newFigure = False)
+                plotting.plots.Plot(self.args.energy_slices.pos_overflow, unfolding_result[p]["unfolded"], yerr = common.quadsum([unfolding_result[p]["stat_err"], unfolding_result[p]["sys_err"]], 0), xlabel = f"$N_{{int, {xs_analyse.process_labels[p]}}}$ (MeV)", ylabel = "Counts", label = "unfolded", style = "step", color = "C6")
+                plotting.plots.Plot(self.args.energy_slices.pos_overflow, hist_true, label = "true", style = "step", color = "C0", newFigure = False)
                 book.Save()
 
         xs = xs_analyse.XSUnfold(unfolding_result, self.args.energy_slices, True, True, self.args.fit["regions"])
@@ -110,20 +109,20 @@ class MCMethod(ABC):
 
         if book:
             for k in cov:
-                plots.plt.figure()
-                plots.plt.imshow(cov[k])
-                plots.plt.grid(False)
-                plots.plt.colorbar()
-                plots.plt.title(common.remove_(k).capitalize())
+                plotting.plots.plt.figure()
+                plotting.plots.plt.imshow(cov[k])
+                plotting.plots.plt.grid(False)
+                plotting.plots.plt.colorbar()
+                plotting.plots.plt.title(common.remove_(k).capitalize())
 
                 x = self.args.energy_slices.pos_overflow[1:-1] - self.args.energy_slices.width/2
-                plots.plt.xticks(np.linspace(0, len(x) - 1, len(x)), np.array(x[::-1], dtype = int), rotation = 30)
-                plots.plt.yticks(np.linspace(0, len(x) - 1, len(x)), np.array(x[::-1], dtype = int), rotation = 30)
-                plots.plt.xlabel("KE (MeV)")
-                plots.plt.ylabel("KE (MeV)")
+                plotting.plots.plt.xticks(np.linspace(0, len(x) - 1, len(x)), np.array(x[::-1], dtype = int), rotation = 30)
+                plotting.plots.plt.yticks(np.linspace(0, len(x) - 1, len(x)), np.array(x[::-1], dtype = int), rotation = 30)
+                plotting.plots.plt.xlabel("KE (MeV)")
+                plotting.plots.plt.ylabel("KE (MeV)")
 
                 for (i, j), z in np.ndenumerate(cov[k]):
-                    plots.plt.gca().text(j, i, f"{z:.1g}", ha='center', va='center', fontsize = 10, color = "red")
+                    plotting.plots.plt.gca().text(j, i, f"{z:.1g}", ha='center', va='center', fontsize = 10, color = "red")
                 book.Save()
         return {k : np.sqrt(np.diag(cov[k])) for k in cov}
 
@@ -596,7 +595,7 @@ class NormalisationSystematic(MCMethod):
         xs_sim = geant.GeantCrossSections()
         scale_factors = {"absorption" : 1, "charge_exchange" : 1, "pion_production" : 1, "double_charge_exchange" : 1, "quasielastic" : 1}
         for r in results["cv"]:
-            for _, p in plots.IterMultiPlot(results["cv"][r][list(results["cv"][r].keys())[0]]):
+            for _, p in plotting.plots.IterMultiPlot(results["cv"][r][list(results["cv"][r].keys())[0]]):
                 for n in results["cv"][r]:
                     mod_norm = {k : v for k, v in scale_factors.items()}
                     if r == "single_pion_production":
@@ -611,18 +610,18 @@ class NormalisationSystematic(MCMethod):
                     else:
                         gxs = getattr(mod_sim, p)
 
-                    plots.Plot(mod_sim.KE, gxs, newFigure = False, label = f"true, $\\mathcal{{N}} = {n}$", title = f"process : {common.remove_(p)}", ylabel = "$\\sigma$ (mb)", xlabel = "$KE$ (MeV)")
-                    plots.Plot(args.energy_slices.pos[:-1] - args.energy_slices.width/2, results["cv"][r][n][p][0], yerr = results["cv"][r][n][p][1], xerr = args.energy_slices.width/2, marker = "x", linestyle = "", label = f"measured, $\\mathcal{{N}} = {n}$", newFigure = False)
-                    plots.plt.xlim(args.energy_slices.min_pos - args.energy_slices.width, args.energy_slices.max_pos + args.energy_slices.width)
-                    # plots.plt.ylim(0, 1.5 * max(results["cv"][r][n][p][0]))
+                    plotting.plots.Plot(mod_sim.KE, gxs, newFigure = False, label = f"true, $\\mathcal{{N}} = {n}$", title = f"process : {common.remove_(p)}", ylabel = "$\\sigma$ (mb)", xlabel = "$KE$ (MeV)")
+                    plotting.plots.Plot(args.energy_slices.pos[:-1] - args.energy_slices.width/2, results["cv"][r][n][p][0], yerr = results["cv"][r][n][p][1], xerr = args.energy_slices.width/2, marker = "x", linestyle = "", label = f"measured, $\\mathcal{{N}} = {n}$", newFigure = False)
+                    plotting.plots.plt.xlim(args.energy_slices.min_pos - args.energy_slices.width, args.energy_slices.max_pos + args.energy_slices.width)
+                    # plotting.plots.plt.ylim(0, 1.5 * max(results["cv"][r][n][p][0]))
                 if p == "single_pion_production":
                     gxs = getattr(xs_sim, "double_charge_exchange") + getattr(xs_sim, "quasielastic")
                 else:
                     gxs = getattr(xs_sim, p)
-                plots.Plot(mod_sim.KE, gxs, newFigure = False, label = f"true, $\\mathcal{{N}} = 1$")
-                plots.Plot(args.energy_slices.pos[:-1] - args.energy_slices.width/2, xs_nominal[p][0], yerr = xs_nominal[p][1], xerr = args.energy_slices.width/2, marker = "x", linestyle = "", label = f"measured, $\\mathcal{{N}} = 1$", newFigure = False)
-            plots.plt.suptitle(f"normalisation test : {common.remove_(r)}")
-            plots.plt.tight_layout()
+                plotting.plots.Plot(mod_sim.KE, gxs, newFigure = False, label = f"true, $\\mathcal{{N}} = 1$")
+                plotting.plots.Plot(args.energy_slices.pos[:-1] - args.energy_slices.width/2, xs_nominal[p][0], yerr = xs_nominal[p][1], xerr = args.energy_slices.width/2, marker = "x", linestyle = "", label = f"measured, $\\mathcal{{N}} = 1$", newFigure = False)
+            plotting.plots.plt.suptitle(f"normalisation test : {common.remove_(r)}")
+            plotting.plots.plt.tight_layout()
             book.Save()
         return
 
@@ -794,7 +793,7 @@ def SaveSystematicTables(systematic_tables : dict[pd.DataFrame], out : str):
 
 def PlotSysHist(systematic_table : dict[pd.DataFrame], book : plotting.PlotBook = plotting.PlotBook.null()):
     for t in systematic_table:
-        plots.plt.figure()
+        plotting.plots.plt.figure()
         c = 0
         for i  in systematic_table[t].T:
             if i in ["KE (MeV)", "Central value (mb)"] : continue
@@ -807,9 +806,9 @@ def PlotSysHist(systematic_table : dict[pd.DataFrame], book : plotting.PlotBook 
                 linestyle = "dashdot"
             else:
                 linestyle = "-"
-            plots.Plot(systematic_table[t].loc["KE (MeV)"], systematic_table[t].loc[i], newFigure = False, xlabel = "KE (MeV)", ylabel = "Uncertainty (mb)", label = i.split(" (mb)")[0], title = common.remove_(t).capitalize(), style = "step", linestyle = linestyle, color = color)
-            plots.plt.legend(ncols = 2)
-        plots.plt.ylim(0, 1.5 * max(plots.plt.gca().get_ylim()))
+            plotting.plots.Plot(systematic_table[t].loc["KE (MeV)"], systematic_table[t].loc[i], newFigure = False, xlabel = "KE (MeV)", ylabel = "Uncertainty (mb)", label = i.split(" (mb)")[0], title = common.remove_(t).capitalize(), style = "step", linestyle = linestyle, color = color)
+            plotting.plots.plt.legend(ncols = 2)
+        plotting.plots.plt.ylim(0, 1.5 * max(plotting.plots.plt.gca().get_ylim()))
         book.Save()
 
     table_filtered = {k : v[~v.index.isin(["KE (MeV)", "Central value (mb)", "Total uncertainty (mb)", "Total systematic uncertainty (mb)"])] for k, v in systematic_table.items()}
@@ -818,25 +817,25 @@ def PlotSysHist(systematic_table : dict[pd.DataFrame], book : plotting.PlotBook 
 
 
     for t in systematic_table:
-        plots.plt.figure()
+        plotting.plots.plt.figure()
         prev = 0
         for e, i in enumerate(reversed(order[t])):
             v = table_filtered[t].iloc[i]
             prev = prev + v.T.values
-            plots.Plot(systematic_table[t].loc["KE (MeV)"].values, prev, newFigure = False, xlabel = "KE (MeV)", ylabel = "Relative uncertainty (mb)", label = v.name.split(" (mb)")[0], title = common.remove_(t).capitalize(), style = "bar", linestyle = "-", color = f"C{i}", zorder = 100-e)
-        plots.plt.legend(ncols = 2)
-        plots.plt.ylim(0, 1.5 * max(plots.plt.gca().get_ylim()))
+            plotting.plots.Plot(systematic_table[t].loc["KE (MeV)"].values, prev, newFigure = False, xlabel = "KE (MeV)", ylabel = "Relative uncertainty (mb)", label = v.name.split(" (mb)")[0], title = common.remove_(t).capitalize(), style = "bar", linestyle = "-", color = f"C{i}", zorder = 100-e)
+        plotting.plots.plt.legend(ncols = 2)
+        plotting.plots.plt.ylim(0, 1.5 * max(plotting.plots.plt.gca().get_ylim()))
         book.Save()
 
     for t in systematic_table:
-        plots.plt.figure()
+        plotting.plots.plt.figure()
         prev = 0
         for e, i in enumerate(reversed(order[t])):
             v = table_filtered[t].iloc[i]
             prev = prev + v.T.values
-            plots.Plot(systematic_table[t].loc["KE (MeV)"].values, prev/total[t], newFigure = False, xlabel = "KE (MeV)", ylabel = "Relative uncertainty", label = v.name.split(" (mb)")[0], title = common.remove_(t).capitalize(), style = "bar", linestyle = "-", color = f"C{i}", zorder = 100-e)
-        plots.plt.legend(ncols = 2)
-        plots.plt.ylim(0, 1.5 * max(plots.plt.gca().get_ylim()))
+            plotting.plots.Plot(systematic_table[t].loc["KE (MeV)"].values, prev/total[t], newFigure = False, xlabel = "KE (MeV)", ylabel = "Relative uncertainty", label = v.name.split(" (mb)")[0], title = common.remove_(t).capitalize(), style = "bar", linestyle = "-", color = f"C{i}", zorder = 100-e)
+        plotting.plots.plt.legend(ncols = 2)
+        plotting.plots.plt.ylim(0, 1.5 * max(plotting.plots.plt.gca().get_ylim()))
         book.Save()
 
     return
@@ -882,7 +881,7 @@ def can_regen(dir : str):
 
 @common.timer
 def main(args : argparse.Namespace):
-    styles.PlotStyler.SetPlotStyle(dark = True)
+    plotting.styles.PlotStyler.SetPlotStyle(dark = True)
     out = args.out + "systematics/"
     os.makedirs(out, exist_ok = True)
 
@@ -914,7 +913,7 @@ def main(args : argparse.Namespace):
 
             sys = mc_stat.CalculateSysError(result)
             SaveSystematicError(sys, None, f"{outdir}sys.dill")
-            with plotting.PlotBook(f"{outdir}plots.pdf") as book:
+            with plotting.PlotBook(f"{outdir}plotting.plots.pdf") as book:
                 mc_stat.PlotXSMCStat(result, book)
             tables = mc_stat.MCStatTables(result)
             SaveTables(tables, outdir, 2)
@@ -934,7 +933,7 @@ def main(args : argparse.Namespace):
 
             sys = sc.CalculateSysErrorAsym(args.cv, result)
             SaveSystematicError(sys, None, f"{outdir}sys.dill")
-            with plotting.PlotBook(f"{outdir}plots.pdf") as book:
+            with plotting.PlotBook(f"{outdir}plotting.plots.pdf") as book:
                 sc.PlotResults(args.cv, result, book)
             tables = sc.DataAnalysisTables(args.cv, sys, "Shower energy")
             SaveTables(tables, outdir, 2)
@@ -956,7 +955,7 @@ def main(args : argparse.Namespace):
 
             sys = upl.CalculateSysErrorAsym(args.cv, result)
             SaveSystematicError(sys, None, f"{outdir}sys.dill")
-            with plotting.PlotBook(f"{outdir}plots.pdf") as book:
+            with plotting.PlotBook(f"{outdir}plotting.plots.pdf") as book:
                 upl.PlotResults(args.cv, result, book)
             tables = upl.DataAnalysisTables(args.cv, sys, "Upstream")
             SaveTables(tables, outdir, 2)
@@ -978,7 +977,7 @@ def main(args : argparse.Namespace):
 
             sys = brw.CalculateSysErrorAsym(args.cv, result)
             SaveSystematicError(sys, None, f"{outdir}sys.dill")
-            with plotting.PlotBook(f"{outdir}plots.pdf") as book:
+            with plotting.PlotBook(f"{outdir}plotting.plots.pdf") as book:
                 brw.PlotResults(args.cv, result, book)
             tables = brw.DataAnalysisTables(args.cv, sys, "Reweight")
             SaveTables(tables, outdir, 2)
@@ -1085,9 +1084,9 @@ def main(args : argparse.Namespace):
 
                 with plotting.PlotBook(f"{outdir}plots", True) as book:
                     #! use styler properly
-                    styles.PlotStyler.SetPlotStyle(dark = False, extend_colors = True)
+                    plotting.styles.PlotStyler.SetPlotStyle(dark = False, extend_colors = True)
                     NormalisationSystematic.PlotNormalisationTestResults(result, args, xs_nominal, book)
-                    styles.PlotStyler.SetPlotStyle(dark = True, extend_colors = False)
+                    plotting.styles.PlotStyler.SetPlotStyle(dark = True, extend_colors = False)
 
                 tables = norm_sys.CreateTables(args.cv, sys)
                 SaveTables(tables, outdir, 2)
@@ -1101,10 +1100,10 @@ def main(args : argparse.Namespace):
         tables = CreateSystematicTable(out, args.cv, args)
         SaveSystematicTables(tables, outdir)
 
-        with plotting.PlotBook(outdir + "systematic_plots.pdf") as book:
-            with plots.matplotlib.rc_context({"axes.prop_cycle" : plots.plt.cycler("color", plots.matplotlib.colormaps["tab20"].colors)}):
+        with plotting.PlotBook(outdir + "systematic_plotting.plots.pdf") as book:
+            with plotting.plots.matplotlib.rc_context({"axes.prop_cycle" : plotting.plots.plt.cycler("color", plotting.plots.matplotlib.colormaps["tab20"].colors)}):
                 PlotSysHist(tables, book)
-        with plotting.PlotBook(outdir + "final_plots.pdf", watermark = "DUNE: Work in Progress") as book:
+        with plotting.PlotBook(outdir + "final_plotting.plots.pdf", watermark = "DUNE: Work in Progress") as book:
             table, table_alt = FinalPlots(args.cv["pdsp"], tables, args.energy_slices, book, alt_xs = False)
 
         process_tags = tags.ExclusiveProcessTags({k : None for k in table.columns})

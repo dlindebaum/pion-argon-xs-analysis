@@ -11,12 +11,7 @@ import os
 
 from rich import print
 
-from python.analysis import application
-from python.analysis import common
-from python.analysis import cuts
-from python.analysis import ntuple
-from python.analysis import selection
-from python.analysis import styles
+from python.analysis import application, common, cuts, ntuple, plotting, selection
 
 def run(i, file : ntuple.FileDescriptor, n_events, start, selected_events, args) -> dict:
     events = ntuple.Data(file, n_events, start)
@@ -113,7 +108,7 @@ def run(i, file : ntuple.FileDescriptor, n_events, start, selected_events, args)
 
 @common.timer
 def main(args):
-    styles.SetPlotStyle(extend_colors = True)
+    plotting.styles.SetPlotStyle(extend_colors = True)
     outdir = args.out + "selection/"
     os.makedirs(outdir, exist_ok = True)
 

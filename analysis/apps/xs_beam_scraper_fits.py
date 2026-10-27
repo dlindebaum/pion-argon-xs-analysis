@@ -18,7 +18,6 @@ from python.analysis import kinematics
 from python.analysis import io
 from python.analysis import ntuple
 from python.analysis import plotting
-from python.analysis import styles
 from python.analysis.beam import scraper
 
 def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
@@ -40,8 +39,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
 @common.timer
 def main(args : argparse.Namespace):
-
-    styles.PlotStyler.SetPlotStyle(True)
+    plotting.styles.PlotStyler.SetPlotStyle(True)
     outdir = args.out + "beam_scraper/"
     os.makedirs(outdir, exist_ok = True)
 

@@ -19,7 +19,6 @@ from python.analysis import io
 from python.analysis import kinematics
 from python.analysis import ntuple
 from python.analysis import plotting
-from python.analysis import styles
 from python.analysis.beam import reweight, upstream
 from python.analysis.cross_section.analysis_input import BeamPionSelection
 
@@ -38,7 +37,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
 
 def main(args : argparse.Namespace):
-    styles.PlotStyler.SetPlotStyle(False)
+    plotting.styles.PlotStyler.SetPlotStyle(False)
     outdir = args.out + "upstream_loss/"
     os.makedirs(outdir, exist_ok = True)
 
@@ -52,7 +51,7 @@ def main(args : argparse.Namespace):
 
     with plotting.PlotBook(outdir + "xs_upstream_loss_plots.pdf") as pdf:
         reco_KE_inst = kinematics.KE(output_mc["p_inst"], Particle.from_pdgid(211).mass)
-        with styles.PlotStyler().Update(font_scale = 1.3):
+        with plotting.styles.PlotStyler().Update(font_scale = 1.3):
             cv = upstream.CentralValueEstimation(bins, reco_KE_inst, output_mc["KE_ff"], upstream.cv_method[args.upstream_loss_cv_function], output_mc["weights"])
         pdf.Save()
 

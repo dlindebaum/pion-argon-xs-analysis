@@ -28,7 +28,6 @@ from python.analysis import application
 from python.analysis import bethe_bloch
 from python.analysis import fitting
 from python.analysis import io
-from python.analysis import plots
 from python.analysis.common import timer, nandiv
 from python.analysis.cross_section import geant
 

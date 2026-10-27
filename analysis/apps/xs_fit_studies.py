@@ -25,7 +25,6 @@ from python.analysis import fitting
 from python.analysis import io
 from python.analysis import plotting
 from python.analysis import slices
-from python.analysis import styles
 from python.analysis import tags
 from python.analysis import toy
 from python.legacy import RegionFit
@@ -749,7 +748,7 @@ def CalculateResultsFromFile(workdirs, test_name, model_name, template_counts, m
 
 @common.timer
 def main(args : argparse.Namespace):
-    styles.PlotStyler.SetPlotStyle(extend_colors = True, dark = True, font_scale = 1.4)
+    plotting.styles.PlotStyler.SetPlotStyle(extend_colors = True, dark = True, font_scale = 1.4)
     toys = toy.Toy(file = args.template)
     args.template = cross_section.analysis_input.AnalysisInput.CreateAnalysisInputToy(toys)
 

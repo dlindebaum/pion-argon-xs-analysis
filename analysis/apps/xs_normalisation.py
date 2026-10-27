@@ -19,7 +19,6 @@ from python.analysis import common
 from python.analysis import io
 from python.analysis import ntuple
 from python.analysis import plotting
-from python.analysis import styles
 from python.analysis import tags
 from python.analysis.selection import beam
 
@@ -36,7 +35,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
 @common.timer
 def main(args):
-    styles.PlotStyler.SetPlotStyle(extend_colors = True)
+    plotting.styles.PlotStyler.SetPlotStyle(extend_colors = True)
     outdir = args.out + "beam_norm/"
     os.makedirs(outdir, exist_ok = True)
 
