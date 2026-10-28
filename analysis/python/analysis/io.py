@@ -36,7 +36,7 @@ def SaveObject(file : str, obj : dict):
 
 def LoadConfiguration(file : str) -> dict:
     """ Loads a json file.
-path
+
     Args:
         file (str): file path
 
