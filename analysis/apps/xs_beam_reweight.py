@@ -140,8 +140,8 @@ def main(args : argparse.Namespace):
         mc_mom = np.array(output_mc[s]["p_inst"])
         data_mom = np.array(output_data[s]["p_inst"])
 
-        mc_weights = reweight.ratio_weights(mc_mom, "gaussian", [reweight_params[k]["value"] for k in reweight_params], 100)
-        mc_weights_truncated = reweight.ratio_weights(mc_mom, "gaussian", [reweight_params[k]["value"] for k in reweight_params], args.beam_reweight["strength"])
+        mc_weights = reweight.calculate_weights(mc_mom, "gaussian", [reweight_params[k]["value"] for k in reweight_params], 100)
+        mc_weights_truncated = reweight.calculate_weights(mc_mom, "gaussian", [reweight_params[k]["value"] for k in reweight_params], args.beam_reweight["strength"])
 
         mc_counts, bins = np.histogram(mc_mom, b, test_range)
         data_counts, _ = np.histogram(data_mom, bins, test_range)

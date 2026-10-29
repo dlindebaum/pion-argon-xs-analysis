@@ -29,7 +29,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
     
     mc = BeamPionSelection(mc, args, True)
     if args["no_reweight"] is False:
-        mc_weights = reweight.ratio_weights(mc.recoParticles.beam_inst_P, "gaussian", [args["beam_reweight"]["params"][k]["value"] for k in args["beam_reweight"]["params"]], args["beam_reweight"]["strength"])
+        mc_weights = reweight.calculate_weights(mc.recoParticles.beam_inst_P, "gaussian", [args["beam_reweight"]["params"][k]["value"] for k in args["beam_reweight"]["params"]], args["beam_reweight"]["strength"])
     else:
         mc_weights = None
     

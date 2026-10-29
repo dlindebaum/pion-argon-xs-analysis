@@ -6,7 +6,7 @@ from python.analysis import common, fitting, plotting
 from python.analysis.plotting import plots
 
 
-def ratio_weights(beam_inst_p : np.ndarray, func : str, params : list, truncate : int = 10):
+def calculate_weights(beam_inst_p : np.ndarray, func : str, params : list, truncate : int = 10):
     weights = 1/getattr(fitting, func)(beam_inst_p, *params)
     weights = np.where(weights > truncate, truncate, weights)
     return weights
@@ -38,7 +38,7 @@ def reweight(p_mc, p_data, p_nominal : float, bins : int = 10, p_range : np.arra
 
 
 def reweight_results(sideband_mc : dict, sideband_data : dict, args : argparse.Namespace, bins : int, reweight_fits : dict, reweight_func : str, book : plotting.PlotBook = plotting.PlotBook.null()):
-    weights = ratio_weights(np.array(sideband_mc["p_inst"]), reweight_func, reweight_fits[reweight_func][0], args.beam_reweight["strength"])
+    weights = calculate_weights(np.array(sideband_mc["p_inst"]), reweight_func, reweight_fits[reweight_func][0], args.beam_reweight["strength"])
 
     plot_range = [args.beam_momentum * 0.75, args.beam_momentum * 1.25]
 

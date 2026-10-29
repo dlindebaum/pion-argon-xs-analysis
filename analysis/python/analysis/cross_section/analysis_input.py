@@ -271,7 +271,7 @@ class AnalysisInput:
             AnalysisInput: analysis input.
         """
         if mc_reweight_params is not None:
-            weights = beam.reweight.ratio_weights(events.recoParticles.beam_inst_P, "gaussian", mc_reweight_params, mc_reweight_stength)
+            weights = beam.reweight.calculate_weights(events.recoParticles.beam_inst_P, "gaussian", mc_reweight_params, mc_reweight_stength)
         else:
             weights = None
 
