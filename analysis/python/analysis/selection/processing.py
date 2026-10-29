@@ -166,8 +166,8 @@ def MakeOutput(value : ak.Array, event_tags : tags.Tags, cuts : list = [], op : 
 def AnalyseBeamFiducialCut(events : ntuple.Data, beam_instrumentation : bool, functions : dict, args : dict):
     output = {}
     masks = {}
-    cut_table = cuts.CutHandler(events, particle_tags = tags.GenerateTrueBeamParticleTags(events) if beam_instrumentation is False else None)
-    output["no_selection"] = MakeOutput(None, tags.GenerateTrueBeamParticleTags(events), None, None, event.GenerateTrueFinalStateTags(events))
+    cut_table = cuts.CutHandler(events, particle_tags = tags.generate_true_beam_particle_tags(events) if beam_instrumentation is False else None)
+    output["no_selection"] = MakeOutput(None, tags.generate_true_beam_particle_tags(events), None, None, event.GenerateTrueFinalStateTags(events))
     if "TrueFiducialCut" in args:
         masks = {k : functions[k](events, **v) for k, v in args.items() if k in ["APA3Cut", "TrueFiducialCut"]}
         for a in ["APA3Cut", "TrueFiducialCut"]:
@@ -175,13 +175,13 @@ def AnalyseBeamFiducialCut(events : ntuple.Data, beam_instrumentation : bool, fu
             cut_table.add_mask(mask, a)
             cut_values = args[a]["cut"] if "cut" in args[a] else None
             operations = args[a]["op"] if "op" in args[a] else None
-            output[a] = MakeOutput(property, tags.GenerateTrueBeamParticleTags(events), cut_values, operations)
+            output[a] = MakeOutput(property, tags.generate_true_beam_particle_tags(events), cut_values, operations)
 
             events.Filter([mask], [mask])
             output[a]["fs_tags"] = event.GenerateTrueFinalStateTags(events)
 
     #* true particle population
-    output["final_tags"] = MakeOutput(None, tags.GenerateTrueBeamParticleTags(events), None, None, event.GenerateTrueFinalStateTags(events))
+    output["final_tags"] = MakeOutput(None, tags.generate_true_beam_particle_tags(events), None, None, event.GenerateTrueFinalStateTags(events))
 
     df = cut_table.get_table(init_data_name = "no selection", pfos = False, percent_remain = False, relative_percent = False, ave_per_event = False)
 
@@ -201,24 +201,24 @@ def AnalyseBeamSelection(events : ntuple.Data, beam_instrumentation : bool, func
         dict: output data.
     """
     output = {}
-    cut_table = cuts.CutHandler(events, particle_tags = tags.GenerateTrueBeamParticleTags(events) if beam_instrumentation is False else None)
+    cut_table = cuts.CutHandler(events, particle_tags = tags.generate_true_beam_particle_tags(events) if beam_instrumentation is False else None)
 
-    output["no_selection"] = MakeOutput(None, tags.GenerateTrueBeamParticleTags(events), None, None, event.GenerateTrueFinalStateTags(events))
-    output["no_selection_endz"] = MakeOutput(events.recoParticles.beam_endPos_SCE.z, tags.GenerateTrueBeamParticleTags(events), None, None)
+    output["no_selection"] = MakeOutput(None, tags.generate_true_beam_particle_tags(events), None, None, event.GenerateTrueFinalStateTags(events))
+    output["no_selection_endz"] = MakeOutput(events.recoParticles.beam_endPos_SCE.z, tags.generate_true_beam_particle_tags(events), None, None)
 
     masks = {k : functions[k](events, **v) for k, v in args.items()}
 
     #* pi+ beam selection
     mask = beam.PiBeamSelection(events, **args["PiBeamSelection"])
     cut_table.add_mask(mask, "PiBeamSelection")
-    counts = tags.GenerateTrueBeamParticleTags(events)
+    counts = tags.generate_true_beam_particle_tags(events)
     for i in counts:
         counts[i] = ak.sum(counts[i].mask)
-    output["PiBeamSelection"] = MakeOutput(counts, tags.GenerateTrueBeamParticleTags(events), None, None)
+    output["PiBeamSelection"] = MakeOutput(counts, tags.generate_true_beam_particle_tags(events), None, None)
     events.Filter([mask], [mask])
     output["PiBeamSelection"]["fs_tags"] = event.GenerateTrueFinalStateTags(events)
 
-    output["PiBeamSelection_endz"] = MakeOutput(events.recoParticles.beam_endPos_SCE.z, tags.GenerateTrueBeamParticleTags(events), None, None)
+    output["PiBeamSelection_endz"] = MakeOutput(events.recoParticles.beam_endPos_SCE.z, tags.generate_true_beam_particle_tags(events), None, None)
 
     for a in args:
         if a in ["PiBeamSelection", "TrueFiducialCut"]: continue
@@ -227,20 +227,20 @@ def AnalyseBeamSelection(events : ntuple.Data, beam_instrumentation : bool, func
         cut_table.add_mask(mask, a)
         cut_values = args[a]["cut"] if "cut" in args[a] else None
         operations = args[a]["op"] if "op" in args[a] else None
-        output[a] = MakeOutput(property, tags.GenerateTrueBeamParticleTags(events), cut_values, operations)
+        output[a] = MakeOutput(property, tags.generate_true_beam_particle_tags(events), cut_values, operations)
 
         if (a == "BeamScraperCut") and (beam_instrumentation == False):
             if beam_instrumentation == False:
                 scraper_id = scraper.IsScraper(events, args[a]["fits"])
-                output[a + "_scraper_tag"] = MakeOutput(None, tags.BeamScraperTag(scraper_id), None, None)
+                output[a + "_scraper_tag"] = MakeOutput(None, tags.beam_scraper_tag(scraper_id), None, None)
 
         events.Filter([mask], [mask])
         output[a]["fs_tags"] = event.GenerateTrueFinalStateTags(events)
 
-    output["selection_endz"] = MakeOutput(events.recoParticles.beam_endPos_SCE.z, tags.GenerateTrueBeamParticleTags(events), None, None)
+    output["selection_endz"] = MakeOutput(events.recoParticles.beam_endPos_SCE.z, tags.generate_true_beam_particle_tags(events), None, None)
 
     #* true particle population
-    output["final_tags"] = MakeOutput(None, tags.GenerateTrueBeamParticleTags(events), None, None, event.GenerateTrueFinalStateTags(events))
+    output["final_tags"] = MakeOutput(None, tags.generate_true_beam_particle_tags(events), None, None, event.GenerateTrueFinalStateTags(events))
 
     df = cut_table.get_table(init_data_name = "no selection", pfos = False, percent_remain = False, relative_percent = False, ave_per_event = False)
     return output, df, masks
@@ -256,7 +256,7 @@ def AnalysePFOSelection(events : ntuple.Data, data : bool, functions : dict, arg
         dict: output data
     """
     output = {}
-    cut_table = cuts.CutHandler(events, particle_tags = tags.GenerateTrueParticleTagsInterestingPFOs(events))
+    cut_table = cuts.CutHandler(events, particle_tags = tags.generate_true_particle_tags_interesting_pfos(events))
 
     for a in args:
         if a in ["NHitsCut", "BeamParticleIPCut"]:
@@ -266,12 +266,12 @@ def AnalysePFOSelection(events : ntuple.Data, data : bool, functions : dict, arg
         cut_table.add_mask(mask, a)
         cut_values = args[a]["cut"] if "cut" in args[a] else None
         operations = args[a]["op"] if "op" in args[a] else None
-        output[a] = MakeOutput(property, tags.GenerateTrueParticleTagsInterestingPFOs(events), cut_values, operations)
+        output[a] = MakeOutput(property, tags.generate_true_particle_tags_interesting_pfos(events), cut_values, operations)
         events.Filter([mask], [mask])
         output[a]["fs_tags"] = event.GenerateTrueFinalStateTags(events)    
 
     #* true particle population
-    output["final_tags"] = MakeOutput(None, tags.GenerateTrueParticleTagsInterestingPFOs(events), None, None)
+    output["final_tags"] = MakeOutput(None, tags.generate_true_particle_tags_interesting_pfos(events), None, None)
     
     df = cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, events = False)
     print(df)
@@ -288,7 +288,7 @@ def AnalysePiPlusSelection(events : ntuple.Data, data : bool, functions : dict, 
         dict: output data
     """
     output = {}
-    cut_table = cuts.CutHandler(events, particle_tags = tags.GenerateTrueParticleTagsPiPlus(events))
+    cut_table = cuts.CutHandler(events, particle_tags = tags.generate_true_particle_tags_pi_plus(events))
 
     for a in args:
         if a == "NHitsCut":
@@ -298,12 +298,12 @@ def AnalysePiPlusSelection(events : ntuple.Data, data : bool, functions : dict, 
         cut_table.add_mask(mask, a)
         cut_values = args[a]["cut"] if "cut" in args[a] else None
         operations = args[a]["op"] if "op" in args[a] else None
-        output[a] = MakeOutput(property, tags.GenerateTrueParticleTagsPiPlus(events), cut_values, operations)
+        output[a] = MakeOutput(property, tags.generate_true_particle_tags_pi_plus(events), cut_values, operations)
         events.Filter([mask], [mask])
         output[a]["fs_tags"] = event.GenerateTrueFinalStateTags(events)    
 
     #* true particle population
-    output["final_tags"] = MakeOutput(None, tags.GenerateTrueParticleTagsPiPlus(events), None, None)
+    output["final_tags"] = MakeOutput(None, tags.generate_true_particle_tags_pi_plus(events), None, None)
     
     df = cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, events = False)
     print(df)
@@ -320,7 +320,7 @@ def AnalysePhotonCandidateSelection(events : ntuple.Data, data : bool, functions
         dict: output data
     """
     output = {}
-    cut_table = cuts.CutHandler(events, particle_tags = tags.GenerateTrueParticleTagsPi0Shower(events) if data is False else None)
+    cut_table = cuts.CutHandler(events, particle_tags = tags.generate_true_particle_tags_pi0_shower(events) if data is False else None)
 
     for a in args:
         if a in ["NHitsCut", "BeamParticleIPCut"]:
@@ -330,12 +330,12 @@ def AnalysePhotonCandidateSelection(events : ntuple.Data, data : bool, functions
         cut_table.add_mask(mask, a)
         cut_values = args[a]["cut"] if "cut" in args[a] else None
         operations = args[a]["op"] if "op" in args[a] else None
-        output[a] = MakeOutput(property, tags.GenerateTrueParticleTagsPi0Shower(events), cut_values, operations)
+        output[a] = MakeOutput(property, tags.generate_true_particle_tags_pi0_shower(events), cut_values, operations)
         events.Filter([mask], [mask])
         output[a]["fs_tags"] = event.GenerateTrueFinalStateTags(events)    
 
     #* true particle population
-    output["final_tags"] = MakeOutput(None, tags.GenerateTrueParticleTagsPi0Shower(events), None, None)
+    output["final_tags"] = MakeOutput(None, tags.generate_true_particle_tags_pi0_shower(events), None, None)
 
     df = cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, events = False)
     print(df)
@@ -361,7 +361,7 @@ def AnalysePi0Selection(events : ntuple.Data, data : bool, functions : dict, arg
 
     output = {}
     photonCandidates = ak.Array(photon_mask)
-    cut_table = cuts.CutHandler(events, particle_tags = tags.GeneratePi0Tags(events, photon_mask) if data is False else None)
+    cut_table = cuts.CutHandler(events, particle_tags = tags.generate_pi0_tags(events, photon_mask) if data is False else None)
 
     for a in args:
         if a == "Pi0MassSelection":
@@ -374,7 +374,7 @@ def AnalysePi0Selection(events : ntuple.Data, data : bool, functions : dict, arg
         cut_table.add_mask(mask, a)
         cut_values = args[a]["cut"] if "cut" in args[a] else None
         operations = args[a]["op"] if "op" in args[a] else None
-        pi0_tags = null_tag() if data else tags.GeneratePi0Tags(events, photonCandidates)
+        pi0_tags = null_tag() if data else tags.generate_pi0_tags(events, photonCandidates)
         output[a] = MakeOutput(property, pi0_tags, cut_values, operations)
         events.Filter([mask], [mask])
         photonCandidates = photonCandidates[mask]
@@ -382,7 +382,7 @@ def AnalysePi0Selection(events : ntuple.Data, data : bool, functions : dict, arg
 
     #* final counts
     output["event_tag"] = MakeOutput(None, event.GenerateTrueFinalStateTags(events), None, None)
-    pi0_tags = null_tag() if data else tags.GeneratePi0Tags(events, photonCandidates)
+    pi0_tags = null_tag() if data else tags.generate_pi0_tags(events, photonCandidates)
     output["final_tags"] = MakeOutput(None, pi0_tags, None, None)
 
     df = cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, pfos = False)

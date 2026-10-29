@@ -392,7 +392,7 @@ class AnalysisInput:
 
     @staticmethod
     def Concatenate(ais : list["AnalysisInput"]):
-        fields = processing.MergeOutputs([{f : getattr(a, f) for f in AnalysisInput.req_fields()} for a in ais])
+        fields = processing.merge_outputs([{f : getattr(a, f) for f in AnalysisInput.req_fields()} for a in ais])
 
         # check for null entries after merging outputs (null entries are list of Nones)
         for k in fields:
@@ -573,10 +573,10 @@ def CreateAnalysisInput(sample : ntuple.Data, args : argparse.Namespace | dict, 
     elif type(sample) == ntuple.Data:
         sample_selected = BeamPionSelection(sample, args_c, is_mc)
         if is_mc:
-            reco_regions, true_regions = regions.RegionSelection(sample, args_c, True, removed = True)
+            reco_regions, true_regions = regions.region_selection(sample, args_c, True, removed = True)
             reweight_params = [args_c["beam_reweight"]["params"][k]["value"] for k in args_c["beam_reweight"]["params"]]
         else:
-            reco_regions = regions.RegionSelection(sample, args_c, False, removed = True)
+            reco_regions = regions.region_selection(sample, args_c, False, removed = True)
             true_regions = None
             reweight_params = None
         ai = AnalysisInput.CreateAnalysisInputNtuple(sample_selected, args_c["upstream_loss_correction_params"]["value"], reco_regions, true_regions, reweight_params, args_c["beam_reweight"]["strength"], args_c["fiducial_volume"], args_c["upstream_loss_response"], args_c["energy_method"])

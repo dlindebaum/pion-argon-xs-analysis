@@ -179,7 +179,7 @@ def PlotBkgRegions(energy_slices : slices.Slies, data : cross_section.analysis_i
 
     N_int_regions = {k : data.NInteract(energy_slices, v, None, True) for k, v in data.regions.items()}
 
-    exclusive_tags = tags.ExclusiveProcessTags({k : None for k in N_int_regions.keys()})
+    exclusive_tags = tags.exclusive_process_tags({k : None for k in N_int_regions.keys()})
 
     for r in N_int_regions:
         cross_section.plots.PlotXSHists(energy_slices, N_int_regions[r], xlabel = "$KE$ (MeV)", label = f"$N^{{Data}}_{{{exclusive_tags[r].name_simple}}}$", title = common.remove_(r).capitalize(), color = "k")
@@ -512,7 +512,7 @@ def LoadToy(file):
 
 
 def PlotRegions(mc : cross_section.analysis_input.AnalysisInput, book : plotting.PlotBook):
-    counts = regions.CountInRegions(mc.exclusive_process, mc.regions)
+    counts = regions.count_in_regions(mc.exclusive_process, mc.regions)
     plots.PlotConfusionMatrix(counts, list(mc.regions.keys()), list(mc.exclusive_process.keys()), y_label = "True process", x_label = "Reco region")
     book.Save()
     return
@@ -575,7 +575,7 @@ def Analyse(args : argparse.Namespace, plot : bool = False):
                 PlotRegions(templates[k], book)
 
             if plot:
-                exclusive_tags = tags.ExclusiveProcessTags({kk : None for kk in templates[k].regions.keys()})
+                exclusive_tags = tags.exclusive_process_tags({kk : None for kk in templates[k].regions.keys()})
                 region_counts = {
                     "MC" : {exclusive_tags[k].name_simple : np.sum(v) for k, v in templates[k].regions.items()},
                     "Data" : {exclusive_tags[k].name_simple : np.sum(v) for k, v in samples[k].regions.items()}

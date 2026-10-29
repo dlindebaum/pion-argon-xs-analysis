@@ -27,7 +27,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
     events = ntuple.Data(file_desc, n_events, start)
     mask = beam.PiBeamSelection(events, args["data"])
     if args["data"] is False:
-        event_tags = tags.GenerateTrueBeamParticleTags(events)
+        event_tags = tags.generate_true_beam_particle_tags(events)
     else:
         event_tags = None
     return {"mask" : mask, "tags" : event_tags}

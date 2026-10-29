@@ -54,7 +54,7 @@ def RunProcess(ntuple_files : list[ntuple.FileDescriptor], is_data : bool, args 
     func_args["data"] = is_data
     output = processing.mutliprocess(func, ntuple_files, args.batches, args.events, func_args, args.threads)
     if merge:
-        output = processing.MergeOutputs(output)
+        output = processing.merge_outputs(output)
     return output
 
 @timer

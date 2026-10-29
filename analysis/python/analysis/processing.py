@@ -34,7 +34,7 @@ def log_process(func):
     return wrap
 
 
-def CalculateBatches(file_desc : ntuple.FileDescriptor, n_batches : int = None, n_events : int = None) -> list[int]:
+def calculate_batches(file_desc : ntuple.FileDescriptor, n_batches : int = None, n_events : int = None) -> list[int]:
     """ Calculate the number of events to run per job (batch).
 
     Args:
@@ -87,13 +87,13 @@ def CalculateBatches(file_desc : ntuple.FileDescriptor, n_batches : int = None, 
     return batches
 
 
-def GenerateFunctionArguments(files : list[ntuple.FileDescriptor], nBatches : int, nEvents : int, args : dict, event_indices : list = None) -> list:
+def generate_function_arguments(files : list[ntuple.FileDescriptor], n_batches : int, n_events : int, args : dict, event_indices : list = None) -> list:
     """ Create a list of function arguments to supply to each job. It will automatically calculate the number of events and stride for each job.
 
     Args:
         files (list[Master.FileDescriptor]): Input file lists
-        nBatches (int): Number of batches run (i.e. number of jobs)
-        nEvents (int): number of events to run per job
+        n_batches (int): Number of batches run (i.e. number of jobs)
+        n_events (int): number of events to run per job
         args (dict): additional function arguments
 
     Returns:
@@ -102,7 +102,7 @@ def GenerateFunctionArguments(files : list[ntuple.FileDescriptor], nBatches : in
     batches = []
     start = []
     for f in files: # calculate event numbers and stride for each file
-        b = CalculateBatches(f, nBatches, nEvents)
+        b = calculate_batches(f, n_batches, n_events)
         start.append([0] + list(np.cumsum(b[:-1])))
         batches.append(b)
 
@@ -126,14 +126,14 @@ def GenerateFunctionArguments(files : list[ntuple.FileDescriptor], nBatches : in
 
 
 @common.timer
-def mutliprocess(func : callable, files : list[ntuple.FileDescriptor], nBatches : int, nEvents : int, args : dict, n_pus : int = None, event_indices : list = None):
+def mutliprocess(func : callable, files : list[ntuple.FileDescriptor], n_batches : int, n_events : int, args : dict, n_pus : int = None, event_indices : list = None):
     """ Run a function with parallel processing, requires that it analyses ntuples.
 
     Args:
         func (callable): function to run
         files (list[Master.FileDescriptor]): input root files
-        nBatches (list): number of batches
-        nEvents (list): number of events
+        n_batches (list): number of batches
+        n_events (list): number of events
         args (dict): args for function
         pus (int) : number of processors to use. If None, all are used.
 
@@ -143,12 +143,12 @@ def mutliprocess(func : callable, files : list[ntuple.FileDescriptor], nBatches 
     pool = ProcessPool(nodes = n_pus)
     pool.restart(True)
 
-    inputs = GenerateFunctionArguments(files, nBatches, nEvents, args = args, event_indices = event_indices)
+    inputs = generate_function_arguments(files, n_batches, n_events, args = args, event_indices = event_indices)
     batch_numbers = list(range(len(inputs[0])))
     return pool.map(func, batch_numbers, *inputs)
 
 
-def MergeOutputs(outputs : list[dict]) -> dict:
+def merge_outputs(outputs : list[dict]) -> dict:
     """ Merge a collection of dictionaries with identical structures into a single dictionary.
 
     Args:
@@ -170,7 +170,7 @@ def MergeOutputs(outputs : list[dict]) -> dict:
                     if type(v) == ak.Array:
                         output[k] = ak.concatenate([output[k], v])
                     elif type(v) == tags.Tags:
-                        output[k] = tags.MergeTags([output[k], v])
+                        output[k] = tags.merge_tags([output[k], v])
                     elif type(v) == list:
                         output[k].extend(v)
                     else:

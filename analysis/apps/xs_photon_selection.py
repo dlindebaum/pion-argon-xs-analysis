@@ -70,10 +70,10 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
                         output[f"{k}_{p}"] = ak.flatten(v)
 
     output["true_mother"] = ak.flatten(events.trueParticlesBT.motherPdg)
-    pfo_tags = tags.GenerateTrueParticleTagsPi0Shower(events)
+    pfo_tags = tags.generate_true_particle_tags_pi0_shower(events)
     output["pi0_photon"] = ak.flatten(pfo_tags["$\\gamma$:beam $\\pi^0$"].mask | pfo_tags["$\\gamma$:other $\\pi^0$"].mask)
 
-    pi0_tags = tags.GeneratePi0Tags(events, photon_mask[photon_mask] & pairs)
+    pi0_tags = tags.generate_pi0_tags(events, photon_mask[photon_mask] & pairs)
     for t in pi0_tags:
         pi0_tags[t].mask = pi0_tags[t].mask[pairs]
     output["pi0_tags"] = pi0_tags

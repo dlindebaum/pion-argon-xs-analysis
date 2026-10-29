@@ -46,7 +46,7 @@ class Toy:
         """
         reco_regions = Toy.GetRegion(self.df, "reco_regions_")
         true_regions = Toy.GetRegion(self.df, "truth_regions_")
-        return regions.CountInRegions(true_regions, reco_regions)
+        return regions.count_in_regions(true_regions, reco_regions)
 
 
     def SetProperty(self, name : str, value : any):
@@ -107,5 +107,5 @@ class Toy:
         """
         for _, r in plots.IterMultiPlot(reco_regions.columns):
             tmp_regions = {t : true_regions[t].values & reco_regions[r].values & (observable > 0) for t in true_regions.columns} # filter the reco events for this region only
-            plots.PlotTagged(observable, tags.ExclusiveProcessTags(tmp_regions), bins = 50, newFigure = False, title = f"reco region : {r}", reverse_sort = False, stacked = stacked, histtype = histtype, x_label = label, ncols = 1, norm = norm)
+            plots.PlotTagged(observable, tags.exclusive_process_tags(tmp_regions), bins = 50, newFigure = False, title = f"reco region : {r}", reverse_sort = False, stacked = stacked, histtype = histtype, x_label = label, ncols = 1, norm = norm)
         return

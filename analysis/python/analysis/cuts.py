@@ -261,7 +261,7 @@ class CutHandler():
         """
         self._init_data = ak.ones_like(evts.recoParticles.number, dtype=bool)
         self._init_data_sig = self._get_mask_signature(self._init_data)
-        self._particle_tags = tags.GenerateTrueParticleTags(evts)
+        self._particle_tags = tags.generate_true_particle_tags(evts)
         self._data_changed = True
         self.init_events_set = True
         return

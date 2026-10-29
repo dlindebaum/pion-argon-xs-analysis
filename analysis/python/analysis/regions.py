@@ -11,7 +11,7 @@ from python.analysis import common, ntuple, plotting, samples, selection, tags
 from python.analysis.plotting import plots
 
 @common.timer
-def RegionSelection(events : ntuple.Data, args : Namespace | dict, is_mc : bool, region_type : samples.SampleDefinition = None, process_type : samples.SampleDefinition = None, removed : bool = False) -> dict[np.ndarray]:
+def region_selection(events : ntuple.Data, args : Namespace | dict, is_mc : bool, region_type : samples.SampleDefinition = None, process_type : samples.SampleDefinition = None, removed : bool = False) -> dict[np.ndarray]:
     """ Get reco and true regions (if possible) for ntuple.
 
     Args:
@@ -70,7 +70,7 @@ def RegionSelection(events : ntuple.Data, args : Namespace | dict, is_mc : bool,
         return reco_regions
 
 
-def CountInRegions(true_regions : dict, reco_regions : dict, selection_efficincy : np.ndarray = None) -> np.ndarray:
+def count_in_regions(true_regions : dict, reco_regions : dict, selection_efficincy : np.ndarray = None) -> np.ndarray:
     """ Computes the counts of each combination of reco and true regions.
 
     Args:
@@ -92,7 +92,7 @@ def CountInRegions(true_regions : dict, reco_regions : dict, selection_efficincy
     return counts
 
 @common.timer
-def GetTotalPionInelMasks(mc : ntuple.Data) -> ak.Array:
+def get_total_pion_inel_masks(mc : ntuple.Data) -> ak.Array:
     """ Returns the mask which selects true inelastic pi+.
 
     Args:
@@ -101,11 +101,11 @@ def GetTotalPionInelMasks(mc : ntuple.Data) -> ak.Array:
     Returns:
         ak.Array: mask.
     """
-    particle_tags = tags.GenerateTrueBeamParticleTags(mc)
+    particle_tags = tags.generate_true_beam_particle_tags(mc)
     return particle_tags["$\\pi^{+}$:inel"].mask
 
 @common.timer
-def RecoRegionSelection(region_selections : dict[dict], out : str):
+def region_study(region_selections : dict[dict], out : str):
     """ Study which computes a correlation matrix ofthe event faction for reco regions and true regions.
         Saved to file to be used in toy simulation.
 
@@ -124,10 +124,10 @@ def RecoRegionSelection(region_selections : dict[dict], out : str):
 
         process_keys = [k for k in true_regions if k != "uncategorised"]
         if pe_index_labels is None:
-            process_tags = tags.ExclusiveProcessTags({k : None for k in process_keys})
+            process_tags = tags.exclusive_process_tags({k : None for k in process_keys})
             pe_index_labels = process_tags.name_simple.values
 
-        counts = np.array(CountInRegions(true_regions, reco_regions))
+        counts = np.array(count_in_regions(true_regions, reco_regions))
         plots.plt.figure(figsize = [3 * 6.4, 3 * 4.8])
         plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "True process", x_label = "Reco region", title = common.remove_(r), newFigure = False)
         pdf.Save()
@@ -144,7 +144,7 @@ def RecoRegionSelection(region_selections : dict[dict], out : str):
         pe[common.remove_(r)] = ((np.diag(counts) / np.sum(counts, 0)) * (np.diag(counts) / np.sum(counts, 1)))[:len(true_regions) - 1] # -1 to exlcude the uncategorised species. (purity x efficiency not needed)
 
         reco_regions.pop("uncategorised")
-        counts = CountInRegions(true_regions, reco_regions)
+        counts = count_in_regions(true_regions, reco_regions)
 
         fractions_df = counts / np.sum(counts, axis = 1)[:, np.newaxis]
         fractions_df = pd.DataFrame(np.array(fractions_df).T, columns = true_regions, index = reco_regions) # columns are the true regions, so index over those to get the fractions

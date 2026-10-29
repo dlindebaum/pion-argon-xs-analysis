@@ -20,7 +20,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
     ri = {}
     for r, v in samples.regions.items():
         print(r)
-        reco_regions, true_regions = regions.RegionSelection(mc, args, True, v, None, True) # should we generate permutations of the true process as well?
+        reco_regions, true_regions = regions.region_selection(mc, args, True, v, None, True) # should we generate permutations of the true process as well?
         ri[r] = {"reco_regions" : reco_regions, "true_regions" : true_regions}
 
     return ri
@@ -35,7 +35,7 @@ def main(args : argparse.Namespace):
 
     print(f"{output_mc=}")
 
-    regions.RecoRegionSelection(output_mc, out)
+    regions.region_study(output_mc, out)
     return
 
 

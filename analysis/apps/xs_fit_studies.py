@@ -624,7 +624,7 @@ def PredictedCountsSummary(template_counts : float, model : pyhf.Model, test_nam
     return n_fe_max, n_fe_total_max
 
 def CreateSummaryTables(total_summaries, row_names):
-    proc_tags = tags.ExclusiveProcessTags({k : None for k in dict.fromkeys(list(row_names) + list(total_summaries.keys()))})
+    proc_tags = tags.exclusive_process_tags({k : None for k in dict.fromkeys(list(row_names) + list(total_summaries.keys()))})
 
     table_fe = pd.DataFrame({k : v[0] for k, v in total_summaries.items()}, index = row_names)
     table_err = pd.DataFrame({k : v[1] for k, v in total_summaries.items()}, index = row_names)
@@ -682,7 +682,7 @@ def Summary(directory : str, test_name : str, model_name : str, model : pyhf.Mod
 
 
 def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, template : cross_section.analysis_input.AnalysisInput, book : plotting.PlotBook = plotting.PlotBook.null()):
-    process_tags = tags.ExclusiveProcessTags(template.exclusive_process)
+    process_tags = tags.exclusive_process_tags(template.exclusive_process)
     for j, c in plots.IterMultiPlot(templates_energy):
         for i, s in enumerate(c):
             plots.Plot(energy_slices.pos_overflow, s/np.sum(templates_energy), color = process_tags.number[i].colour, label = f"$\\lambda_{{{process_map[j]},{process_map[i]}}}$", xlabel = f"$\\lambda_{{{process_map[j]},s}}$ (MeV)", ylabel = "normalised counts", style = "step", newFigure = False)
@@ -821,9 +821,9 @@ def main(args : argparse.Namespace):
                 PlotShapeExamples(args.energy_slices, book)
 
         if (hasattr(args.template, "exclusive_process")) and (type(args.template.exclusive_process) == dict):
-            data_tags = tags.ExclusiveProcessTags({k : None for k in args.template.exclusive_process.keys()})
+            data_tags = tags.exclusive_process_tags({k : None for k in args.template.exclusive_process.keys()})
         else:
-            data_tags = tags.ExclusiveProcessTags({k : None for k in args.template.regions.keys()})
+            data_tags = tags.exclusive_process_tags({k : None for k in args.template.regions.keys()})
 
         test = ["shape", "normalisation", "pulls"] 
 

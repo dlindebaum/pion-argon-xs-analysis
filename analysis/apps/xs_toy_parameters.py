@@ -32,7 +32,7 @@ from python.analysis import tags
 from python.analysis import beam
 from python.analysis.plotting import plots
 
-from apps.xs_analysis_input import RegionSelection, BeamPionSelection
+from apps.xs_analysis_input import BeamPionSelection
 
 from rich import print
 
@@ -71,14 +71,14 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
     true_pion_mask = mc.trueParticles.pdg[:, 0] == 211
 
-    pion_inel_mask = GetTotalPionInelMasks(mc)
+    pion_inel_mask = get_total_pion_inel_masks(mc)
     
     cross_section_quantities = ComputeQuantities(mc, args)
 
     ri = {}
     for r, v in samples.regions.items():
         print(r)
-        reco_regions, true_regions = RegionSelection(mc, args, True, v, None, True) # should we generate permutations of the true process as well?
+        reco_regions, true_regions = regions.region_selection(mc, args, True, v, None, True) # should we generate permutations of the true process as well?
         ri[r] = {"reco_regions" : reco_regions, "true_regions" : true_regions}
 
     mc_copy = BeamPionSelection(mc, args, True)
@@ -197,7 +197,7 @@ def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : 
     return
 
 @common.timer
-def GetTotalPionInelMasks(mc : ntuple.Data) -> ak.Array:
+def get_total_pion_inel_masks(mc : ntuple.Data) -> ak.Array:
     """ Returns the mask which selects true inelastic pi+.
 
     Args:
@@ -206,7 +206,7 @@ def GetTotalPionInelMasks(mc : ntuple.Data) -> ak.Array:
     Returns:
         ak.Array: mask.
     """
-    particle_tags = tags.GenerateTrueBeamParticleTags(mc)
+    particle_tags = tags.generate_true_beam_particle_tags(mc)
     return particle_tags["$\\pi^{+}$:inel"].mask
 
 
@@ -290,10 +290,10 @@ def RecoRegionSelection(region_selections : dict[dict], args : argparse.Namespac
 
         process_keys = [k for k in true_regions if k != "uncategorised"]
         if pe_index_labels is None:
-            process_tags = tags.ExclusiveProcessTags({k : None for k in process_keys})
+            process_tags = tags.exclusive_process_tags({k : None for k in process_keys})
             pe_index_labels = process_tags.name_simple.values
 
-        counts = np.array(regions.CountInRegions(true_regions, reco_regions))
+        counts = np.array(regions.count_in_regions(true_regions, reco_regions))
         plots.plt.figure(figsize = [3 * 6.4, 3 * 4.8])
         plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "True process", x_label = "Reco region", title = common.remove_(r), newFigure = False)
         pdf.Save()
@@ -310,7 +310,7 @@ def RecoRegionSelection(region_selections : dict[dict], args : argparse.Namespac
         pe[common.remove_(r)] = ((np.diag(counts) / np.sum(counts, 0)) * (np.diag(counts) / np.sum(counts, 1)))[:len(true_regions) - 1] # -1 to exlcude the uncategorised species. (purity x efficiency not needed)
 
         reco_regions.pop("uncategorised")
-        counts = regions.CountInRegions(true_regions, reco_regions)
+        counts = regions.count_in_regions(true_regions, reco_regions)
 
         fractions_df = counts / np.sum(counts, axis = 1)[:, np.newaxis]
         fractions_df = pd.DataFrame(np.array(fractions_df).T, columns = true_regions, index = reco_regions) # columns are the true regions, so index over those to get the fractions
@@ -330,7 +330,7 @@ def MeanTrackScoreKDE(mean_track_score : ak.Array, true_processes : dict[ak.Arra
         args (argparse.Namespace): application arguments.
     """
     true_processes_filtered = {k : v for k, v in true_processes.items() if k != "uncategorised"}
-    process_tags = tags.ExclusiveProcessTags(true_processes_filtered)
+    process_tags = tags.exclusive_process_tags(true_processes_filtered)
 
     kdes = {}
     for k, v in true_processes_filtered.items():

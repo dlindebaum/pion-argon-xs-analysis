@@ -407,7 +407,7 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
 
         merged_output = []
         for s in split_output:
-            o = ntuple.MergeOutputs(split_output[s])
+            o = processing.merge_outputs(split_output[s])
             if type(o["name"]) == list:
                 o["name"] = o["name"][0] 
             merged_output.append(o)
@@ -417,7 +417,7 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
     def CreateAltPi0Selections(self):
 
         self.args.cpus = 1
-        processing_args = processing.CalculateBatches(self.args)
+        processing_args = ntuple.CalculateBatches(self.args)
         for k, v in processing_args.items():
             setattr(self.args, k, v)
 
@@ -698,7 +698,7 @@ class NormalisationSystematic(MCMethod):
         data_stat_err = pd.DataFrame({p : xs_nominal["pdsp"][p][1] for p in xs_nominal["pdsp"]})
 
         process_keys = list(xs_nominal["pdsp"].keys())
-        process_tags = tags.ExclusiveProcessTags({k : None for k in process_keys})
+        process_tags = tags.exclusive_process_tags({k : None for k in process_keys})
 
         tables = {}
         for p in xs_nominal["pdsp"]:
@@ -1106,7 +1106,7 @@ def main(args : argparse.Namespace):
         with plotting.PlotBook(outdir + "final_plotting.plots.pdf", watermark = "DUNE: Work in Progress") as book:
             table, table_alt = FinalPlots(args.cv["pdsp"], tables, args.energy_slices, book, alt_xs = False)
 
-        process_tags = tags.ExclusiveProcessTags({k : None for k in table.columns})
+        process_tags = tags.exclusive_process_tags({k : None for k in table.columns})
         table = table.rename(index = {"w_chi2" : "$\\chi^{2}/ndf$", "p" : "$p$"}, columns={t : tags[t].name_simple.capitalize() for t in tags})
         table.style.format("{:.3g}").to_latex(outdir + "goodness_of_fit.tex")
 

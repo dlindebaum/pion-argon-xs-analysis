@@ -81,11 +81,11 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
     output = {
         "sideband" : {
             "p_inst" : sideband_sample.recoParticles.beam_inst_P,
-            "tags" : tags.GenerateTrueBeamParticleTags(sideband_sample)
+            "tags" : tags.generate_true_beam_particle_tags(sideband_sample)
         },
         "analysis" : {
             "p_inst" : analysis_sample.recoParticles.beam_inst_P,
-            "tags" : tags.GenerateTrueBeamParticleTags(analysis_sample)
+            "tags" : tags.generate_true_beam_particle_tags(analysis_sample)
         },
         "table" : table
     }
