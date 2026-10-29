@@ -43,11 +43,11 @@ exclusive_proc = ["absorption", "charge_exchange", "single_pion_production", "pi
 
 pd.set_option('future.no_silent_downcasting', True)
 
-def SaveSystematicError(systematic : dict, fractional : dict, out : str):
+def save_systematic_error(systematic : dict, fractional : dict, out : str):
     return io.write_dill(out, {"systematic" : systematic, "fractional": fractional})
 
 
-def SaveTables(tables : pd.DataFrame, outdir : str, precision : int):
+def save_tables(tables : pd.DataFrame, outdir : str, precision : int):
     io.write_hdf5(tables, f"{outdir}tables.hdf5")
     for t in tables:
         tables[t].style.format(precision = precision).hide(axis = 0).to_latex(f"{outdir}table_{t}.tex")
@@ -61,11 +61,11 @@ class MCMethod(ABC):
         self.data_config = data_config
         pass
 
-    def Analyse(self, analysis_input : analysis_input.AnalysisInput, book : plotting.PlotBook = plotting.PlotBook.null()):
+    def analyse(self, analysis_input : analysis_input.AnalysisInput, book : plotting.PlotBook = plotting.PlotBook.null()):
 
-        region_fit_result = xs_analyse.RegionFit(analysis_input, self.args.energy_slices, self.args.fit["mean_track_score"], self.model, mc_stat_unc = self.args.fit["mc_stat_unc"], single_bin = self.args.fit["single_bin"])
+        region_fit_result = xs_analyse.region_fit(analysis_input, self.args.energy_slices, self.args.fit["mean_track_score"], self.model, mc_stat_unc = self.args.fit["mc_stat_unc"], single_bin = self.args.fit["single_bin"])
 
-        _, histograms_reco_obs, histograms_reco_obs_err = xs_analyse.BackgroundSubtraction(analysis_input, self.args.signal_process, self.args.energy_slices, region_fit_result, self.args.fit["single_bin"], self.args.fit["regions"], self.args.toy_template, args.bkg_sub_mc_stat, book)
+        _, histograms_reco_obs, histograms_reco_obs_err = xs_analyse.background_subtraction(analysis_input, self.args.signal_process, self.args.energy_slices, region_fit_result, self.args.fit["single_bin"], self.args.fit["regions"], self.args.toy_template, args.bkg_sub_mc_stat, book)
 
 
         if self.args.fit["regions"]:
@@ -74,7 +74,7 @@ class MCMethod(ABC):
             histograms_reco_obs_err = {**histograms_reco_obs_err, **histograms_reco_obs_err["int_ex"]}
             histograms_reco_obs_err.pop("int_ex")
 
-        unfolding_result = xs_analyse.Unfolding(histograms_reco_obs, histograms_reco_obs_err, self.args.toy_template, self.args.unfolding, self.args.signal_process, len(analysis_input.KE_init_reco)/len(self.args.toy_template.KE_init_reco), self.args.energy_slices, self.args.fit["regions"], self.args.fit["mc_stat_unc"], None, book)
+        unfolding_result = xs_analyse.unfolding(histograms_reco_obs, histograms_reco_obs_err, self.args.toy_template, self.args.unfolding, self.args.signal_process, len(analysis_input.KE_init_reco)/len(self.args.toy_template.KE_init_reco), self.args.energy_slices, self.args.fit["regions"], self.args.fit["mc_stat_unc"], None, book)
 
         if book is not None:
             for p in xs_analyse.process_labels:
@@ -83,23 +83,23 @@ class MCMethod(ABC):
                 plotting.plots.plot(self.args.energy_slices.pos_overflow, hist_true, label = "true", style = "step", color = "C0", new_figure = False)
                 book.save()
 
-        xs = xs_analyse.XSUnfold(unfolding_result, self.args.energy_slices, True, True, self.args.fit["regions"])
+        xs = xs_analyse.xs_unfold(unfolding_result, self.args.energy_slices, True, True, self.args.fit["regions"])
         return xs
 
     @abstractmethod
-    def RunExperiment(self, config : dict) -> tuple[dict, dict]:
+    def run_experiment(self, config : dict) -> tuple[dict, dict]:
         pass
 
 
-    def Evaluate(self, n : int, **kwargs):
+    def evaluate(self, n : int, **kwargs):
         xs = []
         for i in range(n):
             print(Rule(f"Experiment : {i + 1}"))
-            xs.append(self.RunExperiment(**kwargs))
+            xs.append(self.run_experiment(**kwargs))
         return xs
 
 
-    def CalculateSysCov(self, results : list[dict], book : plotting.PlotBook = plotting.PlotBook.null()):
+    def calculate_sys_cov(self, results : list[dict], book : plotting.PlotBook = plotting.PlotBook.null()):
         values = {k : [] for k in results[0]}
         for i in results:
             for k in i:
@@ -127,7 +127,7 @@ class MCMethod(ABC):
         return {k : np.sqrt(np.diag(cov[k])) for k in cov}
 
 
-    def Tables(self, xs_nominal : dict, sys : dict, name : str) -> dict[pd.DataFrame]:
+    def tables(self, xs_nominal : dict, sys : dict, name : str) -> dict[pd.DataFrame]:
         x = self.args.energy_slices.pos_overflow[1:-1] - (self.args.energy_slices.width/2)
 
         KEs = pd.Series(np.array(x, dtype = int), name = "$KE$ (MeV)")
@@ -167,7 +167,7 @@ class DataAnalysis(ABC):
         pass
 
     @classmethod
-    def CreateNewAIs():
+    def create_new_ais():
         pass
 
 
@@ -181,28 +181,28 @@ class DataAnalysis(ABC):
         args_copy.toy_template = None
         args_copy.out = ""
         args_copy.all = False
-        xs = xs_analyse.Analyse(args_copy, False)["pdsp"]
+        xs = xs_analyse.analyse(args_copy, False)["pdsp"]
         return xs
 
 
-    def RunAnalysis(self, path):
+    def run_analysis(self, path):
         xs = {i : self.__run_analysis(f"{path}{self.name}_{i}/") for i in ["low", "high"]}
         return xs
 
 
-    def PlotResults(self, xs_nominal : dict, result : dict, book : plotting.PlotBook = plotting.PlotBook.null()):
+    def plot_results(self, xs_nominal : dict, result : dict, book : plotting.PlotBook = plotting.PlotBook.null()):
         for p in xs_nominal["pdsp"]:
             plotting.plot_xs_cpmparison({"low" : result["low"][p], "nominal" : xs_nominal["pdsp"][p], "high" : result["high"][p]}, self.args.energy_slices, p, cv_only = True, marker_size = 12)
             book.save()
         return
 
     @staticmethod
-    def CalculateSysError(xs):
+    def calculate_sys_error(xs):
         return {p : abs((xs["high"][p][0] - xs["low"][p][0]) / 2) for p in xs["low"]}
 
 
     @staticmethod
-    def CalculateSysErrorAsym(xs_nominal : dict, xs : dict):
+    def calculate_sys_error_asym(xs_nominal : dict, xs : dict):
         errs = {}
         for p in xs_nominal["pdsp"]:
             e_low = xs_nominal["pdsp"][p][0] - xs["low"][p][0]
@@ -215,7 +215,7 @@ class DataAnalysis(ABC):
         return errs
 
 
-    def DataAnalysisTables(self, xs_nominal : dict, err_asym : dict, name : str):
+    def data_analysis_tables(self, xs_nominal : dict, err_asym : dict, name : str):
         x = self.args.energy_slices.pos_overflow[1:-1] - (self.args.energy_slices.width/2)
 
         KEs = pd.Series(np.array(x, dtype = int), name = "$KE$ (MeV)")
@@ -269,35 +269,35 @@ class NuisanceParameters:
         args_copy.out = ""
         args_copy.all = False
 
-        xs = xs_analyse.Analyse(args_copy, False)["pdsp"]
+        xs = xs_analyse.analyse(args_copy, False)["pdsp"]
         return xs
 
 
-    def RunExperiment(self):
+    def run_experiment(self):
         xs = self.__run_analysis(False)
         xs_np = self.__run_analysis(True)
         return {"no_np" : xs, "np" : xs_np}
 
 
-    def CalculateSysError(self, result : dict):
+    def calculate_sys_error(self, result : dict):
         np_sys = {}
         for p in result["no_np"]:
             np_sys[p] = np.sqrt(result["np"][p][1]**2 - result["no_np"][p][1]**2)
         return np_sys
 
 
-    def PlotXSMCStat(self, result, book : plotting.PlotBook = plotting.PlotBook.null()):
+    def plot_xs_mc_stat(self, result, book : plotting.PlotBook = plotting.PlotBook.null()):
         for p in result["np"]:
             plotting.plot_xs_cpmparison({"Data stat + MC stat" : result["np"][p], "Data stat" : result["no_np"][p]}, self.args.energy_slices, process = p)
             book.save()
 
 
-    def MCStatTables(self, result : dict):
+    def mc_stat_tables(self, result : dict):
         x = self.args.energy_slices.pos_overflow[1:-1] - (self.args.energy_slices.width/2)
 
         KEs = pd.Series(np.array(x, dtype = int), name = "$KE$ (MeV)")
 
-        mc_stat_err = self.CalculateSysError(result)
+        mc_stat_err = self.calculate_sys_error(result)
         data_stat_err = {p : result["no_np"][p][1] for p in result["no_np"]}
 
         tables = {}
@@ -321,7 +321,7 @@ class NuisanceParameters:
 class UpstreamCorrectionSystematic(DataAnalysis):
     name = "upstream_loss_1_sigma"
 
-    def CreateNewAIs(self, outdir : str):
+    def create_new_ais(self, outdir : str):
         upl = {
             "low" : {f"p{i}" : self.args.upstream_loss_correction_params["value"][f"p{i}"] - self.args.upstream_loss_correction_params["error"][f"p{i}"] for i in range(self.args.upstream_loss_response.n_params)},
             "high" : {f"p{i}" : self.args.upstream_loss_correction_params["value"][f"p{i}"] + self.args.upstream_loss_correction_params["error"][f"p{i}"] for i in range(self.args.upstream_loss_response.n_params)}
@@ -338,7 +338,7 @@ class UpstreamCorrectionSystematic(DataAnalysis):
 class BeamReweightSystematic(DataAnalysis):
     name = "beam_reweight_1_sigma"
 
-    def CreateNewAIs(self, outdir : str):
+    def create_new_ais(self, outdir : str):
         cfg = {
             "low" : {k : v["value"] - v["error"] for k, v in self.args.beam_reweight["params"].items()},
             "high" : {k : v["value"] + v["error"] for k, v in self.args.beam_reweight["params"].items()}
@@ -414,7 +414,7 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
         return merged_output
 
 
-    def CreateAltPi0Selections(self):
+    def create_alt_pi0_selections(self):
 
         self.args.cpus = 1
         processing_args = ntuple.calculate_batches(self.args)
@@ -428,11 +428,11 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
         return {"mc" : output_mc, "data" : output_data}
 
 
-    def CreateNewAIs(self, outdir : str):
+    def create_new_ais(self, outdir : str):
 
         os.makedirs(outdir, exist_ok = True)
 
-        masks = self.CreateAltPi0Selections()
+        masks = self.create_alt_pi0_selections()
         io.write_dill(f"{outdir}pi0_selection_masks.dill", masks)
 
         args_copy = {}
@@ -457,7 +457,7 @@ class BeamMomentumResolutionSystematic(MCMethod):
         self.P_reco_original = np.sqrt((self.args.toy_template.KE_init_reco + Particle.from_pdgid(211).mass)**2 - (Particle.from_pdgid(211).mass)**2)
 
 
-    def RunExperiment(self, analysis_input_data : analysis_input.AnalysisInput, resolution : float) -> tuple[dict, dict]:
+    def run_experiment(self, analysis_input_data : analysis_input.AnalysisInput, resolution : float) -> tuple[dict, dict]:
         P_reco_smeared = self.P_reco_original * (1 + np.random.normal(0, resolution, len(self.P_reco_original)))
 
         KE_init_reco = kinematics.KE(P_reco_smeared, Particle.from_pdgid(211).mass)
@@ -469,7 +469,7 @@ class BeamMomentumResolutionSystematic(MCMethod):
 
         if self.args.fit["single_bin"] == False:
             self.model = RegionFit.CreateModel(self.args.toy_template, self.args.energy_slices, self.args.fit["mean_track_score"], False, self.args.toy_template.weights, self.args.fit["mc_stat_unc"], True, self.args.fit["single_bin"])
-        xs = self.Analyse(analysis_input_data, None)
+        xs = self.analyse(analysis_input_data, None)
         return xs
     
 
@@ -481,7 +481,7 @@ class TrackLengthResolutionSystematic(MCMethod):
         self.track_length_original = self.args.toy_template.track_length_reco
 
 
-    def RunExperiment(self, analysis_input_data : analysis_input.AnalysisInput, resolution : float) -> tuple[dict, dict]:
+    def run_experiment(self, analysis_input_data : analysis_input.AnalysisInput, resolution : float) -> tuple[dict, dict]:
         track_length_smeared = self.track_length_original * (1 + np.random.normal(0, resolution, len(self.track_length_original)))
 
         KE_int_reco = bethe_bloch.KE_end(self.args.toy_template.KE_init_reco, track_length_smeared, 10)
@@ -489,11 +489,11 @@ class TrackLengthResolutionSystematic(MCMethod):
 
         if self.args.fit["single_bin"] == False:
             self.model = RegionFit.CreateModel(self.args.toy_template, self.args.energy_slices, self.args.fit["mean_track_score"], False, self.args.toy_template.weights, self.args.fit["mc_stat_unc"], True, self.args.fit["single_bin"])
-        xs = self.Analyse(analysis_input_data, None)
+        xs = self.analyse(analysis_input_data, None)
         return xs
     
 
-    def CalculateResolution(self, book : plotting.PlotBook = plotting.PlotBook.null()):
+    def calculate_resolution(self, book : plotting.PlotBook = plotting.PlotBook.null()):
         ai_mc = analysis_input.AnalysisInput.from_file(self.args.analysis_input["mc"])
 
         r = np.array(common.nandiv(ai_mc.track_length_reco - ai_mc.track_length_true, ai_mc.track_length_reco))
@@ -524,7 +524,7 @@ class TheoryShape(MCMethod):
         super().__init__(args, model, data_config)
 
 
-    def GenerateKEShapeWeights(self, bins : int, shape_lims : list):
+    def generate_KE_shape_weights(self, bins : int, shape_lims : list):
         KE_int = self.args.toy_template.KE_int_true
         hist, edges = np.histogram(KE_int[~np.isnan(KE_int)], bins = bins)
         weights = np.random.uniform(min(shape_lims), max(shape_lims), len(hist))
@@ -535,22 +535,22 @@ class TheoryShape(MCMethod):
         return weights[ind]
 
 
-    def RunExperiment(self, analysis_input_data : analysis_input.AnalysisInput) -> tuple[dict, dict]:
-        weights = self.GenerateKEShapeWeights(50, [0.8, 1.2])
+    def run_experiment(self, analysis_input_data : analysis_input.AnalysisInput) -> tuple[dict, dict]:
+        weights = self.generate_KE_shape_weights(50, [0.8, 1.2])
         self.args.toy_template.weights = weights
 
-        xs = self.Analyse(analysis_input_data, None)
+        xs = self.analyse(analysis_input_data, None)
         return xs
 
 
 class NormalisationSystematic(MCMethod):
-    def RunExperiment(self, config : dict) -> tuple[dict, dict]:
+    def run_experiment(self, config : dict) -> tuple[dict, dict]:
         x = self.args.energy_slices.pos[:-1] - self.args.energy_slices.width / 2
 
         ai = analysis_input.AnalysisInput.create_analysis_input_toy(toy.Toy(df = xs_toy_generator.run(config)))
 
-        xs = self.Analyse(ai, None)
-        xs_sim_mod = xs_toy_generator.ModifyGeantXS(scale_factors = config["pdf_scale_factors"])
+        xs = self.analyse(ai, None)
+        xs_sim_mod = xs_toy_generator.modify_geant_xs(scale_factors = config["pdf_scale_factors"])
 
         if self.args.fit["regions"]:
             xs_true = {k : xs_sim_mod.get_interpolated_curve(k)(x) for k in exclusive_proc}
@@ -560,7 +560,7 @@ class NormalisationSystematic(MCMethod):
         return xs, xs_true
 
 
-    def Evaluate(self, norms = [0.8, 1.2], repeats : int = 1):
+    def evaluate(self, norms = [0.8, 1.2], repeats : int = 1):
         cvs = {}
         true_cvs = {}
         for target in exclusive_proc:
@@ -578,12 +578,12 @@ class NormalisationSystematic(MCMethod):
                             scales["double_charge_exchange"] = i
                         else:
                             scales[target] = i
-                        config = xs_fit_studies.CreateConfigNormalisation(scales, self.data_config)
+                        config = xs_fit_studies.create_config_normalisation(scales, self.data_config)
 
                     if repeats != 1:
                         config["seed"] = j + 1
 
-                    output = self.RunExperiment(config)
+                    output = self.run_experiment(config)
                     xs[i].append(output[0])
                     xs_true[i] = output[1]
             cvs[target] = xs
@@ -591,7 +591,7 @@ class NormalisationSystematic(MCMethod):
         return {"cv" : cvs, "true_cv" : true_cvs}
 
     @staticmethod
-    def PlotNormalisationTestResults(results : dict, args : argparse.Namespace, xs_nominal : dict, book : plotting.PlotBook = plotting.PlotBook.null()):
+    def plot_normalisation_test_results(results : dict, args : argparse.Namespace, xs_nominal : dict, book : plotting.PlotBook = plotting.PlotBook.null()):
         xs_sim = geant.GeantCrossSections()
         scale_factors = {"absorption" : 1, "charge_exchange" : 1, "pion_production" : 1, "double_charge_exchange" : 1, "quasielastic" : 1}
         for r in results["cv"]:
@@ -603,7 +603,7 @@ class NormalisationSystematic(MCMethod):
                         mod_norm["quasielastic"] = n
                     else:
                         mod_norm[r] = n
-                    mod_sim = xs_toy_generator.ModifyGeantXS(scale_factors = mod_norm, modified_PDFs = None)
+                    mod_sim = xs_toy_generator.modify_geant_xs(scale_factors = mod_norm, modified_PDFs = None)
 
                     if p == "single_pion_production":
                         gxs = getattr(mod_sim, "double_charge_exchange") + getattr(mod_sim, "quasielastic")
@@ -626,7 +626,7 @@ class NormalisationSystematic(MCMethod):
         return
 
     @staticmethod
-    def CalculateSysErr(results):
+    def calculate_sys_err(results):
         def sys_err(r, tr):
             return common.quadsum([abs(r[p][0] - tr[p]) for p in r], 0)
 
@@ -639,7 +639,7 @@ class NormalisationSystematic(MCMethod):
         return {"low" : sys_err_low, "high" : sys_err_high}
 
     @staticmethod
-    def TotalSysQS(sys_err : dict):
+    def total_sys_qs(sys_err : dict):
         norm_sys_qs = {}
         for p in exclusive_proc:
             norm_sys_qs[p] = [
@@ -649,7 +649,7 @@ class NormalisationSystematic(MCMethod):
         return norm_sys_qs
 
     @staticmethod
-    def TotalSysMax(sys_err : dict):
+    def total_sys_max(sys_err : dict):
         norm_sys_max = {}
         for p in exclusive_proc:
             norm_sys_max[p] = [
@@ -659,7 +659,7 @@ class NormalisationSystematic(MCMethod):
         return norm_sys_max
     
     @staticmethod
-    def AverageResults(results : dict):
+    def average_results(results : dict):
         cv_avg = {}
         for t in results["cv"]:
             t_avg = {}
@@ -681,7 +681,7 @@ class NormalisationSystematic(MCMethod):
         results["cv"] = cv_avg
 
     @staticmethod
-    def CalculateFractionalError(sys_err_avg : dict, xs_nominal : dict):
+    def calculate_fractional_error(sys_err_avg : dict, xs_nominal : dict):
         frac_low = {}
         frac_high = {}
         for i in xs_nominal:
@@ -690,7 +690,7 @@ class NormalisationSystematic(MCMethod):
         return {"low" : frac_low, "high" : frac_high}
 
     
-    def CreateTables(self, xs_nominal, sys):
+    def create_tables(self, xs_nominal, sys):
         x = args.energy_slices.pos_overflow[1:-1] - (args.energy_slices.width/2)
 
         KEs = pd.Series(np.array(x, dtype = int), name = "$KE$ (MeV)")
@@ -721,7 +721,7 @@ class NormalisationSystematic(MCMethod):
         return tables
 
 
-def CreateSystematicTable(out : str, data_only : dict, args : argparse.Namespace) -> dict[pd.DataFrame]:
+def create_systematics_table(out : str, data_only : dict, args : argparse.Namespace) -> dict[pd.DataFrame]:
     sys_err = {}
     for f in common.ls_recursive(out):
         if "sys.dill" in f:
@@ -778,7 +778,7 @@ def CreateSystematicTable(out : str, data_only : dict, args : argparse.Namespace
     return fmt_tables
 
 
-def SaveSystematicTables(systematic_tables : dict[pd.DataFrame], out : str):
+def save_systematic_tables(systematic_tables : dict[pd.DataFrame], out : str):
     for k, v in systematic_tables.items():
         v.to_hdf(out + f"systematic_table_{k}.hdf5", key = "df")
         v.style.format(
@@ -791,7 +791,7 @@ def SaveSystematicTables(systematic_tables : dict[pd.DataFrame], out : str):
     return
 
 
-def PlotSysHist(systematic_table : dict[pd.DataFrame], book : plotting.PlotBook = plotting.PlotBook.null()):
+def plot_sys_hist(systematic_table : dict[pd.DataFrame], book : plotting.PlotBook = plotting.PlotBook.null()):
     for t in systematic_table:
         plotting.plots.plt.figure()
         c = 0
@@ -841,7 +841,7 @@ def PlotSysHist(systematic_table : dict[pd.DataFrame], book : plotting.PlotBook 
     return
 
 
-def FinalPlots(cv, systematics_table : dict[pd.DataFrame], energy_slices, book : plotting.PlotBook = plotting.PlotBook.null(), alt_xs : bool = False):
+def final_plots(cv, systematics_table : dict[pd.DataFrame], energy_slices, book : plotting.PlotBook = plotting.PlotBook.null(), alt_xs : bool = False):
     goodness_of_fit = {}
     if alt_xs:
         xs_alt = geant.GeantCrossSections(geant.GEANT_XS, energy_range = [energy_slices.min_pos - energy_slices.width, energy_slices.max_pos])
@@ -903,49 +903,49 @@ def main(args : argparse.Namespace):
 
             mc_stat = NuisanceParameters(args)
             if can_regen(outdir):
-                result = mc_stat.RunExperiment()
-                # sys = mc_stat.CalculateSysError(result)
+                result = mc_stat.run_experiment()
+                # sys = mc_stat.calculate_sys_error(result)
                 io.write_dill(f"{outdir}results.dill", result)
                 # SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
                 result = io.read_dill(f"{outdir}results.dill")
                 # sys = io.read_dill(f"{outdir}sys.dill")
 
-            sys = mc_stat.CalculateSysError(result)
-            SaveSystematicError(sys, None, f"{outdir}sys.dill")
+            sys = mc_stat.calculate_sys_error(result)
+            save_systematic_error(sys, None, f"{outdir}sys.dill")
             with plotting.PlotBook(f"{outdir}plotting.plots.pdf") as book:
-                mc_stat.PlotXSMCStat(result, book)
-            tables = mc_stat.MCStatTables(result)
-            SaveTables(tables, outdir, 2)
+                mc_stat.plot_xs_mc_stat(result, book)
+            tables = mc_stat.mc_stat_tables(result)
+            save_tables(tables, outdir, 2)
 
         if can_run("shower_energy"):
             outdir = out + "shower_energy/"
             sc = ShowerEnergyCorrectionSystematic(args)
             if can_regen(outdir):
-                sc.CreateNewAIs(outdir)
-                result = sc.RunAnalysis(outdir)
-                # sys = sc.CalculateSysErrorAsym(args.cv, result)
+                sc.create_new_ais(outdir)
+                result = sc.run_analysis(outdir)
+                # sys = sc.calculate_sys_error_asym(args.cv, result)
                 io.write_dill(f"{outdir}results.dill", result)
                 # SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
                 result = io.read_dill(f"{outdir}results.dill")
                 # sys = io.read_dill(f"{outdir}sys.dill")["systematic"]
 
-            sys = sc.CalculateSysErrorAsym(args.cv, result)
-            SaveSystematicError(sys, None, f"{outdir}sys.dill")
+            sys = sc.calculate_sys_error_asym(args.cv, result)
+            save_systematic_error(sys, None, f"{outdir}sys.dill")
             with plotting.PlotBook(f"{outdir}plotting.plots.pdf") as book:
-                sc.PlotResults(args.cv, result, book)
-            tables = sc.DataAnalysisTables(args.cv, sys, "Shower energy")
-            SaveTables(tables, outdir, 2)
+                sc.plot_results(args.cv, result, book)
+            tables = sc.data_analysis_tables(args.cv, sys, "Shower energy")
+            save_tables(tables, outdir, 2)
 
         if can_run("upstream"):
             outdir = out + "upstream/"
             upl = UpstreamCorrectionSystematic(args)
 
             if can_regen(outdir):
-                upl.CreateNewAIs(outdir)
-                result = upl.RunAnalysis(outdir)
-                # sys = upl.CalculateSysErrorAsym(args.cv, result)
+                upl.create_new_ais(outdir)
+                result = upl.run_analysis(outdir)
+                # sys = upl.calculate_sys_error_asym(args.cv, result)
 
                 io.write_dill(f"{outdir}results.dill", result)
                 # SaveSystematicError(sys, None, f"{outdir}sys.dill")
@@ -953,21 +953,21 @@ def main(args : argparse.Namespace):
                 result = io.read_dill(f"{outdir}results.dill")
                 # sys = io.read_dill(f"{outdir}sys.dill")
 
-            sys = upl.CalculateSysErrorAsym(args.cv, result)
-            SaveSystematicError(sys, None, f"{outdir}sys.dill")
+            sys = upl.calculate_sys_error_asym(args.cv, result)
+            save_systematic_error(sys, None, f"{outdir}sys.dill")
             with plotting.PlotBook(f"{outdir}plotting.plots.pdf") as book:
-                upl.PlotResults(args.cv, result, book)
-            tables = upl.DataAnalysisTables(args.cv, sys, "Upstream")
-            SaveTables(tables, outdir, 2)
+                upl.plot_results(args.cv, result, book)
+            tables = upl.data_analysis_tables(args.cv, sys, "Upstream")
+            save_tables(tables, outdir, 2)
 
         if can_run("beam_reweight"):
             outdir = out + "beam_reweight/"
             brw = BeamReweightSystematic(args)
 
             if can_regen(outdir):
-                brw.CreateNewAIs(outdir)
-                result = brw.RunAnalysis(outdir)
-                # sys = brw.CalculateSysErrorAsym(args.cv, result)
+                brw.create_new_ais(outdir)
+                result = brw.run_analysis(outdir)
+                # sys = brw.calculate_sys_error_asym(args.cv, result)
 
                 io.write_dill(f"{outdir}results.dill", result)
                 # SaveSystematicError(sys, None, f"{outdir}sys.dill")
@@ -975,12 +975,12 @@ def main(args : argparse.Namespace):
                 result = io.read_dill(f"{outdir}results.dill")
                 # sys = io.read_dill(f"{outdir}sys.dill")["systematic"]
 
-            sys = brw.CalculateSysErrorAsym(args.cv, result)
-            SaveSystematicError(sys, None, f"{outdir}sys.dill")
+            sys = brw.calculate_sys_error_asym(args.cv, result)
+            save_systematic_error(sys, None, f"{outdir}sys.dill")
             with plotting.PlotBook(f"{outdir}plotting.plots.pdf") as book:
-                brw.PlotResults(args.cv, result, book)
-            tables = brw.DataAnalysisTables(args.cv, sys, "Reweight")
-            SaveTables(tables, outdir, 2)
+                brw.plot_results(args.cv, result, book)
+            tables = brw.data_analysis_tables(args.cv, sys, "Reweight")
+            save_tables(tables, outdir, 2)
 
         if can_run("track_length"):
             outdir = out + "track_length/"
@@ -988,25 +988,25 @@ def main(args : argparse.Namespace):
             trk = TrackLengthResolutionSystematic(args, model, args.toy_data_config)
 
             with plotting.PlotBook(outdir + "trk_res.pdf") as book:
-                trk.CalculateResolution(book)
+                trk.calculate_resolution(book)
             table = {}
             for i in range(len(trk.popt[0])):
                 table[f"$p_{{{i}}}$"] = common.round_value_to_error(trk.popt[0][i], trk.popt[1][i])
             pd.DataFrame(table, index = [0]).style.hide(axis = "index").to_latex(outdir + "fit_params.tex")
 
             if can_regen(outdir):
-                result = trk.Evaluate(args.n_throws, analysis_input_data = analysis_input_nominal, resolution = trk.resolution)
+                result = trk.evaluate(args.n_throws, analysis_input_data = analysis_input_nominal, resolution = trk.resolution)
                 io.write_dill(f"{outdir}results.dill", result)
             else:
                 result = io.read_dill(f"{outdir}results.dill")
 
             if len(result) > 1:
                 with plotting.PlotBook(f"{outdir}cov_mat") as book:
-                    sys = trk.CalculateSysCov(result, book)
-                SaveSystematicError(sys, None, f"{outdir}sys.dill")
+                    sys = trk.calculate_sys_cov(result, book)
+                save_systematic_error(sys, None, f"{outdir}sys.dill")
 
-                tables = trk.Tables(args.cv, sys, "Track length")
-                SaveTables(tables, outdir, 3)
+                tables = trk.tables(args.cv, sys, "Track length")
+                save_tables(tables, outdir, 3)
             else:
                 print("only one experiment was ran, run more experiments to produce the systematic errors.")
 
@@ -1019,18 +1019,18 @@ def main(args : argparse.Namespace):
             bm = BeamMomentumResolutionSystematic(args, model, args.toy_data_config)
 
             if can_regen(outdir):
-                result = bm.Evaluate(args.n_throws, analysis_input_data = analysis_input_nominal, resolution = resolution)
+                result = bm.evaluate(args.n_throws, analysis_input_data = analysis_input_nominal, resolution = resolution)
                 io.write_dill(f"{outdir}results.dill", result)
             else:
                 result = io.read_dill(f"{outdir}results.dill")
 
             if len(result) > 1:
                 with plotting.PlotBook(f"{outdir}cov_mat") as book:
-                    sys = bm.CalculateSysCov(result, book)
-                SaveSystematicError(sys, None, f"{outdir}sys.dill")
+                    sys = bm.calculate_sys_cov(result, book)
+                save_systematic_error(sys, None, f"{outdir}sys.dill")
 
-                tables = bm.Tables(args.cv, sys, "Beam momentum")
-                SaveTables(tables, outdir, 3)
+                tables = bm.tables(args.cv, sys, "Beam momentum")
+                save_tables(tables, outdir, 3)
             else:
                 print("only one experiment was ran, run more experiments to produce the systematic errors.")
 
@@ -1041,7 +1041,7 @@ def main(args : argparse.Namespace):
             ts = TheoryShape(args, model, args.toy_data_config)
 
             if can_regen(outdir):
-                result = ts.Evaluate(args.n_throws, analysis_input_data = analysis_input_nominal)
+                result = ts.evaluate(args.n_throws, analysis_input_data = analysis_input_nominal)
                 print(f"saving: {outdir}results.dill")
                 io.write_dill(f"{outdir}results.dill", result)
             else:
@@ -1049,11 +1049,11 @@ def main(args : argparse.Namespace):
 
             if len(result) > 1:
                 with plotting.PlotBook(f"{outdir}cov_mat") as book:
-                    sys = ts.CalculateSysCov(result, book)
-                SaveSystematicError(sys, None, f"{outdir}sys.dill")
+                    sys = ts.calculate_sys_cov(result, book)
+                save_systematic_error(sys, None, f"{outdir}sys.dill")
 
-                tables = ts.Tables(args.cv, sys, "Theory")
-                SaveTables(tables, outdir, 3)
+                tables = ts.tables(args.cv, sys, "Theory")
+                save_tables(tables, outdir, 3)
             else:
                 print("only one experiment was ran, run more experiments to produce the systematic errors.")
 
@@ -1063,11 +1063,11 @@ def main(args : argparse.Namespace):
             
             norm_sys = NormalisationSystematic(args, model, args.toy_data_config)
             
-            xs_nominal = norm_sys.Analyse(analysis_input_nominal, None)
+            xs_nominal = norm_sys.analyse(analysis_input_nominal, None)
 
             if can_regen(outdir):
                 if not os.path.isfile(f"{outdir}results.dill"):    
-                    result = norm_sys.Evaluate([0.8, 1.2], args.fit_inaccuracy_repeats)
+                    result = norm_sys.evaluate([0.8, 1.2], args.fit_inaccuracy_repeats)
                     io.write_dill(f"{outdir}results.dill", result)
 
                 result = io.read_dill(f"{outdir}results.dill")
@@ -1075,21 +1075,21 @@ def main(args : argparse.Namespace):
                 result = io.read_dill(f"{outdir}results.dill")
 
             if len(result) > 1:
-                NormalisationSystematic.AverageResults(result)
+                NormalisationSystematic.average_results(result)
                 print(result)
-                sys_err = NormalisationSystematic.CalculateSysErr(result)
-                frac_err = NormalisationSystematic.CalculateFractionalError(sys_err, xs_nominal)
-                SaveSystematicError(sys_err, frac_err, f"{outdir}sys.dill")
+                sys_err = NormalisationSystematic.calculate_sys_err(result)
+                frac_err = NormalisationSystematic.calculate_fractional_error(sys_err, xs_nominal)
+                save_systematic_error(sys_err, frac_err, f"{outdir}sys.dill")
                 sys = io.read_dill(f"{outdir}sys.dill")
 
                 with plotting.PlotBook(f"{outdir}plots", True) as book:
                     #! use styler properly
                     plotting.styles.PlotStyler.set_plot_style(dark = False, extend_colors = True)
-                    NormalisationSystematic.PlotNormalisationTestResults(result, args, xs_nominal, book)
+                    NormalisationSystematic.plot_normalisation_test_results(result, args, xs_nominal, book)
                     plotting.styles.PlotStyler.set_plot_style(dark = True, extend_colors = False)
 
-                tables = norm_sys.CreateTables(args.cv, sys)
-                SaveTables(tables, outdir, 2)
+                tables = norm_sys.create_tables(args.cv, sys)
+                save_tables(tables, outdir, 2)
             else:
                 print("only one experiment was ran, run more experiments to produce the systematic errors.")
 
@@ -1097,14 +1097,14 @@ def main(args : argparse.Namespace):
     if args.plot:
         outdir = out + "combined/"
         os.makedirs(outdir, exist_ok = True)
-        tables = CreateSystematicTable(out, args.cv, args)
-        SaveSystematicTables(tables, outdir)
+        tables = create_systematics_table(out, args.cv, args)
+        save_systematic_tables(tables, outdir)
 
         with plotting.PlotBook(outdir + "systematic_plotting.plots.pdf") as book:
             with plotting.plots.matplotlib.rc_context({"axes.prop_cycle" : plotting.plots.plt.cycler("color", plotting.plots.matplotlib.colormaps["tab20"].colors)}):
-                PlotSysHist(tables, book)
+                plot_sys_hist(tables, book)
         with plotting.PlotBook(outdir + "final_plotting.plots.pdf", watermark = "DUNE: Work in Progress") as book:
-            table, table_alt = FinalPlots(args.cv["pdsp"], tables, args.energy_slices, book, alt_xs = False)
+            table, table_alt = final_plots(args.cv["pdsp"], tables, args.energy_slices, book, alt_xs = False)
 
         process_tags = tags.exclusive_process_tags({k : None for k in table.columns})
         table = table.rename(index = {"w_chi2" : "$\\chi^{2}/ndf$", "p" : "$p$"}, columns={t : tags[t].name_simple.capitalize() for t in tags})

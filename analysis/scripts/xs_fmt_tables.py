@@ -151,7 +151,7 @@ def eff_err(p, n):
     return p_err
 
 
-def CreateTables(path : str, selection_name : str, signal : str = None):
+def create_tables(path : str, selection_name : str, signal : str = None):
 
     tables_mc = {}
     tables_data = {}
@@ -345,7 +345,7 @@ def main(args : argparse.Namespace):
 
     fmt_tables = {}
     for s in signal:
-        fmt_tables[s] = CreateTables(path, s, signal[s])
+        fmt_tables[s] = create_tables(path, s, signal[s])
 
     for f in fmt_tables:
         if fmt_tables[f][1] is None: continue

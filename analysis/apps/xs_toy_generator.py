@@ -77,7 +77,7 @@ def resolve_config(config : dict) -> argparse.Namespace:
     return args
 
 
-def P_int(sigma : np.array, l : float) -> np.array:
+def p_int(sigma : np.array, l : float) -> np.array:
     """ Formula to calcualte the interaction probability for the thin slab approximation. 
 
     Args:
@@ -90,7 +90,7 @@ def P_int(sigma : np.array, l : float) -> np.array:
     return 1 - np.exp(-1E-27 * sigma * 6.02214076e23 * bethe_bloch.Constants.rho * l / bethe_bloch.Constants.A)
 
 
-def ModifyGeantXS(path = geant.GEANT_XS, scale_factors : dict = None, modified_PDFs : dict[np.array] = None):
+def modify_geant_xs(path = geant.GEANT_XS, scale_factors : dict = None, modified_PDFs : dict[np.array] = None):
     xs_sim = geant.GeantCrossSections(file = path)
 
     if modified_PDFs is not None:
@@ -124,7 +124,7 @@ def ModifyGeantXS(path = geant.GEANT_XS, scale_factors : dict = None, modified_P
     return xs_sim
 
 
-def GenerateStackedPDFs(l : float, path = geant.GEANT_XS, scale_factors : dict = None, modified_PDFs : dict[np.array] = None) -> dict:
+def generate_stacked_pdfs(l : float, path = geant.GEANT_XS, scale_factors : dict = None, modified_PDFs : dict[np.array] = None) -> dict:
     """ Creates a PDF of the inclusive cross section and a stacked PDF of the exclusive process,
         such that rejection sampling can be used to allocate an exclusive process for a given inclusive process.
 
@@ -134,25 +134,25 @@ def GenerateStackedPDFs(l : float, path = geant.GEANT_XS, scale_factors : dict =
     Returns:
         dict: dictionaty of pdfs
     """
-    xs_sim = ModifyGeantXS(path, scale_factors, modified_PDFs)
+    xs_sim = modify_geant_xs(path, scale_factors, modified_PDFs)
 
     pdfs = {}
-    pdfs["total_inelastic"] = interp1d(xs_sim.KE, P_int(xs_sim.total_inelastic, l), fill_value = "extrapolate") # total inelastic pdf
+    pdfs["total_inelastic"] = interp1d(xs_sim.KE, p_int(xs_sim.total_inelastic, l), fill_value = "extrapolate") # total inelastic pdf
 
     # sort the exclusice channels based on area under curve
     area = {}
     for v in xs_sim.exclusive_processes:
-        area[v] = np.trapezoid(P_int(getattr(xs_sim, v), l))
+        area[v] = np.trapezoid(p_int(getattr(xs_sim, v), l))
 
     # stack the pdfs in ascending order
     y = np.zeros(len(xs_sim.KE))
     for v, _ in sorted(area.items(), key=lambda x: x[1]):
-        y = y + P_int(getattr(xs_sim, v), l)
+        y = y + p_int(getattr(xs_sim, v), l)
         pdfs[v] = interp1d(xs_sim.KE, y, fill_value = "extrapolate")
     return pdfs
 
 
-def GenerateIntialKEs(n : int, particle : Particle, cv : float, width : float, profile : str | dict, rng : np.random.Generator = None) -> np.array:
+def generate_initial_KEs(n : int, particle : Particle, cv : float, width : float, profile : str | dict, rng : np.random.Generator = None) -> np.array:
     """ Create a distribution of initial kinetic energy based on a profile i.e. pdf.
         Currently supported profiles are "uniform" and "gaussian".
 
@@ -180,7 +180,7 @@ def GenerateIntialKEs(n : int, particle : Particle, cv : float, width : float, p
         return fitting.rejection_sampling(n, profile["min"], profile["max"], profile["function"], profile["parameters"], rng = rng)
 
 
-def Simulate(seed : int, KE_init : np.array, step_size : float, pdfs : dict, smearing_params : dict) -> tuple:
+def simulate(seed : int, KE_init : np.array, step_size : float, pdfs : dict, smearing_params : dict) -> tuple:
     """ Generates interacting kinetic energies and position based on the initial kinetic energy with the bethe bloch formula,
         the total inelastic pdf is used to decide when a particle interacts (using rejection sampling) and then each particle which
         interacts is assosiated a particular exclusive interaction process, using rejection sampling. Particles which reach zero KE are considered
@@ -233,11 +233,11 @@ def Simulate(seed : int, KE_init : np.array, step_size : float, pdfs : dict, sme
         "exclusive_process" : exclusive_process
     })
     
-    smeared = ApplySmearing(df, Smearing(len(KE_init), smearing_params, rng))
+    smeared = apply_smearing(df, smearing(len(KE_init), smearing_params, rng))
     return pd.concat([df, smeared], axis = 1)
 
 
-def CountProcesses(proc : np.array):
+def count_processes(proc : np.array):
     """ Count unique processes for particles
 
     Args:
@@ -264,7 +264,7 @@ def create_masks(toy : pd.DataFrame) -> dict:
     return masks
 
 
-def Smearing(n : int, resolutions : dict, rng : np.random.Generator) -> pd.DataFrame:
+def smearing(n : int, resolutions : dict, rng : np.random.Generator) -> pd.DataFrame:
     """ Produces a dataframe of smearings for each kinematic output of the toy.
         Emulates detector effects.
 
@@ -282,7 +282,7 @@ def Smearing(n : int, resolutions : dict, rng : np.random.Generator) -> pd.DataF
     })
 
 
-def ApplySmearing(df : pd.DataFrame, smearings : pd.DataFrame) -> pd.DataFrame:
+def apply_smearing(df : pd.DataFrame, smearings : pd.DataFrame) -> pd.DataFrame:
     """ Add detector smearing to true obserables.
 
     Args:
@@ -303,7 +303,7 @@ def ApplySmearing(df : pd.DataFrame, smearings : pd.DataFrame) -> pd.DataFrame:
     })
 
 @timer
-def BeamSelectionEfficiency(toy : pd.DataFrame, key : str, beam_selection_params : dict, rng : np.random.Generator):
+def beam_selection_efficiency(toy : pd.DataFrame, key : str, beam_selection_params : dict, rng : np.random.Generator):
     """ Produces a mask of events which would have passed the beam selection,
         based on the selection efficiency of a particular observable.
 
@@ -324,7 +324,7 @@ def BeamSelectionEfficiency(toy : pd.DataFrame, key : str, beam_selection_params
     return pd.DataFrame({"beam_selection_mask" : U < probability}).reset_index(drop = True)
 
 @timer
-def GenerateRecoRegions(exclusive_process : pd.Series, fractions : pd.DataFrame, rng : np.random.Generator) -> pd.DataFrame:
+def generate_reco_regions(exclusive_process : pd.Series, fractions : pd.DataFrame, rng : np.random.Generator) -> pd.DataFrame:
     """ Returns a Dataframe of masks which represent the reco and true regions of each event.
         Truth regions are remade because they differ slighly from the exclusive process.
 
@@ -386,7 +386,7 @@ def GenerateRecoRegions(exclusive_process : pd.Series, fractions : pd.DataFrame,
     return regions_df
 
 
-def GenerateMeanTrackScores(kde : gaussian_kde, n : int, seed : int = None) -> np.array:
+def generate_mean_track_scores(kde : gaussian_kde, n : int, seed : int = None) -> np.array:
     """ Generates Mean track scores from the stats.gaussian_kde object.
         if mean track scores exceed the range 0, 1, the scores are resampled.
 
@@ -415,7 +415,7 @@ def GenerateMeanTrackScores(kde : gaussian_kde, n : int, seed : int = None) -> n
     return values
 
 @timer
-def MeanTrackScore(exclusive_process : pd.Series, kdes : dict, seed : int) -> np.array:
+def mean_track_score(exclusive_process : pd.Series, kdes : dict, seed : int) -> np.array:
     """ Create the Mean track score distributions for each toy event.
 
     Args:
@@ -438,7 +438,7 @@ def MeanTrackScore(exclusive_process : pd.Series, kdes : dict, seed : int) -> np
             # this is single pion production
         else:
             sample_from = i
-        scores = np.where(exclusive_process == i, GenerateMeanTrackScores(kdes[sample_from], len(exclusive_process), seed + c), scores)
+        scores = np.where(exclusive_process == i, generate_mean_track_scores(kdes[sample_from], len(exclusive_process), seed + c), scores)
     return pd.DataFrame({"mean_track_score" : scores.astype(float)}).reset_index(drop = True)
 
 def run(config : dict):
@@ -463,9 +463,9 @@ def main(args : argparse.Namespace):
 
     particle = Particle.from_pdgid(211)
 
-    pdfs = GenerateStackedPDFs(args.step, scale_factors = args.pdf_scale_factors, modified_PDFs = args.modified_PDFs)
+    pdfs = generate_stacked_pdfs(args.step, scale_factors = args.pdf_scale_factors, modified_PDFs = args.modified_PDFs)
 
-    KE_init = GenerateIntialKEs(args.events, particle, args.p_init, args.beam_width, args.beam_profile, rng)
+    KE_init = generate_initial_KEs(args.events, particle, args.p_init, args.beam_width, args.beam_profile, rng)
 
     if args.events < 1E4:
         nodes = 1
@@ -473,7 +473,7 @@ def main(args : argparse.Namespace):
         nodes = ceil(args.events / 1E4)
 
     if nodes == 1:
-        df = Simulate(seed, KE_init, args.step, pdfs, args.smearing_params) # don't need to do multiprocessing
+        df = simulate(seed, KE_init, args.step, pdfs, args.smearing_params) # don't need to do multiprocessing
     else:
         KE_init_split = np.array_split(KE_init, nodes)
         batches = ceil(nodes / args.max_cpus)
@@ -487,7 +487,7 @@ def main(args : argparse.Namespace):
             pools = ProcessPool(nodes = cpus)
             pools.restart()
             sim_args = (seed + completed_proc + np.linspace(0, cpus - 1, cpus, dtype = int), KE_init_batches, [args.step]*cpus, [pdfs]*cpus, [args.smearing_params]*cpus)
-            df.extend(pools.imap(Simulate, *sim_args))
+            df.extend(pools.imap(simulate, *sim_args))
             pools.terminate()
             completed_proc += cpus
         
@@ -498,12 +498,12 @@ def main(args : argparse.Namespace):
     for m in masks:
         df[m] = masks[m]
 
-    CountProcesses(df.inclusive_process)
-    CountProcesses(df.exclusive_process)
+    count_processes(df.inclusive_process)
+    count_processes(df.exclusive_process)
 
-    beam_selection_mask = BeamSelectionEfficiency(df, "z_int", args.beam_selection_efficiencies, rng)
-    region_masks = GenerateRecoRegions(df.exclusive_process, args.reco_region_fractions, rng)
-    scores = MeanTrackScore(df.exclusive_process, args.mean_track_score_kde, seed)
+    beam_selection_mask = beam_selection_efficiency(df, "z_int", args.beam_selection_efficiencies, rng)
+    region_masks = generate_reco_regions(df.exclusive_process, args.reco_region_fractions, rng)
+    scores = mean_track_score(df.exclusive_process, args.mean_track_score_kde, seed)
 
     df = pd.concat([df, beam_selection_mask, region_masks, scores], axis = 1)
 

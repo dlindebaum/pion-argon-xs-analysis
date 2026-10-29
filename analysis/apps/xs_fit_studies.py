@@ -59,20 +59,20 @@ folder = {
 process_map = {0 : "abs", 1 : "cex", 2 : "spip", 3 : "pip"}
 
 
-def OverrideConfig(args):
+def override_config(args):
     for a in ["step", "events", "seed"]:
         if getattr(args, a):
             args.toy_data_config[a] = getattr(args, a)
     return
 
 
-def CreateConfigNormalisation(scales : dict, data_config : dict) -> dict:
+def create_config_normalisation(scales : dict, data_config : dict) -> dict:
     cfg = {k : v for k, v in data_config.items()}
     cfg["pdf_scale_factors"] = scales
     return cfg
 
 
-def ModifiedConfigTest(config : dict, energy_slice : slices.Slices, model : pyhf.Model, toy_template : cross_section.analysis_input.AnalysisInput, mean_track_score_bins : np.array = None, single_bin : np.array = False) -> tuple[dict]:
+def modified_config_test(config : dict, energy_slice : slices.Slices, model : pyhf.Model, toy_template : cross_section.analysis_input.AnalysisInput, mean_track_score_bins : np.array = None, single_bin : np.array = False) -> tuple[dict]:
     toy_alt_pdf = cross_section.analysis_input.AnalysisInput.create_analysis_input_toy(toy.Toy(df = xs_toy_generator.run(config)))
     
     obs = RegionFit.GenerateObservations(toy_alt_pdf, energy_slice, mean_track_score_bins, model, False, single_bin)
@@ -87,7 +87,7 @@ def ModifiedConfigTest(config : dict, energy_slice : slices.Slices, model : pyhf
     return fit_result, true_process_counts, expected_mus
 
 
-def NormalisationTest(directory : str, data_config : dict, model : pyhf.Model, toy_template : cross_section.analysis_input.AnalysisInput, energy_slice : slices.Slices, mean_track_score_bins : np.ndarray, single_bin : bool):
+def normalisation_test(directory : str, data_config : dict, model : pyhf.Model, toy_template : cross_section.analysis_input.AnalysisInput, energy_slice : slices.Slices, mean_track_score_bins : np.ndarray, single_bin : bool):
     for target in folder:
         print(target)
 
@@ -107,14 +107,14 @@ def NormalisationTest(directory : str, data_config : dict, model : pyhf.Model, t
                     scales["double_charge_exchange"] = i
                 else:
                     scales[target] = i
-                config = CreateConfigNormalisation(scales, data_config)
-            results[i], true_counts[i], expected_mus[i] = ModifiedConfigTest(config, energy_slice, model, toy_template, mean_track_score_bins, single_bin)
+                config = create_config_normalisation(scales, data_config)
+            results[i], true_counts[i], expected_mus[i] = modified_config_test(config, energy_slice, model, toy_template, mean_track_score_bins, single_bin)
 
         io.write_dill(f"{directory}fit_results_{folder[target]}.dill", {"results" : results, "true_counts" : true_counts, "expected_mus" : expected_mus})
     return
 
 
-def FitSimulationCurve(xs_sim, sampling_factor : int, process : str, function : fitting.FitFunction, plot : bool = False):
+def fit_simulation_curve(xs_sim, sampling_factor : int, process : str, function : fitting.FitFunction, plot : bool = False):
     x = xs_sim.KE[::sampling_factor]/1000
     y = getattr(xs_sim, process)[::sampling_factor]/1000
 
@@ -123,7 +123,7 @@ def FitSimulationCurve(xs_sim, sampling_factor : int, process : str, function : 
     return results
 
 
-def CountsFractionalError(results, true_counts, model, single_bin = False):
+def counts_fractional_error(results, true_counts, model, single_bin = False):
     fe_err = []
     fe = []
 
@@ -158,13 +158,13 @@ def CountsFractionalError(results, true_counts, model, single_bin = False):
     return fe, fe_err
 
 
-def CreateConfigShapeTest(data_config, modified_PDFs : dict):
+def create_config_shape_test(data_config, modified_PDFs : dict):
     cfg = {k : v for k, v in data_config.items()}
     cfg["modified_PDFs"] = modified_PDFs
     return cfg
 
 
-def SmoothStep(x : np.ndarray, high : float, low : float, split : float, smooth_amount : float) -> np.ndarray:
+def smooth_step(x : np.ndarray, high : float, low : float, split : float, smooth_amount : float) -> np.ndarray:
     """ Generate points for a smoothstep function.
 
     Args:
@@ -184,7 +184,7 @@ def SmoothStep(x : np.ndarray, high : float, low : float, split : float, smooth_
         return gaussian_filter1d(step, smooth_amount)
 
 
-def CreateModifiedXS(xs_sim : cross_section.geant.GeantCrossSections, process : str, high : float, low : float, split : float, smooth_amount : float) -> dict:
+def create_modified_xs(xs_sim : cross_section.geant.GeantCrossSections, process : str, high : float, low : float, split : float, smooth_amount : float) -> dict:
     """ Create a modified cross section curve based on a smoothstep function.
 
     Args:
@@ -199,15 +199,15 @@ def CreateModifiedXS(xs_sim : cross_section.geant.GeantCrossSections, process : 
         dict: dictionary with KE and modified cross section. 
     """
     if process == "single_pion_production":
-        xs_quasi = xs_sim.quasielastic * SmoothStep(xs_sim.KE, high, low, split, smooth_amount)
-        xs_dcex = xs_sim.double_charge_exchange * SmoothStep(xs_sim.KE, high, low, split, smooth_amount)
+        xs_quasi = xs_sim.quasielastic * smooth_step(xs_sim.KE, high, low, split, smooth_amount)
+        xs_dcex = xs_sim.double_charge_exchange * smooth_step(xs_sim.KE, high, low, split, smooth_amount)
         return {**{"KE" : xs_sim.KE, "quasielastic" : xs_quasi}, **{"KE" : xs_sim.KE, "double_charge_exchange" : xs_dcex}}
     else:
-        xs = getattr(xs_sim, process) * SmoothStep(xs_sim.KE, high, low, split, smooth_amount)
+        xs = getattr(xs_sim, process) * smooth_step(xs_sim.KE, high, low, split, smooth_amount)
         return {"KE" : xs_sim.KE, process : xs}
 
 
-def ShapeTestNew(directory : str, data_config : dict, model : pyhf.Model, toy_template : cross_section.analysis_input.AnalysisInput, mean_track_score_bins : np.array, xs_sim : cross_section.geant.GeantCrossSections, energy_slices : slices.Slices, single_bin):
+def shape_test_new(directory : str, data_config : dict, model : pyhf.Model, toy_template : cross_section.analysis_input.AnalysisInput, mean_track_score_bins : np.array, xs_sim : cross_section.geant.GeantCrossSections, energy_slices : slices.Slices, single_bin):
     n = [0.8, 1, 1.2]
     alpha = [500, 1000]
     x0 = [500, 1000, 1500]
@@ -234,14 +234,14 @@ def ShapeTestNew(directory : str, data_config : dict, model : pyhf.Model, toy_te
             if i == "null":
                 config = data_config
             else:
-                config = CreateConfigShapeTest(data_config, CreateModifiedXS(xs_sim, target, i[0], i[1], i[3], i[2]))
+                config = create_config_shape_test(data_config, create_modified_xs(xs_sim, target, i[0], i[1], i[3], i[2]))
 
-            results[i], true_counts[i], expected_mus[i] = ModifiedConfigTest(config, energy_slices, model, toy_template, mean_track_score_bins, single_bin)
+            results[i], true_counts[i], expected_mus[i] = modified_config_test(config, energy_slices, model, toy_template, mean_track_score_bins, single_bin)
         io.write_dill(f"{directory}fit_results_{folder[target]}.dill", {"results" : results, "true_counts" : true_counts, "expected_mus" : expected_mus})
     return
 
 
-def PullStudy(template : cross_section.analysis_input.AnalysisInput, model : pyhf.Model, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, data_config : dict, n : int, single_bin) -> dict:
+def pull_study(template : cross_section.analysis_input.AnalysisInput, model : pyhf.Model, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, data_config : dict, n : int, single_bin) -> dict:
     out = {"expected" : None, "scale" : pd.Series(len(template) / data_config["events"]), "bestfit" : None, "uncertainty" : None}
 
     cfg = {k : v for k, v in data_config.items()}
@@ -270,7 +270,7 @@ def PullStudy(template : cross_section.analysis_input.AnalysisInput, model : pyh
     return out
 
 
-def PullStudyFast(toys : toy.Toy, n_template : int, n_data : int, args, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, n : int) -> dict:
+def pull_study_fast(toys : toy.Toy, n_template : int, n_data : int, args, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, n : int) -> dict:
     out = {"expected" : None, "scale" : None, "bestfit" : None, "uncertainty" : None}
 
     @common.timer
@@ -318,7 +318,7 @@ def PullStudyFast(toys : toy.Toy, n_template : int, n_data : int, args, energy_s
     out["scale"] = pd.DataFrame(scales)
     return out
 
-def PlotShapeExamples(energy_slices : slices.Slices, book : plotting.PlotBook = plotting.PlotBook.null()):
+def plot_shape_examples(energy_slices : slices.Slices, book : plotting.PlotBook = plotting.PlotBook.null()):
     norms = [0.8, 1.2]
     split = 1000
     smooth_amount = 500
@@ -333,7 +333,7 @@ def PlotShapeExamples(energy_slices : slices.Slices, book : plotting.PlotBook = 
             plots.plt.fill_between(xs_sim.KE, norms[0] * y, norms[1] * y, color = "k", alpha = 0.5)
         return
 
-    plot_curves({i : SmoothStep(xs_sim.KE, norms[1], norms[0], split, i) for i in [0, 100, 250, 500, 1000]}, False, "$\\alpha$", "$\\mathcal{N}(E)$")
+    plot_curves({i : smooth_step(xs_sim.KE, norms[1], norms[0], split, i) for i in [0, 100, 250, 500, 1000]}, False, "$\\alpha$", "$\\mathcal{N}(E)$")
     book.save()
 
     for proc in list(folder.keys()):
@@ -342,15 +342,15 @@ def PlotShapeExamples(energy_slices : slices.Slices, book : plotting.PlotBook = 
         else:
             y = getattr(xs_sim, proc)
 
-        plot_curves({i : y * SmoothStep(xs_sim.KE, norms[1], norms[0], split, i) for i in [0, 100, 250, 500, 1000]}, True, "$\\alpha$", "")
+        plot_curves({i : y * smooth_step(xs_sim.KE, norms[1], norms[0], split, i) for i in [0, 100, 250, 500, 1000]}, True, "$\\alpha$", "")
         book.save()
 
-        plot_curves({i : y * SmoothStep(xs_sim.KE, norms[1], norms[0], i, smooth_amount) for i in [100, 500, 1000, 1500, 1900]}, True, "$x_{0}$", "")
+        plot_curves({i : y * smooth_step(xs_sim.KE, norms[1], norms[0], i, smooth_amount) for i in [100, 500, 1000, 1500, 1900]}, True, "$x_{0}$", "")
         book.save()
 
         plots.plt.figure()
         for i, j in itertools.combinations([0.8, 1, 1.2], 2):
-            smooth_factors = SmoothStep(xs_sim.KE, j, i, split, smooth_amount)
+            smooth_factors = smooth_step(xs_sim.KE, j, i, split, smooth_amount)
             plots.plot(xs_sim.KE, y*smooth_factors, label = f"$n_{{-}} = {i}, n_{{+}} = {j},$", new_figure = False)
             plots.plot(xs_sim.KE, y*(smooth_factors[::-1]), label = f"$n_{{-}} = {j}, n_{{+}} = {i},$", new_figure = False)
         xs_sim.plot(proc, label = "nominal", color = "k")
@@ -359,7 +359,7 @@ def PlotShapeExamples(energy_slices : slices.Slices, book : plotting.PlotBook = 
     return
 
 @common.timer
-def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.ndarray, pdf : plotting.PlotBook = plotting.PlotBook.null(), single_bin : bool = False, ylim = None):
+def plot_cross_check_results(xlabel : str, data, data_energy, energy_overflow : np.ndarray, pdf : plotting.PlotBook = plotting.PlotBook.null(), single_bin : bool = False, ylim = None):
     x = data.index.values
 
     xt = np.arange(min(x), max(x)+0.1, 0.1)
@@ -445,7 +445,7 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
     return
 
 
-def ProcessResults(template_counts : int, results : dict, true_counts : dict, expected_mu : dict, model : pyhf.Model, single_bin : bool):
+def process_results(template_counts : int, results : dict, true_counts : dict, expected_mu : dict, model : pyhf.Model, single_bin : bool):
     true_counts_all = {}
     for t in true_counts:
         true_counts_all[t] = {f"true_counts_{i}" : np.sum(v) for i, v in enumerate(true_counts[t].values())}
@@ -460,7 +460,7 @@ def ProcessResults(template_counts : int, results : dict, true_counts : dict, ex
         mu_err[k] = results[k].uncertainty[0:4] / scale_factors[k]
         mu_exp[k] = expected_mu[k] / scale_factors[k]
 
-    fe, fe_err = CountsFractionalError(results, true_counts, model, single_bin)
+    fe, fe_err = counts_fractional_error(results, true_counts, model, single_bin)
     tc_arr = np.swapaxes(np.array([np.array(list(v.values())) for v in true_counts.values()]), 0, 1)
 
     if single_bin is True:
@@ -485,7 +485,7 @@ def ProcessResults(template_counts : int, results : dict, true_counts : dict, ex
     return data.T, data_energy
 
 
-def MeanProcessedResults(total, energy):
+def mean_processed_results(total, energy):
     total = sum(total) / len(total)
 
     energy_reshaped = {}
@@ -502,7 +502,7 @@ def MeanProcessedResults(total, energy):
 
 
 @common.timer
-def PlotDataShapeTestEnergy(data : tuple, energy_overflow : np.ndarray, book : plotting.PlotBook):
+def plot_data_shape_test_energy(data : tuple, energy_overflow : np.ndarray, book : plotting.PlotBook):
 
     def remove_zero(a):
         return a[a != 0]
@@ -535,7 +535,7 @@ def PlotDataShapeTestEnergy(data : tuple, energy_overflow : np.ndarray, book : p
         book.save()
     return
 
-def PlotDataShapeTest(data, key, label, vmin = None, vmax = None):
+def plot_data_shape_test(data, key, label, vmin = None, vmax = None):
     def remove_zero(a):
         return a[a != 0]
 
@@ -587,20 +587,20 @@ def PlotDataShapeTest(data, key, label, vmin = None, vmax = None):
     fig.tight_layout()
 
 @common.timer
-def PlotCrossCheckResultsShape(results_total, results_bins, energy_overflow : np.ndarray, single_bin : bool, book : plotting.PlotBook):
+def plot_cross_check_results_shape(results_total, results_bins, energy_overflow : np.ndarray, single_bin : bool, book : plotting.PlotBook):
 
     for p in process_map:
-        PlotDataShapeTest(results_total, f"mu_{p}", f"$\\mu_{{{process_map[p]}}}$")
+        plot_data_shape_test(results_total, f"mu_{p}", f"$\\mu_{{{process_map[p]}}}$")
         book.save()
     if single_bin is False:
-        PlotDataShapeTestEnergy(results_bins, energy_overflow, book)
+        plot_data_shape_test_energy(results_bins, energy_overflow, book)
 
     return
 
 
 @common.timer
-def PredictedCountsSummary(template_counts : float, model : pyhf.Model, test_name : str, model_name : str, workdirs : str, single_bin : bool):
-    pr, pr_energy = CalculateResultsfrom_file(workdirs, test_name, model_name, template_counts, model, single_bin)    
+def predicted_counts_summary(template_counts : float, model : pyhf.Model, test_name : str, model_name : str, workdirs : str, single_bin : bool):
+    pr, pr_energy = calculate_results_from_file(workdirs, test_name, model_name, template_counts, model, single_bin)    
 
     n_fe_total_max = {}
     n_fe_max = {}
@@ -623,7 +623,7 @@ def PredictedCountsSummary(template_counts : float, model : pyhf.Model, test_nam
         )
     return n_fe_max, n_fe_total_max
 
-def CreateSummaryTables(total_summaries, row_names):
+def create_summary_tables(total_summaries, row_names):
     proc_tags = tags.exclusive_process_tags({k : None for k in dict.fromkeys(list(row_names) + list(total_summaries.keys()))})
 
     table_fe = pd.DataFrame({k : v[0] for k, v in total_summaries.items()}, index = row_names)
@@ -640,22 +640,22 @@ def CreateSummaryTables(total_summaries, row_names):
     return table_fe, table_err, pd.DataFrame(table_str)
 
 
-def SaveSummaryTables(directory : str, tables : tuple[pd.DataFrame], name : str):
+def save_summary_tables(directory : str, tables : tuple[pd.DataFrame], name : str):
     names = ["fe", "unc", "fmt"]
     for n, t in zip(names, tables):
         t.style.to_latex(f"{directory}table_{name}_{n}.tex")
     return
 
 
-def Summary(directory : str, test_name : str, model_name : str, model : pyhf.Model, energy_overflow : np.ndarray, template_counts : float, single_bin : bool, book : plotting.PlotBook = plotting.PlotBook.null(), ymax = None):
+def summary(directory : str, test_name : str, model_name : str, model : pyhf.Model, energy_overflow : np.ndarray, template_counts : float, single_bin : bool, book : plotting.PlotBook = plotting.PlotBook.null(), ymax = None):
 
-    n_fe_max, n_fe_total_max = PredictedCountsSummary(template_counts, model, test_name, model_name, args.workdir, single_bin)
+    n_fe_max, n_fe_total_max = predicted_counts_summary(template_counts, model, test_name, model_name, args.workdir, single_bin)
 
     indices = ["absorption", "charge_exchange", "single_pion_production", "pion_production"]
     xlabel = "$KE$ (MeV)"
 
-    tables_n = CreateSummaryTables(n_fe_max, indices)
-    SaveSummaryTables(directory, tables_n, "processes")
+    tables_n = create_summary_tables(n_fe_max, indices)
+    save_summary_tables(directory, tables_n, "processes")
     print(tables_n[2])
 
     if ymax is None:
@@ -681,7 +681,7 @@ def Summary(directory : str, test_name : str, model_name : str, model : pyhf.Mod
     return ymax
 
 
-def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, template : cross_section.analysis_input.AnalysisInput, book : plotting.PlotBook = plotting.PlotBook.null()):
+def plot_templates(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, template : cross_section.analysis_input.AnalysisInput, book : plotting.PlotBook = plotting.PlotBook.null()):
     process_tags = tags.exclusive_process_tags(template.exclusive_process)
     for j, c in plots.iter_multi_plot(templates_energy):
         for i, s in enumerate(c):
@@ -700,7 +700,7 @@ def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : n
     return
 
 
-def PlotTotalChannel(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, book : plotting.PlotBook = plotting.PlotBook.null()):
+def plot_total_channel(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, book : plotting.PlotBook = plotting.PlotBook.null()):
     for j, c in plots.iter_multi_plot(templates_energy):
         plots.plot(energy_slices.pos_overflow, sum(c), xlabel = f"$n_{{{j}}}$ (MeV)", ylabel = "Counts", style = "bar", new_figure = False)
     book.save()
@@ -712,7 +712,7 @@ def PlotTotalChannel(templates_energy : np.ndarray, tempalates_mean_track_score 
     return
 
 
-def CalculateResultsfrom_file(workdirs, test_name, model_name, template_counts, model, single_bin):
+def calculate_results_from_file(workdirs, test_name, model_name, template_counts, model, single_bin):
     results_files = []
     for d in workdirs:
         directory = d + f"{test_name}_test_{model_name}/"
@@ -729,13 +729,13 @@ def CalculateResultsfrom_file(workdirs, test_name, model_name, template_counts, 
     for d, files in zip(workdirs, results_files):
         for f in files:
             fit_result = io.read_dill(d + f"{test_name}_test_{model_name}/" + files[f])
-            r = ProcessResults(template_counts, fit_result["results"], fit_result["true_counts"], fit_result["expected_mus"], model, single_bin)
+            r = process_results(template_counts, fit_result["results"], fit_result["true_counts"], fit_result["expected_mus"], model, single_bin)
             results_total[f].append(r[0])
             results_bins[f].append(r[1])
 
     for k in list(results_total.keys()):
         if len(workdirs) > 1:
-            results_total[k], results_bins[k] = MeanProcessedResults(results_total[k], results_bins[k])
+            results_total[k], results_bins[k] = mean_processed_results(results_total[k], results_bins[k])
         else:
             results_total[k], results_bins[k] = results_total[k][0], results_bins[k][0]
 
@@ -772,7 +772,7 @@ def main(args : argparse.Namespace):
 
             if "normalisation" not in args.skip:
                 os.makedirs(args.out + f"normalisation_test_{m}/", exist_ok = True)
-                NormalisationTest(
+                normalisation_test(
                     args.out + f"normalisation_test_{m}/",
                     args.toy_data_config, models[m],
                     args.template,
@@ -784,7 +784,7 @@ def main(args : argparse.Namespace):
                 xs_sim = cross_section.geant.GeantCrossSections(energy_range = [0, max(args.energy_slices.pos) + args.energy_slices.width])
 
                 os.makedirs(args.out + f"shape_test_{m}/", exist_ok = True)
-                ShapeTestNew(
+                shape_test_new(
                     args.out + f"shape_test_{m}/",
                     args.toy_data_config,
                     models[m],
@@ -794,7 +794,7 @@ def main(args : argparse.Namespace):
                     args.energy_slices,
                     args.fit["single_bin"])
             if "pulls" not in args.skip:
-                pull_results = PullStudyFast(toys, int(5E6), int(1E6), args, args.energy_slices, mean_track_score_bins if m == "track_score" else None, 500)
+                pull_results = pull_study_fast(toys, int(5E6), int(1E6), args, args.energy_slices, mean_track_score_bins if m == "track_score" else None, 500)
                 os.makedirs(args.out + f"pull_test_{m}/", exist_ok = True)
                 io.write_hdf5(pull_results, args.out + f"pull_test_{m}/" + "pull_results.hdf5")
 
@@ -812,13 +812,13 @@ def main(args : argparse.Namespace):
 
         if args.fit["single_bin"] is False:
             with plotting.PlotBook(outdir + "templates") as book:
-                PlotTemplates(templates_energy, tempalates_mean_track_score, args.energy_slices, mean_track_score_bins, args.template, book)
+                plot_templates(templates_energy, tempalates_mean_track_score, args.energy_slices, mean_track_score_bins, args.template, book)
 
             with plotting.PlotBook(outdir + "observation_exmaple") as book:
-                PlotTotalChannel(templates_energy, tempalates_mean_track_score, args.energy_slices, mean_track_score_bins, book)
+                plot_total_channel(templates_energy, tempalates_mean_track_score, args.energy_slices, mean_track_score_bins, book)
 
             with plotting.PlotBook(outdir + "xs_curves") as book:
-                PlotShapeExamples(args.energy_slices, book)
+                plot_shape_examples(args.energy_slices, book)
 
         if (hasattr(args.template, "exclusive_process")) and (type(args.template.exclusive_process) == dict):
             data_tags = tags.exclusive_process_tags({k : None for k in args.template.exclusive_process.keys()})
@@ -887,19 +887,19 @@ def main(args : argparse.Namespace):
 
                 else:
 
-                    results_total, results_bins = CalculateResultsfrom_file(args.workdir, t, m, template_counts, models[m], args.fit["single_bin"])
+                    results_total, results_bins = calculate_results_from_file(args.workdir, t, m, template_counts, models[m], args.fit["single_bin"])
 
                     for f in results_total:
                         os.makedirs(outdir + f"{t}_test_{m}/", exist_ok = True)
                         with plotting.PlotBook(outdir + f"{t}_test_{m}/" + f + ".pdf", True) as pdf:
                             if (t == "shape"):
-                                PlotCrossCheckResultsShape(results_total[f], results_bins[f], args.energy_slices.pos_overflow, args.fit["single_bin"], pdf)
+                                plot_cross_check_results_shape(results_total[f], results_bins[f], args.energy_slices.pos_overflow, args.fit["single_bin"], pdf)
                             else:
-                                PlotCrossCheckResults(f"$\\mathcal{{N}}_{{{data_tags[f].name_simple}}}$", results_total[f], results_bins[f], args.energy_slices.pos_overflow, pdf, args.fit["single_bin"], [-0.02, 0.06])
+                                plot_cross_check_results(f"$\\mathcal{{N}}_{{{data_tags[f].name_simple}}}$", results_total[f], results_bins[f], args.energy_slices.pos_overflow, pdf, args.fit["single_bin"], [-0.02, 0.06])
                         plots.plt.close("all")
                 
                     with plotting.PlotBook(outdir + f"{t}_test_{m}/summary_plots.pdf", True) as book:
-                        Summary(outdir + f"{t}_test_{m}/", t, m, models[m], args.energy_slices.pos_overflow, template_counts, args.fit["single_bin"], book, ymax = ymax[t])
+                        summary(outdir + f"{t}_test_{m}/", t, m, models[m], args.energy_slices.pos_overflow, template_counts, args.fit["single_bin"], book, ymax = ymax[t])
                     plots.plt.close("all")
 
     return
@@ -934,7 +934,7 @@ if __name__ == "__main__":
 
     if args.toy_data_config:
         args.toy_data_config = io.read_json(args.toy_data_config)
-        OverrideConfig(args)
+        override_config(args)
 
     if args.workdir:
         for i in range(len(args.workdir)):

@@ -20,7 +20,7 @@ from python.analysis import kinematics
 from python.analysis import ntuple
 from python.analysis import plotting
 from python.analysis.beam import reweight, upstream
-from python.analysis.cross_section.analysis_input import BeamPionSelection
+from python.analysis.cross_section.analysis_input import beam_pion_selection
 
 from rich import print
 

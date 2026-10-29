@@ -175,7 +175,7 @@ def CreateKEIntTemplates(analysis_input: AnalysisInput, energy_slices: Slices, s
     return model_input_data
 
 
-def CreateMeanTrackScoreTemplates(analysis_input: AnalysisInput, bins: np.ndarray, weights: np.ndarray = None) -> np.ndarray:
+def Createmean_track_scoreTemplates(analysis_input: AnalysisInput, bins: np.ndarray, weights: np.ndarray = None) -> np.ndarray:
     """ Create mean track score template distributions.
 
     Args:
@@ -211,7 +211,7 @@ def CreateModel(template: AnalysisInput, energy_slice: Slices, mean_track_score_
     """
     templates_energy = CreateKEIntTemplates(template, energy_slice, single_bin, pad)
     if mean_track_score_bins is not None:
-        templates_mean_track_score = CreateMeanTrackScoreTemplates(template, mean_track_score_bins, weights)
+        templates_mean_track_score = Createmean_track_scoreTemplates(template, mean_track_score_bins, weights)
     else:
         templates_mean_track_score = None
     model = Model(len(template.regions), templates_energy, templates_mean_track_score, mc_stat_unc=mc_stat_unc)

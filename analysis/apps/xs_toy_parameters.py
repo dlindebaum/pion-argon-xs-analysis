@@ -32,13 +32,13 @@ from python.analysis import tags
 from python.analysis import beam
 from python.analysis.plotting import plots
 
-from apps.xs_analysis_input import BeamPionSelection
+from apps.xs_analysis_input import beam_pion_selection
 
 from rich import print
 
 
 @common.timer
-def ComputeQuantities(mc : ntuple.Data, args : dict) -> dict[dict, dict]:
+def compute_quantities(mc : ntuple.Data, args : dict) -> dict[dict, dict]:
     """ Compute Quantities used for the cross section measurement.
 
     Args:
@@ -73,7 +73,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
     pion_inel_mask = get_total_pion_inel_masks(mc)
     
-    cross_section_quantities = ComputeQuantities(mc, args)
+    cross_section_quantities = compute_quantities(mc, args)
 
     ri = {}
     for r, v in samples.regions.items():
@@ -91,7 +91,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
     return {"kinematic_quantities" : cross_section_quantities, "true_pion_mask" : true_pion_mask, "pion_inel_mask" : pion_inel_mask, "region_identification" : ri, "mean_track_score" : mean_track_score, "beam_selection_mask" : mask}
 
 
-def CreateFitTable(params, errors):
+def create_fit_tables(params, errors):
     table = {}
     for i, (p, e) in enumerate(zip(params, errors)):
         sf = len(str(float(f"{e:.1g}")))
@@ -104,7 +104,7 @@ def CreateFitTable(params, errors):
     return pd.DataFrame(table, index = [0])
 
 
-def ResolutionStudy(plot_book : plotting.PlotBook, reco_quantity : ak.Array, true_quantity : ak.Array, mask : ak.Array = None, label = "quantity(units)", plot_range = None, residual_range = None, fit_functions : list[fitting.FitFunction] = [fitting.gaussian, fitting.student_t]) -> dict:
+def resolution_study(plot_book : plotting.PlotBook, reco_quantity : ak.Array, true_quantity : ak.Array, mask : ak.Array = None, label = "quantity(units)", plot_range = None, residual_range = None, fit_functions : list[fitting.FitFunction] = [fitting.gaussian, fitting.student_t]) -> dict:
     """ Study of residuals of cross section inputs, used to smear toy observables. Done by fitting a curve to the residual, returning the fit parameters.
 
     Args:
@@ -140,7 +140,7 @@ def ResolutionStudy(plot_book : plotting.PlotBook, reco_quantity : ak.Array, tru
         try:
             plots.plt.figure()
             params[f.__name__], errors[f.__name__] = fitting.fit(centers, counts, np.sqrt(counts), f, plot = True, xlabel = label, ylabel = "Counts", plot_style = "hist", plot_range = residual_range)
-            tables[f.__name__] = CreateFitTable(params[f.__name__], errors[f.__name__])
+            tables[f.__name__] = create_fit_tables(params[f.__name__], errors[f.__name__])
         except ValueError as e:
             print(f"fit not successful for {f.__name__}, reason: \n {e}")
         
@@ -161,7 +161,7 @@ def ResolutionStudy(plot_book : plotting.PlotBook, reco_quantity : ak.Array, tru
     return params_formatted, tables
 
 @common.timer
-def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : argparse.Namespace, labels : dict, out : str):
+def smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : argparse.Namespace, labels : dict, out : str):
     """ Smearing study, fits functions to residuals of cross section quantities and saves the fit parameters of the best fit to file.
         (Best is double crystal ball).
 
@@ -184,7 +184,7 @@ def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : 
     with plotting.PlotBook(out + "smearing/smearing_study") as pdf:
         for k in labels:
             print(f"{k=}")
-            params[k], tables[k] = ResolutionStudy(pdf, selected_quantities["reco"][k], selected_quantities["true"][k], selected_quantities["reco"][k] != 0, labels[k], args.toy_parameters["plot_ranges"][k], args.toy_parameters["smearing_residual_ranges"][k], trial_functions)
+            params[k], tables[k] = resolution_study(pdf, selected_quantities["reco"][k], selected_quantities["true"][k], selected_quantities["reco"][k] != 0, labels[k], args.toy_parameters["plot_ranges"][k], args.toy_parameters["smearing_residual_ranges"][k], trial_functions)
 
     for q in labels:
         sout = out + f"smearing/{q}/"
@@ -210,7 +210,7 @@ def get_total_pion_inel_masks(mc : ntuple.Data) -> ak.Array:
     return particle_tags["$\\pi^{+}$:inel"].mask
 
 
-def GetTotalPionCounts(pion_mask : ak.Array, quantities : dict[str, ak.Array], bins : dict[str, np.array], ranges : dict[str, list]) -> np.array:
+def get_total_pion_counts(pion_mask : ak.Array, quantities : dict[str, ak.Array], bins : dict[str, np.array], ranges : dict[str, list]) -> np.array:
     """ Counts number of pi+ in bins of each quantity.
 
     Args:
@@ -226,7 +226,7 @@ def GetTotalPionCounts(pion_mask : ak.Array, quantities : dict[str, ak.Array], b
     return counts
 
 @common.timer
-def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, beam_selection_mask : ak.Array, args : argparse.Namespace, ranges : dict, labels : dict, bins : dict, out : str):
+def beam_selection_efficiency(quantities : dict, pion_inel_mask : ak.Array, beam_selection_mask : ak.Array, args : argparse.Namespace, ranges : dict, labels : dict, bins : dict, out : str):
     """ Study which looks at the beam selection efficiency as a function of each cross section quantity, then saves the per bin efficiencies to file to use for the toy simulation.
 
     Args:
@@ -237,7 +237,7 @@ def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, beam_s
         labels (dict): plot xlabels 
         bins (dict): plot bins
     """
-    initial_counts_true = GetTotalPionCounts(pion_inel_mask, quantities, bins, ranges)
+    initial_counts_true = get_total_pion_counts(pion_inel_mask, quantities, bins, ranges)
 
     selected_pion_inel_mask = ak.Array(pion_inel_mask)
     selected_quantities = {i : ak.Array(quantities[i]) for i in quantities}
@@ -247,7 +247,7 @@ def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, beam_s
     for q in selected_quantities:
         selected_quantities[q] = selected_quantities[q][beam_selection_mask]
 
-    selected_counts_true = GetTotalPionCounts(selected_pion_inel_mask, selected_quantities, bins, ranges)
+    selected_counts_true = get_total_pion_counts(selected_pion_inel_mask, selected_quantities, bins, ranges)
 
     os.makedirs(out + "pi_beam_efficiency/", exist_ok = True)
     pdf = plotting.PlotBook(out + "pi_beam_efficiency/efficiency_study")
@@ -271,7 +271,7 @@ def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, beam_s
 
 
 @common.timer
-def RecoRegionSelection(region_selections : dict[dict], args : argparse.Namespace, out : str):
+def reco_region_selection(region_selections : dict[dict], args : argparse.Namespace, out : str):
     """ Study which computes a correlation matrix ofthe event faction for reco regions and true regions.
         Saved to file to be used in toy simulation.
 
@@ -322,7 +322,7 @@ def RecoRegionSelection(region_selections : dict[dict], args : argparse.Namespac
     return
 
 @common.timer
-def MeanTrackScoreKDE(mean_track_score : ak.Array, true_processes : dict[ak.Array], args : argparse.Namespace, out : str):
+def mean_track_scoreKDE(mean_track_score : ak.Array, true_processes : dict[ak.Array], args : argparse.Namespace, out : str):
     """ Derives mean track score kernels from mc.
 
     Args:
@@ -353,7 +353,7 @@ def MeanTrackScoreKDE(mean_track_score : ak.Array, true_processes : dict[ak.Arra
     return
 
 
-def FitBeamProfile(KE_init : np.array, func : fitting.FitFunction, KE_range : list, bins : int, book : plotting.PlotBook = plotting.PlotBook.null()) -> dict:
+def fit_beam_profile(KE_init : np.array, func : fitting.FitFunction, KE_range : list, bins : int, book : plotting.PlotBook = plotting.PlotBook.null()) -> dict:
     """ Fit the MC beam profile for use increating KE init.
 
     Args:
@@ -374,7 +374,7 @@ def FitBeamProfile(KE_init : np.array, func : fitting.FitFunction, KE_range : li
     params, error = fitting.fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = book.is_open, plot_style = "hist", xlabel = "$KE^{true}_{ff}$ (MeV)", ylabel = "Counts")
     book.save()
 
-    table = CreateFitTable(params, error)
+    table = create_fit_tables(params, error)
 
     return {
         "function" : func.__name__,
@@ -384,7 +384,7 @@ def FitBeamProfile(KE_init : np.array, func : fitting.FitFunction, KE_range : li
         }, table
 
 @common.timer
-def BeamProfileStudy(quantities : dict, args : argparse.Namespace, true_beam_mask : ak.Array, func : fitting.FitFunction, KE_range : list, out : str):
+def beam_profile_study(quantities : dict, args : argparse.Namespace, true_beam_mask : ak.Array, func : fitting.FitFunction, KE_range : list, out : str):
     """ Try to fit various fit functions to the MC beam profile.
 
     Args:
@@ -396,7 +396,7 @@ def BeamProfileStudy(quantities : dict, args : argparse.Namespace, true_beam_mas
     """
     os.makedirs(out + "beam_profile/", exist_ok = True)
     with plotting.PlotBook(out + "beam_profile/beam_profile.pdf") as book:
-        beam_profile, table = FitBeamProfile(quantities["true"]["KE_init"][true_beam_mask], func, KE_range, 50, book)
+        beam_profile, table = fit_beam_profile(quantities["true"]["KE_init"][true_beam_mask], func, KE_range, 50, book)
         io.write_json(beam_profile, out + "beam_profile/beam_profile.json")
         table.style.hide(axis = "index").to_latex(out + "beam_profile/fit.tex")
     return
@@ -418,15 +418,15 @@ def main(args : argparse.Namespace):
 
     print(f"{output_mc=}")
 
-    RecoRegionSelection(output_mc["region_identification"], args, out)
+    reco_region_selection(output_mc["region_identification"], args, out)
 
-    BeamProfileStudy(output_mc["kinematic_quantities"], args, output_mc["true_pion_mask"], args.toy_parameters["beam_profile"], args.toy_parameters["plot_ranges"]["KE_init"], out)
+    beam_profile_study(output_mc["kinematic_quantities"], args, output_mc["true_pion_mask"], args.toy_parameters["beam_profile"], args.toy_parameters["plot_ranges"]["KE_init"], out)
 
-    Smearing(output_mc["kinematic_quantities"], output_mc["true_pion_mask"], args, labels, out)
+    smearing(output_mc["kinematic_quantities"], output_mc["true_pion_mask"], args, labels, out)
 
-    BeamSelectionEfficiency(output_mc["kinematic_quantities"]["true"], output_mc["pion_inel_mask"], output_mc["beam_selection_mask"], args, args.toy_parameters["plot_ranges"], labels, bins, out)
+    beam_selection_efficiency(output_mc["kinematic_quantities"]["true"], output_mc["pion_inel_mask"], output_mc["beam_selection_mask"], args, args.toy_parameters["plot_ranges"], labels, bins, out)
 
-    MeanTrackScoreKDE(output_mc["mean_track_score"], output_mc["region_identification"][list(output_mc["region_identification"].keys())[0]]["true_regions"], args, out)
+    mean_track_scoreKDE(output_mc["mean_track_score"], output_mc["region_identification"][list(output_mc["region_identification"].keys())[0]]["true_regions"], args, out)
     return
 
 if __name__ == "__main__":
