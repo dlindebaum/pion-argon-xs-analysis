@@ -11,7 +11,7 @@ import numpy as np
 
 from .common import *
 
-from python.analysis.ntuple import Data, Ntuple_Type
+from python.analysis.ntuple import Data, NtupleType
 
 def ValidRecoEnergyCut(events : Data) -> ak.Array:
     return events.recoParticles.shower_energy != -999
@@ -38,7 +38,7 @@ def ValidRecoMomentumCut(events : Data) -> ak.Array:
 
 
 def ValidCNNScoreCut(events : Data, return_property : bool = False) -> ak.Array:
-    return CreateMask(-999, "!=", events.recoParticles.cnn_score, return_property)
+    return create_mask(-999, "!=", events.recoParticles.cnn_score, return_property)
 
 
 def GoodShowerSelection(events : Data, return_table = False):
@@ -47,30 +47,30 @@ def GoodShowerSelection(events : Data, return_table = False):
         ValidRecoMomentumCut,
         ValidRecoEnergyCut,
     ]
-    return CombineSelections(events, selections, 1, return_table = return_table)
+    return combine_selections(events, selections, 1, return_table = return_table)
 
 
 def EMScoreCut(events : Data, cut = 0.5, return_property : bool = False) -> ak.Array: #TODO Remove
-    return CreateMask(cut, "<", events.recoParticles.track_score, return_property)
+    return create_mask(cut, "<", events.recoParticles.track_score, return_property)
 
 
 def NHitsCut(events : Data, cut = 80, op = ">", return_property : bool = False) -> ak.Array:
-    return CreateMask(cut, op, events.recoParticles.n_hits, return_property)
+    return create_mask(cut, op, events.recoParticles.n_hits, return_property)
 
 
 def BeamParticleDistanceCut(events : Data, cut = [3, 90], op = [">", "<"], return_property : bool = False) -> ak.Array:
     # distance to beam end position in cm
     dist = find_beam_separations(events)
-    return CreateMask(cut, op, dist, return_property)
+    return create_mask(cut, op, dist, return_property)
 
 
 def BeamParticleIPCut(events : Data, cut = 20, op = "<", return_property : bool = False) -> ak.Array:
     ip = find_beam_impact_parameters(events)
-    return CreateMask(cut, op, ip, return_property)
+    return create_mask(cut, op, ip, return_property)
 
 
 def TrackScoreCut(events : Data, cut = 0.5, op = ">", return_property : bool = False):
-    return CreateMask(cut, op, events.recoParticles.track_score, return_property)
+    return create_mask(cut, op, events.recoParticles.track_score, return_property)
 
 
 def BeamDaughterCut(events : Data):
@@ -83,23 +83,23 @@ def VetoBeamParticle(events : Data):
 
 
 def PiPlusSelection(events : Data, cut = [0.5, 2.8], op = [">", "<"], return_property : bool = False):
-    median_dEdX = Median(events.recoParticles.track_dEdX)
-    return CreateMask(cut, op, median_dEdX, return_property)
+    median_dEdX = median(events.recoParticles.track_dEdX)
+    return create_mask(cut, op, median_dEdX, return_property)
 
 
 def ProtonSelection(events : Data, cut = 2.8, op = ">", return_property : bool = False):
-    median_dEdX = Median(events.recoParticles.track_dEdX)
-    return CreateMask(cut, op, median_dEdX, return_property)
+    median_dEdX = median(events.recoParticles.track_dEdX)
+    return create_mask(cut, op, median_dEdX, return_property)
 
 
 def Chi2ProtonSelection(events : Data, cut = 80, op = "<", return_property : bool = False):
     chi2_ndf = events.recoParticles.track_chi2_proton / events.recoParticles.track_chi2_proton_ndof
-    return CreateMask(cut, op, chi2_ndf, return_property)
+    return create_mask(cut, op, chi2_ndf, return_property)
 
 def TrackLengthSelection(events : Data, cut = 27.1, op = ">", return_property : bool = False):
-    return CreateMask(cut, op, events.recoParticles.track_len, return_property)
+    return create_mask(cut, op, events.recoParticles.track_len, return_property)
 
-def InitialPi0PhotonSelection(
+def initial_pi0_photon_selection(
         events : Data,
         em_cut : float = 0.5,
         n_hits_cut : int = 80,
@@ -123,10 +123,10 @@ def InitialPi0PhotonSelection(
     if veto_beam_particle:
         selections.append(VetoBeamParticle)
         arguments.append({})
-    return CombineSelections(events, selections, 1, arguments, verbose, return_table)
+    return combine_selections(events, selections, 1, arguments, verbose, return_table)
 
 
-def DaughterPiPlusSelection(
+def daughter_pi_plus_selection(
         events : Data,
         track_cut : float = 0.5,
         n_hits_cut : int = 20,
@@ -144,14 +144,14 @@ def DaughterPiPlusSelection(
         {"cut" : n_hits_cut},
         {"cut" : [min_dEdX, max_dEdX]}
     ]
-    if events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
+    if events.ntuple_type == NtupleType.SHOWER_MERGING:
         print("Apply beam daughter cuts")
         selections.insert(0, BeamDaughterCut)
         arguments.insert(0, {}) # the cut changes slightly depending on the ntuple type we use.
-    return CombineSelections(events, selections, 1, arguments, verbose, return_table)
+    return combine_selections(events, selections, 1, arguments, verbose, return_table)
 
 
-def DaughterProtonSelection(
+def daughter_proton_selection(
         events : Data,
         track_cut : float = 0.5,
         n_hits_cut : int = 20,
@@ -168,8 +168,8 @@ def DaughterProtonSelection(
         {"cut" : n_hits_cut},
         {"cut" : dEdX}
     ]
-    if events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
+    if events.ntuple_type == NtupleType.SHOWER_MERGING:
         selections.insert(0, BeamDaughterCut)
         arguments.insert(0, {}) # the cut changes slightly depending on the ntuple type we use.
-    return CombineSelections(events, selections, 1, arguments, verbose, return_table)
+    return combine_selections(events, selections, 1, arguments, verbose, return_table)
 

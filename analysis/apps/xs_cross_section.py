@@ -69,7 +69,7 @@ def extract_cross_sections(analysis_input : analysis_input.AnalysisInput, energy
 
 
 def main(args : application.argparse.Namespace):
-    plotting.styles.PlotStyler.SetPlotStyle(dark = True)
+    plotting.styles.PlotStyler.set_plot_style(dark = True)
 
     ais = {k : io.read_dill(v) for k, v in args.analysis_input.items() if "mc" in k}
 
@@ -87,18 +87,18 @@ def main(args : application.argparse.Namespace):
     with plotting.PlotBook(f"{outdir}cross_section_plots") as book:
         if postfit_cross_sections is None:
             for k, v in prefit_cross_sections.items():
-                plots.PlotCrossSection({"prefit" : v}, args.energy_slices, k, [1000, 2000])
-                book.Save()
+                plots.plot_cross_section({"prefit" : v}, args.energy_slices, k, [1000, 2000])
+                book.save()
         else:
             for k, v in postfit_cross_sections.items():
-                plots.PlotCrossSectionSteps(v, k, prefit_cross_sections[k])
-                book.Save()
+                plots.plot_cross_section_steps(v, k, prefit_cross_sections[k])
+                book.save()
 
-                plots.PlotCrossSectionMinMax(v, prefit_cross_sections[k], k, args.energy_slices)
-                book.Save()
+                plots.plot_cross_section_minmax(v, prefit_cross_sections[k], k, args.energy_slices)
+                book.save()
 
-                plots.PlotCrossSectionCL(v, prefit_cross_sections[k], k, args.energy_slices)
-                book.Save()
+                plots.plot_cross_section_cl(v, prefit_cross_sections[k], k, args.energy_slices)
+                book.save()
     return
 
 

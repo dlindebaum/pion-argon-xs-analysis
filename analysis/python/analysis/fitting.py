@@ -451,7 +451,7 @@ def fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
     if plot is True:
         #* main plotting
         x_interp = np.linspace(min(x), max(x), 1000)
-        plots.Plot(x_interp, func.func(x_interp, *popt), newFigure = False, x_scale = "linear", ylabel = ylabel, color = "#1f77b4", zorder = 11, label = "fit", title = title)
+        plots.plot(x_interp, func.func(x_interp, *popt), new_figure = False, x_scale = "linear", ylabel = ylabel, color = "#1f77b4", zorder = 11, label = "fit", title = title)
         
         p_min = popt - perr #(perr * chisqr/ndf)
         p_max = popt + perr #(perr * chisqr/ndf)
@@ -463,8 +463,8 @@ def fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
             colour = "black"
             label = "observed\nuncertainty"
             widths = (x[1] - x[0])/2
-            # plots.PlotHist(x - widths, x - widths, weights = y_obs, color = "#d62728", label = "observed", newFigure = False, range = plot_range)
-            plots.Plot(x, y_obs, style = "bar", linestyle = "", color = "#d62728", xlabel = xlabel, label = "observed", newFigure = False)
+            # plots.plot_hist(x - widths, x - widths, weights = y_obs, color = "#d62728", label = "observed", new_figure = False, range = plot_range)
+            plots.plot(x, y_obs, style = "bar", linestyle = "", color = "#d62728", xlabel = xlabel, label = "observed", new_figure = False)
 
             # automatically calculate cap size to match bin width
             w = x[1] - x[0] # bin width
@@ -478,7 +478,7 @@ def fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
             label = "observed"
             capsize = 3
 
-        plots.Plot(x, y_obs, yerr = y_err, marker = marker, linestyle = "", color = colour, xlabel = xlabel, label = label, newFigure = False, capsize = capsize / 2)
+        plots.plot(x, y_obs, yerr = y_err, marker = marker, linestyle = "", color = colour, xlabel = xlabel, label = label, new_figure = False, capsize = capsize / 2)
         if ylim:
             plt.ylim(*sorted(ylim))
         # if plot_range:
@@ -523,7 +523,7 @@ def extract_central_values_df(df : pd.DataFrame, bin_variable : str, variable : 
     cv_err = []
     fig_handles = None
     fig_labels = None
-    for i in plots.MultiPlot(len(data_bins) - 1, orientation = "vertical"):
+    for i in plots.multi_plot(len(data_bins) - 1, orientation = "vertical"):
         if i == len(data_bins): continue
         print_log(i)
         mask = (df[bin_variable] > data_bins[i]) & (df[bin_variable] < data_bins[i+1])
@@ -583,10 +583,10 @@ def extract_central_values_df(df : pd.DataFrame, bin_variable : str, variable : 
             y_pred = best_f.func(x, *best_popt)
             y_pred_interp = best_f.func(x_interp, *best_popt)
 
-            plots.Plot(x_interp, y_pred_interp, marker = "", color = "black", newFigure = False, label = "fit")
+            plots.plot(x_interp, y_pred_interp, marker = "", color = "black", new_figure = False, label = "fit")
             plt.axvline(mean, color = "black", linestyle = "--", label = "central value")
-        # plots.PlotHist(binned_data[variable], bins = hist_bins, newFigure = False, title = f"{bin_label} : {[data_bins[i], data_bins[i+1]]} {bin_units}", range = [min(v_range), max(v_range)], weights = binned_weights, color = "C0")
-        plots.Plot(x, y, yerr = np.sqrt(y), newFigure = False, color = "C0", style = "bar", title = f"{bin_label} : {[data_bins[i], data_bins[i+1]]} {bin_units}")
+        # plots.plot_hist(binned_data[variable], bins = hist_bins, new_figure = False, title = f"{bin_label} : {[data_bins[i], data_bins[i+1]]} {bin_units}", range = [min(v_range), max(v_range)], weights = binned_weights, color = "C0")
+        plots.plot(x, y, yerr = np.sqrt(y), new_figure = False, color = "C0", style = "bar", title = f"{bin_label} : {[data_bins[i], data_bins[i+1]]} {bin_units}")
 
         plt.axvline(np.mean(binned_data[variable]), linestyle = "--", color = "C1", label = "mean")
 

@@ -336,7 +336,7 @@ def exclusive_cross_section(n_incident : np.ndarray, n_end : np.ndarray, n_end_a
         return ratio * xs
 
 #! Deprecated.
-def NIncident(n_initial : np.ndarray, n_end : np.ndarray) -> np.ndarray:
+def n_incident(n_initial : np.ndarray, n_end : np.ndarray) -> np.ndarray:
     """
         Calculate number of incident particles.
         Function is legacy and should not be used in new implementations.
@@ -354,7 +354,7 @@ def NIncident(n_initial : np.ndarray, n_end : np.ndarray) -> np.ndarray:
     return n_incident
 
 #! Deprecated.
-def SliceNumbers(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak.Array, energy_slices : Slices) -> tuple[np.ndarray, np.ndarray]:
+def slice_numbers(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak.Array, energy_slices : Slices) -> tuple[np.ndarray, np.ndarray]:
     """
         Convert energies from physical units to slice numbers.
         Function is legacy and should not be used in new implementations.
@@ -380,7 +380,7 @@ def SliceNumbers(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak
     return init_slice, int_slice
 
 #! Deprecated
-def CountingExperiment(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak.Array, process : ak.Array, energy_slices : Slices, interact_only : bool = False, weights : np.ndarray = None) -> tuple[np.ndarray]:
+def counting_experiment_old(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak.Array, process : ak.Array, energy_slices : Slices, interact_only : bool = False, weights : np.ndarray = None) -> tuple[np.ndarray]:
     """
         Creates the interacting and incident histograms.
         Function is legacy and should not be used in new implementations.
@@ -398,7 +398,7 @@ def CountingExperiment(int_energy : ak.Array, init_energy : ak.Array, outside_tp
         np.ndarray | tuple[np.ndarray]: exclusive interaction histogram and/or initial histogram, incident histogram and interaction histogram 
     """
     deprecation_warning()
-    init_slice, int_slice = SliceNumbers(int_energy, init_energy, outside_tpc, energy_slices)
+    init_slice, int_slice = slice_numbers(int_energy, init_energy, outside_tpc, energy_slices)
 
     exclusive_weights = weights[process] if weights is not None else None
 
@@ -407,14 +407,14 @@ def CountingExperiment(int_energy : ak.Array, init_energy : ak.Array, outside_tp
         n_initial = np.histogram(np.array(init_slice), energy_slices.slice_bins, weights = weights)[0]
         n_interact_inelastic = np.histogram(np.array(int_slice), energy_slices.slice_bins, weights = weights)[0]
 
-        n_incident = NIncident(n_initial, n_interact_inelastic)
+        n_incident = n_incident(n_initial, n_interact_inelastic)
 
         return n_initial, n_interact_inelastic, n_interact_exclusive, n_incident
     else:
         return n_interact_exclusive
 
 #! Deprecated
-def CrossSection(n_int_ex : np.ndarray, n_int : np.ndarray, n_inc : np.ndarray, dEdX : np.ndarray, dE : float, n_int_ex_err : np.ndarray = None, n_int_err : np.ndarray = None, n_inc_err : np.ndarray = None) -> tuple[np.ndarray, np.ndarray]:
+def cross_section(n_int_ex : np.ndarray, n_int : np.ndarray, n_inc : np.ndarray, dEdX : np.ndarray, dE : float, n_int_ex_err : np.ndarray = None, n_int_err : np.ndarray = None, n_inc_err : np.ndarray = None) -> tuple[np.ndarray, np.ndarray]:
     """ Compute exclusive cross sections. If interactions errors are not provided, staticial uncertainties are used (poisson for incident, binomial for interactions).
         Function is legacy and should not be used in new implementations.
 

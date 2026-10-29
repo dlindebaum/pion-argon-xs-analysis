@@ -25,10 +25,10 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
     for s in args["beam_selection"]["selections"]:
         if s == "BeamScraperCut": break
         mask = args["beam_selection"]["selections"][s](mc, **args["beam_selection"]["mc_arguments"][s])
-        mc.Filter([mask], [mask])
+        mc.filter([mask], [mask])
 
-    beam_inst_KE = kinematics.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
-    true_ffKE = mc.trueParticles.beam_KE_front_face
+    beam_inst_KE = kinematics.KE(mc.recoParticles.beam_inst_momentum, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
+    true_ffKE = mc.true_particles.beam_KE_front_face
 
     beam_inst_x = mc.recoParticles.beam_inst_pos.x
     beam_inst_y = mc.recoParticles.beam_inst_pos.y
@@ -39,7 +39,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
 @common.timer
 def main(args : argparse.Namespace):
-    plotting.styles.PlotStyler.SetPlotStyle(True)
+    plotting.styles.PlotStyler.set_plot_style(True)
     outdir = args.out + "beam_scraper/"
     os.makedirs(outdir, exist_ok = True)
 
@@ -49,25 +49,25 @@ def main(args : argparse.Namespace):
     bins = 50
 
     with plotting.PlotBook(outdir + "beam_scraper_fits.pdf") as pdf:
-        plotting.plots.Plot(args.beam_scraper_energy_range, args.beam_scraper_energy_range, color = "red")
-        plotting.plots.PlotHist2D(output_mc["beam_inst_KE"], output_mc["true_ffKE"], xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$KE^{true}_{ff}$ (MeV)", x_range = args.beam_scraper_energy_range, y_range = args.beam_scraper_energy_range, newFigure = False)
-        pdf.Save()
+        plotting.plots.plot(args.beam_scraper_energy_range, args.beam_scraper_energy_range, color = "red")
+        plotting.plots.plot_hist_2d(output_mc["beam_inst_KE"], output_mc["true_ffKE"], xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$KE^{true}_{ff}$ (MeV)", x_range = args.beam_scraper_energy_range, y_range = args.beam_scraper_energy_range, new_figure = False)
+        pdf.save()
 
         if (args.beam_scraper_energy_bins is None):
             print("Warning: 'energy_bins' for the beam scraper fit was not defined. Beam scraper fit will not be completed (Hint: check the pdf output to help figure out the best values for the energy bins)")
             exit()
 
-        plotting.plots.PlotHist2D(output_mc["beam_inst_KE"], output_mc["delta_KE_upstream"], xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\\Delta E_{upstream}$ (MeV)", x_range = args.beam_scraper_energy_range, y_range = residual_range)
+        plotting.plots.plot_hist_2d(output_mc["beam_inst_KE"], output_mc["delta_KE_upstream"], xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\\Delta E_{upstream}$ (MeV)", x_range = args.beam_scraper_energy_range, y_range = residual_range)
         for i in args.beam_scraper_energy_bins: plotting.plots.plt.axvline(i, color = "red")
-        pdf.Save()
+        pdf.save()
 
         scraper_thresholds = scraper.get_scraper_fits(args.beam_scraper_energy_bins, output_mc["beam_inst_KE"], output_mc["delta_KE_upstream"], bins, residual_range)
-        pdf.Save()
+        pdf.save()
         print(scraper_thresholds)
 
         position_means = scraper.beam_scraper_plots(args.beam_scraper_energy_bins, output_mc, scraper_thresholds)
         print(position_means)
-        pdf.Save()
+        pdf.save()
 
     json_dict = {}
     for i, k in enumerate(scraper_thresholds):

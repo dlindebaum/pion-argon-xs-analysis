@@ -27,7 +27,7 @@ def truncate_track(tracks : ak.Array, x_trunc = None, y_trunc = None, z_trunc = 
     for k, v in trunc.items():
         if v is None: continue
         masks[k] = (selection.cuts_to_func(trunc[k], "<")(tracks[k]))
-    mask = selection.CombineMasks(masks, "and")
+    mask = selection.combine_masks(masks, "and")
 
     index = ak.local_index(mask)
     max_ind = ak.argmin(~mask == False, -1) 

@@ -327,8 +327,8 @@ def CalculateResponseMatrices(template : cross_section.AnalysisInput, process : 
 
     outside_tpc_mask = template.outside_fv_reco | template.outside_fv_true
 
-    true_slices = EnergySlice.SliceNumbers(template.KE_int_true, template.KE_init_true, outside_tpc_mask, energy_slice)
-    reco_slices = EnergySlice.SliceNumbers(template.KE_int_reco, template.KE_init_reco, outside_tpc_mask, energy_slice)
+    true_slices = EnergySlice.slice_numbers(template.KE_int_true, template.KE_init_true, outside_tpc_mask, energy_slice)
+    reco_slices = EnergySlice.slice_numbers(template.KE_int_reco, template.KE_init_reco, outside_tpc_mask, energy_slice)
 
     if regions:
         channel = {i : (template.exclusive_process[i])[~outside_tpc_mask] for i in template.regions}
@@ -359,9 +359,9 @@ def CalculateResponseMatrices(template : cross_section.AnalysisInput, process : 
     if book is not None:
         for k in resp:
             Unfold.PlotMatrix(corr[k], energy_slice, title = f"Response marix: {labels[k]}", c_label = "Counts")
-            book.Save()
+            book.save()
             Unfold.PlotMatrix(resp[k][0], energy_slice, title = f"Normalised response matrix: {labels[k]}", c_label = "$P(E_{i}|C_{j})$")
-            book.Save()
+            book.save()
 
     return resp
 
@@ -444,23 +444,23 @@ def PlotUnfoldingResults(obs : np.ndarray, obs_err : np.ndarray, true : np.ndarr
     print(f"unfolded: {ks.calc(results['unfolded'], true)}")
 
 
-    cross_section.PlotXSHists(energy_slices, true, None, True, 1/sum(true), label = "MC true (initial prior)", ylabel = "Fractional counts", color = "C1", newFigure = False)
-    cross_section.PlotXSHists(energy_slices, obs, obs_err, True, 1/sum(obs), label = "Data reco", ylabel = "Fractional counts", color = "k")
-    cross_section.PlotXSHists(energy_slices, results["unfolded"], results["stat_err"], True, 1 / sum(results["unfolded"]), label =  label, color = "C4", ylabel = "Fractional counts", newFigure = False, title = title)
+    cross_section.plot_xs_hists(energy_slices, true, None, True, 1/sum(true), label = "MC true (initial prior)", ylabel = "Fractional counts", color = "C1", new_figure = False)
+    cross_section.plot_xs_hists(energy_slices, obs, obs_err, True, 1/sum(obs), label = "Data reco", ylabel = "Fractional counts", color = "k")
+    cross_section.plot_xs_hists(energy_slices, results["unfolded"], results["stat_err"], True, 1 / sum(results["unfolded"]), label =  label, color = "C4", ylabel = "Fractional counts", new_figure = False, title = title)
     Plots.plt.legend(loc = "upper left")
-    book.Save() 
+    book.save() 
     if "unfolding_matrix" in results:
         Unfold.PlotMatrix(results["unfolding_matrix"], energy_slices, title = "Unfolded matrix: " + label, c_label = "$P(C_{j}|E_{i})$", text = True, text_colour = "red")
-        book.Save()
+        book.save()
 
         Unfold.PlotMatrix((results["unfolding_matrix"].T * obs).T, energy_slices, "Migrations : " + label, c_label = "Counts")
-        book.Save()
+        book.save()
 
     if "covariance_matrix" in results:
         Unfold.PlotMatrix(results["covariance_matrix"], energy_slices, title = "Covariance matrix: " + label, c_label = "Counts")
-        book.Save()
+        book.save()
 
         Unfold.PlotMatrix(np.corrcoef(results["covariance_matrix"]), energy_slices, title = "Correlation matrix: " + label, c_label = "Correlation coefficient", text = True, text_colour = "k", cmap = "coolwarm")
-        book.Save()
+        book.save()
 
     return

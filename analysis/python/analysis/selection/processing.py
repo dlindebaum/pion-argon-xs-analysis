@@ -13,7 +13,7 @@ from python.analysis import cuts, io, ntuple, photon_energy_correction, tags
 from python.analysis.beam import scraper
 
 
-def MergeSelectionMasks(output):
+def merge_selection_masks(output):
     files = output["name"]
 
     masks ={}
@@ -124,7 +124,7 @@ def merge_multiproccess_output(outputs : list) -> dict:
     rprint(merged_output)
     return merged_output
 
-def SaveMasks(output : dict, out : str):
+def write_masks(output : dict, out : str):
     """ Save selection masks to dill file
 
     Args:
@@ -146,7 +146,7 @@ def SaveMasks(output : dict, out : str):
         io.write_dill(out + f"{k}_selection_masks.dill", masks[k])
 
 
-def MakeOutput(value : ak.Array, event_tags : tags.Tags, cuts : list = [], op : list = [], fs_tags : tags.Tags = None) -> dict:
+def make_output(value : ak.Array, event_tags : tags.Tags, cuts : list = [], op : list = [], fs_tags : tags.Tags = None) -> dict:
     """ Output dictionary for multiprocessing class, if we want to be fancy this can be a dataclass instead.
         Generally the data stored in this dictionary should be before any cuts are applied, for plotting purposes.
 
@@ -163,11 +163,11 @@ def MakeOutput(value : ak.Array, event_tags : tags.Tags, cuts : list = [], op : 
     return {"value" : value, "tags" : event_tags, "cuts" : cuts, "op" : op, "fs_tags" : fs_tags}
 
 
-def AnalyseBeamFiducialCut(events : ntuple.Data, beam_instrumentation : bool, functions : dict, args : dict):
+def analyse_beam_fiducial_cut(events : ntuple.Data, beam_instrumentation : bool, functions : dict, args : dict):
     output = {}
     masks = {}
     cut_table = cuts.CutHandler(events, particle_tags = tags.generate_true_beam_particle_tags(events) if beam_instrumentation is False else None)
-    output["no_selection"] = MakeOutput(None, tags.generate_true_beam_particle_tags(events), None, None, event.GenerateTrueFinalStateTags(events))
+    output["no_selection"] = make_output(None, tags.generate_true_beam_particle_tags(events), None, None, event.generate_true_final_state_tags(events))
     if "TrueFiducialCut" in args:
         masks = {k : functions[k](events, **v) for k, v in args.items() if k in ["APA3Cut", "TrueFiducialCut"]}
         for a in ["APA3Cut", "TrueFiducialCut"]:
@@ -175,20 +175,20 @@ def AnalyseBeamFiducialCut(events : ntuple.Data, beam_instrumentation : bool, fu
             cut_table.add_mask(mask, a)
             cut_values = args[a]["cut"] if "cut" in args[a] else None
             operations = args[a]["op"] if "op" in args[a] else None
-            output[a] = MakeOutput(property, tags.generate_true_beam_particle_tags(events), cut_values, operations)
+            output[a] = make_output(property, tags.generate_true_beam_particle_tags(events), cut_values, operations)
 
-            events.Filter([mask], [mask])
-            output[a]["fs_tags"] = event.GenerateTrueFinalStateTags(events)
+            events.filter([mask], [mask])
+            output[a]["fs_tags"] = event.generate_true_final_state_tags(events)
 
     #* true particle population
-    output["final_tags"] = MakeOutput(None, tags.generate_true_beam_particle_tags(events), None, None, event.GenerateTrueFinalStateTags(events))
+    output["final_tags"] = make_output(None, tags.generate_true_beam_particle_tags(events), None, None, event.generate_true_final_state_tags(events))
 
     df = cut_table.get_table(init_data_name = "no selection", pfos = False, percent_remain = False, relative_percent = False, ave_per_event = False)
 
     return output, df, masks
 
 
-def AnalyseBeamSelection(events : ntuple.Data, beam_instrumentation : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame, dict]:
+def analyse_beam_selection(events : ntuple.Data, beam_instrumentation : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame, dict]:
     """ Manually applies the beam selection while storing the value being cut on, cut values and truth tags in order to do plotting
         and produce performance tables.
 
@@ -203,8 +203,8 @@ def AnalyseBeamSelection(events : ntuple.Data, beam_instrumentation : bool, func
     output = {}
     cut_table = cuts.CutHandler(events, particle_tags = tags.generate_true_beam_particle_tags(events) if beam_instrumentation is False else None)
 
-    output["no_selection"] = MakeOutput(None, tags.generate_true_beam_particle_tags(events), None, None, event.GenerateTrueFinalStateTags(events))
-    output["no_selection_endz"] = MakeOutput(events.recoParticles.beam_endPos_SCE.z, tags.generate_true_beam_particle_tags(events), None, None)
+    output["no_selection"] = make_output(None, tags.generate_true_beam_particle_tags(events), None, None, event.generate_true_final_state_tags(events))
+    output["no_selection_endz"] = make_output(events.recoParticles.beam_end_pos_sce.z, tags.generate_true_beam_particle_tags(events), None, None)
 
     masks = {k : functions[k](events, **v) for k, v in args.items()}
 
@@ -214,11 +214,11 @@ def AnalyseBeamSelection(events : ntuple.Data, beam_instrumentation : bool, func
     counts = tags.generate_true_beam_particle_tags(events)
     for i in counts:
         counts[i] = ak.sum(counts[i].mask)
-    output["PiBeamSelection"] = MakeOutput(counts, tags.generate_true_beam_particle_tags(events), None, None)
-    events.Filter([mask], [mask])
-    output["PiBeamSelection"]["fs_tags"] = event.GenerateTrueFinalStateTags(events)
+    output["PiBeamSelection"] = make_output(counts, tags.generate_true_beam_particle_tags(events), None, None)
+    events.filter([mask], [mask])
+    output["PiBeamSelection"]["fs_tags"] = event.generate_true_final_state_tags(events)
 
-    output["PiBeamSelection_endz"] = MakeOutput(events.recoParticles.beam_endPos_SCE.z, tags.generate_true_beam_particle_tags(events), None, None)
+    output["PiBeamSelection_endz"] = make_output(events.recoParticles.beam_end_pos_sce.z, tags.generate_true_beam_particle_tags(events), None, None)
 
     for a in args:
         if a in ["PiBeamSelection", "TrueFiducialCut"]: continue
@@ -227,26 +227,26 @@ def AnalyseBeamSelection(events : ntuple.Data, beam_instrumentation : bool, func
         cut_table.add_mask(mask, a)
         cut_values = args[a]["cut"] if "cut" in args[a] else None
         operations = args[a]["op"] if "op" in args[a] else None
-        output[a] = MakeOutput(property, tags.generate_true_beam_particle_tags(events), cut_values, operations)
+        output[a] = make_output(property, tags.generate_true_beam_particle_tags(events), cut_values, operations)
 
         if (a == "BeamScraperCut") and (beam_instrumentation == False):
             if beam_instrumentation == False:
                 scraper_id = scraper.is_scraper(events, args[a]["fits"])
-                output[a + "_scraper_tag"] = MakeOutput(None, tags.beam_scraper_tag(scraper_id), None, None)
+                output[a + "_scraper_tag"] = make_output(None, tags.beam_scraper_tag(scraper_id), None, None)
 
-        events.Filter([mask], [mask])
-        output[a]["fs_tags"] = event.GenerateTrueFinalStateTags(events)
+        events.filter([mask], [mask])
+        output[a]["fs_tags"] = event.generate_true_final_state_tags(events)
 
-    output["selection_endz"] = MakeOutput(events.recoParticles.beam_endPos_SCE.z, tags.generate_true_beam_particle_tags(events), None, None)
+    output["selection_endz"] = make_output(events.recoParticles.beam_end_pos_sce.z, tags.generate_true_beam_particle_tags(events), None, None)
 
     #* true particle population
-    output["final_tags"] = MakeOutput(None, tags.generate_true_beam_particle_tags(events), None, None, event.GenerateTrueFinalStateTags(events))
+    output["final_tags"] = make_output(None, tags.generate_true_beam_particle_tags(events), None, None, event.generate_true_final_state_tags(events))
 
     df = cut_table.get_table(init_data_name = "no selection", pfos = False, percent_remain = False, relative_percent = False, ave_per_event = False)
     return output, df, masks
 
 
-def AnalysePFOSelection(events : ntuple.Data, data : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
+def analyse_pfo_selection(events : ntuple.Data, data : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
     """ Analyse PFO selection.
 
     Args:
@@ -260,25 +260,25 @@ def AnalysePFOSelection(events : ntuple.Data, data : bool, functions : dict, arg
 
     for a in args:
         if a in ["NHitsCut", "BeamParticleIPCut"]:
-            output[a + "_completeness"] = MakeOutput(events.trueParticlesBT.completeness, [])
+            output[a + "_completeness"] = make_output(events.true_particles_bt.completeness, [])
 
         mask, property = functions[a](events, **args[a], return_property = True)
         cut_table.add_mask(mask, a)
         cut_values = args[a]["cut"] if "cut" in args[a] else None
         operations = args[a]["op"] if "op" in args[a] else None
-        output[a] = MakeOutput(property, tags.generate_true_particle_tags_interesting_pfos(events), cut_values, operations)
-        events.Filter([mask], [mask])
-        output[a]["fs_tags"] = event.GenerateTrueFinalStateTags(events)    
+        output[a] = make_output(property, tags.generate_true_particle_tags_interesting_pfos(events), cut_values, operations)
+        events.filter([mask], [mask])
+        output[a]["fs_tags"] = event.generate_true_final_state_tags(events)    
 
     #* true particle population
-    output["final_tags"] = MakeOutput(None, tags.generate_true_particle_tags_interesting_pfos(events), None, None)
+    output["final_tags"] = make_output(None, tags.generate_true_particle_tags_interesting_pfos(events), None, None)
     
     df = cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, events = False)
     print(df)
     return output, df
 
 
-def AnalysePiPlusSelection(events : ntuple.Data, data : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
+def analyse_pi_plus_selection(events : ntuple.Data, data : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
     """ Analyse the daughter pi+ selection.
 
     Args:
@@ -292,25 +292,25 @@ def AnalysePiPlusSelection(events : ntuple.Data, data : bool, functions : dict, 
 
     for a in args:
         if a == "NHitsCut":
-            output[a + "_completeness"] = MakeOutput(events.trueParticlesBT.completeness, [])
+            output[a + "_completeness"] = make_output(events.true_particles_bt.completeness, [])
 
         mask, property = functions[a](events, **args[a], return_property = True)
         cut_table.add_mask(mask, a)
         cut_values = args[a]["cut"] if "cut" in args[a] else None
         operations = args[a]["op"] if "op" in args[a] else None
-        output[a] = MakeOutput(property, tags.generate_true_particle_tags_pi_plus(events), cut_values, operations)
-        events.Filter([mask], [mask])
-        output[a]["fs_tags"] = event.GenerateTrueFinalStateTags(events)    
+        output[a] = make_output(property, tags.generate_true_particle_tags_pi_plus(events), cut_values, operations)
+        events.filter([mask], [mask])
+        output[a]["fs_tags"] = event.generate_true_final_state_tags(events)    
 
     #* true particle population
-    output["final_tags"] = MakeOutput(None, tags.generate_true_particle_tags_pi_plus(events), None, None)
+    output["final_tags"] = make_output(None, tags.generate_true_particle_tags_pi_plus(events), None, None)
     
     df = cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, events = False)
     print(df)
     return output, df
 
 
-def AnalysePhotonCandidateSelection(events : ntuple.Data, data : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
+def analyse_photon_candidate_selection(events : ntuple.Data, data : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
     """ Analyse the photon candidate selection.
 
     Args:
@@ -324,25 +324,25 @@ def AnalysePhotonCandidateSelection(events : ntuple.Data, data : bool, functions
 
     for a in args:
         if a in ["NHitsCut", "BeamParticleIPCut"]:
-            output[a + "_completeness"] = MakeOutput(events.trueParticlesBT.completeness, [])
+            output[a + "_completeness"] = make_output(events.true_particles_bt.completeness, [])
 
         mask, property = functions[a](events, **args[a], return_property = True)
         cut_table.add_mask(mask, a)
         cut_values = args[a]["cut"] if "cut" in args[a] else None
         operations = args[a]["op"] if "op" in args[a] else None
-        output[a] = MakeOutput(property, tags.generate_true_particle_tags_pi0_shower(events), cut_values, operations)
-        events.Filter([mask], [mask])
-        output[a]["fs_tags"] = event.GenerateTrueFinalStateTags(events)    
+        output[a] = make_output(property, tags.generate_true_particle_tags_pi0_shower(events), cut_values, operations)
+        events.filter([mask], [mask])
+        output[a]["fs_tags"] = event.generate_true_final_state_tags(events)    
 
     #* true particle population
-    output["final_tags"] = MakeOutput(None, tags.generate_true_particle_tags_pi0_shower(events), None, None)
+    output["final_tags"] = make_output(None, tags.generate_true_particle_tags_pi0_shower(events), None, None)
 
     df = cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, events = False)
     print(df)
     return output, df
 
 
-def AnalysePi0Selection(events : ntuple.Data, data : bool, functions : dict, args : dict, photon_mask : ak.Array) -> tuple[dict, pd.DataFrame]:
+def analyse_pi0_selection(events : ntuple.Data, data : bool, functions : dict, args : dict, photon_mask : ak.Array) -> tuple[dict, pd.DataFrame]:
     """ Analyse the pi0 selection.
 
     Args:
@@ -356,7 +356,7 @@ def AnalysePi0Selection(events : ntuple.Data, data : bool, functions : dict, arg
     """    
     def null_tag():
         tag = tags.Tags()
-        tag["null"] = tags.Tag(mask = (events.eventNum < -1))
+        tag["null"] = tags.Tag(mask = (events.event_num < -1))
         return tag
 
     output = {}
@@ -366,7 +366,7 @@ def AnalysePi0Selection(events : ntuple.Data, data : bool, functions : dict, arg
     for a in args:
         if a == "Pi0MassSelection":
             mask, property = functions[a](events, **args[a], return_property = True, photon_mask = photonCandidates)
-            output["mass_event_tag"] = MakeOutput(None, event.GenerateTrueFinalStateTags(events), None, None)
+            output["mass_event_tag"] = make_output(None, event.generate_true_final_state_tags(events), None, None)
         else:
             mask, property = functions[a](events, **args[a], return_property = True, photon_mask = photonCandidates)
         if a != "NPhotonCandidateSelection":
@@ -375,22 +375,22 @@ def AnalysePi0Selection(events : ntuple.Data, data : bool, functions : dict, arg
         cut_values = args[a]["cut"] if "cut" in args[a] else None
         operations = args[a]["op"] if "op" in args[a] else None
         pi0_tags = null_tag() if data else tags.generate_pi0_tags(events, photonCandidates)
-        output[a] = MakeOutput(property, pi0_tags, cut_values, operations)
-        events.Filter([mask], [mask])
+        output[a] = make_output(property, pi0_tags, cut_values, operations)
+        events.filter([mask], [mask])
         photonCandidates = photonCandidates[mask]
-        output[a]["fs_tags"] = event.GenerateTrueFinalStateTags(events)
+        output[a]["fs_tags"] = event.generate_true_final_state_tags(events)
 
     #* final counts
-    output["event_tag"] = MakeOutput(None, event.GenerateTrueFinalStateTags(events), None, None)
+    output["event_tag"] = make_output(None, event.generate_true_final_state_tags(events), None, None)
     pi0_tags = null_tag() if data else tags.generate_pi0_tags(events, photonCandidates)
-    output["final_tags"] = MakeOutput(None, pi0_tags, None, None)
+    output["final_tags"] = make_output(None, pi0_tags, None, None)
 
     df = cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, pfos = False)
     print(df)
     return output, df
 
 
-def AnalyseRegions(events : ntuple.Data, photon_mask : ak.Array, is_data : bool, correction : callable = None, correction_params : dict = None) -> tuple[dict, dict]:
+def analyse_regions(events : ntuple.Data, photon_mask : ak.Array, is_data : bool, correction : callable = None, correction_params : dict = None) -> tuple[dict, dict]:
     """ Create masks which desribe the truth and reco regions for various exlusive cross sections.
 
     Args:
@@ -403,7 +403,7 @@ def AnalyseRegions(events : ntuple.Data, photon_mask : ak.Array, is_data : bool,
     Returns:
         tuple[dict, dict]: truth and reco regions
     """
-    truth_regions = event.create_regions(events.trueParticles.nPi0, events.trueParticles.nPiPlus + events.trueParticles.nPiMinus) if is_data == False else None
+    truth_regions = event.create_regions(events.true_particles.n_pi0, events.true_particles.n_pi_plus + events.true_particles.n_pi_minus) if is_data == False else None
 
     if correction_params is None:
         params = None
@@ -416,7 +416,7 @@ def AnalyseRegions(events : ntuple.Data, photon_mask : ak.Array, is_data : bool,
     return truth_regions, reco_regions
 
 
-def CreatePFOMasks(sample : ntuple.Data, selections : dict, args_type : str, extra_args : dict = None) -> dict[np.array]:
+def create_pfo_masks(sample : ntuple.Data, selections : dict, args_type : str, extra_args : dict = None) -> dict[np.array]:
     """ Create PFO masks to save to file.
 
     Args:

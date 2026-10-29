@@ -16,7 +16,7 @@ import awkward as ak
 
 from python.analysis import selection
 
-criteria = namedtuple("criteria", ["op", "value"]) # criteria is defined using an operator and value (particle count)
+Criteria = namedtuple("criteria", ["op", "value"]) # criteria is defined using an operator and value (particle count)
 
 @dataclass
 class CriteriaList(ABC):
@@ -34,7 +34,7 @@ class SampleDefinition:
     definitions : dict[list[CriteriaList]]
 
     @classmethod
-    def CreateDefinitions(cls, particle_counts : dict[ak.Array], uncategorised = False) -> dict[ak.Array]:
+    def create_definitions(cls, particle_counts : dict[ak.Array], uncategorised = False) -> dict[ak.Array]:
         """ Based on the definitions and criteria list, generate masks to categorise events when provided the particle counts.
 
         Args:
@@ -66,7 +66,7 @@ class SampleDefinition:
             masks[n] = ak.any(defs, 0)
 
         if uncategorised:
-            masks["uncategorised"] = ~selection.CombineMasks(masks, "or")
+            masks["uncategorised"] = ~selection.combine_masks(masks, "or")
 
         return masks
 
@@ -93,7 +93,7 @@ class SampleDefinition:
         return result
 
 __all__ = [
-    "criteria",
+    "Criteria",
     "CriteriaList",
     "SampleDefinition",
 ]

@@ -14,7 +14,7 @@ import pandas as pd
 
 from python.analysis import ntuple, vector
 
-def CombineMasks(masks : dict, operator : str = "and") -> ak.Array:
+def combine_masks(masks : dict, operator : str = "and") -> ak.Array:
     mask = None
     for m in masks:
         if mask is None:
@@ -29,7 +29,7 @@ def CombineMasks(masks : dict, operator : str = "and") -> ak.Array:
     return mask
 
 
-def GetPFOCounts(masks : dict) -> ak.Array:
+def pfo_counts(masks : dict) -> ak.Array:
     """ Compute counts for objects which pass the masks. 
 
     Args:
@@ -38,10 +38,10 @@ def GetPFOCounts(masks : dict) -> ak.Array:
     Returns:
         ak.Array: number of selected PFOs in each event
     """
-    return ak.sum(CombineMasks(masks), -1)
+    return ak.sum(combine_masks(masks), -1)
 
 
-def CountMask(m: ak.Array) -> tuple:
+def count_mask(m: ak.Array) -> tuple:
     """ Counts the total number of entries in a boolean mask,
         and the number which are True.
 
@@ -54,7 +54,7 @@ def CountMask(m: ak.Array) -> tuple:
     return ak.count(m), ak.count(m[m])
 
 
-def CountsWrapper(f):
+def counts_wrapper(f):
     """ Wrapper for selection functions which checks the number of entries that pass a cut.
 
     Args:
@@ -65,13 +65,13 @@ def CountsWrapper(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         m = f(*args, **kwargs)
-        c = CountMask(m)
+        c = count_mask(m)
         print(f"number of entries before|after {f.__name__}: {c[0]}|{c[1]}")
         return m
     return wrapper
 
 
-def CombineSelections(events : ntuple.Data, selection: list, levels: int, args: list = None, verbose: bool = False, return_table: bool = False) -> ak.Array:
+def combine_selections(events : ntuple.Data, selection: list, levels: int, args: list = None, verbose: bool = False, return_table: bool = False) -> ak.Array:
     """ Combines multiple beam particle selections.
 
     Args:
@@ -87,7 +87,7 @@ def CombineSelections(events : ntuple.Data, selection: list, levels: int, args: 
         ak.Array, pd.Dataframe: boolean mask and performance table
     """
     if levels == 0:
-        total = ak.count(events.eventNum)
+        total = ak.count(events.event_num)
     else:
         total = ak.count(events.recoParticles.number)
 
@@ -128,7 +128,7 @@ def CombineSelections(events : ntuple.Data, selection: list, levels: int, args: 
         return mask
 
 
-def CreateMask(values, operations, property, return_property : bool) -> ak.Array:
+def create_mask(values, operations, property, return_property : bool) -> ak.Array:
     """ Create a boolean mask of a property.
 
     Args:
@@ -513,7 +513,7 @@ def multi_cuts_to_str(param_names, values, *operations, func_str=None):
         return formatted_func
     
 
-def Median(x : ak.Array):
+def median(x : ak.Array):
     s = ak.sort(x, -1)
     count = ak.num(s, -1)
 
@@ -571,7 +571,7 @@ def find_beam_impact_parameters(events : ntuple.Data):
         Impact parameters between the PFOs and beam vertex.
     """
     starts = events.recoParticles.shower_start_pos
-    beam_vertex = events.recoParticles.beam_endPos
+    beam_vertex = events.recoParticles.beam_end_pos
     directions = events.recoParticles.shower_direction
     return get_impact_parameter(
         directions, starts, beam_vertex)
@@ -594,13 +594,13 @@ def find_beam_separations(events):
         Separations between the PFOs starts and beam vertex.
     """
     starts = events.recoParticles.shower_start_pos
-    beam_vertex = events.recoParticles.beam_endPos # Note: this is uncorrected for space charge effects beacuase no PFO position were corrected in the reconstruction.
+    beam_vertex = events.recoParticles.beam_end_pos # Note: this is uncorrected for space charge effects beacuase no PFO position were corrected in the reconstruction.
     return vector.dist(starts, beam_vertex)
 
 
 def get_mother_pdgs(events):
     """
-    DEPRECATED: use events.trueParticles(BT).motherPdg
+    DEPRECATED: use events.true_particles(BT).mother_pdg
 
     Loops through each event (warning: slow) and creates a reco-type
     array of PDG codes of mother particle. E.g. a photon from a pi0
@@ -630,9 +630,9 @@ def get_mother_pdgs(events):
     # This loops through every event and assigned the pdg code of the
     # mother. Assigns 211 (pi+) to daughters of the beam, and 0 to
     # everything which is not found
-    mother_ids = events.trueParticles.mother
-    truth_ids = events.trueParticles.number
-    truth_pdgs = events.trueParticles.pdg
+    mother_ids = events.true_particles.mother
+    truth_ids = events.true_particles.number
+    truth_pdgs = events.true_particles.pdg
     mother_pdgs = mother_ids.to_list()
     # ts = time.time()
     for i in range(ak.num(mother_ids, axis=0)):
@@ -652,12 +652,12 @@ def get_mother_pdgs(events):
     return mother_pdgs
 
 __all__ = [
-    "CombineMasks",
-    "GetPFOCounts",
-    "CountMask",
-    "CountsWrapper",
-    "CombineSelections",
-    "CreateMask",
+    "combine_masks",
+    "pfo_counts",
+    "count_mask",
+    "counts_wrapper",
+    "combine_selections",
+    "create_mask",
     "del_prop",
     "np_to_ak_indicies",
     "cuts_to_func",

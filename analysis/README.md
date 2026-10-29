@@ -143,7 +143,7 @@ xs_cross_section.py -c cex_analysis_2GeV_config.json -o .
 ```
 
 
-Core modules are Master.py, vector.py and Plots.py (optional). A simple example of how to look at true data is shown in `xs_beam_quality.py`, and the other scripts are more complicated examples of how to analyse nTuples. For further detail on each module you can read the docstrings.
+Core modules are Master.py, vector.py and Plots.py (optional). A simple example of how to look at true data is shown in `xs_beam_quality.py`, and the other scripts are more complicated examples of how to analyse ntuples. For further detail on each module you can read the docstrings.
 ## Run cross section analysis
 
 ### Simple

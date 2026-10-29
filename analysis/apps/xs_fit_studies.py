@@ -73,14 +73,14 @@ def CreateConfigNormalisation(scales : dict, data_config : dict) -> dict:
 
 
 def ModifiedConfigTest(config : dict, energy_slice : slices.Slices, model : pyhf.Model, toy_template : cross_section.analysis_input.AnalysisInput, mean_track_score_bins : np.array = None, single_bin : np.array = False) -> tuple[dict]:
-    toy_alt_pdf = cross_section.analysis_input.AnalysisInput.CreateAnalysisInputToy(toy.Toy(df = xs_toy_generator.run(config)))
+    toy_alt_pdf = cross_section.analysis_input.AnalysisInput.create_analysis_input_toy(toy.Toy(df = xs_toy_generator.run(config)))
     
     obs = RegionFit.GenerateObservations(toy_alt_pdf, energy_slice, mean_track_score_bins, model, False, single_bin)
     fit_result = RegionFit.Fit(obs, model, None, verbose = False, tolerance = 0.1) # relax the tolerance to allow fit to converge for a large parameter space
 
     true_process_counts = {}
     for v in toy_alt_pdf.exclusive_process:
-        true_process_counts[v] = toy_alt_pdf.NInteract(energy_slice, toy_alt_pdf.exclusive_process[v])
+        true_process_counts[v] = toy_alt_pdf.n_interact(energy_slice, toy_alt_pdf.exclusive_process[v])
 
     expected_mus = [sum(toy_alt_pdf.exclusive_process[r]) / sum(toy_template.exclusive_process[r]) for r in toy_alt_pdf.exclusive_process]
 
@@ -255,7 +255,7 @@ def PullStudy(template : cross_section.analysis_input.AnalysisInput, model : pyh
 
     for i in range(n):
         print(rule.Rule(f"iteration : {i} | total : {n}"))
-        toy_alt_pdf = cross_section.analysis_input.AnalysisInput.CreateAnalysisInputToy(toy.Toy(df = xs_toy_generator.run(cfg)))
+        toy_alt_pdf = cross_section.analysis_input.AnalysisInput.create_analysis_input_toy(toy.Toy(df = xs_toy_generator.run(cfg)))
 
         expected.append({s : (sum(toy_alt_pdf.exclusive_process[s]) / len(toy_alt_pdf.exclusive_process[s])) / template_fractions[s] for s in toy_alt_pdf.exclusive_process})
 
@@ -277,8 +277,8 @@ def PullStudyFast(toys : toy.Toy, n_template : int, n_data : int, args, energy_s
     def Pull():
         output = {"expected" : None, "bestfit" : None, "uncertainty" : None}
         print(rule.Rule(f"iteration : {i} | total : {n}"))
-        template = cross_section.analysis_input.AnalysisInput.CreateAnalysisInputToy(toy.Toy(df = toys.df.iloc[np.random.choice(len(toys.df), int(n_template))].reset_index()))
-        data = cross_section.analysis_input.AnalysisInput.CreateAnalysisInputToy(toy.Toy(df = toys.df.iloc[np.random.choice(len(toys.df), int(n_data))].reset_index()))
+        template = cross_section.analysis_input.AnalysisInput.create_analysis_input_toy(toy.Toy(df = toys.df.iloc[np.random.choice(len(toys.df), int(n_template))].reset_index()))
+        data = cross_section.analysis_input.AnalysisInput.create_analysis_input_toy(toy.Toy(df = toys.df.iloc[np.random.choice(len(toys.df), int(n_data))].reset_index()))
 
         if mean_track_score_bins:
             model = RegionFit.CreateModel(template, args.energy_slices, mean_track_score_bins, False, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
@@ -327,14 +327,14 @@ def PlotShapeExamples(energy_slices : slices.Slices, book : plotting.PlotBook = 
     def plot_curves(curves : dict, geant : bool, label : str, ylabel : str):
         plots.plt.figure()
         for k, v in curves.items():
-            plots.Plot(xs_sim.KE, v, "KE (MeV)", ylabel = ylabel, label = f"{label} : {k}", newFigure = False)
+            plots.plot(xs_sim.KE, v, "KE (MeV)", ylabel = ylabel, label = f"{label} : {k}", new_figure = False)
         if geant:
-            xs_sim.Plot(proc, label = "Geant4", color = "k")
+            xs_sim.plot(proc, label = "Geant4", color = "k")
             plots.plt.fill_between(xs_sim.KE, norms[0] * y, norms[1] * y, color = "k", alpha = 0.5)
         return
 
     plot_curves({i : SmoothStep(xs_sim.KE, norms[1], norms[0], split, i) for i in [0, 100, 250, 500, 1000]}, False, "$\\alpha$", "$\\mathcal{N}(E)$")
-    book.Save()
+    book.save()
 
     for proc in list(folder.keys()):
         if proc == "single_pion_production":
@@ -343,19 +343,19 @@ def PlotShapeExamples(energy_slices : slices.Slices, book : plotting.PlotBook = 
             y = getattr(xs_sim, proc)
 
         plot_curves({i : y * SmoothStep(xs_sim.KE, norms[1], norms[0], split, i) for i in [0, 100, 250, 500, 1000]}, True, "$\\alpha$", "")
-        book.Save()
+        book.save()
 
         plot_curves({i : y * SmoothStep(xs_sim.KE, norms[1], norms[0], i, smooth_amount) for i in [100, 500, 1000, 1500, 1900]}, True, "$x_{0}$", "")
-        book.Save()
+        book.save()
 
         plots.plt.figure()
         for i, j in itertools.combinations([0.8, 1, 1.2], 2):
             smooth_factors = SmoothStep(xs_sim.KE, j, i, split, smooth_amount)
-            plots.Plot(xs_sim.KE, y*smooth_factors, label = f"$n_{{-}} = {i}, n_{{+}} = {j},$", newFigure = False)
-            plots.Plot(xs_sim.KE, y*(smooth_factors[::-1]), label = f"$n_{{-}} = {j}, n_{{+}} = {i},$", newFigure = False)
-        xs_sim.Plot(proc, label = "nominal", color = "k")
+            plots.plot(xs_sim.KE, y*smooth_factors, label = f"$n_{{-}} = {i}, n_{{+}} = {j},$", new_figure = False)
+            plots.plot(xs_sim.KE, y*(smooth_factors[::-1]), label = f"$n_{{-}} = {j}, n_{{+}} = {i},$", new_figure = False)
+        xs_sim.plot(proc, label = "nominal", color = "k")
         plots.plt.fill_between(xs_sim.KE, norms[0] * y, norms[1] * y, color = "k", alpha = 0.5)
-        book.Save()
+        book.save()
     return
 
 @common.timer
@@ -367,49 +367,49 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
     # Plot the fit value for each scale factor 
     plots.plt.figure()
     for i in range(4):
-        plots.Plot(x, data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], newFigure = False, label = f"${process_map[i]}$", marker = "o", ylabel = "$\\mu^{fit}_{s}$", color = list(region_colours.values())[i], linestyle = "")
+        plots.plot(x, data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], new_figure = False, label = f"${process_map[i]}$", marker = "o", ylabel = "$\\mu^{fit}_{s}$", color = list(region_colours.values())[i], linestyle = "")
     plots.plt.legend(title = "$s$")
     plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
     plots.plt.xlabel(xlabel)
-    pdf.Save()
+    pdf.save()
 
     # same as above, in separate plots
-    for i in plots.MultiPlot(4):
-        plots.Plot(x, data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], newFigure = False, marker = "o", xlabel = xlabel, ylabel = f"$\\mu^{{fit}}_{{{process_map[i]}}}$", color = list(region_colours.values())[i], linestyle = "")
+    for i in plots.multi_plot(4):
+        plots.plot(x, data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], new_figure = False, marker = "o", xlabel = xlabel, ylabel = f"$\\mu^{{fit}}_{{{process_map[i]}}}$", color = list(region_colours.values())[i], linestyle = "")
         plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
-    pdf.Save()
+    pdf.save()
 
     # plot true process residual
-    for n in plots.MultiPlot(4):
-        plots.Plot(x, data[f"true_counts_{n}"] * data[f"fe_total_{n}"], yerr = data[f"true_counts_{n}"] * data[f"fe_err_total_{n}"], title = f"$N_{{{process_map[n]}}}^{{pred}}$", xlabel = xlabel, ylabel = "residual", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
+    for n in plots.multi_plot(4):
+        plots.plot(x, data[f"true_counts_{n}"] * data[f"fe_total_{n}"], yerr = data[f"true_counts_{n}"] * data[f"fe_err_total_{n}"], title = f"$N_{{{process_map[n]}}}^{{pred}}$", xlabel = xlabel, ylabel = "residual", linestyle = "", marker = "o", color = list(region_colours.values())[n], new_figure = False)
         plots.plt.axhline(0, color = "black", linestyle = "--")
         plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
-    pdf.Save()
+    pdf.save()
 
     # plot true process fractional error
     plots.plt.figure()
-    for n in plots.MultiPlot(4):
-        plots.Plot(x, data[f"fe_total_{n}"], yerr = data[f"fe_err_total_{n}"], xlabel = xlabel, ylabel = f"$f_{{{process_map[n]}}}$", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
+    for n in plots.multi_plot(4):
+        plots.plot(x, data[f"fe_total_{n}"], yerr = data[f"fe_err_total_{n}"], xlabel = xlabel, ylabel = f"$f_{{{process_map[n]}}}$", linestyle = "", marker = "o", color = list(region_colours.values())[n], new_figure = False)
         plots.plt.axhline(0, color = "black", linestyle = "--")
         plots.plt.ylim(1.5 * np.min(data.filter(regex = "fe_total_").values), 1.5 * np.max(data.filter(regex = "fe_total_").values))
         plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
         if ylim: plots.plt.ylim(ylim)
-    pdf.Save()
+    pdf.save()
 
     # plot true process fractional error
     plots.plt.figure()
     for n in range(4):
-        plots.Plot(x, data[f"fe_total_{n}"], yerr = data[f"fe_err_total_{n}"], label = f"${process_map[n]}$", xlabel = xlabel, ylabel = "$f_{s}$", linestyle = "", marker = "o", color = list(region_colours.values())[n], newFigure = False)
+        plots.plot(x, data[f"fe_total_{n}"], yerr = data[f"fe_err_total_{n}"], label = f"${process_map[n]}$", xlabel = xlabel, ylabel = "$f_{s}$", linestyle = "", marker = "o", color = list(region_colours.values())[n], new_figure = False)
         plots.plt.axhline(0, color = "black", linestyle = "--")
         plots.plt.ylim(1.5 * np.min(data.filter(regex = "fe_total_").values), 1.5 * np.max(data.filter(regex = "fe_total_").values))
     plots.plt.legend(title = "$s$")
     plots.plt.xticks(ticks = xt, labels = np.round(xt, 1))
     if ylim: plots.plt.ylim(ylim)
-    pdf.Save()
+    pdf.save()
 
     plots.plt.figure()
-    for i in plots.MultiPlot(4):
-        plots.Plot(data[f"mu_exp_{i}"], data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], linestyle = "", marker = "o", xlabel = f"$\\mu^{{exp}}_{process_map[i]}$", ylabel = "$\\mu^{fit}_{s}$", label = f"${process_map[i]}$", color = list(region_colours.values())[i], newFigure = False)
+    for i in plots.multi_plot(4):
+        plots.plot(data[f"mu_exp_{i}"], data[f"mu_{i}"], yerr = data[f"mu_err_{i}"], linestyle = "", marker = "o", xlabel = f"$\\mu^{{exp}}_{process_map[i]}$", ylabel = "$\\mu^{fit}_{s}$", label = f"${process_map[i]}$", color = list(region_colours.values())[i], new_figure = False)
         yl = plots.plt.gca().get_ylim()
         xl = plots.plt.gca().get_xlim()
 
@@ -418,30 +418,30 @@ def PlotCrossCheckResults(xlabel : str, data, data_energy, energy_overflow : np.
         plots.plt.ylim(yl)
         plots.plt.legend(title = "$s$")
 
-    pdf.Save()
+    pdf.save()
 
     if single_bin is False:
         plots.plt.figure()
-        for i, s in plots.IterMultiPlot(process_map):
+        for i, s in plots.iter_multi_plot(process_map):
             for l, y, e in zip(x, data_energy["fe"][i], data_energy["fe_err"][i]):
-                plots.Plot(energy_overflow, data[f"true_counts_{s}"] * y, yerr = data[f"true_counts_{s}"] * e, label = l, ylabel = "residual", newFigure = False)
+                plots.plot(energy_overflow, data[f"true_counts_{s}"] * y, yerr = data[f"true_counts_{s}"] * e, label = l, ylabel = "residual", new_figure = False)
             plots.plt.axhline(0, color = "black", linestyle = "--")
             plots.plt.xlabel("$KE$ (MeV)")
             plots.plt.title(f"$N_{{{process_map[i]}}}$")
             plots.plt.legend(title = xlabel)
             if ylim: plots.plt.ylim(ylim)
-        pdf.Save()
+        pdf.save()
 
         plots.plt.figure()
-        for i, s in plots.IterMultiPlot(process_map):
+        for i, s in plots.iter_multi_plot(process_map):
             for l, y, e in zip(x, data_energy["fe"][i], data_energy["fe_err"][i]):
-                plots.Plot(energy_overflow, y, yerr = e, label = l, ylabel = "$f$", newFigure = False)
+                plots.plot(energy_overflow, y, yerr = e, label = l, ylabel = "$f$", new_figure = False)
             plots.plt.axhline(0, color = "black", linestyle = "--")
             plots.plt.xlabel("$KE$ (MeV)")
             plots.plt.title(f"$N_{{{process_map[i]}}}$")
             plots.plt.legend(title = xlabel)
             if ylim: plots.plt.ylim(ylim)
-        pdf.Save()
+        pdf.save()
     return
 
 
@@ -523,7 +523,7 @@ def PlotDataShapeTestEnergy(data : tuple, energy_overflow : np.ndarray, book : p
             
             for i, j in enumerate(x):
                 if (j[2] == a) and (j[3] == b):
-                    plots.Plot(energy_overflow, y[i], yerr = y_err[i], label = f"{x[i][0]}, {x[i][1]}", newFigure = False)
+                    plots.plot(energy_overflow, y[i], yerr = y_err[i], label = f"{x[i][0]}, {x[i][1]}", new_figure = False)
             plots.plt.fill_between(energy_overflow, 0, linestyle = "--", color = "k")
 
             if ia == len(remove_zero(unique_values[2])) - 1:
@@ -532,7 +532,7 @@ def PlotDataShapeTestEnergy(data : tuple, energy_overflow : np.ndarray, book : p
                 plots.plt.ylabel(f"$\\alpha$ : {a}\n\n" + "fractional error")
         plots.plt.suptitle(f"$N_{{{process_map[d]}}}$", size = 20)
         plots.plt.tight_layout()
-        book.Save()
+        book.save()
     return
 
 def PlotDataShapeTest(data, key, label, vmin = None, vmax = None):
@@ -591,7 +591,7 @@ def PlotCrossCheckResultsShape(results_total, results_bins, energy_overflow : np
 
     for p in process_map:
         PlotDataShapeTest(results_total, f"mu_{p}", f"$\\mu_{{{process_map[p]}}}$")
-        book.Save()
+        book.save()
     if single_bin is False:
         PlotDataShapeTestEnergy(results_bins, energy_overflow, book)
 
@@ -600,7 +600,7 @@ def PlotCrossCheckResultsShape(results_total, results_bins, energy_overflow : np
 
 @common.timer
 def PredictedCountsSummary(template_counts : float, model : pyhf.Model, test_name : str, model_name : str, workdirs : str, single_bin : bool):
-    pr, pr_energy = CalculateResultsFromFile(workdirs, test_name, model_name, template_counts, model, single_bin)    
+    pr, pr_energy = CalculateResultsfrom_file(workdirs, test_name, model_name, template_counts, model, single_bin)    
 
     n_fe_total_max = {}
     n_fe_max = {}
@@ -662,57 +662,57 @@ def Summary(directory : str, test_name : str, model_name : str, model : pyhf.Mod
         ymax = np.max([n_fe_max[t][0] for t in n_fe_max])
 
     if single_bin is False:
-        for i, p in plots.IterMultiPlot(indices):
+        for i, p in plots.iter_multi_plot(indices):
             for j, t in enumerate(n_fe_max):
                 y = n_fe_max[t][0]
                 err = n_fe_max[t][1]
-                plots.Plot(energy_overflow, y[i], yerr = err[i], color = f"C{j}", label = common.remove_(t), ylabel = "fractional error in fitted counts", xlabel = xlabel, title = f"process : {common.remove_(p)}", newFigure = False)
+                plots.plot(energy_overflow, y[i], yerr = err[i], color = f"C{j}", label = common.remove_(t), ylabel = "fractional error in fitted counts", xlabel = xlabel, title = f"process : {common.remove_(p)}", new_figure = False)
             plots.plt.legend(title = f"{test_name} test")
             plots.plt.ylim(0, 1.1 * ymax)
-        book.Save()
+        book.save()
 
-        for i, t in plots.IterMultiPlot(n_fe_max):
+        for i, t in plots.iter_multi_plot(n_fe_max):
             for j, p in enumerate(indices):
                 y = n_fe_max[t][0]
                 err = n_fe_max[t][1]
-                plots.Plot(energy_overflow, y[j], yerr = err[j], xlabel = xlabel, ylabel = "$|f_{bs}|$", label = common.remove_(p), title = f"{test_name} test : {common.remove_(t)}", newFigure = False)
+                plots.plot(energy_overflow, y[j], yerr = err[j], xlabel = xlabel, ylabel = "$|f_{bs}|$", label = common.remove_(p), title = f"{test_name} test : {common.remove_(t)}", new_figure = False)
             plots.plt.legend(title = "process")
-        book.Save()
+        book.save()
     return ymax
 
 
 def PlotTemplates(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, template : cross_section.analysis_input.AnalysisInput, book : plotting.PlotBook = plotting.PlotBook.null()):
     process_tags = tags.exclusive_process_tags(template.exclusive_process)
-    for j, c in plots.IterMultiPlot(templates_energy):
+    for j, c in plots.iter_multi_plot(templates_energy):
         for i, s in enumerate(c):
-            plots.Plot(energy_slices.pos_overflow, s/np.sum(templates_energy), color = process_tags.number[i].colour, label = f"$\\lambda_{{{process_map[j]},{process_map[i]}}}$", xlabel = f"$\\lambda_{{{process_map[j]},s}}$ (MeV)", ylabel = "normalised counts", style = "step", newFigure = False)
+            plots.plot(energy_slices.pos_overflow, s/np.sum(templates_energy), color = process_tags.number[i].colour, label = f"$\\lambda_{{{process_map[j]},{process_map[i]}}}$", xlabel = f"$\\lambda_{{{process_map[j]},s}}$ (MeV)", ylabel = "normalised counts", style = "step", new_figure = False)
         plots.plt.title(f"region : {process_map[j]}")
         plots.plt.legend(title = "process")
-    book.Save()
+    book.save()
 
     if tempalates_mean_track_score is not None:
         plots.plt.figure()
         for i, s in enumerate(tempalates_mean_track_score):
-            plots.Plot(common.bin_centers(mean_track_score_bins), s/np.sum(tempalates_mean_track_score), color = process_tags.number[i].colour, label = f"$\\lambda_{{t,{process_map[i]}}}$", xlabel = f"$\\lambda_{{t,s}}$", ylabel = "normalised counts", style = "step", newFigure = False)
+            plots.plot(common.bin_centers(mean_track_score_bins), s/np.sum(tempalates_mean_track_score), color = process_tags.number[i].colour, label = f"$\\lambda_{{t,{process_map[i]}}}$", xlabel = f"$\\lambda_{{t,s}}$", ylabel = "normalised counts", style = "step", new_figure = False)
         plots.plt.legend(loc = "upper left")
-        book.Save()
+        book.save()
         book.close()
     return
 
 
 def PlotTotalChannel(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, book : plotting.PlotBook = plotting.PlotBook.null()):
-    for j, c in plots.IterMultiPlot(templates_energy):
-        plots.Plot(energy_slices.pos_overflow, sum(c), xlabel = f"$n_{{{j}}}$ (MeV)", ylabel = "Counts", style = "bar", newFigure = False)
-    book.Save()
+    for j, c in plots.iter_multi_plot(templates_energy):
+        plots.plot(energy_slices.pos_overflow, sum(c), xlabel = f"$n_{{{j}}}$ (MeV)", ylabel = "Counts", style = "bar", new_figure = False)
+    book.save()
 
     if tempalates_mean_track_score is not None:
-        plots.Plot(common.bin_centers(mean_track_score_bins), sum(tempalates_mean_track_score), xlabel = f"$n_{{ts}}$", ylabel = "Counts", style = "bar")
-        book.Save()
+        plots.plot(common.bin_centers(mean_track_score_bins), sum(tempalates_mean_track_score), xlabel = f"$n_{{ts}}$", ylabel = "Counts", style = "bar")
+        book.save()
     book.close()
     return
 
 
-def CalculateResultsFromFile(workdirs, test_name, model_name, template_counts, model, single_bin):
+def CalculateResultsfrom_file(workdirs, test_name, model_name, template_counts, model, single_bin):
     results_files = []
     for d in workdirs:
         directory = d + f"{test_name}_test_{model_name}/"
@@ -748,9 +748,9 @@ def CalculateResultsFromFile(workdirs, test_name, model_name, template_counts, m
 
 @common.timer
 def main(args : argparse.Namespace):
-    plotting.styles.PlotStyler.SetPlotStyle(extend_colors = True, dark = True, font_scale = 1.4)
+    plotting.styles.PlotStyler.set_plot_style(extend_colors = True, dark = True, font_scale = 1.4)
     toys = toy.Toy(file = args.template)
-    args.template = cross_section.analysis_input.AnalysisInput.CreateAnalysisInputToy(toys)
+    args.template = cross_section.analysis_input.AnalysisInput.create_analysis_input_toy(toys)
 
     mean_track_score_bins = np.linspace(0, 1, 21, True)
 
@@ -854,9 +854,9 @@ def main(args : argparse.Namespace):
                             y, edges = np.histogram(pulls[c], bins = 10)
                             x = (edges[1:] + edges[:-1]) / 2
                             popt, perr = fitting.fit(x, y, np.sqrt(y), fitting.gaussian, plot = True, plot_style = "hist", method = "trf", xlabel = "$\\theta$", ylabel = "Number of entries")
-                            book.Save()
+                            book.save()
 
-                        for _, k in plots.IterMultiPlot(pulls.columns):
+                        for _, k in plots.iter_multi_plot(pulls.columns):
                             mean_res[folder[k]] = f"{np.mean(res[k]):.3g}"
                             mean_fe[folder[k]] = f"{np.mean(fe[k]):.3g}"
                             mean_fe_err[folder[k]] = f"{np.mean(fe_err[k]):.3g}"
@@ -867,19 +867,19 @@ def main(args : argparse.Namespace):
                             print(folder[k])
                             means[folder[k]] = f"{mean:.{p}g} $\\pm$ {sem:.1g}"
                             stds[folder[k]] = f"{std:.3g}"
-                            # plots.PlotHist(pulls[k], bins = 10, title = f"$\\mu_{{{data_tags[k].name_simple}}}$ | mean : {mean:.3g} $\\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = False)
-                            plots.PlotHist(pulls[k], bins = 10, xlabel = "$\\theta$", newFigure = False)
+                            # plots.plot_hist(pulls[k], bins = 10, title = f"$\\mu_{{{data_tags[k].name_simple}}}$ | mean : {mean:.3g} $\\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", new_figure = False)
+                            plots.plot_hist(pulls[k], bins = 10, xlabel = "$\\theta$", new_figure = False)
 
-                        book.Save()
+                        book.save()
                         for k in pulls.columns:
                             mean = np.mean(pulls[k])
                             std = np.std(pulls[k])
                             sem = std / np.sqrt(len(pulls[k]))
                             plots.plt.figure(figsize = (6.4, 5))
-                            # plots.PlotHist(pulls[k], bins = 10, title = f"$\\mu_{{{data_tags[k].name_simple}}}$ | mean : {mean:.3g} $\\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", newFigure = True)
-                            plots.PlotHist(pulls[k], bins = 10, xlabel = "$\\theta$", newFigure = False)
+                            # plots.plot_hist(pulls[k], bins = 10, title = f"$\\mu_{{{data_tags[k].name_simple}}}$ | mean : {mean:.3g} $\\pm$ {sem:.1g} | std.dev : {std:.3g} ", xlabel = "$\\theta$", new_figure = True)
+                            plots.plot_hist(pulls[k], bins = 10, xlabel = "$\\theta$", new_figure = False)
                             # plots.plt.ylabel(plots.plt.gca().yaxis.get_label_text(), loc = "bottom")
-                            book.Save()
+                            book.save()
 
                         table = pd.DataFrame({"mean" : means, "st.dev" : stds, "mean residual" : mean_res, "mean fractional error" : mean_fe, "mean_fractional_error_error" : mean_fe_err}).T
                         table.style.to_latex(outdir + f"pull_test_{m}/pulls.tex")
@@ -887,7 +887,7 @@ def main(args : argparse.Namespace):
 
                 else:
 
-                    results_total, results_bins = CalculateResultsFromFile(args.workdir, t, m, template_counts, models[m], args.fit["single_bin"])
+                    results_total, results_bins = CalculateResultsfrom_file(args.workdir, t, m, template_counts, models[m], args.fit["single_bin"])
 
                     for f in results_total:
                         os.makedirs(outdir + f"{t}_test_{m}/", exist_ok = True)

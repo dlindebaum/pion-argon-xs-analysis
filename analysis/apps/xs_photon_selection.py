@@ -34,13 +34,13 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
     for s, a in zip(args["beam_selection"]["selections"].values(), args["beam_selection"]["mc_arguments"].values()):
         print(s)
         mask = s(events, **a)
-        events.Filter([mask], [mask])
+        events.filter([mask], [mask])
     photon_masks = {}
     if args["valid_pfo_selection"] is True:
         for k, s, a in zip(args["photon_selection"]["selections"].keys(), args["photon_selection"]["selections"].values(), args["photon_selection"]["mc_arguments"].values()):
             photon_masks[k] = s(events, **a)
-    photon_mask = selection.CombineMasks(photon_masks)
-    events.Filter([photon_mask])
+    photon_mask = selection.combine_masks(photon_masks)
+    events.filter([photon_mask])
     print("making pairs")
     pairs = selection.event.NPhotonCandidateSelection(events, photon_mask[photon_mask], 2)
 
@@ -57,7 +57,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
         "true" : ["direction", "shower_start_pos", "energy"]
     }
 
-    for (k, param), particleData in zip(params.items(), {"reco" : events.recoParticles, "true" : events.trueParticlesBT}.values()):
+    for (k, param), particleData in zip(params.items(), {"reco" : events.recoParticles, "true" : events.true_particles_bt}.values()):
         for p in param:
             if hasattr(particleData, p):
                 v = getattr(particleData, p)
@@ -69,7 +69,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
                     else:
                         output[f"{k}_{p}"] = ak.flatten(v)
 
-    output["true_mother"] = ak.flatten(events.trueParticlesBT.motherPdg)
+    output["true_mother"] = ak.flatten(events.true_particles_bt.mother_pdg)
     pfo_tags = tags.generate_true_particle_tags_pi0_shower(events)
     output["pi0_photon"] = ak.flatten(pfo_tags["$\\gamma$:beam $\\pi^0$"].mask | pfo_tags["$\\gamma$:other $\\pi^0$"].mask)
 
@@ -78,7 +78,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
         pi0_tags[t].mask = pi0_tags[t].mask[pairs]
     output["pi0_tags"] = pi0_tags
     
-    fs_tags = selection.event.GenerateTrueFinalStateTags(events)
+    fs_tags = selection.event.generate_true_final_state_tags(events)
     for t in fs_tags:
         fs_tags[t].mask = fs_tags[t].mask[pairs]
     output["final_state_tags"] = fs_tags
@@ -87,11 +87,11 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
 @common.timer
 def main(args):
-    plotting.styles.PlotStyler.SetPlotStyle(False)
+    plotting.styles.PlotStyler.set_plot_style(False)
     out = args.out + "shower_energy_correction/"
 
     if (not os.path.isfile(out + "photon_energies.hdf5")) or args.regen:
-        output = ntuple.RunProcess(args.ntuple_files["mc"], False, args, run)
+        output = ntuple.run_process(args.ntuple_files["mc"], False, args, run)
 
         output_photons = pd.DataFrame({i : output[i] for i in output if "shower_pairs" not in i and "tags" not in i})
         output_pairs = pd.DataFrame({i : output[i] for i in output if "shower_pairs" in i and "tags" not in i})

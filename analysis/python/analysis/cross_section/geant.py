@@ -40,7 +40,7 @@ class GeantCrossSections:
         pass
 
 
-    def Stat_Error(self, xs : str) -> np.ndarray:
+    def stat_error(self, xs : str) -> np.ndarray:
         """ Statisitical error of the simulation, done using binomial uncertainties. Only works if n_cascades is known.
 
         Args:
@@ -55,15 +55,15 @@ class GeantCrossSections:
             return getattr(self, xs) * np.sqrt(getattr(self, xs + "_frac") / self.n_cascades)
 
 
-    def __PlotAll(self, title : str = None):
+    def __plot_all(self, title : str = None):
         """ Plot all cross section channels.
         """
         for k in self.labels.values():
-            plots.Plot(self.KE, getattr(self, k), label = common.remove_(k), newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\\sigma$ (mb)", title = title)
-            # plots.plt.fill_between(self.KE, getattr(self, k) - self.Stat_Error(k), getattr(self, k) + self.Stat_Error(k), color = plots.plt.gca()._get_lines.get_next_color())
+            plots.plot(self.KE, getattr(self, k), label = common.remove_(k), new_figure = False, xlabel = "$KE$ (MeV)", ylabel = "$\\sigma$ (mb)", title = title)
+            # plots.plt.fill_between(self.KE, getattr(self, k) - self.stat_error(k), getattr(self, k) + self.stat_error(k), color = plots.plt.gca()._get_lines.get_next_color())
 
 
-    def Plot(self, xs : str, color : str = None, label : str = None, title : str = None, simplified_pion_production : bool = False):
+    def plot(self, xs : str, color : str = None, label : str = None, title : str = None, simplified_pion_production : bool = False):
         """ Plot cross sections. To be used in conjunction with other plots for comparisons.
 
         Args:
@@ -73,7 +73,7 @@ class GeantCrossSections:
             title (str, optional): title of plot, set to the channel name if label is provided. Defaults to None.
         """
         if xs == "all":
-            self.__PlotAll(title = title)
+            self.__plot_all(title = title)
         else:
             if label is None:
                 label = common.remove_(xs)
@@ -86,11 +86,11 @@ class GeantCrossSections:
                 y = self.quasielastic + self.double_charge_exchange + self.pion_production
             else:
                 y = getattr(self, xs)
-            plots.Plot(self.KE, y, label = label, title = title, newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\\sigma$  (mb)", color = color)
-            # plots.plt.fill_between(self.KE, getattr(self, xs) - self.Stat_Error(xs), getattr(self, xs) + self.Stat_Error(xs), color = plots.plt.gca()._get_lines.get_next_color())
+            plots.plot(self.KE, y, label = label, title = title, new_figure = False, xlabel = "$KE$ (MeV)", ylabel = "$\\sigma$  (mb)", color = color)
+            # plots.plt.fill_between(self.KE, getattr(self, xs) - self.stat_error(xs), getattr(self, xs) + self.stat_error(xs), color = plots.plt.gca()._get_lines.get_next_color())
 
 
-    def GetInterpolatedCurve(self, process : str) -> interp1d:
+    def get_interpolated_curve(self, process : str) -> interp1d:
         """ returns interpolated cross section curve as function of KE.
 
         Args:

@@ -32,23 +32,23 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
             else:
                 print(f"{s=}")
                 mask = args["beam_selection"]["selections"][s](events, **args["beam_selection"][func_args][s])
-                events.Filter([mask], [mask])
+                events.filter([mask], [mask])
     else:
         # do default selections prior to beam quality
         mask = beam.PiBeamSelection(events, args["data"])
-        events.Filter([mask], [mask])
+        events.filter([mask], [mask])
 
         mask = beam.PandoraTagCut(events)
-        events.Filter([mask], [mask])
+        events.filter([mask], [mask])
 
         mask = beam.CaloSizeCut(events)
-        events.Filter([mask], [mask])
+        events.filter([mask], [mask])
 
         mask = beam.HasFinalStatePFOsCut(events)
-        events.Filter([mask], [mask])
+        events.filter([mask], [mask])
 
     #* fit gaussians to the start positions
-    start_pos, end_pos = beam.GetTruncatedPos(events, args["beam_quality_truncate"])
+    start_pos, end_pos = beam.get_truncated_pos(events, args["beam_quality_truncate"])
     beam_dir = vector.normalize(vector.sub(end_pos, start_pos))
     return {"start_pos" : start_pos, "end_pos" : end_pos, "beam_dir": beam_dir}
 

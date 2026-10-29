@@ -1,6 +1,7 @@
 import warnings
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 from matplotlib.backends.backend_pdf import PdfPages
 
@@ -19,16 +20,16 @@ class PlotBook:
         self.close()
         self.is_open = False
 
-    def PlotWatermark(self):
+    def watermark(self):
         plt.text(0.5, 0.5, self.watermark, transform=plt.gca().transAxes, fontsize=38, color='gray', alpha=0.5, ha='center', va='center', rotation=30, zorder = np.inf)
         return
 
-    def Save(self):
+    def save(self):
         global preliminary
         if hasattr(self, "pdf"):
             try:
                 if self.watermark is not None:
-                    self.PlotWatermark()
+                    self.watermark()
                 self.pdf.savefig(bbox_inches='tight')
             except AttributeError:
                 pass

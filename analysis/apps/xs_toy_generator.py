@@ -247,7 +247,7 @@ def CountProcesses(proc : np.array):
         vprint(p, sum(proc == p))
 
 
-def CreateMasks(toy : pd.DataFrame) -> dict:
+def create_masks(toy : pd.DataFrame) -> dict:
     """ Creates masks for each inclusive process and exclusive process based on particle tags from the toy mc.
 
     Args:
@@ -494,7 +494,7 @@ def main(args : argparse.Namespace):
         vprint("Done! Creating dataframe...")
         df = pd.concat(df, ignore_index = True)
 
-    masks = CreateMasks(df)
+    masks = create_masks(df)
     for m in masks:
         df[m] = masks[m]
 

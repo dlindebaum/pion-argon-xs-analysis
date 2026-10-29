@@ -38,7 +38,7 @@ class Slices:
         self.underflow_num = -1 # underflow slice number
 
 
-    def __conversion__(self, x):
+    def __convert__(self, x):
         """ Convert a value to its slice number.
 
         Args:
@@ -88,7 +88,7 @@ class Slices:
             else:
                 if i == 0:
                     p = -np.inf
-                elif i > len(self.edges): # Given the way __conversion__ works, this condition will never be satisfied...
+                elif i > len(self.edges): # Given the way __convert__ works, this condition will never be satisfied...
                     p = np.inf
                 else:
                     p = self.edges[i - 1]
@@ -105,7 +105,7 @@ class Slices:
         Returns:
             array or int: Slice numbers
         """
-        return self.__create_slice__(self.__conversion__(x))
+        return self.__create_slice__(self.__convert__(x))
 
 
     def __getitem__(self, i : int) -> Slice:
@@ -124,9 +124,9 @@ class Slices:
             raise StopIteration
         else:
             if self.reversed:
-                return self.__create_slice__(i + self.__conversion__(self.max))
+                return self.__create_slice__(i + self.__convert__(self.max))
             else:
-                return self.__create_slice__(i + self.__conversion__(self.min))
+                return self.__create_slice__(i + self.__convert__(self.min))
 
     @property
     def num(self) -> np.ndarray:
@@ -200,7 +200,7 @@ class Slices:
         Returns:
             array or int: slice numbers
         """
-        slice_num = self.__conversion__(pos)
+        slice_num = self.__convert__(pos)
         if hasattr(pos, "__iter__"):
             slice_num = ak.where(slice_num > max(self.num), max(self.num), slice_num)
             slice_num = ak.where(slice_num < 0, min(self.num), slice_num)

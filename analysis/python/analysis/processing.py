@@ -45,7 +45,7 @@ def calculate_batches(file_desc : ntuple.FileDescriptor, n_batches : int = None,
     Returns:
         list[int]: list of batches
     """
-    total_events = ak.count(ntuple.Data(file_desc).eventNum) # get number of events, use shower merging ntuple type to supress false warnings
+    total_events = ak.count(ntuple.Data(file_desc).event_num) # get number of events, use shower merging ntuple type to supress false warnings
     print(f"{total_events=}")
 
     if n_batches is None and n_events is None:

@@ -27,17 +27,17 @@ from rich import print
 def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
     mc = ntuple.Data(file_desc, n_events, start)
     
-    mc = BeamPionSelection(mc, args, True)
+    mc = beam_pion_selection(mc, args, True)
     if args["no_reweight"] is False:
-        mc_weights = reweight.calculate_weights(mc.recoParticles.beam_inst_P, "gaussian", [args["beam_reweight"]["params"][k]["value"] for k in args["beam_reweight"]["params"]], args["beam_reweight"]["strength"])
+        mc_weights = reweight.calculate_weights(mc.recoParticles.beam_inst_momentum, "gaussian", [args["beam_reweight"]["params"][k]["value"] for k in args["beam_reweight"]["params"]], args["beam_reweight"]["strength"])
     else:
         mc_weights = None
     
-    return {"p_inst" : mc.recoParticles.beam_inst_P, "KE_ff" : mc.trueParticles.beam_KE_front_face, "weights" : mc_weights}
+    return {"p_inst" : mc.recoParticles.beam_inst_momentum, "KE_ff" : mc.true_particles.beam_KE_front_face, "weights" : mc_weights}
 
 
 def main(args : argparse.Namespace):
-    plotting.styles.PlotStyler.SetPlotStyle(False)
+    plotting.styles.PlotStyler.set_plot_style(False)
     outdir = args.out + "upstream_loss/"
     os.makedirs(outdir, exist_ok = True)
 
@@ -51,13 +51,13 @@ def main(args : argparse.Namespace):
 
     with plotting.PlotBook(outdir + "xs_upstream_loss_plots.pdf") as pdf:
         reco_KE_inst = kinematics.KE(output_mc["p_inst"], Particle.from_pdgid(211).mass)
-        with plotting.styles.PlotStyler().Update(font_scale = 1.3):
+        with plotting.styles.PlotStyler().update(font_scale = 1.3):
             cv = upstream.central_value_estimation(bins, reco_KE_inst, output_mc["KE_ff"], upstream.central_value_method[args.upstream_loss_cv_function], output_mc["weights"])
-        pdf.Save()
+        pdf.save()
 
         plotting.plots.plt.figure()
         params = fitting.fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\\mu(\Delta E_{upstream})$ (MeV)", loc = "upper center")
-        pdf.Save()
+        pdf.save()
 
         params_dict = {
             "value" : {f"p{i}" : params[0][i] for i in range(len(params[0]))},
@@ -66,8 +66,8 @@ def main(args : argparse.Namespace):
 
         reco_KE_ff = reco_KE_inst - upstream.upstream_energy_loss(reco_KE_inst, params_dict["value"], args.upstream_loss_response)
 
-        plotting.plots.PlotHistComparison([reco_KE_ff, output_mc["KE_ff"]], labels = ["$KE^{reco}_{init}$", "$KE^{true}_{init}$"], x_range = [bins[0], bins[-1]], xlabel = "Kinetic energy (MeV)", weights = [output_mc["weights"], output_mc["weights"]])
-        pdf.Save()
+        plotting.plots.plot_hist_comparison([reco_KE_ff, output_mc["KE_ff"]], labels = ["$KE^{reco}_{init}$", "$KE^{true}_{init}$"], x_range = [bins[0], bins[-1]], xlabel = "Kinetic energy (MeV)", weights = [output_mc["weights"], output_mc["weights"]])
+        pdf.save()
     plotting.plots.plt.close("all")
     print(f"fitted parameters : {params_dict}")
     io.write_json(params_dict, outdir + "fit_parameters.json")

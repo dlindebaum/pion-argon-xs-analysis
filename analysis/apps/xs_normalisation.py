@@ -35,7 +35,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
 @common.timer
 def main(args):
-    plotting.styles.PlotStyler.SetPlotStyle(extend_colors = True)
+    plotting.styles.PlotStyler.set_plot_style(extend_colors = True)
     outdir = args.out + "beam_norm/"
     os.makedirs(outdir, exist_ok = True)
 
@@ -46,8 +46,8 @@ def main(args):
     norm = round(n_data / n_mc, 3)
 
     with plotting.PlotBook(outdir + "plots.pdf") as book:
-        plotting.plots.PlotTags(outputs["mc"]["tags"], "True particle ID")
-        book.Save()
+        plotting.plots.plot_tags(outputs["mc"]["tags"], "True particle ID")
+        book.save()
 
     io.write_json({"norm" : norm, "mc" : int(n_mc), "data" : int(n_data)}, outdir + "norm.json")
 

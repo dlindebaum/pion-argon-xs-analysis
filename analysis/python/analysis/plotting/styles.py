@@ -5,7 +5,7 @@ class PlotStyler:
     def __init__(self, extend_colors : bool = False, custom_colors : list = None, dpi : int = 100, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):
         self.args = locals()
         self.args.pop("self")
-        PlotStyler.SetPlotStyle(**self.args)
+        PlotStyler.set_plot_style(**self.args)
 
     class __updater__:
         def __init__(self, parent : "PlotStyler", extend_colors : bool = None, custom_colors : list = None, dpi : int = None, dark : bool = None, font_scale : float = None, font_style : str = None):
@@ -20,17 +20,17 @@ class PlotStyler:
 
             pass
         def __enter__(self):
-            PlotStyler.SetPlotStyle(**self.args)
+            PlotStyler.set_plot_style(**self.args)
             pass
         def __exit__(self, type, value, traceback):
-            PlotStyler.SetPlotStyle(**self.parent.args)
+            PlotStyler.set_plot_style(**self.parent.args)
             pass
 
-    def Update(self, extend_colors : bool = None, custom_colors : list = None, dpi : int = None, dark : bool = None, font_scale : float = None, font_style : str = None):
+    def update(self, extend_colors : bool = None, custom_colors : list = None, dpi : int = None, dark : bool = None, font_scale : float = None, font_style : str = None):
         return self.__updater__(self, extend_colors, custom_colors, dpi, dark, font_scale, font_style)
 
     @staticmethod
-    def SetPlotStyle(extend_colors : bool = False, custom_colors : list = None, dpi : int = 300, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):
+    def set_plot_style(extend_colors : bool = False, custom_colors : list = None, dpi : int = 300, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):
         plt.style.use("default") # first load the default to reset any previous changes made by other styles
         plt.style.use('ggplot')
         plt.rcParams.update({'patch.linewidth': 1})
@@ -61,7 +61,7 @@ class PlotStyler:
         return
 
 
-def SetPlotStyle(extend_colors : bool = False, custom_colors : list = None, dpi : int = 300, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):
+def set_plot_style(extend_colors : bool = False, custom_colors : list = None, dpi : int = 300, dark : bool = False, font_scale : float = 1, font_style : str = "sans"):
     plt.style.use("default") # first load the default to reset any previous changes made by other styles
     plt.style.use('ggplot')
     plt.rcParams.update({'patch.linewidth': 1})

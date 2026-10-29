@@ -187,7 +187,7 @@ def ReformatRowLabels(row_labels : np.array) -> list[str]:
         "dxy" : "$\\delta_{xy}$",
         "dz" : "$\\delta_{z}$",
         "cos_theta" : "$\\cos(\\theta)$",
-        "beam_endPos_z" : "beam end z",
+        "beam_end_pos_z" : "beam end z",
         "michel_score" : "michel score",
         "median_dEdX" : "median $dEdX$",
         "track_score" : "track score",

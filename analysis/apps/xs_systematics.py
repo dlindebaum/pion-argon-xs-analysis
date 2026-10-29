@@ -78,10 +78,10 @@ class MCMethod(ABC):
 
         if book is not None:
             for p in xs_analyse.process_labels:
-                hist_true = analysis_input.CreateHistograms(self.args.energy_slices, p, False, None)["int_ex"]
-                plotting.plots.Plot(self.args.energy_slices.pos_overflow, unfolding_result[p]["unfolded"], yerr = common.quadsum([unfolding_result[p]["stat_err"], unfolding_result[p]["sys_err"]], 0), xlabel = f"$N_{{int, {xs_analyse.process_labels[p]}}}$ (MeV)", ylabel = "Counts", label = "unfolded", style = "step", color = "C6")
-                plotting.plots.Plot(self.args.energy_slices.pos_overflow, hist_true, label = "true", style = "step", color = "C0", newFigure = False)
-                book.Save()
+                hist_true = analysis_input.create_histograms(self.args.energy_slices, p, False, None)["int_ex"]
+                plotting.plots.plot(self.args.energy_slices.pos_overflow, unfolding_result[p]["unfolded"], yerr = common.quadsum([unfolding_result[p]["stat_err"], unfolding_result[p]["sys_err"]], 0), xlabel = f"$N_{{int, {xs_analyse.process_labels[p]}}}$ (MeV)", ylabel = "Counts", label = "unfolded", style = "step", color = "C6")
+                plotting.plots.plot(self.args.energy_slices.pos_overflow, hist_true, label = "true", style = "step", color = "C0", new_figure = False)
+                book.save()
 
         xs = xs_analyse.XSUnfold(unfolding_result, self.args.energy_slices, True, True, self.args.fit["regions"])
         return xs
@@ -123,7 +123,7 @@ class MCMethod(ABC):
 
                 for (i, j), z in np.ndenumerate(cov[k]):
                     plotting.plots.plt.gca().text(j, i, f"{z:.1g}", ha='center', va='center', fontsize = 10, color = "red")
-                book.Save()
+                book.save()
         return {k : np.sqrt(np.diag(cov[k])) for k in cov}
 
 
@@ -192,8 +192,8 @@ class DataAnalysis(ABC):
 
     def PlotResults(self, xs_nominal : dict, result : dict, book : plotting.PlotBook = plotting.PlotBook.null()):
         for p in xs_nominal["pdsp"]:
-            plotting.PlotXSComparison({"low" : result["low"][p], "nominal" : xs_nominal["pdsp"][p], "high" : result["high"][p]}, self.args.energy_slices, p, cv_only = True, marker_size = 12)
-            book.Save()
+            plotting.plot_xs_cpmparison({"low" : result["low"][p], "nominal" : xs_nominal["pdsp"][p], "high" : result["high"][p]}, self.args.energy_slices, p, cv_only = True, marker_size = 12)
+            book.save()
         return
 
     @staticmethod
@@ -288,8 +288,8 @@ class NuisanceParameters:
 
     def PlotXSMCStat(self, result, book : plotting.PlotBook = plotting.PlotBook.null()):
         for p in result["np"]:
-            plotting.PlotXSComparison({"Data stat + MC stat" : result["np"][p], "Data stat" : result["no_np"][p]}, self.args.energy_slices, process = p)
-            book.Save()
+            plotting.plot_xs_cpmparison({"Data stat + MC stat" : result["np"][p], "Data stat" : result["no_np"][p]}, self.args.energy_slices, process = p)
+            book.save()
 
 
     def MCStatTables(self, result : dict):
@@ -369,16 +369,16 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
         print(f"starting process {i}")
         sample = "data" if args["data"] is True else "mc"
 
-        events =  ntuple.Data(file, n_events, start, args["nTuple_type"], args["pmom"])
+        events =  ntuple.Data(file, n_events, start, args["ntuple_type"], args["pmom"])
 
         for s, a in zip(args["beam_selection"]["selections"].values(), args["beam_selection"][f"{sample}_arguments"].values()):
             mask = s(events, **a)
-            events.Filter([mask], [mask])
+            events.filter([mask], [mask])
         photon_masks = {}
         if args["valid_pfo_selection"] is True:
             for k, s, a in zip(args["photon_selection"]["selections"].keys(), args["photon_selection"]["selections"].values(), args["photon_selection"][f"{sample}_arguments"].values()):
                 photon_masks[k] = s(events, **a)
-        photon_candidates = selection.CombineMasks(photon_masks)
+        photon_candidates = selection.combine_masks(photon_masks)
 
         output = {}
         for name, sign in zip(["low", "high"], [1, -1]):
@@ -417,14 +417,14 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
     def CreateAltPi0Selections(self):
 
         self.args.cpus = 1
-        processing_args = ntuple.CalculateBatches(self.args)
+        processing_args = ntuple.calculate_batches(self.args)
         for k, v in processing_args.items():
             setattr(self.args, k, v)
 
         print("running MC")
-        output_mc = self.__merge(ntuple.RunProcess(self.args.ntuple_files["mc"], False, self.args, self.__run, False))
+        output_mc = self.__merge(ntuple.run_process(self.args.ntuple_files["mc"], False, self.args, self.__run, False))
         print("running Data")
-        output_data = self.__merge(ntuple.RunProcess(self.args.ntuple_files["data"], True, self.args, self.__run, False))
+        output_data = self.__merge(ntuple.run_process(self.args.ntuple_files["data"], True, self.args, self.__run, False))
         return {"mc" : output_mc, "data" : output_data}
 
 
@@ -494,7 +494,7 @@ class TrackLengthResolutionSystematic(MCMethod):
     
 
     def CalculateResolution(self, book : plotting.PlotBook = plotting.PlotBook.null()):
-        ai_mc = analysis_input.AnalysisInput.FromFile(self.args.analysis_input["mc"])
+        ai_mc = analysis_input.AnalysisInput.from_file(self.args.analysis_input["mc"])
 
         r = np.array(common.nandiv(ai_mc.track_length_reco - ai_mc.track_length_true, ai_mc.track_length_reco))
 
@@ -502,7 +502,7 @@ class TrackLengthResolutionSystematic(MCMethod):
         x = common.bin_centers(edges)
 
         p = fitting.fit(x, y,np.sqrt(y), fitting.double_crystal_ball, method = "dogbox", plot = True, xlabel = "$\\theta$", ylabel = "Counts", plot_style = "scatter")
-        book.Save()
+        book.save()
 
         y_interp = fitting.double_crystal_ball(x, *p[0])
 
@@ -547,15 +547,15 @@ class NormalisationSystematic(MCMethod):
     def RunExperiment(self, config : dict) -> tuple[dict, dict]:
         x = self.args.energy_slices.pos[:-1] - self.args.energy_slices.width / 2
 
-        ai = analysis_input.AnalysisInput.CreateAnalysisInputToy(toy.Toy(df = xs_toy_generator.run(config)))
+        ai = analysis_input.AnalysisInput.create_analysis_input_toy(toy.Toy(df = xs_toy_generator.run(config)))
 
         xs = self.Analyse(ai, None)
         xs_sim_mod = xs_toy_generator.ModifyGeantXS(scale_factors = config["pdf_scale_factors"])
 
         if self.args.fit["regions"]:
-            xs_true = {k : xs_sim_mod.GetInterpolatedCurve(k)(x) for k in exclusive_proc}
+            xs_true = {k : xs_sim_mod.get_interpolated_curve(k)(x) for k in exclusive_proc}
         else:
-            xs_true = xs_sim_mod.GetInterpolatedCurve(self.args.signal_process)(x)
+            xs_true = xs_sim_mod.get_interpolated_curve(self.args.signal_process)(x)
 
         return xs, xs_true
 
@@ -595,7 +595,7 @@ class NormalisationSystematic(MCMethod):
         xs_sim = geant.GeantCrossSections()
         scale_factors = {"absorption" : 1, "charge_exchange" : 1, "pion_production" : 1, "double_charge_exchange" : 1, "quasielastic" : 1}
         for r in results["cv"]:
-            for _, p in plotting.plots.IterMultiPlot(results["cv"][r][list(results["cv"][r].keys())[0]]):
+            for _, p in plotting.plots.iter_multi_plot(results["cv"][r][list(results["cv"][r].keys())[0]]):
                 for n in results["cv"][r]:
                     mod_norm = {k : v for k, v in scale_factors.items()}
                     if r == "single_pion_production":
@@ -610,19 +610,19 @@ class NormalisationSystematic(MCMethod):
                     else:
                         gxs = getattr(mod_sim, p)
 
-                    plotting.plots.Plot(mod_sim.KE, gxs, newFigure = False, label = f"true, $\\mathcal{{N}} = {n}$", title = f"process : {common.remove_(p)}", ylabel = "$\\sigma$ (mb)", xlabel = "$KE$ (MeV)")
-                    plotting.plots.Plot(args.energy_slices.pos[:-1] - args.energy_slices.width/2, results["cv"][r][n][p][0], yerr = results["cv"][r][n][p][1], xerr = args.energy_slices.width/2, marker = "x", linestyle = "", label = f"measured, $\\mathcal{{N}} = {n}$", newFigure = False)
+                    plotting.plots.plot(mod_sim.KE, gxs, new_figure = False, label = f"true, $\\mathcal{{N}} = {n}$", title = f"process : {common.remove_(p)}", ylabel = "$\\sigma$ (mb)", xlabel = "$KE$ (MeV)")
+                    plotting.plots.plot(args.energy_slices.pos[:-1] - args.energy_slices.width/2, results["cv"][r][n][p][0], yerr = results["cv"][r][n][p][1], xerr = args.energy_slices.width/2, marker = "x", linestyle = "", label = f"measured, $\\mathcal{{N}} = {n}$", new_figure = False)
                     plotting.plots.plt.xlim(args.energy_slices.min_pos - args.energy_slices.width, args.energy_slices.max_pos + args.energy_slices.width)
                     # plotting.plots.plt.ylim(0, 1.5 * max(results["cv"][r][n][p][0]))
                 if p == "single_pion_production":
                     gxs = getattr(xs_sim, "double_charge_exchange") + getattr(xs_sim, "quasielastic")
                 else:
                     gxs = getattr(xs_sim, p)
-                plotting.plots.Plot(mod_sim.KE, gxs, newFigure = False, label = f"true, $\\mathcal{{N}} = 1$")
-                plotting.plots.Plot(args.energy_slices.pos[:-1] - args.energy_slices.width/2, xs_nominal[p][0], yerr = xs_nominal[p][1], xerr = args.energy_slices.width/2, marker = "x", linestyle = "", label = f"measured, $\\mathcal{{N}} = 1$", newFigure = False)
+                plotting.plots.plot(mod_sim.KE, gxs, new_figure = False, label = f"true, $\\mathcal{{N}} = 1$")
+                plotting.plots.plot(args.energy_slices.pos[:-1] - args.energy_slices.width/2, xs_nominal[p][0], yerr = xs_nominal[p][1], xerr = args.energy_slices.width/2, marker = "x", linestyle = "", label = f"measured, $\\mathcal{{N}} = 1$", new_figure = False)
             plotting.plots.plt.suptitle(f"normalisation test : {common.remove_(r)}")
             plotting.plots.plt.tight_layout()
-            book.Save()
+            book.save()
         return
 
     @staticmethod
@@ -806,10 +806,10 @@ def PlotSysHist(systematic_table : dict[pd.DataFrame], book : plotting.PlotBook 
                 linestyle = "dashdot"
             else:
                 linestyle = "-"
-            plotting.plots.Plot(systematic_table[t].loc["KE (MeV)"], systematic_table[t].loc[i], newFigure = False, xlabel = "KE (MeV)", ylabel = "Uncertainty (mb)", label = i.split(" (mb)")[0], title = common.remove_(t).capitalize(), style = "step", linestyle = linestyle, color = color)
+            plotting.plots.plot(systematic_table[t].loc["KE (MeV)"], systematic_table[t].loc[i], new_figure = False, xlabel = "KE (MeV)", ylabel = "Uncertainty (mb)", label = i.split(" (mb)")[0], title = common.remove_(t).capitalize(), style = "step", linestyle = linestyle, color = color)
             plotting.plots.plt.legend(ncols = 2)
         plotting.plots.plt.ylim(0, 1.5 * max(plotting.plots.plt.gca().get_ylim()))
-        book.Save()
+        book.save()
 
     table_filtered = {k : v[~v.index.isin(["KE (MeV)", "Central value (mb)", "Total uncertainty (mb)", "Total systematic uncertainty (mb)"])] for k, v in systematic_table.items()}
     order = {k : v.sum(axis = 1).values.argsort() for k, v in table_filtered.items()}
@@ -822,10 +822,10 @@ def PlotSysHist(systematic_table : dict[pd.DataFrame], book : plotting.PlotBook 
         for e, i in enumerate(reversed(order[t])):
             v = table_filtered[t].iloc[i]
             prev = prev + v.T.values
-            plotting.plots.Plot(systematic_table[t].loc["KE (MeV)"].values, prev, newFigure = False, xlabel = "KE (MeV)", ylabel = "Relative uncertainty (mb)", label = v.name.split(" (mb)")[0], title = common.remove_(t).capitalize(), style = "bar", linestyle = "-", color = f"C{i}", zorder = 100-e)
+            plotting.plots.plot(systematic_table[t].loc["KE (MeV)"].values, prev, new_figure = False, xlabel = "KE (MeV)", ylabel = "Relative uncertainty (mb)", label = v.name.split(" (mb)")[0], title = common.remove_(t).capitalize(), style = "bar", linestyle = "-", color = f"C{i}", zorder = 100-e)
         plotting.plots.plt.legend(ncols = 2)
         plotting.plots.plt.ylim(0, 1.5 * max(plotting.plots.plt.gca().get_ylim()))
-        book.Save()
+        book.save()
 
     for t in systematic_table:
         plotting.plots.plt.figure()
@@ -833,10 +833,10 @@ def PlotSysHist(systematic_table : dict[pd.DataFrame], book : plotting.PlotBook 
         for e, i in enumerate(reversed(order[t])):
             v = table_filtered[t].iloc[i]
             prev = prev + v.T.values
-            plotting.plots.Plot(systematic_table[t].loc["KE (MeV)"].values, prev/total[t], newFigure = False, xlabel = "KE (MeV)", ylabel = "Relative uncertainty", label = v.name.split(" (mb)")[0], title = common.remove_(t).capitalize(), style = "bar", linestyle = "-", color = f"C{i}", zorder = 100-e)
+            plotting.plots.plot(systematic_table[t].loc["KE (MeV)"].values, prev/total[t], new_figure = False, xlabel = "KE (MeV)", ylabel = "Relative uncertainty", label = v.name.split(" (mb)")[0], title = common.remove_(t).capitalize(), style = "bar", linestyle = "-", color = f"C{i}", zorder = 100-e)
         plotting.plots.plt.legend(ncols = 2)
         plotting.plots.plt.ylim(0, 1.5 * max(plotting.plots.plt.gca().get_ylim()))
-        book.Save()
+        book.save()
 
     return
 
@@ -851,12 +851,12 @@ def FinalPlots(cv, systematics_table : dict[pd.DataFrame], energy_slices, book :
             "ProtoDUNE SP: Data Stat + Sys Error" : cv[p],
             "" : [cv[p][0], systematics_table[p].loc["Total uncertainty (mb)"]]
         }
-        plotting.PlotXSComparison(xs, energy_slices, p, simulation_label = "Geant4 v10.6", colors = {k : f"C0" for k in xs}, chi2 = False)
-        goodness_of_fit[p] = plotting.HypTestXS(cv[p][0], systematics_table[p].loc["Total uncertainty (mb)"], p, energy_slices)
+        plotting.plot_xs_cpmparison(xs, energy_slices, p, simulation_label = "Geant4 v10.6", colors = {k : f"C0" for k in xs}, chi2 = False)
+        goodness_of_fit[p] = plotting.hyp_test_xs(cv[p][0], systematics_table[p].loc["Total uncertainty (mb)"], p, energy_slices)
         if alt_xs:
-            xs_alt.Plot(p, "red", label = "Geant4 v10.6, $\\pi^{\\pm}$:$2^{nd}$ $KE > 100 MeV$")
-            goodness_of_fit_alt[p] = plotting.HypTestXS(cv[p][0], systematics_table[p].loc["Total uncertainty (mb)"], p, energy_slices, geant.GEANT_XS)
-        book.Save()
+            xs_alt.plot(p, "red", label = "Geant4 v10.6, $\\pi^{\\pm}$:$2^{nd}$ $KE > 100 MeV$")
+            goodness_of_fit_alt[p] = plotting.hyp_test_xs(cv[p][0], systematics_table[p].loc["Total uncertainty (mb)"], p, energy_slices, geant.GEANT_XS)
+        book.save()
     return pd.DataFrame(goodness_of_fit), pd.DataFrame(goodness_of_fit_alt)
 
 
@@ -881,7 +881,7 @@ def can_regen(dir : str):
 
 @common.timer
 def main(args : argparse.Namespace):
-    plotting.styles.PlotStyler.SetPlotStyle(dark = True)
+    plotting.styles.PlotStyler.set_plot_style(dark = True)
     out = args.out + "systematics/"
     os.makedirs(out, exist_ok = True)
 
@@ -889,11 +889,11 @@ def main(args : argparse.Namespace):
     print(f"{args.run=}")
 
     if args.toy_template:
-        args.toy_template = analysis_input.AnalysisInput.CreateAnalysisInputToy(toy.Toy(file = args.toy_template))
+        args.toy_template = analysis_input.AnalysisInput.create_analysis_input_toy(toy.Toy(file = args.toy_template))
         model = RegionFit.CreateModel(args.toy_template, args.energy_slices, args.fit["mean_track_score"], False, None, args.fit["mc_stat_unc"], True, args.fit["single_bin"])
     
         toy_nominal = toy.Toy(df = xs_toy_generator.run(args.toy_data_config))
-        analysis_input_nominal = analysis_input.AnalysisInput.CreateAnalysisInputToy(toy_nominal)
+        analysis_input_nominal = analysis_input.AnalysisInput.create_analysis_input_toy(toy_nominal)
 
 
     if ("all" not in args.skip) or ("all" in args.run):
@@ -1084,9 +1084,9 @@ def main(args : argparse.Namespace):
 
                 with plotting.PlotBook(f"{outdir}plots", True) as book:
                     #! use styler properly
-                    plotting.styles.PlotStyler.SetPlotStyle(dark = False, extend_colors = True)
+                    plotting.styles.PlotStyler.set_plot_style(dark = False, extend_colors = True)
                     NormalisationSystematic.PlotNormalisationTestResults(result, args, xs_nominal, book)
-                    plotting.styles.PlotStyler.SetPlotStyle(dark = True, extend_colors = False)
+                    plotting.styles.PlotStyler.set_plot_style(dark = True, extend_colors = False)
 
                 tables = norm_sys.CreateTables(args.cv, sys)
                 SaveTables(tables, outdir, 2)

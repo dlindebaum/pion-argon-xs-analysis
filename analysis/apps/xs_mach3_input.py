@@ -17,12 +17,12 @@ def main(args : application.argparse.Namespace):
     out = args.out + "mach3_input/"
     os.makedirs(out, exist_ok = True)
 
-    mc = analysis_input.AnalysisInput.FromFile(args.analysis_input["mc"])
-    data = analysis_input.AnalysisInput.FromFile(args.analysis_input["data"])
+    mc = analysis_input.AnalysisInput.from_file(args.analysis_input["mc"])
+    data = analysis_input.AnalysisInput.from_file(args.analysis_input["data"])
 
     # MaCh3 file requires MC samples with information and the Data histograms.
     for n, m in data.regions.items():
-        new_sample = mc.SelectSample(mc.regions[n])
+        new_sample = mc.select_sample(mc.regions[n])
 
         bins = np.arange(
             min(args.mach3["KE_int_binning"]["range"]),

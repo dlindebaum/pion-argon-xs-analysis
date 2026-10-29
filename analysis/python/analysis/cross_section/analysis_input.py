@@ -85,9 +85,9 @@ class AnalysisInput:
         self.process_id = None
 
         if self.regions is not None:
-            self.region_id = self.IDFromSamples(self.regions)
+            self.region_id = self.id_from_samples(self.regions)
         if self.exclusive_process is not None:
-            self.process_id = self.IDFromSamples(self.exclusive_process)
+            self.process_id = self.id_from_samples(self.exclusive_process)
 
 
     def __len__(self):
@@ -97,7 +97,7 @@ class AnalysisInput:
         return
 
 
-    def ToFile(self, file : str):
+    def to_file(self, file : str):
         """ Save to dill file.
 
         Args:
@@ -107,7 +107,7 @@ class AnalysisInput:
         return
 
 
-    def ToROOTFile(self, file : str):
+    def to_root_file(self, file : str):
         """ Save to a ROOT File as a flat TTree.
 
         Args:
@@ -118,7 +118,7 @@ class AnalysisInput:
         return
 
 
-    def ToSplitROOTFiles(self, directory : str, name : str):
+    def to_split_root_files(self, directory : str, name : str):
         """ Save to regions and samples to multiple ROOT Files, each as a flat TTree.
             Compatible with MaCh3 ROOT input files.
 
@@ -131,16 +131,16 @@ class AnalysisInput:
         #* create different files for a combination of regions and processes, could add support for more splits.
         if self.has_regions: # Data/MC.
             for r in self.region_labels:
-                new_sample = self.SelectSample(self.regions[r])
-                new_sample.ToROOTFile(f"{dir_name}/{name}_R{r}")
+                new_sample = self.select_sample(self.regions[r])
+                new_sample.to_root_file(f"{dir_name}/{name}_R{r}")
         else: # cheated MC
             for t in self.process_labels:
-                new_sample = self.SelectSample(self.exclusive_process[t])
-                new_sample.ToROOTFile(f"{dir_name}/{name}_T{t}")
+                new_sample = self.select_sample(self.exclusive_process[t])
+                new_sample.to_root_file(f"{dir_name}/{name}_T{t}")
         return
 
     @staticmethod
-    def FromFile(file : str) -> "AnalysisInput": #* seems a bit extra but why not
+    def from_file(file : str) -> "AnalysisInput": #* seems a bit extra but why not
         """ Load analysis input from dill file.
 
         Args:
@@ -156,7 +156,7 @@ class AnalysisInput:
             raise Exception("not an analysis input file")
 
 
-    def NInteract(self, energy_slice : slices.Slices, process: np.ndarray, mask : np.ndarray = None, reco : bool = True, weights : np.ndarray = None) -> np.ndarray:
+    def n_interact(self, energy_slice : slices.Slices, process: np.ndarray, mask : np.ndarray = None, reco : bool = True, weights : np.ndarray = None) -> np.ndarray:
         """ Calculate exclusive interaction histogram using the energy slice method.
 
         Args:
@@ -179,11 +179,11 @@ class AnalysisInput:
             KE_int = self.KE_int_true
             KE_init = self.KE_init_true
             outside_fv = self.outside_fv_true
-        n_interact = slices.energy_slice.CountingExperiment(KE_int[mask], KE_init[mask], outside_fv[mask], process[mask], energy_slice, interact_only = True, weights = weights[mask] if weights is not None else weights)
+        n_interact = slices.energy_slice.counting_experiment_old(KE_int[mask], KE_init[mask], outside_fv[mask], process[mask], energy_slice, interact_only = True, weights = weights[mask] if weights is not None else weights)
         return n_interact
 
 
-    def IDFromSamples(self, sample_masks : dict[np.ndarray], uncategorised : int = -1) -> ak.Array:
+    def id_from_samples(self, sample_masks : dict[np.ndarray], uncategorised : int = -1) -> ak.Array:
         """ Create ID from sample masks. Counts from 0 and includes override for uncategorised events.
 
         Args:
@@ -200,7 +200,7 @@ class AnalysisInput:
 
 
     @staticmethod
-    def CreateAnalysisInputToy(toy : Toy) -> "AnalysisInput":
+    def create_analysis_input_toy(toy : Toy) -> "AnalysisInput":
         """ Create analysis input from a toy sample.
 
         Args:
@@ -257,7 +257,7 @@ class AnalysisInput:
             )
 
     @staticmethod
-    def CreateAnalysisInputNtuple(events : ntuple.Data, upstream_energy_loss_params : dict, reco_regions : dict[np.ndarray] = None, true_regions : dict[np.ndarray] = None, mc_reweight_params : dict = None, mc_reweight_stength : float = 3, fiducial_volume : list[float] = [0, 700], upstream_loss_func : callable = fitting.poly2d, energy_method : str = "track") -> "AnalysisInput":
+    def create_analysis_input_ntuple(events : ntuple.Data, upstream_energy_loss_params : dict, reco_regions : dict[np.ndarray] = None, true_regions : dict[np.ndarray] = None, mc_reweight_params : dict = None, mc_reweight_stength : float = 3, fiducial_volume : list[float] = [0, 700], upstream_loss_func : callable = fitting.poly2d, energy_method : str = "track") -> "AnalysisInput":
         """ Create analysis input from an ntuple sample.
 
         Args:
@@ -271,11 +271,11 @@ class AnalysisInput:
             AnalysisInput: analysis input.
         """
         if mc_reweight_params is not None:
-            weights = beam.reweight.calculate_weights(events.recoParticles.beam_inst_P, "gaussian", mc_reweight_params, mc_reweight_stength)
+            weights = beam.reweight.calculate_weights(events.recoParticles.beam_inst_momentum, "gaussian", mc_reweight_params, mc_reweight_stength)
         else:
             weights = None
 
-        KE_inst_reco = kinematics.KE(events.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass)
+        KE_inst_reco = kinematics.KE(events.recoParticles.beam_inst_momentum, Particle.from_pdgid(211).mass)
         upstream_loss_reco = beam.upstream.upstream_energy_loss(KE_inst_reco, upstream_energy_loss_params, upstream_loss_func)
         KE_ff_reco = KE_inst_reco - upstream_loss_reco
 
@@ -285,7 +285,7 @@ class AnalysisInput:
         track_length_truncated_reco = kinematics.track_length(tracks=truncated_track_reco)
 
         if min(fiducial_volume) > 0:
-            track_length_min = np.where(events.recoParticles.beam_endPos_SCE.z > min(fiducial_volume), min(fiducial_volume), track_length_reco)
+            track_length_min = np.where(events.recoParticles.beam_end_pos_sce.z > min(fiducial_volume), min(fiducial_volume), track_length_reco)
 
             KE_init_reco = bethe_bloch.KE_end(KE_ff_reco, track_length_min, 50) # initial kinetic energy in the fiducial volume
 
@@ -296,35 +296,35 @@ class AnalysisInput:
 
         KE_end_reco = kinematics.reco_end_energy(truncated_track_reco, KE_ff_reco, events.recoParticles.beam_dEdX, energy_method)
 
-        outside_tpc_reco = geometry.ProtoDUNESPGeometry().outside_tpc(events.recoParticles.beam_endPos_SCE.x, events.recoParticles.beam_endPos_SCE.y, events.recoParticles.beam_endPos_SCE.z)
+        outside_tpc_reco = geometry.ProtoDUNESPGeometry().outside_tpc(events.recoParticles.beam_end_pos_sce.x, events.recoParticles.beam_end_pos_sce.y, events.recoParticles.beam_end_pos_sce.z)
 
-        outside_fv_reco = (events.recoParticles.beam_endPos_SCE.z < min(fiducial_volume)) | (events.recoParticles.beam_endPos_SCE.z > max(fiducial_volume))
-        start_pos_reco = events.recoParticles.beam_startPos_SCE
-        end_pos_reco = events.recoParticles.beam_endPos_SCE
+        outside_fv_reco = (events.recoParticles.beam_end_pos_sce.z < min(fiducial_volume)) | (events.recoParticles.beam_end_pos_sce.z > max(fiducial_volume))
+        start_pos_reco = events.recoParticles.beam_start_pos_sce
+        end_pos_reco = events.recoParticles.beam_end_pos_sce
 
         if true_regions is not None:
-            KE_ff_true = events.trueParticles.beam_KE_front_face
-            KE_int_true = events.trueParticles.beam_traj_KE[:, -2]
-            track_length_true = events.trueParticles.beam_track_length
-            start_pos_true = events.trueParticles.beam_traj_pos[:, 0]
-            end_pos_true = events.trueParticles.beam_traj_pos[:, -1]
+            KE_ff_true = events.true_particles.beam_KE_front_face
+            KE_int_true = events.true_particles.beam_traj_KE[:, -2]
+            track_length_true = events.true_particles.beam_track_length
+            start_pos_true = events.true_particles.beam_traj_pos[:, 0]
+            end_pos_true = events.true_particles.beam_traj_pos[:, -1]
 
             if min(fiducial_volume) > 0:
-                track_length_min = np.where(events.trueParticles.endPos.z[:, 0] > min(fiducial_volume), min(fiducial_volume), track_length_true)
+                track_length_min = np.where(events.true_particles.end_pos.z[:, 0] > min(fiducial_volume), min(fiducial_volume), track_length_true)
 
                 KE_init_true = bethe_bloch.KE_end(KE_ff_true, track_length_min, 50) # initial kinetic energy in the fiducial volume
             else:
                 KE_init_true = KE_ff_true
 
-            outside_tpc_true = geometry.ProtoDUNESPGeometry().outside_tpc(events.trueParticles.endPos.x[:, 0], events.trueParticles.endPos.y[:, 0], events.trueParticles.endPos.z[:, 0])
+            outside_tpc_true = geometry.ProtoDUNESPGeometry().outside_tpc(events.true_particles.end_pos.x[:, 0], events.true_particles.end_pos.y[:, 0], events.true_particles.end_pos.z[:, 0])
 
-            outside_fv_true = (events.trueParticles.beam_traj_pos.z[:, -1] < min(fiducial_volume)) | (events.trueParticles.beam_traj_pos.z[:, -1] > max(fiducial_volume))
-            inelastic = events.trueParticles.true_beam_endProcess == "pi+Inelastic"
+            outside_fv_true = (events.true_particles.beam_traj_pos.z[:, -1] < min(fiducial_volume)) | (events.true_particles.beam_traj_pos.z[:, -1] > max(fiducial_volume))
+            inelastic = events.true_particles.true_beam_end_process == "pi+Inelastic"
 
-            truncated_tracks_true = kinematics.truncate_track(events.trueParticles.beam_traj_pos[events.trueParticles.in_tpc_z], z_trunc = max(fiducial_volume))
+            truncated_tracks_true = kinematics.truncate_track(events.true_particles.beam_traj_pos[events.true_particles.in_tpc_z], z_trunc = max(fiducial_volume))
             track_length_truncated_true = kinematics.track_length(tracks=truncated_tracks_true)
 
-            traj_KE = events.trueParticles.beam_traj_KE[events.trueParticles.in_tpc_z]
+            traj_KE = events.true_particles.beam_traj_KE[events.true_particles.in_tpc_z]
             KE_end_true = traj_KE[ak.local_index(traj_KE) == (ak.num(truncated_tracks_true)-2)]
             KE_end_true = ak.ravel(ak.fill_none(ak.pad_none(KE_end_true, 1, -1), -999, None)) # current null value for invalid true tracks is -999
             KE_init_true = np.where(np.isnan(KE_init_true), KE_end_true, KE_init_true) # for nan, set to KE_end, as KE_end should always be smaller than or equal to KE_int. can occur when KE_ff is 0.
@@ -361,7 +361,7 @@ class AnalysisInput:
             start_x_reco = start_pos_reco.x,
             start_y_reco = start_pos_reco.y,
             start_z_reco = start_pos_reco.z,
-            P_inst_reco = events.recoParticles.beam_inst_P,
+            P_inst_reco = events.recoParticles.beam_inst_momentum,
             KE_inst_reco = KE_inst_reco,
             KE_int_reco = KE_int_reco,
             KE_init_reco = KE_init_reco,
@@ -381,9 +381,9 @@ class AnalysisInput:
             KE_ff_true = KE_ff_true,
             KE_end_true = KE_end_true,
             weights = weights,
-            event_num = events.eventNum,
+            event_num = events.event_num,
             run = events.run,
-            sub_run = events.subRun,
+            sub_run = events.sub_run,
             )
 
     @staticmethod
@@ -391,7 +391,7 @@ class AnalysisInput:
         return [k for k, v in AnalysisInput.__dataclass_fields__.items() if v.init is True]
 
     @staticmethod
-    def Concatenate(ais : list["AnalysisInput"]):
+    def concatenate(ais : list["AnalysisInput"]):
         fields = processing.merge_outputs([{f : getattr(a, f) for f in AnalysisInput.req_fields()} for a in ais])
 
         # check for null entries after merging outputs (null entries are list of Nones)
@@ -402,7 +402,7 @@ class AnalysisInput:
         return AnalysisInput(**fields)
 
 
-    def SelectSample(self, mask : ak.Array) -> "AnalysisInput":
+    def select_sample(self, mask : ak.Array) -> "AnalysisInput":
         """ Select a subset of the sample, creating a new AnalysisInput.
 
         Args:
@@ -430,7 +430,7 @@ class AnalysisInput:
         return AnalysisInput(**selection)
 
 
-    def CreateTrainTestSamples(self, seed : int, train_fraction : float = None) -> dict:
+    def create_train_test_samples(self, seed : int, train_fraction : float = None) -> dict:
         """ Split analysis input into two samples
 
         Args:
@@ -449,10 +449,10 @@ class AnalysisInput:
             fraction = round(train_fraction * len(sample))
 
         return {
-            "train" : self.SelectSample(sample[:fraction]), "test" : self.SelectSample(sample[fraction:])}
+            "train" : self.select_sample(sample[:fraction]), "test" : self.select_sample(sample[fraction:])}
 
 
-    def CreateHistograms(self, energy_slice : slices.Slices, exclusive_process : str, reco : bool, mask : np.ndarray = None) -> dict[np.ndarray]:
+    def create_histograms(self, energy_slice : slices.Slices, exclusive_process : str, reco : bool, mask : np.ndarray = None) -> dict[np.ndarray]:
         """ Calculate Histogrames required for the cross section measurement using energy slicing. Note exclusive interaction histogram is without background subtraction.
 
         Args:
@@ -487,7 +487,7 @@ class AnalysisInput:
         #     outside_tpc = outside_tpc[toy.df.beam_selection_mask]
         #     channel_mask = channel_mask[toy.df.beam_selection_mask]
 
-        n_initial, n_interact_inelastic, n_interact_exclusive, n_incident = slices.energy_slice.CountingExperiment(KE_int, KE_init, outside_tpc, channel_mask, energy_slice, weights = self.weights)
+        n_initial, n_interact_inelastic, n_interact_exclusive, n_incident = slices.energy_slice.counting_experiment_old(KE_int, KE_init, outside_tpc, channel_mask, energy_slice, weights = self.weights)
 
         output = {"init" : n_initial, "int" : n_interact_inelastic, "int_ex" : n_interact_exclusive, "inc" : n_incident}
         return output
@@ -511,7 +511,7 @@ class AnalysisInput:
 
 
 @common.timer
-def BeamPionSelection(events : ntuple.Data, args : argparse.Namespace | dict, is_mc : bool) -> ntuple.Data:
+def beam_pion_selection(events : ntuple.Data, args : argparse.Namespace | dict, is_mc : bool) -> ntuple.Data:
     """ Apply beam pion selection to ntuples.
         #! This needs to be somewhere else. It really is a helper to apply any beam selection from configuration to a sample (perhaps in ntuples or selection/common?)
 
@@ -526,7 +526,7 @@ def BeamPionSelection(events : ntuple.Data, args : argparse.Namespace | dict, is
 
     args_c = common.args_to_dict(args)
 
-    events_copy = events.Filter(returnCopy = True)
+    events_copy = events.filter(return_copy = True)
     if is_mc:
         selection_args = "mc_arguments"
         sample = "mc"
@@ -537,25 +537,25 @@ def BeamPionSelection(events : ntuple.Data, args : argparse.Namespace | dict, is
     if "selection_masks" in args:
         masks = args_c["selection_masks"][sample]
         if ("fiducial" in masks) and (len(masks["fiducial"]) > 0):
-            mask = selection.CombineMasks(masks["fiducial"][events.filename])
-            events_copy.Filter([mask], [mask])
-        mask = selection.CombineMasks(masks["beam"][events.filename])
-        events_copy.Filter([mask], [mask])
+            mask = selection.combine_masks(masks["fiducial"][events.filename])
+            events_copy.filter([mask], [mask])
+        mask = selection.combine_masks(masks["beam"][events.filename])
+        events_copy.filter([mask], [mask])
     else:
         for s in args_c["beam_selection"]["selections"]:
             mask = args_c["beam_selection"]["selections"][s](events_copy, **args_c["beam_selection"][selection_args][s])
-            events_copy.Filter([mask], [mask])
+            events_copy.filter([mask], [mask])
 
     if "valid_pfo_selection" in args_c:
         if args_c["valid_pfo_selection"] is True:
             if "selection_masks" in args:
-                events_copy.Filter([args_c["selection_masks"][sample]['null_pfo'][events.filename]['ValidPFOSelection']]) # apply PFO preselection here
+                events_copy.filter([args_c["selection_masks"][sample]['null_pfo'][events.filename]['ValidPFOSelection']]) # apply PFO preselection here
             else:
-                events_copy.Filter(selection.pfo.GoodShowerSelection(events))
+                events_copy.filter(selection.pfo.GoodShowerSelection(events))
     return events_copy
 
 
-def CreateAnalysisInput(sample : ntuple.Data, args : argparse.Namespace | dict, is_mc : bool) -> AnalysisInput:
+def create_analysis_input(sample : ntuple.Data, args : argparse.Namespace | dict, is_mc : bool) -> AnalysisInput:
     """ Create analysis input from ntuple sample.
 
     Args:
@@ -569,9 +569,9 @@ def CreateAnalysisInput(sample : ntuple.Data, args : argparse.Namespace | dict, 
     args_c = common.args_to_dict(args)
 
     if type(sample) == Toy:
-        ai = AnalysisInput.CreateAnalysisInputToy(sample)
+        ai = AnalysisInput.create_analysis_input_toy(sample)
     elif type(sample) == ntuple.Data:
-        sample_selected = BeamPionSelection(sample, args_c, is_mc)
+        sample_selected = beam_pion_selection(sample, args_c, is_mc)
         if is_mc:
             reco_regions, true_regions = regions.region_selection(sample, args_c, True, removed = True)
             reweight_params = [args_c["beam_reweight"]["params"][k]["value"] for k in args_c["beam_reweight"]["params"]]
@@ -579,21 +579,21 @@ def CreateAnalysisInput(sample : ntuple.Data, args : argparse.Namespace | dict, 
             reco_regions = regions.region_selection(sample, args_c, False, removed = True)
             true_regions = None
             reweight_params = None
-        ai = AnalysisInput.CreateAnalysisInputNtuple(sample_selected, args_c["upstream_loss_correction_params"]["value"], reco_regions, true_regions, reweight_params, args_c["beam_reweight"]["strength"], args_c["fiducial_volume"], args_c["upstream_loss_response"], args_c["energy_method"])
+        ai = AnalysisInput.create_analysis_input_ntuple(sample_selected, args_c["upstream_loss_correction_params"]["value"], reco_regions, true_regions, reweight_params, args_c["beam_reweight"]["strength"], args_c["fiducial_volume"], args_c["upstream_loss_response"], args_c["energy_method"])
     else:
         raise Exception(f"object type {type(sample)} not a valid sample")
     return ai
 
 
-def CreateAnalysisInputMCTrueBeam(mc : ntuple.Data, args : argparse.Namespace | dict, uncategorised : bool = False):
+def create_analysis_input_mc_true_beam(mc : ntuple.Data, args : argparse.Namespace | dict, uncategorised : bool = False):
     args_c = common.args_to_dict(args)
 
-    masks = [mc.trueParticles.pdg[:, 0] == 211]
+    masks = [mc.true_particles.pdg[:, 0] == 211]
     #! mc true beam does not encorperate fiducial cuts in truth, as this loss in efficiency needs to be corrected for the final cross section measurement
     #! if a particle interacted outside the fiducial region, it was still incident on slices within the fiducial region
-    mc_true_beam = mc.Filter(masks, masks, True)
+    mc_true_beam = mc.filter(masks, masks, True)
 
     process_def = args_c["process_definitions"]
     true_regions = process_def.CreateDefinitions(process_def.criteria_list.get_criteria_values(mc_true_beam, **args["process_args"]), uncategorised = uncategorised)
 
-    return AnalysisInput.CreateAnalysisInputNtuple(mc_true_beam, args_c["upstream_loss_correction_params"]["value"], None, true_regions, [args["beam_reweight"]["params"][k]["value"] for k in args_c["beam_reweight"]["params"]], args_c["beam_reweight"]["strength"], args_c["fiducial_volume"], upstream_loss_func = args_c["upstream_loss_response"], energy_method = args_c["energy_method"])
+    return AnalysisInput.create_analysis_input_ntuple(mc_true_beam, args_c["upstream_loss_correction_params"]["value"], None, true_regions, [args["beam_reweight"]["params"][k]["value"] for k in args_c["beam_reweight"]["params"]], args_c["beam_reweight"]["strength"], args_c["fiducial_volume"], upstream_loss_func = args_c["upstream_loss_response"], energy_method = args_c["energy_method"])

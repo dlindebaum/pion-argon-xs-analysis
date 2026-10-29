@@ -97,17 +97,17 @@ class RootIO:
     """ Interface to ROOT file using uproot
     Attributes:
         filename (str): ROOT filename
-        nEvents (int): number of events to read. Defaults to -1 (all events)
+        n_events (int): number of events to read. Defaults to -1 (all events)
         start (int): starting point to read from. Defaults to None.
     Methods:
-        Get (ak.Array): Load nTuple from root file as awkward array.
+        Get (ak.Array): Load ntuple from root file as awkward array.
         list_ntuples : list all NTuple entries produced by the analyser.
     """
 
-    def __init__(self, _filename: str, _nEvents: int = -1, _start: int = None):
+    def __init__(self, _filename: str, _n_events: int = -1, _start: int = None):
         self.filename = _filename
         self.start = _start
-        self.nEvents = _nEvents
+        self.n_events = _n_events
 
     @staticmethod
     def convert_types(d : dict[dict | ak.Array]) -> dict:
@@ -162,18 +162,18 @@ class RootIO:
 
 
     def read_data(self, item: str) -> ak.Array:
-        """ Load nTuple from root file as awkward array.
+        """ Load ntuple from root file as awkward array.
 
         Args:
-            item (str): nTuple name in root file
+            item (str): ntuple name in root file
 
         Returns:
-            ak.Array: nTuple loaded
+            ak.Array: ntuple loaded
         """
         with uproot.open(self.filename) as file:
             try:
-                if self.nEvents > 0:
-                    for batch in file["pduneana/beamana"].iterate(entry_start = self.start, entry_stop = self.start + self.nEvents, step_size = self.nEvents, filter_name = item):
+                if self.n_events > 0:
+                    for batch in file["pduneana/beamana"].iterate(entry_start = self.start, entry_stop = self.start + self.n_events, step_size = self.n_events, filter_name = item):
                         if len(batch) > 0:
                             return batch[item]
                         else:

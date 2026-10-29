@@ -579,7 +579,7 @@ def processing(samples : list[ntuple.Sample], outdir : str, args : argparse.Name
     """
     if (args.regen is True) or (os.path.isfile(f"{outdir}{outname}.dill") is False):
         print("Processing Ntuples")
-        outputs = {s : ntuple.RunProcess(args.ntuple_files[s], s == ntuple.Sample.DATA, args, func, merge) for s in samples}
+        outputs = {s : ntuple.run_process(args.ntuple_files[s], s == ntuple.Sample.DATA, args, func, merge) for s in samples}
         io.write_dill(f"{outdir}{outname}.dill", outputs)
     else:
         print("Loading existing outputs")

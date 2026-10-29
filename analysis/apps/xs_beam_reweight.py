@@ -33,7 +33,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
     if "fiducial" in selections:
         if len(selections["fiducial"]) > 0:
-            fiducial_mask = selection.CombineMasks(selections["fiducial"][file_desc.file])
+            fiducial_mask = selection.combine_masks(selections["fiducial"][file_desc.file])
         else:
             fiducial_mask = None
     else:
@@ -58,33 +58,33 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
         table[s] = sum(mask)
 
     print(table)
-    sideband_selection = selection.CombineMasks(sideband_selection)
+    sideband_selection = selection.combine_masks(sideband_selection)
 
     events = ntuple.Data(file_desc, n_events, start)
 
-    mask = selection.CombineMasks(selections["beam"][file_desc.file])
+    mask = selection.combine_masks(selections["beam"][file_desc.file])
 
     if fiducial_mask is not None:
         masks = [fiducial_mask, mask]
     else:
         masks = [mask]
 
-    analysis_sample = events.Filter(masks, masks, returnCopy = True)
+    analysis_sample = events.filter(masks, masks, return_copy = True)
 
     if fiducial_mask is not None:
         masks = [fiducial_mask, sideband_selection]
     else:
         masks = [sideband_selection]
 
-    sideband_sample = events.Filter(masks, masks, returnCopy = True)
+    sideband_sample = events.filter(masks, masks, return_copy = True)
 
     output = {
         "sideband" : {
-            "p_inst" : sideband_sample.recoParticles.beam_inst_P,
+            "p_inst" : sideband_sample.recoParticles.beam_inst_momentum,
             "tags" : tags.generate_true_beam_particle_tags(sideband_sample)
         },
         "analysis" : {
-            "p_inst" : analysis_sample.recoParticles.beam_inst_P,
+            "p_inst" : analysis_sample.recoParticles.beam_inst_momentum,
             "tags" : tags.generate_true_beam_particle_tags(analysis_sample)
         },
         "table" : table
@@ -95,7 +95,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
 @common.timer
 def main(args : argparse.Namespace):
-    plotting.styles.PlotStyler.SetPlotStyle(extend_colors = True, dpi = 100)
+    plotting.styles.PlotStyler.set_plot_style(extend_colors = True, dpi = 100)
     out = args.out + "beam_reweight/"
     os.makedirs(out, exist_ok = True)
 

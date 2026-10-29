@@ -25,14 +25,14 @@ from apps import (
     xs_generate_fit_model
     )
 
-from python.analysis.ntuple import CalculateBatches, file_len
+from python.analysis.ntuple import calculate_batches, file_len
 from python.analysis.application import ApplicationArguments, argparse, template_config
 from python.analysis.io import write_json, read_json
 
 
-def template_toy_config(toy_parameters_dir : str, nEvents : int, seed : int, max_cpus : int, step : float, p_init : float, region_selection : str):
+def template_toy_config(toy_parameters_dir : str, n_events : int, seed : int, max_cpus : int, step : float, p_init : float, region_selection : str):
     template = {
-        "events" : nEvents,
+        "events" : n_events,
         "step" : step,
         "p_init" : p_init,
         "beam_profile" : f"{toy_parameters_dir}/beam_profile/beam_profile.json",
@@ -123,7 +123,7 @@ def main(args):
         if no_data:
             print("no data file was specified, 'normalisation' and 'beam_reweight' will not run")
 
-        processing_args = CalculateBatches(args)
+        processing_args = calculate_batches(args)
         args = update_args(processing_args)
 
         planned_steps = step_plan(args, no_data, n_data)

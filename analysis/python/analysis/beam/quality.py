@@ -62,8 +62,8 @@ def plot_fit_results(value : ak.Array, x_label : str, mu : float, sigma : float,
     chisqr = np.sum(((y - y_pred)/ yerr)**2)
     ndf = len(y) - 2
 
-    plotting.plots.Plot(x, y/np.sum(y), yerr = yerr/np.sum(y), color = color, marker = "x", linestyle = "", capsize = 3, newFigure = False)
-    plotting.plots.Plot(x_interp, y_interp / np.sum(y), xlabel = x_label, ylabel = "Counts (area normalised)", color = color, linestyle = "-", label = label + " $\\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2f}", newFigure = False)
+    plotting.plots.plot(x, y/np.sum(y), yerr = yerr/np.sum(y), color = color, marker = "x", linestyle = "", capsize = 3, new_figure = False)
+    plotting.plots.plot(x_interp, y_interp / np.sum(y), xlabel = x_label, ylabel = "Counts (area normalised)", color = color, linestyle = "-", label = label + " $\\chi^{2}/ndf$ : " + f"{chisqr/ndf:.2f}", new_figure = False)
     plotting.plots.plt.ylim(0)
 
 
@@ -91,7 +91,7 @@ def make_plots(output_mc : dict[ak.Array], mc_fits : dict, output_data : dict[ak
         data_fits (dict): fits made on data
         out (str): output directory
     """
-    plotting.styles.PlotStyler.SetPlotStyle()
+    plotting.styles.PlotStyler.set_plot_style()
 
     label_name = "Beam" if truncate is None else "Truncated beam"
 
@@ -104,7 +104,7 @@ def make_plots(output_mc : dict[ak.Array], mc_fits : dict, output_data : dict[ak
             plot_ranges = mc_ranges + data_ranges
             if output_mc is not None: plot_fit_results(output_mc["start_pos"][i], f"{label_name} start position ${i}$ (cm)", mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"], "C0", "MC", range = [min(plot_ranges), max(plot_ranges)])
             if output_data is not None: plot_fit_results(output_data["start_pos"][i], f"{label_name} start position ${i}$ (cm)", data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"], "C1", "Data", range = [min(plot_ranges), max(plot_ranges)])
-            pdf.Save()
+            pdf.save()
     return
 
 

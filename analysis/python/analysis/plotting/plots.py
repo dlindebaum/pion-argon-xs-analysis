@@ -848,18 +848,7 @@ def _adjust_text_colour(value, colour, norm, offset=0.2, max_reduction=0.7):
     return tuple(val * scaling for val in colour)
 
 
-def Save(name: str = "plot", directory: str = "", dpi = 300):
-    """ Saves the last created plot to file. Run after one the functions below.
-
-    Args:
-        name (str, optional): Name of plot. Defaults to "plot".
-        directory (str, optional): directory to save plot in.
-    """
-    plt.savefig(directory + name + ".png", dpi = dpi, bbox_inches='tight')
-    plt.close()
-
-
-def FigureDimensions(x : int, orientation : str = "horizontal") -> tuple[int]:
+def figure_dimensions(x : int, orientation : str = "horizontal") -> tuple[int]:
     """ Compute dimensions for a multiplot which makes the grid as "square" as possible.
 
     Args:
@@ -883,7 +872,7 @@ def FigureDimensions(x : int, orientation : str = "horizontal") -> tuple[int]:
     return dim
 
 
-def MultiPlot(n : int, xlim : tuple = None, ylim : tuple = None, orientation = "horizontal"):
+def multi_plot(n : int, xlim : tuple = None, ylim : tuple = None, orientation = "horizontal"):
     """ Generator for subplots.
 
     Args:
@@ -892,7 +881,7 @@ def MultiPlot(n : int, xlim : tuple = None, ylim : tuple = None, orientation = "
     Yields:
         Iterator[int]: ith plot
     """
-    dim = FigureDimensions(n, orientation)
+    dim = figure_dimensions(n, orientation)
     fig, ax = plt.subplots(figsize = [6.4 * dim[1], 4.8 * dim[0]],frameon=False)
     fig.patch.set_visible(False)
     ax.axis('off')
@@ -903,7 +892,7 @@ def MultiPlot(n : int, xlim : tuple = None, ylim : tuple = None, orientation = "
         yield i
 
 
-def IterMultiPlot(x, xlim : tuple = None, ylim : tuple = None, threshold = 100):
+def iter_multi_plot(x, xlim : tuple = None, ylim : tuple = None, threshold = 100):
     """ Generator for subplots but also iterates with the data to plot to reduce boilerplate.
 
     Args:
@@ -917,14 +906,14 @@ def IterMultiPlot(x, xlim : tuple = None, ylim : tuple = None, threshold = 100):
     """
     if len(x) > threshold:
         raise Exception("Too many plots specified, did you pass the correct shape data?")
-    for i, j in zip(MultiPlot(len(x), xlim, ylim), x):
+    for i, j in zip(multi_plot(len(x), xlim, ylim), x):
         yield i, j
 
 
-def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None, xerr = None, yerr = None, capsize : float = 3, zorder : int = None, style : str = "scatter", rasterized : bool = False):
+def plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, new_figure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None, xerr = None, yerr = None, capsize : float = 3, zorder : int = None, style : str = "scatter", rasterized : bool = False):
     """ Make scatter plot.
     """
-    if newFigure is True:
+    if new_figure is True:
         plt.figure()
 
     if style == "bar":
@@ -976,23 +965,23 @@ def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label:
     plt.tight_layout()
 
 
-def PlotComparison(x, y, labels: list, xlabel: str = "", ylabel: str = "", title: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, xerr = None, yerr = None, capsize : float = 3):
+def plot_comparison(x, y, labels: list, xlabel: str = "", ylabel: str = "", title: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, new_figure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, xerr = None, yerr = None, capsize : float = 3):
     """ Make multiple scatter plots in the same axes.
     """
-    if newFigure is True: plt.figure()
+    if new_figure is True: plt.figure()
     for i in range(len(labels)):
-        Plot(x[i], y[i], xlabel, ylabel, title, labels[i], marker, linestyle, markersize, alpha, False, x_scale, y_scale, None, None, xerr, yerr, capsize)
+        plot(x[i], y[i], xlabel, ylabel, title, labels[i], marker, linestyle, markersize, alpha, False, x_scale, y_scale, None, None, xerr, yerr, capsize)
     plt.tight_layout()
     if annotation is not None:
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
-def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None, alpha : int = 1, histtype : str = "bar", sf : int = 2, density : bool = False, x_scale : str = "linear", y_scale : str = "linear", newFigure : bool = True, annotation : str = None, stacked : bool = False, color = None, range : list = None, truncate : bool = False, weights : ak.Array = None):
+def plot_hist(data, bins = 100, xlabel : str = "", title : str = "", label = None, alpha : int = 1, histtype : str = "bar", sf : int = 2, density : bool = False, x_scale : str = "linear", y_scale : str = "linear", new_figure : bool = True, annotation : str = None, stacked : bool = False, color = None, range : list = None, truncate : bool = False, weights : ak.Array = None):
     """ Plot 1D histograms.
     Returns:
         np.arrays : bin heights and edges
     """
-    if newFigure is True: plt.figure()
+    if new_figure is True: plt.figure()
     if truncate == True:
         if range is None:
             raise Exception("if truncate is true, range must be provided")
@@ -1017,7 +1006,7 @@ def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None
     return height, edges
 
 
-def PlotHist2DMarginal(data_x, data_y, bins: int = 100, x_range: list = None, y_range: list = None, z_range: list = [None, None], xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", x_scale: str = "linear", y_scale: str = "linear", annotation: str = None, cmap : str = "viridis", norm : bool = True, whitespace : float = 0.0):
+def plot_hist_2d_marginal(data_x, data_y, bins: int = 100, x_range: list = None, y_range: list = None, z_range: list = [None, None], xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", x_scale: str = "linear", y_scale: str = "linear", annotation: str = None, cmap : str = "viridis", norm : bool = True, whitespace : float = 0.0):
     plt.subplots(2, 2, figsize = (6.4, 4.8 * 1.2), gridspec_kw={"height_ratios" : [1, 5], "width_ratios" : [4, 1], "wspace" : whitespace, "hspace" : whitespace} , sharex = False, sharey = False) # set to that the ratio plot is 1/5th the default plot height
     plt.subplot(2, 2, 2).set_visible(False) # top right
 
@@ -1025,7 +1014,7 @@ def PlotHist2DMarginal(data_x, data_y, bins: int = 100, x_range: list = None, y_
 
     not_nan = (~np.isnan(data_x)) & (~np.isnan(data_y))
 
-    h, (x_e, y_e) = PlotHist2D(data_x[not_nan], data_y[not_nan], bins, x_range, y_range, z_range, xlabel, ylabel, title, label, x_scale, y_scale, False, annotation, cmap, norm, False)
+    h, (x_e, y_e) = plot_hist_2d(data_x[not_nan], data_y[not_nan], bins, x_range, y_range, z_range, xlabel, ylabel, title, label, x_scale, y_scale, False, annotation, cmap, norm, False)
 
     plt.subplot(2, 2, 1) # top right (x projection)
     ny, _, _ = plt.hist(x_e[:-1], bins = x_e, weights = np.sum(h, 1), density = True)
@@ -1057,13 +1046,13 @@ def PlotHist2DMarginal(data_x, data_y, bins: int = 100, x_range: list = None, y_
     return
 
 
-def PlotHist2D(data_x, data_y, bins: int = 100, x_range: list = None, y_range: list = None, z_range: list = [None, None], xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", x_scale: str = "linear", y_scale: str = "linear", newFigure: bool = True, annotation: str = None, cmap : str = "viridis", norm : bool = True, colorbar : bool = True):
+def plot_hist_2d(data_x, data_y, bins: int = 100, x_range: list = None, y_range: list = None, z_range: list = [None, None], xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", x_scale: str = "linear", y_scale: str = "linear", new_figure: bool = True, annotation: str = None, cmap : str = "viridis", norm : bool = True, colorbar : bool = True):
     """ Plot 2D histograms.
 
     Returns:
         np.arrays : bin heights and edges
     """
-    if newFigure is True:
+    if new_figure is True:
         plt.figure()
 
     # plot data with a logarithmic color scale
@@ -1087,14 +1076,14 @@ def PlotHist2D(data_x, data_y, bins: int = 100, x_range: list = None, y_range: l
     return height, [xedges, yedges]
 
 
-def PlotHistComparison(datas, labels: list, x_range: list = [], bins: int = 100, xlabel: str = "", title: str = "", alpha: int = 1, histtype: str = "step", x_scale: str = "linear", y_scale: str = "linear", sf: int = 2, density: bool = True, annotation: str = None, newFigure: bool = True, colours : list = None, weights : list = None):
+def plot_hist_comparison(datas, labels: list, x_range: list = [], bins: int = 100, xlabel: str = "", title: str = "", alpha: int = 1, histtype: str = "step", x_scale: str = "linear", y_scale: str = "linear", sf: int = 2, density: bool = True, annotation: str = None, new_figure: bool = True, colours : list = None, weights : list = None):
     """ Plots multiple histograms on one plot
 
     Args:
         datas (any): list of data sets to plot
         x_range (list, optional): plot range for all data. Defaults to [].
     """
-    if newFigure is True:
+    if new_figure is True:
         plt.figure()
     if colours is None:
         colours = [None]*len(labels)
@@ -1108,10 +1097,10 @@ def PlotHistComparison(datas, labels: list, x_range: list = [], bins: int = 100,
             data = data[mask]
             if weight is not None: weight = weight[mask]
         if i == 0:
-            _, edges = PlotHist(
-                data, bins, xlabel, title, labels[i], alpha, histtype, sf, density, color = colours[i], range = x_range, newFigure=False, weights = weight)
+            _, edges = plot_hist(
+                data, bins, xlabel, title, labels[i], alpha, histtype, sf, density, color = colours[i], range = x_range, new_figure=False, weights = weight)
         else:
-            PlotHist(data, edges, xlabel, title, labels[i], alpha, histtype, sf, density, color = colours[i], range = x_range, newFigure=False, weights = weight)
+            plot_hist(data, edges, xlabel, title, labels[i], alpha, histtype, sf, density, color = colours[i], range = x_range, new_figure=False, weights = weight)
     plt.xscale(x_scale)
     plt.yscale(y_scale)
     plt.tight_layout()
@@ -1119,14 +1108,14 @@ def PlotHistComparison(datas, labels: list, x_range: list = [], bins: int = 100,
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
-def PlotHist2DComparison(x : list, y : list, x_range : list, y_range : list, xlabels = None, ylabels = None, titles = None, bins = 50, cmap = "plasma", func = None, orientation = "horizontal"):
+def plot_hist_2d_comparison(x : list, y : list, x_range : list, y_range : list, xlabels = None, ylabels = None, titles = None, bins = 50, cmap = "plasma", func = None, orientation = "horizontal"):
     """ Plots multiple 2D histograms with a shared colour bar.
     """
     if xlabels is None: xlabels = [""]*len(x)
     if ylabels is None: ylabels = [""]*len(y)
     if titles is None: titles = [""] * len(x)
 
-    dim = FigureDimensions(len(x), orientation)
+    dim = figure_dimensions(len(x), orientation)
     fig_size = (6.4 * dim[1], 4.8 * dim[0])
     ranges = [x_range, y_range]
 
@@ -1151,7 +1140,7 @@ def PlotHist2DComparison(x : list, y : list, x_range : list, y_range : list, xla
     fig.colorbar(im, cax = cbar_ax)
 
 
-def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : list = None, stacked = False, data_label : str = "Data", mc_labels = "MC", xlabel : str = None, title : str = None, yscale : str = "linear", legend_loc : str = "best", ncols : int = 2, norm : bool = False, sf : int = 2, colour : str = None, alpha : float = None, truncate : bool = False, mc_weights : np.array = None):
+def plot_hist_data_mc(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : list = None, stacked = False, data_label : str = "Data", mc_labels = "MC", xlabel : str = None, title : str = None, yscale : str = "linear", legend_loc : str = "best", ncols : int = 2, norm : bool = False, sf : int = 2, colour : str = None, alpha : float = None, truncate : bool = False, mc_weights : np.array = None):
     """ Make Data MC histograms as seen in most typical particle physics analyses (but looks better).
 
     Args:
@@ -1219,11 +1208,11 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     plt.yscale(yscale)
     plt.title(title)
 
-    binWidth = round((edges[-1] - edges[0]) / len(edges), sf)
+    bin_width = round((edges[-1] - edges[0]) / len(edges), sf)
     if norm == False:
-        yl = "Number of entries (bin width=" + str(binWidth) + ")"
+        yl = "Number of entries (bin width=" + str(bin_width) + ")"
     else:
-        yl = "Normalised number of entries (bin width=" + str(binWidth) + ")"
+        yl = "Normalised number of entries (bin width=" + str(bin_width) + ")"
     plt.ylabel(yl)
 
     h_data, edges = np.histogram(np.array(data), bins = edges, range = x_range) # bin the data in terms of MC
@@ -1258,7 +1247,7 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     plt.subplot(211) # do this to set the current figure to the main plot
 
 
-def PlotHist2DImshow(x : ak.Array, y : ak.Array, bins : int = 100, x_range : list = None, y_range : list = None, c_range : list = None, xlabel : str = None, ylabel : str = None, title : str = None, c_scale : str = "linear", norm : str = None, newFigure : bool = True, colorbar : bool = True, cmap : str = "viridis"):
+def plot_hist_2d_imshow(x : ak.Array, y : ak.Array, bins : int = 100, x_range : list = None, y_range : list = None, c_range : list = None, xlabel : str = None, ylabel : str = None, title : str = None, c_scale : str = "linear", norm : str = None, new_figure : bool = True, colorbar : bool = True, cmap : str = "viridis"):
     """ Same as Hist2D, but uses numpy.histogram2d and imshow to allow more options for plot normalisation,
         but is harder to use in subplots.
     """
@@ -1278,7 +1267,7 @@ def PlotHist2DImshow(x : ak.Array, y : ak.Array, bins : int = 100, x_range : lis
     else:
         cnorm = matplotlib.colors.Normalize(vmin = min(c_range), vmax = max(c_range))
 
-    if newFigure is True: plt.figure()
+    if new_figure is True: plt.figure()
 
     plt.imshow(h_norm.T, origin = "lower", extent=[min(x_e), max(x_e), min(y_e), max(y_e)], norm = cnorm, aspect = "auto", cmap = cmap)
     plt.grid(False)
@@ -1289,12 +1278,12 @@ def PlotHist2DImshow(x : ak.Array, y : ak.Array, bins : int = 100, x_range : lis
     return h, (x_e, y_e)
 
 
-def PlotHist2DImshowMarginal(data_x, data_y, bins: int = 100, x_range: list = None, y_range: list = None, xlabel: str = "", ylabel: str = "", title: str = "", cmap : str = "viridis", norm : bool = True, whitespace : float = 0.0, c_range : list = None, c_scale : str = "linear"):
+def plot_hist_2d_imshow_marginal(data_x, data_y, bins: int = 100, x_range: list = None, y_range: list = None, xlabel: str = "", ylabel: str = "", title: str = "", cmap : str = "viridis", norm : bool = True, whitespace : float = 0.0, c_range : list = None, c_scale : str = "linear"):
     plt.subplots(2, 2, figsize = (6.4, 4.8 * 1.2), gridspec_kw={"height_ratios" : [1, 5], "width_ratios" : [4, 1], "wspace" : whitespace, "hspace" : whitespace} , sharex = False, sharey = False) # set to that the ratio plot is 1/5th the default plot height
     plt.subplot(2, 2, 2).set_visible(False) # top right
 
     plt.subplot(2, 2, 3) # bottom left (main plot)
-    h, (x_e, y_e) = PlotHist2DImshow(data_x, data_y, bins, x_range, y_range, c_range, xlabel, ylabel, title, c_scale, norm, False, False, cmap)
+    h, (x_e, y_e) = plot_hist_2d_imshow(data_x, data_y, bins, x_range, y_range, c_range, xlabel, ylabel, title, c_scale, norm, False, False, cmap)
 
     plt.subplot(2, 2, 1) # top right (x projection)
     plt.hist(x_e[:-1], bins = x_e, weights = np.sum(h, 1), density = True)
@@ -1316,7 +1305,7 @@ def PlotHist2DImshowMarginal(data_x, data_y, bins: int = 100, x_range: list = No
     return
 
 
-def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y_tick_labels : list[str] = None, title : str = None, newFigure : bool = True, cmap : str = "cool", x_label : str = None, y_label : str = None, detailed_info : bool = True):
+def plot_confusion_matrix(counts : np.ndarray, x_tick_labels : list[str] = None, y_tick_labels : list[str] = None, title : str = None, new_figure : bool = True, cmap : str = "cool", x_label : str = None, y_label : str = None, detailed_info : bool = True):
     """ Plots confusion matrix
 
     Args:
@@ -1324,13 +1313,13 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
         x_tick_labels (list[str], optional): labels for categories in the x axis. Defaults to None.
         y_tick_labels (list[str], optional): labels for categories in the y axis. Defaults to None.
         title (str, optional): plot title. Defaults to None.
-        newFigure (bool, optional): create plot in new figure. Defaults to True.
+        new_figure (bool, optional): create plot in new figure. Defaults to True.
         cmap (str, optional): colour map. Defaults to "cool".
         x_label (str, optional): x label. Defaults to None.
         y_label (str, optional): y label. Defaults to None.
     """
     fractions = counts / np.sum(counts, axis = 1)[:, np.newaxis]
-    if newFigure: plt.figure()
+    if new_figure: plt.figure()
     c_norm = counts/np.sum(counts, axis = 0)
     
     fractions_err = (fractions * (1 - fractions) / np.sum(counts, axis = 1)[:, np.newaxis])**0.5
@@ -1377,16 +1366,16 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
     plt.tight_layout()
 
 
-def DrawMultiCutPosition(value : float | list[float], arrow_loc : float = 0.8, arrow_length : float = 0.2, face : str | list[str] = "right", flip : bool = False, color = "black", annotate : bool = False):
+def draw_multi_cut_position(value : float | list[float], arrow_loc : float = 0.8, arrow_length : float = 0.2, face : str | list[str] = "right", flip : bool = False, color = "black", annotate : bool = False):
     if type(value) == list and type(face) == list:
         for i in range(max(2, len(value))):
-            DrawCutPosition(value[i], arrow_loc, arrow_length, face[i], flip, color, annotate)
+            draw_cut_position(value[i], arrow_loc, arrow_length, face[i], flip, color, annotate)
     else:
-        DrawCutPosition(value, arrow_loc, arrow_length, face, flip, color, annotate)
+        draw_cut_position(value, arrow_loc, arrow_length, face, flip, color, annotate)
     return
 
 
-def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float = 0.2, face : str = "right", flip : bool = False, color = "black", annotate : bool = False):
+def draw_cut_position(value : float, arrow_loc : float = 0.8, arrow_length : float = 0.2, face : str = "right", flip : bool = False, color = "black", annotate : bool = False):
     """ Illustrates a cut on a plot. Direction of the arrow indidcates which portion of the plot passes the cut.
 
     Args:
@@ -1422,7 +1411,7 @@ def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float
     plt.annotate("", xy = xy1, xytext = xy0, arrowprops=dict(facecolor = color, edgecolor = color, arrowstyle = "->"), xycoords= transform)
 
 
-def PlotTagged(data : np.array, sample_tags : tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False, title : str = "", newFigure : bool = True, stacked : bool = True, alpha : float = None, truncate : bool = False, histtype : str = "stepfilled", reverse_sort : bool = False, data_weights : np.array = None):
+def plot_tagged(data : np.array, sample_tags : tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False, title : str = "", new_figure : bool = True, stacked : bool = True, alpha : float = None, truncate : bool = False, histtype : str = "stepfilled", reverse_sort : bool = False, data_weights : np.array = None):
     """ Makes a stacked histogram and splits the sample based on tags.
 
     Args:
@@ -1460,13 +1449,13 @@ def PlotTagged(data : np.array, sample_tags : tags.Tags, bins = 100, x_range : l
             colours[i] = "C" + str(i)
 
     if data2 is None:
-        PlotHist(split_data, stacked = stacked, label = [common.remove_(i) for i in sorted_tags.name.values], bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, newFigure = newFigure, alpha = alpha, truncate = truncate, histtype = histtype, weights = split_weights)
+        plot_hist(split_data, stacked = stacked, label = [common.remove_(i) for i in sorted_tags.name.values], bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, new_figure = new_figure, alpha = alpha, truncate = truncate, histtype = histtype, weights = split_weights)
         plt.legend(loc = loc, ncols = ncols, labelspacing = 0.25,  columnspacing = 0.25)
     else:
-        PlotHistDataMC(ak.ravel(data2), split_data, bins, x_range, stacked, "Data", sorted_tags.name.values, x_label, title, y_scale, loc, ncols, norm, colour = colours, alpha = alpha, truncate = truncate, mc_weights = split_weights)
+        plot_hist_data_mc(ak.ravel(data2), split_data, bins, x_range, stacked, "Data", sorted_tags.name.values, x_label, title, y_scale, loc, ncols, norm, colour = colours, alpha = alpha, truncate = truncate, mc_weights = split_weights)
 
 
-def UniqueData(data):
+def unique_data(data):
     """ Formats data to be plotted as a bar plot based on unique values and how often they occur.
     """
     unique, counts = np.unique(data, return_counts=True)
@@ -1480,13 +1469,13 @@ def UniqueData(data):
     return unique_labels, counts
 
 
-def PlotBar(data, width: float = 0.4, xlabel: str = "", title: str = "", label: str = "", alpha: float = 1, newFigure: bool = True, annotation: str = None, bar_labels : bool = True, color = None):
+def plot_bar(data, width: float = 0.4, xlabel: str = "", title: str = "", label: str = "", alpha: float = 1, new_figure: bool = True, annotation: str = None, bar_labels : bool = True, color = None):
     """ Plot a bar graph or unique items in data.
     """
-    if newFigure is True:
+    if new_figure is True:
         plt.figure()
 
-    unique, counts = UniqueData(data)
+    unique, counts = unique_data(data)
     bar = plt.bar(unique, counts, width, label=label, alpha=alpha, color = color)
     if bar_labels: plt.bar_label(bar, counts)
     plt.ylabel("Counts")
@@ -1500,14 +1489,14 @@ def PlotBar(data, width: float = 0.4, xlabel: str = "", title: str = "", label: 
     return unique, counts
 
 
-def PlotBarComparision(data_1, data_2, width: float = 0.4, xlabel: str = "", title: str = "", label_1: str = "", label_2: str = "", newFigure: bool = True, annotation: str = None, ylabel : str = None, fraction : bool = False, barlabel : bool = True):
+def plot_bar_comparison(data_1, data_2, width: float = 0.4, xlabel: str = "", title: str = "", label_1: str = "", label_2: str = "", new_figure: bool = True, annotation: str = None, ylabel : str = None, fraction : bool = False, barlabel : bool = True):
     """ Plot two bar plots of the same data type side-by-side.
     """
-    if newFigure is True:
+    if new_figure is True:
         plt.figure()
 
-    unique_1, counts_1 = UniqueData(data_1)
-    unique_2, counts_2 = UniqueData(data_2)
+    unique_1, counts_1 = unique_data(data_1)
+    unique_2, counts_2 = unique_data(data_2)
 
     m = None
     if(len(unique_2) > len(unique_1)):
@@ -1563,7 +1552,7 @@ def PlotBarComparision(data_1, data_2, width: float = 0.4, xlabel: str = "", tit
     return [unique_1, counts_1], [unique_2, counts_2]
 
 
-def PlotStackedBar(bars, labels, xlabel : str = None, colours : list = None, alpha : float = 1, label_title : str = None, width : float = 0.8, annotation : str = None):
+def plot_stacked_bar(bars, labels, xlabel : str = None, colours : list = None, alpha : float = 1, label_title : str = None, width : float = 0.8, annotation : str = None):
     """ Plot stacked bar chart.
 
     Args:
@@ -1607,8 +1596,8 @@ def PlotStackedBar(bars, labels, xlabel : str = None, colours : list = None, alp
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
-def PlotTags(sample_tags : tags.Tags, xlabel : str = "name", fraction : bool = True, newFigure : bool = True, display_values : bool = False):
-    if newFigure: plt.figure()    
+def plot_tags(sample_tags : tags.Tags, xlabel : str = "name", fraction : bool = True, new_figure : bool = True, display_values : bool = False):
+    if new_figure: plt.figure()    
     counts = [ak.sum(m) for m in sample_tags.mask.values]
     yl = "Counts"
     if fraction is True:
@@ -1621,7 +1610,7 @@ def PlotTags(sample_tags : tags.Tags, xlabel : str = "name", fraction : bool = T
     plt.xticks(rotation = 30)
 
 
-class RatioPlot():
+class ratio_plot():
     def __init__(self, x = None, y1 = None, y2 = None, y1_err = None, y2_err = None, xlabel = "x", ylabel = "y2/y1") -> None:
         self.x = x
         self.y1 = y1
@@ -1655,7 +1644,7 @@ class RatioPlot():
         else:
             ratio_err = abs(ratio * np.sqrt(common.nandiv(self.y1_err, self.y1)**2 + common.nandiv(self.y2_err, self.y2)**2))
 
-        Plot(self.x, ratio, yerr = ratio_err, xlabel = self.xlabel, ylabel = self.ylabel, marker = "o", color = "black", linestyle = "", newFigure = False)
+        plot(self.x, ratio, yerr = ratio_err, xlabel = self.xlabel, ylabel = self.ylabel, marker = "o", color = "black", linestyle = "", new_figure = False)
         ticks = [0, 0.5, 1, 1.5, 2] # hardcode the yaxis to have 5 ticks
         plt.yticks(ticks, np.char.mod("%.2f", ticks))
         plt.ylim(0, 2)
@@ -2093,9 +2082,9 @@ def make_truth_comparison_plots(
 
     # Ideally, we can use the trueParticle (not trueparticleBT} data, since trueParticle is likely
     #   already loaded, and trueParticleBT likely hasn't been
-    true_energies = events.trueParticlesBT.energy[valid_events]
-    # true_energies_mom = vector.magnitude(events.trueParticlesBT.momentum)[valid_events]
-    true_dirs = events.trueParticlesBT.direction[valid_events]
+    true_energies = events.true_particles_bt.energy[valid_events]
+    # true_energies_mom = vector.magnitude(events.true_particles_bt.momentum)[valid_events]
+    true_dirs = events.true_particles_bt.direction[valid_events]
 
     reco_energies = events.recoParticles.shower_energy[valid_events]
     reco_dirs = events.recoParticles.shower_direction[valid_events]
@@ -2131,12 +2120,12 @@ def make_truth_comparison_plots(
 
         # This might contain some useful stuff for moving to trueParticle informatio, rather than trueParticleBT
         # err_true_photon_i = np.zeros(np.sum(valid_events))
-        # photon_i_ids = events.trueParticlesBT.number[valid_events][photon_i_indicies]
+        # photon_i_ids = events.true_particles_bt.number[valid_events][photon_i_indicies]
         # reco_energy_full = reco_energies[photon_i_indicies]
         # index = np.arange(photon_indicies[prop][:,0].shape[0])[valid_events]
         # for j in range(np.sum(valid_events)):
-        #     true_ids = events.trueParticles.number[index[j]].to_numpy()
-        #     true_energy = events.trueParticles.energy[index[j]].to_numpy()
+        #     true_ids = events.true_particles.number[index[j]].to_numpy()
+        #     true_energy = events.true_particles.energy[index[j]].to_numpy()
 
         #     true_energy_i = true_energy[true_ids == photon_i_ids[j]]
         #     # true_energy_ii = true_energy[true_ids == pfo_truth_ids[photon_ii_indicies]]

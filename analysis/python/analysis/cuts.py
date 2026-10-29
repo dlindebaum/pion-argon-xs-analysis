@@ -250,7 +250,7 @@ class CutHandler():
         N.B. if we want to to this for truth, we must change evts
         to be an acutal akward array (i.e.
         `evts.recoParticles.number` for reco and
-        `evts.trueParticles.number` for truth). At the moment,
+        `evts.true_particles.number` for truth). At the moment,
         we take a Master.Data object an pull the
         `evts.recoParticles.number` from it.
 
@@ -724,4 +724,4 @@ class CutHandler():
 def apply_filters(obj, filters):#: Master.Data, filters):
     for f in filters:
         print(f"{f=}")
-        obj.cutTable.add_mask(f)
+        obj.cut_table.add_mask(f)

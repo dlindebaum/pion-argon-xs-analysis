@@ -130,10 +130,10 @@ def generate_true_particle_tags(events):# : Data) -> Tags:
         211, -211, 13, -13, 11, -11, 22, 2212, 321
     ] # anything not in this list is tagged as other
 
-    if ak.count(events.trueParticlesBT.pdg) == 0: # the ntuple has no MC, so provide some null data base off recoParticles array shape
+    if ak.count(events.true_particles_bt.pdg) == 0: # the ntuple has no MC, so provide some null data base off recoParticles array shape
         pdg = ak.where(events.recoParticles.number, -1, 0)
     else:
-        pdg = events.trueParticlesBT.pdg
+        pdg = events.true_particles_bt.pdg
     masks = particle_masks(pdg, particles_to_tag)
     masks["other"] = other_mask(masks)
 
@@ -157,11 +157,11 @@ def generate_true_beam_particle_tags(events):# : Data) -> Tags:
         211, -13, -11, 2212, 321
     ] # anything not in this list is tagged as other
 
-    masks = particle_masks(events.trueParticlesBT.beam_pdg, particles_to_tag)
+    masks = particle_masks(events.true_particles_bt.beam_pdg, particles_to_tag)
     masks["other"] = other_mask(masks)
 
-    inel = events.trueParticlesBT.beam_endProcess == "pi+Inelastic"
-    cosmic = events.trueParticlesBT.beam_origin == 2
+    inel = events.true_particles_bt.beam_end_process == "pi+Inelastic"
+    cosmic = events.true_particles_bt.beam_origin == 2
 
     new_mask = {"$\\pi^{+}$:inel" : masks["$\\pi^{+}$"] & inel, "$\\pi^{+}$:decay" : masks["$\\pi^{+}$"] & ~inel, }
 
@@ -192,13 +192,13 @@ def generate_true_particle_tags_pi_plus(events):# : Data) -> Tags:
         211, -211, 13, -13, -11, 22, 2212
     ] # anything not in this list is tagged as other
 
-    if ak.count(events.trueParticlesBT.pdg) == 0: # the ntuple has no MC, so provide some null data base off recoParticles array shape
+    if ak.count(events.true_particles_bt.pdg) == 0: # the ntuple has no MC, so provide some null data base off recoParticles array shape
         pdg = ak.where(events.recoParticles.number, -1, 0)
         beam_daughter = pdg
 
     else:
-        pdg = events.trueParticlesBT.pdg
-        beam_daughter = events.trueParticlesBT.mother == 1
+        pdg = events.true_particles_bt.pdg
+        beam_daughter = events.true_particles_bt.mother == 1
 
     masks = particle_masks(pdg, particles_to_tag)
     masks["other"] = other_mask(masks)
@@ -228,17 +228,17 @@ def generate_true_particle_tags_interesting_pfos(events) -> Tags:
     particles_to_tag = [
         211, -211, 13, -13, 11, -11, 22, 2212
     ]
-    if ak.count(events.trueParticlesBT.pdg) == 0: # the ntuple has no MC, so provide some null data base off recoParticles array shape
+    if ak.count(events.true_particles_bt.pdg) == 0: # the ntuple has no MC, so provide some null data base off recoParticles array shape
         pdg = ak.where(events.recoParticles.number, -1, 0)
         beam_pi0 = pdg
         beam_daughter = pdg
         other_pi0 = pdg
 
     else:
-        pdg = events.trueParticlesBT.pdg
-        beam_pi0 = events.trueParticlesBT.is_beam_pi0
-        other_pi0 = (events.trueParticlesBT.motherPdg == 111) & (~events.trueParticlesBT.is_beam_pi0)
-        beam_daughter = events.trueParticlesBT.mother == 1
+        pdg = events.true_particles_bt.pdg
+        beam_pi0 = events.true_particles_bt.is_beam_pi0
+        other_pi0 = (events.true_particles_bt.mother_pdg == 111) & (~events.true_particles_bt.is_beam_pi0)
+        beam_daughter = events.true_particles_bt.mother == 1
 
     masks = particle_masks(pdg, particles_to_tag)
     masks["other"] = other_mask(masks)
@@ -281,14 +281,14 @@ def generate_true_particle_tags_pi0_shower(events) -> Tags:# : Data):
     particles_to_tag = [
         211, -211, 13, -13, 11, -11, 22, 2212
     ]
-    if ak.count(events.trueParticlesBT.pdg) == 0: # the ntuple has no MC, so provide some null data base off recoParticles array shape
+    if ak.count(events.true_particles_bt.pdg) == 0: # the ntuple has no MC, so provide some null data base off recoParticles array shape
         pdg = ak.where(events.recoParticles.number, -1, 0)
         beam_pi0 = pdg
         other_pi0 = pdg
     else:
-        pdg = events.trueParticlesBT.pdg
-        beam_pi0 = events.trueParticlesBT.is_beam_pi0
-        other_pi0 = (events.trueParticlesBT.motherPdg == 111) & (~events.trueParticlesBT.is_beam_pi0)
+        pdg = events.true_particles_bt.pdg
+        beam_pi0 = events.true_particles_bt.is_beam_pi0
+        other_pi0 = (events.true_particles_bt.mother_pdg == 111) & (~events.true_particles_bt.is_beam_pi0)
     masks = particle_masks(pdg, particles_to_tag)
     masks["other"] = other_mask(masks)
 
@@ -320,10 +320,10 @@ def generate_pi0_tags(events, photon_pfos : ak.Array) -> Tags:# : Data, photon_p
     Returns:
         Tags: tags
     """
-    pi0_photon = events.trueParticlesBT.motherPdg == 111
+    pi0_photon = events.true_particles_bt.mother_pdg == 111
 
     correctly_matched_photons = ak.sum(pi0_photon & photon_pfos, -1)
-    photon_mothers = events.trueParticlesBT.mother[pi0_photon & photon_pfos]
+    photon_mothers = events.true_particles_bt.mother[pi0_photon & photon_pfos]
     photon_mothers = ak.pad_none(photon_mothers, 2, -1)
     same_mother = ak.where(correctly_matched_photons == 2, photon_mothers[:, 0] == photon_mothers[:, 1], False)
 
@@ -367,10 +367,10 @@ def exclusive_process_tags(true_masks):
 
 
 def stopping_muon_tag(events : "Data"):
-    masks = particle_masks(events.trueParticlesBT.beam_pdg, [-13])
+    masks = particle_masks(events.true_particles_bt.beam_pdg, [-13])
     masks["other"] = other_mask(masks)
 
-    decay = events.trueParticlesBT.beam_endProcess == "Decay"
+    decay = events.true_particles_bt.beam_end_process == "Decay"
 
     new_mask = {"$\\mu^{+}$:inel" : masks["$\\mu^{+}$"] & ~decay, "$\\mu^{+}$:decay" : masks["$\\mu^{+}$"] & decay}
 

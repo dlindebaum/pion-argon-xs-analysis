@@ -49,16 +49,16 @@ def ComputeQuantities(mc : ntuple.Data, args : dict) -> dict[dict, dict]:
         dict[dict, dict]: dictionary of quantities, one for reco and truth.
     """
     with alive_bar(title = "computng reco quantities") as bar:
-        reco_upstream_loss = beam.upstream.upstream_energy_loss(kinematics.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass), args["upstream_loss_correction_params"]["value"], args["upstream_loss_response"])
+        reco_upstream_loss = beam.upstream.upstream_energy_loss(kinematics.KE(mc.recoParticles.beam_inst_momentum, Particle.from_pdgid(211).mass), args["upstream_loss_correction_params"]["value"], args["upstream_loss_response"])
         
-        reco_KE_ff = kinematics.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) - reco_upstream_loss
+        reco_KE_ff = kinematics.KE(mc.recoParticles.beam_inst_momentum, Particle.from_pdgid(211).mass) - reco_upstream_loss
         reco_KE_int = kinematics.reco_end_energy(mc.recoParticles.beam_calo_pos, reco_KE_ff, mc.recoParticles.beam_dEdX, args["energy_method"])
         reco_track_length = mc.recoParticles.beam_track_length
 
     with alive_bar(title = "computng true quantities") as bar:
-        true_KE_ff = mc.trueParticles.beam_KE_front_face
-        true_KE_int = mc.trueParticles.beam_traj_KE[:, -2]
-        true_track_length = mc.trueParticles.beam_track_length
+        true_KE_ff = mc.true_particles.beam_KE_front_face
+        true_KE_int = mc.true_particles.beam_traj_KE[:, -2]
+        true_track_length = mc.true_particles.beam_track_length
 
     return {
         "reco" : {"KE_init" : reco_KE_ff, "KE_int" : reco_KE_int, "z_int" : reco_track_length},
@@ -69,7 +69,7 @@ def ComputeQuantities(mc : ntuple.Data, args : dict) -> dict[dict, dict]:
 def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
     mc = ntuple.Data(file_desc, n_events, start)
 
-    true_pion_mask = mc.trueParticles.pdg[:, 0] == 211
+    true_pion_mask = mc.true_particles.pdg[:, 0] == 211
 
     pion_inel_mask = get_total_pion_inel_masks(mc)
     
@@ -81,12 +81,12 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
         reco_regions, true_regions = regions.region_selection(mc, args, True, v, None, True) # should we generate permutations of the true process as well?
         ri[r] = {"reco_regions" : reco_regions, "true_regions" : true_regions}
 
-    mc_copy = BeamPionSelection(mc, args, True)
+    mc_copy = beam_pion_selection(mc, args, True)
 
     mean_track_score = ak.fill_none(ak.mean(mc_copy.recoParticles.track_score, axis = -1), -0.05)
 
     selection = args["selection_masks"]["mc"]["beam"][file_desc.file]
-    mask = selection.CombineMasks(selection)
+    mask = selection.combine_masks(selection)
 
     return {"kinematic_quantities" : cross_section_quantities, "true_pion_mask" : true_pion_mask, "pion_inel_mask" : pion_inel_mask, "region_identification" : ri, "mean_track_score" : mean_track_score, "beam_selection_mask" : mask}
 
@@ -123,12 +123,12 @@ def ResolutionStudy(plot_book : plotting.PlotBook, reco_quantity : ak.Array, tru
     residual = reco_quantity - true_quantity
     if mask is not None:
         residual = residual[mask]
-    plots.PlotHistComparison([reco_quantity, true_quantity], labels = ["reco", "true"], xlabel = label, x_range = plot_range)
-    plot_book.Save()
-    plots.PlotHist(residual, xlabel = label, range = residual_range)
-    plot_book.Save()
-    plots.PlotHist(residual, xlabel = label, range = residual_range, y_scale = "log")
-    plot_book.Save()
+    plots.plot_hist_comparison([reco_quantity, true_quantity], labels = ["reco", "true"], xlabel = label, x_range = plot_range)
+    plot_book.save()
+    plots.plot_hist(residual, xlabel = label, range = residual_range)
+    plot_book.save()
+    plots.plot_hist(residual, xlabel = label, range = residual_range, y_scale = "log")
+    plot_book.save()
 
     counts, edges = np.histogram(np.array(residual), 100, range = residual_range)
     centers = (edges[1:] + edges[:-1]) / 2
@@ -144,7 +144,7 @@ def ResolutionStudy(plot_book : plotting.PlotBook, reco_quantity : ak.Array, tru
         except ValueError as e:
             print(f"fit not successful for {f.__name__}, reason: \n {e}")
         
-        plot_book.Save()
+        plot_book.save()
         plots.plt.close()
 
     params_formatted = {p : {"function" : p, "values" : {f"p{i}" : params[p][i] for i in range(len(params[p]))}} for p in params}
@@ -255,9 +255,9 @@ def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, beam_s
     x = {i : (bins[i][1:] + bins[i][:-1])/2 for i in initial_counts_true}
     e = {i : common.efficiency(selected_counts_true[i], initial_counts_true[i]) for i in initial_counts_true}
 
-    for _, i in plots.IterMultiPlot(initial_counts_true):
-        plots.Plot(x[i], e[i][0], yerr = e[i][1], xlabel = "true" + labels[i], ylabel = "beam $\\pi^{+}$:inel selection efficiency", newFigure = False)
-    pdf.Save()
+    for _, i in plots.iter_multi_plot(initial_counts_true):
+        plots.plot(x[i], e[i][0], yerr = e[i][1], xlabel = "true" + labels[i], ylabel = "beam $\\pi^{+}$:inel selection efficiency", new_figure = False)
+    pdf.save()
     pdf.close()
 
     selection_efficiency_info ={
@@ -295,8 +295,8 @@ def RecoRegionSelection(region_selections : dict[dict], args : argparse.Namespac
 
         counts = np.array(regions.count_in_regions(true_regions, reco_regions))
         plots.plt.figure(figsize = [3 * 6.4, 3 * 4.8])
-        plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "True process", x_label = "Reco region", title = common.remove_(r), newFigure = False)
-        pdf.Save()
+        plots.plot_confusion_matrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "True process", x_label = "Reco region", title = common.remove_(r), new_figure = False)
+        pdf.save()
 
         (a,b)=counts.shape
         diff = a-b
@@ -339,15 +339,15 @@ def MeanTrackScoreKDE(mean_track_score : ak.Array, true_processes : dict[ak.Arra
 
     os.makedirs(out + "meanTrackScoreKDE/", exist_ok = True)
     with plotting.PlotBook(out + "meanTrackScoreKDE/plots.pdf", True) as book:
-        plots.PlotTagged(mean_track_score, process_tags, 21, [0, 1], x_label = "mean track score", stacked = False, histtype = "step", norm = True)
-        book.Save()
+        plots.plot_tagged(mean_track_score, process_tags, 21, [0, 1], x_label = "mean track score", stacked = False, histtype = "step", norm = True)
+        book.save()
 
         x = np.linspace(0, 1, 1000)
 
-        plots.PlotTagged(mean_track_score, process_tags, 21, [0, 1], x_label = "mean track score", stacked = False, histtype = "step", norm = True)
+        plots.plot_tagged(mean_track_score, process_tags, 21, [0, 1], x_label = "mean track score", stacked = False, histtype = "step", norm = True)
         for tag in process_tags:
-            plots.Plot(x, kdes[tag].evaluate(x), color = process_tags[tag].colour, label = common.remove_(tag) + " KDE", newFigure = False)
-        book.Save()
+            plots.plot(x, kdes[tag].evaluate(x), color = process_tags[tag].colour, label = common.remove_(tag) + " KDE", new_figure = False)
+        book.save()
 
     io.write_dill(out + "meanTrackScoreKDE/kdes.dill", kdes)
     return
@@ -372,7 +372,7 @@ def FitBeamProfile(KE_init : np.array, func : fitting.FitFunction, KE_range : li
     plots.plt.figure()
     print(f"{book.open=}")
     params, error = fitting.fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = book.is_open, plot_style = "hist", xlabel = "$KE^{true}_{ff}$ (MeV)", ylabel = "Counts")
-    book.Save()
+    book.save()
 
     table = CreateFitTable(params, error)
 
@@ -403,7 +403,7 @@ def BeamProfileStudy(quantities : dict, args : argparse.Namespace, true_beam_mas
 
 @common.timer
 def main(args : argparse.Namespace):
-    plotting.styles.PlotStyler.SetPlotStyle(True)
+    plotting.styles.PlotStyler.set_plot_style(True)
     out = args.out + "toy_parameters/"
     os.makedirs(out, exist_ok = True)
 

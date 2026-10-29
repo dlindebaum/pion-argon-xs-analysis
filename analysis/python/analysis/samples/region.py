@@ -13,28 +13,28 @@ from python.analysis import ntuple, selection
 
 @dataclass
 class region_criteria(CriteriaList):
-    n_loose_pi : criteria
-    n_loose_photon : criteria
-    n_pi : criteria
-    n_photon : criteria
-    n_pi0 : criteria
+    n_loose_pi : Criteria
+    n_loose_photon : Criteria
+    n_pi : Criteria
+    n_photon : Criteria
+    n_pi0 : Criteria
 
     @staticmethod
     def get_criteria_values(events : ntuple.Data, selection_masks: dict, **kwargs) -> dict:
         counts = {}
         for obj in selection_masks:
             if obj in ["beam", "null_pfo", "fiducial"]: continue
-            counts[f"n_{obj}"] = selection.GetPFOCounts(selection_masks[obj][events.filename])
+            counts[f"n_{obj}"] = selection.pfo_counts(selection_masks[obj][events.filename])
         return counts
 
 @dataclass
 class region_criteria_esc(region_criteria):
-    escapes : criteria
+    escapes : Criteria
 
     @staticmethod
     def get_criteria_values(events : ntuple.Data, selection_masks: dict, **kwargs) -> dict:
         values = region_criteria.get_criteria_values(events, selection_masks, **kwargs)
-        values["escapes"] = events.recoParticles.beam_endPos_SCE.z >= max(kwargs["fiducial_volume"])
+        values["escapes"] = events.recoParticles.beam_end_pos_sce.z >= max(kwargs["fiducial_volume"])
         return values
 
 
@@ -42,20 +42,20 @@ class high_purity_regions(SampleDefinition):
     criteria_list = region_criteria
     definitions = {
         "absorption" : [
-            criteria_list(criteria("==", 0), criteria("==", 0), criteria("==", 0), criteria("==", 0), criteria("==", 0)),
+            criteria_list(Criteria("==", 0), Criteria("==", 0), Criteria("==", 0), Criteria("==", 0), Criteria("==", 0)),
         ],
         "charge_exchange" : [
-            criteria_list(criteria("==", 0), criteria("==", 2), criteria("==", 0), criteria("==", 2), criteria("==", 1)),
+            criteria_list(Criteria("==", 0), Criteria("==", 2), Criteria("==", 0), Criteria("==", 2), Criteria("==", 1)),
         ],
         "single_pion_production" : [
-            criteria_list(criteria("==", 1), criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria("==", 0)),
+            criteria_list(Criteria("==", 1), Criteria("==", 0), Criteria("==", 1), Criteria("==", 0), Criteria("==", 0)),
         ],
         "pion_production" : [
-            criteria_list(criteria(">=", 0), criteria(">=", 0), criteria(">", 1), criteria(">=", 0), criteria(">=", 0)),
-            criteria_list(criteria(">=", 0), criteria(">=", 0), criteria(">", 0), criteria("==", 2), criteria("==", 1)),
-            criteria_list(criteria(">=", 0), criteria(">=", 0), criteria(">=", 0), criteria(">", 2), criteria(">=", 0)),
-            criteria_list(criteria(">=", 0), criteria(">", 2), criteria(">=", 0), criteria(">=", 0), criteria(">=", 0)),
-            criteria_list(criteria(">=", 0), criteria(">=", 0), criteria("==", 1), criteria("==", 1), criteria(">=", 0)),
+            criteria_list(Criteria(">=", 0), Criteria(">=", 0), Criteria(">", 1), Criteria(">=", 0), Criteria(">=", 0)),
+            criteria_list(Criteria(">=", 0), Criteria(">=", 0), Criteria(">", 0), Criteria("==", 2), Criteria("==", 1)),
+            criteria_list(Criteria(">=", 0), Criteria(">=", 0), Criteria(">=", 0), Criteria(">", 2), Criteria(">=", 0)),
+            criteria_list(Criteria(">=", 0), Criteria(">", 2), Criteria(">=", 0), Criteria(">=", 0), Criteria(">=", 0)),
+            criteria_list(Criteria(">=", 0), Criteria(">=", 0), Criteria("==", 1), Criteria("==", 1), Criteria(">=", 0)),
         ],        
     }
 
@@ -64,20 +64,20 @@ class high_efficiency_regions(SampleDefinition):
     criteria_list = region_criteria
     definitions = {
         "absorption" : [
-            criteria_list(criteria(">=", 0), criteria(">=", 0), criteria("==", 0), criteria("==", 0), criteria("==", 0)),
+            criteria_list(Criteria(">=", 0), Criteria(">=", 0), Criteria("==", 0), Criteria("==", 0), Criteria("==", 0)),
         ],
         "charge_exchange" : [
-            criteria_list(criteria(">=", 0), criteria(">=", 0), criteria("==", 0), criteria("==", 2), criteria("==", 1)),
-            criteria_list(criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria("==", 1), criteria("==", 0)),
+            criteria_list(Criteria(">=", 0), Criteria(">=", 0), Criteria("==", 0), Criteria("==", 2), Criteria("==", 1)),
+            criteria_list(Criteria("==", 0), Criteria("==", 1), Criteria("==", 0), Criteria("==", 1), Criteria("==", 0)),
         ],
         "single_pion_production" : [
-            criteria_list(criteria(">=", 0), criteria(">=", 0), criteria("==", 1), criteria("==", 0), criteria("==", 0)),
+            criteria_list(Criteria(">=", 0), Criteria(">=", 0), Criteria("==", 1), Criteria("==", 0), Criteria("==", 0)),
         ],
         "pion_production" : [
-            criteria_list(criteria(">", 0), criteria(">", 0), criteria(">", 0), criteria(">", 0), criteria(">=", 0)),
-            criteria_list(criteria(">", 1), criteria(">=", 0), criteria(">", 1), criteria("==", 0), criteria("==", 0)),
-            criteria_list(criteria(">=", 0), criteria(">", 1), criteria("==", 0), criteria(">", 0), criteria("==", 0)),
-            criteria_list(criteria(">", 0), criteria("<", 3), criteria("==", 0), criteria(">", 0), criteria("==", 0)),
+            criteria_list(Criteria(">", 0), Criteria(">", 0), Criteria(">", 0), Criteria(">", 0), Criteria(">=", 0)),
+            criteria_list(Criteria(">", 1), Criteria(">=", 0), Criteria(">", 1), Criteria("==", 0), Criteria("==", 0)),
+            criteria_list(Criteria(">=", 0), Criteria(">", 1), Criteria("==", 0), Criteria(">", 0), Criteria("==", 0)),
+            criteria_list(Criteria(">", 0), Criteria("<", 3), Criteria("==", 0), Criteria(">", 0), Criteria("==", 0)),
         ],        
     }
 
@@ -86,21 +86,21 @@ class moderate_efficiency_regions(SampleDefinition):
     criteria_list = region_criteria
     definitions = {
         "absorption" : [
-            criteria_list(criteria("==", 0), criteria("==", 0), criteria(">=", 0), criteria(">=", 0), criteria(">=", 0)),
+            criteria_list(Criteria("==", 0), Criteria("==", 0), Criteria(">=", 0), Criteria(">=", 0), Criteria(">=", 0)),
         ],
         "charge_exchange" : [
-            criteria_list(criteria("==", 0), criteria("==", 2), criteria("==", 0), criteria("==", 2), criteria("==", 1)),
-            criteria_list(criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria("==", 1), criteria("==", 0)),
+            criteria_list(Criteria("==", 0), Criteria("==", 2), Criteria("==", 0), Criteria("==", 2), Criteria("==", 1)),
+            criteria_list(Criteria("==", 0), Criteria("==", 1), Criteria("==", 0), Criteria("==", 1), Criteria("==", 0)),
         ],
         "single_pion_production" : [
-            criteria_list(criteria(">", 0), criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria("==", 0)),
+            criteria_list(Criteria(">", 0), Criteria("==", 0), Criteria("==", 1), Criteria("==", 0), Criteria("==", 0)),
         ],
         "pion_production" : [
-            criteria_list(criteria(">=", 0), criteria(">=", 0), criteria(">", 1), criteria(">=", 0), criteria(">=", 0)),
-            criteria_list(criteria(">=", 0), criteria(">=", 0), criteria(">", 0), criteria("==", 2), criteria("==", 1)),
-            criteria_list(criteria(">=", 0), criteria(">=", 0), criteria(">=", 0), criteria(">", 2), criteria(">=", 0)),
-            criteria_list(criteria(">=", 0), criteria(">", 2), criteria(">=", 0), criteria(">=", 0), criteria(">=", 0)),
-            criteria_list(criteria(">=", 0), criteria(">=", 0), criteria("==", 1), criteria("==", 1), criteria(">=", 0)),
+            criteria_list(Criteria(">=", 0), Criteria(">=", 0), Criteria(">", 1), Criteria(">=", 0), Criteria(">=", 0)),
+            criteria_list(Criteria(">=", 0), Criteria(">=", 0), Criteria(">", 0), Criteria("==", 2), Criteria("==", 1)),
+            criteria_list(Criteria(">=", 0), Criteria(">=", 0), Criteria(">=", 0), Criteria(">", 2), Criteria(">=", 0)),
+            criteria_list(Criteria(">=", 0), Criteria(">", 2), Criteria(">=", 0), Criteria(">=", 0), Criteria(">=", 0)),
+            criteria_list(Criteria(">=", 0), Criteria(">=", 0), Criteria("==", 1), Criteria("==", 1), Criteria(">=", 0)),
         ],        
     }
 
@@ -108,22 +108,22 @@ class moderate_efficiency_three_regions_esc(SampleDefinition):
     criteria_list = region_criteria_esc
     definitions = {
         "absorption" : [
-            criteria_list(criteria("==", 0), criteria("==", 0), criteria(">=", 0), criteria(">=", 0), criteria(">=", 0), criteria("==",0)),
+            criteria_list(Criteria("==", 0), Criteria("==", 0), Criteria(">=", 0), Criteria(">=", 0), Criteria(">=", 0), Criteria("==",0)),
         ],
         "charge_exchange" : [
-            criteria_list(criteria("==", 0), criteria("==", 2), criteria("==", 0), criteria("==", 2), criteria("==", 1), criteria("==",0)),
-            criteria_list(criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria("==",0)),
+            criteria_list(Criteria("==", 0), Criteria("==", 2), Criteria("==", 0), Criteria("==", 2), Criteria("==", 1), Criteria("==",0)),
+            criteria_list(Criteria("==", 0), Criteria("==", 1), Criteria("==", 0), Criteria("==", 1), Criteria("==", 0), Criteria("==",0)),
         ],
         "pion_production" : [
-            criteria_list(criteria(">", 0), criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria("==", 0), criteria("==",0)),
-            criteria_list(criteria(">=", 0), criteria(">=", 0), criteria(">", 1), criteria(">=", 0), criteria(">=", 0), criteria("==",0)),
-            criteria_list(criteria(">=", 0), criteria(">=", 0), criteria(">", 0), criteria("==", 2), criteria("==", 1), criteria("==",0)),
-            criteria_list(criteria(">=", 0), criteria(">=", 0), criteria(">=", 0), criteria(">", 2), criteria(">=", 0), criteria("==",0)),
-            criteria_list(criteria(">=", 0), criteria(">", 2), criteria(">=", 0), criteria(">=", 0), criteria(">=", 0), criteria("==",0)),
-            criteria_list(criteria(">=", 0), criteria(">=", 0), criteria("==", 1), criteria("==", 1), criteria(">=", 0), criteria("==",0)),
+            criteria_list(Criteria(">", 0), Criteria("==", 0), Criteria("==", 1), Criteria("==", 0), Criteria("==", 0), Criteria("==",0)),
+            criteria_list(Criteria(">=", 0), Criteria(">=", 0), Criteria(">", 1), Criteria(">=", 0), Criteria(">=", 0), Criteria("==",0)),
+            criteria_list(Criteria(">=", 0), Criteria(">=", 0), Criteria(">", 0), Criteria("==", 2), Criteria("==", 1), Criteria("==",0)),
+            criteria_list(Criteria(">=", 0), Criteria(">=", 0), Criteria(">=", 0), Criteria(">", 2), Criteria(">=", 0), Criteria("==",0)),
+            criteria_list(Criteria(">=", 0), Criteria(">", 2), Criteria(">=", 0), Criteria(">=", 0), Criteria(">=", 0), Criteria("==",0)),
+            criteria_list(Criteria(">=", 0), Criteria(">=", 0), Criteria("==", 1), Criteria("==", 1), Criteria(">=", 0), Criteria("==",0)),
         ],
         "escaping" : [
-            criteria_list(criteria(">=", 0), criteria(">=", 0), criteria(">=", 0), criteria(">=", 0), criteria(">=", 0), criteria("==",1)),
+            criteria_list(Criteria(">=", 0), Criteria(">=", 0), Criteria(">=", 0), Criteria(">=", 0), Criteria(">=", 0), Criteria("==",1)),
         ],
     }
 
@@ -131,19 +131,19 @@ class moderate_efficiency_three_regions(SampleDefinition):
     criteria_list = region_criteria
     definitions = {
         "absorption" : [
-            region_criteria(criteria("==", 0), criteria("==", 0), criteria(">=", 0), criteria(">=", 0), criteria(">=", 0)),
+            region_criteria(Criteria("==", 0), Criteria("==", 0), Criteria(">=", 0), Criteria(">=", 0), Criteria(">=", 0)),
         ],
         "charge_exchange" : [
-            region_criteria(criteria("==", 0), criteria("==", 2), criteria("==", 0), criteria("==", 2), criteria("==", 1)),
-            region_criteria(criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria("==", 1), criteria("==", 0)),
+            region_criteria(Criteria("==", 0), Criteria("==", 2), Criteria("==", 0), Criteria("==", 2), Criteria("==", 1)),
+            region_criteria(Criteria("==", 0), Criteria("==", 1), Criteria("==", 0), Criteria("==", 1), Criteria("==", 0)),
         ],
         "pion_production" : [
-            region_criteria(criteria(">", 0), criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria("==", 0)),
-            region_criteria(criteria(">=", 0), criteria(">=", 0), criteria(">", 1), criteria(">=", 0), criteria(">=", 0)),
-            region_criteria(criteria(">=", 0), criteria(">=", 0), criteria(">", 0), criteria("==", 2), criteria("==", 1)),
-            region_criteria(criteria(">=", 0), criteria(">=", 0), criteria(">=", 0), criteria(">", 2), criteria(">=", 0)),
-            region_criteria(criteria(">=", 0), criteria(">", 2), criteria(">=", 0), criteria(">=", 0), criteria(">=", 0)),
-            region_criteria(criteria(">=", 0), criteria(">=", 0), criteria("==", 1), criteria("==", 1), criteria(">=", 0)),
+            region_criteria(Criteria(">", 0), Criteria("==", 0), Criteria("==", 1), Criteria("==", 0), Criteria("==", 0)),
+            region_criteria(Criteria(">=", 0), Criteria(">=", 0), Criteria(">", 1), Criteria(">=", 0), Criteria(">=", 0)),
+            region_criteria(Criteria(">=", 0), Criteria(">=", 0), Criteria(">", 0), Criteria("==", 2), Criteria("==", 1)),
+            region_criteria(Criteria(">=", 0), Criteria(">=", 0), Criteria(">=", 0), Criteria(">", 2), Criteria(">=", 0)),
+            region_criteria(Criteria(">=", 0), Criteria(">", 2), Criteria(">=", 0), Criteria(">=", 0), Criteria(">=", 0)),
+            region_criteria(Criteria(">=", 0), Criteria(">=", 0), Criteria("==", 1), Criteria("==", 1), Criteria(">=", 0)),
         ],        
     }
 
@@ -151,14 +151,14 @@ class moderate_efficiency_three_regions_loose_pi(SampleDefinition):
     criteria_list = region_criteria
     definitions = {
         "absorption" : [
-            region_criteria(criteria("==", 0), criteria("==", 0), criteria(">=", 0), criteria(">=", 0), criteria(">=", 0)),
+            region_criteria(Criteria("==", 0), Criteria("==", 0), Criteria(">=", 0), Criteria(">=", 0), Criteria(">=", 0)),
         ],
         "charge_exchange" : [
-            region_criteria(criteria("==", 0), criteria("==", 2), criteria("==", 0), criteria("==", 2), criteria("==", 1)),
-            region_criteria(criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria("==", 1), criteria("==", 0)),
+            region_criteria(Criteria("==", 0), Criteria("==", 2), Criteria("==", 0), Criteria("==", 2), Criteria("==", 1)),
+            region_criteria(Criteria("==", 0), Criteria("==", 1), Criteria("==", 0), Criteria("==", 1), Criteria("==", 0)),
         ],
         "pion_production" : [
-            region_criteria(criteria(">", 0), criteria("==", 0), criteria(">=", 0), criteria("==", 0), criteria("==", 0)),
+            region_criteria(Criteria(">", 0), Criteria("==", 0), Criteria(">=", 0), Criteria("==", 0), Criteria("==", 0)),
         ],        
     }
 
@@ -166,13 +166,13 @@ class pdsp_1GeV_regions(SampleDefinition):
     criteria_list = region_criteria
     definitions = {
         "absorption" : [
-            region_criteria(criteria(">=", 0), criteria(">=", 0), criteria("==", 0), criteria("==", 0), criteria(">=", 0)),
+            region_criteria(Criteria(">=", 0), Criteria(">=", 0), Criteria("==", 0), Criteria("==", 0), Criteria(">=", 0)),
         ],
         "charge_exchange" : [
-            region_criteria(criteria(">=", 0), criteria(">=", 0), criteria("==", 0), criteria(">=", 1), criteria(">=", 0)),
+            region_criteria(Criteria(">=", 0), Criteria(">=", 0), Criteria("==", 0), Criteria(">=", 1), Criteria(">=", 0)),
         ],
         "other" : [
-            region_criteria(criteria(">=", 0), criteria(">=", 0), criteria(">=", 1), criteria(">=", 0), criteria(">=", 0)),
+            region_criteria(Criteria(">=", 0), Criteria(">=", 0), Criteria(">=", 1), Criteria(">=", 0), Criteria(">=", 0)),
         ],        
     }
 
@@ -181,18 +181,18 @@ class default(SampleDefinition):
     criteria_list = region_criteria
     definitions = {
         "absorption" : [
-            region_criteria(criteria(">=", 0), criteria(">=", 0), criteria("==", 0), criteria(">=", 0), criteria("==", 0)),
+            region_criteria(Criteria(">=", 0), Criteria(">=", 0), Criteria("==", 0), Criteria(">=", 0), Criteria("==", 0)),
         ],
         "charge_exchange" : [
-            region_criteria(criteria(">=", 0), criteria(">=", 0), criteria("==", 0), criteria(">=", 0), criteria("==", 1)),
+            region_criteria(Criteria(">=", 0), Criteria(">=", 0), Criteria("==", 0), Criteria(">=", 0), Criteria("==", 1)),
         ],
         "single_pion_production" : [
-            region_criteria(criteria(">=", 0), criteria(">=", 0), criteria("==", 1), criteria(">=", 0), criteria("==", 0)),
+            region_criteria(Criteria(">=", 0), Criteria(">=", 0), Criteria("==", 1), Criteria(">=", 0), Criteria("==", 0)),
         ],
         "pion_production" : [
-            region_criteria(criteria(">=", 0), criteria(">=", 0), criteria(">", 1), criteria(">=", 0), criteria(">=", 0)),
-            region_criteria(criteria(">=", 0), criteria(">=", 0), criteria(">=", 0), criteria(">=", 0), criteria(">", 1)),
-            region_criteria(criteria(">=", 0), criteria(">=", 0), criteria("==", 1), criteria(">=", 0), criteria("==", 1)),
+            region_criteria(Criteria(">=", 0), Criteria(">=", 0), Criteria(">", 1), Criteria(">=", 0), Criteria(">=", 0)),
+            region_criteria(Criteria(">=", 0), Criteria(">=", 0), Criteria(">=", 0), Criteria(">=", 0), Criteria(">", 1)),
+            region_criteria(Criteria(">=", 0), Criteria(">=", 0), Criteria("==", 1), Criteria(">=", 0), Criteria("==", 1)),
         ],        
     }
 

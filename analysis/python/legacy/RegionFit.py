@@ -166,7 +166,7 @@ def CreateKEIntTemplates(analysis_input: AnalysisInput, energy_slices: Slices, s
     for c in analysis_input.regions:
         tmp = []
         for s in analysis_input.exclusive_process:
-            n_int = analysis_input.NInteract(energy_slices, analysis_input.exclusive_process[s], analysis_input.regions[c], reco, analysis_input.weights) + 1E-10 * int(pad)
+            n_int = analysis_input.n_interact(energy_slices, analysis_input.exclusive_process[s], analysis_input.regions[c], reco, analysis_input.weights) + 1E-10 * int(pad)
             if single_bin:
                 tmp.append(np.array([sum(n_int)]))
             else:
@@ -239,7 +239,7 @@ def CreateObservedInputData(fit_input: AnalysisInput, slices: Slices, mean_track
     else:
         mask = fit_input.inclusive_process
     for v in fit_input.regions.values():
-        n_int = fit_input.NInteract(slices, v & mask, reco=True)
+        n_int = fit_input.n_interact(slices, v & mask, reco=True)
         if single_bin:
             n_int = [sum(n_int)]
         observed_binned.append(n_int)
@@ -273,9 +273,9 @@ def PlotPrefitPostFit(prefit : np.ndarray, prefit_err: np.ndarray, postfit: np.n
         energy_bins (np.ndarray): Energy bins.
         xlabel (str, optional): X-axis label. Defaults to "$KE_{int}$ (MeV)".
     """
-    with Plots.RatioPlot(energy_bins[::-1], postfit, prefit, postfit_err, prefit_err, xlabel, "fit/ true") as ratio_plot:
-        Plots.Plot(ratio_plot.x, ratio_plot.y2, yerr=ratio_plot.y2_err, color="C0", label="true", style="step", newFigure=False)
-        Plots.Plot(ratio_plot.x, ratio_plot.y1, yerr=ratio_plot.y1_err, color="C6", label="fit", style="step", ylabel="Counts", newFigure=False)
+    with Plots.ratio_plot(energy_bins[::-1], postfit, prefit, postfit_err, prefit_err, xlabel, "fit/ true") as ratio_plot:
+        Plots.plot(ratio_plot.x, ratio_plot.y2, yerr=ratio_plot.y2_err, color="C0", label="true", style="step", new_figure=False)
+        Plots.plot(ratio_plot.x, ratio_plot.y1, yerr=ratio_plot.y1_err, color="C6", label="fit", style="step", ylabel="Counts", new_figure=False)
 
 
 def EstimateCounts(postfit_pred: cabinetry.model_utils.ModelPrediction) -> tuple[np.ndarray, np.ndarray]:

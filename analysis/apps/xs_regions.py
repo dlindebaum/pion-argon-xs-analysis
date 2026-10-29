@@ -27,7 +27,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
 @common.timer
 def main(args : argparse.Namespace):
-    plotting.styles.PlotStyler.SetPlotStyle(True)
+    plotting.styles.PlotStyler.set_plot_style(True)
     out = args.out + "region_plots/"
     os.makedirs(out, exist_ok = True)
 

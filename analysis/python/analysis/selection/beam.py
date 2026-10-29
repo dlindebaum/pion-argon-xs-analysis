@@ -15,12 +15,12 @@ from .pfo import GoodShowerSelection
 from python.analysis import vector
 from python.analysis.ntuple import Data
 
-def GetTruncatedDEdX(sample : Data, truncate : float):
+def get_truncated_dEdX(sample : Data, truncate : float):
     truncated_start = sample.recoParticles.beam_calo_pos.z >= truncate
     return sample.recoParticles.beam_dEdX[truncated_start]
 
 
-def GetTruncatedPos(sample : Data, truncate : float) -> tuple[ak.Array, ak.Array]:
+def get_truncated_pos(sample : Data, truncate : float) -> tuple[ak.Array, ak.Array]:
     if truncate is not None:
         truncated_start = ak.argmax(sample.recoParticles.beam_calo_pos.z >= truncate, -1, keepdims = True)
         start_pos = sample.recoParticles.beam_calo_pos[truncated_start]
@@ -32,8 +32,8 @@ def GetTruncatedPos(sample : Data, truncate : float) -> tuple[ak.Array, ak.Array
         end_pos = ak.fill_none(end_pos, vector.null_vector[0])
         end_pos = ak.flatten(end_pos)
     else:
-        start_pos = sample.recoParticles.beam_startPos_SCE
-        end_pos = sample.recoParticles.beam_endPos_SCE # these should already be populaed with null vectors.
+        start_pos = sample.recoParticles.beam_start_pos_sce
+        end_pos = sample.recoParticles.beam_end_pos_sce # these should already be populaed with null vectors.
 
     return start_pos, end_pos
 
@@ -48,12 +48,12 @@ def BeamTriggerSelection(events: Data, pdgs : list[int] = [211, 13, -13], use_be
         return_property (bool, optional): return beam pdg. Defaults to False.
     """
     def compare_beam_pdg(pdg : int):
-        return ak.fill_none(ak.pad_none(events.recoParticles.beam_inst_PDG_candidates, 1, -1), -1, -1) == pdg
+        return ak.fill_none(ak.pad_none(events.recoParticles.beam_inst_pdg_candidates, 1, -1), -1, -1) == pdg
 
     if use_beam_inst:
         mask = events.recoParticles.beam_inst_valid
         mask = mask & (events.recoParticles.beam_inst_trigger != 8)
-        mask = mask & (events.recoParticles.beam_inst_nTracks == 1) & (events.recoParticles.beam_inst_nMomenta == 1)
+        mask = mask & (events.recoParticles.beam_inst_n_tracks == 1) & (events.recoParticles.beam_inst_n_momenta == 1)
 
         beam_pdg = None
         for i in pdgs:
@@ -65,7 +65,7 @@ def BeamTriggerSelection(events: Data, pdgs : list[int] = [211, 13, -13], use_be
         mask = mask & ak.any(beam_pdg, axis = -1)
         mask = mask & events.recoParticles.reco_reconstructable_beam_event
     else:
-        beam_pdg = ak.flatten(events.trueParticles.pdg[events.trueParticles.number == 1])
+        beam_pdg = ak.flatten(events.true_particles.pdg[events.true_particles.number == 1])
         mask = ak.any([beam_pdg == i for i in pdgs], axis = 0)
     if return_property is True:
         return mask, beam_pdg
@@ -75,12 +75,12 @@ def BeamTriggerSelection(events: Data, pdgs : list[int] = [211, 13, -13], use_be
 
 def TrueFiducialCut(events, is_mc : bool, cut : int = [30, 220], op = [">", "<"], return_property : bool = False):
     if is_mc:
-        return CreateMask(cut, op, events.trueParticles.endPos.z[:, 0], return_property)
+        return create_mask(cut, op, events.true_particles.end_pos.z[:, 0], return_property)
     else:
         if return_property == True:
-            return ak.ones_like(events.eventNum, dtype = bool), ak.zeros_like(events.eventNum, dtype = bool)
+            return ak.ones_like(events.event_num, dtype = bool), ak.zeros_like(events.event_num, dtype = bool)
         else:
-            return ak.ones_like(events.eventNum, dtype = bool)
+            return ak.ones_like(events.event_num, dtype = bool)
 
 
 def PiBeamSelection(events: Data, use_beam_inst : bool = False, return_property : bool = False) -> ak.Array:
@@ -106,7 +106,7 @@ def PandoraTagCut(events: Data, cut : int = 13, op = "==", return_property : boo
     Returns:
         ak.Array: boolean mask.
     """
-    return CreateMask(cut, op, events.recoParticles.beam_pandora_tag, return_property)
+    return create_mask(cut, op, events.recoParticles.beam_pandora_tag, return_property)
 
 
 def CaloSizeCut(events: Data, return_property : bool = False) -> ak.Array:
@@ -118,11 +118,11 @@ def CaloSizeCut(events: Data, return_property : bool = False) -> ak.Array:
     Returns:
         ak.Array: boolean mask.
     """
-    calo_wire = events.recoParticles.beam_caloWire
+    calo_wire = events.recoParticles.beam_calo_wire
     # Analyser fills the empty entry with a -999
     calo_wire = calo_wire[calo_wire != -999]
 
-    return CreateMask(0, ">", ak.num(calo_wire, 1), return_property)
+    return create_mask(0, ">", ak.num(calo_wire, 1), return_property)
 
 
 def BeamQualityCut(events: Data, fits : dict, dxy_cut : list = [-3, 3], dz_cut : list = [-3, 3], costh_cut : list = [0.95, 2]) -> ak.Array:
@@ -135,7 +135,7 @@ def BeamQualityCut(events: Data, fits : dict, dxy_cut : list = [-3, 3], dz_cut :
     Returns:
         ak.Array: boolean mask.
     """
-    start_pos, end_pos = GetTruncatedPos(events, fits["truncate"])
+    start_pos, end_pos = get_truncated_pos(events, fits["truncate"])
 
     beam_dx = (start_pos.x - fits["mu_x"]) / fits["sigma_x"]
     beam_dy = (start_pos.y - fits["mu_y"]) / fits["sigma_y"]
@@ -175,12 +175,12 @@ def DxyCut(events: Data, fits : dict, cut, op = "<", return_property : bool = Fa
     Returns:
         mask and or property cut on.
     """
-    start_pos = GetTruncatedPos(events, fits["truncate"])[0]
+    start_pos = get_truncated_pos(events, fits["truncate"])[0]
 
     beam_dx = (start_pos.x - fits["mu_x"]) / fits["sigma_x"]
     beam_dy = (start_pos.y - fits["mu_y"]) / fits["sigma_y"]
     beam_dxy = (beam_dx**2 + beam_dy**2)**0.5
-    return CreateMask(cut, op, beam_dxy, return_property)
+    return create_mask(cut, op, beam_dxy, return_property)
 
 
 def DzCut(events: Data, fits : dict, cut, op = [">", "<"], return_property : bool = False):
@@ -196,10 +196,10 @@ def DzCut(events: Data, fits : dict, cut, op = [">", "<"], return_property : boo
     Returns:
         mask and or property cut on.
     """
-    start_pos = GetTruncatedPos(events, fits["truncate"])[0]
+    start_pos = get_truncated_pos(events, fits["truncate"])[0]
 
     beam_dz = (start_pos.z - fits["mu_z"]) / fits["sigma_z"]
-    return CreateMask(cut, op, beam_dz, return_property)
+    return create_mask(cut, op, beam_dz, return_property)
 
 
 def CosThetaCut(events: Data, fits : dict, cut, op = ">", return_property : bool = False):
@@ -215,7 +215,7 @@ def CosThetaCut(events: Data, fits : dict, cut, op = ">", return_property : bool
     Returns:
         mask and or property cut on.
     """
-    start_pos, end_pos = GetTruncatedPos(events, fits["truncate"])
+    start_pos, end_pos = get_truncated_pos(events, fits["truncate"])
 
     beam_dir = vector.normalize(vector.sub(end_pos, start_pos))
 
@@ -227,7 +227,7 @@ def CosThetaCut(events: Data, fits : dict, cut, op = ">", return_property : bool
     beam_dir_mc = vector.normalize(beam_dir_mc)
 
     beam_costh = vector.dot(beam_dir, beam_dir_mc)
-    return CreateMask(cut, op, beam_costh, return_property)
+    return create_mask(cut, op, beam_costh, return_property)
 
 
 def APA3Cut(events: Data, cut : float = 220, op = "<", return_property : bool = False) -> ak.Array:
@@ -239,7 +239,7 @@ def APA3Cut(events: Data, cut : float = 220, op = "<", return_property : bool = 
     Returns:
         ak.Array: boolean mask.
     """
-    return CreateMask(cut, op, events.recoParticles.beam_endPos_SCE.z, return_property)
+    return create_mask(cut, op, events.recoParticles.beam_end_pos_sce.z, return_property)
 
 
 def MichelScoreCut(events: Data, cut : float = 0.55, op = "<", return_property : bool = False) -> ak.Array:
@@ -251,8 +251,8 @@ def MichelScoreCut(events: Data, cut : float = 0.55, op = "<", return_property :
     Returns:
         ak.Array: boolean mask.
     """
-    score = ak.where(events.recoParticles.beam_nHits != 0, events.recoParticles.beam_michelScore / events.recoParticles.beam_nHits, -999)
-    return CreateMask(cut, op, score, return_property)
+    score = ak.where(events.recoParticles.beam_n_hits != 0, events.recoParticles.beam_michel_score / events.recoParticles.beam_n_hits, -999)
+    return create_mask(cut, op, score, return_property)
 
 
 def MedianDEdXCut(events: Data, cut : float = 2.4, op = "<", truncate : float = None, return_property : bool = False) -> ak.Array:
@@ -267,9 +267,9 @@ def MedianDEdXCut(events: Data, cut : float = 2.4, op = "<", truncate : float = 
     if truncate is None:
         dEdX = events.recoParticles.beam_dEdX
     else:
-        dEdX = GetTruncatedDEdX(events, truncate)
-    median = Median(dEdX)
-    return CreateMask(cut, op, median, return_property)
+        dEdX = get_truncated_dEdX(events, truncate)
+    median = median(dEdX)
+    return create_mask(cut, op, median, return_property)
 
 
 def BeamScraperCut(events : Data, KE_range : int, fits : dict, cut : float = 1.5, op = "<", return_property : bool = False) -> ak.Array:
@@ -298,7 +298,7 @@ def BeamScraperCut(events : Data, KE_range : int, fits : dict, cut : float = 1.5
     ny = (events.recoParticles.beam_inst_pos.y - mu_y)/sigma_y
 
     r = np.sqrt(nx**2 + ny**2)
-    return CreateMask(cut, op, r, return_property)
+    return create_mask(cut, op, r, return_property)
 
 
 def HasFinalStatePFOsCut(events: Data, return_property : bool = False) -> ak.Array:
@@ -313,10 +313,10 @@ def HasFinalStatePFOsCut(events: Data, return_property : bool = False) -> ak.Arr
     """
     pfo_mask = GoodShowerSelection(events) # create this mask internally so that the PFO and event selections remain separate
     nPFO = ak.num(events.recoParticles.number[pfo_mask])
-    return CreateMask(0, ">", nPFO, return_property)
+    return create_mask(0, ">", nPFO, return_property)
 
 
-def CreateDefaultSelection(events: Data,
+def create_default_selection(events: Data,
     use_beam_inst : bool = False,
     beam_quality_fits : dict = None,
     scraper : bool = False,
@@ -360,4 +360,4 @@ def CreateDefaultSelection(events: Data,
     if scraper is True:
         selection.append(BeamScraperCut)
         arguments.append({"KE_range" : scraper_KE_range, "fits" : scraper_fits, "cut" : scraper_cut})
-    return CombineSelections(events, selection, 0, arguments, verbose, return_table)
+    return combine_selections(events, selection, 0, arguments, verbose, return_table)

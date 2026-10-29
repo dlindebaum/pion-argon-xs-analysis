@@ -32,26 +32,26 @@ def region_selection(events : ntuple.Data, args : Namespace | dict, is_mc : bool
 
     selection_masks = args_c["selection_masks"][key]
 
-    events_copy = events.Filter(returnCopy = True)
+    events_copy = events.filter(return_copy = True)
     
     if "fiducial" in selection_masks and (len(selection_masks["fiducial"]) > 0):
-        mask = selection.CombineMasks(selection_masks["fiducial"][events_copy.filename])
-        events_copy.Filter([mask], [mask])
+        mask = selection.combine_masks(selection_masks["fiducial"][events_copy.filename])
+        events_copy.filter([mask], [mask])
 
-    mask = selection.CombineMasks(selection_masks["beam"][events_copy.filename])
-    events_copy.Filter([mask], [mask])
+    mask = selection.combine_masks(selection_masks["beam"][events_copy.filename])
+    events_copy.filter([mask], [mask])
 
     # counts = {}
     # for obj in selection_masks:
     #     if obj in ["beam", "null_pfo", "fiducial"]: continue
-    #     counts[f"n_{obj}"] = SelectionTools.GetPFOCounts(selection_masks[obj][events.filename])
+    #     counts[f"n_{obj}"] = SelectionTools.pfo_counts(selection_masks[obj][events.filename])
 
     if region_type is None:
         region_def = args_c["region_definitions"]
     else:
         region_def = region_type
 
-    reco_regions = region_def.CreateDefinitions(region_def.criteria_list.get_criteria_values(events_copy, selection_masks, **args["region_args"]), uncategorised = removed)
+    reco_regions = region_def.create_definitions(region_def.criteria_list.get_criteria_values(events_copy, selection_masks, **args["region_args"]), uncategorised = removed)
     
     if is_mc:
         if process_type is None:
@@ -59,7 +59,7 @@ def region_selection(events : ntuple.Data, args : Namespace | dict, is_mc : bool
         else:
             process_def = process_type
 
-        true_regions = process_def.CreateDefinitions(process_def.criteria_list.get_criteria_values(events_copy, **args["process_args"]), uncategorised = removed)
+        true_regions = process_def.create_definitions(process_def.criteria_list.get_criteria_values(events_copy, **args["process_args"]), uncategorised = removed)
 
         for k in true_regions:
             true_regions[k] = true_regions[k]
@@ -129,8 +129,8 @@ def region_study(region_selections : dict[dict], out : str):
 
         counts = np.array(count_in_regions(true_regions, reco_regions))
         plots.plt.figure(figsize = [3 * 6.4, 3 * 4.8])
-        plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "True process", x_label = "Reco region", title = common.remove_(r), newFigure = False)
-        pdf.Save()
+        plots.plot_confusion_matrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "True process", x_label = "Reco region", title = common.remove_(r), new_figure = False)
+        pdf.save()
 
         (a,b)=counts.shape
         diff = a-b

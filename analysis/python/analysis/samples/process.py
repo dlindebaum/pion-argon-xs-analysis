@@ -19,16 +19,16 @@ class process_criteria_geant(CriteriaList):
     """ Criteria defined on the true particle counts.
         Distinguishes charged pions to categorise double charge exchange and quasi-elastic.
     """
-    pi_inelastic : criteria # is pi inelatstic interaction
-    n_pi_plus : criteria # number of pi pluses
-    n_pi_minus : criteria # number of charged pi minuses
-    n_pi0 : criteria # numbre of pi0's
+    pi_inelastic : Criteria # is pi inelatstic interaction
+    n_pi_plus : Criteria # number of pi pluses
+    n_pi_minus : Criteria # number of charged pi minuses
+    n_pi0 : Criteria # numbre of pi0's
 
     @staticmethod
     def get_criteria_values(events : ntuple.Data, pi_KE_lim : float = 0):
 
-        n_pip_true, n_pim_true, n_pi0_true = GetTruePionCountsGeant(events, pi_KE_lim) # counts number of pions in events
-        pi_inel = events.trueParticles.true_beam_endProcess == "pi+Inelastic" # used to distinguish interactions from decays/non-pions
+        n_pip_true, n_pim_true, n_pi0_true = get_true_pion_counts_geant(events, pi_KE_lim) # counts number of pions in events
+        pi_inel = events.true_particles.true_beam_end_process == "pi+Inelastic" # used to distinguish interactions from decays/non-pions
         return {"pi_inelastic" : pi_inel, "n_pi_plus" : n_pip_true, "n_pi_minus" : n_pim_true, "n_pi0" : n_pi0_true}
 
 
@@ -37,14 +37,14 @@ class process_criteria(CriteriaList):
     """ Criteria defined on the true particle counts.
         Uses only pions in the final state to categorise events.
     """
-    pi_inelastic : criteria # is pi inelatstic interaction
-    n_pi : criteria # number of charged pi's
-    n_pi0 : criteria # numbre of pi0's
+    pi_inelastic : Criteria # is pi inelatstic interaction
+    n_pi : Criteria # number of charged pi's
+    n_pi0 : Criteria # numbre of pi0's
 
     @staticmethod
     def get_criteria_values(events : ntuple.Data, pi_KE_lim : float = 0):
-        n_pi_true, n_pi0_true = GetTruePionCounts(events, pi_KE_lim)
-        pi_inel = events.trueParticles.true_beam_endProcess == "pi+Inelastic"
+        n_pi_true, n_pi0_true = get_true_pion_counts(events, pi_KE_lim)
+        pi_inel = events.true_particles.true_beam_end_process == "pi+Inelastic"
         return {"pi_inelastic" : pi_inel, "n_pi" : n_pi_true, "n_pi0" : n_pi0_true}
 
 
@@ -52,21 +52,21 @@ class process_criteria(CriteriaList):
 class process_criteria_exp(CriteriaList):
     """ Expanded criteria for true process definitions
     """
-    pi_beam : criteria # beam particle is pion
-    beam_escapes : criteria # beam particle escapes fiducial volume
-    beam_decay : criteria # beam particle decays
-    pi_inelastic : criteria # is pi inelatstic interaction
-    n_pi : criteria # number of charged pi's
-    n_pi0 : criteria # numbre of pi0's
+    pi_beam : Criteria # beam particle is pion
+    beam_escapes : Criteria # beam particle escapes fiducial volume
+    beam_decay : Criteria # beam particle decays
+    pi_inelastic : Criteria # is pi inelatstic interaction
+    n_pi : Criteria # number of charged pi's
+    n_pi0 : Criteria # numbre of pi0's
 
     @staticmethod
     def get_criteria_values(events : ntuple.Data, pi_KE_lim : float = 0, fiducial_volume : list[float] = [0, 700]):
 
         cvs = process_criteria.get_criteria_values(events, pi_KE_lim)
 
-        pi_beam = events.trueParticles.pdg[:, 0] == 211
-        decay = (events.trueParticles.true_beam_endProcess == "Decay")
-        escapes = events.trueParticles.beam_traj_pos.z[:, -1] >= max(fiducial_volume)
+        pi_beam = events.true_particles.pdg[:, 0] == 211
+        decay = (events.true_particles.true_beam_end_process == "Decay")
+        escapes = events.true_particles.beam_traj_pos.z[:, -1] >= max(fiducial_volume)
 
         return cvs | {"pi_beam" : pi_beam , "beam_escapes" : escapes, "beam_decay" : decay}
 
@@ -77,28 +77,28 @@ class geant_process_energy_limit(SampleDefinition):
 
     definitions = {
         "total_inelastic" : [
-            criteria_list(criteria("==", 1), criteria(">=", 0), criteria(">=", 0), criteria(">=", 0))
+            criteria_list(Criteria("==", 1), Criteria(">=", 0), Criteria(">=", 0), Criteria(">=", 0))
         ],
         "absorption" : [
-            criteria_list(criteria("==", 1), criteria("==", 0), criteria("==", 0), criteria("==", 0))
+            criteria_list(Criteria("==", 1), Criteria("==", 0), Criteria("==", 0), Criteria("==", 0))
         ],
         "charge_exchange" : [
-            criteria_list(criteria("==", 1), criteria("==", 0), criteria("==", 0), criteria("==", 1))
+            criteria_list(Criteria("==", 1), Criteria("==", 0), Criteria("==", 0), Criteria("==", 1))
         ],
         "quasielastic" : [
-            criteria_list(criteria("==", 1), criteria("==", 1), criteria("==", 0), criteria("==", 0))
+            criteria_list(Criteria("==", 1), Criteria("==", 1), Criteria("==", 0), Criteria("==", 0))
         ],
         "double_charge_exchange" : [
-            criteria_list(criteria("==", 1), criteria("==", 0), criteria("==", 1), criteria("==", 0))
+            criteria_list(Criteria("==", 1), Criteria("==", 0), Criteria("==", 1), Criteria("==", 0))
         ],
         "pion_production" : [
-            criteria_list(criteria("==", 1), criteria(">", 1), criteria(">=", 0), criteria(">=", 0)),
-            criteria_list(criteria("==", 1), criteria(">=", 0), criteria(">", 1), criteria(">=", 0)),
-            criteria_list(criteria("==", 1), criteria(">=", 0), criteria(">=", 0), criteria(">", 1)),
-            criteria_list(criteria("==", 1), criteria("==", 1), criteria("==", 1), criteria("==", 1)),
-            criteria_list(criteria("==", 1), criteria("==", 1), criteria("==", 1), criteria("==", 0)),
-            criteria_list(criteria("==", 1), criteria("==", 1), criteria("==", 0), criteria("==", 1)),
-            criteria_list(criteria("==", 1), criteria("==", 0), criteria("==", 1), criteria("==", 1))
+            criteria_list(Criteria("==", 1), Criteria(">", 1), Criteria(">=", 0), Criteria(">=", 0)),
+            criteria_list(Criteria("==", 1), Criteria(">=", 0), Criteria(">", 1), Criteria(">=", 0)),
+            criteria_list(Criteria("==", 1), Criteria(">=", 0), Criteria(">=", 0), Criteria(">", 1)),
+            criteria_list(Criteria("==", 1), Criteria("==", 1), Criteria("==", 1), Criteria("==", 1)),
+            criteria_list(Criteria("==", 1), Criteria("==", 1), Criteria("==", 1), Criteria("==", 0)),
+            criteria_list(Criteria("==", 1), Criteria("==", 1), Criteria("==", 0), Criteria("==", 1)),
+            criteria_list(Criteria("==", 1), Criteria("==", 0), Criteria("==", 1), Criteria("==", 1))
         ],
     }
 
@@ -108,18 +108,18 @@ class four_signal_process(SampleDefinition):
     criteria_list = process_criteria
     definitions = {
         "absorption" : [
-            criteria_list(criteria(">=", 0), criteria("==", 0), criteria("==", 0)),
+            criteria_list(Criteria(">=", 0), Criteria("==", 0), Criteria("==", 0)),
         ],
         "charge_exchange" : [
-            criteria_list(criteria(">=", 0), criteria("==", 0), criteria("==", 1)),
+            criteria_list(Criteria(">=", 0), Criteria("==", 0), Criteria("==", 1)),
         ],
         "single_pion_production" : [
-            criteria_list(criteria(">=", 0), criteria("==", 1), criteria("==", 0)),
+            criteria_list(Criteria(">=", 0), Criteria("==", 1), Criteria("==", 0)),
         ],
         "pion_production" : [
-            criteria_list(criteria(">=", 0), criteria(">", 1), criteria(">=", 0)),
-            criteria_list(criteria(">=", 0), criteria(">=", 0), criteria(">", 1)),
-            criteria_list(criteria(">=", 0), criteria("==", 1), criteria("==", 1))
+            criteria_list(Criteria(">=", 0), Criteria(">", 1), Criteria(">=", 0)),
+            criteria_list(Criteria(">=", 0), Criteria(">=", 0), Criteria(">", 1)),
+            criteria_list(Criteria(">=", 0), Criteria("==", 1), Criteria("==", 1))
         ]
     }
 
@@ -129,14 +129,14 @@ class three_signal_process(SampleDefinition):
     criteria_list = process_criteria
     definitions = {
         "absorption" : [
-            criteria_list(criteria(">=", 0), criteria("==", 0), criteria("=s=", 0)),
+            criteria_list(Criteria(">=", 0), Criteria("==", 0), Criteria("=s=", 0)),
         ],
         "charge_exchange" : [
-            criteria_list(criteria(">=", 0), criteria("==", 0), criteria("==", 1)),
+            criteria_list(Criteria(">=", 0), Criteria("==", 0), Criteria("==", 1)),
         ],
         "pion_production" : [
-            criteria_list(criteria(">=", 0), criteria(">=", 1), criteria(">=", 0)),
-            criteria_list(criteria(">=", 0), criteria("==", 0), criteria(">", 1)),
+            criteria_list(Criteria(">=", 0), Criteria(">=", 1), Criteria(">=", 0)),
+            criteria_list(Criteria(">=", 0), Criteria("==", 0), Criteria(">", 1)),
         ]
     }
 
@@ -145,17 +145,17 @@ class three_signal_process_bkg(SampleDefinition):
     criteria_list = process_criteria
     definitions = {
         "absorption" : [
-            criteria_list(criteria("==", 1), criteria("==", 0), criteria("==", 0)),
+            criteria_list(Criteria("==", 1), Criteria("==", 0), Criteria("==", 0)),
         ],
         "charge_exchange" : [
-            criteria_list(criteria("==", 1), criteria("==", 0), criteria("==", 1)),
+            criteria_list(Criteria("==", 1), Criteria("==", 0), Criteria("==", 1)),
         ],
         "pion_production" : [
-            criteria_list(criteria("==", 1), criteria(">=", 1), criteria(">=", 0)),
-            criteria_list(criteria("==", 1), criteria("==", 0), criteria(">", 1)),
+            criteria_list(Criteria("==", 1), Criteria(">=", 1), Criteria(">=", 0)),
+            criteria_list(Criteria("==", 1), Criteria("==", 0), Criteria(">", 1)),
         ],
         "impurities" : [
-            criteria_list(criteria("==", 0), criteria(">=", 0), criteria(">=", 0)),
+            criteria_list(Criteria("==", 0), Criteria(">=", 0), Criteria(">=", 0)),
         ]
     }
 
@@ -164,23 +164,23 @@ class three_signal_process_bkg_fd(SampleDefinition):
     criteria_list = process_criteria_exp
     definitions = {
         "absorption" : [
-            criteria_list(criteria("==", 1), criteria("==", 0), criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria("==", 0)),
+            criteria_list(Criteria("==", 1), Criteria("==", 0), Criteria("==", 0), Criteria("==", 1), Criteria("==", 0), Criteria("==", 0)),
         ],
         "charge_exchange" : [
-            criteria_list(criteria("==", 1), criteria("==", 0), criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria("==", 1)),
+            criteria_list(Criteria("==", 1), Criteria("==", 0), Criteria("==", 0), Criteria("==", 1), Criteria("==", 0), Criteria("==", 1)),
         ],
         "pion_production" : [
-            criteria_list(criteria("==", 1), criteria("==", 0), criteria("==", 0), criteria("==", 1), criteria(">=", 1), criteria(">=", 0)),
-            criteria_list(criteria("==", 1), criteria("==", 0), criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria(">", 1)),
+            criteria_list(Criteria("==", 1), Criteria("==", 0), Criteria("==", 0), Criteria("==", 1), Criteria(">=", 1), Criteria(">=", 0)),
+            criteria_list(Criteria("==", 1), Criteria("==", 0), Criteria("==", 0), Criteria("==", 1), Criteria("==", 0), Criteria(">", 1)),
         ],
         "decay" : [
-            criteria_list(criteria("==", 1), criteria("==", 0), criteria("==", 1), criteria("==", 0), criteria(">=", 0), criteria(">=", 0))
+            criteria_list(Criteria("==", 1), Criteria("==", 0), Criteria("==", 1), Criteria("==", 0), Criteria(">=", 0), Criteria(">=", 0))
         ],
         "escaping" : [
-            criteria_list(criteria("==", 1), criteria("==", 1), criteria(">=", 0) ,criteria(">=", 0), criteria(">=", 0), criteria(">=", 0))
+            criteria_list(Criteria("==", 1), Criteria("==", 1), Criteria(">=", 0) ,Criteria(">=", 0), Criteria(">=", 0), Criteria(">=", 0))
         ],
         "impurities" : [
-            criteria_list(criteria("==", 0), criteria(">=", 0), criteria(">=", 0), criteria("==", 0), criteria(">=", 0), criteria(">=", 0)),
+            criteria_list(Criteria("==", 0), Criteria(">=", 0), Criteria(">=", 0), Criteria("==", 0), Criteria(">=", 0), Criteria(">=", 0)),
         ],
     }
     mode = {
@@ -202,26 +202,26 @@ class three_signal_process_bkg_fd(SampleDefinition):
     signal = ["absorption", "charge_exchange", "pion_production"] # The processes we actually want to measure cross sections for.
 
 
-def GetTruePionCounts(events : ntuple.Data, ke_lim : float = 0):
-    n_pi_true = (events.trueParticles.number != 1) & (abs(events.trueParticles.pdg) == 211) & (events.trueParticles.mother == 1)
+def get_true_pion_counts(events : ntuple.Data, ke_lim : float = 0):
+    n_pi_true = (events.true_particles.number != 1) & (abs(events.true_particles.pdg) == 211) & (events.true_particles.mother == 1)
 
-    ke = kinematics.KE(vector.magnitude(events.trueParticles.momentum), Particle.from_pdgid(211).mass)
+    ke = kinematics.KE(vector.magnitude(events.true_particles.momentum), Particle.from_pdgid(211).mass)
 
     n_pi_true = ak.sum(n_pi_true & (ke > ke_lim), axis = -1)
-    n_pi0_true = events.trueParticles.nPi0
+    n_pi0_true = events.true_particles.n_pi0
 
     return n_pi_true, n_pi0_true
 
 
-def GetTruePionCountsGeant(events, ke_lim : float = 0) -> tuple[ak.Array, ak.Array]:
-    ke = kinematics.KE(vector.magnitude(events.trueParticles.momentum), Particle.from_pdgid(211).mass)
+def get_true_pion_counts_geant(events, KE_lim : float = 0) -> tuple[ak.Array, ak.Array]:
+    KE = kinematics.KE(vector.magnitude(events.true_particles.momentum), Particle.from_pdgid(211).mass)
 
-    n_pip_true = (events.trueParticles.number != 1) & (events.trueParticles.pdg == 211) & (events.trueParticles.mother == 1)
-    n_pim_true = (events.trueParticles.number != 1) & (events.trueParticles.pdg == -211) & (events.trueParticles.mother == 1)
+    n_pip_true = (events.true_particles.number != 1) & (events.true_particles.pdg == 211) & (events.true_particles.mother == 1)
+    n_pim_true = (events.true_particles.number != 1) & (events.true_particles.pdg == -211) & (events.true_particles.mother == 1)
 
-    n_pip_true = ak.sum(n_pip_true & (ke > ke_lim), axis = -1)
-    n_pim_true = ak.sum(n_pim_true & (ke > ke_lim), axis = -1)
-    n_pi0_true = events.trueParticles.nPi0
+    n_pip_true = ak.sum(n_pip_true & (KE > KE_lim), axis = -1)
+    n_pim_true = ak.sum(n_pim_true & (KE > KE_lim), axis = -1)
+    n_pi0_true = events.true_particles.n_pi0
 
     return n_pip_true, n_pim_true, n_pi0_true
 
