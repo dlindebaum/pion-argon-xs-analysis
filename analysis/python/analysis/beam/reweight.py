@@ -6,15 +6,15 @@ from python.analysis import common, fitting, plotting
 from python.analysis.plotting import plots
 
 
-def RatioWeights(beam_inst_P : np.ndarray, func : str, params : list, truncate : int = 10):
-    weights = 1/getattr(fitting, func)(beam_inst_P, *params)
+def ratio_weights(beam_inst_p : np.ndarray, func : str, params : list, truncate : int = 10):
+    weights = 1/getattr(fitting, func)(beam_inst_p, *params)
     weights = np.where(weights > truncate, truncate, weights)
     return weights
 
 
-def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.array = np.array([0.75, 1.25]), book : plotting.PlotBook = plotting.PlotBook.null()):
-    p_mc, edges = np.histogram(np.array(p_MC), bins, range = p_nominal * p_range)
-    p_data = np.histogram(np.array(p_Data), bins, range = p_nominal * p_range)[0]
+def reweight(p_mc, p_data, p_nominal : float, bins : int = 10, p_range : np.array = np.array([0.75, 1.25]), book : plotting.PlotBook = plotting.PlotBook.null()):
+    p_mc, edges = np.histogram(np.array(p_mc), bins, range = p_nominal * p_range)
+    p_data = np.histogram(np.array(p_data), bins, range = p_nominal * p_range)[0]
 
     with plots.RatioPlot((edges[1:] + edges[:-1]) / 2, p_data, p_mc, np.sqrt(p_data), np.sqrt(p_mc), "$P_{inst}^{reco}$ (MeV)", "Data/MC") as ratio_plot:
         plots.Plot(ratio_plot.x, ratio_plot.y1, yerr = ratio_plot.y1_err, newFigure = False)
@@ -32,13 +32,13 @@ def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.arra
     results = {}
     for f in [fitting.gaussian, fitting.student_t, fitting.poly2d, fitting.crystal_ball, fitting.double_crystal_ball, fitting.double_gaussian]:
         plots.plt.figure()
-        results[f.__name__] = fitting,fit(ratio_plot.x[ratio > 0], ratio[ratio > 0], ratio_err[ratio > 0], f, plot = True, xlabel = "$P_{inst}^{reco}$(MeV)", ylabel = "$r$")
+        results[f.__name__] = fitting.fit(ratio_plot.x[ratio > 0], ratio[ratio > 0], ratio_err[ratio > 0], f, plot = True, xlabel = "$P_{inst}^{reco}$(MeV)", ylabel = "$r$")
         book.Save()
     return results
 
 
-def ReWeightResults(sideband_mc : dict, sideband_data : dict, args : argparse.Namespace, bins : int, reweight_results : dict, reweight_func : str, book : plotting.PlotBook = plotting.PlotBook.null()):
-    weights = RatioWeights(np.array(sideband_mc["p_inst"]), reweight_func, reweight_results[reweight_func][0], args.beam_reweight["strength"])
+def reweight_results(sideband_mc : dict, sideband_data : dict, args : argparse.Namespace, bins : int, reweight_fits : dict, reweight_func : str, book : plotting.PlotBook = plotting.PlotBook.null()):
+    weights = ratio_weights(np.array(sideband_mc["p_inst"]), reweight_func, reweight_fits[reweight_func][0], args.beam_reweight["strength"])
 
     plot_range = [args.beam_momentum * 0.75, args.beam_momentum * 1.25]
 
@@ -55,7 +55,7 @@ def ReWeightResults(sideband_mc : dict, sideband_data : dict, args : argparse.Na
     return
 
 
-def SmearingFactors(sample, weights : np.array = None):
+def smearing_factors(sample, weights : np.array = None):
     average = np.average(sample.recoParticles.beam_inst_P, weights=weights)
     variance = np.average((sample.recoParticles.beam_inst_P-average)**2, weights=weights)
     std = np.sqrt(variance)

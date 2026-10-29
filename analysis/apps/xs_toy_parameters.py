@@ -49,7 +49,7 @@ def ComputeQuantities(mc : ntuple.Data, args : dict) -> dict[dict, dict]:
         dict[dict, dict]: dictionary of quantities, one for reco and truth.
     """
     with alive_bar(title = "computng reco quantities") as bar:
-        reco_upstream_loss = beam.upstream.UpstreamEnergyLoss(kinematics.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass), args["upstream_loss_correction_params"]["value"], args["upstream_loss_response"])
+        reco_upstream_loss = beam.upstream.upstream_energy_loss(kinematics.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass), args["upstream_loss_correction_params"]["value"], args["upstream_loss_response"])
         
         reco_KE_ff = kinematics.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) - reco_upstream_loss
         reco_KE_int = kinematics.reco_end_energy(mc.recoParticles.beam_calo_pos, reco_KE_ff, mc.recoParticles.beam_dEdX, args["energy_method"])
@@ -139,7 +139,7 @@ def ResolutionStudy(plot_book : plotting.PlotBook, reco_quantity : ak.Array, tru
     for f in fit_functions:
         try:
             plots.plt.figure()
-            params[f.__name__], errors[f.__name__] = fitting,fit(centers, counts, np.sqrt(counts), f, plot = True, xlabel = label, ylabel = "Counts", plot_style = "hist", plot_range = residual_range)
+            params[f.__name__], errors[f.__name__] = fitting.fit(centers, counts, np.sqrt(counts), f, plot = True, xlabel = label, ylabel = "Counts", plot_style = "hist", plot_range = residual_range)
             tables[f.__name__] = CreateFitTable(params[f.__name__], errors[f.__name__])
         except ValueError as e:
             print(f"fit not successful for {f.__name__}, reason: \n {e}")
@@ -371,7 +371,7 @@ def FitBeamProfile(KE_init : np.array, func : fitting.FitFunction, KE_range : li
 
     plots.plt.figure()
     print(f"{book.open=}")
-    params, error = fitting,fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = book.is_open, plot_style = "hist", xlabel = "$KE^{true}_{ff}$ (MeV)", ylabel = "Counts")
+    params, error = fitting.fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = book.is_open, plot_style = "hist", xlabel = "$KE^{true}_{ff}$ (MeV)", ylabel = "Counts")
     book.Save()
 
     table = CreateFitTable(params, error)

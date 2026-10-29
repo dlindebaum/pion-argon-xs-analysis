@@ -61,11 +61,11 @@ def main(args : argparse.Namespace):
         for i in args.beam_scraper_energy_bins: plotting.plots.plt.axvline(i, color = "red")
         pdf.Save()
 
-        scraper_thresholds = scraper.GetScraperFits(args.beam_scraper_energy_bins, output_mc["beam_inst_KE"], output_mc["delta_KE_upstream"], bins, residual_range)
+        scraper_thresholds = scraper.get_scraper_fits(args.beam_scraper_energy_bins, output_mc["beam_inst_KE"], output_mc["delta_KE_upstream"], bins, residual_range)
         pdf.Save()
         print(scraper_thresholds)
 
-        position_means = scraper.BeamScraperPlots(args.beam_scraper_energy_bins, output_mc, scraper_thresholds)
+        position_means = scraper.beam_scraper_plots(args.beam_scraper_energy_bins, output_mc, scraper_thresholds)
         print(position_means)
         pdf.Save()
 

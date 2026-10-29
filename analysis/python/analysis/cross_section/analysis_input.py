@@ -271,12 +271,12 @@ class AnalysisInput:
             AnalysisInput: analysis input.
         """
         if mc_reweight_params is not None:
-            weights = beam.reweight.RatioWeights(events.recoParticles.beam_inst_P, "gaussian", mc_reweight_params, mc_reweight_stength)
+            weights = beam.reweight.ratio_weights(events.recoParticles.beam_inst_P, "gaussian", mc_reweight_params, mc_reweight_stength)
         else:
             weights = None
 
         KE_inst_reco = kinematics.KE(events.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass)
-        upstream_loss_reco = beam.upstream.UpstreamEnergyLoss(KE_inst_reco, upstream_energy_loss_params, upstream_loss_func)
+        upstream_loss_reco = beam.upstream.upstream_energy_loss(KE_inst_reco, upstream_energy_loss_params, upstream_loss_func)
         KE_ff_reco = KE_inst_reco - upstream_loss_reco
 
         track_length_reco = events.recoParticles.beam_track_length

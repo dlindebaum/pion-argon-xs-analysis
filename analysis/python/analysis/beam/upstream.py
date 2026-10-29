@@ -5,8 +5,8 @@ import pandas as pd
 
 from python.analysis import fitting
 
-def UpstreamEnergyLoss(KE_inst : ak.Array, params : np.ndarray, function : fitting.FitFunction = fitting.poly2d) -> ak.Array:
-    """ compute the upstream loss based on a repsonse function and it's fit parameters.
+def upstream_energy_loss(KE_inst : ak.Array, params : np.ndarray, function : fitting.FitFunction = fitting.poly2d) -> ak.Array:
+    """ Compute the upstream loss based on a repsonse function and it's fit parameters.
 
     Args:
         KE_inst (ak.Array): kinetic energy measured by the beam instrumentation
@@ -18,7 +18,7 @@ def UpstreamEnergyLoss(KE_inst : ak.Array, params : np.ndarray, function : fitti
     """
     return function.func(KE_inst, **params)
 
-cv_method = {
+central_value_method = {
     "None" : None,
     "gaussian" : fitting.gaussian,
     "double_gaussian" : fitting.double_gaussian,
@@ -27,7 +27,7 @@ cv_method = {
 }
 
 
-def NumericalCV(bins : np.array, KE_reco_inst : np.array, KE_true_ff : np.array) -> tuple[np.array, np.array]:
+def numerical_cv(bins : np.array, KE_reco_inst : np.array, KE_true_ff : np.array) -> tuple[np.array, np.array]:
     """ Central value in reco bin using the arithmetic mean.
 
     Args:
@@ -55,7 +55,7 @@ def NumericalCV(bins : np.array, KE_reco_inst : np.array, KE_true_ff : np.array)
     return mean_residual_energy, mean_error_residual_energy
 
 
-def CentralValueEstimation(bins : np.ndarray, KE_reco_inst : np.ndarray, KE_true_ff : np.ndarray, cv_function : fitting.FitFunction = None, weights : np.ndarray = None) -> tuple[np.array, np.array]:
+def central_value_estimation(bins : np.ndarray, KE_reco_inst : np.ndarray, KE_true_ff : np.ndarray, cv_function : fitting.FitFunction = None, weights : np.ndarray = None) -> tuple[np.array, np.array]:
     """ Estiamte upstream loss using a reponse function to correct the reco KE at the instrumentaiton to get the KE at the front face of the TPC.
         estiamtes the central value of residuals in bins of KE_reco_inst using a fitting function.
 
@@ -69,7 +69,7 @@ def CentralValueEstimation(bins : np.ndarray, KE_reco_inst : np.ndarray, KE_true
         tuple[np.array, np.array]: central values in each bin, error in central values
     """
     if cv_function is None:
-        cv = NumericalCV(bins, KE_reco_inst, KE_true_ff)
+        cv = numerical_cv(bins, KE_reco_inst, KE_true_ff)
     else:
         df = pd.DataFrame({"KE_inst" : KE_reco_inst, "true_ffKE" : KE_true_ff})
         df["residual"] = df.KE_inst - df.true_ffKE

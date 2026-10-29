@@ -198,7 +198,7 @@ def response_fits(central_values : dict, bins : np.ndarray, book : plotting.Plot
     for _, cv in plots.IterMultiPlot(central_values):
         print(cv)
         print(central_values[cv][1])
-        popt, perr = fitting,fit(x, central_values[cv][0], central_values[cv][1], ResponseFit, method = "lm", plot = True, xlabel = "$E^{reco}$ (MeV)", ylabel = "Fractional error", maxfev = int(1E6))
+        popt, perr = fitting.fit(x, central_values[cv][0], central_values[cv][1], ResponseFit, method = "lm", plot = True, xlabel = "$E^{reco}$ (MeV)", ylabel = "Fractional error", maxfev = int(1E6))
         plots.plt.ylim(-1, 1)
         plots.plt.title(cv)
         response_params[cv] = {"value" : popt, "error" : perr}
@@ -209,7 +209,7 @@ def response_fits(central_values : dict, bins : np.ndarray, book : plotting.Plot
 
     for cv in central_values:
         plots.plt.figure()
-        popt, _ = fitting,fit(x, central_values[cv][0], central_values[cv][1], ResponseFit, method = "lm", plot = True, xlabel = "$E^{reco}$ (MeV)", ylabel = "Fractional error", maxfev = int(1E6))
+        popt, _ = fitting.fit(x, central_values[cv][0], central_values[cv][1], ResponseFit, method = "lm", plot = True, xlabel = "$E^{reco}$ (MeV)", ylabel = "Fractional error", maxfev = int(1E6))
         plots.plt.ylim(-1, 1)
         book.Save()
     return response_params

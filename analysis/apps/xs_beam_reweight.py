@@ -120,12 +120,12 @@ def main(args : argparse.Namespace):
     os.makedirs(out + "plots/", exist_ok = True)
 
     with plotting.PlotBook(out + "plots/" + "reweight_fits.pdf", True) as book:
-        results = reweight.ReWeight(output_mc["sideband"]["p_inst"], output_data["sideband"]["p_inst"], args.beam_momentum, 20, np.array([0.75, 1.25]), book = book)
+        results = reweight.reweight(output_mc["sideband"]["p_inst"], output_data["sideband"]["p_inst"], args.beam_momentum, 20, np.array([0.75, 1.25]), book = book)
 
     for r in results:
         with plotting.PlotBook(out + "plots/" + f"reweight_results_{r}.pdf", True) as book:
-            reweight.ReWeightResults(output_mc["sideband"], output_data["sideband"], args, 25, results, r, book = book)
-            reweight.ReWeightResults(output_mc["analysis"], output_data["analysis"], args, 50, results, r, book = book)
+            reweight.reweight_results(output_mc["sideband"], output_data["sideband"], args, 25, results, r, book = book)
+            reweight.reweight_results(output_mc["analysis"], output_data["analysis"], args, 50, results, r, book = book)
             reweight_params = {f"p{i}" : {"value" : results[r][0][i], "error" : results[r][1][i]} for i in range(getattr(fitting, r).n_params)}
             io.write_json(reweight_params, out + r + ".json")
         plots.plt.close("all")
@@ -140,8 +140,8 @@ def main(args : argparse.Namespace):
         mc_mom = np.array(output_mc[s]["p_inst"])
         data_mom = np.array(output_data[s]["p_inst"])
 
-        mc_weights = reweight.RatioWeights(mc_mom, "gaussian", [reweight_params[k]["value"] for k in reweight_params], 100)
-        mc_weights_truncated = reweight.RatioWeights(mc_mom, "gaussian", [reweight_params[k]["value"] for k in reweight_params], args.beam_reweight["strength"])
+        mc_weights = reweight.ratio_weights(mc_mom, "gaussian", [reweight_params[k]["value"] for k in reweight_params], 100)
+        mc_weights_truncated = reweight.ratio_weights(mc_mom, "gaussian", [reweight_params[k]["value"] for k in reweight_params], args.beam_reweight["strength"])
 
         mc_counts, bins = np.histogram(mc_mom, b, test_range)
         data_counts, _ = np.histogram(data_mom, bins, test_range)

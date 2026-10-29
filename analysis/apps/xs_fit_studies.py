@@ -119,7 +119,7 @@ def FitSimulationCurve(xs_sim, sampling_factor : int, process : str, function : 
     y = getattr(xs_sim, process)[::sampling_factor]/1000
 
     if plot is True: plots.plt.figure()
-    results = fitting,fit(x, y, None, function, method = "dogbox", plot = plot, xlabel = "$KE$(GeV)", ylabel = "$\\sigma$ (b)", title = process)
+    results = fitting.fit(x, y, None, function, method = "dogbox", plot = plot, xlabel = "$KE$(GeV)", ylabel = "$\\sigma$ (b)", title = process)
     return results
 
 
@@ -853,7 +853,7 @@ def main(args : argparse.Namespace):
                             plots.plt.figure()
                             y, edges = np.histogram(pulls[c], bins = 10)
                             x = (edges[1:] + edges[:-1]) / 2
-                            popt, perr = fitting,fit(x, y, np.sqrt(y), fitting.gaussian, plot = True, plot_style = "hist", method = "trf", xlabel = "$\\theta$", ylabel = "Number of entries")
+                            popt, perr = fitting.fit(x, y, np.sqrt(y), fitting.gaussian, plot = True, plot_style = "hist", method = "trf", xlabel = "$\\theta$", ylabel = "Number of entries")
                             book.Save()
 
                         for _, k in plots.IterMultiPlot(pulls.columns):

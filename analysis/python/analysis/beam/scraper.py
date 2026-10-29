@@ -8,7 +8,7 @@ from python.analysis import bethe_bloch, common, fitting, kinematics, selection,
 from python.analysis.plotting import plots
 
 
-def IsScraper(mc : ntuple.Data, beam_scraper_args : dict) -> ak.Array:
+def is_scraper(mc : ntuple.Data, beam_scraper_args : dict) -> ak.Array:
     beam_inst_KE = kinematics.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) # get kinetic energy from beam instrumentation
     true_ffKE = mc.trueParticles.beam_KE_front_face
 
@@ -24,7 +24,7 @@ def IsScraper(mc : ntuple.Data, beam_scraper_args : dict) -> ak.Array:
     return scraper_ids
 
 
-def GetTrueFFKE(KE_tpc : ak.Array, length_to_ff : ak.Array) -> ak.Array:
+def get_true_ff_KE(KE_tpc : ak.Array, length_to_ff : ak.Array) -> ak.Array:
     """ True Front facing kinetic energy is the kinetic energy of the first particle trajectory point in the tpc,
         plus the energy lost between the first trajectory point in the TPC and trajectory point before.
 
@@ -73,7 +73,7 @@ def ff_value(arr : ak.Array, ind : int) -> any:
         return arr[ind + 1]
 
 
-def GetScraperFits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : ak.Array, fit_bins : int, residual_range : list) -> dict:
+def get_scraper_fits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : ak.Array, fit_bins : int, residual_range : list) -> dict:
     """ Fit gaussians to front facing kinetic energies to extract values required to define events as beam scrapers.
 
     Args:
@@ -102,7 +102,7 @@ def GetScraperFits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : 
         print(f"{(max(y), np.nanmedian(data), np.nanstd(data))=}")
 
         next(plot)
-        popt, perr, metrics = fitting,fit(common.bin_centers(bin_edges), y, yerr, fitting.gaussian, method = "dogbox", return_chi_sqr = True)#, plot = True, plot_style = "scatter", xlabel = "$\\Delta E_{upstream}$ (MeV)", title = bin_label, plot_range = residual_range)
+        popt, perr, metrics = fitting.fit(common.bin_centers(bin_edges), y, yerr, fitting.gaussian, method = "dogbox", return_chi_sqr = True)#, plot = True, plot_style = "scatter", xlabel = "$\\Delta E_{upstream}$ (MeV)", title = bin_label, plot_range = residual_range)
         heights, _ = plots.PlotHist(data, newFigure = False, bins = fit_bins, range = residual_range, label = "observed")
         x_interp = np.linspace(min(data), max(data), 10 * fit_bins)
         y_interp = fitting.gaussian.func(x_interp, max(heights), popt[1], popt[2])
@@ -130,14 +130,12 @@ def GetScraperFits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : 
     return scraper_fit
 
 
-def BeamScraperPlots(beam_inst_KE_bins : list, output_mc : dict[ak.Array], scraper_fits : dict) -> dict:
+def beam_scraper_plots(beam_inst_KE_bins : list, output_mc : dict[ak.Array], scraper_fits : dict) -> dict:
     """ Scatter plots of events to show beam scraper events as a function of the XY position at the beam instrumentation.
 
     Args:
         mc (Master.Data): events to look at.
         beam_inst_KE_bins (list): beam kinetic energy bins.
-        beam_inst_KE (ak.Array): beam instrumentation kinetic energy.
-        delta_KE_upstream (ak.Array): difference in the front facing KE and beam kinetic energy.
         scraper_fits (dict): parameters to define beam scrapers.
 
     Returns:

@@ -8,7 +8,7 @@ import numpy as np
 from python.analysis import common, fitting, io, plotting
 
 
-def Fit_Vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
+def fit_vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
     """ Gaussian fit to each component in the vector.
 
     Args:
@@ -28,7 +28,7 @@ def Fit_Vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
         y, bins_edges = np.histogram(data, bins = bins, range = sorted([np.nanpercentile(data, 10), np.nanpercentile(data, 90)])) # fit only to data within the 10th and 90th percentile of data to exclude large tails in the distriubtion.
         yerr = np.sqrt(y) # Poisson error
 
-        popt, perr = fitting,fit(common.bin_centers(bins_edges), y, yerr, fitting.gaussian)
+        popt, perr = fitting.fit(common.bin_centers(bins_edges), y, yerr, fitting.gaussian)
 
         mu[i] = popt[1]
         sigma[i] = abs(popt[2])
@@ -38,7 +38,7 @@ def Fit_Vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
     return mu, sigma, mu_err, sigma_err
 
 
-def plot(value : ak.Array, x_label : str, mu : float, sigma : float, color : str = None, label : str = None, range : list = None):
+def plot_fit_results(value : ak.Array, x_label : str, mu : float, sigma : float, color : str = None, label : str = None, range : list = None):
     """ Plot data plus the gaussian fit made on the data.
 
     Args:
@@ -81,7 +81,7 @@ def plot_range(mu : float, sigma : float, tolerance : float = 5) -> list:
     return sorted([mu - tolerance * sigma, mu + tolerance * sigma])
 
 
-def MakePlots(output_mc : dict[ak.Array], mc_fits : dict, output_data : dict[ak.Array], data_fits : dict, out : str, truncate : float):
+def make_plots(output_mc : dict[ak.Array], mc_fits : dict, output_data : dict[ak.Array], data_fits : dict, out : str, truncate : float):
     """ Make plots showing the fits for MC and or Data.
 
     Args:
@@ -102,16 +102,16 @@ def MakePlots(output_mc : dict[ak.Array], mc_fits : dict, output_data : dict[ak.
             data_ranges = [] if data_fits is None else plot_range(data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"])
 
             plot_ranges = mc_ranges + data_ranges
-            if output_mc is not None: plot(output_mc["start_pos"][i], f"{label_name} start position ${i}$ (cm)", mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"], "C0", "MC", range = [min(plot_ranges), max(plot_ranges)])
-            if output_data is not None: plot(output_data["start_pos"][i], f"{label_name} start position ${i}$ (cm)", data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"], "C1", "Data", range = [min(plot_ranges), max(plot_ranges)])
+            if output_mc is not None: plot_fit_results(output_mc["start_pos"][i], f"{label_name} start position ${i}$ (cm)", mc_fits[f"mu_{i}"], mc_fits[f"sigma_{i}"], "C0", "MC", range = [min(plot_ranges), max(plot_ranges)])
+            if output_data is not None: plot_fit_results(output_data["start_pos"][i], f"{label_name} start position ${i}$ (cm)", data_fits[f"mu_{i}"], data_fits[f"sigma_{i}"], "C1", "Data", range = [min(plot_ranges), max(plot_ranges)])
             pdf.Save()
     return
 
 
-def Fits(args : argparse.Namespace, output : dict, out : str, sample_name : str):
+def fits(args : argparse.Namespace, output : dict, out : str, sample_name : str):
     start_pos = output["start_pos"]
     beam_dir = output["beam_dir"]
-    mu, sigma, mu_err, sigma_err = Fit_Vector(start_pos, 100)
+    mu, sigma, mu_err, sigma_err = fit_vector(start_pos, 100)
 
     mu_dir = {i : ak.mean(ak.nan_to_num(beam_dir[i])) for i in ["x", "y", "z"]}
     mu_dir_err = {i : ak.std(ak.nan_to_num(beam_dir[i]))/np.sqrt(ak.count(beam_dir[i])) for i in ["x", "y", "z"]}

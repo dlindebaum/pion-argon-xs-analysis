@@ -501,7 +501,7 @@ class TrackLengthResolutionSystematic(MCMethod):
         y, edges = np.histogram(r, 150, [-0.5, 0.5])
         x = common.bin_centers(edges)
 
-        p = fitting,fit(x, y,np.sqrt(y), fitting.double_crystal_ball, method = "dogbox", plot = True, xlabel = "$\\theta$", ylabel = "Counts", plot_style = "scatter")
+        p = fitting.fit(x, y,np.sqrt(y), fitting.double_crystal_ball, method = "dogbox", plot = True, xlabel = "$\\theta$", ylabel = "Counts", plot_style = "scatter")
         book.Save()
 
         y_interp = fitting.double_crystal_ball(x, *p[0])

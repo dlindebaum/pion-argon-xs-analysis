@@ -231,7 +231,7 @@ def AnalyseBeamSelection(events : ntuple.Data, beam_instrumentation : bool, func
 
         if (a == "BeamScraperCut") and (beam_instrumentation == False):
             if beam_instrumentation == False:
-                scraper_id = scraper.IsScraper(events, args[a]["fits"])
+                scraper_id = scraper.is_scraper(events, args[a]["fits"])
                 output[a + "_scraper_tag"] = MakeOutput(None, tags.beam_scraper_tag(scraper_id), None, None)
 
         events.Filter([mask], [mask])

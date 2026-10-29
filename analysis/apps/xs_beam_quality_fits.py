@@ -59,13 +59,13 @@ def main(args):
 
     outputs = application.processing(list(args.ntuple_files.keys()), outdir, args, run, True)
 
-    fit_values = {s : quality.Fits(args, outputs[s], outdir, s) for s in outputs}
+    fit_values = {s : quality.fits(args, outputs[s], outdir, s) for s in outputs}
 
     if "data" not in outputs.keys():
         outputs["data"] = None
         fit_values["data"] = None
     
-    quality.MakePlots(outputs["mc"], fit_values["mc"], outputs["data"], fit_values["data"], outdir, args.beam_quality_truncate)
+    quality.make_plots(outputs["mc"], fit_values["mc"], outputs["data"], fit_values["data"], outdir, args.beam_quality_truncate)
 
     return
 

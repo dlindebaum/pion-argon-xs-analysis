@@ -29,7 +29,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
     
     mc = BeamPionSelection(mc, args, True)
     if args["no_reweight"] is False:
-        mc_weights = reweight.RatioWeights(mc.recoParticles.beam_inst_P, "gaussian", [args["beam_reweight"]["params"][k]["value"] for k in args["beam_reweight"]["params"]], args["beam_reweight"]["strength"])
+        mc_weights = reweight.ratio_weights(mc.recoParticles.beam_inst_P, "gaussian", [args["beam_reweight"]["params"][k]["value"] for k in args["beam_reweight"]["params"]], args["beam_reweight"]["strength"])
     else:
         mc_weights = None
     
@@ -52,11 +52,11 @@ def main(args : argparse.Namespace):
     with plotting.PlotBook(outdir + "xs_upstream_loss_plots.pdf") as pdf:
         reco_KE_inst = kinematics.KE(output_mc["p_inst"], Particle.from_pdgid(211).mass)
         with plotting.styles.PlotStyler().Update(font_scale = 1.3):
-            cv = upstream.CentralValueEstimation(bins, reco_KE_inst, output_mc["KE_ff"], upstream.cv_method[args.upstream_loss_cv_function], output_mc["weights"])
+            cv = upstream.central_value_estimation(bins, reco_KE_inst, output_mc["KE_ff"], upstream.central_value_method[args.upstream_loss_cv_function], output_mc["weights"])
         pdf.Save()
 
         plotting.plots.plt.figure()
-        params = fitting,fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\\mu(\Delta E_{upstream})$ (MeV)", loc = "upper center")
+        params = fitting.fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\\mu(\Delta E_{upstream})$ (MeV)", loc = "upper center")
         pdf.Save()
 
         params_dict = {
@@ -64,7 +64,7 @@ def main(args : argparse.Namespace):
             "error" : {f"p{i}" : params[1][i] for i in range(len(params[1]))}
         }
 
-        reco_KE_ff =  reco_KE_inst - upstream.UpstreamEnergyLoss(reco_KE_inst, params_dict["value"], args.upstream_loss_response)
+        reco_KE_ff = reco_KE_inst - upstream.upstream_energy_loss(reco_KE_inst, params_dict["value"], args.upstream_loss_response)
 
         plotting.plots.PlotHistComparison([reco_KE_ff, output_mc["KE_ff"]], labels = ["$KE^{reco}_{init}$", "$KE^{true}_{init}$"], x_range = [bins[0], bins[-1]], xlabel = "Kinetic energy (MeV)", weights = [output_mc["weights"], output_mc["weights"]])
         pdf.Save()
