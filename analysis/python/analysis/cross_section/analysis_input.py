@@ -103,7 +103,7 @@ class AnalysisInput:
         Args:
             file (str): file path.
         """
-        io.SaveObject(file, self)
+        io.write_dill(file, self)
         return
 
 
@@ -113,8 +113,8 @@ class AnalysisInput:
         Args:
             file (str): file path.
         """
-        file_writer = io.IO(file)
-        file_writer.WriteData(vars(self), None, True)
+        file_writer = io.RootIO(file)
+        file_writer.write_data(vars(self), None, True)
         return
 
 
@@ -149,7 +149,7 @@ class AnalysisInput:
         Returns:
             AnalysisInput: analysis input.
         """
-        obj = io.LoadObject(file)
+        obj = io.read_dill(file)
         if type(obj) == AnalysisInput:
             return obj
         else:
@@ -281,8 +281,8 @@ class AnalysisInput:
 
         track_length_reco = events.recoParticles.beam_track_length
 
-        truncated_track_reco = kinematics.TruncateTrack(events.recoParticles.beam_calo_pos, z_trunc = max(fiducial_volume))
-        track_length_truncated_reco = kinematics.TrackLength(tracks=truncated_track_reco)
+        truncated_track_reco = kinematics.truncate_track(events.recoParticles.beam_calo_pos, z_trunc = max(fiducial_volume))
+        track_length_truncated_reco = kinematics.track_length(tracks=truncated_track_reco)
 
         if min(fiducial_volume) > 0:
             track_length_min = np.where(events.recoParticles.beam_endPos_SCE.z > min(fiducial_volume), min(fiducial_volume), track_length_reco)
@@ -292,9 +292,9 @@ class AnalysisInput:
         else:
             KE_init_reco = KE_ff_reco
 
-        KE_int_reco = kinematics.RecoEndEnergy(events.recoParticles.beam_calo_pos, KE_ff_reco, events.recoParticles.beam_dEdX, energy_method)
+        KE_int_reco = kinematics.reco_end_energy(events.recoParticles.beam_calo_pos, KE_ff_reco, events.recoParticles.beam_dEdX, energy_method)
 
-        KE_end_reco = kinematics.RecoEndEnergy(truncated_track_reco, KE_ff_reco, events.recoParticles.beam_dEdX, energy_method)
+        KE_end_reco = kinematics.reco_end_energy(truncated_track_reco, KE_ff_reco, events.recoParticles.beam_dEdX, energy_method)
 
         outside_tpc_reco = geometry.ProtoDUNESPGeometry().outside_tpc(events.recoParticles.beam_endPos_SCE.x, events.recoParticles.beam_endPos_SCE.y, events.recoParticles.beam_endPos_SCE.z)
 
@@ -321,8 +321,8 @@ class AnalysisInput:
             outside_fv_true = (events.trueParticles.beam_traj_pos.z[:, -1] < min(fiducial_volume)) | (events.trueParticles.beam_traj_pos.z[:, -1] > max(fiducial_volume))
             inelastic = events.trueParticles.true_beam_endProcess == "pi+Inelastic"
 
-            truncated_tracks_true = kinematics.TruncateTrack(events.trueParticles.beam_traj_pos[events.trueParticles.in_tpc_z], z_trunc = max(fiducial_volume))
-            track_length_truncated_true = kinematics.TrackLength(tracks=truncated_tracks_true)
+            truncated_tracks_true = kinematics.truncate_track(events.trueParticles.beam_traj_pos[events.trueParticles.in_tpc_z], z_trunc = max(fiducial_volume))
+            track_length_truncated_true = kinematics.track_length(tracks=truncated_tracks_true)
 
             traj_KE = events.trueParticles.beam_traj_KE[events.trueParticles.in_tpc_z]
             KE_end_true = traj_KE[ak.local_index(traj_KE) == (ak.num(truncated_tracks_true)-2)]

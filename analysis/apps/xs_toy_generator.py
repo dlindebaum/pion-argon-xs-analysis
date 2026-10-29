@@ -40,7 +40,7 @@ def vprint(*args, **kwags):
         print(*args, **kwags)
 
 
-def ResolveConfig(config : dict) -> argparse.Namespace:
+def resolve_config(config : dict) -> argparse.Namespace:
     """ Parse Toy configuration file.
 
     Args:
@@ -54,18 +54,18 @@ def ResolveConfig(config : dict) -> argparse.Namespace:
         if k == "smearing_params":
             args.smearing_params = {}
             for i in v:
-                args.smearing_params[i] = io.LoadConfiguration(v[i])
+                args.smearing_params[i] = io.read_json(v[i])
                 args.smearing_params[i]["function"] = getattr(fitting, args.smearing_params[i]["function"])
         elif k == "reco_region_fractions":
-            args.reco_region_fractions = io.ReadHDF5(v)
+            args.reco_region_fractions = io.read_hdf5(v)
         elif k == "beam_selection_efficiencies":
             #* that complex unpacking with pytables
-            args.beam_selection_efficiencies = io.ReadHDF5(v)
+            args.beam_selection_efficiencies = io.read_hdf5(v)
         elif k == "mean_track_score_kde":
-            setattr(args, k, io.LoadObject(v))
+            setattr(args, k, io.read_dill(v))
         elif k == "beam_profile":
             if v not in ["gaussian", "uniform"]:
-                args.beam_profile = io.LoadConfiguration(v)
+                args.beam_profile = io.read_json(v)
                 args.beam_profile["function"] = getattr(fitting, args.beam_profile["function"])
             else:
                 setattr(args, k, v)
@@ -177,7 +177,7 @@ def GenerateIntialKEs(n : int, particle : Particle, cv : float, width : float, p
         else:
             raise ValueError(f"{profile} not a valid beam profile")
     else:
-        return fitting.RejectionSampling(n, profile["min"], profile["max"], profile["function"], profile["parameters"], rng = rng)
+        return fitting.rejection_sampling(n, profile["min"], profile["max"], profile["function"], profile["parameters"], rng = rng)
 
 
 def Simulate(seed : int, KE_init : np.array, step_size : float, pdfs : dict, smearing_params : dict) -> tuple:
@@ -276,9 +276,9 @@ def Smearing(n : int, resolutions : dict, rng : np.random.Generator) -> pd.DataF
         pd.DataFrame: smearing terms
     """
     return pd.DataFrame({
-        "KE_int_smearing" : fitting.RejectionSampling(n, min(resolutions["KE_int"]["range"]), max(resolutions["KE_int"]["range"]), resolutions["KE_int"]["function"], resolutions["KE_int"]["values"], rng = rng),
-        "KE_init_smearing" : fitting.RejectionSampling(n, min(resolutions["KE_init"]["range"]), max(resolutions["KE_init"]["range"]), resolutions["KE_init"]["function"], resolutions["KE_init"]["values"], rng = rng),
-        "z_int_smearing" : fitting.RejectionSampling(n, min(resolutions["z_int"]["range"]), max(resolutions["z_int"]["range"]), resolutions["z_int"]["function"], resolutions["z_int"]["values"], rng = rng),
+        "KE_int_smearing" : fitting.rejection_sampling(n, min(resolutions["KE_int"]["range"]), max(resolutions["KE_int"]["range"]), resolutions["KE_int"]["function"], resolutions["KE_int"]["values"], rng = rng),
+        "KE_init_smearing" : fitting.rejection_sampling(n, min(resolutions["KE_init"]["range"]), max(resolutions["KE_init"]["range"]), resolutions["KE_init"]["function"], resolutions["KE_init"]["values"], rng = rng),
+        "z_int_smearing" : fitting.rejection_sampling(n, min(resolutions["z_int"]["range"]), max(resolutions["z_int"]["range"]), resolutions["z_int"]["function"], resolutions["z_int"]["values"], rng = rng),
     })
 
 
@@ -442,7 +442,7 @@ def MeanTrackScore(exclusive_process : pd.Series, kdes : dict, seed : int) -> np
     return pd.DataFrame({"mean_track_score" : scores.astype(float)}).reset_index(drop = True)
 
 def run(config : dict):
-    return main(ResolveConfig(config))
+    return main(resolve_config(config))
 
 @timer
 def main(args : argparse.Namespace):
@@ -524,11 +524,11 @@ def main(args : argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Generates toy events for inelastic pion interactions.")
     parser.add_argument("-c", "--config", type = str, default = None, help = "Config json file.")
-    application.ApplicationArguments.Output(parser, default = "toy_sample", file = True)
+    application.ApplicationArguments.output(parser, default = "toy_sample", file = True)
 
     args = parser.parse_args()
-    config = io.LoadConfiguration(args.config)
-    args = argparse.Namespace(**vars(args), **vars(ResolveConfig(config)))
+    config = io.read_json(args.config)
+    args = argparse.Namespace(**vars(args), **vars(resolve_config(config)))
     if args.out is None:
         args.out = "toy_mc"
     args.out = args.out.split(".")[0]

@@ -102,7 +102,7 @@ def GetScraperFits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : 
         print(f"{(max(y), np.nanmedian(data), np.nanstd(data))=}")
 
         next(plot)
-        popt, perr, metrics = fitting.Fit(common.bin_centers(bin_edges), y, yerr, fitting.gaussian, method = "dogbox", return_chi_sqr = True)#, plot = True, plot_style = "scatter", xlabel = "$\\Delta E_{upstream}$ (MeV)", title = bin_label, plot_range = residual_range)
+        popt, perr, metrics = fitting,fit(common.bin_centers(bin_edges), y, yerr, fitting.gaussian, method = "dogbox", return_chi_sqr = True)#, plot = True, plot_style = "scatter", xlabel = "$\\Delta E_{upstream}$ (MeV)", title = bin_label, plot_range = residual_range)
         heights, _ = plots.PlotHist(data, newFigure = False, bins = fit_bins, range = residual_range, label = "observed")
         x_interp = np.linspace(min(data), max(data), 10 * fit_bins)
         y_interp = fitting.gaussian.func(x_interp, max(heights), popt[1], popt[2])

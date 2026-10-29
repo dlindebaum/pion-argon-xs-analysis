@@ -100,9 +100,9 @@ def main(args : application.argparse.Namespace):
 if __name__ == "__main__":
 
     parser = application.argparse.ArgumentParser("Creates systematics yaml file for use with MaCh3.")
-    application.ApplicationArguments.Config(parser)
-    application.ApplicationArguments.Output(parser)
+    application.ApplicationArguments.config(parser)
+    application.ApplicationArguments.output(parser)
 
-    args = application.ApplicationArguments.ResolveArgs(parser.parse_args())
+    args = application.ApplicationArguments.resolve_args(parser.parse_args())
     print(vars(args))
     main(args)

@@ -71,7 +71,7 @@ def extract_cross_sections(analysis_input : analysis_input.AnalysisInput, energy
 def main(args : application.argparse.Namespace):
     plotting.styles.PlotStyler.SetPlotStyle(dark = True)
 
-    ais = {k : io.LoadObject(v) for k, v in args.analysis_input.items() if "mc" in k}
+    ais = {k : io.read_dill(v) for k, v in args.analysis_input.items() if "mc" in k}
 
     prefit_cross_sections = extract_cross_sections(ais["mc_cheated"], args.energy_slices, args.process_definitions, args.fiducial_volume, None, True)
 
@@ -106,10 +106,10 @@ if __name__ == "__main__":
 
     parser = application.argparse.ArgumentParser(description = "Computes normalisation for beam pion analysis.", formatter_class = application.argparse.RawDescriptionHelpFormatter)
 
-    application.ApplicationArguments.Config(parser, True)
+    application.ApplicationArguments.config(parser, True)
     # application.ApplicationArguments.Processing(parser) do we need multiprocessing? Likely not.
-    application.ApplicationArguments.Output(parser)
+    application.ApplicationArguments.output(parser)
 
-    args = application.ApplicationArguments.ResolveArgs(parser.parse_args())
+    args = application.ApplicationArguments.resolve_args(parser.parse_args())
     print(vars(args))
     main(args)

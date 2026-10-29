@@ -11,13 +11,13 @@ import json
 import os
 import shutil
 
-from python.analysis.io import LoadConfiguration, SaveConfiguration
+from python.analysis.io import read_json, write_json
 from python.analysis import application
 
 from rich import print
 
 def update_cfg_paths(cfg : str, old : str, new : str) -> tuple[dict, str]:
-    cfg_str = json.dumps(LoadConfiguration(cfg))
+    cfg_str = json.dumps(read_json(cfg))
     new_cfg = json.loads(cfg_str.replace(old, new))
     path = cfg.replace(old, new)
     return new_cfg, path
@@ -47,7 +47,7 @@ def main(args : argparse.Namespace):
 
     for i in [args.config] + args.toy_configs:
         cfg, path = update_cfg_paths(i, args.workdir, args.newdir)
-        SaveConfiguration(cfg, path)
+        write_json(cfg, path)
     print("updated paths in configuration.")
 
     return
@@ -55,10 +55,10 @@ def main(args : argparse.Namespace):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    application.ApplicationArguments.Config(parser, True)
+    application.ApplicationArguments.config(parser, True)
     parser.add_argument("-t", "--toy-configs", type = str, nargs="+", default = [], help = "Any toy config files that need to be updated in addition to the analysis config", required = False)
     parser.add_argument("-w", "--workdir", type = str, help = "Current analysis working directory.", required = True)
     parser.add_argument("-n", "--newdir", type = str, help = "New analysis working directory.", required = True)
 
-    args = application.ApplicationArguments.ResolveArgs(parser.parse_args())    
+    args = application.ApplicationArguments.resolve_args(parser.parse_args())    
     main(args)

@@ -91,7 +91,7 @@ def file_len(file : str) -> int:
     Returns:
         int: Number of events
     """
-    return len(io.IO(file).Get(["EventID", "event"]))
+    return len(io.RootIO(file).get(["EventID", "event"]))
 
 
 class Ntuple_Type(str, Enum):
@@ -162,10 +162,10 @@ class Data:
                     self.momentum_scale = file_descriptor.momentum_scale
                 self.nEvents = nEvents
                 self.start = start
-                self.io = io.IO(self.filename, self.nEvents, self.start)
-                self.run = self.io.Get(["Run", "run"])
-                self.subRun = self.io.Get(["SubRun", "subrun"])
-                self.eventNum = self.io.Get(["EventID", "event"])
+                self.io = io.RootIO(self.filename, self.nEvents, self.start)
+                self.run = self.io.get(["Run", "run"])
+                self.subRun = self.io.get(["SubRun", "subrun"])
+                self.eventNum = self.io.get(["EventID", "event"])
                 if self.eventNum is not None:
                     self.event_index = ak.local_index(self.eventNum) + start # unique index for each event
                 self.trueParticles = TrueParticleData(self)
@@ -398,7 +398,7 @@ class Data:
             filtered.momentum_scale = self.momentum_scale
             filtered.nEvents = self.nEvents
             filtered.start = self.start
-            filtered.io = io.IO(filtered.filename,
+            filtered.io = io.RootIO(filtered.filename,
                              filtered.nEvents, filtered.start)
             filtered.cutTable = self.cutTable.copy()
             filtered.event_index = self.event_index
@@ -692,7 +692,7 @@ class Data:
         print(f"event indices saved to : {output_path}")
 
     def Load_Selected_Events(self, indices_file : str):
-        selection = io.ReadHDF5(indices_file).values.flatten()
+        selection = io.read_hdf5(indices_file).values.flatten()
 
         mask = []
         for i in self.event_index:
@@ -717,7 +717,7 @@ class ParticleData(ABC):
         __init__:
         CalculatePairQuantities: Calculate Shower pair quantities. #! shower pair quantities should be its own data class
     Methods:
-        LoadData: Reads data from NTuple to hidden attribute specific to the subclass.
+        read_data: Reads data from NTuple to hidden attribute specific to the subclass.
         Filter (object): Filter data.
     """
     @abstractmethod
@@ -741,7 +741,7 @@ class ParticleData(ABC):
                 Warning(f"couldn't apply a filter to {var}")
 
 
-    def LoadData(self, name: str, nTuple_name, is_vector : bool = False):
+    def read_data(self, name: str, nTuple_name, is_vector : bool = False):
         """ Reads data from ntuple and assigns it to a hidden variable
             which can then be called by the property method.
 
@@ -753,12 +753,12 @@ class ParticleData(ABC):
         if hasattr(self.events, "io") and not hasattr(self, var_name):
             if is_vector:
                 setattr(self, var_name, ak.zip({
-                    "x": self.events.io.Get(nTuple_name[0]),
-                    "y": self.events.io.Get(nTuple_name[1]),
-                    "z": self.events.io.Get(nTuple_name[2])
+                    "x": self.events.io.get(nTuple_name[0]),
+                    "y": self.events.io.get(nTuple_name[1]),
+                    "z": self.events.io.get(nTuple_name[2])
                 }))
             else:
-                setattr(self, var_name, self.events.io.Get(nTuple_name))
+                setattr(self, var_name, self.events.io.get(nTuple_name))
             # apply any filters to data when loading
             self.FilterVariable(name)
 
@@ -818,16 +818,16 @@ class TrueParticleData(ParticleData):
     def PDSPData(self, name : str, beam : str, daughter : str, grand_daughter : str):
         var_name = f"_{type(self).__name__}__{name}"
         if hasattr(self.events, "io") and not hasattr(self, var_name):
-            value = ak.concatenate([ak.unflatten(self.events.io.Get(beam), 1, -1), self.events.io.Get(daughter), self.events.io.Get(grand_daughter)], -1)
+            value = ak.concatenate([ak.unflatten(self.events.io.get(beam), 1, -1), self.events.io.get(daughter), self.events.io.get(grand_daughter)], -1)
             setattr(self, var_name, value)
             self.FilterVariable(name)
 
     def PDSPDataVector(self, name : str, beam : str, daughter : str, grand_daughter : str):
         var_name = f"_{type(self).__name__}__{name}"
         if hasattr(self.events, "io") and not hasattr(self, var_name):
-            bv = [self.events.io.Get(n) for n in beam]
-            dv = [self.events.io.Get(n) for n in daughter]
-            gv = [self.events.io.Get(n) for n in grand_daughter]
+            bv = [self.events.io.get(n) for n in beam]
+            dv = [self.events.io.get(n) for n in daughter]
+            gv = [self.events.io.get(n) for n in grand_daughter]
             value = [ak.concatenate([ak.unflatten(bv[i], 1, -1), dv[i], gv[i]], -1) for i in range(len(beam))]
             value = vector.vector(x = value[0], y = value[1], z = value[2])
             setattr(self, var_name, value)
@@ -835,12 +835,12 @@ class TrueParticleData(ParticleData):
 
     @property
     def beam_traj_KE(self) -> ak.Array:
-        self.LoadData("beam_traj_KE", "true_beam_traj_KE")
+        self.read_data("beam_traj_KE", "true_beam_traj_KE")
         return getattr(self, f"_{type(self).__name__}__beam_traj_KE")
 
     @property
     def beam_traj_pos(self) -> ak.Record:
-        self.LoadData("beam_traj_pos", ["true_beam_traj_X", "true_beam_traj_Y", "true_beam_traj_Z"], is_vector = True)
+        self.read_data("beam_traj_pos", ["true_beam_traj_X", "true_beam_traj_Y", "true_beam_traj_Z"], is_vector = True)
         return getattr(self, f"_{type(self).__name__}__beam_traj_pos")
 
     @property
@@ -848,7 +848,7 @@ class TrueParticleData(ParticleData):
         if self.events.nTuple_type == Ntuple_Type.PDSP:
             self.PDSPData("pdg", "true_beam_PDG", "true_beam_daughter_PDG", "true_beam_Pi0_decay_PDG")
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
-            self.LoadData("pdg", "g4_Pdg")
+            self.read_data("pdg", "g4_Pdg")
         return getattr(self, f"_{type(self).__name__}__pdg")
 
     @property
@@ -856,21 +856,21 @@ class TrueParticleData(ParticleData):
         if self.events.nTuple_type == Ntuple_Type.PDSP:
             self.PDSPData("number", "true_beam_ID", "true_beam_daughter_ID", "true_beam_Pi0_decay_ID")
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
-            self.LoadData("number", "g4_num")
+            self.read_data("number", "g4_num")
         return getattr(self, f"_{type(self).__name__}__number")
 
     @property
     def mother(self) -> ak.Array:
         var_name = f"_{type(self).__name__}__mother"
         if self.events.nTuple_type == Ntuple_Type.PDSP and not hasattr(self, var_name):
-            beam = ak.Array([0] * ak.count(self.events.io.Get("true_beam_ID"))) #! need to check null values for these
-            daughter = ak.Array([[1]*i for i in ak.num(self.events.io.Get("true_beam_daughter_ID"))]) #! need to check null values for these
-            grand_daughter = self.events.io.Get("true_beam_Pi0_decay_parID")
+            beam = ak.Array([0] * ak.count(self.events.io.get("true_beam_ID"))) #! need to check null values for these
+            daughter = ak.Array([[1]*i for i in ak.num(self.events.io.get("true_beam_daughter_ID"))]) #! need to check null values for these
+            grand_daughter = self.events.io.get("true_beam_Pi0_decay_parID")
             mother = ak.concatenate([ak.unflatten(beam, 1, -1), daughter, grand_daughter], -1)
             setattr(self, var_name, mother)
             self.FilterVariable("mother")
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
-            self.LoadData("mother", "g4_mother")
+            self.read_data("mother", "g4_mother")
         return getattr(self, var_name)
 
     @property
@@ -879,13 +879,13 @@ class TrueParticleData(ParticleData):
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
                 + "'mother_pdg' for 'PDSP' ntuple type.")
-        self.LoadData("mother_pdg", "g4_mother_Pdg") # PDSPAnalyzer does not contain this information
+        self.read_data("mother_pdg", "g4_mother_Pdg") # PDSPAnalyzer does not contain this information
         return getattr(self, f"_{type(self).__name__}__mother_pdg")
 
     @property
     def mass(self) -> ak.Array:
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
-            self.LoadData("mass", "g4_mass") # PDSPAnalyzer does not contain this information, but we can create this ourselves
+            self.read_data("mass", "g4_mass") # PDSPAnalyzer does not contain this information, but we can create this ourselves
         if self.events.nTuple_type == Ntuple_Type.PDSP:
             unique_pdgs = np.unique(ak.ravel(self.events.trueParticles.pdg)) # get all unique pdg codes
 
@@ -910,7 +910,7 @@ class TrueParticleData(ParticleData):
     @property
     def energy(self) -> ak.Array:
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
-            self.LoadData("energy", "g4_startE") # PDSPAnalyzer does not contain this information, but we can create this ourselves
+            self.read_data("energy", "g4_startE") # PDSPAnalyzer does not contain this information, but we can create this ourselves
         if self.events.nTuple_type == Ntuple_Type.PDSP:
             e = (vector.magnitude(self.momentum) ** 2 - self.mass ** 2) ** 0.5
             setattr(self, f"_{type(self).__name__}__energy", e)
@@ -926,7 +926,7 @@ class TrueParticleData(ParticleData):
             if apply_scaling: # PDSP analyser stores true energy information in GeV
                 setattr(self, var_name, vector.prod(1000, getattr(self, var_name)))
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
-            self.LoadData("momentum", ["g4_pX", "g4_pY", "g4_pZ"], is_vector = True)
+            self.read_data("momentum", ["g4_pX", "g4_pY", "g4_pZ"], is_vector = True)
         return getattr(self, var_name)
 
     @property
@@ -940,7 +940,7 @@ class TrueParticleData(ParticleData):
         if self.events.nTuple_type == Ntuple_Type.PDSP:
             self.PDSPDataVector("shower_start_pos", ["true_beam_startX", "true_beam_startY", "true_beam_startZ"], ["true_beam_daughter_startX", "true_beam_daughter_startY", "true_beam_daughter_startZ"], ["true_beam_Pi0_decay_startX", "true_beam_Pi0_decay_startY", "true_beam_Pi0_decay_startZ"])
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
-            self.LoadData("shower_start_pos", ["g4_startX", "g4_startY", "g4_startZ"], is_vector = True)
+            self.read_data("shower_start_pos", ["g4_startX", "g4_startY", "g4_startZ"], is_vector = True)
         return getattr(self, f"_{type(self).__name__}__shower_start_pos")
 
     @property
@@ -948,7 +948,7 @@ class TrueParticleData(ParticleData):
         if self.events.nTuple_type == Ntuple_Type.PDSP:
             self.PDSPDataVector("endPos", ["true_beam_endX", "true_beam_endY", "true_beam_endZ"], ["true_beam_daughter_endX", "true_beam_daughter_endY", "true_beam_daughter_endZ"], ["true_beam_Pi0_decay_startX", "true_beam_Pi0_decay_startY", "true_beam_Pi0_decay_startZ"])
         if self.events.nTuple_type == Ntuple_Type.SHOWER_MERGING:
-            self.LoadData("endPos", ["g4_endX", "g4_endY", "g4_endZ"], is_vector = True)
+            self.read_data("endPos", ["g4_endX", "g4_endY", "g4_endZ"], is_vector = True)
         return getattr(self, f"_{type(self).__name__}__endPos")
 
     @property
@@ -957,7 +957,7 @@ class TrueParticleData(ParticleData):
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
                 + f"'nPi0' for {Ntuple_Type.SHOWER_MERGING} ntuple type.")
-        self.LoadData("nPi0", "true_daughter_nPi0")
+        self.read_data("nPi0", "true_daughter_nPi0")
         return getattr(self, f"_{type(self).__name__}__nPi0")
 
     @property
@@ -966,7 +966,7 @@ class TrueParticleData(ParticleData):
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
                 + f"'nPiPlus' for {Ntuple_Type.SHOWER_MERGING} ntuple type.")
-        self.LoadData("nPiPlus", "true_daughter_nPiPlus")
+        self.read_data("nPiPlus", "true_daughter_nPiPlus")
         return getattr(self, f"_{type(self).__name__}__nPiPlus")
 
     @property
@@ -975,7 +975,7 @@ class TrueParticleData(ParticleData):
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
                 + f"'nPiMinus' for {Ntuple_Type.SHOWER_MERGING} ntuple type.")
-        self.LoadData("nPiMinus", "true_daughter_nPiMinus")
+        self.read_data("nPiMinus", "true_daughter_nPiMinus")
         return getattr(self, f"_{type(self).__name__}__nPiMinus")
 
     @property
@@ -984,7 +984,7 @@ class TrueParticleData(ParticleData):
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
                 + f"'nProton' for {Ntuple_Type.SHOWER_MERGING} ntuple type.")
-        self.LoadData("nProton", "true_daughter_nProton")
+        self.read_data("nProton", "true_daughter_nProton")
         return getattr(self, f"_{type(self).__name__}__nProton")
 
     @property
@@ -993,7 +993,7 @@ class TrueParticleData(ParticleData):
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
                 + f"'nNeutron' for {Ntuple_Type.SHOWER_MERGING} ntuple type.")
-        self.LoadData("nNeutron", "true_daughter_nNeutron")
+        self.read_data("nNeutron", "true_daughter_nNeutron")
         return getattr(self, f"_{type(self).__name__}__nNeutron")
 
     @property
@@ -1002,12 +1002,12 @@ class TrueParticleData(ParticleData):
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
                 + f"'nNucleus' for {Ntuple_Type.SHOWER_MERGING} ntuple type.")
-        self.LoadData("nNucleus", "true_daughter_nNucleus")
+        self.read_data("nNucleus", "true_daughter_nNucleus")
         return getattr(self, f"_{type(self).__name__}__nNucleus")
 
     @property
     def true_beam_endProcess(self) -> ak.Array:
-        self.LoadData("true_beam_endProcess", "true_beam_endProcess")
+        self.read_data("true_beam_endProcess", "true_beam_endProcess")
         return getattr(self, f"_{type(self).__name__}__true_beam_endProcess")
 
     @property
@@ -1168,17 +1168,17 @@ class RecoParticleData(ParticleData):
 
     @property
     def beam_number(self) -> ak.Array:
-        self.LoadData("beam_number", ["beamNum", "reco_beam_PFP_ID"])
+        self.read_data("beam_number", ["beamNum", "reco_beam_PFP_ID"])
         return getattr(self, f"_{type(self).__name__}__beam_number")
 
     @property
     def beam_sliceID(self) -> ak.Array:
-        self.LoadData("beam_sliceID", "reco_beam_sliceID") # dont store this in PDSPAnalyser
+        self.read_data("beam_sliceID", "reco_beam_sliceID") # dont store this in PDSPAnalyser
         return getattr(self, f"_{type(self).__name__}__beam_sliceID")
 
     @property
     def beam_cosmicScore(self) -> ak.Array:
-        self.LoadData("beam_cosmicScore",
+        self.read_data("beam_cosmicScore",
                       "reco_daughter_allShower_beamCosmicScore") # dont store this in PDSPAnalyser
         return getattr(self, f"_{type(self).__name__}__beam_cosmicScore")
 
@@ -1189,7 +1189,7 @@ class RecoParticleData(ParticleData):
             ["reco_beam_calo_endY"],
             ["reco_beam_calo_endZ"]
         ]
-        self.LoadData("beam_endPos_SCE", nTuples, is_vector = True)
+        self.read_data("beam_endPos_SCE", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__beam_endPos_SCE")
 
     @property
@@ -1199,7 +1199,7 @@ class RecoParticleData(ParticleData):
             ["reco_beam_endY"],
             ["reco_beam_endZ"]
         ]
-        self.LoadData("beam_endPos", nTuples, is_vector = True)
+        self.read_data("beam_endPos", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__beam_endPos")
 
     @property
@@ -1209,7 +1209,7 @@ class RecoParticleData(ParticleData):
             ["reco_beam_calo_startY"],
             ["reco_beam_calo_startZ"]
         ]
-        self.LoadData("beam_startPos_SCE", nTuples, is_vector = True)
+        self.read_data("beam_startPos_SCE", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__beam_startPos_SCE")
 
     @property
@@ -1219,72 +1219,72 @@ class RecoParticleData(ParticleData):
             ["reco_beam_startY"],
             ["reco_beam_startZ"]
         ]
-        self.LoadData("beam_startPos", nTuples, is_vector = True)
+        self.read_data("beam_startPos", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__beam_startPos")
 
     @property
     def beam_calo_pos(self) -> ak.Record:
-        self.LoadData("beam_calo_pos", ["reco_beam_calo_X", "reco_beam_calo_Y", "reco_beam_calo_Z"], is_vector = True)
+        self.read_data("beam_calo_pos", ["reco_beam_calo_X", "reco_beam_calo_Y", "reco_beam_calo_Z"], is_vector = True)
         return getattr(self, f"_{type(self).__name__}__beam_calo_pos")
 
     @property
     def beam_caloWire(self) -> ak.Array:
-        self.LoadData("beam_caloWire", "reco_beam_calo_wire")
+        self.read_data("beam_caloWire", "reco_beam_calo_wire")
         return getattr(self, f"_{type(self).__name__}__beam_caloWire")
 
     @property
     def beam_michelScore(self) -> ak.Array:
-        self.LoadData("beam_michelScore", "reco_beam_vertex_michel_score")
+        self.read_data("beam_michelScore", "reco_beam_vertex_michel_score")
         return getattr(self, f"_{type(self).__name__}__beam_michelScore")
 
     @property
     def beam_trackScore(self) -> ak.Array:
-        self.LoadData("beam_trackScore", "reco_beam_PFP_trackScore_collection")
+        self.read_data("beam_trackScore", "reco_beam_PFP_trackScore_collection")
         return getattr(self, f"_{type(self).__name__}__beam_trackScore")
 
     @property
     def beam_nHits(self) -> ak.Array:
-        self.LoadData("beam_nHits", "reco_beam_vertex_nHits")
+        self.read_data("beam_nHits", "reco_beam_vertex_nHits")
         return getattr(self, f"_{type(self).__name__}__beam_nHits")
 
     @property
     def beam_dEdX(self) -> ak.Array:
-        self.LoadData("beam_dEdX", "reco_beam_dEdX_SCE")
+        self.read_data("beam_dEdX", "reco_beam_dEdX_SCE")
         return getattr(self, f"_{type(self).__name__}__beam_dEdX")
 
     @property
     def beam_dEdX_calibrated(self) -> ak.Array:
-        self.LoadData("beam_dEdX_calibrated", "reco_beam_calibrated_dEdX_SCE")
+        self.read_data("beam_dEdX_calibrated", "reco_beam_calibrated_dEdX_SCE")
         return getattr(self, f"_{type(self).__name__}__beam_dEdX_calibrated")
 
     @property
     def reco_reconstructable_beam_event(self) -> ak.Array:
-        self.LoadData("reco_reconstructable_beam_event", "reco_reconstructable_beam_event")
+        self.read_data("reco_reconstructable_beam_event", "reco_reconstructable_beam_event")
         return getattr(self, f"_{type(self).__name__}__reco_reconstructable_beam_event")
 
     @property
     def beam_inst_valid(self) -> ak.Array:
-        self.LoadData("beam_inst_valid", "beam_inst_valid")
+        self.read_data("beam_inst_valid", "beam_inst_valid")
         return getattr(self, f"_{type(self).__name__}__beam_inst_valid")
 
     @property
     def beam_inst_nTracks(self) -> ak.Array:
-        self.LoadData("beam_inst_nTracks", "beam_inst_nTracks")
+        self.read_data("beam_inst_nTracks", "beam_inst_nTracks")
         return getattr(self, f"_{type(self).__name__}__beam_inst_nTracks")
 
     @property
     def beam_inst_nMomenta(self) -> ak.Array:
-        self.LoadData("beam_inst_nMomenta", "beam_inst_nMomenta")
+        self.read_data("beam_inst_nMomenta", "beam_inst_nMomenta")
         return getattr(self, f"_{type(self).__name__}__beam_inst_nMomenta")
 
     @property
     def beam_inst_trigger(self) -> ak.Array:
-        self.LoadData("beam_inst_trigger", "beam_inst_trigger")
+        self.read_data("beam_inst_trigger", "beam_inst_trigger")
         return getattr(self, f"_{type(self).__name__}__beam_inst_trigger")
 
     @property
     def beam_inst_P(self) -> ak.Array:
-        self.LoadData("beam_inst_P", "beam_inst_P")
+        self.read_data("beam_inst_P", "beam_inst_P")
         return self.events.momentum_scale * 1000 * getattr(self, f"_{type(self).__name__}__beam_inst_P")
 
     @property
@@ -1294,48 +1294,48 @@ class RecoParticleData(ParticleData):
             ["beam_inst_dirY"],
             ["beam_inst_dirZ"]
         ]
-        self.LoadData("beam_inst_dir", nTuples, is_vector = True)
+        self.read_data("beam_inst_dir", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__beam_inst_dir")
 
 
     @property
     def beam_inst_pos(self) -> ak.Record:
-        self.LoadData("beam_inst_pos", ["beam_inst_X", "beam_inst_Y", "beam_inst_Z"], is_vector = True)
+        self.read_data("beam_inst_pos", ["beam_inst_X", "beam_inst_Y", "beam_inst_Z"], is_vector = True)
         return getattr(self, f"_{type(self).__name__}__beam_inst_pos")
 
     @property
     def beam_inst_PDG_candidates(self) -> ak.Array:
-        self.LoadData("beam_inst_PDG_candidates", "beam_inst_PDG_candidates")
+        self.read_data("beam_inst_PDG_candidates", "beam_inst_PDG_candidates")
         return getattr(self, f"_{type(self).__name__}__beam_inst_PDG_candidates")
 
     @property
     def pandora_tag(self) -> ak.Array:
-        self.LoadData("pandora_tag", "pandoraTag") # This information is not stored for daughter PFOs in PDSPAnalyser
+        self.read_data("pandora_tag", "pandoraTag") # This information is not stored for daughter PFOs in PDSPAnalyser
         return getattr(self, f"_{type(self).__name__}__pandora_tag")
 
     @property
     def slice_id(self) -> ak.Array:
-        self.LoadData("slice_id", "reco_daughter_allShower_sliceID") # dont store this in PDSPAnalyser
+        self.read_data("slice_id", "reco_daughter_allShower_sliceID") # dont store this in PDSPAnalyser
         return getattr(self, f"_{type(self).__name__}__slice_id")
 
     @property
     def number(self) -> ak.Array:
-        self.LoadData("number", ["reco_PFP_ID", "reco_daughter_PFP_ID"])
+        self.read_data("number", ["reco_PFP_ID", "reco_daughter_PFP_ID"])
         return getattr(self, f"_{type(self).__name__}__number")
 
     @property
     def mother(self) -> ak.Array:
-        self.LoadData("mother", "reco_PFP_Mother") # not needed for PDSPAnalyser (only beam daughter PFOs are kept)
+        self.read_data("mother", "reco_PFP_Mother") # not needed for PDSPAnalyser (only beam daughter PFOs are kept)
         return getattr(self, f"_{type(self).__name__}__mother")
 
     @property
     def n_hits(self) -> ak.Array:
-        self.LoadData("n_hits", "reco_daughter_PFP_nHits")
+        self.read_data("n_hits", "reco_daughter_PFP_nHits")
         return getattr(self, f"_{type(self).__name__}__n_hits")
 
     @property
     def n_hits_collection(self) -> ak.Array:
-        self.LoadData("n_hits_collection", "reco_daughter_PFP_nHits_collection")
+        self.read_data("n_hits_collection", "reco_daughter_PFP_nHits_collection")
         return getattr(self, f"_{type(self).__name__}__n_hits_collection")
 
     @property
@@ -1345,7 +1345,7 @@ class RecoParticleData(ParticleData):
             "reco_daughter_allTrack_startY",
             "reco_daughter_allTrack_startZ"
         ]
-        self.LoadData("track_start_pos", nTuples, is_vector = True)
+        self.read_data("track_start_pos", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__track_start_pos")
 
     @property
@@ -1355,7 +1355,7 @@ class RecoParticleData(ParticleData):
             "reco_daughter_allShower_startY",
             "reco_daughter_allShower_startZ"
         ]
-        self.LoadData("shower_start_pos", nTuples, is_vector = True)
+        self.read_data("shower_start_pos", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__shower_start_pos")
 
     @property
@@ -1365,7 +1365,7 @@ class RecoParticleData(ParticleData):
             "reco_daughter_allTrack_startDirY",
             "reco_daughter_allTrack_startDirZ"
         ]
-        self.LoadData("track_start_dir", nTuples, is_vector = True)
+        self.read_data("track_start_dir", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__track_start_dir")
 
     @property
@@ -1375,7 +1375,7 @@ class RecoParticleData(ParticleData):
             "reco_daughter_allShower_dirY",
             "reco_daughter_allShower_dirZ"
         ]
-        self.LoadData("shower_direction", nTuples, is_vector = True)
+        self.read_data("shower_direction", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__shower_direction")
 
     @property
@@ -1385,12 +1385,12 @@ class RecoParticleData(ParticleData):
             "reco_daughter_allTrack_endY",
             "reco_daughter_allTrack_endZ"
         ]
-        self.LoadData("track_end_pos", nTuples, is_vector = True)
+        self.read_data("track_end_pos", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__track_end_pos")
 
     @property
     def shower_energy(self) -> ak.Array:
-        self.LoadData("shower_energy", "reco_daughter_allShower_energy")
+        self.read_data("shower_energy", "reco_daughter_allShower_energy")
         return getattr(self, f"_{type(self).__name__}__shower_energy")
 
     @property
@@ -1405,27 +1405,27 @@ class RecoParticleData(ParticleData):
 
     @property
     def shower_length(self) -> ak.Array:
-        self.LoadData("shower_length", ["reco_daughter_allShower_length", "reco_daughter_allShower_len"])
+        self.read_data("shower_length", ["reco_daughter_allShower_length", "reco_daughter_allShower_len"])
         return getattr(self, f"_{type(self).__name__}__shower_length")
 
     @property
     def shower_cone_angle(self) -> ak.Array:
-        self.LoadData("shower_cone_angle", "reco_daughter_allShower_coneAngle")
+        self.read_data("shower_cone_angle", "reco_daughter_allShower_coneAngle")
         return getattr(self, f"_{type(self).__name__}__shower_cone_angle") # PDSPAnalyser does not store this value
 
     @property
     def track_score(self) -> ak.Array:
-        self.LoadData("track_score", "reco_daughter_PFP_trackScore_collection")
+        self.read_data("track_score", "reco_daughter_PFP_trackScore_collection")
         return getattr(self, f"_{type(self).__name__}__track_score")
 
     @property
     def em_score(self) -> ak.Array:
-        self.LoadData("em_score", "reco_daughter_PFP_emScore_collection")
+        self.read_data("em_score", "reco_daughter_PFP_emScore_collection")
         return getattr(self, f"_{type(self).__name__}__em_score")
 
     @property
     def cnn_score(self) -> ak.Array:
-        self.LoadData("cnn_score", "CNNScore_collection")
+        self.read_data("cnn_score", "CNNScore_collection")
         return getattr(self, f"_{type(self).__name__}__cnn_score") # specific to the shower merging, but can be recalculated
 
     @property
@@ -1435,92 +1435,92 @@ class RecoParticleData(ParticleData):
             "reco_daughter_allShower_spacePointY",
             "reco_daughter_allShower_spacePointZ"
         ]
-        self.LoadData("space_points", nTuples, is_vector = True)
+        self.read_data("space_points", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__space_points") # not in PDSPAnalyser
 
     @property
     def channel(self) -> ak.Array:
-        self.LoadData("channel", "reco_daughter_allShower_hit_channel") # not in PDSPAnalyser
+        self.read_data("channel", "reco_daughter_allShower_hit_channel") # not in PDSPAnalyser
         return getattr(self, f"_{type(self).__name__}__channel")
 
     @property
     def peak_time(self) -> ak.Array:
-        self.LoadData("peak_time", "reco_daughter_allShower_hit_peakTime") # not in PDSPAnalyser
+        self.read_data("peak_time", "reco_daughter_allShower_hit_peakTime") # not in PDSPAnalyser
         return getattr(self, f"_{type(self).__name__}__peak_time")
 
     @property
     def integral(self) -> ak.Array:
-        self.LoadData("integral", "reco_daughter_allSHower_hit_integral") # not in PDSPAnalyser
+        self.read_data("integral", "reco_daughter_allSHower_hit_integral") # not in PDSPAnalyser
         return getattr(self, f"_{type(self).__name__}__integral")
 
     @property
     def hit_energy(self) -> ak.Array:
-        self.LoadData("hit_energy", "reco_daughter_allShower_hit_energy") # not in PDSPAnalyser
+        self.read_data("hit_energy", "reco_daughter_allShower_hit_energy") # not in PDSPAnalyser
         return getattr(self, f"_{type(self).__name__}__hit_energy")
 
     @property
     def track_dEdX(self) -> ak.Array:
-        self.LoadData("track_dEdX", "reco_daughter_allTrack_calibrated_dEdX_SCE")
+        self.read_data("track_dEdX", "reco_daughter_allTrack_calibrated_dEdX_SCE")
         return getattr(self, f"_{type(self).__name__}__track_dEdX")
 
     @property
     def track_dQdX(self) -> ak.Array:
-        self.LoadData("track_dQdX", "reco_daughter_allTrack_calibrated_dQdX_SCE")
+        self.read_data("track_dQdX", "reco_daughter_allTrack_calibrated_dQdX_SCE")
         return getattr(self, f"_{type(self).__name__}__track_dQdX")
     
     @property
     def residual_range(self) -> ak.Array:
-        self.LoadData("residual_range", "reco_daughter_allTrack_resRange_SCE")
+        self.read_data("residual_range", "reco_daughter_allTrack_resRange_SCE")
         return getattr(self, f"_{type(self).__name__}__residual_range")
     
     @property
     def track_chi2_proton(self) -> ak.Array:
-        self.LoadData("track_chi2_proton", "reco_daughter_allTrack_Chi2_proton")
+        self.read_data("track_chi2_proton", "reco_daughter_allTrack_Chi2_proton")
         return getattr(self, f"_{type(self).__name__}__track_chi2_proton")
     
     @property
     def track_chi2_proton_ndof(self) -> ak.Array:
-        self.LoadData("track_chi2_proton_ndof", "reco_daughter_allTrack_Chi2_ndof")
+        self.read_data("track_chi2_proton_ndof", "reco_daughter_allTrack_Chi2_ndof")
         return getattr(self, f"_{type(self).__name__}__track_chi2_proton_ndof")
 
     @property
     def track_chi2_pion(self) -> ak.Array:
-        self.LoadData("track_chi2_pion", "reco_daughter_allTrack_Chi2_pion")
+        self.read_data("track_chi2_pion", "reco_daughter_allTrack_Chi2_pion")
         return getattr(self, f"_{type(self).__name__}__track_chi2_pion")
     
     @property
     def track_chi2_pion_ndof(self) -> ak.Array:
-        self.LoadData("track_chi2_pion_ndof", "reco_daughter_allTrack_Chi2_ndof_pion")
+        self.read_data("track_chi2_pion_ndof", "reco_daughter_allTrack_Chi2_ndof_pion")
         return getattr(self, f"_{type(self).__name__}__track_chi2_pion_ndof")
     
     @property
     def track_chi2_muon(self) -> ak.Array:
-        self.LoadData("track_chi2_muon", "reco_daughter_allTrack_Chi2_muon")
+        self.read_data("track_chi2_muon", "reco_daughter_allTrack_Chi2_muon")
         return getattr(self, f"_{type(self).__name__}__track_chi2_muon")
     
     @property
     def track_chi2_muon_ndof(self) -> ak.Array:
-        self.LoadData("track_chi2_muon_ndof", "reco_daughter_allTrack_Chi2_ndof_muon")
+        self.read_data("track_chi2_muon_ndof", "reco_daughter_allTrack_Chi2_ndof_muon")
         return getattr(self, f"_{type(self).__name__}__track_chi2_muon_ndof")
 
     @property
     def track_len(self) -> ak.Array:
-        self.LoadData("track_len", "reco_daughter_allTrack_len")
+        self.read_data("track_len", "reco_daughter_allTrack_len")
         return getattr(self, f"_{type(self).__name__}__track_len")
     
     @property
     def track_len_alt(self) -> ak.Array:
-        self.LoadData("track_len_alt", "reco_daughter_allTrack_alt_len")
+        self.read_data("track_len_alt", "reco_daughter_allTrack_alt_len")
         return getattr(self, f"_{type(self).__name__}__track_len_alt")
     
     @property
     def track_vertex_michel(self) -> ak.Array:
-        self.LoadData("track_vertex_michel", "reco_daughter_allTrack_vertex_michel_score")
+        self.read_data("track_vertex_michel", "reco_daughter_allTrack_vertex_michel_score")
         return getattr(self, f"_{type(self).__name__}__track_vertex_michel")
     
     @property
     def track_vertex_nhits(self) -> ak.Array:
-        self.LoadData("track_vertex_nhits", "reco_daughter_allTrack_vertex_nHits")
+        self.read_data("track_vertex_nhits", "reco_daughter_allTrack_vertex_nHits")
         return getattr(self, f"_{type(self).__name__}__track_vertex_nhits")
 
     @property
@@ -1530,7 +1530,7 @@ class RecoParticleData(ParticleData):
             tag = ak.flatten(ak.fill_none(ak.pad_none(tag, 1), -999))
             setattr(self, f"_{type(self).__name__}__beam_pandora_tag", tag)
         if self.events.nTuple_type == Ntuple_Type.PDSP:
-            self.LoadData("beam_pandora_tag", "reco_beam_type")
+            self.read_data("beam_pandora_tag", "reco_beam_type")
         return getattr(self, f"_{type(self).__name__}__beam_pandora_tag")
 
 
@@ -1710,22 +1710,22 @@ class TrueParticleDataBT(ParticleData):
 
     @property
     def number(self) -> ak.Array:
-        self.LoadData("number", "reco_daughter_PFP_true_byHits_ID")
+        self.read_data("number", "reco_daughter_PFP_true_byHits_ID")
         return getattr(self, f"_{type(self).__name__}__number")
 
     @property
     def mother(self) -> ak.Array:
-        self.LoadData("mother", ["reco_daughter_PFP_true_byHits_Mother", "reco_daughter_PFP_true_byHits_parID"])
+        self.read_data("mother", ["reco_daughter_PFP_true_byHits_Mother", "reco_daughter_PFP_true_byHits_parID"])
         return getattr(self, f"_{type(self).__name__}__mother")
 
     @property
     def pdg(self) -> ak.Array:
-        self.LoadData("pdg", ["reco_daughter_PFP_true_byHits_pdg", "reco_daughter_PFP_true_byHits_PDG"])
+        self.read_data("pdg", ["reco_daughter_PFP_true_byHits_pdg", "reco_daughter_PFP_true_byHits_PDG"])
         return getattr(self, f"_{type(self).__name__}__pdg")
 
     @property
     def motherPdg(self) -> ak.Array:
-        self.LoadData("motherPdg", ["reco_daughter_PFP_true_byHits_Mother_pdg", "reco_daughter_PFP_true_byHits_parPDG"])
+        self.read_data("motherPdg", ["reco_daughter_PFP_true_byHits_Mother_pdg", "reco_daughter_PFP_true_byHits_parPDG"])
         return getattr(self, f"_{type(self).__name__}__motherPdg")
 
     @property
@@ -1735,7 +1735,7 @@ class TrueParticleDataBT(ParticleData):
             "reco_daughter_PFP_true_byHits_startY",
             "reco_daughter_PFP_true_byHits_startZ"
         ]
-        self.LoadData("shower_start_pos", nTuples, is_vector = True)
+        self.read_data("shower_start_pos", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__shower_start_pos")
 
     @property
@@ -1745,7 +1745,7 @@ class TrueParticleDataBT(ParticleData):
             "reco_daughter_PFP_true_byHits_endY",
             "reco_daughter_PFP_true_byHits_endZ"
         ]
-        self.LoadData("endPos", nTuples, is_vector = True)
+        self.read_data("endPos", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__endPos")
 
     @property
@@ -1755,7 +1755,7 @@ class TrueParticleDataBT(ParticleData):
             ["reco_daughter_PFP_true_byHits_pY", "reco_daughter_PFP_true_byHits_startPy"],
             ["reco_daughter_PFP_true_byHits_pZ", "reco_daughter_PFP_true_byHits_startPz"]
         ]
-        self.LoadData("momentum", nTuples, is_vector = True)
+        self.read_data("momentum", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__momentum")
 
     @property
@@ -1766,18 +1766,18 @@ class TrueParticleDataBT(ParticleData):
 
     @property
     def energy(self) -> ak.Array:
-        self.LoadData("energy", "reco_daughter_PFP_true_byHits_startE")
+        self.read_data("energy", "reco_daughter_PFP_true_byHits_startE")
         factor = 1000 if self.events.nTuple_type == Ntuple_Type.PDSP else 1
         return factor * getattr(self, f"_{type(self).__name__}__energy")
 
     @property
     def energyByHits_uncorrected(self) -> ak.Array:
-        self.LoadData("energyByHits_uncorrected", "reco_daughter_PFP_true_byHits_EnergyByHits")
+        self.read_data("energyByHits_uncorrected", "reco_daughter_PFP_true_byHits_EnergyByHits")
         return getattr(self, f"_{type(self).__name__}__energyByHits_uncorrected") # for shower merging only
 
     @property
     def energyByHits_correction(self) -> ak.Array:
-        self.LoadData("energyByHits_correction", "reco_daughter_PFP_true_byHits_EnergyByHits_correction")
+        self.read_data("energyByHits_correction", "reco_daughter_PFP_true_byHits_EnergyByHits_correction")
         return getattr(self, f"_{type(self).__name__}__energyByHits_correction") # for shower merging only
 
     @property
@@ -1803,32 +1803,32 @@ class TrueParticleDataBT(ParticleData):
 
     @property
     def hitsInRecoCluster(self) -> ak.Array:
-        self.LoadData("hitsInRecoCluster", "reco_daughter_PFP_true_byHits_hitsInRecoCluster")
+        self.read_data("hitsInRecoCluster", "reco_daughter_PFP_true_byHits_hitsInRecoCluster")
         return getattr(self, f"_{type(self).__name__}__hitsInRecoCluster") # PDSPAnalyser does not store this
 
     @property
     def n_hits(self) -> ak.Array:
-        self.LoadData("n_hits", "reco_daughter_PFP_true_byHits_nHits")
+        self.read_data("n_hits", "reco_daughter_PFP_true_byHits_nHits")
         return getattr(self, f"_{type(self).__name__}__n_hits") # PDSPAnalyser does not store this
 
     @property
     def sharedHits(self) -> ak.Array:
-        self.LoadData("sharedHits", "reco_daughter_PFP_true_byHits_sharedHits")
+        self.read_data("sharedHits", "reco_daughter_PFP_true_byHits_sharedHits")
         return getattr(self, f"_{type(self).__name__}__sharedHits")
 
     @property
     def hitsInRecoCluster_collection(self) -> ak.Array:
-        self.LoadData("hitsInRecoCluster_collection", "reco_daughter_PFP_true_byHits_hitsInRecoCluster_collection")
+        self.read_data("hitsInRecoCluster_collection", "reco_daughter_PFP_true_byHits_hitsInRecoCluster_collection")
         return getattr(self, f"_{type(self).__name__}__hitsInRecoCluster_collection") # for shower merging only
 
     @property
     def n_hits_collection(self) -> ak.Array:
-        self.LoadData("n_hits_collection", "reco_daughter_PFP_true_byHits_nHits_collection")
+        self.read_data("n_hits_collection", "reco_daughter_PFP_true_byHits_nHits_collection")
         return getattr(self, f"_{type(self).__name__}__n_hits_collection") # for shower merging only
 
     @property
     def sharedHits_collection(self) -> ak.Array:
-        self.LoadData("sharedHits_collection", "reco_daughter_PFP_true_byHits_sharedHits_collection")
+        self.read_data("sharedHits_collection", "reco_daughter_PFP_true_byHits_sharedHits_collection")
         return getattr(self, f"_{type(self).__name__}__sharedHits_collection") # for shower merging only
 
     @property
@@ -1838,7 +1838,7 @@ class TrueParticleDataBT(ParticleData):
             "reco_beam_PFP_true_byHits_endY",
             "reco_beam_PFP_true_byHits_endZ"
         ]
-        self.LoadData("trueBeamVertex", nTuples, is_vector = True)
+        self.read_data("trueBeamVertex", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__trueBeamVertex")
 
     @property
@@ -1851,7 +1851,7 @@ class TrueParticleDataBT(ParticleData):
                     v = None
                 setattr(self, f"_{type(self).__name__}__purity", v)
             if self.events.nTuple_type == Ntuple_Type.PDSP:
-                self.LoadData("purity", "reco_daughter_PFP_true_byHits_purity")
+                self.read_data("purity", "reco_daughter_PFP_true_byHits_purity")
         return getattr(self, f"_{type(self).__name__}__purity")
 
     @property
@@ -1864,7 +1864,7 @@ class TrueParticleDataBT(ParticleData):
                     v = None
                 setattr(self, f"_{type(self).__name__}__completeness", v)
             if self.events.nTuple_type == Ntuple_Type.PDSP:
-                self.LoadData("completeness", "reco_daughter_PFP_true_byHits_completeness")
+                self.read_data("completeness", "reco_daughter_PFP_true_byHits_completeness")
         return getattr(self, f"_{type(self).__name__}__completeness")
 
     @property
@@ -1894,42 +1894,42 @@ class TrueParticleDataBT(ParticleData):
             "reco_daughter_PFP_true_byHits_spacePointY",
             "reco_daughter_PFP_true_byHits_spacePointZ"
         ]
-        self.LoadData("space_points", nTuples, is_vector = True)
+        self.read_data("space_points", nTuples, is_vector = True)
         return getattr(self, f"_{type(self).__name__}__space_points") # for shower merging only
 
     @property
     def channel(self) -> ak.Array:
-        self.LoadData("channel", "reco_daughter_PFP_true_byHits_hit_channel")
+        self.read_data("channel", "reco_daughter_PFP_true_byHits_hit_channel")
         return getattr(self, f"_{type(self).__name__}__channel") # for shower merging only
 
     @property
     def peak_time(self) -> ak.Array:
-        self.LoadData("peak_time", "reco_daughter_PFP_true_byHits_hit_peakTime")
+        self.read_data("peak_time", "reco_daughter_PFP_true_byHits_hit_peakTime")
         return getattr(self, f"_{type(self).__name__}__peak_time") # for shower merging only
 
     @property
     def integral(self) -> ak.Array:
-        self.LoadData("integral", "reco_daughter_PFP_true_byHits_hit_integral")
+        self.read_data("integral", "reco_daughter_PFP_true_byHits_hit_integral")
         return getattr(self, f"_{type(self).__name__}__integral") # for shower merging only
 
     @property
     def hit_energy(self) -> ak.Array:
-        self.LoadData("hit_energy", "reco_daughter_PFP_true_byHits_hit_energy")
+        self.read_data("hit_energy", "reco_daughter_PFP_true_byHits_hit_energy")
         return getattr(self, f"_{type(self).__name__}__hit_energy") # for shower merging only
 
     @property
     def beam_pdg(self) -> ak.Array:
-        self.LoadData("beam_pdg", ["reco_beam_PFP_true_byHits_pdg", "reco_beam_true_byHits_PDG"])
+        self.read_data("beam_pdg", ["reco_beam_PFP_true_byHits_pdg", "reco_beam_true_byHits_PDG"])
         return getattr(self, f"_{type(self).__name__}__beam_pdg")
 
     @property
     def beam_origin(self) -> ak.Array:
-        self.LoadData("beam_origin", "reco_beam_true_byHits_origin")
+        self.read_data("beam_origin", "reco_beam_true_byHits_origin")
         return getattr(self, f"_{type(self).__name__}__beam_origin")
 
     @property
     def beam_endProcess(self) -> ak.Array:
-        self.LoadData("beam_endProcess", "reco_beam_true_byHits_endProcess")
+        self.read_data("beam_endProcess", "reco_beam_true_byHits_endProcess")
         return getattr(self, f"_{type(self).__name__}__beam_endProcess")
 
     @property

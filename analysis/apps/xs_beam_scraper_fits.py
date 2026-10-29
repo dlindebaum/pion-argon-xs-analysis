@@ -43,7 +43,7 @@ def main(args : argparse.Namespace):
     outdir = args.out + "beam_scraper/"
     os.makedirs(outdir, exist_ok = True)
 
-    output_mc = application.ApplicationProcessing(["mc"], outdir, args, run, True)["mc"]
+    output_mc = application.processing(["mc"], outdir, args, run, True)["mc"]
 
     residual_range = [-300, 300] # range of residual for plotsdefine 
     bins = 50
@@ -74,7 +74,7 @@ def main(args : argparse.Namespace):
         json_dict[str(i)] = {**{"bins" : k}, **scraper_thresholds[k], **position_means[k]}
 
     name = outdir + "mc_beam_scraper_fit_values.json"
-    io.SaveConfiguration(json_dict, name)
+    io.write_json(json_dict, name)
     print(f"fit values written to {name}")
     return
 
@@ -82,16 +82,16 @@ def main(args : argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Calculates parameters required to idenfify beam scrapers and apply the selection.")
 
-    application.ApplicationArguments.Config(parser, required = True)
-    application.ApplicationArguments.Processing(parser)
-    application.ApplicationArguments.Output(parser)
-    application.ApplicationArguments.Regen(parser)
+    application.ApplicationArguments.config(parser, required = True)
+    application.ApplicationArguments.processing(parser)
+    application.ApplicationArguments.output(parser)
+    application.ApplicationArguments.regen(parser)
 
     parser.add_argument("--energy_range", dest = "beam_scraper_energy_range", type = float, nargs = 2, help = "energy range to study (MeV).")
     parser.add_argument("--energy_bins", dest = "beam_scraper_energy_bins", type = float, nargs = 5, help = "kinetic energy bin edges (currently allows only 4 bins to be made) (MeV)")
 
     args = parser.parse_args()
-    args = application.ApplicationArguments.ResolveArgs(args)
+    args = application.ApplicationArguments.resolve_args(args)
 
     print(vars(args))
     main(args)

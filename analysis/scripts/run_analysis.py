@@ -27,7 +27,7 @@ from apps import (
 
 from python.analysis.ntuple import CalculateBatches, file_len
 from python.analysis.application import ApplicationArguments, argparse, template_config
-from python.analysis.io import SaveConfiguration, LoadConfiguration
+from python.analysis.io import write_json, read_json
 
 
 def template_toy_config(toy_parameters_dir : str, nEvents : int, seed : int, max_cpus : int, step : float, p_init : float, region_selection : str):
@@ -57,15 +57,15 @@ def template_toy_config(toy_parameters_dir : str, nEvents : int, seed : int, max
 
 
 def update_config(config, update : dict):
-    json_config = LoadConfiguration(config)
+    json_config = read_json(config)
     json_config.update(update)
-    SaveConfiguration(json_config, config)
+    write_json(json_config, config)
     print(f"{config} has been updated")
     return
 
 
 def update_args(processing_args : dict = {}):
-    new_args = ApplicationArguments.ResolveArgs(original_args)
+    new_args = ApplicationArguments.resolve_args(original_args)
     for k, v in processing_args.items():
         setattr(new_args, k, v)
     return new_args
@@ -109,7 +109,7 @@ def step_plan(args : argparse.Namespace, no_data : bool, n_data : list):
 def main(args):
     os.makedirs(args.out, exist_ok = True)
     if args.create_config:
-        SaveConfiguration(template_config, os.path.join(args.out, args.create_config))
+        write_json(template_config, os.path.join(args.out, args.create_config))
         print(f"template configuration saved as {args.out + args.create_config}")
         exit()
     else:
@@ -145,7 +145,7 @@ def main(args):
             xs_normalisation.main(args)
             output_path = args.out + "beam_norm/"
             print("outputs: " + output_path)
-            norm = LoadConfiguration(os.path.abspath(output_path + "norm.json"))
+            norm = read_json(os.path.abspath(output_path + "norm.json"))
             update_config(args.config, {"norm" : norm["norm"]})
             args = update_args(processing_args) # reload config to continue
         if args.stop == "normalisation": return
@@ -339,9 +339,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-C", "--create_config", type = str, help = "Create a template configuration with the default selection")
-    ApplicationArguments.Config(parser)
-    ApplicationArguments.Output(parser, "analysis/")
-    ApplicationArguments.Regen(parser)
+    ApplicationArguments.config(parser)
+    ApplicationArguments.output(parser, "analysis/")
+    ApplicationArguments.regen(parser)
     parser.add_argument("--skip", type = str, nargs = "+", default = [], choices = analysis_options)
     parser.add_argument("--run", type = str, nargs = "+", default = [], choices = analysis_options)
     parser.add_argument("--force", action = "store_true")

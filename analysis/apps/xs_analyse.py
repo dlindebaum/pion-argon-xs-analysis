@@ -303,7 +303,7 @@ def PlotDataBkgSub(hist_data : dict[np.ndarray], hist_data_err : dict[np.ndarray
 
 
 def SelectionEfficiency(true_hists_selected, true_hists):
-    return {k : common.Efficiency(true_hists_selected[k], true_hists[k]) for k in true_hists}
+    return {k : common.efficiency(true_hists_selected[k], true_hists[k]) for k in true_hists}
 
 
 def EfficiencyErrStat(eff, err, val, val_eff, norm, true):
@@ -505,7 +505,7 @@ def LoadToy(file):
     if file.split(".")[-1] == "hdf5":
         toy = toy.Toy(file = file)
     elif file.split(".")[-1] == "json":
-        toy = toy.Toy(df = xs_toy_generator.run(io.LoadConfiguration(file)))
+        toy = toy.Toy(df = xs_toy_generator.run(io.read_json(file)))
     else:
         raise Exception("toy file format not recognised")
     return cross_section.analysis_input.AnalysisInput.CreateAnalysisInputToy(toy)
@@ -688,7 +688,7 @@ def main(args):
 
     xs = Analyse(args, True)
 
-    io.SaveObject(args.out + "xs.dill", xs)
+    io.write_dill(args.out + "xs.dill", xs)
 
     with plotting.PlotBook(args.out + "results.pdf") as book:
         colours = {f"{label_map[k]} Data" : f"C{i}" for i, k in enumerate(xs.keys())}
@@ -702,15 +702,15 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Computes the upstream energy loss for beam particles after beam particle selection, then writes the fitted parameters to file.", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    application.ApplicationArguments.Config(parser, required = True)
-    application.ApplicationArguments.Output(parser)
+    application.ApplicationArguments.config(parser, required = True)
+    application.ApplicationArguments.output(parser)
 
     parser.add_argument("--toy_data", dest = "toy_data", type = str, help = "toy data, proivde a hdf5 toy file or toy config")
     parser.add_argument("--toy_template", dest = "toy_template", type = str, help = "toy template, proivde a hdf5 toy file or toy config")
     parser.add_argument("--pdsp", dest = "pdsp", action = "store_true", help = "run the analysis with the PDSP samples")
     parser.add_argument("--all", dest = "all", action = "store_true", help = "measure all exclusive cross sections.")
 
-    args = application.ApplicationArguments.ResolveArgs(parser.parse_args())
+    args = application.ApplicationArguments.resolve_args(parser.parse_args())
 
     if args.toy_data and (not args.toy_template):
         raise Exception("if toy data is provided toy template must also be provided")

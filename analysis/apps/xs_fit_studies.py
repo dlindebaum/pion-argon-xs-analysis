@@ -110,7 +110,7 @@ def NormalisationTest(directory : str, data_config : dict, model : pyhf.Model, t
                 config = CreateConfigNormalisation(scales, data_config)
             results[i], true_counts[i], expected_mus[i] = ModifiedConfigTest(config, energy_slice, model, toy_template, mean_track_score_bins, single_bin)
 
-        io.SaveObject(f"{directory}fit_results_{folder[target]}.dill", {"results" : results, "true_counts" : true_counts, "expected_mus" : expected_mus})
+        io.write_dill(f"{directory}fit_results_{folder[target]}.dill", {"results" : results, "true_counts" : true_counts, "expected_mus" : expected_mus})
     return
 
 
@@ -119,7 +119,7 @@ def FitSimulationCurve(xs_sim, sampling_factor : int, process : str, function : 
     y = getattr(xs_sim, process)[::sampling_factor]/1000
 
     if plot is True: plots.plt.figure()
-    results = fitting.Fit(x, y, None, function, method = "dogbox", plot = plot, xlabel = "$KE$(GeV)", ylabel = "$\\sigma$ (b)", title = process)
+    results = fitting,fit(x, y, None, function, method = "dogbox", plot = plot, xlabel = "$KE$(GeV)", ylabel = "$\\sigma$ (b)", title = process)
     return results
 
 
@@ -237,7 +237,7 @@ def ShapeTestNew(directory : str, data_config : dict, model : pyhf.Model, toy_te
                 config = CreateConfigShapeTest(data_config, CreateModifiedXS(xs_sim, target, i[0], i[1], i[3], i[2]))
 
             results[i], true_counts[i], expected_mus[i] = ModifiedConfigTest(config, energy_slices, model, toy_template, mean_track_score_bins, single_bin)
-        io.SaveObject(f"{directory}fit_results_{folder[target]}.dill", {"results" : results, "true_counts" : true_counts, "expected_mus" : expected_mus})
+        io.write_dill(f"{directory}fit_results_{folder[target]}.dill", {"results" : results, "true_counts" : true_counts, "expected_mus" : expected_mus})
     return
 
 
@@ -728,7 +728,7 @@ def CalculateResultsFromFile(workdirs, test_name, model_name, template_counts, m
     results_bins = {k : [] for k in results_files[0]}
     for d, files in zip(workdirs, results_files):
         for f in files:
-            fit_result = io.LoadObject(d + f"{test_name}_test_{model_name}/" + files[f])
+            fit_result = io.read_dill(d + f"{test_name}_test_{model_name}/" + files[f])
             r = ProcessResults(template_counts, fit_result["results"], fit_result["true_counts"], fit_result["expected_mus"], model, single_bin)
             results_total[f].append(r[0])
             results_bins[f].append(r[1])
@@ -796,7 +796,7 @@ def main(args : argparse.Namespace):
             if "pulls" not in args.skip:
                 pull_results = PullStudyFast(toys, int(5E6), int(1E6), args, args.energy_slices, mean_track_score_bins if m == "track_score" else None, 500)
                 os.makedirs(args.out + f"pull_test_{m}/", exist_ok = True)
-                io.DictToHDF5(pull_results, args.out + f"pull_test_{m}/" + "pull_results.hdf5")
+                io.write_hdf5(pull_results, args.out + f"pull_test_{m}/" + "pull_results.hdf5")
 
 
     if args.workdir:
@@ -836,7 +836,7 @@ def main(args : argparse.Namespace):
             for m in models:
                 if t == "pulls":
                     with plotting.PlotBook(outdir + f"pull_test_{m}/pulls.pdf", True) as book:
-                        pull_results = io.ReadHDF5(outdir + f"pull_test_{m}/" + "pull_results.hdf5")
+                        pull_results = io.read_hdf5(outdir + f"pull_test_{m}/" + "pull_results.hdf5")
 
                         pulls = (pull_results["bestfit"] - (pull_results["expected"] / pull_results["scale"])) / pull_results["uncertainty"]
                         res = (pull_results["scale"] * pull_results["bestfit"]) - pull_results["expected"]
@@ -853,7 +853,7 @@ def main(args : argparse.Namespace):
                             plots.plt.figure()
                             y, edges = np.histogram(pulls[c], bins = 10)
                             x = (edges[1:] + edges[:-1]) / 2
-                            popt, perr = fitting.Fit(x, y, np.sqrt(y), fitting.gaussian, plot = True, plot_style = "hist", method = "trf", xlabel = "$\\theta$", ylabel = "Number of entries")
+                            popt, perr = fitting,fit(x, y, np.sqrt(y), fitting.gaussian, plot = True, plot_style = "hist", method = "trf", xlabel = "$\\theta$", ylabel = "Number of entries")
                             book.Save()
 
                         for _, k in plots.IterMultiPlot(pulls.columns):
@@ -908,7 +908,7 @@ def main(args : argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("app which performs cross checks for the region fit using toys.")
     
-    application.ApplicationArguments.Config(parser, True)
+    application.ApplicationArguments.config(parser, True)
 
     parser.add_argument("--template", "-t", dest = "template", type = str, help = "toy template hdf5 file", required = True)
 
@@ -923,9 +923,9 @@ if __name__ == "__main__":
 
     parser.add_argument("--skip", dest = "skip", type = str, choices = ["normalisation", "shape", "pulls"], nargs = "+", default = [], help = "test to skip")
 
-    application.ApplicationArguments.Output(parser, None)
+    application.ApplicationArguments.output(parser, None)
 
-    args = application.ApplicationArguments.ResolveArgs(parser.parse_args(), False)
+    args = application.ApplicationArguments.resolve_args(parser.parse_args(), False)
 
     if (not args.toy_data_config) and (not args.workdir):
         raise Exception("--toy_data_config or --workdir or both must be supplied")
@@ -933,7 +933,7 @@ if __name__ == "__main__":
     if args.events: args.events = int(args.events)
 
     if args.toy_data_config:
-        args.toy_data_config = io.LoadConfiguration(args.toy_data_config)
+        args.toy_data_config = io.read_json(args.toy_data_config)
         OverrideConfig(args)
 
     if args.workdir:

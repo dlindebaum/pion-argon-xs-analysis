@@ -106,13 +106,13 @@ def main(args):
         output_pairs.to_hdf(out + "photon_energies.hdf5", "photon_pairs")
         output_tags.to_hdf(out + "photon_energies.hdf5", "tags")
 
-    df = io.ReadHDF5(out + "photon_energies.hdf5")["all_photons"]
+    df = io.read_hdf5(out + "photon_energies.hdf5")["all_photons"]
     df["residual"] = df.reco_shower_energy - df.true_energy
     df["fractional_error"] = (df.reco_shower_energy / df.true_energy) - 1
 
     with plotting.PlotBook(out + "plots.pdf") as book:
         #* initial plots
-        pec.PhotonSelection(df, book)
+        pec.photon_selection(df, book)
 
         #* linear correction
         if args.shower_correction["energy_range"] is None:
@@ -129,7 +129,7 @@ def main(args):
         bins = np.linspace(*energy_range, 11)
         print(f"{bins=}")
         linear_correction = pec.linear_fit(df, bins, energy_range, book)
-        pec.LinearFitPerformance(df, linear_correction, book)
+        pec.linear_fit_performance(df, linear_correction, book)
 
 
         #* response correction
@@ -137,13 +137,13 @@ def main(args):
         #* response correction
         bins = np.array(pec.create_bins_df(df.reco_shower_energy, int(len(df.reco_shower_energy)//11), energy_range), dtype = int)
 
-        central_values = pec.CalculateCentralValues(df, bins, book)
-        response_params = pec.ResponseFits(central_values, bins, book)
-        central_values = pec.CalculateCentralValues(df, bins, book)
-        response_params = pec.ResponseFits(central_values, bins, book)
+        central_values = pec.calculate_central_values(df, bins, book)
+        response_params = pec.response_fits(central_values, bins, book)
+        central_values = pec.calculate_central_values(df, bins, book)
+        response_params = pec.response_fits(central_values, bins, book)
 
-        tab = pec.MethodComparison(df, linear_correction, response_params, bins, energy_range, book)
-        tab = pec.MethodComparison(df, linear_correction, response_params, bins, energy_range, book)
+        tab = pec.method_comparison(df, linear_correction, response_params, bins, energy_range, book)
+        tab = pec.method_comparison(df, linear_correction, response_params, bins, energy_range, book)
     
     tab.T.style.format(precision = 3).to_latex(out + "table.tex")
 
@@ -158,18 +158,18 @@ def main(args):
         sf = [len(f'{p["error"][f"p{i}"]:.1g}') - 1 for i in range(len(p["value"]))]
         table = pd.DataFrame({f"$p_{{{i}}}$" : f'{p["value"][f"p{i}"]:.{sf[i]}f} $\\pm$ {p["error"][f"p{i}"]:.1g}' for i in range(len(p["value"]))}, index = [0])
         table.style.hide(axis = "index").to_latex(out + name + ".tex")
-        io.SaveConfiguration(p, out + name + ".json")
+        io.write_json(p, out + name + ".json")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Applies beam particle selection and saves properties of photon shower candidate PFOs to hdf5 file (MC only)", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    application.ApplicationArguments.Processing(parser)
-    application.ApplicationArguments.Output(parser)
-    application.ApplicationArguments.Config(parser)
-    application.ApplicationArguments.Regen(parser)
+    application.ApplicationArguments.processing(parser)
+    application.ApplicationArguments.output(parser)
+    application.ApplicationArguments.config(parser)
+    application.ApplicationArguments.regen(parser)
 
     args = parser.parse_args()
-    args = application.ApplicationArguments.ResolveArgs(args)
+    args = application.ApplicationArguments.resolve_args(args)
 
     print(vars(args))
     main(args)

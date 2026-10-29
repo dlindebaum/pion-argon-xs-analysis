@@ -31,16 +31,16 @@ def main(args : application.argparse.Namespace):
             )
         hists = {f"{n}_DataHist" : np.histogram(np.array(data.KE_int_reco[m]), bins)}
 
-        fw = io.IO(f"{out}pdsp_R{n}.root")
-        fw.WriteData(vars(new_sample), hists, True)
+        fw = io.RootIO(f"{out}pdsp_R{n}.root")
+        fw.write_data(vars(new_sample), hists, True)
 
     return
 
 if __name__ == "__main__":
     parser = application.argparse.ArgumentParser("Create analysis input files from Ntuples.")
-    application.ApplicationArguments.Config(parser)
-    application.ApplicationArguments.Output(parser)
+    application.ApplicationArguments.config(parser)
+    application.ApplicationArguments.output(parser)
 
-    args = application.ApplicationArguments.ResolveArgs(parser.parse_args())
+    args = application.ApplicationArguments.resolve_args(parser.parse_args())
     print(vars(args))
     main(args)

@@ -39,7 +39,7 @@ def main(args):
     outdir = args.out + "beam_norm/"
     os.makedirs(outdir, exist_ok = True)
 
-    outputs = application.ApplicationProcessing(list(args.ntuple_files.keys()), outdir, args, run, True)
+    outputs = application.processing(list(args.ntuple_files.keys()), outdir, args, run, True)
 
     n_data = ak.sum(outputs["data"]["mask"])
     n_mc = ak.sum(outputs["mc"]["mask"])
@@ -49,20 +49,20 @@ def main(args):
         plotting.plots.PlotTags(outputs["mc"]["tags"], "True particle ID")
         book.Save()
 
-    io.SaveConfiguration({"norm" : norm, "mc" : int(n_mc), "data" : int(n_data)}, outdir + "norm.json")
+    io.write_json({"norm" : norm, "mc" : int(n_mc), "data" : int(n_data)}, outdir + "norm.json")
 
     return
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Computes normalisation for beam pion analysis.", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    application.ApplicationArguments.Config(parser, True)
-    application.ApplicationArguments.Processing(parser)
-    application.ApplicationArguments.Output(parser)
-    application.ApplicationArguments.Regen(parser)
+    application.ApplicationArguments.config(parser, True)
+    application.ApplicationArguments.processing(parser)
+    application.ApplicationArguments.output(parser)
+    application.ApplicationArguments.regen(parser)
 
     args = parser.parse_args()
 
-    args = application.ApplicationArguments.ResolveArgs(args)
+    args = application.ApplicationArguments.resolve_args(args)
     print(vars(args))
     main(args)

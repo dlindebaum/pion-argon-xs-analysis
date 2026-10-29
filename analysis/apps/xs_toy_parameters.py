@@ -52,7 +52,7 @@ def ComputeQuantities(mc : ntuple.Data, args : dict) -> dict[dict, dict]:
         reco_upstream_loss = beam.upstream.UpstreamEnergyLoss(kinematics.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass), args["upstream_loss_correction_params"]["value"], args["upstream_loss_response"])
         
         reco_KE_ff = kinematics.KE(mc.recoParticles.beam_inst_P, Particle.from_pdgid(211).mass) - reco_upstream_loss
-        reco_KE_int = kinematics.RecoEndEnergy(mc.recoParticles.beam_calo_pos, reco_KE_ff, mc.recoParticles.beam_dEdX, args["energy_method"])
+        reco_KE_int = kinematics.reco_end_energy(mc.recoParticles.beam_calo_pos, reco_KE_ff, mc.recoParticles.beam_dEdX, args["energy_method"])
         reco_track_length = mc.recoParticles.beam_track_length
 
     with alive_bar(title = "computng true quantities") as bar:
@@ -139,7 +139,7 @@ def ResolutionStudy(plot_book : plotting.PlotBook, reco_quantity : ak.Array, tru
     for f in fit_functions:
         try:
             plots.plt.figure()
-            params[f.__name__], errors[f.__name__] = fitting.Fit(centers, counts, np.sqrt(counts), f, plot = True, xlabel = label, ylabel = "Counts", plot_style = "hist", plot_range = residual_range)
+            params[f.__name__], errors[f.__name__] = fitting,fit(centers, counts, np.sqrt(counts), f, plot = True, xlabel = label, ylabel = "Counts", plot_style = "hist", plot_range = residual_range)
             tables[f.__name__] = CreateFitTable(params[f.__name__], errors[f.__name__])
         except ValueError as e:
             print(f"fit not successful for {f.__name__}, reason: \n {e}")
@@ -190,7 +190,7 @@ def Smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : 
         sout = out + f"smearing/{q}/"
         os.makedirs(sout, exist_ok = True)
         for k in params[q]:
-            io.SaveConfiguration(params[q][k], sout + f"{k}.json")
+            io.write_json(params[q][k], sout + f"{k}.json")
         
         for k in tables[q]:
             tables[q][k].style.hide(axis = "index").to_latex(sout + f"{k}.tex")
@@ -253,7 +253,7 @@ def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, beam_s
     pdf = plotting.PlotBook(out + "pi_beam_efficiency/efficiency_study")
 
     x = {i : (bins[i][1:] + bins[i][:-1])/2 for i in initial_counts_true}
-    e = {i : common.Efficiency(selected_counts_true[i], initial_counts_true[i]) for i in initial_counts_true}
+    e = {i : common.efficiency(selected_counts_true[i], initial_counts_true[i]) for i in initial_counts_true}
 
     for _, i in plots.IterMultiPlot(initial_counts_true):
         plots.Plot(x[i], e[i][0], yerr = e[i][1], xlabel = "true" + labels[i], ylabel = "beam $\\pi^{+}$:inel selection efficiency", newFigure = False)
@@ -266,7 +266,7 @@ def BeamSelectionEfficiency(quantities : dict, pion_inel_mask : ak.Array, beam_s
         "error" : pd.DataFrame({i : e[i][1] for i in e})
     }
 
-    io.DictToHDF5(selection_efficiency_info, out + "pi_beam_efficiency/beam_selection_efficiencies_true.hdf5")
+    io.write_hdf5(selection_efficiency_info, out + "pi_beam_efficiency/beam_selection_efficiencies_true.hdf5")
     return
 
 
@@ -349,7 +349,7 @@ def MeanTrackScoreKDE(mean_track_score : ak.Array, true_processes : dict[ak.Arra
             plots.Plot(x, kdes[tag].evaluate(x), color = process_tags[tag].colour, label = common.remove_(tag) + " KDE", newFigure = False)
         book.Save()
 
-    io.SaveObject(out + "meanTrackScoreKDE/kdes.dill", kdes)
+    io.write_dill(out + "meanTrackScoreKDE/kdes.dill", kdes)
     return
 
 
@@ -371,7 +371,7 @@ def FitBeamProfile(KE_init : np.array, func : fitting.FitFunction, KE_range : li
 
     plots.plt.figure()
     print(f"{book.open=}")
-    params, error = fitting.Fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = book.is_open, plot_style = "hist", xlabel = "$KE^{true}_{ff}$ (MeV)", ylabel = "Counts")
+    params, error = fitting,fit((x[1:] + x[:-1])/2, y, np.sqrt(y), func, plot = book.is_open, plot_style = "hist", xlabel = "$KE^{true}_{ff}$ (MeV)", ylabel = "Counts")
     book.Save()
 
     table = CreateFitTable(params, error)
@@ -397,7 +397,7 @@ def BeamProfileStudy(quantities : dict, args : argparse.Namespace, true_beam_mas
     os.makedirs(out + "beam_profile/", exist_ok = True)
     with plotting.PlotBook(out + "beam_profile/beam_profile.pdf") as book:
         beam_profile, table = FitBeamProfile(quantities["true"]["KE_init"][true_beam_mask], func, KE_range, 50, book)
-        io.SaveConfiguration(beam_profile, out + "beam_profile/beam_profile.json")
+        io.write_json(beam_profile, out + "beam_profile/beam_profile.json")
         table.style.hide(axis = "index").to_latex(out + "beam_profile/fit.tex")
     return
 
@@ -414,7 +414,7 @@ def main(args : argparse.Namespace):
         "z_int" : "$l^{res,MC}$ (cm)"
     }
 
-    output_mc = application.ApplicationProcessing(["mc"], out, args, run, True)["mc"]
+    output_mc = application.processing(["mc"], out, args, run, True)["mc"]
 
     print(f"{output_mc=}")
 
@@ -432,13 +432,13 @@ def main(args : argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Analyses MC ntuples in order to determine parameters used to emulate selection efficiency and detector effects for the toy model.")
 
-    application.ApplicationArguments.Config(parser, True)
-    application.ApplicationArguments.Output(parser)
-    application.ApplicationArguments.Regen(parser)
-    application.ApplicationArguments.Processing(parser)
+    application.ApplicationArguments.config(parser, True)
+    application.ApplicationArguments.output(parser)
+    application.ApplicationArguments.regen(parser)
+    application.ApplicationArguments.processing(parser)
 
     args = parser.parse_args()
-    args = application.ApplicationArguments.ResolveArgs(args)
+    args = application.ApplicationArguments.resolve_args(args)
 
     print(vars(args))
     main(args)

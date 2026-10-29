@@ -39,7 +39,7 @@ def init_notebook(line):
     return
 
 
-def Efficiency(selected_count : np.array, total_count : np.array) -> tuple[np.array, np.array]:
+def efficiency(selected_count : np.array, total_count : np.array) -> tuple[np.array, np.array]:
     """ Calcualtes selection efficiency and binomial error.
 
     Args:
@@ -171,7 +171,7 @@ def dict_inverse(d : dict) -> dict:
     return {v : k for k, v in d.items()}
 
 
-def ClipJagged(array, min, max):
+def clip_jagged(array, min, max):
     """ Clips a jagged (awkward) array, if the type of aray is an awkward array, returns as an awkward array, otherwise it returns a list of nested arrays
 
     Args:

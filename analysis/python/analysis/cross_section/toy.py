@@ -7,7 +7,7 @@ from python.analysis.plotting import plots
 class Toy:
     def __init__(self, file : str = None, df : str = None) -> None:
         if file is not None:
-            self.df = io.ReadHDF5(file)
+            self.df = io.read_hdf5(file)
         elif df is not None:
             self.df = df
         else:

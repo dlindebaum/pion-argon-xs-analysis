@@ -41,7 +41,7 @@ def main(args : argparse.Namespace):
     outdir = args.out + "upstream_loss/"
     os.makedirs(outdir, exist_ok = True)
 
-    output_mc = application.ApplicationProcessing(["mc"], outdir, args, run, True)["mc"]
+    output_mc = application.processing(["mc"], outdir, args, run, True)["mc"]
 
     if all(v is None for v in output_mc["weights"]):
         output_mc["weights"] = None
@@ -56,7 +56,7 @@ def main(args : argparse.Namespace):
         pdf.Save()
 
         plotting.plots.plt.figure()
-        params = fitting.Fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\\mu(\Delta E_{upstream})$ (MeV)", loc = "upper center")
+        params = fitting,fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\\mu(\Delta E_{upstream})$ (MeV)", loc = "upper center")
         pdf.Save()
 
         params_dict = {
@@ -70,20 +70,20 @@ def main(args : argparse.Namespace):
         pdf.Save()
     plotting.plots.plt.close("all")
     print(f"fitted parameters : {params_dict}")
-    io.SaveConfiguration(params_dict, outdir + "fit_parameters.json")
+    io.write_json(params_dict, outdir + "fit_parameters.json")
     return
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Computes the upstream energy loss for beam particles after beam particle selection, then writes the fitted parameters to file.", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    application.ApplicationArguments.Config(parser, True)
-    application.ApplicationArguments.Output(parser)
-    application.ApplicationArguments.Regen(parser)
-    application.ApplicationArguments.Processing(parser)
+    application.ApplicationArguments.config(parser, True)
+    application.ApplicationArguments.output(parser)
+    application.ApplicationArguments.regen(parser)
+    application.ApplicationArguments.processing(parser)
     parser.add_argument("--cv_function", dest = "upstream_loss_cv_function", type = str, default = "gaussian", help = "method to extract central value, possible options are ['None', 'gaussian', 'student_t', 'double_gaussian', 'crystal_ball']")
     parser.add_argument("--no_reweight", dest = "no_reweight", action = "store_true", help = "perform correction without reweighted MC")
 
-    args = application.ApplicationArguments.ResolveArgs(parser.parse_args())
+    args = application.ApplicationArguments.resolve_args(parser.parse_args())
     print(vars(args))
     main(args)

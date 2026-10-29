@@ -31,7 +31,7 @@ def main(args : argparse.Namespace):
     out = args.out + "region_plots/"
     os.makedirs(out, exist_ok = True)
 
-    output_mc = application.ApplicationProcessing(["mc"], out, args, run, True)["mc"]
+    output_mc = application.processing(["mc"], out, args, run, True)["mc"]
 
     print(f"{output_mc=}")
 
@@ -42,13 +42,13 @@ def main(args : argparse.Namespace):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Analyses MC ntuples in order to visualise the region identifications.")
 
-    application.ApplicationArguments.Config(parser, True)
-    application.ApplicationArguments.Output(parser)
-    application.ApplicationArguments.Regen(parser)
-    application.ApplicationArguments.Processing(parser)
+    application.ApplicationArguments.config(parser, True)
+    application.ApplicationArguments.output(parser)
+    application.ApplicationArguments.regen(parser)
+    application.ApplicationArguments.processing(parser)
 
     args = parser.parse_args()
-    args = application.ApplicationArguments.ResolveArgs(args)
+    args = application.ApplicationArguments.resolve_args(args)
 
     print(vars(args))
     main(args)

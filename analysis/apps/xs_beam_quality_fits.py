@@ -57,7 +57,7 @@ def main(args):
     outdir = args.out + "beam_quality/"
     os.makedirs(outdir, exist_ok = True)
 
-    outputs = application.ApplicationProcessing(list(args.ntuple_files.keys()), outdir, args, run, True)
+    outputs = application.processing(list(args.ntuple_files.keys()), outdir, args, run, True)
 
     fit_values = {s : quality.Fits(args, outputs[s], outdir, s) for s in outputs}
 
@@ -72,13 +72,13 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Computes Guassian fit paramters needed for the beam quality cuts in the beam particle selection.", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    application.ApplicationArguments.Config(parser, True)
-    application.ApplicationArguments.Processing(parser)
-    application.ApplicationArguments.Output(parser)
-    application.ApplicationArguments.Regen(parser)
+    application.ApplicationArguments.config(parser, True)
+    application.ApplicationArguments.processing(parser)
+    application.ApplicationArguments.output(parser)
+    application.ApplicationArguments.regen(parser)
 
     args = parser.parse_args()
 
-    args = application.ApplicationArguments.ResolveArgs(args)
+    args = application.ApplicationArguments.resolve_args(args)
     print(vars(args))
     main(args)

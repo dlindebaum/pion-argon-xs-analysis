@@ -44,11 +44,11 @@ exclusive_proc = ["absorption", "charge_exchange", "single_pion_production", "pi
 pd.set_option('future.no_silent_downcasting', True)
 
 def SaveSystematicError(systematic : dict, fractional : dict, out : str):
-    return io.SaveObject(out, {"systematic" : systematic, "fractional": fractional})
+    return io.write_dill(out, {"systematic" : systematic, "fractional": fractional})
 
 
 def SaveTables(tables : pd.DataFrame, outdir : str, precision : int):
-    io.DictToHDF5(tables, f"{outdir}tables.hdf5")
+    io.write_hdf5(tables, f"{outdir}tables.hdf5")
     for t in tables:
         tables[t].style.format(precision = precision).hide(axis = 0).to_latex(f"{outdir}table_{t}.tex")
     return
@@ -433,7 +433,7 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
         os.makedirs(outdir, exist_ok = True)
 
         masks = self.CreateAltPi0Selections()
-        io.SaveObject(f"{outdir}pi0_selection_masks.dill", masks)
+        io.write_dill(f"{outdir}pi0_selection_masks.dill", masks)
 
         args_copy = {}
         for i in ["low", "high"]:
@@ -501,7 +501,7 @@ class TrackLengthResolutionSystematic(MCMethod):
         y, edges = np.histogram(r, 150, [-0.5, 0.5])
         x = common.bin_centers(edges)
 
-        p = fitting.Fit(x, y,np.sqrt(y), fitting.double_crystal_ball, method = "dogbox", plot = True, xlabel = "$\\theta$", ylabel = "Counts", plot_style = "scatter")
+        p = fitting,fit(x, y,np.sqrt(y), fitting.double_crystal_ball, method = "dogbox", plot = True, xlabel = "$\\theta$", ylabel = "Counts", plot_style = "scatter")
         book.Save()
 
         y_interp = fitting.double_crystal_ball(x, *p[0])
@@ -725,7 +725,7 @@ def CreateSystematicTable(out : str, data_only : dict, args : argparse.Namespace
     sys_err = {}
     for f in common.ls_recursive(out):
         if "sys.dill" in f:
-            sys_err[f.split("/")[-2]] = io.LoadObject(f)["systematic"]
+            sys_err[f.split("/")[-2]] = io.read_dill(f)["systematic"]
 
     tables_dict = {p : {} for p in exclusive_proc}
     for k, v in data_only["pdsp"].items():
@@ -905,11 +905,11 @@ def main(args : argparse.Namespace):
             if can_regen(outdir):
                 result = mc_stat.RunExperiment()
                 # sys = mc_stat.CalculateSysError(result)
-                io.SaveObject(f"{outdir}results.dill", result)
+                io.write_dill(f"{outdir}results.dill", result)
                 # SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
-                result = io.LoadObject(f"{outdir}results.dill")
-                # sys = io.LoadObject(f"{outdir}sys.dill")
+                result = io.read_dill(f"{outdir}results.dill")
+                # sys = io.read_dill(f"{outdir}sys.dill")
 
             sys = mc_stat.CalculateSysError(result)
             SaveSystematicError(sys, None, f"{outdir}sys.dill")
@@ -925,11 +925,11 @@ def main(args : argparse.Namespace):
                 sc.CreateNewAIs(outdir)
                 result = sc.RunAnalysis(outdir)
                 # sys = sc.CalculateSysErrorAsym(args.cv, result)
-                io.SaveObject(f"{outdir}results.dill", result)
+                io.write_dill(f"{outdir}results.dill", result)
                 # SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
-                result = io.LoadObject(f"{outdir}results.dill")
-                # sys = io.LoadObject(f"{outdir}sys.dill")["systematic"]
+                result = io.read_dill(f"{outdir}results.dill")
+                # sys = io.read_dill(f"{outdir}sys.dill")["systematic"]
 
             sys = sc.CalculateSysErrorAsym(args.cv, result)
             SaveSystematicError(sys, None, f"{outdir}sys.dill")
@@ -947,11 +947,11 @@ def main(args : argparse.Namespace):
                 result = upl.RunAnalysis(outdir)
                 # sys = upl.CalculateSysErrorAsym(args.cv, result)
 
-                io.SaveObject(f"{outdir}results.dill", result)
+                io.write_dill(f"{outdir}results.dill", result)
                 # SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
-                result = io.LoadObject(f"{outdir}results.dill")
-                # sys = io.LoadObject(f"{outdir}sys.dill")
+                result = io.read_dill(f"{outdir}results.dill")
+                # sys = io.read_dill(f"{outdir}sys.dill")
 
             sys = upl.CalculateSysErrorAsym(args.cv, result)
             SaveSystematicError(sys, None, f"{outdir}sys.dill")
@@ -969,11 +969,11 @@ def main(args : argparse.Namespace):
                 result = brw.RunAnalysis(outdir)
                 # sys = brw.CalculateSysErrorAsym(args.cv, result)
 
-                io.SaveObject(f"{outdir}results.dill", result)
+                io.write_dill(f"{outdir}results.dill", result)
                 # SaveSystematicError(sys, None, f"{outdir}sys.dill")
             else:
-                result = io.LoadObject(f"{outdir}results.dill")
-                # sys = io.LoadObject(f"{outdir}sys.dill")["systematic"]
+                result = io.read_dill(f"{outdir}results.dill")
+                # sys = io.read_dill(f"{outdir}sys.dill")["systematic"]
 
             sys = brw.CalculateSysErrorAsym(args.cv, result)
             SaveSystematicError(sys, None, f"{outdir}sys.dill")
@@ -996,9 +996,9 @@ def main(args : argparse.Namespace):
 
             if can_regen(outdir):
                 result = trk.Evaluate(args.n_throws, analysis_input_data = analysis_input_nominal, resolution = trk.resolution)
-                io.SaveObject(f"{outdir}results.dill", result)
+                io.write_dill(f"{outdir}results.dill", result)
             else:
-                result = io.LoadObject(f"{outdir}results.dill")
+                result = io.read_dill(f"{outdir}results.dill")
 
             if len(result) > 1:
                 with plotting.PlotBook(f"{outdir}cov_mat") as book:
@@ -1020,9 +1020,9 @@ def main(args : argparse.Namespace):
 
             if can_regen(outdir):
                 result = bm.Evaluate(args.n_throws, analysis_input_data = analysis_input_nominal, resolution = resolution)
-                io.SaveObject(f"{outdir}results.dill", result)
+                io.write_dill(f"{outdir}results.dill", result)
             else:
-                result = io.LoadObject(f"{outdir}results.dill")
+                result = io.read_dill(f"{outdir}results.dill")
 
             if len(result) > 1:
                 with plotting.PlotBook(f"{outdir}cov_mat") as book:
@@ -1043,9 +1043,9 @@ def main(args : argparse.Namespace):
             if can_regen(outdir):
                 result = ts.Evaluate(args.n_throws, analysis_input_data = analysis_input_nominal)
                 print(f"saving: {outdir}results.dill")
-                io.SaveObject(f"{outdir}results.dill", result)
+                io.write_dill(f"{outdir}results.dill", result)
             else:
-                result = io.LoadObject(f"{outdir}results.dill")
+                result = io.read_dill(f"{outdir}results.dill")
 
             if len(result) > 1:
                 with plotting.PlotBook(f"{outdir}cov_mat") as book:
@@ -1068,11 +1068,11 @@ def main(args : argparse.Namespace):
             if can_regen(outdir):
                 if not os.path.isfile(f"{outdir}results.dill"):    
                     result = norm_sys.Evaluate([0.8, 1.2], args.fit_inaccuracy_repeats)
-                    io.SaveObject(f"{outdir}results.dill", result)
+                    io.write_dill(f"{outdir}results.dill", result)
 
-                result = io.LoadObject(f"{outdir}results.dill")
+                result = io.read_dill(f"{outdir}results.dill")
             else:
-                result = io.LoadObject(f"{outdir}results.dill")
+                result = io.read_dill(f"{outdir}results.dill")
 
             if len(result) > 1:
                 NormalisationSystematic.AverageResults(result)
@@ -1080,7 +1080,7 @@ def main(args : argparse.Namespace):
                 sys_err = NormalisationSystematic.CalculateSysErr(result)
                 frac_err = NormalisationSystematic.CalculateFractionalError(sys_err, xs_nominal)
                 SaveSystematicError(sys_err, frac_err, f"{outdir}sys.dill")
-                sys = io.LoadObject(f"{outdir}sys.dill")
+                sys = io.read_dill(f"{outdir}sys.dill")
 
                 with plotting.PlotBook(f"{outdir}plots", True) as book:
                     #! use styler properly
@@ -1118,8 +1118,8 @@ def main(args : argparse.Namespace):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser("Estimate Systematics for the cross section analysis")
-    application.ApplicationArguments.Config(parser)
-    application.ApplicationArguments.Output(parser, "systematic/")
+    application.ApplicationArguments.config(parser)
+    application.ApplicationArguments.output(parser, "systematic/")
 
     parser.add_argument("--cv", "-v", dest = "cv", type = str, default = None, help = "plot systematics with central value measurement", required = True)
 
@@ -1136,7 +1136,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--plot", "-p", dest = "plot", action = "store_true", default = None, help = "plot systematics with central value measurement")
 
-    args = application.ApplicationArguments.ResolveArgs(parser.parse_args())
+    args = application.ApplicationArguments.resolve_args(parser.parse_args())
 
     if ("all" in args.run) or ("fit_inaccuracy" in args.run) or ("track_length" in args.run) or ("beam_res" in args.run) or ("theory" in args.run):
         if not args.toy_template:
@@ -1144,9 +1144,9 @@ if __name__ == "__main__":
         if not args.toy_data_config:
             raise Exception("--toy_data_config must be specified")        
     if args.toy_data_config:
-        args.toy_data_config = common.LoadConfiguration(args.toy_data_config)
+        args.toy_data_config = common.read_json(args.toy_data_config)
 
-    args.cv = io.LoadObject(args.cv)
+    args.cv = io.read_dill(args.cv)
 
     print(vars(args))
     print(warnings.warn("App is deprecated and likely no longer works!"))

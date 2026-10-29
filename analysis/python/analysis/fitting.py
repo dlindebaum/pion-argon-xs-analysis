@@ -375,7 +375,7 @@ class lognormal_gaussian_exp(FitFunction):
         return (lims[:, 0], lims[:, 1])    
 
 
-def RejectionSampling(num : int, low : float, high : float, func : FitFunction, params : dict, scale_param : str = "p0", rng : np.random.default_rng = None) -> np.array:
+def rejection_sampling(num : int, low : float, high : float, func : FitFunction, params : dict, scale_param : str = "p0", rng : np.random.default_rng = None) -> np.array:
     """ Performs Rejection sampling for a given function which describes a pdf.
 
     Args:
@@ -405,7 +405,7 @@ def RejectionSampling(num : int, low : float, high : float, func : FitFunction, 
     return x[:num] #? is there a way to generate only the desired number rather than truncating x?
 
 
-def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, method = "trf", maxfev = int(10E4), plot : bool = False, xlabel : str = "", ylabel : str = "", ylim : list = None, plot_style : str = "scatter", title : str = "", plot_range : list = None, return_chi_sqr : bool = False, loc = "upper right") -> tuple[np.array, np.array]:
+def fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, method = "trf", maxfev = int(10E4), plot : bool = False, xlabel : str = "", ylabel : str = "", ylim : list = None, plot_style : str = "scatter", title : str = "", plot_range : list = None, return_chi_sqr : bool = False, loc = "upper right") -> tuple[np.array, np.array]:
     """ Implementation of scipy's curve fit, with some constraints, checks to handle nan data and optional plotting.
 
     Args:
@@ -504,7 +504,7 @@ def Fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
         return popt, perr
 
 
-def ExtractCentralValues_df(df : pd.DataFrame, bin_variable : str, variable : str, v_range : list, funcs, data_bins : list, hist_bins : int, log : bool = False, rms_err : bool = False, weights : np.ndarray = None, outer_legend : bool = False, bin_label : str = "bin", bin_units : str = ""):
+def extract_central_values_df(df : pd.DataFrame, bin_variable : str, variable : str, v_range : list, funcs, data_bins : list, hist_bins : int, log : bool = False, rms_err : bool = False, weights : np.ndarray = None, outer_legend : bool = False, bin_label : str = "bin", bin_units : str = ""):
     """ Estimate a central value in each reco energy bin based on some FitFunction or collection of FitFunctions.
 
     Args:

@@ -32,7 +32,7 @@ def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.arra
     results = {}
     for f in [fitting.gaussian, fitting.student_t, fitting.poly2d, fitting.crystal_ball, fitting.double_crystal_ball, fitting.double_gaussian]:
         plots.plt.figure()
-        results[f.__name__] = fitting.Fit(ratio_plot.x[ratio > 0], ratio[ratio > 0], ratio_err[ratio > 0], f, plot = True, xlabel = "$P_{inst}^{reco}$(MeV)", ylabel = "$r$")
+        results[f.__name__] = fitting,fit(ratio_plot.x[ratio > 0], ratio[ratio > 0], ratio_err[ratio > 0], f, plot = True, xlabel = "$P_{inst}^{reco}$(MeV)", ylabel = "$r$")
         book.Save()
     return results
 

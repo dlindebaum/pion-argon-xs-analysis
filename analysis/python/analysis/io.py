@@ -9,7 +9,7 @@ import tables
 import uproot
 
 
-def LoadObject(file : str):
+def read_dill(file : str):
     """ Opens and serialises object saved as a dill file. May be remaned to a more general method if dill files are used more commonly.
 
     Args:
@@ -23,7 +23,7 @@ def LoadObject(file : str):
     return obj
 
 
-def SaveObject(file : str, obj : dict):
+def write_dill(file : str, obj : dict):
     """ Saves object to file.
 
     Args:
@@ -34,7 +34,7 @@ def SaveObject(file : str, obj : dict):
         dill.dump(obj, f)
     return
 
-def LoadConfiguration(file : str) -> dict:
+def read_json(file : str) -> dict:
     """ Loads a json file.
 
     Args:
@@ -48,8 +48,8 @@ def LoadConfiguration(file : str) -> dict:
     return config
 
 
-def SaveConfiguration(params : any, file : str):
-    """ Saves an objects to a json file. params should be an object serialisable by json (no numpy arrays etc.).
+def write_json(params : any, file : str):
+    """ Saves an object to a json file. params should be an object serialisable by json (no numpy arrays etc.).
 
     Args:
         params (any): correction parameters.
@@ -60,7 +60,7 @@ def SaveConfiguration(params : any, file : str):
     return
 
 
-def DictToHDF5(dictionary : dict, file : str):
+def write_hdf5(dictionary : dict, file : str):
     """ Write dictionary to a HDF5 file.
 
     Args:
@@ -73,7 +73,7 @@ def DictToHDF5(dictionary : dict, file : str):
     return
 
 
-def ReadHDF5(file : str):
+def read_hdf5(file : str):
     """ Reads a HDF5 file and unpacks the contents into pandas dataframes.
 
     Args:
@@ -93,7 +93,7 @@ def ReadHDF5(file : str):
         return {k : pd.read_hdf(file, k) for k in keys}
 
 
-class IO:
+class RootIO:
     """ Interface to ROOT file using uproot
     Attributes:
         filename (str): ROOT filename
@@ -101,7 +101,7 @@ class IO:
         start (int): starting point to read from. Defaults to None.
     Methods:
         Get (ak.Array): Load nTuple from root file as awkward array.
-        ListNTuples : list all NTuple entries produced by the analyser.
+        list_ntuples : list all NTuple entries produced by the analyser.
     """
 
     def __init__(self, _filename: str, _nEvents: int = -1, _start: int = None):
@@ -126,7 +126,7 @@ class IO:
                 print(f"Info: data entry {k} is None, this entry will be dropped.")
                 continue
             if type(v) == dict:
-                for k1, v1 in IO.convert_types(v).items():
+                for k1, v1 in RootIO.convert_types(v).items():
                     d_new[f"{k}_{k1}"] = v1
             elif isinstance(v.type.content, ak.types.OptionType):
                 d_new[k] = ak.Array(v.layout.project())
@@ -135,7 +135,7 @@ class IO:
         return d_new
 
 
-    def WriteData(self, vectors : dict = None, histograms : dict = None, overwrite : bool = False):
+    def write_data(self, vectors : dict = None, histograms : dict = None, overwrite : bool = False):
         """ Write TTree to a new root file.
 
         Args:
@@ -161,7 +161,7 @@ class IO:
         return
 
 
-    def LoadData(self, item: str) -> ak.Array:
+    def read_data(self, item: str) -> ak.Array:
         """ Load nTuple from root file as awkward array.
 
         Args:
@@ -185,19 +185,19 @@ class IO:
                 return None
 
 
-    def Get(self, item):
+    def get(self, item):
         if type(item) is list:
             for i in item:
-                out = self.LoadData(i)
+                out = self.read_data(i)
                 if out is not None:
                     return out
             if out is None:
                 warnings.warn(f"ntuple names {item} could not be found in the file.")
         else:
-            return self.LoadData(item)
+            return self.read_data(item)
 
 
-    def ListNTuples(self, search: str = "", return_keys=False):
+    def list_ntuples(self, search: str = "", return_keys=False):
         """ list all NTuple entries produced by the analyser.
 
         Args:

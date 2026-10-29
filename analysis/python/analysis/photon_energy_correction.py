@@ -5,7 +5,7 @@ import pandas as pd
 from python.analysis import fitting, plotting
 from python.analysis.plotting import plots
 
-def LinearCorrection(x, p0):
+def apply_linear_correction(x, p0):
     return x / p0
 
 class ResponseFit(fitting.FitFunction):
@@ -19,18 +19,18 @@ class ResponseFit(fitting.FitFunction):
     def p0(x, y):
         return None
 
-def ResponseCorrection(x, p0, p1, p2):
+def response_correction(x, p0, p1, p2):
     return x / (ResponseFit.func(x, p0, p1, p2) + 1)
 
 
 shower_energy_correction = {
-    "linear" : LinearCorrection,
-    "response": ResponseCorrection,
+    "linear" : apply_linear_correction,
+    "response": response_correction,
     None : None
 }
 
 #! replace with selection tools equivalent
-def CreatePFOMasks(masks : dict[ak.Array]) -> ak.Array:
+def create_pfo_masks(masks : dict[ak.Array]) -> ak.Array:
     """ combine a dicitonary of masks into a single mask.
 
     Args:
@@ -48,7 +48,7 @@ def CreatePFOMasks(masks : dict[ak.Array]) -> ak.Array:
     return mask
 
 
-def PhotonSelection(df : pd.DataFrame, book : plotting.PlotBook = plotting.PlotBook.null()):
+def photon_selection(df : pd.DataFrame, book : plotting.PlotBook = plotting.PlotBook.null()):
     pi0_mother = df.true_mother == 111
     counts = {"pi0_daughter" : len(pi0_mother[df.pi0_photon]), "other" : len(df.pi0_photon) - len(df.pi0_photon[df.pi0_photon])}
     print(counts)
@@ -63,7 +63,7 @@ def PhotonSelection(df : pd.DataFrame, book : plotting.PlotBook = plotting.PlotB
     return df
 
 
-def LinearFit(x, m):
+def line(x, m):
     return m * x
 
 
@@ -98,33 +98,33 @@ def linear_fit(df : pd.DataFrame, bins : np.ndarray, energy_range : list, book :
     if any(np.isnan(np.concatenate([x, y]))):
         raise Exception(f"binned x and y values contain NaNs. Consider changing the binning range. \n {x, y=}")
 
-    popt, pcov = fitting.curve_fit(LinearFit, x, y)
+    popt, pcov = fitting.curve_fit(line, x, y)
 
     print(popt, pcov**0.5)
     perr = np.array([pcov[i][i] for i in range(len(popt))])**0.5
 
     plots.Plot(x, y, marker = "x", linestyle = "")
-    plots.Plot(x, LinearFit(x, *popt), newFigure = False, label = "fit")
-    plots.plt.fill_between(x, LinearFit(x, *(popt + perr)), LinearFit(x, *(popt - perr)), color = "C3", alpha = 0.5)
+    plots.Plot(x, line(x, *popt), newFigure = False, label = "fit")
+    plots.plt.fill_between(x, line(x, *(popt + perr)), line(x, *(popt - perr)), color = "C3", alpha = 0.5)
     plots.Plot(x, x, newFigure = False, label = "$y = x$", xlabel = "$E^{reco}$ (MeV)", ylabel = "$E^{true}$ (MeV)")
     plots.plt.legend()
 
 
     plots.PlotHist2D(df.true_energy, df.reco_shower_energy, x_range = [0, 1500], y_range = [0, 1500], cmap = "summer")
-    plots.Plot(x, LinearFit(x, *popt), newFigure = False, label = "fit", color = "C0")
+    plots.Plot(x, line(x, *popt), newFigure = False, label = "fit", color = "C0")
     plots.Plot(x, x, newFigure = False, color = "black", label = "$y = x$")
     plots.Plot(x, y, marker = "x", linestyle = "", ylabel = "$E^{true}$ (MeV)", xlabel = "$E^{reco}$ (MeV)", newFigure = False, color = "C0")
     book.Save()
     return popt[0]
 
 
-def LinearFitPerformance(df : pd.DataFrame, linear_correction : float, book : plotting.PlotBook = plotting.PlotBook.null()):
+def linear_fit_performance(df : pd.DataFrame, linear_correction : float, book : plotting.PlotBook = plotting.PlotBook.null()):
     """ Performance plots and metrics of linear correction.
 
     Args:
         linear_correction (float): correction from fit
     """
-    corrected_energy = LinearCorrection(df.reco_shower_energy, linear_correction)
+    corrected_energy = apply_linear_correction(df.reco_shower_energy, linear_correction)
 
     fe = (df.reco_shower_energy / df.true_energy) - 1
     fec = (corrected_energy / df.true_energy) - 1
@@ -142,7 +142,7 @@ def LinearFitPerformance(df : pd.DataFrame, linear_correction : float, book : pl
     return
 
 
-def IterBinnedDF(df : pd.DataFrame, variable : str, v_range: list, reco_bins : list) -> pd.DataFrame:
+def iter_binned_df(df : pd.DataFrame, variable : str, v_range: list, reco_bins : list) -> pd.DataFrame:
     for i in range(1, len(reco_bins)):
         binned_data = df[(df.reco_shower_energy > reco_bins[i-1]) & (df.reco_shower_energy < reco_bins[i])]
         ranged_data = binned_data[(binned_data[variable] > min(v_range)) & (binned_data[variable] < max(v_range))]
@@ -151,14 +151,14 @@ def IterBinnedDF(df : pd.DataFrame, variable : str, v_range: list, reco_bins : l
 
 def calculate_mean(df : pd.DataFrame, variable : str, v_range: list, reco_bins : list) -> np.ndarray:
     means = []
-    for column in IterBinnedDF(df, variable, v_range, reco_bins):
+    for column in iter_binned_df(df, variable, v_range, reco_bins):
         means.append(column.mean())
     return np.array(means)
 
 
 def calculate_sem(df : pd.DataFrame, variable : str, v_range: list, reco_bins : list) -> np.ndarray:
     sem = []
-    for column in IterBinnedDF(df, variable, v_range, reco_bins):
+    for column in iter_binned_df(df, variable, v_range, reco_bins):
         sem.append(column.std() / np.sqrt(len(column)))
     return np.array(sem)
 
@@ -177,28 +177,28 @@ def create_bins_df(value : pd.Series, n_entries, v_range : list = None) -> np.nd
     return np.array(bins)
 
 
-def CalculateCentralValues(df : pd.date_range, bins : np.ndarray, book : plotting.PlotBook) -> dict:
+def calculate_central_values(df : pd.date_range, bins : np.ndarray, book : plotting.PlotBook) -> dict:
     central_values = {}
 
     with plotting.styles.PlotStyler().Update(font_scale = 1.3):
         for k, v in {"student_t" : fitting.student_t, "gaussian" : fitting.gaussian}.items():
-            central_values[k] = fitting.ExtractCentralValues_df(df, "reco_shower_energy", "fractional_error", [-1, 1], [v], bins, 20, bin_label = "$E^{reco}$", bin_units = "(MeV)")
+            central_values[k] = fitting.extract_central_values_df(df, "reco_shower_energy", "fractional_error", [-1, 1], [v], bins, 20, bin_label = "$E^{reco}$", bin_units = "(MeV)")
             book.Save()
-        # central_values["gaussian"] = fitting.ExtractCentralValues_df(df, "reco_shower_energy", "fractional_error", [-1, 1], [fitting.gaussian], bins, 20)
+        # central_values["gaussian"] = fitting.extract_central_values_df(df, "reco_shower_energy", "fractional_error", [-1, 1], [fitting.gaussian], bins, 20)
         # book.Save()
         central_values["mean"] = [calculate_mean(df, "fractional_error", [-1, 1], bins), calculate_sem(df, "fractional_error", [-1, 1], bins)]
         book.Save()
     return central_values
 
 
-def ResponseFits(central_values : dict, bins : np.ndarray, book : plotting.PlotBook) -> dict:
+def response_fits(central_values : dict, bins : np.ndarray, book : plotting.PlotBook) -> dict:
     x = (bins[1:] + bins[:-1]) / 2
     response_params = {}
 
     for _, cv in plots.IterMultiPlot(central_values):
         print(cv)
         print(central_values[cv][1])
-        popt, perr = fitting.Fit(x, central_values[cv][0], central_values[cv][1], ResponseFit, method = "lm", plot = True, xlabel = "$E^{reco}$ (MeV)", ylabel = "Fractional error", maxfev = int(1E6))
+        popt, perr = fitting,fit(x, central_values[cv][0], central_values[cv][1], ResponseFit, method = "lm", plot = True, xlabel = "$E^{reco}$ (MeV)", ylabel = "Fractional error", maxfev = int(1E6))
         plots.plt.ylim(-1, 1)
         plots.plt.title(cv)
         response_params[cv] = {"value" : popt, "error" : perr}
@@ -209,17 +209,17 @@ def ResponseFits(central_values : dict, bins : np.ndarray, book : plotting.PlotB
 
     for cv in central_values:
         plots.plt.figure()
-        popt, _ = fitting.Fit(x, central_values[cv][0], central_values[cv][1], ResponseFit, method = "lm", plot = True, xlabel = "$E^{reco}$ (MeV)", ylabel = "Fractional error", maxfev = int(1E6))
+        popt, _ = fitting,fit(x, central_values[cv][0], central_values[cv][1], ResponseFit, method = "lm", plot = True, xlabel = "$E^{reco}$ (MeV)", ylabel = "Fractional error", maxfev = int(1E6))
         plots.plt.ylim(-1, 1)
         book.Save()
     return response_params
 
 
-def MethodComparison(df : pd.DataFrame, linear_correction : float, response_params : dict, bins : np.ndarray, energy_range : list, book : plotting.PlotBook):
+def method_comparison(df : pd.DataFrame, linear_correction : float, response_params : dict, bins : np.ndarray, energy_range : list, book : plotting.PlotBook):
     energies = {"uncorrected" : df.reco_shower_energy, "linear" : df.reco_shower_energy / linear_correction}
 
     for p in response_params:
-        energies[p] = ResponseCorrection(df.reco_shower_energy, *response_params[p]["value"])
+        energies[p] = response_correction(df.reco_shower_energy, *response_params[p]["value"])
 
     energies = {"uncorrected" : energies["uncorrected"], "gaussian" : energies["gaussian"]}
 

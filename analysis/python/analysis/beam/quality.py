@@ -28,7 +28,7 @@ def Fit_Vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
         y, bins_edges = np.histogram(data, bins = bins, range = sorted([np.nanpercentile(data, 10), np.nanpercentile(data, 90)])) # fit only to data within the 10th and 90th percentile of data to exclude large tails in the distriubtion.
         yerr = np.sqrt(y) # Poisson error
 
-        popt, perr = fitting.Fit(common.bin_centers(bins_edges), y, yerr, fitting.gaussian)
+        popt, perr = fitting,fit(common.bin_centers(bins_edges), y, yerr, fitting.gaussian)
 
         mu[i] = popt[1]
         sigma[i] = abs(popt[2])
@@ -142,7 +142,7 @@ def Fits(args : argparse.Namespace, output : dict, out : str, sample_name : str)
     #* write to json file
     os.makedirs(args.out, exist_ok = True)
     name = out + sample_name + "_beam_quality_fit_values.json"
-    io.SaveConfiguration(fit_values, name)
+    io.write_json(fit_values, name)
     print(f"fit values written to {name}")
 
     return fit_values

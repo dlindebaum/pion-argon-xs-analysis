@@ -15,7 +15,7 @@ import pandas as pd
 
 from rich import print
 
-from python.analysis.io import ReadHDF5, LoadConfiguration
+from python.analysis.io import read_hdf5, read_json
 from python.analysis.application import ApplicationArguments
 from python.analysis import common
 
@@ -162,8 +162,8 @@ def CreateTables(path : str, selection_name : str, signal : str = None):
         if not os.path.exists(f"{path}/tables_mc/{selection_name}/{selection_name}_{f}.hdf5"):
             continue
         file_path_data = f"{path}/tables_mc/{selection_name}/{selection_name}_{f}.hdf5"
-        tables_mc[col_map[f]] = ReadHDF5(f"{path}/tables_mc/{selection_name}/{selection_name}_{f}.hdf5")
-        tables_data[col_map[f]] = ReadHDF5(f"{path}/tables_data/{selection_name}/{selection_name}_{f}.hdf5")
+        tables_mc[col_map[f]] = read_hdf5(f"{path}/tables_mc/{selection_name}/{selection_name}_{f}.hdf5")
+        tables_data[col_map[f]] = read_hdf5(f"{path}/tables_data/{selection_name}/{selection_name}_{f}.hdf5")
 
     if len(tables_mc) == 0:
         return None, None
@@ -314,8 +314,8 @@ def copy_table(source : str, dest : str, new_name : str = None, bf_cols : bool =
 
 
 def brw_selection(path):
-    selection_data = ReadHDF5(f"{path}/beam_reweight/selection_data.hdf5")
-    selection_mc = ReadHDF5(f"{path}/beam_reweight/selection_mc.hdf5")
+    selection_data = read_hdf5(f"{path}/beam_reweight/selection_data.hdf5")
+    selection_mc = read_hdf5(f"{path}/beam_reweight/selection_mc.hdf5")
 
     selection_table = pd.concat(objs = [selection_data.rename(columns = {"Counts" : "Data"}), selection_mc.rename(columns = {"Counts" : "MC"})], axis = 1)
     selection_table = selection_table.rename(index = {"TrueFiducialCut" : "Fiducial region", "HasFinalStatePFOsCut" : "Inverted preselection"})
@@ -332,14 +332,14 @@ def main(args : argparse.Namespace):
     out = f"{path}/formatted_tables/"
 
     os.makedirs(f"{out}upstream/", exist_ok = True)
-    upl_table(LoadConfiguration(f"{path}/upstream_loss/fit_parameters.json")).style.hide(axis = "index").to_latex(f"{out}upstream/fit.tex")
+    upl_table(read_json(f"{path}/upstream_loss/fit_parameters.json")).style.hide(axis = "index").to_latex(f"{out}upstream/fit.tex")
     FormatTable(f"{out}upstream/fit.tex", False)
 
     os.makedirs(f"{out}beam_reweight/", exist_ok = True)
     brw_selection(path).style.to_latex(f"{out}beam_reweight/selection.tex")
     FormatTable(f"{out}beam_reweight/selection.tex")
 
-    brw = brw_table(LoadConfiguration(f"{path}/beam_reweight/gaussian.json"))
+    brw = brw_table(read_json(f"{path}/beam_reweight/gaussian.json"))
     brw.style.hide(axis = "index").to_latex(f"{out}/beam_reweight/fit.tex")
     FormatTable(f"{out}/beam_reweight/fit.tex", False)
 
@@ -358,7 +358,7 @@ def main(args : argparse.Namespace):
         FormatTable(f"{outp}/total_counts.tex") 
 
 
-    bq = {i : LoadConfiguration(f"{path}/beam_quality/{i}_beam_quality_fit_values.json") for i in ["mc", "data"]}
+    bq = {i : read_json(f"{path}/beam_quality/{i}_beam_quality_fit_values.json") for i in ["mc", "data"]}
     
     outp = f"{out}beam_quality/"
     os.makedirs(outp, exist_ok = True)
@@ -416,10 +416,10 @@ if __name__ == "__main__":
     analysis_options = ["normalisation", "beam_quality", "beam_scraper", "selection", "photon_correction", "reweight", "upstream_correction", "toy_parameters", "analysis_input", "analyse"]
 
     parser = argparse.ArgumentParser()
-    ApplicationArguments.Config(parser)
+    ApplicationArguments.config(parser)
     parser.add_argument("-w", "--workdir", type = str, default = ".", help = "analysis working directory")
 
-    args = ApplicationArguments.ResolveArgs(parser.parse_args())
+    args = ApplicationArguments.resolve_args(parser.parse_args())
 
     print(vars(args))
     main(args)

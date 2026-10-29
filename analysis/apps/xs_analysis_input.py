@@ -52,11 +52,11 @@ def main(args):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser("Create analysis input files from Ntuples.")
-    application.ApplicationArguments.Config(parser)
-    application.ApplicationArguments.Output(parser)
-    application.ApplicationArguments.Processing(parser)
+    application.ApplicationArguments.config(parser)
+    application.ApplicationArguments.output(parser)
+    application.ApplicationArguments.processing(parser)
     parser.add_argument("-R", "--ROOT", dest = "root", action="store_true", help = "Saves the output to ROOT files in addition to the dill files.")
 
-    args = application.ApplicationArguments.ResolveArgs(parser.parse_args())
+    args = application.ApplicationArguments.resolve_args(parser.parse_args())
     print(vars(args))
     main(args)

@@ -996,7 +996,7 @@ def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None
     if truncate == True:
         if range is None:
             raise Exception("if truncate is true, range must be provided")
-        data = common.ClipJagged(data, min(range), max(range))
+        data = common.clip_jagged(data, min(range), max(range))
 
     height, edges, _ = plt.hist(data, bins, label = label, alpha = alpha, density = density, histtype = histtype, stacked = stacked, color = color, range = range if range and len(range) == 2 else None, weights = weights)
     binWidth = round((edges[-1] - edges[0]) / len(edges), sf)

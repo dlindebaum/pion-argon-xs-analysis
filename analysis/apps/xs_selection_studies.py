@@ -112,13 +112,13 @@ def main(args):
     outdir = args.out + "selection/"
     os.makedirs(outdir, exist_ok = True)
 
-    output_mc = selection.processing.MergeSelectionMasks(selection.processing.merge_multiproccess_output(application.ApplicationProcessing(["mc"], outdir, args, run, False, "output_mc")["mc"]))
+    output_mc = selection.processing.MergeSelectionMasks(selection.processing.merge_multiproccess_output(application.processing(["mc"], outdir, args, run, False, "output_mc")["mc"]))
 
     output_data = None
     if "data" in args.ntuple_files:
         if len(args.ntuple_files["data"]) > 0:
             if args.mc_only is False:
-                output_data = selection.processing.MergeSelectionMasks(selection.processing.merge_multiproccess_output(application.ApplicationProcessing(["data"], outdir, args, run, False, "output_data")["data"]))
+                output_data = selection.processing.MergeSelectionMasks(selection.processing.merge_multiproccess_output(application.processing(["data"], outdir, args, run, False, "output_data")["data"]))
 
     # tables
     selection.plots.MakeTables(output_mc, args.out + "tables_mc/", "mc")
@@ -174,16 +174,16 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Applies beam particle selection, PFO selection, produces tables and basic plots.", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    application.ApplicationArguments.Config(parser, required = True)
-    application.ApplicationArguments.Processing(parser)
-    application.ApplicationArguments.Output(parser)
-    application.ApplicationArguments.Regen(parser)
+    application.ApplicationArguments.config(parser, required = True)
+    application.ApplicationArguments.processing(parser)
+    application.ApplicationArguments.output(parser)
+    application.ApplicationArguments.regen(parser)
 
     parser.add_argument("--mc", dest = "mc_only", action = "store_true", help = "Only analyse the MC file.")
 
     args = parser.parse_args()
 
-    args = application.ApplicationArguments.ResolveArgs(args)
+    args = application.ApplicationArguments.resolve_args(args)
 
     print(vars(args))
     main(args)

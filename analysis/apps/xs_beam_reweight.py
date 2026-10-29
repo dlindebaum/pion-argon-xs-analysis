@@ -99,7 +99,7 @@ def main(args : argparse.Namespace):
     out = args.out + "beam_reweight/"
     os.makedirs(out, exist_ok = True)
 
-    outputs = application.ApplicationProcessing(list(args.ntuple_files.keys()), out, args, run, True)
+    outputs = application.processing(list(args.ntuple_files.keys()), out, args, run, True)
 
     for o in outputs:
         for t in outputs[o]["table"]:
@@ -127,10 +127,10 @@ def main(args : argparse.Namespace):
             reweight.ReWeightResults(output_mc["sideband"], output_data["sideband"], args, 25, results, r, book = book)
             reweight.ReWeightResults(output_mc["analysis"], output_data["analysis"], args, 50, results, r, book = book)
             reweight_params = {f"p{i}" : {"value" : results[r][0][i], "error" : results[r][1][i]} for i in range(getattr(fitting, r).n_params)}
-            io.SaveConfiguration(reweight_params, out + r + ".json")
+            io.write_json(reweight_params, out + r + ".json")
         plots.plt.close("all")
 
-    reweight_params = io.LoadConfiguration(out + "gaussian" + ".json")
+    reweight_params = io.read_json(out + "gaussian" + ".json")
 
 
     chi2_table = {}
@@ -161,11 +161,11 @@ def main(args : argparse.Namespace):
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser("Calculates reweighting parameters for beam momentum.")
-    application.ApplicationArguments.Config(args, True)
-    application.ApplicationArguments.Output(args)
-    application.ApplicationArguments.Regen(args)
-    application.ApplicationArguments.Processing(args)
+    application.ApplicationArguments.config(args, True)
+    application.ApplicationArguments.output(args)
+    application.ApplicationArguments.regen(args)
+    application.ApplicationArguments.processing(args)
 
-    args = application.ApplicationArguments.ResolveArgs(args.parse_args())
+    args = application.ApplicationArguments.resolve_args(args.parse_args())
     print(vars(args))
     main(args)
