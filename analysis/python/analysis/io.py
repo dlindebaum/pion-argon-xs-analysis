@@ -1,4 +1,10 @@
-"""Input/output helpers for object and config persistence."""
+"""
+Created on: 30/10/2026 16:05
+
+Author: Shyam Bhuller
+
+Description: Functions and classes for reading from / writing to differnt file types.
+"""
 import json
 import warnings
 

@@ -294,7 +294,7 @@ class Data:
         """ Equivlant to shower matching/angluar closeness cut, but for backtracked MC.
 
         Args:
-            events (Master.Data): events to look at
+            events (ntuple.Data): events to look at
 
         Raises:
             Exception: if all reco PFP's backtracked to the same true particle
@@ -956,8 +956,8 @@ class TrueParticleData(ParticleData):
         if self.events.ntuple_type == NtupleType.SHOWER_MERGING:
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
-                + f"'nPi0' for {NtupleType.SHOWER_MERGING} ntuple type.")
-        self.read_data("nPi0", "true_daughter_nPi0")
+                + f"'n_pi0' for {NtupleType.SHOWER_MERGING} ntuple type.")
+        self.read_data("n_pi0", "true_daughter_nPi0")
         return getattr(self, f"_{type(self).__name__}__n_pi0")
 
     @property
@@ -966,7 +966,7 @@ class TrueParticleData(ParticleData):
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
                 + f"'n_pi_plus' for {NtupleType.SHOWER_MERGING} ntuple type.")
-        self.read_data("n_pi_plus", "true_daughter_n_pi_plus")
+        self.read_data("n_pi_plus", "true_daughter_nPiPlus")
         return getattr(self, f"_{type(self).__name__}__n_pi_plus")
 
     @property
@@ -975,7 +975,7 @@ class TrueParticleData(ParticleData):
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
                 + f"'n_pi_minus' for {NtupleType.SHOWER_MERGING} ntuple type.")
-        self.read_data("n_pi_minus", "true_daughter_n_pi_minus")
+        self.read_data("n_pi_minus", "true_daughter_nPiMinus")
         return getattr(self, f"_{type(self).__name__}__n_pi_minus")
 
     @property
@@ -984,7 +984,7 @@ class TrueParticleData(ParticleData):
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
                 + f"'n_proton' for {NtupleType.SHOWER_MERGING} ntuple type.")
-        self.read_data("n_proton", "true_daughter_n_proton")
+        self.read_data("n_proton", "true_daughter_nProton")
         return getattr(self, f"_{type(self).__name__}__n_proton")
 
     @property
@@ -993,7 +993,7 @@ class TrueParticleData(ParticleData):
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
                 + f"'n_neutron' for {NtupleType.SHOWER_MERGING} ntuple type.")
-        self.read_data("n_neutron", "true_daughter_n_neutron")
+        self.read_data("n_neutron", "true_daughter_nNeutron")
         return getattr(self, f"_{type(self).__name__}__n_neutron")
 
     @property
@@ -1002,12 +1002,12 @@ class TrueParticleData(ParticleData):
             raise AttributeError(
                 f"'{type(self).__name__}' object has no attribute "
                 + f"'n_nucleus' for {NtupleType.SHOWER_MERGING} ntuple type.")
-        self.read_data("n_nucleus", "true_daughter_n_nucleus")
+        self.read_data("n_nucleus", "true_daughter_nNucleus")
         return getattr(self, f"_{type(self).__name__}__n_nucleus")
 
     @property
     def true_beam_end_process(self) -> ak.Array:
-        self.read_data("true_beam_end_process", "true_beam_end_process")
+        self.read_data("true_beam_end_process", "true_beam_endProcess")
         return getattr(self, f"_{type(self).__name__}__true_beam_end_process")
 
     @property
@@ -1956,7 +1956,7 @@ class TrueParticleDataBT(ParticleData):
         """ Gets the true particle number of each true particle backtracked to reco
 
         Args:
-            events (Master.Data): events to look at
+            events (ntuple.Data): events to look at
 
         Returns:
             ak.Array: awkward array of true particle indices

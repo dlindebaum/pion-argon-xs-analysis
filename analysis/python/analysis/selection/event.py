@@ -625,27 +625,27 @@ def generate_truth_tags(
         if only_diphoton:
             pi0_count = count_diphoton_decays(
                 events,
-                beam_daughters=beam_daughters)
+                beam_daughters)
         else:
             if not beam_daughters:
-                count_all_pi0s(events, beam_daughters=beam_daughters)
+                count_all_pi0s(events, beam_daughters)
             else:
                 try:
                     pi0_count = events.true_particles.n_pi0
                 except(AttributeError):
-                    count_all_pi0s(events, beam_daughters=beam_daughters)
+                    count_all_pi0s(events, beam_daughters)
     if pi_charged_count is None:
         if not beam_daughters:
             pi_charged_count = count_non_beam_charged_pi(
                 events,
-                beam_daughters=beam_daughters)
+                beam_daughters)
         else:
             try:
                 pi_charged_count = events.true_particles.n_pi_plus
             except(AttributeError):
                 pi_charged_count = count_non_beam_charged_pi(
                     events,
-                    beam_daughters=beam_daughters)
+                    beam_daughters)
     return np.logical_and(pi0_cut(pi0_count),
                           pi_charged_cut(pi_charged_count))
 

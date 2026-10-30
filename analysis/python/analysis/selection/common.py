@@ -664,7 +664,7 @@ __all__ = [
     "multi_cuts_to_func",
     "cuts_to_str",
     "multi_cuts_to_str",
-    "Median",
+    "median",
     "get_impact_parameter",
     "find_beam_impact_parameters",
     "find_beam_separations",

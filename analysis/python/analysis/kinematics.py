@@ -1,4 +1,10 @@
-"""Kinematic helpers."""
+"""
+Created on: 30/10/2026 16:06
+
+Author: Shyam Bhuller
+
+Description: Functions to help calculate kinematic properties, generally related to particle tracks.
+"""
 import awkward as ak
 
 from python.analysis import bethe_bloch, selection, vector
@@ -53,8 +59,8 @@ def reco_end_energy(tracks : ak.Array, KE_init: ak.Array, dEdX : ak.Array | None
         dE = ak.sum(dEdX[:, :-1] * pitches, -1)
         KE_end = KE_init - dE
     elif method == "track":
-        track_length = track_length(pitches=pitches)
-        KE_end = bethe_bloch.KE_end(KE_init, track_length, 50)
+        tl = track_length(pitches=pitches)
+        KE_end = bethe_bloch.KE_end(KE_init, tl, 50)
     else:
         raise Exception(f"{method} not a valid method, pick 'calo' or 'track'")
     return KE_end

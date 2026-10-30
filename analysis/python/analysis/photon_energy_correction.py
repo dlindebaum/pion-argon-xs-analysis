@@ -1,3 +1,10 @@
+"""
+Created on: 30/10/2026 16:07
+
+Author: Shyam Bhuller
+
+Description: Functions and classes related to the photon energy correction method for final state showers.
+"""
 import awkward as ak
 import numpy as np
 import pandas as pd

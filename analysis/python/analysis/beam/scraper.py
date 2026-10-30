@@ -134,7 +134,7 @@ def beam_scraper_plots(beam_inst_KE_bins : list, output_mc : dict[ak.Array], scr
     """ Scatter plots of events to show beam scraper events as a function of the XY position at the beam instrumentation.
 
     Args:
-        mc (Master.Data): events to look at.
+        mc (ntuple.Data): events to look at.
         beam_inst_KE_bins (list): beam kinetic energy bins.
         scraper_fits (dict): parameters to define beam scrapers.
 

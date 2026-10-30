@@ -268,8 +268,8 @@ def MedianDEdXCut(events: Data, cut : float = 2.4, op = "<", truncate : float = 
         dEdX = events.recoParticles.beam_dEdX
     else:
         dEdX = get_truncated_dEdX(events, truncate)
-    median = median(dEdX)
-    return create_mask(cut, op, median, return_property)
+    med = median(dEdX)
+    return create_mask(cut, op, med, return_property)
 
 
 def BeamScraperCut(events : Data, KE_range : int, fits : dict, cut : float = 1.5, op = "<", return_property : bool = False) -> ak.Array:

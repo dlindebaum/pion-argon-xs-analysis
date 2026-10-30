@@ -85,7 +85,7 @@ def step_plan(args : argparse.Namespace, no_data : bool, n_data : list):
         ("selection", not hasattr(args, "selection_masks")),
         ("reweight", ("params" not in args.beam_reweight) and (not no_data)),
         ("upstream_correction", not hasattr(args, "upstream_loss_correction_params")),
-        ("region_plots", hasattr(args, "region_plots") and ("region_plots" not in existing)),
+        ("region_plots", ("region_plots" not in existing)),
         ("analysis_input", (not hasattr(args, "analysis_input")) and (len(n_data) > 0)),
         ("mach3_input", ("mach3_input" not in existing) and (len(n_data) > 0)),
         ("fit_model", ("fit_model" not in existing)),

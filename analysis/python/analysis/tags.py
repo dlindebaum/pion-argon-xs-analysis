@@ -67,6 +67,14 @@ class TagIterator:
 
 
 def merge_tags(tags : list[Tags]) -> Tags:
+    """ Merge a group of tags into the same Tags object. Includes merging masks.
+
+    Args:
+        tags (list[Tags]): List of Tags to merge.
+
+    Returns:
+        Tags: Merged Tags.
+    """
     new_tags = Tags()
     for t in tags:
         for tag in t:
@@ -117,11 +125,11 @@ def other_mask(masks : dict) -> ak.Array:
     return ~other
 
 
-def generate_true_particle_tags(events):# : Data) -> Tags:
+def generate_true_particle_tags(events : "Data") -> Tags:
     """ Creates true particle tags with boolean masks. Does this for all PFOs.
 
     Args:
-        events (Master.Data): events to look at
+        events (ntuple.Data): Events to look at.
 
     Returns:
         Tags: tags
@@ -144,11 +152,11 @@ def generate_true_particle_tags(events):# : Data) -> Tags:
     return tags
 
 
-def generate_true_beam_particle_tags(events):# : Data) -> Tags:
+def generate_true_beam_particle_tags(events : "Data") -> Tags:
     """ Creates true particle tags with boolean masks for beam particles.
 
     Args:
-        events (Master.Data): events to look at
+        events (ntuple.Data): Events to look at.
 
     Returns:
         Tags: tags
@@ -179,11 +187,11 @@ def generate_true_beam_particle_tags(events):# : Data) -> Tags:
     return tags
 
 
-def generate_true_particle_tags_pi_plus(events):# : Data) -> Tags:
+def generate_true_particle_tags_pi_plus(events : "Data") -> Tags:
     """ Creates true particle tags with boolean masks, with specific tags related to pi+ particles. Does this for all PFOs.
 
     Args:
-        events (Master.Data): events to look at
+        events (ntuple.Data): Events to look at.
 
     Returns:
         Tags: tags
@@ -224,7 +232,15 @@ def generate_true_particle_tags_pi_plus(events):# : Data) -> Tags:
     return tags
 
 
-def generate_true_particle_tags_interesting_pfos(events) -> Tags:
+def generate_true_particle_tags_interesting_pfos(events : "Data") -> Tags:
+    """ Generate tags for a subset of particle flow objects of interest for the final state topologies.
+
+    Args:
+        events (ntuple.Data): Events to look at.
+
+    Returns:
+        Tags: Created Tags.
+    """
     particles_to_tag = [
         211, -211, 13, -13, 11, -11, 22, 2212
     ]
@@ -269,11 +285,11 @@ def generate_true_particle_tags_interesting_pfos(events) -> Tags:
 
     return tags
 
-def generate_true_particle_tags_pi0_shower(events) -> Tags:# : Data):
+def generate_true_particle_tags_pi0_shower(events : "Data") -> Tags:
     """ Creates true particle tags with boolean masks with specific tags for pi0 photon showers. Does this for all PFOs.
 
     Args:
-        events (Master.Data): events to look at
+        events (ntuple.Data): Events to look at.
 
     Returns:
         Tags: tags
@@ -305,7 +321,7 @@ def generate_true_particle_tags_pi0_shower(events) -> Tags:# : Data):
     return tags
 
 
-def generate_pi0_tags(events, photon_pfos : ak.Array) -> Tags:# : Data, photon_pfos : ak.Array) -> Tags:
+def generate_pi0_tags(events : "Data", photon_pfos : ak.Array) -> Tags:
     """ Truth tags for pi0s.
         Categories are:
             two photons from the same pi0
@@ -314,7 +330,7 @@ def generate_pi0_tags(events, photon_pfos : ak.Array) -> Tags:# : Data, photon_p
             no photons from a pi0
 
     Args:
-        events (Data): events to look at.
+        events (Data): Events to look at..
         photon_pfos (ak.Array): mask which select PFOs that are photon showers
 
     Returns:
@@ -335,7 +351,15 @@ def generate_pi0_tags(events, photon_pfos : ak.Array) -> Tags:# : Data, photon_p
     return pi0_tags
 
 
-def exclusive_process_tags(true_masks):
+def exclusive_process_tags(true_masks : ak.Array) -> Tags:
+    """ Generate Tags for exclusive processes for pion-Argon cross sections.
+
+    Args:
+        true_masks (ak.Array): Masks for each definition.
+
+    Returns:
+        Tags: Created Tags.
+    """
     tags = Tags()
     colours = {
         "charge_exchange" : "#8EBA42",
@@ -367,6 +391,14 @@ def exclusive_process_tags(true_masks):
 
 
 def stopping_muon_tag(events : "Data"):
+    """ Tags to categorise beam muons that stop in the TPC.
+
+    Args:
+        events (Data): Events to look at.
+
+    Returns:
+        Tags: Created Tags.
+    """
     masks = particle_masks(events.true_particles_bt.beam_pdg, [-13])
     masks["other"] = other_mask(masks)
 
@@ -385,7 +417,15 @@ def stopping_muon_tag(events : "Data"):
     return tags
 
 
-def beam_scraper_tag(scraper_ids : ak.Array):
+def beam_scraper_tag(scraper_ids : ak.Array) -> Tags:
+    """ Tags for events which are and not beam scrapers.
+
+    Args:
+        scraper_ids (ak.Array): Id of events which are beam scrapers.
+
+    Returns:
+        Tags: Created Tags.
+    """
     tags = Tags()
     tags["scraper"] = Tag("scraper", "scraper", "C6", scraper_ids, 0)
     tags["non scraper"] = Tag("non scraper", "non scraper", "C0", ~scraper_ids, 1)

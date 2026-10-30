@@ -1,3 +1,10 @@
+"""
+Created on: 30/10/2026 16:03
+
+Author: Dennis Lindebaum
+
+Description: Classes for bookkeeping cuts for the ntuple Data class. 
+"""
 import warnings
 import numpy as np
 import awkward as ak
@@ -134,7 +141,7 @@ class CutHandler():
 
     def __init__(
             self,
-            evts = None,#: Master.Data = None,
+            evts = None,#: ntuple.Data = None,
             particles_to_tag: list = _default_particles,
             particle_tags : tags.Tags = None):
         """
@@ -143,7 +150,7 @@ class CutHandler():
 
         Parameters
         ----------
-        evts : Master.Data, optional
+        evts : ntuple.Data, optional
             Initial events the masks are being applied from.
             If not set here, it must be set for getting a
             table using `self.set_init_evts(evts)`. Default
@@ -236,10 +243,10 @@ class CutHandler():
             data = new_data
         return results
 
-    def set_init_evts(self, evts):#: Master.Data):
+    def set_init_evts(self, evts):#: ntuple.Data):
         """
         Set the initial event counts to be cut using the masks.
-        This is automatically performed if as `Master.Data`
+        This is automatically performed if as `ntuple.Data`
         object is passed in initialisation.
         
         This must be performed prior to generating a table.
@@ -251,12 +258,12 @@ class CutHandler():
         to be an acutal akward array (i.e.
         `evts.recoParticles.number` for reco and
         `evts.true_particles.number` for truth). At the moment,
-        we take a Master.Data object an pull the
+        we take a ntuple.Data object an pull the
         `evts.recoParticles.number` from it.
 
         Parameters
         ----------
-        evts : Master.Data
+        evts : ntuple.Data
             Initial events the masks are being applied from.
         """
         self._init_data = ak.ones_like(evts.recoParticles.number, dtype=bool)
@@ -721,7 +728,7 @@ class CutHandler():
     def __add__(self, other):
         return self.concatenate(other, return_copy=True)
 
-def apply_filters(obj, filters):#: Master.Data, filters):
+def apply_filters(obj, filters):#: ntuple.Data, filters):
     for f in filters:
         print(f"{f=}")
         obj.cut_table.add_mask(f)

@@ -594,6 +594,6 @@ def create_analysis_input_mc_true_beam(mc : ntuple.Data, args : argparse.Namespa
     mc_true_beam = mc.filter(masks, masks, True)
 
     process_def = args_c["process_definitions"]
-    true_regions = process_def.CreateDefinitions(process_def.criteria_list.get_criteria_values(mc_true_beam, **args["process_args"]), uncategorised = uncategorised)
+    true_regions = process_def.create_definitions(process_def.criteria_list.get_criteria_values(mc_true_beam, **args["process_args"]), uncategorised = uncategorised)
 
     return AnalysisInput.create_analysis_input_ntuple(mc_true_beam, args_c["upstream_loss_correction_params"]["value"], None, true_regions, [args["beam_reweight"]["params"][k]["value"] for k in args_c["beam_reweight"]["params"]], args_c["beam_reweight"]["strength"], args_c["fiducial_volume"], upstream_loss_func = args_c["upstream_loss_response"], energy_method = args_c["energy_method"])

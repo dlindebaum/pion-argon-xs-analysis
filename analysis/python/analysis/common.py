@@ -3,7 +3,7 @@ Created on: 21/01/2024 17:14
 
 Author: Shyam Bhuller
 
-Description: random functions which are sometimes useful
+Description: Random functions which are sometimes useful.
 """
 import argparse
 import awkward as ak

@@ -407,9 +407,9 @@ def counting_experiment_old(int_energy : ak.Array, init_energy : ak.Array, outsi
         n_initial = np.histogram(np.array(init_slice), energy_slices.slice_bins, weights = weights)[0]
         n_interact_inelastic = np.histogram(np.array(int_slice), energy_slices.slice_bins, weights = weights)[0]
 
-        n_incident = n_incident(n_initial, n_interact_inelastic)
+        n_inc = n_incident(n_initial, n_interact_inelastic)
 
-        return n_initial, n_interact_inelastic, n_interact_exclusive, n_incident
+        return n_initial, n_interact_inelastic, n_interact_exclusive, n_inc
     else:
         return n_interact_exclusive
 

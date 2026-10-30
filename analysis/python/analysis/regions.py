@@ -1,4 +1,10 @@
-"""Region definitions and utilities."""
+"""
+Created on: 30/10/2026 16:08
+
+Author: Shyam Bhuller
+
+Description: Functions to help produce region and process masks.
+"""
 import os
 
 from argparse import Namespace
@@ -15,14 +21,16 @@ def region_selection(events : ntuple.Data, args : Namespace | dict, is_mc : bool
     """ Get reco and true regions (if possible) for ntuple.
 
     Args:
-        events (Master.Data): events before beam pion selection.
-        args (Namespace): application arguements
-        is_mc (bool): if ntuple is MC or Data.
+        events (ntuple.Data): Events before beam pion selection.
+        args (Namespace): Application arguements.
+        is_mc (bool): if Ntuple is MC or Data.
+        region_type (samples.SampleDefinition, optional): Override region definition. Defaults to None.
+        process_type (samples.SampleDefinition, optional): Override process definition. Defaults to None.
+        removed (bool, optional): Include the removed events as "Uncategorised". Defaults to False.
 
     Returns:
-        tuple[dict, dict]: regions
+        dict[np.ndarray]: Regions.
     """
-
     args_c = common.args_to_dict(args)
 
     if is_mc:
@@ -74,9 +82,9 @@ def count_in_regions(true_regions : dict, reco_regions : dict, selection_efficin
     """ Computes the counts of each combination of reco and true regions.
 
     Args:
-        true_regions (dict): true region masks
-        reco_regions (dict): reco region masks
-        return_counts (bool, optional): return matrix of counts. Defaults to False.
+        true_regions (dict): True region masks.
+        reco_regions (dict): Reco region masks.
+        selection_efficincy (np.ndarray, optional): Selection efficiency to apply to the masks. Defaults to None.
 
     Returns:
         np.ndarray: counts.
@@ -96,7 +104,7 @@ def get_total_pion_inel_masks(mc : ntuple.Data) -> ak.Array:
     """ Returns the mask which selects true inelastic pi+.
 
     Args:
-        mc (Master.Data): mc events.
+        mc (ntuple.Data): MC events.
 
     Returns:
         ak.Array: mask.
@@ -110,8 +118,8 @@ def region_study(region_selections : dict[dict], out : str):
         Saved to file to be used in toy simulation.
 
     Args:
-        mc (Master.Data): mc events.
-        args (Namespace): application arguments.
+        mc (ntuple.Data): MC events.
+        args (Namespace): Application arguments.
     """
     os.makedirs(out + "reco_regions/", exist_ok = True)
     pdf = plotting.PlotBook(out + "reco_regions/reco_regions_study")
