@@ -94,7 +94,7 @@ In the following add the configuration information for the analysis inputs:
 The fit model can be recreated for convenience (e.g. different binning), and to do so, run the following:
 
 ```
-cex_generate_fit_model.py -c cex_analysis_2GeV_config.json -o .
+xs_generate_fit_model.py -c cex_analysis_2GeV_config.json -o .
 ```
 
 You will find the fit model created in the workspace: `fit_model/PDSPFitModel.yaml`
@@ -139,11 +139,11 @@ Once the fit is performed, you should get an output root file `Test.root`. This 
 Run the following:
 
 ```
-cex_cross_section.py -c cex_analysis_2GeV_config.json -o .
+xs_cross_section.py -c cex_analysis_2GeV_config.json -o .
 ```
 
 
-Core modules are Master.py, vector.py and Plots.py (optional). A simple example of how to look at true data is shown in `cex_beam_quality.py`, and the other scripts are more complicated examples of how to analyse nTuples. For further detail on each module you can read the docstrings.
+Core modules are Master.py, vector.py and Plots.py (optional). A simple example of how to look at true data is shown in `xs_beam_quality.py`, and the other scripts are more complicated examples of how to analyse nTuples. For further detail on each module you can read the docstrings.
 ## Run cross section analysis
 
 ### Simple
@@ -313,7 +313,7 @@ tables_mc:
 beam  loose_photon  loose_pi  null_pfo  photon  pi  pi0
 
 upstream_loss:
-cex_upstream_loss_plots.pdf  fit_parameters.json  output.dill
+xs_upstream_loss_plots.pdf  fit_parameters.json  output.dill
 
 xs_measurement:
 cross_section_plots.pdf
@@ -364,7 +364,7 @@ run_analysis.py -c analysis_config.json -o . --skip <selection, photon_correctio
 check `--help` for the names of all the apps which can be skipped or forced to run.
 
 ## Toy generator (Deprecated)
-To generate toys, you need to have run `cex_toy_parameters.py`. Then create a new json file to create your toy sample. An example template for the toy configuration is
+To generate toys, you need to have run `xs_toy_parameters.py`. Then create a new json file to create your toy sample. An example template for the toy configuration is
 
 ```[json]
 {
@@ -394,7 +394,7 @@ Note that the beam profile takes a file in the example, but this can also be rep
 to generate the toy run
 
 ```
-cex_toy_generator.py -c <your_toy_config_file>
+xs_toy_generator.py -c <your_toy_config_file>
 ```
 
 which will produce an HDF5 file with the generated toy sample. Note the toy sample is used for systematic studies, but can also be used to do the fit, background estimation and cross section measurement.
@@ -403,16 +403,16 @@ which will produce an HDF5 file with the generated toy sample. Note the toy samp
 
 Make sure to run all the steps in `run_analysis.py` and have a configuration for a toy template file and toy data sample (the difference being reduced stats). Then run the following 
 
-`cex_systematics.py -c <analysis configuration file> -o <analysis directory> --cv <dill file of your central value measurement>`
+`xs_systematics.py -c <analysis configuration file> -o <analysis directory> --cv <dill file of your central value measurement>`
 
 where, similar to `run_analysis.py` you can provide the argument `run`, `skip` and `regen`, then give a list of all the systematics you wish to evaluate.
 
 An example would be (to evaluate the mc stat uncertainty.):
 
-`cex_systematics.py -c <analysis configuration file> -o <analysis directory> --cv <dill file of your central value measurement> --run mc_stat`
+`xs_systematics.py -c <analysis configuration file> -o <analysis directory> --cv <dill file of your central value measurement> --run mc_stat`
 
 **WARNING THIS WILL TAKE A LONG TIME IF YOU DO `--run all` SO BE CAUTIOUS**
 
 To make a plot of the central value + any systematics you did generate, run
 
-`cex_systematics.py -c <analysis configuration file> -o <analysis directory> --cv <dill file of your central value measurement> --plot`.
+`xs_systematics.py -c <analysis configuration file> -o <analysis directory> --cv <dill file of your central value measurement> --plot`.

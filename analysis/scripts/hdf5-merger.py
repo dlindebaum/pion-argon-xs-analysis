@@ -7,7 +7,7 @@ Author: Shyam Bhuller
 Description: Merges pandas dataframes which are stored in hdf5 format.
 """
 from rich import print
-from python.analysis.Master import ReadHDF5, DictToHDF5
+from python.analysis.io import ReadHDF5, DictToHDF5
 
 import pandas as pd
 

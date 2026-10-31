@@ -13,8 +13,9 @@ from rich import print, rule
 import subprocess
 import time
 
-from python.analysis.Application import ApplicationArguments
-from python.analysis.Master import SaveConfiguration, LoadConfiguration, timer
+from python.analysis.application import ApplicationArguments
+from python.analysis.io import SaveConfiguration, LoadConfiguration
+from python.analysis.common import timer
 
 def file_search(path : str, data_cfg : dict) -> None:
     """ Search for files based on the names provided in the configuration, then update the paths in the configuration data.

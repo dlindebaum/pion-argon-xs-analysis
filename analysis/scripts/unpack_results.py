@@ -5,8 +5,8 @@ import argparse
 import tarfile
 from rich import print
 
-from python.analysis.Utils import ls_recursive
-from python.analysis.Master import LoadObject, SaveObject
+from python.analysis.common import ls_recursive
+from python.analysis.io import LoadObject, SaveObject
 
 def main(args : argparse.Namespace):
 

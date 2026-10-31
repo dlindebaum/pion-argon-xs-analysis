@@ -11,23 +11,23 @@ import os
 from rich import print
 
 from apps import (
-    cex_normalisation,
-    cex_beam_quality_fits,
-    cex_beam_scraper_fits,
-    cex_photon_selection,
-    cex_selection_studies,
-    cex_beam_reweight,
-    cex_upstream_loss,
-    cex_regions,
-    cex_analysis_input,
-    cex_mach3_input,
-    cex_cross_section,
-    cex_generate_fit_model
+    xs_normalisation,
+    xs_beam_quality_fits,
+    xs_beam_scraper_fits,
+    xs_photon_selection,
+    xs_selection_studies,
+    xs_beam_reweight,
+    xs_upstream_loss,
+    xs_regions,
+    xs_analysis_input,
+    xs_mach3_input,
+    xs_cross_section,
+    xs_generate_fit_model
     )
 
-from python.analysis.NtupleProcessing import CalculateBatches, file_len
-from python.analysis.Application import ApplicationArguments, argparse, template_config
-from python.analysis.Master import SaveConfiguration, LoadConfiguration
+from python.analysis.ntuple import CalculateBatches, file_len
+from python.analysis.application import ApplicationArguments, argparse, template_config
+from python.analysis.io import SaveConfiguration, LoadConfiguration
 
 
 def template_toy_config(toy_parameters_dir : str, nEvents : int, seed : int, max_cpus : int, step : float, p_init : float, region_selection : str):
@@ -142,7 +142,7 @@ def main(args):
         #* normalisation 
         if "normalisation" in planned_steps:
             print("calculate beam normalisation")
-            cex_normalisation.main(args)
+            xs_normalisation.main(args)
             output_path = args.out + "beam_norm/"
             print("outputs: " + output_path)
             norm = LoadConfiguration(os.path.abspath(output_path + "norm.json"))
@@ -153,7 +153,7 @@ def main(args):
         #* beam quality
         if "beam_quality" in planned_steps:
             print("run beam quality fit")
-            cex_beam_quality_fits.main(args)
+            xs_beam_quality_fits.main(args)
             output_path = args.out + "beam_quality/"
             print("outputs: " + output_path)
             target_files = {
@@ -173,7 +173,7 @@ def main(args):
         #* beam scraper
         if "beam_scraper" in planned_steps:
             print("run beam scraper fit")
-            cex_beam_scraper_fits.main(args)
+            xs_beam_scraper_fits.main(args)
             output_path = args.out + "beam_scraper/"
             print("outputs: " + output_path)
             target_files = {
@@ -193,7 +193,7 @@ def main(args):
         #* photon energy correction
         if "photon_correction" in planned_steps:
             print("run shower correction")
-            cex_photon_selection.main(args)
+            xs_photon_selection.main(args)
             output_path = args.out + "shower_energy_correction/"
             print("outputs: " + output_path)
             target_files = {
@@ -215,7 +215,7 @@ def main(args):
             print("run selection")
             args.mc_only = len(n_data) == 0
             args.nbins = 50
-            cex_selection_studies.main(args)
+            xs_selection_studies.main(args)
 
             output_path = args.out
             print("outputs: " + output_path)
@@ -245,7 +245,7 @@ def main(args):
         #* beam reweight
         if "reweight" in planned_steps:
             print("run beam reweight")
-            cex_beam_reweight.main(args)
+            xs_beam_reweight.main(args)
             output_path = args.out + "beam_reweight/"
             print("outputs: " + output_path)
             target_files = {
@@ -265,7 +265,7 @@ def main(args):
         if "upstream_correction" in planned_steps:
             print("run upstream correction")
             args.no_reweight = (not hasattr(args, "beam_reweight")) or ("params" not in args.beam_reweight) 
-            cex_upstream_loss.main(args)
+            xs_upstream_loss.main(args)
 
             output_path = args.out + "upstream_loss/"
             print("outputs: " + output_path)
@@ -287,14 +287,14 @@ def main(args):
         #* region plots
         if "region_plots" in planned_steps:
             print("run region plots")
-            cex_regions.main(args)
+            xs_regions.main(args)
             # special case where the main config is not updated, rather the results from this would be used in the toy configurations
         if args.stop == "region_plots": return
 
         #* analysis input
         if "analysis_input" in planned_steps:
             print("run analysis input")
-            cex_analysis_input.main(args)
+            xs_analysis_input.main(args)
 
             output_path = args.out + "analysis_input/"
             print("outputs: " + output_path)
@@ -315,19 +315,19 @@ def main(args):
         #* mach3_input
         if "mach3_input" in planned_steps:
             print("run mach3_input")
-            cex_mach3_input.main(args)
+            xs_mach3_input.main(args)
         if args.stop == "mach3_input": return
 
         #* fit parameter configuration generation
         if "fit_model" in planned_steps:
             print("run generate fit model")
-            cex_generate_fit_model.main(args)
+            xs_generate_fit_model.main(args)
         if args.stop == "cross_section": return
 
         #* cross section extraction
         if "cross_section" in planned_steps:
             print("run cross section extraction")
-            cex_cross_section.main(args)
+            xs_cross_section.main(args)
         if args.stop == "cross_section": return
 
     return
