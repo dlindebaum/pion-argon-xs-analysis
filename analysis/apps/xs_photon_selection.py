@@ -27,6 +27,19 @@ from python.analysis import plotting
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # hide pesky pandas warnings (performance is actually ok)
 
 def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
+    """ Select photon candidates and collect their reconstructed and true properties.
+
+        Args:
+            i (int): Index of the chunk being processed.
+            file_desc (ntuple.FileDescriptor): Descriptor for the input ntuple file.
+            n_events (int): Maximum number of events to read.
+            start (int): First event index to read.
+            selected_events (Any): Optional event subset supplied by the processing runner.
+            args (dict): Resolved beam, photon, and PFO-selection configuration.
+
+        Returns:
+            dict: Flattened photon properties and associated pi0/final-state tags.
+    """
     output = {}
 
     events = ntuple.Data(file_desc, n_events, start)

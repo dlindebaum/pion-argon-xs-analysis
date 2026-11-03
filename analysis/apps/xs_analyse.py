@@ -40,7 +40,30 @@ label_map = {"toy" : "toy", "pdsp" : "ProtoDUNE SP"}
 process_labels = {"absorption": "abs", "charge_exchange" : "cex", "single_pion_production" : "spip", "pion_production" : "pip"}
 
 def plot_KEs(mc : cross_section.analysis_input.AnalysisInput, data : cross_section.analysis_input.AnalysisInput, args : argparse.Namespace, book : plotting.PlotBook):
+    """ Plot reconstructed initial and interaction kinetic-energy distributions.
+
+        Args:
+            mc (cross_section.analysis_input.AnalysisInput): MC template sample.
+            data (cross_section.analysis_input.AnalysisInput): Observed data sample.
+            args (argparse.Namespace): Plot ranges and MC normalization options.
+            book (plotting.PlotBook): Destination for the diagnostic plots.
+    """
     def PlotDataMCTruth(mc, data, truth, bins, xlabel, x_range, norm, weights, mc_label = "MC reco", data_label = "Data reco", truth_label = "MC truth"):
+        """ Plot reconstructed data/MC and the weighted MC truth distribution.
+
+            Args:
+                mc (np.ndarray): Reconstructed MC values.
+                data (np.ndarray): Reconstructed data values.
+                truth (np.ndarray): True MC values.
+                bins (int | array-like): Histogram bin count or bin edges.
+                xlabel (str): Horizontal-axis label.
+                x_range (tuple[float, float]): Histogram range.
+                norm (float): Scale factor applied to the truth histogram.
+                weights (np.ndarray): MC event weights.
+                mc_label (str): Label for the reconstructed MC histogram.
+                data_label (str): Label for the data histogram.
+                truth_label (str): Label for the truth histogram.
+        """
         plots.plot_hist_data_mc(data, mc, bins = bins, x_range = x_range, norm = norm, xlabel = xlabel, mc_labels = mc_label, data_label = data_label, mc_weights = weights)
 
         y, edges = np.histogram(np.array(truth), bins, range = x_range, weights = weights)
@@ -60,14 +83,14 @@ def plot_KEs(mc : cross_section.analysis_input.AnalysisInput, data : cross_secti
 def create_init_params(model : pyhf.Model, analysis_input : cross_section.analysis_input.AnalysisInput, energy_slices : slices.Slies, mean_track_score_bins : np.array) -> np.array:
     """ Create initial parameters for the region fit, using the proportion of reco regions and template to get a rough estimate of the process rates.
 
-    Args:
-        model (pyhf.Model): fit model
-        analysis_input (cross_section.analysis_input.AnalysisInput): analysis input
-        energy_slices (slices.Slies): energy slices
-        mean_track_score_bins (np.array): mean track score bins
+        Args:
+            model (pyhf.Model): fit model
+            analysis_input (cross_section.analysis_input.AnalysisInput): analysis input
+            energy_slices (slices.Slies): energy slices
+            mean_track_score_bins (np.array): mean track score bins
 
-    Returns:
-        np.array[float]: initial parameter values
+        Returns:
+            np.array: initial parameter values
     """
     prefit_pred = cabinetry.model_utils.prediction(model)
     template_KE = [np.sum(prefit_pred.model_yields[i], 0) for i in range(len(prefit_pred.model_yields))][:-1]
@@ -83,19 +106,22 @@ def create_init_params(model : pyhf.Model, analysis_input : cross_section.analys
 
 
 def region_fit(fit_input : cross_section.analysis_input.AnalysisInput, energy_slice : slices.Slies, mean_track_score_bins : np.array, template_input : cross_section.analysis_input.AnalysisInput | pyhf.Model, suggest_init : bool = False, template_weights : np.array = None, return_fit_results : bool = False, mc_stat_unc : bool = False, single_bin : bool = False, fix_np : bool = False) -> cabinetry.model_utils.ModelPrediction | RegionFit.FitResults:
-    """ Fit model to analysis input to predict the normalaisations of each process.
+    """ Fit the region model to estimate signal-process normalizations.
 
-    Args:
-        fit_input (cross_section.analysis_input.AnalysisInput): observed data
-        energy_slice (slices.Slies): energy slices
-        mean_track_score_bins (np.array): mean track score bins
-        template_input (cross_section.analysis_input.AnalysisInput | pyhf.Model): template sample or existing model
-        suggest_init (bool, optional): estimate normalisations ans use these as the initial values for the fit. Defaults to False.
-        template_weights (np.array, optional): weights for the mean track score. Defaults to None.
-        return_fit_results (bool, optional): return the raw fit results as  well as the prediction. Defaults to False.
+        Args:
+            fit_input (cross_section.analysis_input.AnalysisInput): Observed data or toy input.
+            energy_slice (slices.Slies): Energy-slice definition used by the fit.
+            mean_track_score_bins (np.array): Mean-track-score bin edges.
+            template_input (cross_section.analysis_input.AnalysisInput | pyhf.Model): Template sample or prebuilt model.
+            suggest_init (bool): Whether to estimate initial process normalizations from yields.
+            template_weights (np.array): Optional template weights for the fit model.
+            return_fit_results (bool): Whether to return the raw fit result alongside the prediction.
+            mc_stat_unc (bool): Whether to include MC statistical uncertainties.
+            single_bin (bool): Whether to fit a single mean-track-score bin.
+            fix_np (bool): Whether to fix nuisance parameters after the initial fit.
 
-    Returns:
-        cabinetry.model_utils.ModelPrediction | RegionFit.FitResults: model prediction and or the raw fit result.
+        Returns:
+            cabinetry.model_utils.ModelPrediction | RegionFit.FitResults: Model prediction, optionally paired with the raw fit result.
     """
     if type(template_input) == cross_section.analysis_input.AnalysisInput:
         model = RegionFit.CreateModel(template_input, energy_slice, mean_track_score_bins, False, template_weights, mc_stat_unc, True, single_bin)
@@ -129,6 +155,17 @@ def region_fit(fit_input : cross_section.analysis_input.AnalysisInput, energy_sl
 
 
 def bkg_sub_all_region(data : cross_section.analysis_input.AnalysisInput, energy_slices : slices.Slies, bkg, bkg_err):
+    """ Subtract fitted background counts from the interaction histogram.
+
+        Args:
+            data (cross_section.analysis_input.AnalysisInput): Observed analysis input.
+            energy_slices (slices.Slies): Energy binning used to count interactions.
+            bkg (np.ndarray): Estimated background counts by energy bin.
+            bkg_err (np.ndarray): Background uncertainties by energy bin.
+
+        Returns:
+            Any: Background-subtracted counts and their uncertainties.
+    """
     N_int = data.n_interact(energy_slices, np.ones_like(data.outside_fv_reco, dtype = bool))
     N_int_ex = N_int - np.sum(bkg, 0)
     N_int_ex_err = np.sqrt(N_int + np.sum(bkg_err**2, 0))
@@ -136,6 +173,17 @@ def bkg_sub_all_region(data : cross_section.analysis_input.AnalysisInput, energy
 
 
 def bkg_sub_regions(data : cross_section.analysis_input.AnalysisInput, energy_slices : slices.Slies, bkg, bkg_err):
+    """ Subtract fitted background counts from each reconstructed region.
+
+        Args:
+            data (cross_section.analysis_input.AnalysisInput): Observed analysis input.
+            energy_slices (slices.Slies): Energy binning used to count interactions.
+            bkg (dict): Estimated background counts by region and energy bin.
+            bkg_err (dict): Background uncertainties by region and energy bin.
+
+        Returns:
+            Any: Background-subtracted counts and uncertainties by region.
+    """
     processes = list(data.regions.keys())
     
     N_int_regions = {k : data.n_interact(energy_slices, v, None, True) for k, v in data.regions.items()}
@@ -150,6 +198,19 @@ def bkg_sub_regions(data : cross_section.analysis_input.AnalysisInput, energy_sl
 
 
 def bkg_single_bin(N_bkg_s : np.ndarray, N_bkg_err_s : np.ndarray, template : cross_section.analysis_input.AnalysisInput, templates_energy : list[np.ndarray], signal_process : str, mc_stat : bool):
+    """ Distribute single-bin fitted backgrounds over energy using the MC template.
+
+        Args:
+            N_bkg_s (np.ndarray): Fitted background counts by region.
+            N_bkg_err_s (np.ndarray): Fit uncertainties by region.
+            template (cross_section.analysis_input.AnalysisInput): MC template with region labels.
+            templates_energy (list[np.ndarray]): MC background counts by energy and region.
+            signal_process (str): Signal-region label excluded from the background.
+            mc_stat (bool): Whether to include template statistical uncertainty.
+
+        Returns:
+            Any: Energy-resolved background counts, errors, and labels.
+    """
     bkg_mask = signal_process != np.array(template.region_labels)
     labels = np.array(template.region_labels)[bkg_mask]
 
@@ -176,6 +237,16 @@ def bkg_single_bin(N_bkg_s : np.ndarray, N_bkg_err_s : np.ndarray, template : cr
 
 
 def plot_bkg_regions(energy_slices : slices.Slies, data : cross_section.analysis_input.AnalysisInput, bkg : dict[np.ndarray], bkg_err : dict[np.ndarray], bkg_label : dict[list[str]], book : plotting.PlotBook):
+    """ Plot observed interaction counts and fitted backgrounds for each region.
+
+        Args:
+            energy_slices (slices.Slies): Energy binning used in the plots.
+            data (cross_section.analysis_input.AnalysisInput): Observed analysis input.
+            bkg (dict[np.ndarray]): Background counts by region and source.
+            bkg_err (dict[np.ndarray]): Background uncertainties by region and source.
+            bkg_label (dict[list[str]]): Labels identifying the background sources.
+            book (plotting.PlotBook): Destination for region plots.
+    """
 
     N_int_regions = {k : data.n_interact(energy_slices, v, None, True) for k, v in data.regions.items()}
 
@@ -191,17 +262,21 @@ def plot_bkg_regions(energy_slices : slices.Slies, data : cross_section.analysis
 
 
 def background_subtraction(data : cross_section.analysis_input.AnalysisInput, process : str, energy_slice : slices.Slies, postfit_pred : cabinetry.model_utils.ModelPrediction = None, single_bin : bool = False, regions : bool = False, template : cross_section.analysis_input.AnalysisInput = None, mc_stat : bool = True, book : plotting.PlotBook = plotting.PlotBook.null()) -> tuple[np.ndarray]:
-    """ Background subtraction using the fit if a fit result is specified.
+    """ Build observed histograms and subtract fitted background contributions.
 
-    Args:
-        data (cross_section.analysis_input.AnalysisInput): observed data
-        process (str): signal process
-        energy_slice (slices.Slies): energy slices
-        fit_results (cabinetry.model_utils.ModelPrediction, optional): fit predictions. Defaults to None.
-        book (plotting.PlotBook, optional): plot book. Defaults to plotting.PlotBook.null().
+        Args:
+            data (cross_section.analysis_input.AnalysisInput): Observed data or MC analysis input.
+            process (str): Signal process used to determine the fit regions.
+            energy_slice (slices.Slies): Energy binning used for histograms.
+            postfit_pred (cabinetry.model_utils.ModelPrediction): Optional fitted region prediction.
+            single_bin (bool): Whether the fit uses a single region bin.
+            regions (bool): Whether to return region-resolved background subtraction.
+            template (cross_section.analysis_input.AnalysisInput): MC template for energy redistribution.
+            mc_stat (bool): Whether to include MC template statistical errors.
+            book (plotting.PlotBook): Optional destination for fit comparison plots.
 
-    Returns:
-        tuple[np.array]: true histograms (if data is mc), reco histograms postfit, error in reco hitograms postfit
+        Returns:
+            tuple[np.ndarray]: True histograms when available, background-subtracted reconstructed histograms, and their errors.
     """
     if data.KE_init_true is not None:
         histograms_true_obs = data.create_histograms(energy_slice, process, False, False)
@@ -267,6 +342,21 @@ def background_subtraction(data : cross_section.analysis_input.AnalysisInput, pr
 
 
 def plot_data_bkg_sub(hist_data : dict[np.ndarray], hist_data_err : dict[np.ndarray], mc : cross_section.analysis_input.AnalysisInput, regions : bool, signal_process : str, energy_slices : slices.Slies, scale : float, sample_name : str, data_label = "data", mc_label = "mc", book : plotting.PlotBook = plotting.PlotBook.null()):
+    """ Plot observed and MC histograms before and after background subtraction.
+
+        Args:
+            hist_data (dict[np.ndarray]): Data histograms by observable/region.
+            hist_data_err (dict[np.ndarray]): Data histogram uncertainties.
+            mc (cross_section.analysis_input.AnalysisInput): MC template sample.
+            regions (bool): Whether histograms are separated by reconstructed region.
+            signal_process (str): Signal process used for the fit.
+            energy_slices (slices.Slies): Energy binning for the histograms.
+            scale (float): MC normalization factor.
+            sample_name (str): Sample label included in plot titles.
+            data_label (str): Legend label for data.
+            mc_label (str): Legend label for MC.
+            book (plotting.PlotBook): Destination for comparison plots.
+    """
     labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$", "inc" : "$N_{inc}$"}
 
     histograms_mc_reco = mc.create_histograms(energy_slices, signal_process, True, False)
@@ -303,10 +393,32 @@ def plot_data_bkg_sub(hist_data : dict[np.ndarray], hist_data_err : dict[np.ndar
 
 
 def selection_efficiency(true_hists_selected, true_hists):
+    """ Calculate bin-wise selection efficiencies for each true histogram.
+
+        Args:
+            true_hists_selected (dict): Selected true counts by observable.
+            true_hists (dict): Unselected true counts by observable.
+
+        Returns:
+            dict: Efficiency and uncertainty pairs by observable.
+    """
     return {k : common.efficiency(true_hists_selected[k], true_hists[k]) for k in true_hists}
 
 
 def efficiency_err_stat(eff, err, val, val_eff, norm, true):
+    """ Propagate statistical errors through an efficiency correction.
+
+        Args:
+            eff (tuple): Efficiency values and uncertainties.
+            err (np.ndarray): Statistical errors on the unfolded counts.
+            val (np.ndarray): Unfolded counts before efficiency correction.
+            val_eff (np.ndarray): Unfolded counts after efficiency correction.
+            norm (float): Normalization applied to the true fallback counts.
+            true (np.ndarray): True counts used where efficiency is zero.
+
+        Returns:
+            np.ndarray: Finite statistical uncertainties on efficiency-corrected counts.
+    """
     eff_err = np.where(eff[0] == 0,
         np.sqrt(norm * true),
         val_eff * np.sqrt(common.nandiv(err, val)**2)
@@ -315,6 +427,17 @@ def efficiency_err_stat(eff, err, val, val_eff, norm, true):
 
 
 def efficiency_err_sys(eff, err, val, val_eff):
+    """ Propagate systematic errors through an efficiency correction.
+
+        Args:
+            eff (tuple): Efficiency values and uncertainties.
+            err (np.ndarray): Systematic errors on the unfolded counts.
+            val (np.ndarray): Unfolded counts before efficiency correction.
+            val_eff (np.ndarray): Unfolded counts after efficiency correction.
+
+        Returns:
+            np.ndarray: Finite systematic uncertainties on efficiency-corrected counts.
+    """
     eff_err = np.where(eff[0] == 0,
         0,
         val_eff * np.sqrt(common.nandiv(err, val)**2)
@@ -323,6 +446,20 @@ def efficiency_err_sys(eff, err, val, val_eff):
 
 
 def apply_efficiency(energy_slices : slices.Slies, efficiencies, unfolding_result, true, norm : float = 1, mc_stat_unc = False, book : plotting.PlotBook = plotting.PlotBook.null()):
+    """ Correct unfolded counts for efficiency and propagate statistical/systematic errors.
+
+        Args:
+            energy_slices (slices.Slies): Energy binning used for the corrected-count plots.
+            efficiencies (dict): Efficiency values and errors by observable.
+            unfolding_result (dict): Unfolded counts and associated errors.
+            true (dict): True counts used as the fallback for zero-efficiency bins.
+            norm (float): Scale applied to fallback true counts.
+            mc_stat_unc (bool): Whether to combine MC statistical and systematic errors in plots.
+            book (plotting.PlotBook): Optional destination for correction plots.
+
+        Returns:
+            dict: Efficiency-corrected counts and statistical/systematic errors.
+    """
     labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$", "inc" : "$N_{inc}$", "absorption": "$N_{int,abs}$", "charge_exchange" : "$N_{int,cex}$", "single_pion_production" : "$N_{int,spip}$", "pion_production" : "$N_{int,pip}$"}
 
     hist_unfolded_efficiency_corrected = {}
@@ -349,6 +486,13 @@ def apply_efficiency(energy_slices : slices.Slies, efficiencies, unfolding_resul
 
 
 def plot_efficiency(energy_slices : slices.Slies, efficiencies : dict, book : plotting.PlotBook):
+    """ Plot efficiency curves and uncertainties for each observable.
+
+        Args:
+            energy_slices (slices.Slies): Energy binning used for the horizontal axis.
+            efficiencies (dict): Efficiency values and uncertainties by observable.
+            book (plotting.PlotBook): Destination for efficiency plots.
+    """
     if book is not None:
         x = energy_slices.pos_overflow - energy_slices.width/2
         for k, v in efficiencies.items():
@@ -360,6 +504,24 @@ def plot_efficiency(energy_slices : slices.Slies, efficiencies : dict, book : pl
 
 
 def unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.analysis_input.AnalysisInput, unfolding_args : dict, signal_process, norm, energy_slices : slices.Slies, regions : bool = False, mc_stat_unc : bool = False, mc_cheat : cross_section.analysis_input.AnalysisInput = None, book : plotting.PlotBook = plotting.PlotBook.null()):
+    """ Unfold reconstructed histograms and correct the result for selection efficiency.
+
+        Args:
+            reco_hists (dict): Reconstructed observed histograms by observable/region.
+            reco_hists_err (dict): Uncertainties corresponding to reconstructed histograms.
+            mc (cross_section.analysis_input.AnalysisInput): Selected MC template sample.
+            unfolding_args (dict): Unfolding configuration, or ``None`` for defaults.
+            signal_process (str): Signal process whose response is unfolded.
+            norm (float): Scale factor matching the template to the observed sample.
+            energy_slices (slices.Slies): Energy binning used for response and cross sections.
+            regions (bool): Whether to unfold reconstructed regions separately.
+            mc_stat_unc (bool): Whether to include MC statistical uncertainties.
+            mc_cheat (cross_section.analysis_input.AnalysisInput): Optional perfect-selection MC sample.
+            book (plotting.PlotBook): Optional destination for response and efficiency plots.
+
+        Returns:
+            dict: Unfolded and efficiency-corrected counts with uncertainties.
+    """
     labels = {"init" : "$N_{init}$", "int" : "$N_{int}$", "int_ex" : "$N_{int, ex}$", "inc" : "$N_{inc}$", "absorption": "$N_{int,abs}$", "charge_exchange" : "$N_{int,cex}$", "single_pion_production" : "$N_{int,spip}$", "pion_production" : "$N_{int,pip}$"}
 
     true_hists_selected = mc.create_histograms(energy_slices, signal_process, False, ~mc.inclusive_process)
@@ -458,6 +620,18 @@ def unfolding(reco_hists : dict, reco_hists_err : dict, mc : cross_section.analy
 
 
 def xs_unfold(unfolded_result, energy_slices, sys : bool = False, stat = True, regions : bool = False):
+    """ Convert unfolded interaction counts and their uncertainties to cross sections.
+
+        Args:
+            unfolded_result (Any): Unfolded counts and uncertainty arrays keyed by process.
+            energy_slices (Any): Energy-slice binning used to calculate the cross sections.
+            sys (bool): Whether to include the unfolded systematic uncertainties.
+            stat (Any): Whether to include the unfolded statistical uncertainties.
+            regions (bool): Whether to return cross sections separately for reconstructed regions.
+
+        Returns:
+            Any: Cross-section values and selected uncertainty components, keyed by process when ``regions`` is True.
+    """
     total_err = {}
 
     for r in unfolded_result:
@@ -502,6 +676,14 @@ def xs_unfold(unfolded_result, energy_slices, sys : bool = False, stat = True, r
 
 
 def read_toy(file):
+    """ Load a toy sample from an HDF5 or JSON file.
+
+        Args:
+            file (Any): Path to a toy file ending in ``.hdf5`` or ``.json``.
+
+        Returns:
+            cross_section.analysis_input.AnalysisInput: Analysis input built from the loaded toy sample.
+    """
     if file.split(".")[-1] == "hdf5":
         toy = toy.Toy(file = file)
     elif file.split(".")[-1] == "json":
@@ -512,6 +694,12 @@ def read_toy(file):
 
 
 def plot_regions(mc : cross_section.analysis_input.AnalysisInput, book : plotting.PlotBook):
+    """ Plot regions.
+
+        Args:
+            mc (cross_section.analysis_input.AnalysisInput): MC sample providing exclusive-process and reconstructed-region labels.
+            book (plotting.PlotBook): Plot book in which to save the region confusion matrix.
+    """
     counts = regions.count_in_regions(mc.exclusive_process, mc.regions)
     plots.plot_confusion_matrix(counts, list(mc.regions.keys()), list(mc.exclusive_process.keys()), y_label = "True process", x_label = "Reco region")
     book.save()
@@ -519,6 +707,14 @@ def plot_regions(mc : cross_section.analysis_input.AnalysisInput, book : plottin
 
 
 def fit_param_tables(table : pd.DataFrame):
+    """ Format fit values and uncertainties as LaTeX math strings in a one-row table.
+
+        Args:
+            table (pd.DataFrame): Fit results indexed by ``fit value`` and ``uncertainty``.
+
+        Returns:
+            pd.DataFrame: One-row table with each parameter rendered as ``value \\pm uncertainty``.
+    """
     sf = [len(str(float(f"{i:.1g}"))) - 2 for i in table.loc["uncertainty"]]
     cv = [float(f"{v:.{sf[i]}f}") for i, v in enumerate(table.loc["fit value"])]
     err = [float(f"{v:.1g}") for v in table.loc["uncertainty"]]
@@ -530,6 +726,15 @@ def fit_param_tables(table : pd.DataFrame):
 
 
 def analyse(args : argparse.Namespace, plot : bool = False):
+    """ Run the configured toy and/or PDSP cross-section analyses.
+
+        Args:
+            args (argparse.Namespace): Analysis configuration, including samples, fit, unfolding, and output settings.
+            plot (bool): Whether to create and save diagnostic and result plots.
+
+        Returns:
+            dict: Cross-section results keyed by analyzed sample, then by process.
+    """
     samples = {}
     templates = {}
     if args.toy_template:
@@ -683,6 +888,11 @@ def analyse(args : argparse.Namespace, plot : bool = False):
     return xs
 
 def main(args):
+    """ Handle main.
+
+        Args:
+            args (Any): Input value for args.
+    """
     plotting.plotting.styles.PlotStyler.set_plot_style(extend_colors = False, dark = True)
     args.out = args.out + "measurement/"
 

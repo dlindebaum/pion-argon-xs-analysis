@@ -44,10 +44,24 @@ exclusive_proc = ["absorption", "charge_exchange", "single_pion_production", "pi
 pd.set_option('future.no_silent_downcasting', True)
 
 def save_systematic_error(systematic : dict, fractional : dict, out : str):
+    """ Serialize systematic errors and their fractional values to a dill file.
+
+        Args:
+            systematic (dict): Absolute systematic uncertainties by source/process.
+            fractional (dict): Fractional uncertainties corresponding to the systematics.
+            out (str): Destination file path.
+    """
     return io.write_dill(out, {"systematic" : systematic, "fractional": fractional})
 
 
 def save_tables(tables : pd.DataFrame, outdir : str, precision : int):
+    """ Save systematic tables in HDF5 and formatted LaTeX files.
+
+        Args:
+            tables (pd.DataFrame): Mapping of table names to per-process data frames.
+            outdir (str): Directory in which to write the tables.
+            precision (int): Number of decimal places used in LaTeX formatting.
+    """
     io.write_hdf5(tables, f"{outdir}tables.hdf5")
     for t in tables:
         tables[t].style.format(precision = precision).hide(axis = 0).to_latex(f"{outdir}table_{t}.tex")
@@ -55,13 +69,36 @@ def save_tables(tables : pd.DataFrame, outdir : str, precision : int):
 
 
 class MCMethod(ABC):
+    """ Base workflow for systematic variations evaluated with MC templates.
+
+        Args:
+            args (argparse.Namespace): Analysis and fit configuration.
+            model (pyhf.Model): Region-fit model used for the analysis.
+            data_config (dict): Toy-data configuration for experiments.
+    """
     def __init__(self, args : argparse.Namespace, model : pyhf.Model, data_config : dict) -> None:
+        """ Store independent copies of the configuration and fit model.
+
+            Args:
+                args (argparse.Namespace): Analysis and fit configuration.
+                model (pyhf.Model): Region-fit model used for the analysis.
+                data_config (dict): Toy-data configuration for experiments.
+        """
         self.args = common.dill_copy(args)
         self.model = model
         self.data_config = data_config
         pass
 
     def analyse(self, analysis_input : analysis_input.AnalysisInput, book : plotting.PlotBook = plotting.PlotBook.null()):
+        """ Fit regions, subtract backgrounds, unfold, and calculate cross sections.
+
+            Args:
+                analysis_input (analysis_input.AnalysisInput): Event-level input to analyze.
+                book (plotting.PlotBook): Optional destination for diagnostic plots.
+
+            Returns:
+                dict: Cross-section estimates and uncertainties by process.
+        """
 
         region_fit_result = xs_analyse.region_fit(analysis_input, self.args.energy_slices, self.args.fit["mean_track_score"], self.model, mc_stat_unc = self.args.fit["mc_stat_unc"], single_bin = self.args.fit["single_bin"])
 
@@ -88,10 +125,27 @@ class MCMethod(ABC):
 
     @abstractmethod
     def run_experiment(self, config : dict) -> tuple[dict, dict]:
+        """ Run one systematic experiment using the supplied toy configuration.
+
+            Args:
+                config (dict): Configuration for the generated toy data.
+
+            Returns:
+                tuple[dict, dict]: cross sections and their corresponding truth values.
+        """
         pass
 
 
     def evaluate(self, n : int, **kwargs):
+        """ Run the systematic experiment repeatedly with shared keyword arguments.
+
+            Args:
+                n (int): Number of experiments to run.
+                **kwargs (Any): Arguments forwarded to ``run_experiment``.
+
+            Returns:
+                list: Results from each experiment.
+        """
         xs = []
         for i in range(n):
             print(Rule(f"Experiment : {i + 1}"))
@@ -100,6 +154,15 @@ class MCMethod(ABC):
 
 
     def calculate_sys_cov(self, results : list[dict], book : plotting.PlotBook = plotting.PlotBook.null()):
+        """ Calculate cross-section uncertainties from experiment covariance matrices.
+
+            Args:
+                results (list[dict]): Per-experiment cross-section estimates and errors.
+                book (plotting.PlotBook): Optional destination for covariance plots.
+
+            Returns:
+                dict: Per-process standard deviations derived from covariance diagonals.
+        """
         values = {k : [] for k in results[0]}
         for i in results:
             for k in i:
@@ -128,6 +191,16 @@ class MCMethod(ABC):
 
 
     def tables(self, xs_nominal : dict, sys : dict, name : str) -> dict[pd.DataFrame]:
+        """ Build per-process tables combining data statistics and one systematic.
+
+            Args:
+                xs_nominal (dict): Nominal cross sections and data-statistical uncertainties.
+                sys (dict): Absolute systematic uncertainties by process.
+                name (str): Label for the systematic uncertainty column.
+
+            Returns:
+                dict[pd.DataFrame]: Formatted uncertainty tables keyed by process.
+        """
         x = self.args.energy_slices.pos_overflow[1:-1] - (self.args.energy_slices.width/2)
 
         KEs = pd.Series(np.array(x, dtype = int), name = "$KE$ (MeV)")
@@ -157,21 +230,46 @@ class MCMethod(ABC):
 
 
 class DataAnalysis(ABC):
+    """ Base workflow that creates varied analysis inputs and compares fitted results.
+
+        Args:
+            args (argparse.Namespace): Analysis and variation configuration.
+    """
     def __init__(self, args : argparse.Namespace) -> None:
+        """ Store a copy of the analysis configuration.
+
+            Args:
+                args (argparse.Namespace): Analysis and variation configuration.
+        """
         self.args = common.dill_copy(args)
         pass
 
     @property
     @abstractmethod
     def name(self):
+        """ Return the directory-name prefix identifying this systematic variation.
+
+            Returns:
+                str: Name used to identify varied input directories.
+        """
         pass
 
     @classmethod
     def create_new_ais():
+        """ Define the subclass hook for creating varied analysis inputs.
+        """
         pass
 
 
     def __run_analysis(self, new_input):
+        """ Run the cross-section analysis on a directory of varied inputs.
+
+            Args:
+                new_input (str): Directory containing the varied analysis-input files.
+
+            Returns:
+                dict: Fitted cross sections for the PDSP sample.
+        """
         args_copy = common.dill_copy(self.args)
         inp = {}
         for f in common.ls_recursive(new_input):
@@ -186,11 +284,26 @@ class DataAnalysis(ABC):
 
 
     def run_analysis(self, path):
+        """ Analyze the low and high systematic-variation input directories.
+
+            Args:
+                path (str): Parent directory containing the variation subdirectories.
+
+            Returns:
+                dict: Low/high fitted cross sections keyed by variation.
+        """
         xs = {i : self.__run_analysis(f"{path}{self.name}_{i}/") for i in ["low", "high"]}
         return xs
 
 
     def plot_results(self, xs_nominal : dict, result : dict, book : plotting.PlotBook = plotting.PlotBook.null()):
+        """ Plot low/high varied cross sections against the nominal result.
+
+            Args:
+                xs_nominal (dict): Nominal cross sections keyed by sample and process.
+                result (dict): Low/high systematic-variation cross sections.
+                book (plotting.PlotBook): Destination for comparison plots.
+        """
         for p in xs_nominal["pdsp"]:
             plotting.plot_xs_cpmparison({"low" : result["low"][p], "nominal" : xs_nominal["pdsp"][p], "high" : result["high"][p]}, self.args.energy_slices, p, cv_only = True, marker_size = 12)
             book.save()
@@ -198,11 +311,28 @@ class DataAnalysis(ABC):
 
     @staticmethod
     def calculate_sys_error(xs):
+        """ Estimate symmetric uncertainty as half the difference between variations.
+
+            Args:
+                xs (dict): Low/high cross-section results by process.
+
+            Returns:
+                dict: Absolute symmetric uncertainty by process.
+        """
         return {p : abs((xs["high"][p][0] - xs["low"][p][0]) / 2) for p in xs["low"]}
 
 
     @staticmethod
     def calculate_sys_error_asym(xs_nominal : dict, xs : dict):
+        """ Calculate low/high deviations from the nominal cross-section values.
+
+            Args:
+                xs_nominal (dict): Nominal cross sections keyed by process.
+                xs (dict): Low/high varied cross sections keyed by variation and process.
+
+            Returns:
+                dict: Low/high absolute deviations from nominal by process.
+        """
         errs = {}
         for p in xs_nominal["pdsp"]:
             e_low = xs_nominal["pdsp"][p][0] - xs["low"][p][0]
@@ -216,6 +346,16 @@ class DataAnalysis(ABC):
 
 
     def data_analysis_tables(self, xs_nominal : dict, err_asym : dict, name : str):
+        """ Create per-process tables with data-statistical and asymmetric errors.
+
+            Args:
+                xs_nominal (dict): Nominal cross sections and data-statistical uncertainties.
+                err_asym (dict): Low/high absolute systematic deviations by process.
+                name (str): Label for the systematic columns.
+
+            Returns:
+                dict[pd.DataFrame]: Formatted error tables keyed by process.
+        """
         x = self.args.energy_slices.pos_overflow[1:-1] - (self.args.energy_slices.width/2)
 
         KEs = pd.Series(np.array(x, dtype = int), name = "$KE$ (MeV)")
@@ -248,12 +388,30 @@ class DataAnalysis(ABC):
 
 
 class NuisanceParameters:
+    """ Compare fits with nuisance parameters fixed and profiled to estimate MC statistics.
+
+        Args:
+            args (argparse.Namespace): Analysis configuration used to run the fixed- and profiled-nuisance fits.
+    """
     def __init__(self, args : argparse.Namespace) -> None:
+        """ Store a copy of the analysis configuration.
+
+            Args:
+                args (argparse.Namespace): Analysis and fit configuration.
+        """
         self.args = common.dill_copy(args)
         pass
 
 
     def __run_analysis(self, np : bool = False):
+        """ Run the analysis with nuisance parameters fixed or profiled.
+
+            Args:
+                np (bool): Whether to profile nuisance parameters and include their MC-statistical effects.
+
+            Returns:
+                dict: Fitted cross sections for the PDSP sample.
+        """
         args_copy = common.dill_copy(self.args)
         args_copy.fit["mc_stat_unc"] = True
         args_copy.fit["fix_np"] = not np
@@ -274,12 +432,25 @@ class NuisanceParameters:
 
 
     def run_experiment(self):
+        """ Run both fixed- and profiled-nuisance fits.
+
+            Returns:
+                dict: Cross-section results for the two nuisance-parameter configurations.
+        """
         xs = self.__run_analysis(False)
         xs_np = self.__run_analysis(True)
         return {"no_np" : xs, "np" : xs_np}
 
 
     def calculate_sys_error(self, result : dict):
+        """ Derive the MC-statistical uncertainty from the two fit uncertainties.
+
+            Args:
+                result (dict): Results from ``run_experiment``.
+
+            Returns:
+                dict: MC-statistical uncertainty by process.
+        """
         np_sys = {}
         for p in result["no_np"]:
             np_sys[p] = np.sqrt(result["np"][p][1]**2 - result["no_np"][p][1]**2)
@@ -287,12 +458,26 @@ class NuisanceParameters:
 
 
     def plot_xs_mc_stat(self, result, book : plotting.PlotBook = plotting.PlotBook.null()):
+        """ Plot cross sections with data-only and data-plus-MC statistical errors.
+
+            Args:
+                result (dict): Results from ``run_experiment``.
+                book (plotting.PlotBook): Destination for comparison plots.
+        """
         for p in result["np"]:
             plotting.plot_xs_cpmparison({"Data stat + MC stat" : result["np"][p], "Data stat" : result["no_np"][p]}, self.args.energy_slices, process = p)
             book.save()
 
 
     def mc_stat_tables(self, result : dict):
+        """ Build per-process tables of data, MC, and total statistical errors.
+
+            Args:
+                result (dict): Results from ``run_experiment``.
+
+            Returns:
+                dict: Formatted statistical-error tables keyed by process.
+        """
         x = self.args.energy_slices.pos_overflow[1:-1] - (self.args.energy_slices.width/2)
 
         KEs = pd.Series(np.array(x, dtype = int), name = "$KE$ (MeV)")
@@ -319,9 +504,16 @@ class NuisanceParameters:
 
 
 class UpstreamCorrectionSystematic(DataAnalysis):
+    """ Create input samples with upstream-energy-loss parameters shifted by one sigma.
+    """
     name = "upstream_loss_1_sigma"
 
     def create_new_ais(self, outdir : str):
+        """ Generate low/high analysis inputs using shifted upstream-loss parameters.
+
+            Args:
+                outdir (str): Parent directory for the varied analysis inputs.
+        """
         upl = {
             "low" : {f"p{i}" : self.args.upstream_loss_correction_params["value"][f"p{i}"] - self.args.upstream_loss_correction_params["error"][f"p{i}"] for i in range(self.args.upstream_loss_response.n_params)},
             "high" : {f"p{i}" : self.args.upstream_loss_correction_params["value"][f"p{i}"] + self.args.upstream_loss_correction_params["error"][f"p{i}"] for i in range(self.args.upstream_loss_response.n_params)}
@@ -336,9 +528,16 @@ class UpstreamCorrectionSystematic(DataAnalysis):
 
 
 class BeamReweightSystematic(DataAnalysis):
+    """ Create input samples with beam-reweight parameters shifted by one sigma.
+    """
     name = "beam_reweight_1_sigma"
 
     def create_new_ais(self, outdir : str):
+        """ Generate low/high analysis inputs using shifted beam-reweight parameters.
+
+            Args:
+                outdir (str): Parent directory for the varied analysis inputs.
+        """
         cfg = {
             "low" : {k : v["value"] - v["error"] for k, v in self.args.beam_reweight["params"].items()},
             "high" : {k : v["value"] + v["error"] for k, v in self.args.beam_reweight["params"].items()}
@@ -355,9 +554,19 @@ class BeamReweightSystematic(DataAnalysis):
 
 
 class ShowerEnergyCorrectionSystematic(DataAnalysis):
+    """ Recompute pi0 selections after shifting shower-energy correction parameters.
+
+        Args:
+            args (argparse.Namespace): Analysis and shower-energy-correction configuration for the varied selections.
+    """
     name = "shower_energy_correction_1_sigma"
 
     def __init__(self, args: argparse.Namespace) -> None:
+        """ Configure single-threaded processing for shower-selection variations.
+
+            Args:
+                args (argparse.Namespace): Analysis and selection configuration.
+        """
         super().__init__(args)
         self.args.batches = None
         self.args.events = None
@@ -366,6 +575,19 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
 
     @staticmethod
     def __run(i : int, file : str, n_events : int, start : int, selected_events, args : dict):
+        """ Calculate low/high pi0-selection masks for one ntuple chunk.
+
+            Args:
+                i (int): Index of the chunk being processed.
+                file (str): Input ntuple file path.
+                n_events (int): Maximum number of events to read.
+                start (int): First event index to read.
+                selected_events (Any): Optional event subset supplied by the processing runner.
+                args (dict): Per-chunk selection and correction configuration.
+
+            Returns:
+                dict: Low/high selection masks and the source file name.
+        """
         print(f"starting process {i}")
         sample = "data" if args["data"] is True else "mc"
 
@@ -397,6 +619,14 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
 
 
     def __merge(self, output : dict) -> dict:
+        """ Merge processing chunks separately for each input ntuple file.
+
+            Args:
+                output (dict): Per-chunk selection masks and source file names.
+
+            Returns:
+                dict: Merged low/high selections for each source file.
+        """
         names = np.unique([o["name"] for o in output])
 
         split_output = {n : [] for n in names}
@@ -415,6 +645,11 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
 
 
     def create_alt_pi0_selections(self):
+        """ Generate and merge shifted pi0-selection masks for data and MC.
+
+            Returns:
+                dict: Per-file low/high selection masks for data and MC.
+        """
 
         self.args.cpus = 1
         processing_args = ntuple.calculate_batches(self.args)
@@ -429,6 +664,11 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
 
 
     def create_new_ais(self, outdir : str):
+        """ Save shifted pi0 masks and build low/high analysis-input samples.
+
+            Args:
+                outdir (str): Parent directory for masks and varied analysis inputs.
+        """
 
         os.makedirs(outdir, exist_ok = True)
 
@@ -450,14 +690,37 @@ class ShowerEnergyCorrectionSystematic(DataAnalysis):
 
 
 class BeamMomentumResolutionSystematic(MCMethod):
+    """ Evaluate the effect of smearing reconstructed beam momentum.
+
+        Args:
+            args (argparse.Namespace): Analysis and fit configuration, including the toy template to smear.
+            model (pyhf.Model): Region-fit model used to analyze the smeared sample.
+            data_config (dict): Toy-data configuration passed to the MC systematic workflow.
+    """
     name = "beam_momentum_resolution"
 
     def __init__(self, args: argparse.Namespace, model: pyhf.Model, data_config: dict) -> None:
+        """ Initialize the MC workflow and cache original reconstructed momentum.
+
+            Args:
+                args (argparse.Namespace): Analysis and fit configuration.
+                model (pyhf.Model): Region-fit model used for the analysis.
+                data_config (dict): Toy-data configuration for experiments.
+        """
         super().__init__(args, model, data_config)
         self.P_reco_original = np.sqrt((self.args.toy_template.KE_init_reco + Particle.from_pdgid(211).mass)**2 - (Particle.from_pdgid(211).mass)**2)
 
 
     def run_experiment(self, analysis_input_data : analysis_input.AnalysisInput, resolution : float) -> tuple[dict, dict]:
+        """ Smear beam momentum and reanalyze the supplied sample.
+
+            Args:
+                analysis_input_data (analysis_input.AnalysisInput): Event sample to fit.
+                resolution (float): Relative Gaussian beam-momentum resolution.
+
+            Returns:
+                tuple[dict, dict]: Cross-section estimates and uncertainties.
+        """
         P_reco_smeared = self.P_reco_original * (1 + np.random.normal(0, resolution, len(self.P_reco_original)))
 
         KE_init_reco = kinematics.KE(P_reco_smeared, Particle.from_pdgid(211).mass)
@@ -474,14 +737,37 @@ class BeamMomentumResolutionSystematic(MCMethod):
     
 
 class TrackLengthResolutionSystematic(MCMethod):
+    """ Evaluate the effect of smearing reconstructed track length.
+
+        Args:
+            args (argparse.Namespace): Analysis and fit configuration, including the toy template to smear.
+            model (pyhf.Model): Region-fit model used to analyze the smeared sample.
+            data_config (dict): Toy-data configuration passed to the MC systematic workflow.
+    """
     name = "track_length_resolution"
 
     def __init__(self, args: argparse.Namespace, model: pyhf.Model, data_config: dict) -> None:
+        """ Initialize the MC workflow and cache original reconstructed track lengths.
+
+            Args:
+                args (argparse.Namespace): Analysis and fit configuration.
+                model (pyhf.Model): Region-fit model used for the analysis.
+                data_config (dict): Toy-data configuration for experiments.
+        """
         super().__init__(args, model, data_config)
         self.track_length_original = self.args.toy_template.track_length_reco
 
 
     def run_experiment(self, analysis_input_data : analysis_input.AnalysisInput, resolution : float) -> tuple[dict, dict]:
+        """ Smear track lengths and reanalyze the supplied sample.
+
+            Args:
+                analysis_input_data (analysis_input.AnalysisInput): Event sample to fit.
+                resolution (float): Relative Gaussian track-length resolution.
+
+            Returns:
+                tuple[dict, dict]: Cross-section estimates and uncertainties.
+        """
         track_length_smeared = self.track_length_original * (1 + np.random.normal(0, resolution, len(self.track_length_original)))
 
         KE_int_reco = bethe_bloch.KE_end(self.args.toy_template.KE_init_reco, track_length_smeared, 10)
@@ -494,6 +780,14 @@ class TrackLengthResolutionSystematic(MCMethod):
     
 
     def calculate_resolution(self, book : plotting.PlotBook = plotting.PlotBook.null()):
+        """ Fit the MC fractional track-length residuals and estimate their width.
+
+            Args:
+                book (plotting.PlotBook): Destination for the residual-fit plot.
+
+            Returns:
+                float: Fitted central 68% width used as the relative resolution.
+        """
         ai_mc = analysis_input.AnalysisInput.from_file(self.args.analysis_input["mc"])
 
         r = np.array(common.nandiv(ai_mc.track_length_reco - ai_mc.track_length_true, ai_mc.track_length_reco))
@@ -520,11 +814,34 @@ class TrackLengthResolutionSystematic(MCMethod):
 
 
 class TheoryShape(MCMethod):
+    """ Evaluate cross-section changes caused by energy-dependent theory reweighting.
+
+        Args:
+            args (argparse.Namespace): Analysis and fit configuration for the theory-shape experiments.
+            model (pyhf.Model): Region-fit model used to analyze the reweighted samples.
+            data_config (dict): Toy-data configuration passed to the MC systematic workflow.
+    """
     def __init__(self, args: argparse.Namespace, model: pyhf.Model, data_config: dict) -> None:
+        """ Initialize the MC workflow for theory-shape experiments.
+
+            Args:
+                args (argparse.Namespace): Analysis and fit configuration.
+                model (pyhf.Model): Region-fit model used for the analysis.
+                data_config (dict): Toy-data configuration for experiments.
+        """
         super().__init__(args, model, data_config)
 
 
     def generate_KE_shape_weights(self, bins : int, shape_lims : list):
+        """ Generate event weights with random shape variations over true interaction energy.
+
+            Args:
+                bins (int): Number of true-energy bins used to define the weights.
+                shape_lims (list): Minimum and maximum random weight before normalization.
+
+            Returns:
+                np.ndarray: Normalized per-event shape weights.
+        """
         KE_int = self.args.toy_template.KE_int_true
         hist, edges = np.histogram(KE_int[~np.isnan(KE_int)], bins = bins)
         weights = np.random.uniform(min(shape_lims), max(shape_lims), len(hist))
@@ -536,6 +853,14 @@ class TheoryShape(MCMethod):
 
 
     def run_experiment(self, analysis_input_data : analysis_input.AnalysisInput) -> tuple[dict, dict]:
+        """ Reweight a toy sample by true interaction energy and reanalyze it.
+
+            Args:
+                analysis_input_data (analysis_input.AnalysisInput): Event sample to fit.
+
+            Returns:
+                tuple[dict, dict]: Cross-section estimates and uncertainties.
+        """
         weights = self.generate_KE_shape_weights(50, [0.8, 1.2])
         self.args.toy_template.weights = weights
 
@@ -544,7 +869,17 @@ class TheoryShape(MCMethod):
 
 
 class NormalisationSystematic(MCMethod):
+    """ Measure fit bias under normalization variations in generated toy samples.
+    """
     def run_experiment(self, config : dict) -> tuple[dict, dict]:
+        """ Generate and fit one normalization-varied toy sample.
+
+            Args:
+                config (dict): Toy-generation configuration with process scale factors.
+
+            Returns:
+                tuple[dict, dict]: and true cross sections for the experiment.
+        """
         x = self.args.energy_slices.pos[:-1] - self.args.energy_slices.width / 2
 
         ai = analysis_input.AnalysisInput.create_analysis_input_toy(toy.Toy(df = xs_toy_generator.run(config)))
@@ -561,6 +896,15 @@ class NormalisationSystematic(MCMethod):
 
 
     def evaluate(self, norms = [0.8, 1.2], repeats : int = 1):
+        """ Run normalization tests for each process at each requested scale.
+
+            Args:
+                norms (Sequence[float]): Normalization values to test.
+                repeats (int): Number of independent toys generated per scale.
+
+            Returns:
+                dict: Measured and true cross sections grouped by process and scale.
+        """
         cvs = {}
         true_cvs = {}
         for target in exclusive_proc:
@@ -592,6 +936,14 @@ class NormalisationSystematic(MCMethod):
 
     @staticmethod
     def plot_normalisation_test_results(results : dict, args : argparse.Namespace, xs_nominal : dict, book : plotting.PlotBook = plotting.PlotBook.null()):
+        """ Plot measured and true cross sections for each normalization test.
+
+            Args:
+                results (dict): Measured and true test results by process and scale.
+                args (argparse.Namespace): Analysis configuration and energy binning.
+                xs_nominal (dict): Nominal cross sections used for comparison.
+                book (plotting.PlotBook): Destination for normalization-test plots.
+        """
         xs_sim = geant.GeantCrossSections()
         scale_factors = {"absorption" : 1, "charge_exchange" : 1, "pion_production" : 1, "double_charge_exchange" : 1, "quasielastic" : 1}
         for r in results["cv"]:
@@ -627,7 +979,24 @@ class NormalisationSystematic(MCMethod):
 
     @staticmethod
     def calculate_sys_err(results):
+        """ Calculate low/high deviations between measured and true varied cross sections.
+
+            Args:
+                results (dict): Normalization-test measured and truth results.
+
+            Returns:
+                dict: Low/high absolute systematic errors by varied process.
+        """
         def sys_err(r, tr):
+            """ Combine absolute process deviations in quadrature.
+
+                Args:
+                    r (dict): Measured cross sections by process.
+                    tr (dict): True cross-section values by process.
+
+                Returns:
+                    np.ndarray: Quadrature sum of process deviations per energy bin.
+            """
             return common.quadsum([abs(r[p][0] - tr[p]) for p in r], 0)
 
         sys_err_low = {}
@@ -640,6 +1009,14 @@ class NormalisationSystematic(MCMethod):
 
     @staticmethod
     def total_sys_qs(sys_err : dict):
+        """ Combine low/high normalization errors across targets in quadrature.
+
+            Args:
+                sys_err (dict): Low/high systematic errors grouped by target process.
+
+            Returns:
+                dict: Total low/high errors by exclusive signal process.
+        """
         norm_sys_qs = {}
         for p in exclusive_proc:
             norm_sys_qs[p] = [
@@ -650,6 +1027,14 @@ class NormalisationSystematic(MCMethod):
 
     @staticmethod
     def total_sys_max(sys_err : dict):
+        """ Select the largest low/high normalization error across targets.
+
+            Args:
+                sys_err (dict): Low/high systematic errors grouped by target process.
+
+            Returns:
+                dict: Maximum low/high errors by exclusive signal process.
+        """
         norm_sys_max = {}
         for p in exclusive_proc:
             norm_sys_max[p] = [
@@ -660,6 +1045,11 @@ class NormalisationSystematic(MCMethod):
     
     @staticmethod
     def average_results(results : dict):
+        """ Replace repeated measured cross sections with their mean and mean errors.
+
+            Args:
+                results (dict): Mutable normalization-test results containing repetitions.
+        """
         cv_avg = {}
         for t in results["cv"]:
             t_avg = {}
@@ -682,6 +1072,15 @@ class NormalisationSystematic(MCMethod):
 
     @staticmethod
     def calculate_fractional_error(sys_err_avg : dict, xs_nominal : dict):
+        """ Divide low/high absolute systematic errors by nominal cross sections.
+
+            Args:
+                sys_err_avg (dict): Low/high absolute uncertainties by process.
+                xs_nominal (dict): Nominal cross-section values and uncertainties.
+
+            Returns:
+                dict: Low/high fractional systematic errors by process.
+        """
         frac_low = {}
         frac_high = {}
         for i in xs_nominal:
@@ -691,6 +1090,15 @@ class NormalisationSystematic(MCMethod):
 
     
     def create_tables(self, xs_nominal, sys):
+        """ Create per-process tables for nominal and fit-inaccuracy errors.
+
+            Args:
+                xs_nominal (dict): Nominal cross sections and statistical uncertainties.
+                sys (dict): Absolute and fractional systematic uncertainties.
+
+            Returns:
+                dict: Formatted uncertainty tables keyed by process.
+        """
         x = args.energy_slices.pos_overflow[1:-1] - (args.energy_slices.width/2)
 
         KEs = pd.Series(np.array(x, dtype = int), name = "$KE$ (MeV)")
@@ -722,6 +1130,16 @@ class NormalisationSystematic(MCMethod):
 
 
 def create_systematics_table(out : str, data_only : dict, args : argparse.Namespace) -> dict[pd.DataFrame]:
+    """ Combine saved systematic errors and central values into per-process tables.
+
+        Args:
+            out (str): Root directory containing serialized systematic results.
+            data_only (dict): Central cross sections and data-statistical uncertainties.
+            args (argparse.Namespace): Analysis configuration, including energy slices.
+
+        Returns:
+            dict[pd.DataFrame]: Combined uncertainty table for each process.
+    """
     sys_err = {}
     for f in common.ls_recursive(out):
         if "sys.dill" in f:
@@ -779,6 +1197,12 @@ def create_systematics_table(out : str, data_only : dict, args : argparse.Namesp
 
 
 def save_systematic_tables(systematic_tables : dict[pd.DataFrame], out : str):
+    """ Save combined systematic tables to HDF5 and formatted LaTeX files.
+
+        Args:
+            systematic_tables (dict[pd.DataFrame]): Per-process combined uncertainty tables.
+            out (str): Output directory for the table files.
+    """
     for k, v in systematic_tables.items():
         v.to_hdf(out + f"systematic_table_{k}.hdf5", key = "df")
         v.style.format(
@@ -792,6 +1216,12 @@ def save_systematic_tables(systematic_tables : dict[pd.DataFrame], out : str):
 
 
 def plot_sys_hist(systematic_table : dict[pd.DataFrame], book : plotting.PlotBook = plotting.PlotBook.null()):
+    """ Plot absolute and cumulative relative uncertainties for each process.
+
+        Args:
+            systematic_table (dict[pd.DataFrame]): Per-process combined uncertainty tables.
+            book (plotting.PlotBook): Destination for uncertainty plots.
+    """
     for t in systematic_table:
         plotting.plots.plt.figure()
         c = 0
@@ -842,6 +1272,18 @@ def plot_sys_hist(systematic_table : dict[pd.DataFrame], book : plotting.PlotBoo
 
 
 def final_plots(cv, systematics_table : dict[pd.DataFrame], energy_slices, book : plotting.PlotBook = plotting.PlotBook.null(), alt_xs : bool = False):
+    """ Plot final cross sections and calculate goodness-of-fit results.
+
+        Args:
+            cv (dict): Central cross sections and statistical errors by process.
+            systematics_table (dict[pd.DataFrame]): Combined systematic tables by process.
+            energy_slices (slices.Slices): Energy binning used in the cross-section result.
+            book (plotting.PlotBook): Destination for final comparison plots.
+            alt_xs (bool): Whether to also compare against the alternative Geant prediction.
+
+        Returns:
+            Nominal: and alternative goodness-of-fit tables.
+    """
     goodness_of_fit = {}
     if alt_xs:
         xs_alt = geant.GeantCrossSections(geant.GEANT_XS, energy_range = [energy_slices.min_pos - energy_slices.width, energy_slices.max_pos])
@@ -861,6 +1303,14 @@ def final_plots(cv, systematics_table : dict[pd.DataFrame], energy_slices, book 
 
 
 def can_run(systematic : str):
+    """ Check whether a systematic was selected to run and has not been skipped.
+
+        Args:
+            systematic (str): Systematic name to test.
+
+        Returns:
+            bool: Whether the systematic is selected for execution.
+    """
     run = ((systematic not in args.skip) and (systematic in args.run)) or ("all" in args.run)
     if run is True:
         print(Rule(common.remove_(systematic)))
@@ -868,6 +1318,14 @@ def can_run(systematic : str):
 
 
 def can_regen(dir : str):
+    """ Determine whether results in a directory should be regenerated.
+
+        Args:
+            dir (str): Systematic output directory to inspect.
+
+        Returns:
+            bool: Whether calculations should be rerun instead of loading saved results.
+    """
     if os.path.exists(dir) and (args.regen is False):
         if len(common.ls_recursive(dir)) > 0:
             for f in common.ls_recursive(dir):
@@ -881,6 +1339,11 @@ def can_regen(dir : str):
 
 @common.timer
 def main(args : argparse.Namespace):
+    """ Run selected systematic studies and optionally combine and plot their results.
+
+        Args:
+            args (argparse.Namespace): Resolved analysis, systematic, and output configuration.
+    """
     plotting.styles.PlotStyler.set_plot_style(dark = True)
     out = args.out + "systematics/"
     os.makedirs(out, exist_ok = True)

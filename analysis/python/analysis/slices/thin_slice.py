@@ -18,19 +18,21 @@ from python.analysis.common import nandiv
 
 
 def deprecation_warning():
+    """Emit a deprecation warning because the thin-slice methods are no longer supported.
+    """
     return warnings.warn("ThinSlice functions are deprecrated!", DeprecationWarning)
 
 
 def counting_experiment(end_pos : ak.Array, channel : ak.Array, slices : Slices) -> tuple[ak.Array, ak.Array]:
     """ Creates the interacting and incident histograms.
 
-    Args:
-        end_pos (ak.Array): end position of particle or "interaction vertex"
-        channel (ak.Array): mask which selects particles which interact in the channel you are interested in
-        slices (Slices): spatial slices
+        Args:
+            end_pos (ak.Array): end position of particle or "interaction vertex"
+            channel (ak.Array): mask which selects particles which interact in the channel you are interested in
+            slices (Slices): spatial slices
 
-    Returns:
-        tuple[ak.Array, ak.Array]: n_interact and n_incident histograms
+        Returns:
+            tuple[ak.Array, ak.Array]: n_interact and n_incident histograms
     """
     deprecation_warning()
 
@@ -47,13 +49,13 @@ def counting_experiment(end_pos : ak.Array, channel : ak.Array, slices : Slices)
 def mean_slice_energy(energy : ak.Array, end_pos : ak.Array, slices : Slices) -> tuple[ak.Array, ak.Array]:
     """ Compute the average energy in a spatial slice.
 
-    Args:
-        energy (ak.Array): particle energies over its lifetime in the tpc
-        end_pos (ak.Array): end position of particle or "interaction vertex"
-        slices (Slices): spatial slices
+        Args:
+            energy (ak.Array): particle energies over its lifetime in the tpc
+            end_pos (ak.Array): end position of particle or "interaction vertex"
+            slices (Slices): spatial slices
 
-    Returns:
-        tuple[ak.Array, ak.Array]: means slice energy, error in the mean slice energy
+        Returns:
+            tuple[ak.Array, ak.Array]: means slice energy, error in the mean slice energy
     """
     deprecation_warning()
     beam_traj_slice = slices.pos_to_num(end_pos)
@@ -77,13 +79,13 @@ def mean_slice_energy(energy : ak.Array, end_pos : ak.Array, slices : Slices) ->
 def total_cross_section(n_incident : np.ndarray, n_interact : np.ndarray, slice_width : float) -> tuple[np.ndarray, np.ndarray]:
     """ Returns cross section in mb.
 
-    Args:
-        n_incident (np.ndarray): incident histogram
-        n_interact (np.ndarray): interacting histogram
-        slice_width (float): spatial width of thin slice
+        Args:
+            n_incident (np.ndarray): incident histogram
+            n_interact (np.ndarray): interacting histogram
+            slice_width (float): spatial width of thin slice
 
-    Returns:
-        tuple[np.ndarray, np.ndarray]: cross section, statistical uncertainty
+        Returns:
+            tuple[np.ndarray, np.ndarray]: cross section, statistical uncertainty
     """
     deprecation_warning()
     xs = np.log(n_incident / (n_incident - n_interact)) # calculate a dimensionless cross section
@@ -102,14 +104,14 @@ def total_cross_section(n_incident : np.ndarray, n_interact : np.ndarray, slice_
 def cross_section(n_int_exclusive : np.ndarray, n_int_inclusive : np.ndarray, n_inc_inclusive : np.ndarray, slice_width : float) -> tuple[np.ndarray, np.ndarray]:
     """ Cross section of exclusive process.
 
-    Args:
-        n_int_exclusive (np.ndarray): exclusive interactions
-        n_int_inclusive (np.ndarray): interactions
-        n_inc_inclusive (np.ndarray): incident counts
-        slice_width (float): slice width
+        Args:
+            n_int_exclusive (np.ndarray): exclusive interactions
+            n_int_inclusive (np.ndarray): interactions
+            n_inc_inclusive (np.ndarray): incident counts
+            slice_width (float): slice width
 
-    Returns:
-        tuple[np.ndarray, np.ndarray]: cross section and error
+        Returns:
+            tuple[np.ndarray, np.ndarray]: cross section and error
     """
     deprecation_warning()
     NA = 6.02214076e23

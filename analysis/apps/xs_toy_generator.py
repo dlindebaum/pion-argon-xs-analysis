@@ -36,18 +36,24 @@ warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # 
 global verbose
 
 def vprint(*args, **kwags):
+    """ Print arguments only when toy-generator verbose mode is enabled.
+
+        Args:
+            *args (Any): Positional values passed through to ``print``.
+            **kwags (Any): Keyword options passed through to ``print``.
+    """
     if verbose is True:
         print(*args, **kwags)
 
 
 def resolve_config(config : dict) -> argparse.Namespace:
-    """ Parse Toy configuration file.
+    """ Convert toy configuration values into a namespace and load referenced inputs.
 
-    Args:
-        args (argparse.Namespace): application arguments
+        Args:
+            config (dict): Toy configuration mapping, including paths to serialized inputs.
 
-    Returns:
-        argparse.Namespace: parsed configuration
+        Returns:
+            argparse.Namespace: Parsed configuration with loaded parameters and defaults.
     """
     args = argparse.Namespace()
     for k, v in config.items():
@@ -78,19 +84,29 @@ def resolve_config(config : dict) -> argparse.Namespace:
 
 
 def p_int(sigma : np.array, l : float) -> np.array:
-    """ Formula to calcualte the interaction probability for the thin slab approximation. 
+    """ Formula to calcualte the interaction probability for the thin slab approximation.
 
-    Args:
-        sigma (np.array): cross section as a function of energy
-        l (float): slab thickness
+        Args:
+            sigma (np.array): cross section as a function of energy
+            l (float): slab thickness
 
-    Returns:
-        np.array: interaction proabability
+        Returns:
+            np.array: interaction proabability
     """
     return 1 - np.exp(-1E-27 * sigma * 6.02214076e23 * bethe_bloch.Constants.rho * l / bethe_bloch.Constants.A)
 
 
 def modify_geant_xs(path = geant.GEANT_XS, scale_factors : dict = None, modified_PDFs : dict[np.array] = None):
+    """ Load Geant cross sections and apply optional shape changes and scale factors.
+
+        Args:
+            path (str): Path to the Geant cross-section input.
+            scale_factors (dict): Per-process normalization factors.
+            modified_PDFs (dict[np.array]): Optional replacement cross-section curves keyed by process.
+
+        Returns:
+            geant.GeantCrossSections: Modified cross-section data.
+    """
     xs_sim = geant.GeantCrossSections(file = path)
 
     if modified_PDFs is not None:
@@ -126,13 +142,16 @@ def modify_geant_xs(path = geant.GEANT_XS, scale_factors : dict = None, modified
 
 def generate_stacked_pdfs(l : float, path = geant.GEANT_XS, scale_factors : dict = None, modified_PDFs : dict[np.array] = None) -> dict:
     """ Creates a PDF of the inclusive cross section and a stacked PDF of the exclusive process,
-        such that rejection sampling can be used to allocate an exclusive process for a given inclusive process.
+                    such that rejection sampling can be used to allocate an exclusive process for a given inclusive process.
 
-    Args:
-        l (float): slice thickness
+        Args:
+            l (float): slice thickness
+            path (str): Path to the Geant cross-section input.
+            scale_factors (dict): Per-process normalization factors.
+            modified_PDFs (dict[np.array]): Optional replacement cross-section curves keyed by process.
 
-    Returns:
-        dict: dictionaty of pdfs
+        Returns:
+            dict: Interpolated total-interaction and cumulative exclusive-process probabilities.
     """
     xs_sim = modify_geant_xs(path, scale_factors, modified_PDFs)
 
@@ -156,15 +175,16 @@ def generate_initial_KEs(n : int, particle : Particle, cv : float, width : float
     """ Create a distribution of initial kinetic energy based on a profile i.e. pdf.
         Currently supported profiles are "uniform" and "gaussian".
 
+        Args:
+            n (int): number of particles/events.
+            particle (Particle): particle type
+            cv (float): central value of profile
+            width (float): width of profile
+            profile (str | dict): profile type
+            rng (np.random.Generator): Random generator used for sampling.
 
-    Args:
-        n (int): number of particles/events.
-        particle (Particle): particle type
-        cv (float): central value of profile
-        width (float): width of profile
-        profile (str): profile type
-    Returns:
-        np.array: initial kinetic energies.
+        Returns:
+            np.array: initial kinetic energies.
     """
     if rng is None:
         rng = np.random.default_rng()
@@ -186,14 +206,15 @@ def simulate(seed : int, KE_init : np.array, step_size : float, pdfs : dict, sme
         interacts is assosiated a particular exclusive interaction process, using rejection sampling. Particles which reach zero KE are considered
         to be particle decays. The precision of these calculations depends on the step size, which is essentially the slab thickness.
 
-    Args:
-        KE_init (np.array): initial Kinetic energy distribution
-        stepsize (float): position step size or "slab thickness"
-        particle (Particle): particle type
-        pdfs (dict): cross section pdfs
+        Args:
+            seed (int): Seed used to initialize the random generator.
+            KE_init (np.array): Initial kinetic energies to propagate.
+            step_size (float): Position step size or slab thickness.
+            pdfs (dict): Interpolated interaction-probability curves.
+            smearing_params (dict): Resolution models used to smear generated observables.
 
-    Returns:
-        tuple: interacting kinetic energy, interacting position, whether it interacted or decay, exclusive process
+        Returns:
+            tuple: interacting kinetic energy, interacting position, whether it interacted or decay, exclusive process
     """
     rng = np.random.default_rng(seed)
 
@@ -240,8 +261,8 @@ def simulate(seed : int, KE_init : np.array, step_size : float, pdfs : dict, sme
 def count_processes(proc : np.array):
     """ Count unique processes for particles
 
-    Args:
-        proc (np.array): array of processes
+        Args:
+            proc (np.array): array of processes
     """
     for p in Counter(proc):
         vprint(p, sum(proc == p))
@@ -250,11 +271,11 @@ def count_processes(proc : np.array):
 def create_masks(toy : pd.DataFrame) -> dict:
     """ Creates masks for each inclusive process and exclusive process based on particle tags from the toy mc.
 
-    Args:
-        toy (pd.DataFrame): toy mc to look at
+        Args:
+            toy (pd.DataFrame): toy mc to look at
 
-    Returns:
-        dict: masks of processes
+        Returns:
+            dict: masks of processes
     """
     masks = {}
     for c in np.unique(toy.exclusive_process)[1:]:
@@ -268,12 +289,13 @@ def smearing(n : int, resolutions : dict, rng : np.random.Generator) -> pd.DataF
     """ Produces a dataframe of smearings for each kinematic output of the toy.
         Emulates detector effects.
 
-    Args:
-        n (int): number of events
-        resolutions (dict): smearing parameters
+        Args:
+            n (int): number of events
+            resolutions (dict): smearing parameters
+            rng (np.random.Generator): Random-number generator used to sample each observable's smearing distribution.
 
-    Returns:
-        pd.DataFrame: smearing terms
+        Returns:
+            pd.DataFrame: smearing terms
     """
     return pd.DataFrame({
         "KE_int_smearing" : fitting.rejection_sampling(n, min(resolutions["KE_int"]["range"]), max(resolutions["KE_int"]["range"]), resolutions["KE_int"]["function"], resolutions["KE_int"]["values"], rng = rng),
@@ -285,12 +307,12 @@ def smearing(n : int, resolutions : dict, rng : np.random.Generator) -> pd.DataF
 def apply_smearing(df : pd.DataFrame, smearings : pd.DataFrame) -> pd.DataFrame:
     """ Add detector smearing to true obserables.
 
-    Args:
-        df (pd.DataFrame): simulated data
-        smearings (pd.DataFrame): generated smearings
+        Args:
+            df (pd.DataFrame): simulated data
+            smearings (pd.DataFrame): generated smearings
 
-    Returns:
-        pd.DataFrame: smeared observables i.e. reco.
+        Returns:
+            pd.DataFrame: smeared observables i.e. reco.
     """
     KE_init_smeared = df.KE_init + smearings.KE_init_smearing
     z_int_smeared = df.z_int + smearings.z_int_smearing
@@ -307,13 +329,14 @@ def beam_selection_efficiency(toy : pd.DataFrame, key : str, beam_selection_para
     """ Produces a mask of events which would have passed the beam selection,
         based on the selection efficiency of a particular observable.
 
-    Args:
-        toy (pd.DataFrame): toy
-        key (str): observable
-        beam_selection_params (dict): selection efficiencies
+        Args:
+            toy (pd.DataFrame): toy
+            key (str): observable
+            beam_selection_params (dict): selection efficiencies
+            rng (np.random.Generator): Random-number generator used to accept or reject events according to the efficiency.
 
-    Returns:
-        np.array: mask of events which pass the selection.
+        Returns:
+            np.array: mask of events which pass the selection.
     """
     bin_width = (beam_selection_params["bins"][key][1:].values - beam_selection_params["bins"][key][:-1].values)[0]
     probability_index = np.digitize(toy[key].values, beam_selection_params["bins"][key] + 2 * bin_width)
@@ -328,12 +351,13 @@ def generate_reco_regions(exclusive_process : pd.Series, fractions : pd.DataFram
     """ Returns a Dataframe of masks which represent the reco and true regions of each event.
         Truth regions are remade because they differ slighly from the exclusive process.
 
-    Args:
-        exclusive_process (pd.Series): exclusive processes.
-        fractions (pd.DataFrame): fractions of reco regions in true regions.
+        Args:
+            exclusive_process (pd.Series): exclusive processes.
+            fractions (pd.DataFrame): fractions of reco regions in true regions.
+            rng (np.random.Generator): Random-number generator used to sample a reconstructed region for each event.
 
-    Returns:
-        pd.DataFrame: region masks.
+        Returns:
+            pd.DataFrame: region masks.
     """
     exclusive_processes = np.unique(exclusive_process.values)
 
@@ -390,12 +414,13 @@ def generate_mean_track_scores(kde : gaussian_kde, n : int, seed : int = None) -
     """ Generates Mean track scores from the stats.gaussian_kde object.
         if mean track scores exceed the range 0, 1, the scores are resampled.
 
-    Args:
-        kde (stats.gaussian_kde): Kernel density estimate
-        n (int): sample size to generate
+        Args:
+            kde (gaussian_kde): Kernel density estimate
+            n (int): sample size to generate
+            seed (int): Seed for reproducible KDE sampling; ``None`` uses an unseeded resampling sequence.
 
-    Returns:
-        np.array: sampled mean track scores
+        Returns:
+            np.array: sampled mean track scores
     """
     # scipy.stats.gaussian_kde.resample() uses numpy RandomState seeding rules:
     # integer seeds must be in [0, 2**32 - 1]. We may pass large integers
@@ -418,12 +443,13 @@ def generate_mean_track_scores(kde : gaussian_kde, n : int, seed : int = None) -
 def mean_track_score(exclusive_process : pd.Series, kdes : dict, seed : int) -> np.array:
     """ Create the Mean track score distributions for each toy event.
 
-    Args:
-        exclusive_process (pd.Series): exclusive process masks
-        kdes (dict): dictionary of kernel density estimates
+        Args:
+            exclusive_process (pd.Series): exclusive process masks
+            kdes (dict): dictionary of kernel density estimates
+            seed (int): Base seed used to generate reproducible scores for each exclusive process.
 
-    Returns:
-        np.array: mean track scores
+        Returns:
+            np.array: mean track scores
     """
     scores = np.array([None]*len(exclusive_process))
     exclusive_processes = np.unique(exclusive_process.values)

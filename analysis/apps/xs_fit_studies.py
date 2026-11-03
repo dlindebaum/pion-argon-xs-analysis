@@ -60,6 +60,11 @@ process_map = {0 : "abs", 1 : "cex", 2 : "spip", 3 : "pip"}
 
 
 def override_config(args):
+    """Apply the supplied step, event-count, and seed overrides to the toy configuration.
+
+        Args:
+            args (Any): Parsed arguments containing optional step, event-count, and seed overrides and the toy_data_config dictionary.
+    """
     for a in ["step", "events", "seed"]:
         if getattr(args, a):
             args.toy_data_config[a] = getattr(args, a)
@@ -67,12 +72,34 @@ def override_config(args):
 
 
 def create_config_normalisation(scales : dict, data_config : dict) -> dict:
+    """Copy a toy configuration and set its process PDF scale factors.
+
+        Args:
+            scales (dict): Process-to-scale-factor mapping stored under pdf_scale_factors.
+            data_config (dict): Base toy-generation configuration to copy.
+
+        Returns:
+            dict: Shallow copy of data_config with pdf_scale_factors set to scales.
+    """
     cfg = {k : v for k, v in data_config.items()}
     cfg["pdf_scale_factors"] = scales
     return cfg
 
 
 def modified_config_test(config : dict, energy_slice : slices.Slices, model : pyhf.Model, toy_template : cross_section.analysis_input.AnalysisInput, mean_track_score_bins : np.array = None, single_bin : np.array = False) -> tuple[dict]:
+    """Generate configured toy data, fit it, and return fit results, true counts, and expected process scales.
+
+        Args:
+            config (dict): Toy-generation configuration used to create the alternative sample.
+            energy_slice (slices.Slices): Energy slicing used to build observations and count interactions.
+            model (pyhf.Model): Statistical model fitted to the generated observations.
+            toy_template (cross_section.analysis_input.AnalysisInput): Reference sample used to calculate expected process scale factors.
+            mean_track_score_bins (np.array): Optional bin edges for the mean-track-score channel.
+            single_bin (np.array): Whether to fit one combined bin instead of energy-resolved bins.
+
+        Returns:
+            tuple[dict]: Fit result, true interaction counts by process, and expected process scales.
+    """
     toy_alt_pdf = cross_section.analysis_input.AnalysisInput.create_analysis_input_toy(toy.Toy(df = xs_toy_generator.run(config)))
     
     obs = RegionFit.GenerateObservations(toy_alt_pdf, energy_slice, mean_track_score_bins, model, False, single_bin)
@@ -88,6 +115,17 @@ def modified_config_test(config : dict, energy_slice : slices.Slices, model : py
 
 
 def normalisation_test(directory : str, data_config : dict, model : pyhf.Model, toy_template : cross_section.analysis_input.AnalysisInput, energy_slice : slices.Slices, mean_track_score_bins : np.ndarray, single_bin : bool):
+    """Repeat toy fits at several process normalizations and save the results for each target process.
+
+        Args:
+            directory (str): Output directory prefix for the saved fit-result files.
+            data_config (dict): Base configuration for generating toy samples.
+            model (pyhf.Model): Statistical model fitted to each generated sample.
+            toy_template (cross_section.analysis_input.AnalysisInput): Reference sample for expected process scale factors.
+            energy_slice (slices.Slices): Energy slicing used to build fit observations.
+            mean_track_score_bins (np.ndarray): Bin edges for the optional mean-track-score channel.
+            single_bin (bool): Whether to fit one combined bin instead of energy-resolved bins.
+    """
     for target in folder:
         print(target)
 
@@ -115,6 +153,18 @@ def normalisation_test(directory : str, data_config : dict, model : pyhf.Model, 
 
 
 def fit_simulation_curve(xs_sim, sampling_factor : int, process : str, function : fitting.FitFunction, plot : bool = False):
+    """Fit a sampled simulation cross-section curve as a function of kinetic energy.
+
+        Args:
+            xs_sim (Any): Simulated cross-section object providing kinetic energy and the selected process values.
+            sampling_factor (int): Stride used to subsample the simulation points.
+            process (str): Cross-section attribute name to fit.
+            function (fitting.FitFunction): Parametric model fitted to the sampled curve.
+            plot (bool): Whether to draw the fitted curve and data.
+
+        Returns:
+            tuple: Optimized fit parameters and their estimated errors from fitting.fit.
+    """
     x = xs_sim.KE[::sampling_factor]/1000
     y = getattr(xs_sim, process)[::sampling_factor]/1000
 
@@ -124,6 +174,17 @@ def fit_simulation_curve(xs_sim, sampling_factor : int, process : str, function 
 
 
 def counts_fractional_error(results, true_counts, model, single_bin = False):
+    """Compare post-fit predicted counts with true counts and return fractional differences and uncertainties.
+
+        Args:
+            results (Any): Fit results keyed by test configuration.
+            true_counts (Any): True interaction counts keyed by configuration and process.
+            model (Any): Fitted pyhf model used to obtain post-fit predictions.
+            single_bin (Any): Whether to combine all bins when comparing predicted and true counts.
+
+        Returns:
+            tuple: Fractional count differences and their propagated uncertainties, arranged by process, configuration, and bin.
+    """
     fe_err = []
     fe = []
 
@@ -159,6 +220,15 @@ def counts_fractional_error(results, true_counts, model, single_bin = False):
 
 
 def create_config_shape_test(data_config, modified_PDFs : dict):
+    """Copy a toy configuration and attach the process PDFs modified for a shape test.
+
+        Args:
+            data_config (Any): Base toy-generation configuration to copy.
+            modified_PDFs (dict): Process-to-modified-cross-section mapping inserted into the configuration.
+
+        Returns:
+            dict: Shallow copy of data_config with modified_PDFs set to the supplied mapping.
+    """
     cfg = {k : v for k, v in data_config.items()}
     cfg["modified_PDFs"] = modified_PDFs
     return cfg
@@ -167,15 +237,15 @@ def create_config_shape_test(data_config, modified_PDFs : dict):
 def smooth_step(x : np.ndarray, high : float, low : float, split : float, smooth_amount : float) -> np.ndarray:
     """ Generate points for a smoothstep function.
 
-    Args:
-        x (np.ndarray): x values.
-        high (float): High value of the smoothstep.
-        low (float): Low value of the smoothstep.
-        split (float): Where the step occurs in x.
-        smooth_amount (float): Amount to smooth the step by 0 results in a step function.
+        Args:
+            x (np.ndarray): x values.
+            high (float): High value of the smoothstep.
+            low (float): Low value of the smoothstep.
+            split (float): Where the step occurs in x.
+            smooth_amount (float): Amount to smooth the step by 0 results in a step function.
 
-    Returns:
-        np.ndarray: y values of smooth step function.
+        Returns:
+            np.ndarray: y values of smooth step function.
     """
     step = np.where(x >= split, high, low)
     if smooth_amount == 0:
@@ -187,16 +257,16 @@ def smooth_step(x : np.ndarray, high : float, low : float, split : float, smooth
 def create_modified_xs(xs_sim : cross_section.geant.GeantCrossSections, process : str, high : float, low : float, split : float, smooth_amount : float) -> dict:
     """ Create a modified cross section curve based on a smoothstep function.
 
-    Args:
-        xs_sim (cross_section.geant.GeantCrossSections): GEANT cross sections.
-        process (str): Processes cross section to modify.
-        high (float): High value of the smoothstep.
-        low (float): Low value of the smoothstep.
-        split (float): Where the step occurs in x.
-        smooth_amount (float): Amount to smooth the step by 0 results in a step function.
+        Args:
+            xs_sim (cross_section.geant.GeantCrossSections): GEANT cross sections.
+            process (str): Processes cross section to modify.
+            high (float): High value of the smoothstep.
+            low (float): Low value of the smoothstep.
+            split (float): Where the step occurs in x.
+            smooth_amount (float): Amount to smooth the step by 0 results in a step function.
 
-    Returns:
-        dict: dictionary with KE and modified cross section. 
+        Returns:
+            dict: dictionary with KE and modified cross section.
     """
     if process == "single_pion_production":
         xs_quasi = xs_sim.quasielastic * smooth_step(xs_sim.KE, high, low, split, smooth_amount)
@@ -208,6 +278,18 @@ def create_modified_xs(xs_sim : cross_section.geant.GeantCrossSections, process 
 
 
 def shape_test_new(directory : str, data_config : dict, model : pyhf.Model, toy_template : cross_section.analysis_input.AnalysisInput, mean_track_score_bins : np.array, xs_sim : cross_section.geant.GeantCrossSections, energy_slices : slices.Slices, single_bin):
+    """Run toy fits for smooth-step cross-section variations and save results by target process.
+
+        Args:
+            directory (str): Output directory prefix for the saved fit-result files.
+            data_config (dict): Base configuration for generating toy samples.
+            model (pyhf.Model): Statistical model fitted to each generated sample.
+            toy_template (cross_section.analysis_input.AnalysisInput): Reference sample for expected process scale factors.
+            mean_track_score_bins (np.array): Bin edges for the optional mean-track-score channel.
+            xs_sim (cross_section.geant.GeantCrossSections): Simulated cross sections modified in the shape variations.
+            energy_slices (slices.Slices): Energy slicing used to build fit observations.
+            single_bin (Any): Whether to fit one combined bin instead of energy-resolved bins.
+    """
     n = [0.8, 1, 1.2]
     alpha = [500, 1000]
     x0 = [500, 1000, 1500]
@@ -242,6 +324,20 @@ def shape_test_new(directory : str, data_config : dict, model : pyhf.Model, toy_
 
 
 def pull_study(template : cross_section.analysis_input.AnalysisInput, model : pyhf.Model, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, data_config : dict, n : int, single_bin) -> dict:
+    """Generate n toy samples, fit each sample, and collect expected scales, best fits, and uncertainties.
+
+        Args:
+            template (cross_section.analysis_input.AnalysisInput): Reference sample used to calculate expected process fractions.
+            model (pyhf.Model): Statistical model fitted to each generated toy sample.
+            energy_slices (slices.Slices): Energy slicing used to build fit observations.
+            mean_track_score_bins (np.ndarray): Bin edges for the optional mean-track-score channel.
+            data_config (dict): Toy-generation configuration, copied with its seed cleared for random samples.
+            n (int): Number of toy samples to generate and fit.
+            single_bin (Any): Whether to fit one combined bin instead of energy-resolved bins.
+
+        Returns:
+            dict: DataFrames of expected scales, best-fit values, and uncertainties, plus the template/data scale Series.
+    """
     out = {"expected" : None, "scale" : pd.Series(len(template) / data_config["events"]), "bestfit" : None, "uncertainty" : None}
 
     cfg = {k : v for k, v in data_config.items()}
@@ -271,10 +367,29 @@ def pull_study(template : cross_section.analysis_input.AnalysisInput, model : py
 
 
 def pull_study_fast(toys : toy.Toy, n_template : int, n_data : int, args, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, n : int) -> dict:
+    """Run repeated fits using resampled template/data rows from a shared toy sample.
+
+        Args:
+            toys (toy.Toy): Shared toy sample from which template and data rows are resampled.
+            n_template (int): Number of rows sampled to construct each fit template.
+            n_data (int): Number of rows sampled to construct each pseudo-data sample.
+            args (Any): Study arguments providing energy slices and fit configuration options.
+            energy_slices (slices.Slices): Energy slicing used to build fit observations.
+            mean_track_score_bins (np.ndarray): Bin edges for the optional mean-track-score channel.
+            n (int): Number of repeated fits to perform.
+
+        Returns:
+            dict: DataFrames of expected scales, scale factors, best-fit values, and uncertainties from the repeated fits.
+    """
     out = {"expected" : None, "scale" : None, "bestfit" : None, "uncertainty" : None}
 
     @common.timer
     def Pull():
+        """Resample template and data rows, build and fit a model, and collect scale estimates.
+
+            Returns:
+                dict: Expected process scales, fitted values, uncertainties, and template/data scale factors for one resampled fit.
+        """
         output = {"expected" : None, "bestfit" : None, "uncertainty" : None}
         print(rule.Rule(f"iteration : {i} | total : {n}"))
         template = cross_section.analysis_input.AnalysisInput.create_analysis_input_toy(toy.Toy(df = toys.df.iloc[np.random.choice(len(toys.df), int(n_template))].reset_index()))
@@ -319,12 +434,26 @@ def pull_study_fast(toys : toy.Toy, n_template : int, n_data : int, args, energy
     return out
 
 def plot_shape_examples(energy_slices : slices.Slices, book : plotting.PlotBook = plotting.PlotBook.null()):
+    """Plot example cross-section curves with normalization and smooth-step shape variations.
+
+        Args:
+            energy_slices (slices.Slices): Energy slicing that sets the range of simulated kinetic energies.
+            book (plotting.PlotBook): PlotBook used to save each generated figure.
+    """
     norms = [0.8, 1.2]
     split = 1000
     smooth_amount = 500
     xs_sim = cross_section.geant.GeantCrossSections(energy_range = [0, energy_slices.max + energy_slices.width])
 
     def plot_curves(curves : dict, geant : bool, label : str, ylabel : str):
+        """Plot each supplied curve and optionally overlay the GEANT cross section and variation band.
+
+            Args:
+                curves (dict): Mapping from curve labels to values on the simulated kinetic-energy grid.
+                geant (bool): Whether to overlay the nominal GEANT curve and its normalization band.
+                label (str): Label describing the varied parameter shown in the legend.
+                ylabel (str): Vertical-axis label for the plotted curves.
+        """
         plots.plt.figure()
         for k, v in curves.items():
             plots.plot(xs_sim.KE, v, "KE (MeV)", ylabel = ylabel, label = f"{label} : {k}", new_figure = False)
@@ -360,6 +489,17 @@ def plot_shape_examples(energy_slices : slices.Slices, book : plotting.PlotBook 
 
 @common.timer
 def plot_cross_check_results(xlabel : str, data, data_energy, energy_overflow : np.ndarray, pdf : plotting.PlotBook = plotting.PlotBook.null(), single_bin : bool = False, ylim = None):
+    """Plot fitted process scales, count residuals, and fractional errors across test settings and energy.
+
+        Args:
+            xlabel (str): Horizontal-axis label describing the tested setting.
+            data (Any): Process-indexed fit summary table containing fitted scales, true counts, and fractional errors.
+            data_energy (Any): Energy-binned fractional errors and uncertainties keyed by process and test setting.
+            energy_overflow (np.ndarray): Energy-bin coordinates used for the energy-resolved plots.
+            pdf (plotting.PlotBook): PlotBook used to save the generated figures.
+            single_bin (bool): Whether the fit uses a single combined bin, suppressing energy-resolved plots.
+            ylim (Any): Optional lower and upper limits for fractional-error plot axes.
+    """
     x = data.index.values
 
     xt = np.arange(min(x), max(x)+0.1, 0.1)
@@ -446,6 +586,19 @@ def plot_cross_check_results(xlabel : str, data, data_energy, energy_overflow : 
 
 
 def process_results(template_counts : int, results : dict, true_counts : dict, expected_mu : dict, model : pyhf.Model, single_bin : bool):
+    """Normalize fit results by event-count scales and calculate total and energy-binned fractional count errors.
+
+        Args:
+            template_counts (int): Number of entries in the reference template used to normalize process counts.
+            results (dict): Fit results keyed by test configuration.
+            true_counts (dict): True interaction counts keyed by configuration and process.
+            expected_mu (dict): Expected process scale factors keyed by configuration.
+            model (pyhf.Model): Fitted pyhf model used to calculate post-fit count differences.
+            single_bin (bool): Whether to combine all bins when calculating total fractional errors.
+
+        Returns:
+            tuple: Process-indexed total summary DataFrame and energy-binned error dictionary.
+    """
     true_counts_all = {}
     for t in true_counts:
         true_counts_all[t] = {f"true_counts_{i}" : np.sum(v) for i, v in enumerate(true_counts[t].values())}
@@ -486,6 +639,15 @@ def process_results(template_counts : int, results : dict, true_counts : dict, e
 
 
 def mean_processed_results(total, energy):
+    """Average total result tables and energy-binned fractional-error arrays across studies.
+
+        Args:
+            total (Any): Sequence of total-summary DataFrames to average.
+            energy (Any): Sequence of energy-binned fractional-error dictionaries to average.
+
+        Returns:
+            tuple: Mean total-summary DataFrame and mean energy-binned errors with their shared settings.
+    """
     total = sum(total) / len(total)
 
     energy_reshaped = {}
@@ -504,7 +666,22 @@ def mean_processed_results(total, energy):
 @common.timer
 def plot_data_shape_test_energy(data : tuple, energy_overflow : np.ndarray, book : plotting.PlotBook):
 
+    """Plot energy-binned fractional count errors for the shape-test configurations.
+
+        Args:
+            data (tuple): Dictionary containing shape-test settings, energy-binned fractional errors, and uncertainties.
+            energy_overflow (np.ndarray): Energy-bin coordinates used for the horizontal axis.
+            book (plotting.PlotBook): PlotBook used to save each process figure.
+    """
     def remove_zero(a):
+        """Return the elements of a that are not zero.
+
+            Args:
+                a (Any): Array of varied parameter values from which zeros are excluded.
+
+            Returns:
+                np.ndarray: Elements of a that are not zero.
+        """
         return a[a != 0]
 
     for d in range(data["fe"].shape[0]):
@@ -536,7 +713,24 @@ def plot_data_shape_test_energy(data : tuple, energy_overflow : np.ndarray, book
     return
 
 def plot_data_shape_test(data, key, label, vmin = None, vmax = None):
+    """Render a selected shape-test result as heatmaps over its varied parameters.
+
+        Args:
+            data (Any): DataFrame indexed by shape-test settings and containing the requested result column.
+            key (Any): Column name to render as the heatmap value.
+            label (Any): Label used for the figure and colorbar.
+            vmin (Any): Optional minimum value for the heatmap color scale.
+            vmax (Any): Optional maximum value for the heatmap color scale.
+    """
     def remove_zero(a):
+        """ Remove zero.
+
+            Args:
+                a (Any): Array of varied parameter values from which zeros are excluded.
+
+            Returns:
+                np.ndarray: Elements of a that are not zero.
+        """
         return a[a != 0]
 
     y = data[key]
@@ -589,6 +783,15 @@ def plot_data_shape_test(data, key, label, vmin = None, vmax = None):
 @common.timer
 def plot_cross_check_results_shape(results_total, results_bins, energy_overflow : np.ndarray, single_bin : bool, book : plotting.PlotBook):
 
+    """Plot fitted process-scale heatmaps and, for multi-bin studies, energy-dependent errors.
+
+        Args:
+            results_total (Any): Process-indexed total result tables for each shape-test setting.
+            results_bins (Any): Process-indexed energy-binned fractional errors and uncertainties.
+            energy_overflow (np.ndarray): Energy-bin coordinates used for energy-resolved plots.
+            single_bin (bool): Whether the fit uses one combined bin, suppressing energy-resolved plots.
+            book (plotting.PlotBook): PlotBook used to save the generated figures.
+    """
     for p in process_map:
         plot_data_shape_test(results_total, f"mu_{p}", f"$\\mu_{{{process_map[p]}}}$")
         book.save()
@@ -600,6 +803,19 @@ def plot_cross_check_results_shape(results_total, results_bins, energy_overflow 
 
 @common.timer
 def predicted_counts_summary(template_counts : float, model : pyhf.Model, test_name : str, model_name : str, workdirs : str, single_bin : bool):
+    """Load processed fit results and find the largest absolute fractional errors and their uncertainties.
+
+        Args:
+            template_counts (float): Number of entries in the reference template used to normalize process counts.
+            model (pyhf.Model): Model used to compute post-fit predictions.
+            test_name (str): Test-name component of the result directory and file names.
+            model_name (str): Model-name component of the result directory and file names.
+            workdirs (str): Directories containing saved results for the test and model.
+            single_bin (bool): Whether the fit used a single combined bin.
+
+        Returns:
+            tuple: Energy-binned maxima with uncertainties and total fractional-error maxima with uncertainties.
+    """
     pr, pr_energy = calculate_results_from_file(workdirs, test_name, model_name, template_counts, model, single_bin)    
 
     n_fe_total_max = {}
@@ -624,6 +840,15 @@ def predicted_counts_summary(template_counts : float, model : pyhf.Model, test_n
     return n_fe_max, n_fe_total_max
 
 def create_summary_tables(total_summaries, row_names):
+    """Build numeric and formatted tables of per-process fractional errors and uncertainties.
+
+        Args:
+            total_summaries (Any): Mapping from process to arrays of fractional-error maxima and corresponding uncertainties.
+            row_names (Any): Process names used as the output table rows.
+
+        Returns:
+            tuple: Numeric fractional-error table, uncertainty table, and formatted percentage table.
+    """
     proc_tags = tags.exclusive_process_tags({k : None for k in dict.fromkeys(list(row_names) + list(total_summaries.keys()))})
 
     table_fe = pd.DataFrame({k : v[0] for k, v in total_summaries.items()}, index = row_names)
@@ -641,6 +866,13 @@ def create_summary_tables(total_summaries, row_names):
 
 
 def save_summary_tables(directory : str, tables : tuple[pd.DataFrame], name : str):
+    """Write the numeric, uncertainty, and formatted summary tables as LaTeX files.
+
+        Args:
+            directory (str): Directory prefix where the LaTeX table files are written.
+            tables (tuple[pd.DataFrame]): Fractional-error, uncertainty, and formatted tables, in that order.
+            name (str): Filename prefix shared by the three saved tables.
+    """
     names = ["fe", "unc", "fmt"]
     for n, t in zip(names, tables):
         t.style.to_latex(f"{directory}table_{name}_{n}.tex")
@@ -649,6 +881,22 @@ def save_summary_tables(directory : str, tables : tuple[pd.DataFrame], name : st
 
 def summary(directory : str, test_name : str, model_name : str, model : pyhf.Model, energy_overflow : np.ndarray, template_counts : float, single_bin : bool, book : plotting.PlotBook = plotting.PlotBook.null(), ymax = None):
 
+    """Create fractional-error summary tables and plots, returning the selected plot y-axis maximum.
+
+        Args:
+            directory (str): Directory prefix for the saved summary tables.
+            test_name (str): Test-name component used to load study results and label plots.
+            model_name (str): Model-name component used to load study results.
+            model (pyhf.Model): Fitted model used to calculate predicted-count summaries.
+            energy_overflow (np.ndarray): Energy-bin coordinates used for energy-resolved plots.
+            template_counts (float): Number of entries in the reference template used to normalize process counts.
+            single_bin (bool): Whether the fit uses a single combined bin, suppressing energy-resolved plots.
+            book (plotting.PlotBook): PlotBook used to save the generated plots.
+            ymax (Any): Optional maximum fractional error for the summary plot axes.
+
+        Returns:
+            Any: Plot y-axis maximum, supplied by the caller or derived from the largest energy-binned fractional error.
+    """
     n_fe_max, n_fe_total_max = predicted_counts_summary(template_counts, model, test_name, model_name, args.workdir, single_bin)
 
     indices = ["absorption", "charge_exchange", "single_pion_production", "pion_production"]
@@ -682,6 +930,16 @@ def summary(directory : str, test_name : str, model_name : str, model : pyhf.Mod
 
 
 def plot_templates(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, template : cross_section.analysis_input.AnalysisInput, book : plotting.PlotBook = plotting.PlotBook.null()):
+    """ Plot templates.
+
+        Args:
+            templates_energy (np.ndarray): Template count distributions over energy bins, separated by region and process.
+            tempalates_mean_track_score (np.ndarray): Optional template count distributions over mean-track-score bins.
+            energy_slices (slices.Slices): Energy slicing that supplies the energy-bin coordinates.
+            mean_track_score_bins (np.ndarray): Edges for the optional mean-track-score histogram.
+            template (cross_section.analysis_input.AnalysisInput): Template sample supplying exclusive-process tags and colors.
+            book (plotting.PlotBook): PlotBook used to save the template figures.
+    """
     process_tags = tags.exclusive_process_tags(template.exclusive_process)
     for j, c in plots.iter_multi_plot(templates_energy):
         for i, s in enumerate(c):
@@ -701,6 +959,15 @@ def plot_templates(templates_energy : np.ndarray, tempalates_mean_track_score : 
 
 
 def plot_total_channel(templates_energy : np.ndarray, tempalates_mean_track_score : np.ndarray, energy_slices : slices.Slices, mean_track_score_bins : np.ndarray, book : plotting.PlotBook = plotting.PlotBook.null()):
+    """Plot summed template counts by energy slice and, when available, mean-track-score bin.
+
+        Args:
+            templates_energy (np.ndarray): Template count distributions over energy bins, separated by region and process.
+            tempalates_mean_track_score (np.ndarray): Optional template count distributions over mean-track-score bins.
+            energy_slices (slices.Slices): Energy slicing that supplies the energy-bin coordinates.
+            mean_track_score_bins (np.ndarray): Edges for the optional mean-track-score histogram.
+            book (plotting.PlotBook): PlotBook used to save the total-channel figures.
+    """
     for j, c in plots.iter_multi_plot(templates_energy):
         plots.plot(energy_slices.pos_overflow, sum(c), xlabel = f"$n_{{{j}}}$ (MeV)", ylabel = "Counts", style = "bar", new_figure = False)
     book.save()
@@ -713,6 +980,19 @@ def plot_total_channel(templates_energy : np.ndarray, tempalates_mean_track_scor
 
 
 def calculate_results_from_file(workdirs, test_name, model_name, template_counts, model, single_bin):
+    """Load and process saved fit-study results, averaging across workdirs and aligning nominal process rows.
+
+        Args:
+            workdirs (Any): Directories containing saved results for the test and model.
+            test_name (Any): Test-name component of the result directory and file names.
+            model_name (Any): Model-name component of the result directory and file names.
+            template_counts (Any): Number of reference-template entries used to normalize process counts.
+            model (Any): Fitted model used to calculate post-fit count differences.
+            single_bin (Any): Whether to combine all bins when calculating total fractional errors.
+
+        Returns:
+            tuple: Process-indexed total result tables and energy-binned error dictionaries.
+    """
     results_files = []
     for d in workdirs:
         directory = d + f"{test_name}_test_{model_name}/"
@@ -748,6 +1028,11 @@ def calculate_results_from_file(workdirs, test_name, model_name, template_counts
 
 @common.timer
 def main(args : argparse.Namespace):
+    """ Handle main.
+
+        Args:
+            args (argparse.Namespace): Input value for args.
+    """
     plotting.styles.PlotStyler.set_plot_style(extend_colors = True, dark = True, font_scale = 1.4)
     toys = toy.Toy(file = args.template)
     args.template = cross_section.analysis_input.AnalysisInput.create_analysis_input_toy(toys)

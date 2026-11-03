@@ -12,8 +12,20 @@ import awkward as ak
 import numpy as np
 
 class Slices:
+    """ Cross section counting experiment slices.
+        Each slice acts as an interacting target for a particle moving through a medium.
+        Class contains handlers for the binning slice numbers and conversions between them.
+
+        Args:
+            edges (np.ndarray[int]): Ordered slice boundaries, ascending or descending.
+    """
     Slice = namedtuple("Slice", "num pos")
     def __init__(self, edges : np.ndarray[int]):
+        """Store the slice edges and derive their order, slice-number range, and flow-bin indices.
+
+            Args:
+                edges (np.ndarray[int]): Ordered slice boundaries, ascending or descending.
+        """
         self.edges = np.array(edges)
         self.min = min(edges)
         self.max = max(edges)
@@ -38,14 +50,14 @@ class Slices:
         self.underflow_num = -1 # underflow slice number
 
 
-    def __convert__(self, x):
+    def __convert__(self, x) -> Slice:
         """ Convert a value to its slice number.
 
-        Args:
-            x: Value, array of float.
+            Args:
+                x (Any): Value, array of float.
 
-        Returns:
-            slice: Slice number/s.
+            Returns:
+                slice: Slice number/s.
         """
         if hasattr(x, "__iter__"):
             if self.reversed:
@@ -64,11 +76,11 @@ class Slices:
     def __create_slice__(self, i) -> Slice:
         """ Using the slice number, create the Slice object.
 
-        Args:
-            i (int): Slice number/s.
+            Args:
+                i (int): Slice number/s.
 
-        Returns:
-            Slice: Slice.
+            Returns:
+                Slice: Slice.
         """
         if hasattr(i, "__iter__"):
             if self.reversed:
@@ -96,14 +108,14 @@ class Slices:
         return self.Slice(i, p)
 
 
-    def __call__(self, x):
+    def __call__(self, x) -> Slice:
         """ Get the slice number for a set of values
 
-        Args:
-            x: Values
+            Args:
+                x (Any): Values
 
-        Returns:
-            array or int: Slice numbers
+            Returns:
+                Slice: numbers
         """
         return self.__create_slice__(self.__convert__(x))
 
@@ -111,14 +123,14 @@ class Slices:
     def __getitem__(self, i : int) -> Slice:
         """ Creates slices from slice numbers.
 
-        Args:
-            i (int): slice number
+            Args:
+                i (int): slice number
 
-        Raises:
-            StopIteration
+            Returns:
+                Slice: ith slice
 
-        Returns:
-            Slice: ith slice
+            Raises:
+                StopIteration
         """
         if i >= len(self.edges) - 1:
             raise StopIteration
@@ -132,8 +144,8 @@ class Slices:
     def num(self) -> np.ndarray:
         """ Return all slice numbers.
 
-        Returns:
-            np.ndarray: slice numbers
+            Returns:
+                np.ndarray: slice numbers
         """
         return np.array([ s.num for s in self], dtype = int)
 
@@ -141,8 +153,8 @@ class Slices:
     def num_all(self) -> np.ndarray:
         """ Return all slice numbers.
 
-        Returns:
-            np.ndarray: slice numbers
+            Returns:
+                np.ndarray: slice numbers
         """
         return np.array([self.underflow_num] + [s.num for s in self] + [self.overflow_num], dtype = int)
 
@@ -150,8 +162,8 @@ class Slices:
     def pos(self) -> np.ndarray:
         """ Return all slice positions. Within the valid slice range.
 
-        Returns:
-            np.ndarray: slice positions
+            Returns:
+                np.ndarray: slice positions
         """
         return np.array([s.pos for s in self])
 
@@ -159,8 +171,8 @@ class Slices:
     def width(self) -> np.ndarray:
         """ Return widths of each slice.
 
-        Returns:
-            np.ndarray: slice widths
+            Returns:
+                np.ndarray: slice widths
         """
         if reversed:
             return self.edges[:-1] - self.edges[1:]
@@ -169,6 +181,11 @@ class Slices:
 
     @property
     def pos_overflow(self) -> np.ndarray:
+        """Return slice positions with one extrapolated position added at the overflow side.
+
+            Returns:
+                np.ndarray: Slice positions plus an adjacent-width extrapolation, inserted first for reversed slices.
+        """
         widths = abs(self.edges[1:] - self.edges[:-1])
         i = 0 if self.reversed else -1
         ov = self.edges[i] + widths[i]
@@ -179,14 +196,19 @@ class Slices:
 
     @property
     def pos_bins(self):
+        """Return the sorted position edges including the extrapolated overflow position.
+
+            Returns:
+                Any: Sorted values from ``pos_overflow``.
+        """
         return np.sort(self.pos_overflow)
 
     @property
     def slice_bins(self) -> np.ndarray:
         """ Bin edges for histogramming slices.
 
-        Returns:
-            np.ndaray: Bin edges.
+            Returns:
+                np.ndarray: Bin edges.
         """
         return np.arange(self.underflow_num - 0.5, self.overflow_num + 1.5)
 
@@ -194,11 +216,11 @@ class Slices:
     def pos_to_num(self, pos):
         """ Convert slice positions to numbers
 
-        Args:
-            pos: positions
+            Args:
+                pos (Any): positions
 
-        Returns:
-            array or int: slice numbers
+            Returns:
+                Any: slice numbers
         """
         slice_num = self.__convert__(pos)
         if hasattr(pos, "__iter__"):

@@ -20,7 +20,8 @@ Criteria = namedtuple("criteria", ["op", "value"]) # criteria is defined using a
 
 @dataclass
 class CriteriaList(ABC):
-    """ A list of Criteria """
+    """ A list of Criteria
+    """
     pass
 
 
@@ -28,7 +29,7 @@ class SampleDefinition:
     """ Class that is used to define Samples based on provided criteria.
         Members:
         criteria_list (CritieriaList): The criteria used to define an events in the sample.
-        definitions (dict[list[CriteriaList]]): The categories that the samples are idenified as. This should be based on the CriteriaList. 
+        definitions (dict[list[CriteriaList]]): The categories that the samples are idenified as. This should be based on the CriteriaList.
     """
     criteria_list : CriteriaList
     definitions : dict[list[CriteriaList]]
@@ -37,12 +38,12 @@ class SampleDefinition:
     def create_definitions(cls, particle_counts : dict[ak.Array], uncategorised = False) -> dict[ak.Array]:
         """ Based on the definitions and criteria list, generate masks to categorise events when provided the particle counts.
 
-        Args:
-            particle_counts (dict[ak.Array]): particle counts. keys should be the different particle types, and must match what is used by criteria_list.
-            uncategorised (bool, optional): Create a new category for particles that do not fall into the pre-defined categories . Defaults to False.
+            Args:
+                particle_counts (dict[ak.Array]): particle counts. keys should be the different particle types, and must match what is used by criteria_list.
+                uncategorised (bool, optional): Create a new category for particles that do not fall into the pre-defined categories . Defaults to False.
 
-        Returns:
-            dict[ak.Array]: Dictionary of masks for each category.
+            Returns:
+                dict[ak.Array]: Dictionary of masks for each category.
         """
         particle_list = list(cls.criteria_list.__dataclass_fields__.keys())
         for c in particle_list:
@@ -72,6 +73,14 @@ class SampleDefinition:
 
 
     def convert_process_definitions_str(self, s : str) -> dict:
+        """Parse the string representation of named ``Criteria`` values into operator/value dictionaries.
+
+            Args:
+                s (str): Text containing assignments such as ``n_pi=criteria(op='==', value=1)``.
+
+            Returns:
+                dict: Criteria keyed by field name, with numeric values converted to ``int`` or ``float`` when possible.
+        """
         pattern = r"(\w+)=criteria\(op='([^']+)',\s*value=([^)]+)\)"
 
         result = {}

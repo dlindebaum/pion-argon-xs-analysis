@@ -19,17 +19,24 @@ from rich import print
 from python.analysis import common, ntuple, tags
 
 def log_process(func : callable) -> callable:
-    """Wrap a worker function and redirect its output to a process-specific log.
+    """ Wrap a worker function and redirect its output to a process-specific log.
 
-    Args:
-        func (callable): Worker function. Its first positional argument is used
-            as the process number in the log filename.
+        Args:
+            func (callable): Worker function. Its first positional argument is used as the process number in the log filename.
 
-    Returns:
-        callable: A wrapper that writes the worker's stdout and stderr to
-        ``out_<process number>.log`` and returns the worker's result.
+        Returns:
+            callable: A wrapper that writes the worker's stdout and stderr to ``out_<process number>.log`` and returns the worker's result.
     """
     def wrap(*args, **kwargs):
+        """Run the worker with stdout and stderr redirected to its process-numbered log file.
+
+            Args:
+                *args (Any): Worker arguments; the first value supplies the process number and log filename.
+                **kwargs (Any): Keyword arguments forwarded unchanged to the worker.
+
+            Returns:
+                Any: The wrapped worker's return value.
+        """
         process_num = args[0]
         print(f"starting process : {process_num}")
         with open(f"out_{args[0]}.log", "w") as f:
@@ -40,20 +47,15 @@ def log_process(func : callable) -> callable:
 
 
 def calculate_batches(file_desc : ntuple.FileDescriptor, n_batches : int = None, n_events : int = None) -> list[int]:
-    """Divide the events in a file into batches and return each batch size.
+    """ Divide the events in a file into batches and return each batch size.
 
-    Args:
-        file_desc (ntuple.FileDescriptor): Input ntuple file descriptor.
-        n_batches (int, optional): Desired number of batches. If ``None``,
-            derive the number of batches from ``n_events`` or use one batch
-            when both options are ``None``.
-        n_events (int, optional): Desired number of events per batch. If
-            ``None``, derive the batch size from ``n_batches``.
+        Args:
+            file_desc (ntuple.FileDescriptor): Input ntuple file descriptor.
+            n_batches (int): Desired number of batches. If ``None``, derive the number of batches from ``n_events`` or use one batch when both options are ``None``.
+            n_events (int): Desired number of events per batch. If ``None``, derive the batch size from ``n_batches``.
 
-    Returns:
-        list[int]: Event count for each batch. When both limits are supplied
-            and their product does not exceed the file's event count, only
-            that requested number of events is included.
+        Returns:
+            list[int]: Event count for each batch. When both limits are supplied and their product does not exceed the file's event count, only that requested number of events is included.
     """
     total_events = ak.count(ntuple.Data(file_desc).event_num) # get number of events, use shower merging ntuple type to supress false warnings
     print(f"{total_events=}")
@@ -98,23 +100,17 @@ def calculate_batches(file_desc : ntuple.FileDescriptor, n_batches : int = None,
 
 
 def generate_function_arguments(files : list[ntuple.FileDescriptor], n_batches : int, n_events : int, args : dict, event_indices : list = None) -> list:
-    """Build parallel argument lists for processing each file batch.
+    """ Build parallel argument lists for processing each file batch.
 
-    Args:
-        files (list[ntuple.FileDescriptor]): Files to divide into batches.
-        n_batches (int): Desired number of batches per file, or ``None`` to
-            derive it from ``n_events``.
-        n_events (int): Desired number of events per batch, or ``None`` to
-            derive it from ``n_batches``.
-        args (dict): Additional arguments passed unchanged to every job.
-        event_indices (list, optional): One event-index value per file. That
-            file's value is passed to each of its batches; ``None`` supplies
-            ``None`` for every job.
+        Args:
+            files (list[ntuple.FileDescriptor]): Files to divide into batches.
+            n_batches (int): Desired number of batches per file, or ``None`` to derive it from ``n_events``.
+            n_events (int): Desired number of events per batch, or ``None`` to derive it from ``n_batches``.
+            args (dict): Additional arguments passed unchanged to every job.
+            event_indices (list): One event-index value per file. That file's value is passed to each of its batches; ``None`` supplies ``None`` for every job.
 
-    Returns:
-        list: Five parallel lists, in order: file descriptor, batch size,
-            starting event offset within the file, event-index value, and
-            ``args``. Each column contains one entry per job.
+        Returns:
+            list: Five parallel lists, in order: file descriptor, batch size, starting event offset within the file, event-index value, and ``args``. Each column contains one entry per job.
     """
     batches = []
     start = []
@@ -144,25 +140,19 @@ def generate_function_arguments(files : list[ntuple.FileDescriptor], n_batches :
 
 @common.timer
 def mutliprocess(func : callable, files : list[ntuple.FileDescriptor], n_batches : int, n_events : int, args : dict, n_pus : int = None, event_indices : list = None) -> list:
-    """Run a worker function over ntuple batches using a process pool.
+    """ Run a worker function over ntuple batches using a process pool.
 
-    Args:
-        func (callable): Worker called once per batch. It receives positional
-            arguments in this order: process number, file descriptor, batch
-            size, starting event offset, event-index value, and ``args``.
-        files (list[ntuple.FileDescriptor]): Input ntuple files.
-        n_batches (int): Desired number of batches per file, or ``None`` to
-            derive it from ``n_events``.
-        n_events (int): Desired number of events per batch, or ``None`` to
-            derive it from ``n_batches``.
-        args (dict): Additional argument passed to every worker call.
-        n_pus (int, optional): Number of worker processes. ``None`` lets the
-            process pool choose its default.
-        event_indices (list, optional): One event-index value per file, passed
-            to every batch from that file.
+        Args:
+            func (callable): Worker called once per batch. It receives positional arguments in this order: process number, file descriptor, batch size, starting event offset, event-index value, and ``args``.
+            files (list[ntuple.FileDescriptor]): Input ntuple files.
+            n_batches (int): Desired number of batches per file, or ``None`` to derive it from ``n_events``.
+            n_events (int): Desired number of events per batch, or ``None`` to derive it from ``n_batches``.
+            args (dict): Additional argument passed to every worker call.
+            n_pus (int): Number of worker processes. ``None`` lets the process pool choose its default.
+            event_indices (list): One event-index value per file, passed to every batch from that file.
 
-    Returns:
-        list: Worker result for each batch, in pool-map order.
+        Returns:
+            list: Worker result for each batch, in pool-map order.
     """
     pool = ProcessPool(nodes = n_pus)
     pool.restart(True)
@@ -173,19 +163,25 @@ def mutliprocess(func : callable, files : list[ntuple.FileDescriptor], n_batches
 
 
 def merge_outputs(outputs : list[dict]) -> dict:
-    """Merge batch-output dictionaries by combining values with matching keys.
+    """ Merge batch-output dictionaries by combining values with matching keys.
 
-    Nested dictionaries are merged recursively. Duplicate leaf values are
-    combined according to their type: Awkward arrays are concatenated, tags
-    are merged, lists are extended, and other values are collected into lists.
+                  Nested dictionaries are merged recursively. Duplicate leaf values are
+                  combined according to their type: Awkward arrays are concatenated, tags
+                  are merged, lists are extended, and other values are collected into lists.
 
-    Args:
-        outputs (list[dict]): Dictionaries returned by the batch workers.
+        Args:
+            outputs (list[dict]): Dictionaries returned by the batch workers.
 
-    Returns:
-        dict: Merged output dictionary.
+        Returns:
+            dict: Merged output dictionary.
     """
     def search(collection : dict, output : dict):
+        """Recursively merge a dictionary into the output, combining duplicate leaf values by type.
+
+            Args:
+                collection (dict): Batch output dictionary being merged.
+                output (dict): Accumulator updated with the collection's keys and values.
+        """
         for k, v in collection.items():
             if type(v) is dict:
                 if k not in output:

@@ -26,6 +26,19 @@ from python.analysis.beam import reweight
 from python.analysis.plotting import plots
 
 def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
+    """ Collect beam-momentum samples and selection counts for one ntuple chunk.
+
+        Args:
+            i (int): Index of the chunk being processed.
+            file_desc (ntuple.FileDescriptor): Descriptor for the input ntuple file.
+            n_events (int): Maximum number of events to read.
+            start (int): First event index to read.
+            selected_events (Any): Optional event subset supplied by the processing runner.
+            args (dict): Resolved selections and beam-reweight configuration.
+
+        Returns:
+            dict: Sideband and analysis momentum samples, tags, and cutflow counts.
+    """
 
     sample = "data" if args["data"] else "mc"
 

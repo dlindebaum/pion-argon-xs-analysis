@@ -11,6 +11,12 @@ import pandas as pd
 import argparse
 
 def main(csvs : str, output : str):
+    """ Merge CSV files into one dataframe and optionally save the result.
+
+        Args:
+            csvs (str): Paths to the CSV files to read and merge.
+            output (str): Destination path for the merged CSV, or None to skip saving.
+    """
     df = pd.concat(map(pd.read_csv, csvs), ignore_index=True)
     print(df)
     if output is not None:

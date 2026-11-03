@@ -21,7 +21,21 @@ if TYPE_CHECKING:
 
 
 class MaskIter():
+    """Iterate through masks while respecting event/PFO levels and simultaneous groups.
+
+        Args:
+            start_sigs (Any): Per-mask input signatures describing event and PFO dimensions.
+            simultaneous (Any): Flags indicating whether each mask joins the preceding mask group.
+            masks (Any): Boolean event- or PFO-level masks to apply in order.
+    """
     def __init__(self, start_sigs, simultaneous, masks):
+        """Store mask iteration state and check that masks and signatures align.
+
+            Args:
+                start_sigs (Any): Per-mask input signatures describing event and PFO dimensions.
+                simultaneous (Any): Flags indicating whether each mask joins the preceding mask group.
+                masks (Any): Boolean event- or PFO-level masks to apply in order.
+        """
         self.sigs = start_sigs
         self.masks = masks
         self.iter_max = len(masks)
@@ -46,33 +60,89 @@ class MaskIter():
         return
     
     def __iter__(self):
+        """Reset iteration and select the first mask.
+
+            Returns:
+                Any: This iterator, reset to the first mask.
+        """
         self.index = 0
         self.curr_mask = self.masks[0]
         return self
 
     def check_simul_masks(self, sig1, sig2):
+        """Return whether two mask signatures can be applied simultaneously.
+
+            Args:
+                sig1 (Any): First mask signature, represented by event and PFO counts.
+                sig2 (Any): Second mask signature to compare with the first.
+
+            Returns:
+                bool: Whether both signatures can be applied to the same event/PFO data.
+        """
         return (sig1[0] == sig2[0]) and ((sig1[1] == sig2[-1]) or (sig1[1] == -1) or (sig2[1] == -1))
 
     def comb_masks(self, mask_list):
+        """Combine a sequence of masks with logical AND.
+
+            Args:
+                mask_list (Any): Boolean masks to combine with logical AND.
+
+            Returns:
+                np.ndarray: Elementwise logical AND of the supplied masks.
+        """
         return functools.reduce(lambda x, y: np.logical_and(x, y), mask_list)
 
     def gen_mask_applier(self):
+        """Build a callable that applies the accumulated event and PFO masks to data.
+
+            Returns:
+                Callable: Function that applies the accumulated event and PFO masks to data.
+        """
         if len(self.curr_evts) == 0:
             mask = self.comb_masks(self.curr_pfos)
             def mask_applier(data):
+                """Apply the accumulated PFO masks to data.
+
+                    Args:
+                        data (Any): Array or nested event/PFO data to filter with the captured mask.
+
+                    Returns:
+                        Any: The supplied data filtered by the captured mask.
+                """
                 return data[mask]
         elif len(self.curr_pfos) == 0:
             mask = self.comb_masks(self.curr_evts)
             def mask_applier(data):
+                """Apply the accumulated event masks to data.
+
+                    Args:
+                        data (Any): Array or nested event/PFO data to filter with the accumulated mask.
+
+                    Returns:
+                        Any: The supplied data filtered by the captured mask.
+                """
                 return data[mask]
         else:
             evt_mask = self.comb_masks(self.curr_evts)
             pfo_mask = self.comb_masks(self.curr_pfos)
             def mask_applier(data):
+                """Apply PFO masks first, then event masks, to data.
+
+                    Args:
+                        data (Any): Array or nested event/PFO data to return unchanged until the simultaneous group is complete.
+
+                    Returns:
+                        Any: Data filtered by the PFO mask and then the event mask.
+                """
                 return data[pfo_mask][evt_mask]
         return mask_applier
     
     def add_mask_at_index(self, index):
+        """Add the indexed mask to the event- or PFO-level mask group.
+
+            Args:
+                index (Any): Position of the mask to add to the current event/PFO group.
+        """
         if self.sigs[index][1] == -1:
             self.curr_evts.append(self.masks[index])
         else:
@@ -80,15 +150,45 @@ class MaskIter():
         return
 
     def get_mask_func(self, apply_func, next_simul):
+        """Create a wrapper that defers mask application for simultaneous masks.
+
+            Args:
+                apply_func (Any): Callable that applies the current accumulated masks.
+                next_simul (Any): Whether another mask is to be applied in the same group.
+
+            Returns:
+                Callable: Wrapper that returns the mask callable and either deferred or filtered data.
+        """
         if next_simul:
             def apply_mask_func(data):
+                """Return the mask callable and unfiltered data for the next simultaneous mask.
+
+                    Args:
+                        data (Any): Array or nested event/PFO data to filter with the accumulated mask.
+
+                    Returns:
+                        tuple: The mask callable and the data unchanged for a following simultaneous mask.
+                """
                 return apply_func, data
         else:
             def apply_mask_func(data):
+                """Apply the mask callable to data and return it with the result.
+
+                    Args:
+                        data (Any): Array or nested event/PFO data to filter with the accumulated mask.
+
+                    Returns:
+                        tuple: The mask callable and its filtered data.
+                """
                 return apply_func, apply_func(data)
         return apply_mask_func
 
     def __next__(self):
+        """Advance to the next mask and return its application wrapper.
+
+            Returns:
+                Callable: Wrapper for applying the next mask group to data.
+        """
         if self.index >= self.iter_max:
             raise StopIteration
         if self.init_simul[self.index] == self.index:
@@ -100,8 +200,13 @@ class MaskIter():
         return self.get_mask_func(self.curr_func, self.next_simul[self.index-1])
         
     def __getitem__(self, sli : slice):
-        """
-        NOT YET UPDATED TO PROPERLY HANDLE PFO/EVENT MIXING
+        """ NOT YET UPDATED TO PROPERLY HANDLE PFO/EVENT MIXING
+
+            Args:
+                sli (slice): Requested slice of mask-iteration positions; slicing is currently unsupported.
+
+            Returns:
+                Any: This method currently raises NotImplementedError.
         """
         raise NotImplementedError
         if (sli.step is not None) and (sli.step < 0):
@@ -126,6 +231,13 @@ class MaskIter():
     
 
 class CutHandler():
+    """Track cut masks and generate event, PFO, and tagged-particle cut-flow tables.
+
+        Args:
+            evts (Any): Optional ntuple.Data object used to initialize the event mask and particle tags.
+            particles_to_tag (list): PDG codes whose particle counts are included in cut-flow tables.
+            particle_tags (tags.Tags): Optional particle tags used to add per-particle counts to cut-flow tables.
+    """
     _default_particles = [
         211, -211, 13, -13,
         11, -11, 22, 2212, 321]
@@ -144,25 +256,16 @@ class CutHandler():
             evts = None,#: ntuple.Data = None,
             particles_to_tag: list = _default_particles,
             particle_tags : tags.Tags = None):
-        """
-        Create new a `CutHandler` object to store applied masks
-        and return a table of tracked particles when asked.
+        """ Create new a `CutHandler` object to store applied masks
+            and return a table of tracked particles when asked.
 
-        Parameters
-        ----------
-        evts : ntuple.Data, optional
-            Initial events the masks are being applied from.
-            If not set here, it must be set for getting a
-            table using `self.set_init_evts(evts)`. Default
-            is None.
-        particles_to_tag : list, optional
-            List of pdg codes to be tracked by the tables.
-            Default is [211, -211, 13, -13,11, -11, 22, 2212, 321]
-        
-        Returns
-        -------
-        CutHandler
-            New `CutHandler` instance.
+            Args:
+                evts (Any): ntuple.Data, optional Initial events the masks are being applied from. If not set here, it must be set for getting a table using `self.set_init_evts(evts)`. Default is None.
+                particles_to_tag (list): list, optional List of pdg codes to be tracked by the tables. Default is [211, -211, 13, -13,11, -11, 22, 2212, 321]
+                particle_tags (tags.Tags): Optional particle tags used to add per-particle counts to cut-flow tables.
+
+            Returns:
+                CutHandler: New `CutHandler` instance.
         """
         self._masks = []
         self._signatures = []
@@ -191,6 +294,11 @@ class CutHandler():
         return
 
     def _gen_basic_counts(self):
+        """Build event and PFO counts and efficiencies for each cut stage.
+
+            Returns:
+                dict: Event and PFO counts, overall efficiencies, step-relative efficiencies, and mean PFOs per event.
+        """
         init_evt_count = ak.num(self._init_data, axis=0)
         init_pfo_count = ak.count(self._init_data)
         results = {
@@ -224,6 +332,14 @@ class CutHandler():
         return results
 
     def _gen_particle_counts(self, init_list):
+        """Build per-stage counts, efficiencies, and per-event averages for a particle mask.
+
+            Args:
+                init_list (Any): Initial per-event particle mask used as the count baseline.
+
+            Returns:
+                dict: Per-stage particle counts, total-relative percentages, step-relative percentages, and per-event averages.
+        """
         init_count = np.sum(init_list)
         results = {
             "remaining": [init_count],
@@ -244,27 +360,24 @@ class CutHandler():
         return results
 
     def set_init_evts(self, evts):#: ntuple.Data):
-        """
-        Set the initial event counts to be cut using the masks.
-        This is automatically performed if as `ntuple.Data`
-        object is passed in initialisation.
-        
-        This must be performed prior to generating a table.
+        """ Set the initial event counts to be cut using the masks.
+            This is automatically performed if as `ntuple.Data`
+            object is passed in initialisation.
 
-        Use `self.init_data_set` for a boolean indicating if
-        the events have been set.
+            This must be performed prior to generating a table.
 
-        N.B. if we want to to this for truth, we must change evts
-        to be an acutal akward array (i.e.
-        `evts.recoParticles.number` for reco and
-        `evts.true_particles.number` for truth). At the moment,
-        we take a ntuple.Data object an pull the
-        `evts.recoParticles.number` from it.
+            Use `self.init_data_set` for a boolean indicating if
+            the events have been set.
 
-        Parameters
-        ----------
-        evts : ntuple.Data
-            Initial events the masks are being applied from.
+            N.B. if we want to to this for truth, we must change evts
+            to be an acutal akward array (i.e.
+            `evts.recoParticles.number` for reco and
+            `evts.true_particles.number` for truth). At the moment,
+            we take a ntuple.Data object an pull the
+            `evts.recoParticles.number` from it.
+
+            Args:
+                evts (Any): ntuple.Data Initial events the masks are being applied from.
         """
         self._init_data = ak.ones_like(evts.recoParticles.number, dtype=bool)
         self._init_data_sig = self._get_mask_signature(self._init_data)
@@ -274,12 +387,30 @@ class CutHandler():
         return
 
     def _comb_masks(self, mask_list):
+        """Combine multiple masks into one logical-AND mask, preserving a lone mask unchanged.
+
+            Args:
+                mask_list (Any): Masks to combine when a group contains multiple masks.
+
+            Returns:
+                list: One combined mask when multiple masks are supplied, otherwise the original mask list.
+        """
         if len(mask_list) >= 2:
             return [functools.reduce(lambda x, y: np.logical_and(x, y), mask_list)]
         else:
             return mask_list
 
     def _group_masks(self, start_index=None, end_index=None, rcount=np.inf):
+        """Group consecutive masks by event/PFO level and simultaneous-application boundaries.
+
+            Args:
+                start_index (Any): Optional lower boundary for the mask range to group.
+                end_index (Any): Optional upper boundary for the mask range to group.
+                rcount (Any): Maximum number of non-simultaneous mask groups to collect.
+
+            Returns:
+                list: Masks grouped and combined by application level and simultaneous-group boundaries.
+        """
         groups_count = 0
         curr_pfos_like = []
         curr_evts_like = []
@@ -318,6 +449,15 @@ class CutHandler():
         return ordered_results
 
     def _get_mask_signature(self, mask, end=False):
+        """Describe a mask's event and PFO dimensions before or after application.
+
+            Args:
+                mask (Any): Boolean mask whose event/PFO input signature is measured.
+                end (Any): If true, measure the signature after applying the current mask group.
+
+            Returns:
+                tuple: Event count and PFO-level count, or -1 for an event-level mask.
+        """
         flat_array = isinstance(ak.count(mask, axis=0), numbers.Integral)
         if not end:
             pfo_level = -1 if flat_array else ak.count(mask)
@@ -334,6 +474,16 @@ class CutHandler():
         return end_sig
     
     def _validate_signature(self, signature, raise_exception=True, return_simul=False):
+        """Check whether a mask matches the current simultaneous or sequential mask signature.
+
+            Args:
+                signature (Any): Event/PFO dimensions of the candidate mask.
+                raise_exception (Any): Whether to raise ValueError when the signature is incompatible.
+                return_simul (Any): If true, return whether the mask can be applied simultaneously.
+
+            Returns:
+                bool: Whether the signature is compatible, or its simultaneous-application status when requested.
+        """
         if self._start_sig == ():
             return False
         simul_mask = (self._start_sig[0] == signature[0]) and ((self._start_sig[-1] == signature[-1]) or (self._start_sig[-1] == -1) or (signature[-1] == -1))
@@ -348,15 +498,11 @@ class CutHandler():
         return good_mask
 
     def add_mask(self, mask: ak.Array, name: str = "-"):
-        """
-        Add a mask to the instance.
+        """ Add a mask to the instance.
 
-        Parameters
-        ----------
-        mask : ak.Array
-            Boolean mask of the cut applied.
-        name : str
-            Name indicating what the cut did.
+            Args:
+                mask (ak.Array): ak.Array Boolean mask of the cut applied.
+                name (str): str Name indicating what the cut did.
         """
         this_sig = self._get_mask_signature(mask)
         self._simultaneous.append(self._validate_signature(this_sig, return_simul=True))
@@ -371,12 +517,27 @@ class CutHandler():
         return
 
     def _mask_appliers(self):
+        """Create an iterator that applies the stored masks in order.
+
+            Returns:
+                MaskIter: Iterator configured with this handler's signatures, grouping flags, and masks.
+        """
         return MaskIter(self._signatures, self._simultaneous, self._masks)
 
     def __iter__(self):
+        """Return an iterator over this handler's mask applications.
+
+            Returns:
+                MaskIter: Iterator that applies this handler's masks in order.
+        """
         return self._mask_appliers()
 
     def copy(self):
+        """Return a deep copy of this cut handler.
+
+            Returns:
+                CutHandler: Deep copy of this handler and its stored cut state.
+        """
         return copy.deepcopy(self)
     
     def get_masks(
@@ -385,34 +546,16 @@ class CutHandler():
             final_concat_index: int = None,
             initial_true_index: int = None,
             final_true_index: int = None):
-        """
-        Returns the stored masks
+        """ Returns the stored masks
 
-        Parameters
-        ----------
-        initial_concat_index : int, optional
-            Concatenation from which to begin fetching masks.
-            Will be overwritten by `true_index_start` if
-            passed. Default is 0.
-        final_concat_index : int, optional
-            Concatenation from which to finish fetching
-            masks (the first resut of this concatenation
-            will _not_ be inculded). Will be overwritten by
-            `true_index_end` if `true_index_start` is passed.
-            Default is None.
-        initial_true_index : int, optional
-            Index from which to begin fetching masks.
-            Overwrites `concat_index_start` if passed.
-            Default is None.
-        final_true_index : int, optional
-            Index to finish fetching masks (the supplied
-            index will not be included). Only used if
-            `true_index_start` is passed. Default is None.
-        
-        Returns
-        -------
-        list
-            List of requested masks
+            Args:
+                initial_concat_index (int): int, optional Concatenation from which to begin fetching masks. Will be overwritten by `true_index_start` if passed. Default is 0.
+                final_concat_index (int): int, optional Concatenation from which to finish fetching masks (the first resut of this concatenation will _not_ be inculded). Will be overwritten by `true_index_end` if `true_index_start` is passed. Default is None.
+                initial_true_index (int): int, optional Index from which to begin fetching masks. Overwrites `concat_index_start` if passed. Default is None.
+                final_true_index (int): int, optional Index to finish fetching masks (the supplied index will not be included). Only used if `true_index_start` is passed. Default is None.
+
+            Returns:
+                list: List of requested masks
         """
         if initial_true_index is None:
             initial_true_index = self.concat_indicies[initial_concat_index]
@@ -427,12 +570,11 @@ class CutHandler():
 
 
     def get_masks_dict(self) -> dict:
-        """ 
-        Returns the masks and if applicable their names in a dictionary.
-        if no name was provided for the mask, a number is assigned.
+        """ Returns the masks and if applicable their names in a dictionary.
+            if no name was provided for the mask, a number is assigned.
 
-        Returns:
-            dict: dcitionary of masks
+            Returns:
+                dict: dcitionary of masks
         """
         masks = {}
         for i, (n, m) in enumerate(zip(self._names, self._masks)):
@@ -448,41 +590,18 @@ class CutHandler():
             return_table: bool = False,
             application_concat_index: int = 0,
             application_true_index: int = None):
-        """
-        DO NOT USE - yet to be fully implmented.
+        """ DO NOT USE - yet to be fully implmented.
 
-        Apply the masks in the instance to the data.
+            Apply the masks in the instance to the data.
 
-        Parameters
-        ----------
-        data : ak.Array
-            Data to which the masks are applied. Must
-            match the signature of the first mask.
-        return_table : bool, optional
-            If `True`, the both the filtered mask and
-            corresponding table will be returned. Default
-            is False.
-        application_concat_index : int, optional
-            Initial concatenation from which to apply masks.
-            If data has already been filtered, use this to
-            change from where the mask application begins.
-            Current concatenation index can be seen using
-            `self.concate_index`. Default is 0.
-        application_true_index : int, optional
-            Selects an arbitray mask as the starting point from
-            which to begin applying masks. This can be used
-            selections have not been grouped via concatenations.
-            Current mask index can be seen using
-            `self.curr_mask_index`. This will override
-            `initial_concat_index` if set. Default is None.
-        
-        Returns
-        -------
-        ak.Array
-            Filtered data.
-        pd.DataFrame, optional
-            Cuts table, only returned if `return_table` is
-            True.
+            Args:
+                data (ak.Array): ak.Array Data to which the masks are applied. Must match the signature of the first mask.
+                return_table (bool): bool, optional If `True`, the both the filtered mask and corresponding table will be returned. Default is False.
+                application_concat_index (int): int, optional Initial concatenation from which to apply masks. If data has already been filtered, use this to change from where the mask application begins. Current concatenation index can be seen using `self.concate_index`. Default is 0.
+                application_true_index (int): int, optional Selects an arbitray mask as the starting point from which to begin applying masks. This can be used selections have not been grouped via concatenations. Current mask index can be seen using `self.curr_mask_index`. This will override `initial_concat_index` if set. Default is None.
+
+            Returns:
+                ak.Array: Filtered data. pd.DataFrame, optional Cuts table, only returned if `return_table` is True.
         """
         raise NotImplementedError
         # TODO exception throwing
@@ -499,6 +618,8 @@ class CutHandler():
             return result        
 
     def _gen_table(self):
+        """Refresh cached event, PFO, and tagged-particle cut-flow columns when needed.
+        """
         if self._init_data is None:
             raise Exception("Initial data not added, supply events using set_init_events.")
         if len(self._masks) == 0:
@@ -514,11 +635,38 @@ class CutHandler():
         return
     
     def _gen_particle_cols_array(self, pdg):
+        """Build cut-flow column labels by prefixing each particle-count label with a PDG code.
+
+            Args:
+                pdg (Any): Particle PDG code used to prefix each table-column label.
+
+            Returns:
+                np.ndarray: PDG-prefixed particle cut-flow column labels.
+        """
         return np.array(list(map(lambda c: f"{pdg} {c}", self._particle_table_cols)))
     def _gen_particle_cols_array_read(self, pdg, latex):
+        """Build the same PDG-prefixed particle-count labels used by the table columns.
+
+            Args:
+                pdg (Any): Particle PDG code used to prefix each table-column label.
+                latex (Any): Retained for compatibility; it does not change the returned labels.
+
+            Returns:
+                np.ndarray: PDG-prefixed particle cut-flow column labels.
+        """
         return np.array(list(map(lambda c: f"{pdg} {c}", self._particle_table_cols)))
 
     def _new_init_events(self, col, index, init_name):
+        """Slice one cached table column and rebase percentage values to its selected first row.
+
+            Args:
+                col (Any): Cached cut-flow column to retrieve and rebase.
+                index (Any): First cached row to include as the new initial row.
+                init_name (Any): Display name to assign to the selected initial row.
+
+            Returns:
+                list: Selected column values, with percentages rebased when applicable.
+        """
         if index == 0:
             result = self._table_data[col]
         else:
@@ -544,78 +692,29 @@ class CutHandler():
             events: bool = True, pfos: bool = True,
             counts: bool = True, percent_remain: bool = True,
             relative_percent: bool = True, ave_per_event: bool = True):
-        """
-        Generate the cuts table for the masks shown to the instance.
+        """ Generate the cuts table for the masks shown to the instance.
 
-        The initial events must have been set prior to calling this,
-        either in the initialisation, or the `set_init_events`
-        method.
+            The initial events must have been set prior to calling this,
+            either in the initialisation, or the `set_init_events`
+            method.
 
-        Parameters
-        ----------
-        init_data_name : str, optional
-            Name to be displayed for the pre-cuts row. Default is
-            `"Initial data"`
-        initial_concat_index : int, optional
-            Initial concatenation from which to generate the table
-            This can be used to i.e. removing initial event
-            selection cuts if they are not of interest. Current
-            concatenation index can be seen using
-            `self.concate_index`. Default is 0.
-        final_concat_index : int, optional
-            Final concatenation at which to stop generating the
-            table. Current concatenation index can be seen using
-            `self.concate_index`. Default is None.
-        initial_true_index : int, optional
-            Selects an arbitray mask as the starting point from
-            which to generate the table. This can be used
-            selections have not been grouped via concatenations.
-            Current mask index can be seen using
-            `self.curr_mask_index`. This will override
-            `initial_concat_index` if set. Default is None.
-        final_true_index : int, optional
-            Selects an arbitray mask as the final point at which
-            to stop generating the table. Indexed mask will _not_
-            be included. Current mask index can be seen using
-            `self.curr_mask_index`. This will override
-            `final_concat_index1` if `initial_concat_index` is
-            set. Default is None.
-        latex : bool, optional
-            If `True`, result is a string which may be copied
-            directly into LaTeX. Default is False.
-        particles_list: list, optional
-            List of pdg codes of particles to be included in the
-            table. Default is [211, -211, 13, -13,11, -11, 22,
-            2212, 321]
-        events: bool, optional
-            If `True`, columns indicating the number of events
-            present are included. Default is True.
-        pfos: bool, optional
-            If `True`, columns indicating the total number of
-            PFOs present are included. Default is True.
-        counts: bool, optional
-            If `True`, columns indicating the number of
-            occurances for each tracked item are included.
-            Default is True.
-        percent_remain: bool, optional
-            If `True`, columns indicating the percentage of the
-            intial count for each tracked item are included.
-            Default is True.
-        relative_percent: bool, optional
-            If `True`, columns indicating the relative percentage
-            remaining compared to the previous row for each
-            tracked item are included. Default is True.
-        ave_per_event: bool, optional
-            If `True`, columns indicating the mean number of
-            occurances per event for each tracked item are
-            included. Not included for events data. Default is
-            True.
-        
-        Returns
-        -------
-        pd.DataFrame or str
-            Table of results as a DataFrame if `latex` is False,
-            or a string if `latex` is True.
+            Args:
+                init_data_name (str): str, optional Name to be displayed for the pre-cuts row. Default is `"Initial data"`
+                initial_concat_index (int): int, optional Initial concatenation from which to generate the table This can be used to i.e. removing initial event selection cuts if they are not of interest. Current concatenation index can be seen using `self.concate_index`. Default is 0.
+                final_concat_index (int): int, optional Final concatenation at which to stop generating the table. Current concatenation index can be seen using `self.concate_index`. Default is None.
+                initial_true_index (int): int, optional Selects an arbitray mask as the starting point from which to generate the table. This can be used selections have not been grouped via concatenations. Current mask index can be seen using `self.curr_mask_index`. This will override `initial_concat_index` if set. Default is None.
+                final_true_index (int): int, optional Selects an arbitray mask as the final point at which to stop generating the table. Indexed mask will _not_ be included. Current mask index can be seen using `self.curr_mask_index`. This will override `final_concat_index1` if `initial_concat_index` is set. Default is None.
+                latex (bool): bool, optional If `True`, result is a string which may be copied directly into LaTeX. Default is False.
+                particles_list (list): list, optional List of pdg codes of particles to be included in the table. Default is [211, -211, 13, -13,11, -11, 22, 2212, 321]
+                events (bool): bool, optional If `True`, columns indicating the number of events present are included. Default is True.
+                pfos (bool): bool, optional If `True`, columns indicating the total number of PFOs present are included. Default is True.
+                counts (bool): bool, optional If `True`, columns indicating the number of occurances for each tracked item are included. Default is True.
+                percent_remain (bool): bool, optional If `True`, columns indicating the percentage of the intial count for each tracked item are included. Default is True.
+                relative_percent (bool): bool, optional If `True`, columns indicating the relative percentage remaining compared to the previous row for each tracked item are included. Default is True.
+                ave_per_event (bool): bool, optional If `True`, columns indicating the mean number of occurances per event for each tracked item are included. Not included for events data. Default is True.
+
+            Returns:
+                Table: of results as a DataFrame if `latex` is False, or a string if `latex` is True.
         """
         self._gen_table()
 
@@ -657,41 +756,31 @@ class CutHandler():
             return pd.DataFrame(data)
 
     def concatenate(self, other, return_copy=False):
-        """
-        Concatenates a second `CutHandler` instance.
+        """ Concatenates a second `CutHandler` instance.
 
-        Also usable via the addition operator (which returns
-        a copy).
+            Also usable via the addition operator (which returns
+            a copy).
 
-        The combined result will include data from both
-        instances with this instance first and the `other`
-        instance second.
+            The combined result will include data from both
+            instances with this instance first and the `other`
+            instance second.
 
-        The `other` instance have a compatible initial mask
-        signature with that of the final mask in this
-        instance.
+            The `other` instance have a compatible initial mask
+            signature with that of the final mask in this
+            instance.
 
-        The index of this concatenation is stored in
-        `self.concat_indicies`, and the current index is
-        stored as `self.concat_index`. The concatenation
-        index may be used in `get_masks` and `get_table` to
-        index a particular set of cuts.
+            The index of this concatenation is stored in
+            `self.concat_indicies`, and the current index is
+            stored as `self.concat_index`. The concatenation
+            index may be used in `get_masks` and `get_table` to
+            index a particular set of cuts.
 
-        Parameters
-        ----------
-        other : CutHandler
-            Other CutHandler object to be concatenate to
-            this instance.
-        return_copy : bool, optional
-            If True, a new instance is created to contain
-            the concatenation, whilst this instance does
-            not change. Default is False.
-        
-        Returns
-        -------
-        CutHandler, optional
-            Combine CutHandler instance, if `return_copy`
-            was set to True.
+            Args:
+                other (Any): CutHandler Other CutHandler object to be concatenate to this instance.
+                return_copy (Any): bool, optional If True, a new instance is created to contain the concatenation, whilst this instance does not change. Default is False.
+
+            Returns:
+                Combine: CutHandler instance, if `return_copy` was set to True.
         """
         if not isinstance(other, CutHandler):
             raise NotImplementedError("CutHandler object can only be added to another CutHandler object")
@@ -726,9 +815,23 @@ class CutHandler():
             return
 
     def __add__(self, other):
+        """Return a copy containing this handler's masks followed by the other handler's masks.
+
+            Args:
+                other (Any): Another CutHandler whose masks are appended after this handler's masks.
+
+            Returns:
+                CutHandler: Copy containing the masks from both handlers in order.
+        """
         return self.concatenate(other, return_copy=True)
 
 def apply_filters(obj, filters):#: ntuple.Data, filters):
+    """ Apply filters.
+
+        Args:
+            obj (Any): Data object whose cut table receives the masks.
+            filters (Any): Masks to add to the object's cut table.
+    """
     for f in filters:
         print(f"{f=}")
         obj.cut_table.add_mask(f)

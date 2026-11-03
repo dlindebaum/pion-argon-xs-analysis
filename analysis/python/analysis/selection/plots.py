@@ -133,6 +133,15 @@ truncate = {
 
 
 def calculate_arrow_length(value, x_range):
+    """Choose a cut-arrow length as ten percent of the data maximum or plot-range maximum.
+
+        Args:
+            value (Any): Values used to find the data maximum when no plot range is set.
+            x_range (Any): Optional plot limits whose upper bound sets the arrow scale.
+
+        Returns:
+            Any: Ten percent of the selected maximum.
+    """
     if x_range is None:
         l = ak.max(value)
     else:
@@ -141,13 +150,14 @@ def calculate_arrow_length(value, x_range):
 
 
 def make_beam_selection_plots(output_mc : dict, output_data : dict, out_dir : str, norm : float, book_name = "beam"):
-    """ Beam particle selection plots.
+    """Save beam-selection diagnostic plots for MC and, when provided, data in a PDF.
 
-    Args:
-        output_mc (dict): mc to plot
-        output_data (dict): data to plot
-        out_dir (str): output directory
-        norm (float): plot normalisation
+        Args:
+            output_mc (dict): MC selection outputs, including values, tags, cut positions, and final tags.
+            output_data (dict): Optional data selection outputs to overlay with MC.
+            out_dir (str): Directory for the PDF output.
+            norm (float): Whether to normalize MC and data histograms.
+            book_name (Any): Base name of the output PDF, without its directory.
     """
     norm = False if output_data is None else norm
     with plotting.PlotBook(out_dir + f"{book_name}.pdf") as pdf:
@@ -201,6 +211,15 @@ def make_beam_selection_plots(output_mc : dict, output_data : dict, out_dir : st
 
 
 def make_pfo_selection_plots(output_mc : dict, output_data : dict, out_dir : str, norm : float, book_name : str):
+    """Save per-selection PFO plots, cut positions, optional completeness plots, and final particle tags.
+
+        Args:
+            output_mc (dict): MC selection outputs containing values, tags, and cut metadata.
+            output_data (dict): Optional data selection outputs to overlay with MC.
+            out_dir (str): Directory for the PDF output.
+            norm (float): Whether to normalize the selection histograms.
+            book_name (str): Name of the output PDF within ``out_dir``.
+    """
     norm = False if output_data is None else norm
 
     with plotting.PlotBook(out_dir + book_name) as pdf:
@@ -222,6 +241,17 @@ def make_pfo_selection_plots(output_mc : dict, output_data : dict, out_dir : str
 
 
 def make_pfo_selection_plots_condensed(output_mc : dict, output_mc_loose : dict, output_data : dict, output_data_loose : dict, out_dir : str, norm : float, book_name : str):
+    """Save condensed PFO-selection comparisons overlaying nominal and loose cuts for MC and data.
+
+        Args:
+            output_mc (dict): MC outputs for the nominal particle selections.
+            output_mc_loose (dict): MC outputs for the loose particle selections.
+            output_data (dict): Optional data outputs for the nominal selections.
+            output_data_loose (dict): Optional data outputs for the loose selections.
+            out_dir (str): Directory for the PDF output.
+            norm (float): Whether to normalize the selection histograms.
+            book_name (str): Name of the output PDF within ``out_dir``.
+    """
     norm = False if output_data is None else norm
 
     with plotting.PlotBook(out_dir + book_name) as pdf:
@@ -256,11 +286,12 @@ def make_pfo_selection_plots_condensed(output_mc : dict, output_mc_loose : dict,
 def make_pi0_selection_plots(output_mc : dict, output_data : dict, out_dir : str, norm : float, nbins : int):
     """ Pi0 selection plots.
 
-    Args:
-        output_mc (dict): mc to plot
-        output_data (dict): data to plot
-        out_dir (str): output directory
-        norm (float): plot normalisation
+        Args:
+            output_mc (dict): mc to plot
+            output_data (dict): data to plot
+            out_dir (str): output directory
+            norm (float): plot normalisation
+            nbins (int): Number of bins.
     """
     norm = False if output_data is None else norm
 
@@ -301,10 +332,10 @@ def make_pi0_selection_plots(output_mc : dict, output_data : dict, out_dir : str
 def make_region_plots(outputs_mc_masks : dict, outputs_data_masks : dict, out_dir : str):
     """ Correlation matrices for truth and reco region selection.
 
-    Args:
-        outputs_mc_masks (dict): mc masks for each region
-        outputs_data_masks (dict): data masks for each region
-        out_dir (str): output directory
+        Args:
+            outputs_mc_masks (dict): mc masks for each region
+            outputs_data_masks (dict): data masks for each region
+            out_dir (str): output directory
     """
     with plotting.PlotBook(out_dir + "regions.pdf") as pdf:
         # Visualise the regions
@@ -325,10 +356,10 @@ def make_region_plots(outputs_mc_masks : dict, outputs_data_masks : dict, out_di
 def make_tables(output : dict, out : str, sample : str):
     """ Create cutflow tables.
 
-    Args:
-        output (dict): output data
-        out (str): output name
-        sample (str): sample name i.e. mc or data
+        Args:
+            output (dict): output data
+            out (str): output name
+            sample (str): sample name i.e. mc or data
     """
     for s in output:
         print(f"{s=}")

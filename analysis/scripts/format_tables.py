@@ -15,11 +15,11 @@ def split_rows(row : str) -> list[str]:
     """ Takes a line read from a latex table and splits the row wherever there is a & symbol,
         if the line has no & symbols, it returns an empty list so naturally strips unwanted lines.
 
-    Args:
-        row (str): line from latex file
+        Args:
+            row (str): A line read from a LaTeX table.
 
-    Returns:
-        list[str]: split rows.
+        Returns:
+            list[str]: split rows.
     """
     split_row = []
     last = -1
@@ -35,11 +35,11 @@ def split_rows(row : str) -> list[str]:
 def format(string : str) -> str:
     """ Formats strings by stripping any latex formatting, if numeric it will also convert the string to a float or int.
 
-    Args:
-        string (str): string to format
+        Args:
+            string (str): string to format
 
-    Returns:
-        str: formatted string
+        Returns:
+            str: formatted string
     """
     replacements = {
     "{}": "",
@@ -138,7 +138,7 @@ def merge_element_rows(elements_str : list) -> list[str]:
         elements_str (list): table elements in string format
 
     Returns:
-        _type_: Latex table rows
+        list[str]: Latex table rows
     """
     merged_table_rows = []
     for j in range(len(elements_str)):
@@ -152,12 +152,12 @@ def merge_element_rows(elements_str : list) -> list[str]:
 def reformat_columns(column_headers : np.array, n : int) -> str:
     """ Reformats columns of the original tables to multi columns and joins them into a single Latex table row
 
-    Args:
-        column_headers (np.array): column headers
-        n (int) : number of items in each table element
+        Args:
+            column_headers (np.array): Column labels from the first input table.
+            n (int): Number of source tables combined in each cell.
 
-    Returns:
-        str: Latex table row
+        Returns:
+            str: A LaTeX row containing the formatted column headers.
     """
     columns_str = "(legend) " # top left corner is given a legend desribing the contents of each element
     for c in column_headers[1:]: # skip first column which has no entry and is only supossed to be one column
@@ -172,11 +172,11 @@ def reformat_columns(column_headers : np.array, n : int) -> str:
 def reformat_row_labels(row_labels : np.array) -> list[str]:
     """ Takes original row labels and replaces them with their fancy counterparts.
 
-    Args:
-        row_labels (np.array): original row labels
+        Args:
+            row_labels (np.array): Original row labels.
 
-    Returns:
-        list[str]: fancy row labels
+        Returns:
+            list[str]: Display-friendly row labels.
     """
     mapping = {
         "" : "",

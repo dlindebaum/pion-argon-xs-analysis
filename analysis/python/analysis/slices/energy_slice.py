@@ -20,16 +20,13 @@ from python.analysis.common import quadsum, nandiv, nanlog, deprecation_warning
 def process_multiple_array(input : np.ndarray, function : callable) -> np.ndarray:
     """ Call function on multiple arrays.
 
-    Args:
-        input (np.ndarray): input arrays.
-        function (callable): function to call.
+        Args:
+            input (np.ndarray): input arrays.
+            function (callable): function to call.
 
-    Raises:
-        ValueError: At least one array must be passed.
-        TypeError: only arrays should be passed.
+        Returns:
+            np.ndarray: outputs.
 
-    Returns:
-        list[any]: outputs.
     """
     out = []
     if len(input) == 0:
@@ -50,12 +47,12 @@ def process_multiple_array(input : np.ndarray, function : callable) -> np.ndarra
 def convert_energy_to_slice(slices : Slices, *energy : np.ndarray) -> np.ndarray | tuple[np.ndarray]:
     """ Converts energy distributions to slice number distributions.
 
-    Args:
-        slices (Slices): Energy slices.
-        energy (np.ndarray): Energy distribution, multiple can be passed.
+        Args:
+            slices (Slices): Energy slices.
+            energy (np.ndarray): Energy distribution, multiple can be passed.
 
-    Returns:
-        np.ndarray | tuple[np.ndarray]: Slice distributions, equal to the number of energy distributions passed. 
+        Returns:
+            np.ndarray | tuple[np.ndarray]: Slice distributions, equal to the number of energy distributions passed.
     """
     func = lambda x : slices(x).num
     return process_multiple_array(energy, func)
@@ -64,12 +61,12 @@ def convert_energy_to_slice(slices : Slices, *energy : np.ndarray) -> np.ndarray
 def count(slices : Slices, *slice : np.ndarray) -> tuple[np.ndarray]:
     """ Produce counts of each slice.
 
-    Args:
-        slices (Slices): Energy slices.
-        slice (np.ndarray): Slice distribution, multiple can be passed.
+        Args:
+            slices (Slices): Energy slices.
+            slice (np.ndarray): Slice distribution, multiple can be passed.
 
-    Returns:
-        tuple[np.ndarray]: Slice distributions, equal to the number of slice distributions passed.
+        Returns:
+            tuple[np.ndarray]: Slice distributions, equal to the number of slice distributions passed.
     """
     func = lambda x: np.histogram(np.array(x), slices.slice_bins)[0]
 
@@ -77,15 +74,15 @@ def count(slices : Slices, *slice : np.ndarray) -> tuple[np.ndarray]:
 
 
 def count_2D(slices : Slices, s1 : np.ndarray, s2 : np.ndarray) -> np.ndarray:
-    """ Produce Counts in 2D for a pair of slices. 
+    """ Produce Counts in 2D for a pair of slices.
 
-    Args:
-        slices (Slices): Energy slices.
-        s1 (np.ndarray): First slice distribution.
-        s2 (np.ndarray): Second slice distribution.
+        Args:
+            slices (Slices): Energy slices.
+            s1 (np.ndarray): First slice distribution.
+            s2 (np.ndarray): Second slice distribution.
 
-    Returns:
-        np.ndarray: 2D array of counts, s1 is on axis 0 and s2 on axis 1.
+        Returns:
+            np.ndarray: 2D array of counts, s1 is on axis 0 and s2 on axis 1.
     """
     return np.histogram2d(np.array(s1), np.array(s2), slices.slice_bins)[0]
 
@@ -93,13 +90,13 @@ def count_2D(slices : Slices, s1 : np.ndarray, s2 : np.ndarray) -> np.ndarray:
 def incident(n_init : np.ndarray, n_end : np.ndarray, axis : int = None) -> np.ndarray:
     """ Calculates the incident counts for each slice.
 
-    Args:
-        n_init (np.ndarray): Initial counts for each slice.
-        n_end (np.ndarray): End counts for each slice.
-        axis (int): What axis to perform cumulative sum over, Default is None (all axes).
+        Args:
+            n_init (np.ndarray): Initial counts for each slice.
+            n_end (np.ndarray): End counts for each slice.
+            axis (int): What axis to perform cumulative sum over, Default is None (all axes).
 
-    Returns:
-        np.ndarray: Incident counts for each slice.
+        Returns:
+            np.ndarray: Incident counts for each slice.
     """
     c_init = np.cumsum(n_init, axis)
     c_end = np.cumsum(n_end, axis)
@@ -110,12 +107,12 @@ def incident(n_init : np.ndarray, n_end : np.ndarray, axis : int = None) -> np.n
 def complete_slice(init_slice : np.ndarray, end_slice : np.ndarray) -> np.ndarray:
     """ Whether a particle is incident on at least one slice.
 
-    Args:
-        init_slice (np.ndarray): Initial slice.
-        end_slice (np.ndarray): End slice.
+        Args:
+            init_slice (np.ndarray): Initial slice.
+            end_slice (np.ndarray): End slice.
 
-    Returns:
-        np.ndarray: Flag to indicate particles with at least one incident slice.
+        Returns:
+            np.ndarray: Flag to indicate particles with at least one incident slice.
     """
     return (init_slice != end_slice)
 
@@ -124,14 +121,14 @@ def counting_experiment_exclusive(energy_slices, KE_end : np.ndarray, mask : np.
     """ Perform counting experiment to get the exclusive interacting counts and end counts needed for the exclusive cross section measurement.
         These counts do not need to respect the valid slices.
 
-    Args:
-        energy_slices (Slices): Energy slices.
-        KE_end (np.ndarray): End kinetic energy.
-        mask (np.ndarray): Mask of particles to include in the count.
-        outside_fv (np.ndarray): Mask that excludes events that end outside the bounds of the fiducial volume.
+        Args:
+            energy_slices (Slices): Energy slices.
+            KE_end (np.ndarray): End kinetic energy.
+            mask (np.ndarray): Mask of particles to include in the count.
+            outside_fv (np.ndarray): Mask that excludes events that end outside the bounds of the fiducial volume.
 
-    Returns:
-        np.ndarray: Exclusive interacting and end counts.
+        Returns:
+            tuple[np.ndarray]: Exclusive interacting and end counts.
     """
     selected = mask & ~outside_fv
     s_end, s_int = convert_energy_to_slice(energy_slices, KE_end[~outside_fv], KE_end[selected])
@@ -141,14 +138,14 @@ def counting_experiment_exclusive(energy_slices, KE_end : np.ndarray, mask : np.
 def get_init_end_valid_slices(slices : Slices, KE_init : np.ndarray, KE_end : np.ndarray, outside_fv : np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """ Convert initial and end energies into initial and end slices. Also provide a mask of valid slices.
 
-    Args:
-        slices (Slices): Energy slices.
-        KE_init (np.ndarray): Initial kinetic energy.
-        KE_end (np.ndarray): Enitial kinetic energy.
-        outside_fv (np.ndarray): Mask that excludes events that end outside the bounds of the fiducial volume.
+        Args:
+            slices (Slices): Energy slices.
+            KE_init (np.ndarray): Initial kinetic energy.
+            KE_end (np.ndarray): Enitial kinetic energy.
+            outside_fv (np.ndarray): Mask that excludes events that end outside the bounds of the fiducial volume.
 
-    Returns:
-        tuple[np.ndarray, np.ndarray, np.ndarray]: initial slices, end slices, valid slices.
+        Returns:
+            tuple[np.ndarray, np.ndarray, np.ndarray]: initial slices, end slices, valid slices.
     """
     if slices.reversed is False:
         raise Exception("Energy slices should be in reverse order.")
@@ -168,16 +165,16 @@ def counting_experiment_tensor_process(KE_init : np.ndarray, KE_end : np.ndarray
     """ Counting experiment to produce counts in init and end slices in 2D/3D tensors rather than 1D counts. Also splits the tensors per process.
         Splits the count into two tensors, one for valid slices, another for the invalid slices.
 
-    Args:
-        KE_init (np.ndarray): Initial kinetic energy.
-        KE_end (np.ndarray): Enitial kinetic energy.
-        slices (Slices): Energy slices.
-        outside_fv (np.ndarray): Mask that excludes events that end outside the bounds of the fiducial volume.
-        processes (dict[np.ndarray]): Masks for the interaction processes.
-        posterior_tensors (dict[np.ndarray]): Postfit tensor for each process, used to extract yields for a set of normalisation parameters. Must have dimensions n (energy slices) x n x m (number of normalisations).
+        Args:
+            KE_init (np.ndarray): Initial kinetic energy.
+            KE_end (np.ndarray): Enitial kinetic energy.
+            slices (Slices): Energy slices.
+            outside_fv (np.ndarray): Mask that excludes events that end outside the bounds of the fiducial volume.
+            processes (dict[np.ndarray]): Masks for the interaction processes.
+            posterior_tensors (dict[np.ndarray] | None): Postfit tensor for each process, used to extract yields for a set of normalisation parameters. Must have dimensions n (energy slices) x n x m (number of normalisations).
 
-    Returns:
-        tuple[dict[np.ndarray], dict[np.ndarray]]: Slice tensor for valid slices, Slice tensor for invalid slices.
+        Returns:
+            tuple[dict[np.ndarray], dict[np.ndarray]]: tensor for valid slices, Slice tensor for invalid slices.
     """
     init_slice, end_slice, valid_slices = get_init_end_valid_slices(slices, KE_init, KE_end, outside_fv)
 
@@ -202,14 +199,14 @@ def counting_experiment_tensor_process(KE_init : np.ndarray, KE_end : np.ndarray
 def counting_experiment(KE_init : np.ndarray, KE_end : np.ndarray, slices : Slices, outside_fv : np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """ Perform counting experiment to get initial, end and incident counts.
 
-    Args:
-        KE_init (np.ndarray): Initial kinetic energy
-        KE_end (np.ndarray): end kinetic energy
-        slices (Slices): Energy slices
-        outside_fv (np.ndarray): Mask that excludes events that end outside the bounds of the fiducial volume.
+        Args:
+            KE_init (np.ndarray): Initial kinetic energy
+            KE_end (np.ndarray): end kinetic energy
+            slices (Slices): Energy slices
+            outside_fv (np.ndarray): Mask that excludes events that end outside the bounds of the fiducial volume.
 
-    Returns:
-        tuple[np.ndarray, np.ndarray, np.ndarray]: initial counts, end counts and incident counts
+        Returns:
+            tuple[np.ndarray, np.ndarray, np.ndarray]: initial counts, end counts and incident counts
     """
     init_slice, end_slice, valid_slices = get_init_end_valid_slices(slices, KE_init, KE_end, outside_fv)
 
@@ -224,11 +221,12 @@ def counting_experiment(KE_init : np.ndarray, KE_end : np.ndarray, slices : Slic
 def calculate_interaction_tensor(counts : dict[np.ndarray], background_process : list[str] = ["impurities"]) -> np.ndarray:
     """ Calculate the interaction tensor excluding specified backgrounds.
 
-    Args:
-        counts (dict[np.ndarray]): Counts for each process.
+        Args:
+            counts (dict[np.ndarray]): Counts for each process.
+            background_process (list[str]): Input value for background process.
 
-    Returns:
-        np.ndarray: Tensor of counts for the interaction processes.
+        Returns:
+            np.ndarray: Tensor of counts for the interaction processes.
     """
     interaction_tensor = None
     for k, v in counts.items():
@@ -243,28 +241,29 @@ def calculate_interaction_tensor(counts : dict[np.ndarray], background_process :
 def slice_dEdX(energy_slices : Slices, particle : Particle) -> np.ndarray:
     """ Computes the mean dEdX between energy slices.
 
-    Args:
-        energy_slices (Slices): Energy slices.
-        particle (Particle): Particle.
+        Args:
+            energy_slices (Slices): Energy slices.
+            particle (Particle): Particle.
 
-    Returns:
-        np.ndarray: mean dEdX
+        Returns:
+            np.ndarray: mean dEdX
     """
     return bethe_bloch.mean_dEdX(energy_slices.edges - energy_slices.width/2, particle)
 
 
 def total_cross_section(n_incident : np.ndarray, n_end : np.ndarray, dEdX : np.ndarray, dE : float, error : bool = True) -> tuple[np.ndarray, np.ndarray]:
     """ Calculate total inelastic cross section in mb.
-        !Note: the statistical uncertainty propagation does not account for the correlation between end, int end_all and int_all. 
+        !Note: the statistical uncertainty propagation does not account for the correlation between end, int end_all and int_all.
 
-    Args:
-        n_incident (np.ndarray): Incident counts.
-        n_end (np.ndarray): End counts.
-        dEdX (np.ndarray): Mean slice dEdX.
-        dE (float): Energy slice width.
+        Args:
+            n_incident (np.ndarray): Incident counts.
+            n_end (np.ndarray): End counts.
+            dEdX (np.ndarray): Mean slice dEdX.
+            dE (float): Energy slice width.
+            error (bool): Input value for error.
 
-    Returns:
-        tuple[np.ndarray, np.ndarray]: Total inelastic cross section and statistical undertainty in mb, assuming each counts are statistically independant.
+        Returns:
+            tuple[np.ndarray, np.ndarray] | np.ndarray: Total inelastic cross section and its statistical uncertainty in mb when ``error`` is true; otherwise only the cross section.
     """
     slice_width = dE/dEdX
 
@@ -293,14 +292,14 @@ def total_cross_section(n_incident : np.ndarray, n_end : np.ndarray, dEdX : np.n
 def exclusive_cross_section_from_total(n_end_all : np.ndarray, n_int_all : np.ndarray, xs : np.ndarray, xs_err : np.ndarray = None) -> tuple[np.ndarray, np.ndarray] | tuple[np.ndarray]:
     """ Calculate exclusive interaction cross section provided the total cross section.
 
-    Args:
-        n_end_all (np.ndarray): End counts.
-        n_int_all (np.ndarray): Exclusive interaction counts.
-        xs (np.ndarray): Total cross section.
-        xs_err (np.ndarray, optional): Error in the total cross section. Defaults to None.
+        Args:
+            n_end_all (np.ndarray): End counts.
+            n_int_all (np.ndarray): Exclusive interaction counts.
+            xs (np.ndarray): Total cross section.
+            xs_err (np.ndarray): Error in the total cross section. Defaults to None.
 
-    Returns:
-        tuple[np.ndarray, np.ndarray] | tuple[np.ndarray]: _description_
+        Returns:
+            tuple[np.ndarray, np.ndarray] | np.ndarray: Exclusive cross section and combined uncertainty when ``xs_err`` is provided; otherwise only the cross section.
     """
     ratio = n_int_all / n_end_all
     if xs_err is not None:
@@ -312,18 +311,19 @@ def exclusive_cross_section_from_total(n_end_all : np.ndarray, n_int_all : np.nd
 
 def exclusive_cross_section(n_incident : np.ndarray, n_end : np.ndarray, n_end_all : np.ndarray, n_int_all : np.ndarray, dEdX : np.ndarray, dE : float, error : bool = True) -> tuple[np.ndarray, np.ndarray]:
     """ Calculate exclusive interaction cross section provided the interacting and initial counts.
-        !Note: the statistical uncertainty propagation does not account for the correlation between end, int end_all and int_all. 
+        !Note: the statistical uncertainty propagation does not account for the correlation between end, int end_all and int_all.
 
-    Args:
-        n_incident (np.ndarray): Incident counts.
-        n_end (np.ndarray): End counts for events that are incident on a slice.
-        n_end_all (np.ndarray): End counts.
-        n_int_all (np.ndarray): Exclusive interaction counts.
-        dEdX (np.ndarray): Mean dEdX for each cross section bin.
-        dE (float): Width of energy bin.
+        Args:
+            n_incident (np.ndarray): Incident counts.
+            n_end (np.ndarray): End counts for events that are incident on a slice.
+            n_end_all (np.ndarray): End counts.
+            n_int_all (np.ndarray): Exclusive interaction counts.
+            dEdX (np.ndarray): Mean dEdX for each cross section bin.
+            dE (float): Width of energy bin.
+            error (bool): Input value for error.
 
-    Returns:
-        tuple[np.ndarray, np.ndarray]: Cross section and statistical error in mb, assuming each counts are statistically independant.
+        Returns:
+            tuple[np.ndarray, np.ndarray] | np.ndarray: Exclusive cross section and propagated statistical error in mb when ``error`` is true; otherwise only the cross section.
     """
     xs, xs_err = total_cross_section(n_incident, n_end, dEdX, dE)
 
@@ -337,16 +337,15 @@ def exclusive_cross_section(n_incident : np.ndarray, n_end : np.ndarray, n_end_a
 
 #! Deprecated.
 def n_incident(n_initial : np.ndarray, n_end : np.ndarray) -> np.ndarray:
-    """
-        Calculate number of incident particles.
+    """ Calculate number of incident particles.
         Function is legacy and should not be used in new implementations.
 
-    Args:
-        n_initial (np.ndarray): initial particle counts
-        n_end (np.ndarray): interaction counts
+        Args:
+            n_initial (np.ndarray): initial particle counts
+            n_end (np.ndarray): interaction counts
 
-    Returns:
-        np.ndarray: incident counts
+        Returns:
+            np.ndarray: incident counts
     """
     deprecation_warning()
     n_survived_all = np.cumsum(n_initial - n_end)
@@ -355,18 +354,17 @@ def n_incident(n_initial : np.ndarray, n_end : np.ndarray) -> np.ndarray:
 
 #! Deprecated.
 def slice_numbers(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak.Array, energy_slices : Slices) -> tuple[np.ndarray, np.ndarray]:
-    """
-        Convert energies from physical units to slice numbers.
+    """ Convert energies from physical units to slice numbers.
         Function is legacy and should not be used in new implementations.
 
-    Args:
-        int_energy (ak.Array): interaction energy
-        init_energy (ak.Array): initial energy
-        outside_tpc (ak.Array): mask of particles which interact outside the fiducial volume
-        energy_slices (Slices): energy slices
+        Args:
+            int_energy (ak.Array): interaction energy
+            init_energy (ak.Array): initial energy
+            outside_tpc (ak.Array): mask of particles which interact outside the fiducial volume
+            energy_slices (Slices): energy slices
 
-    Returns:
-        tuple[np.ndarray, np.ndarray]: initial slice numbers and interacitng slice numbers
+        Returns:
+            tuple[np.ndarray, np.ndarray]: initial slice numbers and interacitng slice numbers
     """
     deprecation_warning()
     init_slice = energy_slices(init_energy).num + 1 # equivilant to ceil
@@ -381,21 +379,20 @@ def slice_numbers(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : a
 
 #! Deprecated
 def counting_experiment_old(int_energy : ak.Array, init_energy : ak.Array, outside_tpc : ak.Array, process : ak.Array, energy_slices : Slices, interact_only : bool = False, weights : np.ndarray = None) -> tuple[np.ndarray]:
-    """
-        Creates the interacting and incident histograms.
+    """ Creates the interacting and incident histograms.
         Function is legacy and should not be used in new implementations.
 
-    Args:
-        int_energy (ak.Array): interacting enrgy
-        init_energy (ak.Array): initial energy
-        outside_tpc (ak.Array): mask of particles which interact outside the fiducial volume
-        process (ak.Array): mask of events for exclusive interactions
-        energy_slices (Slices): energy slices
-        interact_only (bool, optional): only return exclusive interaction histogram. Defaults to False.
-        weights (np.ndarray, optional): event weights. Defaults to None.
+        Args:
+            int_energy (ak.Array): interacting enrgy
+            init_energy (ak.Array): initial energy
+            outside_tpc (ak.Array): mask of particles which interact outside the fiducial volume
+            process (ak.Array): mask of events for exclusive interactions
+            energy_slices (Slices): energy slices
+            interact_only (bool): only return exclusive interaction histogram. Defaults to False.
+            weights (np.ndarray): event weights. Defaults to None.
 
-    Returns:
-        np.ndarray | tuple[np.ndarray]: exclusive interaction histogram and/or initial histogram, incident histogram and interaction histogram 
+        Returns:
+            tuple[np.ndarray]: exclusive interaction histogram and/or initial histogram, incident histogram and interaction histogram
     """
     deprecation_warning()
     init_slice, int_slice = slice_numbers(int_energy, init_energy, outside_tpc, energy_slices)
@@ -418,18 +415,18 @@ def cross_section(n_int_ex : np.ndarray, n_int : np.ndarray, n_inc : np.ndarray,
     """ Compute exclusive cross sections. If interactions errors are not provided, staticial uncertainties are used (poisson for incident, binomial for interactions).
         Function is legacy and should not be used in new implementations.
 
-    Args:
-        n_int_ex (np.ndarray): exclusive interactions
-        n_int (np.ndarray): interactions
-        n_inc (np.ndarray): incident counts
-        dEdX (np.ndarray): slice dEdX
-        dE (float): energy slice width
-        n_int_ex_err (np.ndarray, optional): exclusive interaction errors. Defaults to None.
-        n_int_err (np.ndarray, optional): interaction errors. Defaults to None.
-        n_inc_err (np.ndarray, optional): incident count errors. Defaults to None.
+        Args:
+            n_int_ex (np.ndarray): exclusive interactions
+            n_int (np.ndarray): interactions
+            n_inc (np.ndarray): incident counts
+            dEdX (np.ndarray): slice dEdX
+            dE (float): energy slice width
+            n_int_ex_err (np.ndarray): exclusive interaction errors. Defaults to None.
+            n_int_err (np.ndarray): interaction errors. Defaults to None.
+            n_inc_err (np.ndarray): incident count errors. Defaults to None.
 
-    Returns:
-        tuple[np.ndarray, np.ndarray]: _description_
+        Returns:
+            tuple[np.ndarray, np.ndarray]: Exclusive cross section and uncertainty in mb.
     """
     deprecation_warning()
     NA = 6.02214076e23

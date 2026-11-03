@@ -304,18 +304,37 @@ template_config = {
 
 
 class ApplicationArguments:
+    """Provide helpers for defining and resolving command-line and JSON analysis configuration.
+    """
     @staticmethod
     def processing(parser : argparse.ArgumentParser):
+        """Add command-line options for event batches, per-batch event limits, and worker threads.
+
+            Args:
+                parser (argparse.ArgumentParser): Parser to which the processing options are added.
+        """
         parser.add_argument("-b", "--batches", dest = "batches", type = int, default = None, help = "Number of batches to split n tuple files into when parallel processing processing data.")
         parser.add_argument("-e", "--events", dest = "events", type = int, default = None, help = "Number of events to process when parallel processing data.")
         parser.add_argument("-t", "--threads", dest = "threads", type = int, default = 1, help = "Number of threads to use when processsing.")
 
     @staticmethod
     def regen(parser : argparse.ArgumentParser):
+        """Add the flag that forces regeneration of stored processing outputs.
+
+            Args:
+                parser (argparse.ArgumentParser): Parser to which the regeneration option is added.
+        """
         parser.add_argument("-r", "--regen", dest = "regen", action = "store_true", help = "Regenerate any stored data.")
 
     @staticmethod
     def output(parser : argparse.ArgumentParser, default : str = None, file : bool = False):
+        """Add the output path option, with help text for either a file or directory.
+
+            Args:
+                parser (argparse.ArgumentParser): Parser to which the output option is added.
+                default (str): Default output path.
+                file (bool): Describe the output as a filename rather than a directory.
+        """
         if file is True:
             help = "output file name."
         else:
@@ -325,23 +344,36 @@ class ApplicationArguments:
 
     @staticmethod
     def plots(parser : argparse.ArgumentParser):
+        """Add plot histogram-bin and annotation options.
+
+            Args:
+                parser (argparse.ArgumentParser): Parser to which the plot options are added.
+        """
         parser.add_argument("--nbins", dest = "nbins", type = int, default = 50, help = "Number of bins to make for histogram plots.")
         parser.add_argument("-a", "--annotation", dest = "annotation", type = str, default = None, help = "Annotation to add to plots.")
         return
 
     @staticmethod
     def config(parser : argparse.ArgumentParser, required : bool = False, default : any = None):
+        """Add the path option for an analysis JSON configuration file.
+
+            Args:
+                parser (argparse.ArgumentParser): Parser to which the configuration option is added.
+                required (bool): Require a configuration path on the command line.
+                default (any): Default configuration path.
+        """
         parser.add_argument("-c", "--config", dest = "config", type = str, default = default, required = required, help = "Analysis configuration file, if supplied will override command line arguments.")
 
     @staticmethod
     def resolve_args(args : argparse.Namespace, override_out : bool = True) -> argparse.Namespace:
         """ Parses command line arguements.
 
-        Args:
-            args (argparse.Namespace): arguements to parse
+            Args:
+                args (argparse.Namespace): arguements to parse
+                override_out (bool): Derive a default output path and trailing slash when true.
 
-        Returns:
-            argparse.Namespace: parsed arguements
+            Returns:
+                argparse.Namespace: parsed arguements
         """
         if hasattr(args, "config"):
             args_copy = argparse.Namespace()
@@ -381,14 +413,14 @@ class ApplicationArguments:
 
     @staticmethod
     def __create_selection(value : dict, module) -> dict:
-        """ Creates a dictionary of selection functions and their argumenets as specified in the analysise configuration file. 
+        """ Creates a dictionary of selection functions and their argumenets as specified in the analysise configuration file.
 
-        Args:
-            value (dict): dicionary describing a particular selection, key value is the function name, value is a list of function arguements.
-            module (module): which python module does this selection belong to.
+            Args:
+                value (dict): dicionary describing a particular selection, key value is the function name, value is a list of function arguements.
+                module (module): which python module does this selection belong to.
 
-        Returns:
-            _type_: _description_
+            Returns:
+                dict: Dictionary of selection functions.
         """
         selection = {"selections" : {}, "arguments" : {}}
         for func, opt in value.items():
@@ -403,11 +435,11 @@ class ApplicationArguments:
     def resolve_config(config : dict) -> argparse.Namespace:
         """ Reads analysis configuration file and unpacks/serializes relavent objects.
 
-        Args:
-            config (dict): file path
+            Args:
+                config (dict): file path
 
-        Returns:
-            argparse.Namespace: unpacked configuration
+            Returns:
+                argparse.Namespace: unpacked configuration
         """
         args = argparse.Namespace()
         for head, value in config.items():
@@ -526,6 +558,11 @@ class ApplicationArguments:
 
     @staticmethod
     def add_energy_correction(args):
+        """Load the configured shower correction and attach it to data and MC pi0-selection arguments.
+
+            Args:
+                args (Any): Resolved analysis configuration containing shower and pi0 selection options.
+        """
         if hasattr(args, "shower_correction") and (args.shower_correction["correction_params"] != None):
             method = photon_energy_correction.shower_energy_correction[args.shower_correction["correction"]]
             params = io.read_json(args.shower_correction["correction_params"])
@@ -541,6 +578,14 @@ class ApplicationArguments:
 
     @staticmethod
     def data_mc_selection_args(args : argparse.Namespace):
+        """Copy common selection arguments into data/MC settings and attach applicable fit parameters.
+
+            Args:
+                args (argparse.Namespace): Resolved configuration whose selection arguments are split by sample.
+
+            Returns:
+                Any: The mutated namespace with separate data and MC selection arguments.
+        """
         for a in vars(args):
             if ("selection" in a) and (type(getattr(args, a)) == dict):
                 if "arguments" in getattr(args, a): 
@@ -566,16 +611,16 @@ class ApplicationArguments:
 def processing(samples : list[ntuple.Sample], outdir : str, args : argparse.Namespace, func : callable, merge : bool, outname : str = "output") -> list[dict] | dict:
     """ Processing specifically for Applications where there is an option to reload processed data rather than fully reprocessing Ntuples.
 
-    Args:
-        samples (list[Sample]): What sample types to process, can be Data, MC or both.
-        outdir (str): Output directory for stored processing outputs.
-        args (argparse.Namespace): Application arguments.
-        func (callable): Process to run.
-        merge (bool): whether to merge the processing outputs.
-        outname (str, optional): Output file name. Defaults to "output".
+        Args:
+            samples (list[ntuple.Sample]): What sample types to process, can be Data, MC or both.
+            outdir (str): Output directory for stored processing outputs.
+            args (argparse.Namespace): Application arguments.
+            func (callable): Process to run.
+            merge (bool): whether to merge the processing outputs.
+            outname (str): Output file name. Defaults to "output".
 
-    Returns:
-        list[dict] | dict: Processing outputs, either loaded from file or processed at runtime.
+        Returns:
+            list[dict] | dict: Processing outputs, either loaded from file or processed at runtime.
     """
     if (args.regen is True) or (os.path.isfile(f"{outdir}{outname}.dill") is False):
         print("Processing Ntuples")

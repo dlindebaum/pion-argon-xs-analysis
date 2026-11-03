@@ -14,6 +14,19 @@ from rich import print
 from python.analysis import application, common, cuts, ntuple, plotting, selection
 
 def run(i, file : ntuple.FileDescriptor, n_events, start, selected_events, args) -> dict:
+    """ Apply beam and final state particle selections to the Ntuple chunk and extract parameter and cut values to produce plots. 
+
+        Args:
+            i (Any): Chunk index supplied by the processing runner; this function does not use it.
+            file (ntuple.FileDescriptor): Descriptor for the ntuple file to analyze.
+            n_events (Any): Maximum number of events to read from the chunk.
+            start (Any): First event index to read.
+            selected_events (Any): Processing-runner argument retained for interface compatibility; this function does not use it.
+            args (Any): Selection configuration, including data/MC mode and enabled cuts.
+
+        Returns:
+            dict: Parameters, cuts and tags for each selection.
+    """
     events = ntuple.Data(file, n_events, start)
 
     output = {

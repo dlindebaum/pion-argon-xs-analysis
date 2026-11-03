@@ -12,18 +12,28 @@ from python.analysis.cross_section import AnalysisInput, Slices
 
 
 def Model(n_channels: int, KE_int_templates: np.ndarray, mean_track_score_templates: np.ndarray = None, mc_stat_unc: bool = False) -> pyhf.Model:
-    """ Create pyhf model for region fit.
+    """ Create a pyhf model from per-channel templates.
 
-    Args:
-        n_channels (int): number of channels in the model.
-        KE_int_templates (np.ndarray): Templates for the KE_int distributions for each channel.
-        mean_track_score_templates (np.ndarray, optional): Templates for the mean track score distributions for each channel. Defaults to None.
-        mc_stat_unc (bool, optional): Whether to include Monte Carlo statistical uncertainties. Defaults to False.
+        Args:
+            n_channels (int): Number of region channels to create.
+            KE_int_templates (np.ndarray): Interaction-energy templates, indexed by channel and sample.
+            mean_track_score_templates (np.ndarray): Optional mean-track-score templates.
+            mc_stat_unc (bool): Whether to add statistical-error modifiers to samples.
 
-    Returns:
-        pyhf.Model: Pyhf model.
+        Returns:
+            pyhf.Model: Model containing the region channels and optional score channel.
     """
     def channel(channel_name: str, samples: np.ndarray, mc_stat_unc: bool):
+        """ Build a pyhf channel specification from its sample templates.
+
+            Args:
+                channel_name (str): Name assigned to the channel.
+                samples (np.ndarray): Per-sample bin counts for the channel.
+                mc_stat_unc (bool): Whether to attach statistical-error modifiers.
+
+            Returns:
+                dict: pyhf channel specification.
+        """
         ch = {
             "name": channel_name,
             "samples": [
@@ -56,10 +66,10 @@ def Model(n_channels: int, KE_int_templates: np.ndarray, mean_track_score_templa
 
 
 def PrintModelSpecs(model: pyhf.Model):
-    """ Print Model specifications.
+    """ Print the main configuration details of a pyhf model.
 
-    Args:
-        model (pyhf.Model): Pyhd model.
+        Args:
+            model (pyhf.Model): Model whose channels, samples, modifiers, and parameters are printed.
     """
     print(f"  channels: {model.config.channels}")
     print(f"     nbins: {model.config.channel_nbins}")
@@ -71,18 +81,18 @@ def PrintModelSpecs(model: pyhf.Model):
 
 
 def GenerateObservations(fit_input: AnalysisInput, energy_slices: Slices, mean_track_score_bins: np.ndarray, model: pyhf.Model, verbose: bool = True, single_bin: bool = False) -> np.ndarray:
-    """ Create Observable distribution to fit with.
+    """ Create the observation vector expected by the fit model.
 
-    Args:
-        fit_input (AnalysisInput): AnalysisInput object containing the data to fit.
-        energy_slices (Slices): energy slices to use for the fit.
-        mean_track_score_bins (np.ndarray): Bins for the mean track score distribution.
-        model (pyhf.Model): Pyhf model.
-        verbose (bool, optional): Optionally print verbose output. Defaults to True.
-        single_bin (bool, optional): Perform a single bin fit. Defaults to False.
+        Args:
+            fit_input (AnalysisInput): Input containing observed event data.
+            energy_slices (Slices): Energy slices used to form interaction counts.
+            mean_track_score_bins (np.ndarray): Bin edges for the optional score distribution.
+            model (pyhf.Model): Model whose auxiliary data is appended to the observations.
+            verbose (bool): Whether to print model initialization and likelihood details.
+            single_bin (bool): Whether to combine each interaction distribution into one bin.
 
-    Returns:
-        np.ndarray: Bins of the obsevations.
+        Returns:
+            np.ndarray: Concatenated observation counts and model auxiliary data.
     """
     data = CreateObservedInputData(fit_input, energy_slices, mean_track_score_bins, single_bin)
     if verbose is True:
@@ -94,19 +104,19 @@ def GenerateObservations(fit_input: AnalysisInput, energy_slices: Slices, mean_t
 
 
 def Fit(observations, model: pyhf.Model, init_params: list[float] = None, par_bounds: list[tuple] = None, verbose: bool = True, tolerance: float = 1E-2, fix_pars: list[bool] = None) -> FitResults:
-    """ Perform region fit.
+    """ Fit the region model to the supplied observations.
 
-    Args:
-        observations (_type_): Observations to fit with.
-        model (pyhf.Model): Pyhf model.
-        init_params (list[float], optional): Initial parameters. Defaults to None.
-        par_bounds (list[tuple], optional): Parameter bounds. Defaults to None.
-        verbose (bool, optional): Optionally print verbose output. Defaults to True.
-        tolerance (float, optional): Tolerance for fit convergence (difference between log likelihood of the current and previous iteration). Defaults to 1E-2.
-        fix_pars (list[bool], optional): Boolean values to indicate if the parameter value should be fixed. Defaults to None.
+        Args:
+            observations (np.ndarray): Observed counts and auxiliary data passed to the fit.
+            model (pyhf.Model): Model to fit.
+            init_params (list[float]): Optional initial parameter values.
+            par_bounds (list[tuple]): Optional lower and upper bounds for parameters.
+            verbose (bool): Whether to print fit inputs and results.
+            tolerance (float): Convergence tolerance passed to cabinetry.
+            fix_pars (list[bool]): Optional flags indicating parameters to fix.
 
-    Returns:
-        FitResults: Results of the fit.
+        Returns:
+            FitResults: Fit result, including best-fit parameters and uncertainties.
     """
     pyhf.set_backend(backend="numpy", custom_optimizer="minuit")
     if verbose is True:
@@ -129,14 +139,14 @@ def Fit(observations, model: pyhf.Model, init_params: list[float] = None, par_bo
 
 
 def GetPredictedCorrelationMatrix(model: pyhf.Model, mu: np.ndarray) -> np.ndarray:
-    """ Compute  the correlation matrix for the smaples and channels using normalisations.
+    """ Compute integer sample yields by channel after applying normalisations.
 
-    Args:
-        model (pyhf.Model): Pyhf model.
-        mu (np.ndarray): Mean normalisation values.
+        Args:
+            model (pyhf.Model): Model whose channel templates provide the nominal yields.
+            mu (np.ndarray): Sample normalization factors applied to each channel.
 
-    Returns:
-        np.ndarray: Correlation matrix.
+        Returns:
+            np.ndarray: Integer yield matrix with samples along rows and channels along columns.
     """
     counts_matrix = []
     for channel in model.spec["channels"]:
@@ -150,17 +160,17 @@ def GetPredictedCorrelationMatrix(model: pyhf.Model, mu: np.ndarray) -> np.ndarr
 
 
 def CreateKEIntTemplates(analysis_input: AnalysisInput, energy_slices: Slices, single_bin: bool = False, pad: bool = False, reco: bool = True) -> list[np.ndarray]:
-    """ Create KE template distributions for defining the model samples.
+    """ Create interaction-energy templates for the model samples.
 
-    Args:
-        analysis_input (AnalysisInput): MC analysis input file.
-        energy_slices (Slices): Energy slices.
-        single_bin (bool, optional): Whether to create single bin templates. Defaults to False.
-        pad (bool, optional): Pad the counts to ensure there are no zero entries. Defaults to False.
-        reco (bool, optional): Whether to use reconstructed data. Defaults to True.
+        Args:
+            analysis_input (AnalysisInput): Analysis input providing process and region masks.
+            energy_slices (Slices): Energy slices used to count interactions.
+            single_bin (bool): Whether to sum each template into one bin.
+            pad (bool): Whether to add a small offset to each bin.
+            reco (bool): Whether to use reconstructed rather than true quantities.
 
-    Returns:
-        list[np.ndarray]: List of KE templates for each region and sample.
+        Returns:
+            list[np.ndarray]: Templates organized by region and exclusive process.
     """
     model_input_data = []
     for c in analysis_input.regions:
@@ -176,15 +186,15 @@ def CreateKEIntTemplates(analysis_input: AnalysisInput, energy_slices: Slices, s
 
 
 def Createmean_track_scoreTemplates(analysis_input: AnalysisInput, bins: np.ndarray, weights: np.ndarray = None) -> np.ndarray:
-    """ Create mean track score template distributions.
+    """ Create mean-track-score histograms for each exclusive process.
 
-    Args:
-        analysis_input (AnalysisInput): _description_
-        bins (np.ndarray): _description_
-        weights (np.ndarray, optional): _description_. Defaults to None.
+        Args:
+            analysis_input (AnalysisInput): Input providing score values and process masks.
+            bins (np.ndarray): Histogram bin edges.
+            weights (np.ndarray): Optional event weights applied to each process.
 
-    Returns:
-        np.ndarray: _description_
+        Returns:
+            np.ndarray: Histogram counts, with one row per exclusive process.
     """
     templates = []
     for t in analysis_input.exclusive_process:
@@ -194,20 +204,20 @@ def Createmean_track_scoreTemplates(analysis_input: AnalysisInput, bins: np.ndar
 
 
 def CreateModel(template: AnalysisInput, energy_slice: Slices, mean_track_score_bins: np.ndarray, return_templates: bool = False, weights: np.ndarray = None, mc_stat_unc: bool = True, pad: bool = True, single_bin: bool = False) -> pyhf.Model:
-    """ Create fit model from an MC analysis input.
+    """ Create a fit model and its templates from an analysis input.
 
-    Args:
-        template (AnalysisInput): MC analysis input file.
-        energy_slice (Slices): Energy slices.
-        mean_track_score_bins (np.ndarray): Mean track score bins.
-        return_templates (bool, optional): Return templates along with the pyhf model. Defaults to False.
-        weights (np.ndarray, optional): Weights for the MC events. Defaults to None.
-        mc_stat_unc (bool, optional): MC statistical uncertainties. Defaults to True.
-        pad (bool, optional): Pad the counts to ensure there are no zero entries. Defaults to True.
-        single_bin (bool, optional): Create a single bin model. Defaults to False.
+        Args:
+            template (AnalysisInput): Input used to build the model templates.
+            energy_slice (Slices): Energy slices used for the interaction templates.
+            mean_track_score_bins (np.ndarray): Optional score histogram bin edges.
+            return_templates (bool): Whether to return templates alongside the model.
+            weights (np.ndarray): Optional weights for score histograms.
+            mc_stat_unc (bool): Whether to include Monte Carlo statistical uncertainties.
+            pad (bool): Whether to add a small offset to interaction-template bins.
+            single_bin (bool): Whether to combine each interaction template into one bin.
 
-    Returns:
-        pyhf.Model: Pyhf model and optionally template distributions.
+        Returns:
+            pyhf.Model: Model alone, or the model and both template collections when requested.
     """
     templates_energy = CreateKEIntTemplates(template, energy_slice, single_bin, pad)
     if mean_track_score_bins is not None:
@@ -222,16 +232,16 @@ def CreateModel(template: AnalysisInput, energy_slice: Slices, mean_track_score_
 
 
 def CreateObservedInputData(fit_input: AnalysisInput, slices: Slices, mean_track_score_bins: np.ndarray = None, single_bin: bool = False) -> np.ndarray:
-    """ Create observed distributions from an analysis input.
+    """ Create observed interaction and optional score distributions.
 
-    Args:
-        fit_input (AnalysisInput): Analysis input.
-        slices (Slices): energy slices.
-        mean_track_score_bins (np.ndarray, optional): mean track score bins. Defaults to None.
-        single_bin (bool, optional): if the fit is single binned. Defaults to False.
+        Args:
+            fit_input (AnalysisInput): Input containing observed data and region masks.
+            slices (Slices): Energy slices used to form interaction counts.
+            mean_track_score_bins (np.ndarray): Optional score histogram bin edges.
+            single_bin (bool): Whether to sum interaction counts into one bin per region.
 
-    Returns:
-        np.ndarray: observable distributions to fit with.
+        Returns:
+            np.ndarray: Observed distributions in region order, optionally followed by score counts.
     """
     observed_binned = []
     if fit_input.inclusive_process is None:
@@ -249,29 +259,29 @@ def CreateObservedInputData(fit_input: AnalysisInput, slices: Slices, mean_track
 
 
 def SliceModelPrediction(prediction: cabinetry.model_utils.ModelPrediction, slice_: slice, label: str) -> cabinetry.model_utils.ModelPrediction:
-    """ Calculate the model prediction of the yields.
+    """ Create a model prediction containing a selected slice of bins.
 
-    Args:
-        prediction (cabinetry.model_utils.ModelPrediction): Model prediction base.
-        slice_ (slice): slice of bins to get.
-        label (str): model prediction label.
+        Args:
+            prediction (cabinetry.model_utils.ModelPrediction): Prediction to slice.
+            slice_ (slice): Bin selection applied to the prediction arrays.
+            label (str): Label assigned to the returned prediction.
 
-    Returns:
-        cabinetry.model_utils.ModelPrediction: Model prediction.
+        Returns:
+            cabinetry.model_utils.ModelPrediction: Prediction containing the selected yield and uncertainty bins.
     """
     return cabinetry.model_utils.ModelPrediction(prediction.model, np.array(prediction.model_yields[slice_]), np.array(prediction.total_stdev_model_bins[slice_]), np.array(prediction.total_stdev_model_channels[slice_]), label)
 
 
 def PlotPrefitPostFit(prefit : np.ndarray, prefit_err: np.ndarray, postfit: np.ndarray, postfit_err: np.ndarray, energy_bins: np.ndarray, xlabel="$KE_{int}$ (MeV)"):
-    """ Plot prefit and post fit distributions.
+    """ Plot pre-fit and post-fit yields with their ratio.
 
-    Args:
-        prefit (np.ndarray): Prefit data.
-        prefit_err (np.ndarray): Prefit errors.
-        postfit (np.ndarray): Postfit data.
-        postfit_err (np.ndarray): Postfit errors.
-        energy_bins (np.ndarray): Energy bins.
-        xlabel (str, optional): X-axis label. Defaults to "$KE_{int}$ (MeV)".
+        Args:
+            prefit (np.ndarray): Pre-fit yields.
+            prefit_err (np.ndarray): Uncertainties on the pre-fit yields.
+            postfit (np.ndarray): Post-fit yields.
+            postfit_err (np.ndarray): Uncertainties on the post-fit yields.
+            energy_bins (np.ndarray): Energy bin edges.
+            xlabel (str): Label for the x-axis.
     """
     with Plots.ratio_plot(energy_bins[::-1], postfit, prefit, postfit_err, prefit_err, xlabel, "fit/ true") as ratio_plot:
         Plots.plot(ratio_plot.x, ratio_plot.y2, yerr=ratio_plot.y2_err, color="C0", label="true", style="step", new_figure=False)
@@ -279,13 +289,13 @@ def PlotPrefitPostFit(prefit : np.ndarray, prefit_err: np.ndarray, postfit: np.n
 
 
 def EstimateCounts(postfit_pred: cabinetry.model_utils.ModelPrediction) -> tuple[np.ndarray, np.ndarray]:
-    """ Estimate the predicted yield and error for each bin.
+    """ Extract post-fit yields and bin uncertainties for the interaction channels.
 
-    Args:
-        postfit_pred (cabinetry.model_utils.ModelPrediction): Postfit model prediction.
+        Args:
+            postfit_pred (cabinetry.model_utils.ModelPrediction): Post-fit model prediction.
 
-    Returns:
-        tuple[np.ndarray, np.ndarray]: Predicted yields and errors.
+        Returns:
+            tuple[np.ndarray, np.ndarray]: matrix and corresponding bin-uncertainty matrix.
     """
     if any([c["name"] == "mean_track_score" for c in postfit_pred.model.spec["channels"]]):
         KE_int_prediction = SliceModelPrediction(postfit_pred, slice(-1), "KE_int_postfit")
@@ -299,15 +309,15 @@ def EstimateCounts(postfit_pred: cabinetry.model_utils.ModelPrediction) -> tuple
 
 
 def EstimateBackgroundAllRegions(postfit_pred: cabinetry.model_utils.ModelPrediction, template: AnalysisInput, signal_process: str) -> tuple[np.ndarray, np.ndarray]:
-    """ Estimate backgorund counts for across all regions.
+    """ Sum predicted background yields across all regions.
 
-    Args:
-        postfit_pred (cabinetry.model_utils.ModelPrediction): Post fit prediction.
-        template (AnalysisInput): model template analysis input.
-        signal_process (str): signal process (others are assumed background to this).
+        Args:
+            postfit_pred (cabinetry.model_utils.ModelPrediction): Post-fit model prediction.
+            template (AnalysisInput): Input whose region labels identify the signal region.
+            signal_process (str): Region label excluded as signal; other regions are treated as background.
 
-    Returns:
-        tuple[np.ndarray, np.ndarray]: Predicted background yields and errors.
+        Returns:
+            tuple[np.ndarray, np.ndarray]: yields and uncertainties summed across regions.
     """
     N, N_err = EstimateCounts(postfit_pred)
     N = np.sum(N, 0)
@@ -321,14 +331,14 @@ def EstimateBackgroundAllRegions(postfit_pred: cabinetry.model_utils.ModelPredic
 
 
 def EstimateBackgroundInRegions(postfit_pred: cabinetry.model_utils.ModelPrediction, data: AnalysisInput) -> tuple[dict, dict]:
-    """ Estimate background counts for each region. The region label is considered the signal process.
+    """ Estimate the background yields in each region by excluding its matching signal bin.
 
-    Args:
-        postfit_pred (cabinetry.model_utils.ModelPrediction): Postfit model prediction.
-        data (AnalysisInput): Data analysis input.
+        Args:
+            postfit_pred (cabinetry.model_utils.ModelPrediction): Post-fit model prediction.
+            data (AnalysisInput): Input whose region labels define the signal-process names.
 
-    Returns:
-        tuple[dict, dict]: Predicted background yields and errors.
+        Returns:
+            tuple[dict, dict]: of background yields and uncertainties keyed by region label.
     """
     N, N_err = EstimateCounts(postfit_pred)
     processes = list(data.regions.keys())

@@ -233,16 +233,16 @@ def _unfold_custom(prior=None, mixer=None, ts_func=None, max_iter=100,
  ##############################################################
 
 def CorrelationMarix(observed : np.ndarray, true : np.ndarray, bins : np.ndarray, remove_overflow : bool = True) -> np.ndarray:
-    """ Caclulate Correlation matrix of observed and true parameters.
+    """ Calculate the observed-versus-true two-dimensional histogram.
 
-    Args:
-        observed (np.ndarray): observed data (reco).
-        true (np.ndarray): true data (truth).
-        bins (np.ndarray): bins.
-        remove_overflow (bool, optional): remove the first bins which are interpreted as overflow. Defaults to True.
+        Args:
+            observed (np.ndarray): Reconstructed values.
+            true (np.ndarray): Corresponding truth values.
+            bins (np.ndarray): Bin edges used for both histogram axes.
+            remove_overflow (bool): Whether to remove the first row and column.
 
-    Returns:
-        np.ndarray: Correlation matrix.
+        Returns:
+            np.ndarray: Two-dimensional counts indexed by observed and true bins.
     """
     corr = np.histogram2d(np.array(observed), np.array(true), bins = bins)[0]
     if remove_overflow is True:
@@ -251,17 +251,17 @@ def CorrelationMarix(observed : np.ndarray, true : np.ndarray, bins : np.ndarray
 
 
 def ResponseMatrix(observed : np.ndarray, true : np.ndarray, bins : np.ndarray, efficiencies : np.ndarray = None, remove_overflow : bool = False) -> tuple[np.ndarray, np.ndarray]:
-    """ Caclulate Correlation matrix of observed and true parameters.
+    """ Build a column-normalized response matrix and its statistical errors.
 
-    Args:
-        observed (np.ndarray): observed data (reco).
-        true (np.ndarray): true data (truth).
-        bins (np.ndarray): bins.
-        efficiencies (np.ndarray, optional): selection efficiency. Defaults to None.
-        remove_overflow (bool, optional): remove the first bins which are interpreted as overflow. Defaults to True.
+        Args:
+            observed (np.ndarray): Reconstructed values.
+            true (np.ndarray): Corresponding truth values.
+            bins (np.ndarray): Bin edges used for both histogram axes.
+            efficiencies (np.ndarray): Optional per-truth-bin efficiencies.
+            remove_overflow (bool): Whether the first row and column are removed before normalization.
 
-    Returns:
-        tuple[np.ndarray, np.ndarray]: response matrix and the statistical error in the response matrix
+        Returns:
+            tuple[np.ndarray, np.ndarray]: response matrix and its statistical errors.
     """
     if efficiencies is None:
         efficiencies = np.ones(len(bins) - 1 - int(remove_overflow))
@@ -284,12 +284,16 @@ def ResponseMatrix(observed : np.ndarray, true : np.ndarray, bins : np.ndarray, 
 
  #? move to Plots?
 def PlotMatrix(matrix : np.ndarray, energy_slices : Slices, title : str = None, c_label : str = None, text : bool = False, text_colour = "k", cmap = "plasma"):
-    """ Plot numpy matrix.
+    """ Plot a matrix using energy-bin labels on both axes.
 
-    Args:
-        matrix (np.ndarray): matrix
-        title (str, optional): plot title. Defaults to None.
-        c_label (str, optional): colourbar label. Defaults to None.
+        Args:
+            matrix (np.ndarray): Matrix displayed as an image.
+            energy_slices (Slices): Energy-slice definition used for axis tick labels.
+            title (str): Optional plot title.
+            c_label (str): Optional colorbar label.
+            text (bool): Whether to annotate each cell with its value.
+            text_colour (str): Color used for cell annotations.
+            cmap (str): Matplotlib colormap name.
     """
     x = energy_slices.pos_overflow - energy_slices.width/2
     #* cause = true, effect = reco
@@ -311,17 +315,18 @@ def PlotMatrix(matrix : np.ndarray, energy_slices : Slices, title : str = None, 
 
 
 def CalculateResponseMatrices(template : cross_section.AnalysisInput, process : str, energy_slice : Slices, regions : bool = False, book : Plots.PlotBook = None, efficiencies : dict[np.ndarray] = None) -> dict[np.ndarray]:
-    """ Calculate response matrix of energy histograms from analysis input.
+    """ Calculate response matrices for energy distributions in an analysis input.
 
-    Args:
-        template (AnalysisInput): template analysis input
-        process (str): exclusive process
-        energy_slice (Slices): energy slices
-        book (Plots.PlotBook, optional): plot book. Defaults to None.
-        efficiencies (dict[np.ndarray], optional): selection efficiencies. Defaults to None.
+        Args:
+            template (cross_section.AnalysisInput): Input containing reconstructed and true energies.
+            process (str): Exclusive-process key used when calculating a single-process matrix.
+            energy_slice (Slices): Energy-slice and binning definition.
+            regions (bool): Whether to calculate separate matrices for each region.
+            book (Plots.PlotBook): Optional plot book used to save diagnostic plots.
+            efficiencies (dict[np.ndarray]): Optional efficiencies indexed by matrix key.
 
-    Returns:
-        dict[np.ndarray]: response matrices with errors for each histogram
+        Returns:
+            dict[np.ndarray]: Response-matrix and uncertainty pairs, keyed by histogram or region.
     """
     slice_bins = energy_slice.slice_bins
 
@@ -367,24 +372,33 @@ def CalculateResponseMatrices(template : cross_section.AnalysisInput, process : 
 
 
 def Unfold(observed : dict[np.ndarray], observed_err : dict[np.ndarray], response_matrices : dict[np.ndarray], priors : dict[np.ndarray] = None, ts_stop = 0.01, max_iter = 100, ts = "ks", regularizers : dict[UnivariateSpline] = None, verbose : bool = False, efficiencies : dict[np.ndarray] = None, covariance : str = "multinomial") -> dict[dict]:
-    """ Run iterative bayesian unfolding for each histogram.
+    """ Unfold each observed histogram using its response matrix.
 
-    Args:
-        observed (dict[np.ndarray]): observed data
-        observed_err (dict[np.ndarray]): observed data error
-        response_matrices (dict[np.ndarray]): repsonse matrices
-        priors (dict[np.ndarray], optional): pior distributions. Defaults to None.
-        ts_stop (float, optional): tolerance of test statistic. Defaults to 0.01.
-        max_iter (int, optional): maximum number of iterations. Defaults to 100.
-        ts (str, optional): test statistic type. Defaults to "ks".
-        regularizers (dict[UnivariateSpline], optional): splines to regularise the priors. Defaults to None.
-        verbose (bool, optional): verbose printout. Defaults to False.
-        efficiencies (dict[np.ndarray], optional): selection efficiencies. Defaults to None.
+        Args:
+            observed (dict[np.ndarray]): Observed distributions keyed by histogram name.
+            observed_err (dict[np.ndarray]): Uncertainties corresponding to the observed distributions.
+            response_matrices (dict[np.ndarray]): Response-matrix and error pairs keyed by histogram name.
+            priors (dict[np.ndarray]): Optional prior distributions keyed by histogram name.
+            ts_stop (float): Test-statistic threshold for stopping iterations.
+            max_iter (int): Maximum number of iterations.
+            ts (str): Test statistic used to determine convergence.
+            regularizers (dict[UnivariateSpline]): Optional spline regularizers keyed by histogram name.
+            verbose (bool): Whether to print histogram names and iteration logs.
+            efficiencies (dict[np.ndarray]): Optional efficiency and uncertainty pairs by histogram.
+            covariance (str): Covariance model passed to the unfolding algorithm.
 
-    Returns:
-        dict: unfolding results for each histogram.
+        Returns:
+            dict[dict]: Unfolding results keyed by histogram name.
     """
     def make_cb(key):
+        """ Assemble the callbacks configured for one histogram.
+
+            Args:
+                key (str): Histogram key used to select its regularizer.
+
+            Returns:
+                list: Logger and regularizer callbacks enabled for this histogram.
+        """
         cb = []
         if verbose: cb.append(Logger())
         if regularizers is not None:
@@ -417,15 +431,16 @@ def Unfold(observed : dict[np.ndarray], observed_err : dict[np.ndarray], respons
 
 
 def PlotUnfoldingResults(obs : np.ndarray, obs_err : np.ndarray, true : np.ndarray, results : dict, energy_slices : Slices, title : str, book : Plots.PlotBook = Plots.PlotBook.null()):
-    """ Plot unfolded histogram in comparison to observed and true.
+    """ Plot observed, unfolded, and true energy distributions.
 
-    Args:
-        obs (np.ndarray): observation
-        true (np.ndarray): truth
-        results (dict): unfolding results
-        energy_bins (np.ndarray): energy bins
-        label (str): x label (units of MeV are automatically applied)
-        book (Plots.PlotBook, optional): plot book. Defaults to Plots.PlotBook.null().
+        Args:
+            obs (np.ndarray): Observed reconstructed distribution.
+            obs_err (np.ndarray): Uncertainties on the observed distribution.
+            true (np.ndarray): True distribution used for comparison.
+            results (dict): Unfolding result containing unfolded values and diagnostics.
+            energy_slices (Slices): Energy-slice definition for the plots.
+            title (str): Plot title.
+            book (Plots.PlotBook): Plot book to which the plots are saved.
     """
     if "num_iterations" in results:
         label = f"Data unfolded, {results['num_iterations']} iterations"

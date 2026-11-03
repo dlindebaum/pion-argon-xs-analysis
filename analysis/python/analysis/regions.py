@@ -20,16 +20,16 @@ from python.analysis.plotting import plots
 def region_selection(events : ntuple.Data, args : Namespace | dict, is_mc : bool, region_type : samples.SampleDefinition = None, process_type : samples.SampleDefinition = None, removed : bool = False) -> dict[np.ndarray]:
     """ Get reco and true regions (if possible) for ntuple.
 
-    Args:
-        events (ntuple.Data): Events before beam pion selection.
-        args (Namespace): Application arguements.
-        is_mc (bool): if Ntuple is MC or Data.
-        region_type (samples.SampleDefinition, optional): Override region definition. Defaults to None.
-        process_type (samples.SampleDefinition, optional): Override process definition. Defaults to None.
-        removed (bool, optional): Include the removed events as "Uncategorised". Defaults to False.
+        Args:
+            events (ntuple.Data): Events before beam pion selection.
+            args (Namespace | dict): Application arguements.
+            is_mc (bool): if Ntuple is MC or Data.
+            region_type (samples.SampleDefinition): Override region definition. Defaults to None.
+            process_type (samples.SampleDefinition): Override process definition. Defaults to None.
+            removed (bool): Include the removed events as "Uncategorised". Defaults to False.
 
-    Returns:
-        dict[np.ndarray]: Regions.
+        Returns:
+            dict[np.ndarray]: Regions.
     """
     args_c = common.args_to_dict(args)
 
@@ -81,13 +81,13 @@ def region_selection(events : ntuple.Data, args : Namespace | dict, is_mc : bool
 def count_in_regions(true_regions : dict, reco_regions : dict, selection_efficincy : np.ndarray = None) -> np.ndarray:
     """ Computes the counts of each combination of reco and true regions.
 
-    Args:
-        true_regions (dict): True region masks.
-        reco_regions (dict): Reco region masks.
-        selection_efficincy (np.ndarray, optional): Selection efficiency to apply to the masks. Defaults to None.
+        Args:
+            true_regions (dict): True region masks.
+            reco_regions (dict): Reco region masks.
+            selection_efficincy (np.ndarray): Selection efficiency to apply to the masks. Defaults to None.
 
-    Returns:
-        np.ndarray: counts.
+        Returns:
+            np.ndarray: counts.
     """
     counts = []
     for t in true_regions:
@@ -103,23 +103,22 @@ def count_in_regions(true_regions : dict, reco_regions : dict, selection_efficin
 def get_total_pion_inel_masks(mc : ntuple.Data) -> ak.Array:
     """ Returns the mask which selects true inelastic pi+.
 
-    Args:
-        mc (ntuple.Data): MC events.
+        Args:
+            mc (ntuple.Data): MC events.
 
-    Returns:
-        ak.Array: mask.
+        Returns:
+            ak.Array: mask.
     """
     particle_tags = tags.generate_true_beam_particle_tags(mc)
     return particle_tags["$\\pi^{+}$:inel"].mask
 
 @common.timer
 def region_study(region_selections : dict[dict], out : str):
-    """ Study which computes a correlation matrix ofthe event faction for reco regions and true regions.
-        Saved to file to be used in toy simulation.
+    """Plot reco-vs-truth region matrices and save per-region fractions and purity-efficiency summaries.
 
-    Args:
-        mc (ntuple.Data): MC events.
-        args (Namespace): Application arguments.
+        Args:
+            region_selections (dict[dict]): Region masks grouped by sample, with ``reco_regions`` and ``true_regions`` entries.
+            out (str): Output directory for the region plots, HDF5 fraction tables, and LaTeX summary.
     """
     os.makedirs(out + "reco_regions/", exist_ok = True)
     pdf = plotting.PlotBook(out + "reco_regions/reco_regions_study")

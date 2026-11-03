@@ -27,6 +27,15 @@ class process_criteria_geant(CriteriaList):
     @staticmethod
     def get_criteria_values(events : ntuple.Data, pi_KE_lim : float = 0):
 
+        """ Build the per-event criteria used by the GEANT-compatible process definitions.
+
+            Args:
+                events (ntuple.Data): Ntuple data containing true-particle records.
+                pi_KE_lim (float): Minimum kinetic energy for counting charged pions; pions at or below this threshold are excluded.
+
+            Returns:
+                dict: Boolean ``pi_inelastic`` values and per-event counts of primary positive pions, negative pions, and neutral pions. Charged-pion counts include only particles with ``mother == 1`` and kinetic energy above ``pi_KE_lim``.
+        """
         n_pip_true, n_pim_true, n_pi0_true = get_true_pion_counts_geant(events, pi_KE_lim) # counts number of pions in events
         pi_inel = events.true_particles.true_beam_end_process == "pi+Inelastic" # used to distinguish interactions from decays/non-pions
         return {"pi_inelastic" : pi_inel, "n_pi_plus" : n_pip_true, "n_pi_minus" : n_pim_true, "n_pi0" : n_pi0_true}
@@ -43,6 +52,15 @@ class process_criteria(CriteriaList):
 
     @staticmethod
     def get_criteria_values(events : ntuple.Data, pi_KE_lim : float = 0):
+        """ Build per-event final-state pion counts for the three-signal process definitions.
+
+            Args:
+                events (ntuple.Data): Ntuple data containing true-particle records.
+                pi_KE_lim (float): Minimum kinetic energy for counting charged pions; pions at or below this threshold are excluded.
+
+            Returns:
+                dict: Boolean ``pi_inelastic`` values, charged-pion counts (combining positive and negative pions), and neutral-pion counts, with one value per event. Charged pions are primary daughters with ``mother == 1`` and kinetic energy above ``pi_KE_lim``.
+        """
         n_pi_true, n_pi0_true = get_true_pion_counts(events, pi_KE_lim)
         pi_inel = events.true_particles.true_beam_end_process == "pi+Inelastic"
         return {"pi_inelastic" : pi_inel, "n_pi" : n_pi_true, "n_pi0" : n_pi0_true}
@@ -62,6 +80,16 @@ class process_criteria_exp(CriteriaList):
     @staticmethod
     def get_criteria_values(events : ntuple.Data, pi_KE_lim : float = 0, fiducial_volume : list[float] = [0, 700]):
 
+        """ Extend the final-state pion criteria with beam identity, decay, and escape flags.
+
+            Args:
+                events (ntuple.Data): Ntuple data containing true-particle records and beam trajectories.
+                pi_KE_lim (float): Minimum kinetic energy for counting charged pions; pions at or below this threshold are excluded.
+                fiducial_volume (list[float]): Lower and upper z boundaries used to identify a beam particle that exits the fiducial volume.
+
+            Returns:
+                dict: The standard pion-process criteria plus per-event ``pi_beam``, ``beam_escapes``, and ``beam_decay`` booleans. ``beam_escapes`` is true when the final beam-trajectory z position is at least the upper fiducial-volume boundary.
+        """
         cvs = process_criteria.get_criteria_values(events, pi_KE_lim)
 
         pi_beam = events.true_particles.pdg[:, 0] == 211
@@ -72,7 +100,8 @@ class process_criteria_exp(CriteriaList):
 
 
 class geant_process_energy_limit(SampleDefinition):
-    """" Interaction definitions compatible with GEANT4 simulation file, including charged pion KE limit."""
+    """ Interaction definitions compatible with GEANT4 simulation file, including charged pion KE limit.
+    """
     criteria_list = process_criteria_geant
 
     definitions = {
@@ -104,7 +133,8 @@ class geant_process_energy_limit(SampleDefinition):
 
 
 class four_signal_process(SampleDefinition):
-    """ Signal defintions where pion production is split into single and 'multi' pion production."""
+    """ Signal defintions where pion production is split into single and 'multi' pion production.
+    """
     criteria_list = process_criteria
     definitions = {
         "absorption" : [
@@ -125,7 +155,8 @@ class four_signal_process(SampleDefinition):
 
 
 class three_signal_process(SampleDefinition):
-    """ Signal defintion more widely used in PDSP analyses"""
+    """ Signal defintion more widely used in PDSP analyses
+    """
     criteria_list = process_criteria
     definitions = {
         "absorption" : [
@@ -141,7 +172,8 @@ class three_signal_process(SampleDefinition):
     }
 
 class three_signal_process_bkg(SampleDefinition):
-    """ Signal defintion more widely used in PDSP analyses, accounting for impurities arising from non pi+ inelastic interactions."""
+    """ Signal defintion more widely used in PDSP analyses, accounting for impurities arising from non pi+ inelastic interactions.
+    """
     criteria_list = process_criteria
     definitions = {
         "absorption" : [
@@ -160,7 +192,8 @@ class three_signal_process_bkg(SampleDefinition):
     }
 
 class three_signal_process_bkg_fd(SampleDefinition):
-    """ Signal defintion more widely used in PDSP analyses, accounting for impurities arising from non pi+ inelastic interactions and also any particles which escape the fiducial volume."""
+    """ Signal defintion more widely used in PDSP analyses, accounting for impurities arising from non pi+ inelastic interactions and also any particles which escape the fiducial volume.
+    """
     criteria_list = process_criteria_exp
     definitions = {
         "absorption" : [
@@ -203,6 +236,15 @@ class three_signal_process_bkg_fd(SampleDefinition):
 
 
 def get_true_pion_counts(events : ntuple.Data, ke_lim : float = 0):
+    """ Count primary charged and neutral pions in each event.
+
+        Args:
+            events (ntuple.Data): Ntuple data containing true-particle records.
+            ke_lim (float): Minimum kinetic energy for counting charged pions. Charged pions at or below this threshold are excluded; neutral-pion counts are read directly from the ntuple.
+
+        Returns:
+            tuple[ak.Array, ak.Array]: Per-event charged-pion counts (combining both charges) and neutral-pion counts, in that order. Charged pions must have ``abs(pdg) == 211``, ``mother == 1``, and ``number != 1``.
+    """
     n_pi_true = (events.true_particles.number != 1) & (abs(events.true_particles.pdg) == 211) & (events.true_particles.mother == 1)
 
     ke = kinematics.KE(vector.magnitude(events.true_particles.momentum), Particle.from_pdgid(211).mass)
@@ -213,7 +255,16 @@ def get_true_pion_counts(events : ntuple.Data, ke_lim : float = 0):
     return n_pi_true, n_pi0_true
 
 
-def get_true_pion_counts_geant(events, KE_lim : float = 0) -> tuple[ak.Array, ak.Array]:
+def get_true_pion_counts_geant(events, KE_lim : float = 0) -> tuple[ak.Array, ak.Array, ak.Array]:
+    """ Count primary positive, negative, and neutral pions separately in each event.
+
+        Args:
+            events (ntuple.Data): Ntuple data containing true-particle records.
+            KE_lim (float): Minimum kinetic energy for counting charged pions. Charged pions at or below this threshold are excluded; neutral-pion counts are read directly from the ntuple.
+
+        Returns:
+            tuple[ak.Array, ak.Array, ak.Array]: Per-event positive-pion, negative-pion, and neutral-pion counts, in that order. Charged pions must have ``mother == 1``, ``number != 1``, and kinetic energy above ``KE_lim``.
+    """
     KE = kinematics.KE(vector.magnitude(events.true_particles.momentum), Particle.from_pdgid(211).mass)
 
     n_pip_true = (events.true_particles.number != 1) & (events.true_particles.pdg == 211) & (events.true_particles.mother == 1)

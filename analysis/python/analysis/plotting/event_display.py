@@ -13,38 +13,44 @@ import numpy as np
 from python.analysis import vector
 
 class EventDisplay:
-    """ Event display class, an object which produces figures and allows the user.
-        to draw various objects on the plot (see methods).
-        #! Use TPCGeometry class for bounds.
-    Attributes:
-        xlim (tuple): xRange of plots.
-        ylim (tuple): yRange of plots.
-        zlim (tuple): zRange of plots.
-        fig2D (matplotlib.figure.Figure): figure for 2D plots.
-        xy (matplotlib.axes._subplots.AxesSubplot): 2D plot on the xy plane.
-        xz (matplotlib.axes._subplots.AxesSubplot): 2D plot on the xz plane.
-        fig3D (matplotlib.figure.Figure): figure for 3D plots.
-        ax3D (mpl_toolkits.mplot3d.axes3d.Axes3D): 3D plot.
+    """Create detector-view figures and draw reconstructed particle points, tracks, and labels.
 
-    Methods:
-        detector_bounds: Set axes range to dectector bounds.
-        PFO: Plot a PFO in the event display.
-        Point: Draw a single point.
-        Line: Draw a line.
-        Text: Draw text.
+        Args:
+            event_id (str): Event number displayed in figure titles.
+            run (str): Run number displayed in figure titles.
+            subrun (str): Subrun number displayed in figure titles.
+            plot_2D (bool): Create the z-x and z-y detector projections.
+            plot_3D (bool): Create the three-dimensional detector view.
+
+        Attributes:
+            xlim (tuple): xRange of plots.
+            ylim (tuple): yRange of plots.
+            zlim (tuple): zRange of plots.
+            fig2D (matplotlib.figure.Figure): figure for 2D plots.
+            zy (matplotlib.axes._subplots.AxesSubplot): z-y detector projection.
+            zx (matplotlib.axes._subplots.AxesSubplot): z-x detector projection.
+            fig3D (matplotlib.figure.Figure): figure for 3D plots.
+            ax3D (mpl_toolkits.mplot3d.axes3d.Axes3D): 3D plot.
+
+            Methods:
+            detector_bounds: Set coordinate ranges for the detector views.
+            pfo: Plot PFO space points and optional start point, direction, and PDG label.
+            point: Draw a point in the enabled views.
+            line: Draw a line in the enabled views.
+            text: Draw a label at a detector position.
     """
     xlim = (-350, 350)
     ylim = (0, 600)
     zlim = (0, 700)
     def __init__(self, event_id : str, run : str, subrun : str, plot_2D : bool = True, plot_3D : bool = True):
-        """ Constructor
+        """Create event-labeled 2D and/or 3D Matplotlib detector views.
 
-        Args:
-            event_id (str): Event number
-            run (str): run number
-            subrun (str): subrun number
-            plot2D (bool, optional): whether to create 2D plots. Defaults to True.
-            plot3D (bool, optional): whether to create 3D plots. Defaults to True.
+            Args:
+                event_id (str): Event number displayed in figure titles.
+                run (str): Run number displayed in figure titles.
+                subrun (str): Subrun number displayed in figure titles.
+                plot_2D (bool): Create the z-x and z-y detector projections.
+                plot_3D (bool): Create the three-dimensional detector view.
         """
         #* set plot defaults
         plt.rcParams.update({'font.size': 14})
@@ -73,10 +79,10 @@ class EventDisplay:
     def detector_bounds(self, x : tuple = xlim, y : tuple = ylim, z : tuple = zlim):
         """ Set axes range to dectector bounds.
 
-        Args:
-            x (tuple, optional): x bound. Defaults to xlim.
-            y (tuple, optional): y bound. Defaults to ylim.
-            z (tuple, optional): z bound. Defaults to zlim.
+            Args:
+                x (tuple): x bound. Defaults to xlim.
+                y (tuple): y bound. Defaults to ylim.
+                z (tuple): z bound. Defaults to zlim.
         """
         if hasattr(self, "fig2D"):
             self.zx.set_xlim(z)
@@ -92,14 +98,15 @@ class EventDisplay:
     def pfo(self, points : ak.Array, marker : str, colour : str, alpha : float = 1, pointSize : int = 2, startPoint : ak.Record = None, direction : ak.Record = None, pdg : int = None):
         """ Plot a PFO in the event display.
 
-        Args:
-            points (ak.Array): hit space point positions
-            marker (str): style of points
-            colour (str): colour of points
-            pointSize (int, optional): size of points. Defaults to 2.
-            startPoint (ak.Record, optional): PFO start point. Defaults to None.
-            direction (ak.Record, optional): direction of point. Defaults to None.
-            pdg (int, optional): pdg code of point. Defaults to None.
+            Args:
+                points (ak.Array): hit space point positions
+                marker (str): style of points
+                colour (str): colour of points
+                alpha (float): Marker transparency.
+                pointSize (int): size of points. Defaults to 2.
+                startPoint (ak.Record): PFO start point. Defaults to None.
+                direction (ak.Record): direction of point. Defaults to None.
+                pdg (int): pdg code of point. Defaults to None.
         """
         points = points[points.x != -999] # don't plot null space point values
 
@@ -134,11 +141,11 @@ class EventDisplay:
     def point(self, point : ak.Record, marker : str, colour : str, pointSize : int = 2):
         """ Draw a single point.
 
-        Args:
-            point (ak.Record): point position
-            marker (str): point style
-            colour (str): point colour
-            pointSize (int, optional): point size. Defaults to 2.
+            Args:
+                point (ak.Record): point position
+                marker (str): point style
+                colour (str): point colour
+                pointSize (int): point size. Defaults to 2.
         """
         if hasattr(self, "fig2D"):
             self.zx.scatter(point.z, point.x, pointSize, marker=marker, color=colour)
@@ -152,11 +159,11 @@ class EventDisplay:
     def line(self, start : ak.Record, end : ak.Record, colour : str, lineStyle="-"):
         """ Draw a line.
 
-        Args:
-            start (ak.Record): start position of line
-            end (ak.Record): end position of line
-            colour (str): colour of line
-            lineStyle (str, optional): line style. Defaults to "-".
+            Args:
+                start (ak.Record): start position of line
+                end (ak.Record): end position of line
+                colour (str): colour of line
+                lineStyle (str, optional): line style. Defaults to "-".
         """
         if hasattr(self, "fig2D"):
             self.zx.plot([start.z, end.z], [start.x, end.x], lineStyle, color = colour)
@@ -168,12 +175,13 @@ class EventDisplay:
         return
 
     def text(self, point : ak.Record, text : str, fontsize : int = 16, colour = "black"):
-        """ Draw text.
+        """Draw a text label at a point in each enabled detector view.
 
-        Args:
-            point (ak.Record): point to draw text (top left of bounding box)
-            text (str): the text.
-            fontsize (int, optional): font size. Defaults to 16.
+            Args:
+                point (ak.Record): Position at which to anchor the label.
+                text (str): Label content.
+                fontsize (int): Font size in points. Defaults to 16.
+                colour (Any): Text color.
         """
         if hasattr(self, "fig2D"):
             self.zx.text(point.z, point.x, str(text), fontsize = fontsize, clip_on = True, color = colour, path_effects = [pe.withStroke(linewidth = 1, foreground = "black")])

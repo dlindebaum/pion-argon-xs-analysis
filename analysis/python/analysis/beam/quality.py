@@ -11,12 +11,12 @@ from python.analysis import common, fitting, io, plotting
 def fit_vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
     """ Gaussian fit to each component in the vector.
 
-    Args:
-        v (ak.Record): vector
-        bins (int): number of bins
+        Args:
+            v (ak.Record): vector
+            bins (int): number of bins
 
-    Returns:
-        tuple: fit paramaters for each component.
+        Returns:
+            tuple[dict, dict, dict, dict]: fit paramaters for each component.
     """
     mu = {}
     mu_err = {}
@@ -41,13 +41,14 @@ def fit_vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
 def plot_fit_results(value : ak.Array, x_label : str, mu : float, sigma : float, color : str = None, label : str = None, range : list = None):
     """ Plot data plus the gaussian fit made on the data.
 
-    Args:
-        value (ak.Array): date to plot
-        x_label (str): x label
-        range (list): range to plot
-        mu (float): mean of fit
-        sigma (float): rms of fit
-        name (str): plot name
+        Args:
+            value (ak.Array): Beam-position coordinate values to histogram.
+            x_label (str): Label for the plotted coordinate axis.
+            mu (float): Fitted Gaussian mean.
+            sigma (float): Fitted Gaussian standard deviation.
+            color (str): Optional color for the data and fit.
+            label (str): Legend label used with the fit's chi-square per degree of freedom.
+            range (list): Optional histogram range; defaults to five standard deviations around ``mu``.
     """
     y, edges = np.histogram(np.array(value), bins = 50, range = [mu - 5 * sigma, mu + 5 * sigma] if range is None else range)
     x = (edges[1:] + edges[:-1]) / 2
@@ -70,26 +71,27 @@ def plot_fit_results(value : ak.Array, x_label : str, mu : float, sigma : float,
 def plot_range(mu : float, sigma : float, tolerance : float = 5) -> list:
     """ Compute range of plot based on properties of the Gaussian.
 
-    Args:
-        mu (float): mean
-        sigma (float): rms
-        tolerance (float, optional): how many standard deviations to extend the range by. Defaults to 5.
+        Args:
+            mu (float): mean
+            sigma (float): rms
+            tolerance (float): how many standard deviations to extend the range by. Defaults to 5.
 
-    Returns:
-        list: plot range
+        Returns:
+            list: plot range
     """
     return sorted([mu - tolerance * sigma, mu + tolerance * sigma])
 
 
 def make_plots(output_mc : dict[ak.Array], mc_fits : dict, output_data : dict[ak.Array], data_fits : dict, out : str, truncate : float):
-    """ Make plots showing the fits for MC and or Data.
+    """Save normalized x/y/z beam start-position histograms with their MC and data Gaussian fits.
 
-    Args:
-        output_mc (dict[ak.Array]): mc
-        mc_fits (dict): fits made on mc
-        output_data (dict[ak.Array]): data
-        data_fits (dict): fits made on data
-        out (str): output directory
+        Args:
+            output_mc (dict[ak.Array]): Optional MC arrays containing the beam start positions.
+            mc_fits (dict): Fitted MC means and widths, keyed by coordinate.
+            output_data (dict[ak.Array]): Optional data arrays containing the beam start positions.
+            data_fits (dict): Fitted data means and widths, keyed by coordinate.
+            out (str): Output directory prefix for ``beam_quality_fits.pdf``.
+            truncate (float): Truncation setting used to label the plotted beam sample.
     """
     plotting.styles.PlotStyler.set_plot_style()
 
@@ -109,6 +111,17 @@ def make_plots(output_mc : dict[ak.Array], mc_fits : dict, output_data : dict[ak
 
 
 def fits(args : argparse.Namespace, output : dict, out : str, sample_name : str):
+    """Fit beam start-position distributions and summarize beam-direction components, then write the results to JSON.
+
+        Args:
+            args (argparse.Namespace): Analysis settings, including output directory and truncation.
+            output (dict): Processed arrays containing ``start_pos`` and ``beam_dir``.
+            out (str): Output path prefix for the fit-value JSON file.
+            sample_name (str): Sample label included in the output filename.
+
+        Returns:
+            Any: Mapping of fitted position/direction means, widths, uncertainties, and truncation setting.
+    """
     start_pos = output["start_pos"]
     beam_dir = output["beam_dir"]
     mu, sigma, mu_err, sigma_err = fit_vector(start_pos, 100)

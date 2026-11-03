@@ -18,6 +18,19 @@ from python.analysis.cross_section import analysis_input
 
 
 def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
+    """ Create selected and truth-beam analysis inputs for one ntuple chunk.
+
+        Args:
+            i (int): Index of the chunk being processed.
+            file_desc (ntuple.FileDescriptor): Descriptor for the input ntuple file.
+            n_events (int): Maximum number of events to read.
+            start (int): First event index to read.
+            selected_events (Any): Optional event subset supplied by the processing runner.
+            args (dict): Resolved analysis configuration, including the data/MC flag.
+
+        Returns:
+            dict: Selected and, for MC, truth-beam analysis inputs for the chunk.
+    """
     events = ntuple.Data(file_desc, n_events, start)
 
     analysis_input_s = analysis_input.create_analysis_input(events, args, not args["data"])

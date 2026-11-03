@@ -31,6 +31,20 @@ from python.analysis.io import write_json, read_json
 
 
 def template_toy_config(toy_parameters_dir : str, n_events : int, seed : int, max_cpus : int, step : float, p_init : float, region_selection : str):
+    """ Build the default configuration dictionary for a toy sample.
+
+        Args:
+            toy_parameters_dir (str): Directory containing the toy parameter files.
+            n_events (int): Number of events to generate.
+            seed (int): Random seed for the toy generation.
+            max_cpus (int): Maximum number of CPUs to use.
+            step (float): Momentum or energy step used by the toy configuration.
+            p_init (float): Initial particle momentum.
+            region_selection (str): Name of the reconstruction-region selection.
+
+        Returns:
+            Any: Toy-generation settings and paths to their input files.
+    """
     template = {
         "events" : n_events,
         "step" : step,
@@ -57,6 +71,12 @@ def template_toy_config(toy_parameters_dir : str, n_events : int, seed : int, ma
 
 
 def update_config(config, update : dict):
+    """ Apply updates to a JSON configuration file.
+
+        Args:
+            config (str): Path to the JSON configuration file to update.
+            update (dict): Configuration keys and values to merge into the file.
+    """
     json_config = read_json(config)
     json_config.update(update)
     write_json(json_config, config)
@@ -65,6 +85,14 @@ def update_config(config, update : dict):
 
 
 def update_args(processing_args : dict = {}):
+    """ Resolve the original command-line arguments and apply processing overrides.
+
+        Args:
+            processing_args (dict): Attribute names and values to apply to the resolved arguments.
+
+        Returns:
+            argparse.Namespace: Resolved arguments with the supplied overrides.
+    """
     new_args = ApplicationArguments.resolve_args(original_args)
     for k, v in processing_args.items():
         setattr(new_args, k, v)
@@ -72,10 +100,29 @@ def update_args(processing_args : dict = {}):
 
 
 def check_run(args : argparse.Namespace, step : str):
+    """ Determine whether a step is requested and is not excluded.
+
+        Args:
+            args (argparse.Namespace): Arguments containing run, force, and skip options.
+            step (str): Analysis step name to check.
+
+        Returns:
+            bool: Whether the step should run.
+    """
     return ((step in args.run) or (args.force is True)) and (step not in args.skip)
 
 
 def step_plan(args : argparse.Namespace, no_data : bool, n_data : list):
+    """ Plan analysis steps based on existing outputs and requested options.
+
+        Args:
+            args (argparse.Namespace): Resolved analysis configuration and run options.
+            no_data (bool): Whether no data input files were specified.
+            n_data (list): Event counts for the data input files.
+
+        Returns:
+            list[str]: Names of the analysis steps selected for execution.
+    """
     existing = os.listdir(args.out) if os.path.isdir(args.out) else []
     steps = [
         ("normalisation", (not no_data) and ((args.norm is None) or ("beam_norm" not in existing))),

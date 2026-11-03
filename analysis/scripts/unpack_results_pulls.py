@@ -11,6 +11,11 @@ from python.analysis.common import ls_recursive
 from python.analysis.io import read_hdf5, write_hdf5
 
 def main(args : argparse.Namespace):
+    """ Extract job archives and merge pull-result tables into one HDF5 file.
+
+        Args:
+            args (argparse.Namespace): Parsed arguments containing the job output directory.
+    """
 
     # uncompress files
     out_names = []

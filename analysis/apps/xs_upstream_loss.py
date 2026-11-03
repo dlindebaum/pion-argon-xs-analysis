@@ -25,6 +25,19 @@ from python.analysis.cross_section.analysis_input import beam_pion_selection
 from rich import print
 
 def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
+    """ Select beam pions and extract momentum, true energy, and optional weights.
+
+        Args:
+            i (int): Index of the chunk being processed.
+            file_desc (ntuple.FileDescriptor): Descriptor for the input ntuple file.
+            n_events (int): Maximum number of events to read.
+            start (int): First event index to read.
+            selected_events (Any): Optional event subset supplied by the processing runner.
+            args (dict): Resolved selection and beam-reweight configuration.
+
+        Returns:
+            dict: Instrumentation momentum, true front-face energy, and optional weights.
+    """
     mc = ntuple.Data(file_desc, n_events, start)
     
     mc = beam_pion_selection(mc, args, True)

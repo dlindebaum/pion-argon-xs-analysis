@@ -31,8 +31,18 @@ class Tags(dict):
         or you can iterate over the items in the tag rather than the dictionary key i.e.
         for t in tags.colour:
             print(t) # this will print the colour of the tag rather than the key.
+
+        Args:
+            arg (Any): Positional arguments passed to ``dict`` to populate the collection.
+            kw (Any): Keyword arguments passed to ``dict`` to populate the collection.
     """
     def __init__(self, *arg, **kw):
+        """Create attribute iterators for each ``Tag`` field, then initialize the dictionary contents.
+
+            Args:
+                arg (Any): Positional arguments passed to ``dict`` to populate the collection.
+                kw (Any): Keyword arguments passed to ``dict`` to populate the collection.
+        """
         for member in list(Tag.__annotations__.keys()):
             setattr(self, member, TagIterator(self, member)) # assign a TagIterator per item in Tag
 
@@ -42,13 +52,31 @@ class Tags(dict):
 
 class TagIterator:
     """ Iterator which allows enumeration of a collection of tags based on the value of the tag.
-        See how this is used in Tags. 
+        See how this is used in Tags.
+
+        Args:
+            parent (Tags): Tag collection whose values are accessed.
+            value (str): ``Tag`` attribute to retrieve from each collection entry.
     """
     def __init__(self, parent : Tags, value : str):
+        """Store the tag collection and the ``Tag`` attribute exposed by this iterator.
+
+            Args:
+                parent (Tags): Tag collection whose values are accessed.
+                value (str): ``Tag`` attribute to retrieve from each collection entry.
+        """
         self.__parent = parent # which collection this belongs to
         self.__value = value # which value does this iterate over
 
     def __getitem__(self, i):
+        """Return the first tag whose selected attribute equals the requested value.
+
+            Args:
+                i (Any): Attribute value to search for.
+
+            Returns:
+                Any: Matching ``Tag``, or ``None`` if no entry matches.
+        """
         for _, v in self.__parent.items():
             if getattr(v, self.__value) == i:
                 return v
@@ -57,23 +85,28 @@ class TagIterator:
     def values(self) -> list:
         """ returns a list of values for all tags.
 
-        Returns:
-            list: list of values for each tag
+            Returns:
+                list: list of values for each tag
         """
         return [getattr(v, self.__value) for _, v in self.__parent.items()]
 
     def __str__(self) -> str:
+        """Render the selected attribute values as a string representation of a list.
+
+            Returns:
+                str: String form of the values exposed by this iterator.
+        """
         return str(self.values)
 
 
 def merge_tags(tags : list[Tags]) -> Tags:
     """ Merge a group of tags into the same Tags object. Includes merging masks.
 
-    Args:
-        tags (list[Tags]): List of Tags to merge.
+        Args:
+            tags (list[Tags]): List of Tags to merge.
 
-    Returns:
-        Tags: Merged Tags.
+        Returns:
+            Tags: Merged Tags.
     """
     new_tags = Tags()
     for t in tags:
@@ -94,12 +127,12 @@ def merge_tags(tags : list[Tags]) -> Tags:
 def particle_masks(pdgs : ak.Array, to_tag : list) -> dict:
     """ produces a dictionry of masks based on particle pdg codes to tag specified by the user.
 
-    Args:
-        pdgs (ak.Array): array of pdg codes
-        to_tag (list): particle pgd codes to tag
+        Args:
+            pdgs (ak.Array): array of pdg codes
+            to_tag (list): particle pgd codes to tag
 
-    Returns:
-        dict: particle tags
+        Returns:
+            dict: particle tags
     """
     masks = {}
     for t in to_tag:
@@ -110,11 +143,11 @@ def particle_masks(pdgs : ak.Array, to_tag : list) -> dict:
 def other_mask(masks : dict) -> ak.Array:
     """ Creates a mask which selects indices not already tagged by a set of masks.
 
-    Args:
-        masks (dict): masks which tag data
+        Args:
+            masks (dict): masks which tag data
 
-    Returns:
-        ak.Array: mask which tags any untagged data.
+        Returns:
+            ak.Array: mask which tags any untagged data.
     """
     other = None
     for m in masks:
@@ -128,11 +161,11 @@ def other_mask(masks : dict) -> ak.Array:
 def generate_true_particle_tags(events : "Data") -> Tags:
     """ Creates true particle tags with boolean masks. Does this for all PFOs.
 
-    Args:
-        events (ntuple.Data): Events to look at.
+        Args:
+            events ('Data'): Events to look at.
 
-    Returns:
-        Tags: tags
+        Returns:
+            Tags: tags
     """
     particles_to_tag = [
         211, -211, 13, -13, 11, -11, 22, 2212, 321
@@ -155,11 +188,11 @@ def generate_true_particle_tags(events : "Data") -> Tags:
 def generate_true_beam_particle_tags(events : "Data") -> Tags:
     """ Creates true particle tags with boolean masks for beam particles.
 
-    Args:
-        events (ntuple.Data): Events to look at.
+        Args:
+            events ('Data'): Events to look at.
 
-    Returns:
-        Tags: tags
+        Returns:
+            Tags: tags
     """
     particles_to_tag = [
         211, -13, -11, 2212, 321
@@ -190,11 +223,11 @@ def generate_true_beam_particle_tags(events : "Data") -> Tags:
 def generate_true_particle_tags_pi_plus(events : "Data") -> Tags:
     """ Creates true particle tags with boolean masks, with specific tags related to pi+ particles. Does this for all PFOs.
 
-    Args:
-        events (ntuple.Data): Events to look at.
+        Args:
+            events ('Data'): Events to look at.
 
-    Returns:
-        Tags: tags
+        Returns:
+            Tags: tags
     """
     particles_to_tag = [
         211, -211, 13, -13, -11, 22, 2212
@@ -235,11 +268,11 @@ def generate_true_particle_tags_pi_plus(events : "Data") -> Tags:
 def generate_true_particle_tags_interesting_pfos(events : "Data") -> Tags:
     """ Generate tags for a subset of particle flow objects of interest for the final state topologies.
 
-    Args:
-        events (ntuple.Data): Events to look at.
+        Args:
+            events ('Data'): Events to look at.
 
-    Returns:
-        Tags: Created Tags.
+        Returns:
+            Tags: Created Tags.
     """
     particles_to_tag = [
         211, -211, 13, -13, 11, -11, 22, 2212
@@ -288,11 +321,11 @@ def generate_true_particle_tags_interesting_pfos(events : "Data") -> Tags:
 def generate_true_particle_tags_pi0_shower(events : "Data") -> Tags:
     """ Creates true particle tags with boolean masks with specific tags for pi0 photon showers. Does this for all PFOs.
 
-    Args:
-        events (ntuple.Data): Events to look at.
+        Args:
+            events ('Data'): Events to look at.
 
-    Returns:
-        Tags: tags
+        Returns:
+            Tags: tags
     """
     particles_to_tag = [
         211, -211, 13, -13, 11, -11, 22, 2212
@@ -329,12 +362,12 @@ def generate_pi0_tags(events : "Data", photon_pfos : ak.Array) -> Tags:
             one photon from a pi0
             no photons from a pi0
 
-    Args:
-        events (Data): Events to look at..
-        photon_pfos (ak.Array): mask which select PFOs that are photon showers
+        Args:
+            events ('Data'): Events to look at..
+            photon_pfos (ak.Array): mask which select PFOs that are photon showers
 
-    Returns:
-        Tags: tags
+        Returns:
+            Tags: tags
     """
     pi0_photon = events.true_particles_bt.mother_pdg == 111
 
@@ -354,11 +387,11 @@ def generate_pi0_tags(events : "Data", photon_pfos : ak.Array) -> Tags:
 def exclusive_process_tags(true_masks : ak.Array) -> Tags:
     """ Generate Tags for exclusive processes for pion-Argon cross sections.
 
-    Args:
-        true_masks (ak.Array): Masks for each definition.
+        Args:
+            true_masks (ak.Array): Masks for each definition.
 
-    Returns:
-        Tags: Created Tags.
+        Returns:
+            Tags: Created Tags.
     """
     tags = Tags()
     colours = {
@@ -393,11 +426,11 @@ def exclusive_process_tags(true_masks : ak.Array) -> Tags:
 def stopping_muon_tag(events : "Data"):
     """ Tags to categorise beam muons that stop in the TPC.
 
-    Args:
-        events (Data): Events to look at.
+        Args:
+            events ('Data'): Events to look at.
 
-    Returns:
-        Tags: Created Tags.
+        Returns:
+            Tags: Created Tags.
     """
     masks = particle_masks(events.true_particles_bt.beam_pdg, [-13])
     masks["other"] = other_mask(masks)
@@ -420,11 +453,11 @@ def stopping_muon_tag(events : "Data"):
 def beam_scraper_tag(scraper_ids : ak.Array) -> Tags:
     """ Tags for events which are and not beam scrapers.
 
-    Args:
-        scraper_ids (ak.Array): Id of events which are beam scrapers.
+        Args:
+            scraper_ids (ak.Array): Id of events which are beam scrapers.
 
-    Returns:
-        Tags: Created Tags.
+        Returns:
+            Tags: Created Tags.
     """
     tags = Tags()
     tags["scraper"] = Tag("scraper", "scraper", "C6", scraper_ids, 0)

@@ -17,6 +17,16 @@ from python.analysis import application
 from rich import print
 
 def update_cfg_paths(cfg : str, old : str, new : str) -> tuple[dict, str]:
+    """ Replace a work-area path in a JSON configuration and its filename.
+
+        Args:
+            cfg (str): Path to the configuration file.
+            old (str): Existing path prefix to replace.
+            new (str): Replacement path prefix.
+
+        Returns:
+            tuple[dict, str]: configuration data and its new file path.
+    """
     cfg_str = json.dumps(read_json(cfg))
     new_cfg = json.loads(cfg_str.replace(old, new))
     path = cfg.replace(old, new)

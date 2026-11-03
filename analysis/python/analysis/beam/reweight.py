@@ -7,12 +7,36 @@ from python.analysis.plotting import plots
 
 
 def calculate_weights(beam_inst_p : np.ndarray, func : str, params : list, truncate : int = 10):
+    """Evaluate the inverse of a named fitting function and cap weights at ``truncate``.
+
+        Args:
+            beam_inst_p (np.ndarray): Reconstructed beam-instrument momentum values.
+            func (str): Name of a function in ``analysis.fitting`` to evaluate.
+            params (list): Positional parameters passed to that function after momentum.
+            truncate (int): Maximum returned weight.
+
+        Returns:
+            Any: Elementwise reciprocal fit values, capped above at ``truncate``.
+    """
     weights = 1/getattr(fitting, func)(beam_inst_p, *params)
     weights = np.where(weights > truncate, truncate, weights)
     return weights
 
 
 def reweight(p_mc, p_data, p_nominal : float, bins : int = 10, p_range : np.array = np.array([0.75, 1.25]), book : plotting.PlotBook = plotting.PlotBook.null()):
+    """Fit candidate functions to the binned, normalized data-to-MC momentum ratio.
+
+        Args:
+            p_mc (Any): Simulated beam-instrument momentum values.
+            p_data (Any): Data beam-instrument momentum values.
+            p_nominal (float): Central momentum that scales the histogram range.
+            bins (int): Number of momentum histogram bins.
+            p_range (np.array): Multiplicative lower and upper range factors around ``p_nominal``.
+            book (plotting.PlotBook): Plot book used to save ratio and fit figures.
+
+        Returns:
+            Any: Fit results keyed by candidate function name.
+    """
     p_mc, edges = np.histogram(np.array(p_mc), bins, range = p_nominal * p_range)
     p_data = np.histogram(np.array(p_data), bins, range = p_nominal * p_range)[0]
 
@@ -38,6 +62,17 @@ def reweight(p_mc, p_data, p_nominal : float, bins : int = 10, p_range : np.arra
 
 
 def reweight_results(sideband_mc : dict, sideband_data : dict, args : argparse.Namespace, bins : int, reweight_fits : dict, reweight_func : str, book : plotting.PlotBook = plotting.PlotBook.null()):
+    """Calculate sideband-MC momentum weights and save nominal and reweighted data/MC comparisons.
+
+        Args:
+            sideband_mc (dict): Sideband simulation arrays and tags, including ``p_inst``.
+            sideband_data (dict): Sideband data arrays and tags, including ``p_inst``.
+            args (argparse.Namespace): Analysis settings for momentum, normalization, and weight strength.
+            bins (int): Number of bins in the momentum comparison plots.
+            reweight_fits (dict): Fit results indexed by reweight-function name.
+            reweight_func (str): Fit function used to calculate event weights.
+            book (plotting.PlotBook): Plot book used to save the comparisons.
+    """
     weights = calculate_weights(np.array(sideband_mc["p_inst"]), reweight_func, reweight_fits[reweight_func][0], args.beam_reweight["strength"])
 
     plot_range = [args.beam_momentum * 0.75, args.beam_momentum * 1.25]
@@ -56,6 +91,15 @@ def reweight_results(sideband_mc : dict, sideband_data : dict, args : argparse.N
 
 
 def smearing_factors(sample, weights : np.array = None):
+    """Calculate the weighted mean and standard deviation of reconstructed beam momentum.
+
+        Args:
+            sample (Any): Sample containing ``recoParticles.beam_inst_momentum``.
+            weights (np.array): Optional event weights used in both averages.
+
+        Returns:
+            Any: Weighted momentum mean and standard deviation.
+    """
     average = np.average(sample.recoParticles.beam_inst_momentum, weights=weights)
     variance = np.average((sample.recoParticles.beam_inst_momentum-average)**2, weights=weights)
     std = np.sqrt(variance)

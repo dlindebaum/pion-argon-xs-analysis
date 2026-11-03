@@ -15,6 +15,8 @@ from python.analysis import bethe_bloch, beam, common, fitting, geometry, io, ki
 @dataclass
 class AnalysisInput:
     # masks
+    """Container for event masks, reco/truth observables, and optional event metadata used in cross-section analyses.
+    """
     regions : dict[np.ndarray]
     inclusive_process : dict[np.ndarray]
     exclusive_process : dict[np.ndarray]
@@ -60,20 +62,40 @@ class AnalysisInput:
 
     @property
     def has_regions(self):
+        """Report whether reconstructed region masks are stored as a dictionary.
+
+            Returns:
+                Any: ``True`` when ``regions`` has exactly type ``dict``.
+        """
         return type(self.regions) == dict
 
     @property
     def has_exclusive_process(self):
+        """Report whether exclusive-process masks are stored as a dictionary.
+
+            Returns:
+                Any: ``True`` when ``exclusive_process`` has exactly type ``dict``.
+        """
         return type(self.exclusive_process) == dict 
 
     @property
     def region_labels(self):
+        """Return the names of stored reconstructed regions, requiring region masks to be defined.
+
+            Returns:
+                Any: Region dictionary keys in insertion order.
+        """
         if not self.has_regions:
             raise Exception("Analysis input does not have well defined regions.")
         return list(self.regions.keys())
 
     @property
     def process_labels(self):
+        """Return the names of stored exclusive processes, requiring process masks to be defined.
+
+            Returns:
+                Any: Exclusive-process dictionary keys in insertion order.
+        """
         if not self.has_exclusive_process:
             raise Exception("Analysis input does not have well defined exclusive processes.")
         return list(self.exclusive_process.keys())
@@ -81,6 +103,8 @@ class AnalysisInput:
 
     def __post_init__(self):
         # need to set defaults for fields otherwise they are undefined (and python doesnt complain...)
+        """Initialize region and process IDs from their corresponding mask dictionaries.
+        """
         self.region_id = None
         self.process_id = None
 
@@ -91,6 +115,11 @@ class AnalysisInput:
 
 
     def __len__(self):
+        """Return the length of the first available event-level observable or weight array.
+
+            Returns:
+                Any: Number of entries in the first non-``None`` candidate field, or ``None`` if none exists.
+        """
         for o in ["outside_tpc_reco", "outside_tpc_true", "track_length_reco", "KE_int_reco", "KE_init_reco", "mean_track_score", "track_length_true", "KE_int_true", "KE_init_true", "weights"]:
             if getattr(self, o) is not None:
                 return len(getattr(self, o))
@@ -100,8 +129,8 @@ class AnalysisInput:
     def to_file(self, file : str):
         """ Save to dill file.
 
-        Args:
-            file (str): file path.
+            Args:
+                file (str): file path.
         """
         io.write_dill(file, self)
         return
@@ -110,8 +139,8 @@ class AnalysisInput:
     def to_root_file(self, file : str):
         """ Save to a ROOT File as a flat TTree.
 
-        Args:
-            file (str): file path.
+            Args:
+                file (str): file path.
         """
         file_writer = io.RootIO(file)
         file_writer.write_data(vars(self), None, True)
@@ -122,8 +151,9 @@ class AnalysisInput:
         """ Save to regions and samples to multiple ROOT Files, each as a flat TTree.
             Compatible with MaCh3 ROOT input files.
 
-        Args:
-            file (str): file path.
+            Args:
+                directory (str): Parent directory for the output folder.
+                name (str): Sample label used in the output folder and ROOT filenames.
         """
         dir_name = f"{directory}/root_analysis_input_{name}"
         os.makedirs(dir_name, exist_ok = True)
@@ -143,11 +173,11 @@ class AnalysisInput:
     def from_file(file : str) -> "AnalysisInput": #* seems a bit extra but why not
         """ Load analysis input from dill file.
 
-        Args:
-            file (str): file path.
+            Args:
+                file (str): file path.
 
-        Returns:
-            AnalysisInput: analysis input.
+            Returns:
+                'AnalysisInput': The object loaded from the file.
         """
         obj = io.read_dill(file)
         if type(obj) == AnalysisInput:
@@ -159,15 +189,15 @@ class AnalysisInput:
     def n_interact(self, energy_slice : slices.Slices, process: np.ndarray, mask : np.ndarray = None, reco : bool = True, weights : np.ndarray = None) -> np.ndarray:
         """ Calculate exclusive interaction histogram using the energy slice method.
 
-        Args:
-            energy_slice (slices.Slices): energy slices
-            process (np.ndarray): exclusive process mask
-            mask (np.ndarray, optional): additional mask. Defaults to None.
-            reco (bool, optional): use reco KE?. Defaults to True.
-            weights (np.ndarray, optional): event weights. Defaults to None.
+            Args:
+                energy_slice (slices.Slices): energy slices
+                process (np.ndarray): exclusive process mask
+                mask (np.ndarray): additional mask. Defaults to None.
+                reco (bool): use reco KE?. Defaults to True.
+                weights (np.ndarray): event weights. Defaults to None.
 
-        Returns:
-            np.ndarray: exclusive interaction histogram.
+            Returns:
+                np.ndarray: exclusive interaction histogram.
         """
         common.deprecation_warning()
         if mask is None: mask = np.ones(len(self.KE_int_reco), dtype = bool)
@@ -186,12 +216,12 @@ class AnalysisInput:
     def id_from_samples(self, sample_masks : dict[np.ndarray], uncategorised : int = -1) -> ak.Array:
         """ Create ID from sample masks. Counts from 0 and includes override for uncategorised events.
 
-        Args:
-            sample_masks (dict[np.ndarray]): sample masks, such as reco regions.
-            uncategorised (int, optional): id for uncategorised objects. Defaults to -1.
+            Args:
+                sample_masks (dict[np.ndarray]): sample masks, such as reco regions.
+                uncategorised (int): id for uncategorised objects. Defaults to -1.
 
-        Returns:
-            ak.Array: _description_
+            Returns:
+                ak.Array: Per-event integer ID, set by the last matching mask in insertion order or to ``uncategorised`` if none matches.
         """
         id = ak.zeros_like(list(sample_masks.values())[0]) + uncategorised
         for i, v in enumerate(sample_masks.values()):
@@ -203,11 +233,11 @@ class AnalysisInput:
     def create_analysis_input_toy(toy : Toy) -> "AnalysisInput":
         """ Create analysis input from a toy sample.
 
-        Args:
-            toy (Toy): toy sample
+            Args:
+                toy (Toy): toy sample
 
-        Returns:
-            AnalysisInput: analysis input object.
+            Returns:
+                'AnalysisInput': An analysis-input container populated from the toy's masks and observables.
         """
         common.deprecation_warning() #! function wont be supported further.
         inclusive_events = np.array((toy.df.inclusive_process != "decay").values)
@@ -260,15 +290,19 @@ class AnalysisInput:
     def create_analysis_input_ntuple(events : ntuple.Data, upstream_energy_loss_params : dict, reco_regions : dict[np.ndarray] = None, true_regions : dict[np.ndarray] = None, mc_reweight_params : dict = None, mc_reweight_stength : float = 3, fiducial_volume : list[float] = [0, 700], upstream_loss_func : callable = fitting.poly2d, energy_method : str = "track") -> "AnalysisInput":
         """ Create analysis input from an ntuple sample.
 
-        Args:
-            events (ntuple.Data): ntuple sample
-            upstream_energy_loss_params (dict): upstream energy loss correction
-            reco_regions (dict[np.ndarray]): reco region masks
-            true_regions (dict[np.ndarray], optional): true process masks. Defaults to None.
-            mc_reweight_params (dict, optional): mc reweight parameters. Defaults to None.
+            Args:
+                events (ntuple.Data): ntuple sample
+                upstream_energy_loss_params (dict): Parameters for correcting reconstructed front-face kinetic energy.
+                reco_regions (dict[np.ndarray]): Reconstructed region masks, if available.
+                true_regions (dict[np.ndarray]): Truth-level process masks, if available.
+                mc_reweight_params (dict): Parameters used to calculate optional MC beam-momentum weights.
+                mc_reweight_stength (float): Strength passed to the beam-weight fit function.
+                fiducial_volume (list[float]): Lower and upper z boundaries used for fiducial selection and truncation.
+                upstream_loss_func (callable): Fit function used to calculate upstream energy loss.
+                energy_method (str): Method used to reconstruct end energy from calorimetry.
 
-        Returns:
-            AnalysisInput: analysis input.
+            Returns:
+                'AnalysisInput': Reconstructed/truth observables, selection masks, and optional MC weights for the ntuple.
         """
         if mc_reweight_params is not None:
             weights = beam.reweight.calculate_weights(events.recoParticles.beam_inst_momentum, "gaussian", mc_reweight_params, mc_reweight_stength)
@@ -388,10 +422,23 @@ class AnalysisInput:
 
     @staticmethod
     def req_fields():
+        """List dataclass fields accepted by the ``AnalysisInput`` initializer.
+
+            Returns:
+                Any: Names of fields whose dataclass ``init`` flag is true.
+        """
         return [k for k, v in AnalysisInput.__dataclass_fields__.items() if v.init is True]
 
     @staticmethod
     def concatenate(ais : list["AnalysisInput"]):
+        """Merge event-level fields from several analysis inputs into one container.
+
+            Args:
+                ais (list['AnalysisInput']): Analysis-input containers to concatenate.
+
+            Returns:
+                Any: A new ``AnalysisInput`` containing merged fields; all-None list fields become ``None``.
+        """
         fields = processing.merge_outputs([{f : getattr(a, f) for f in AnalysisInput.req_fields()} for a in ais])
 
         # check for null entries after merging outputs (null entries are list of Nones)
@@ -405,11 +452,11 @@ class AnalysisInput:
     def select_sample(self, mask : ak.Array) -> "AnalysisInput":
         """ Select a subset of the sample, creating a new AnalysisInput.
 
-        Args:
-            mask (ak.Array): Sample to select, can be a boolean mask or list of indices.
+            Args:
+                mask (ak.Array): Sample to select, can be a boolean mask or list of indices.
 
-        Returns:
-            AnalysisInput: Selected sample.
+            Returns:
+                'AnalysisInput': New container containing values selected by the mask.
         """
         selection = {}
         for field in AnalysisInput.req_fields():
@@ -433,12 +480,12 @@ class AnalysisInput:
     def create_train_test_samples(self, seed : int, train_fraction : float = None) -> dict:
         """ Split analysis input into two samples
 
-        Args:
-            seed (int): seed for random permutation
-            train_fraction (float, optional): fraction of events to assign to train, if None, sample is split 50/50. Defaults to None.
+            Args:
+                seed (int): seed for random permutation
+                train_fraction (float): fraction of events to assign to train, if None, sample is split 50/50. Defaults to None.
 
-        Returns:
-            dict: train and test samples.
+            Returns:
+                dict: train and test samples.
         """
         rng = np.random.default_rng(seed)
         sample = rng.permutation(len(self.KE_init_reco))
@@ -455,14 +502,14 @@ class AnalysisInput:
     def create_histograms(self, energy_slice : slices.Slices, exclusive_process : str, reco : bool, mask : np.ndarray = None) -> dict[np.ndarray]:
         """ Calculate Histogrames required for the cross section measurement using energy slicing. Note exclusive interaction histogram is without background subtraction.
 
-        Args:
-            energy_slice (slices.Slices): energy slices
-            exclusive_process (str): exclusive process
-            reco (bool): use reco information?
-            mask (np.ndarray, optional): additional mask. Defaults to None.
+            Args:
+                energy_slice (slices.Slices): energy slices
+                exclusive_process (str): exclusive process
+                reco (bool): use reco information?
+                mask (np.ndarray): additional mask. Defaults to None.
 
-        Returns:
-            dict[np.ndarray]: histograms
+            Returns:
+                dict[np.ndarray]: histograms
         """
         common.deprecation_warning()
         KE_int = self.KE_int_true if reco is False else self.KE_int_reco
@@ -496,11 +543,11 @@ class AnalysisInput:
     def get_outside_mask(self, fiducial_volume : tuple[float]) -> ak.Array:
         """ Get the mask for events not in the ROI for the analysis. Considers FV and TPC boundary masks.
 
-        Args:
-            fiducial_volume (tuple[float]): Fiducial volume, if None, ignores the fiducial volume mask.
+            Args:
+                fiducial_volume (tuple[float]): Fiducial volume, if None, ignores the fiducial volume mask.
 
-        Returns:
-            ak.Array: outside ROI mask.
+            Returns:
+                ak.Array: outside ROI mask.
         """
         if fiducial_volume is not None:
             init_mask = self.end_z_true < min(fiducial_volume)
@@ -515,13 +562,13 @@ def beam_pion_selection(events : ntuple.Data, args : argparse.Namespace | dict, 
     """ Apply beam pion selection to ntuples.
         #! This needs to be somewhere else. It really is a helper to apply any beam selection from configuration to a sample (perhaps in ntuples or selection/common?)
 
-    Args:
-        events (ntuple.Data): analysis ntuple
-        args (cross_section.argparse.Namespace): analysis configuration
-        is_mc (bool): is the ntuple mc or data?
+        Args:
+            events (ntuple.Data): analysis ntuple
+            args (argparse.Namespace | dict): analysis configuration
+            is_mc (bool): is the ntuple mc or data?
 
-    Returns:
-        ntuple.Data: selected events.
+        Returns:
+            ntuple.Data: selected events.
     """
 
     args_c = common.args_to_dict(args)
@@ -558,13 +605,13 @@ def beam_pion_selection(events : ntuple.Data, args : argparse.Namespace | dict, 
 def create_analysis_input(sample : ntuple.Data, args : argparse.Namespace | dict, is_mc : bool) -> AnalysisInput:
     """ Create analysis input from ntuple sample.
 
-    Args:
-        sample (ntuple.Data): sample
-        args (cross_section.argparse.Namespace): analysis configurations
-        is_mc (bool): is the sample mc?
+        Args:
+            sample (ntuple.Data): Toy or ntuple data from which to construct the container.
+            args (argparse.Namespace | dict): Configuration for selection, regions, energy corrections, and weights.
+            is_mc (bool): Whether the ntuple should use MC selections and truth-process regions.
 
-    Returns:
-        cross_section.AnalysisInput: analysis input.
+        Returns:
+            AnalysisInput: analysis input.
     """
     args_c = common.args_to_dict(args)
 
@@ -586,6 +633,16 @@ def create_analysis_input(sample : ntuple.Data, args : argparse.Namespace | dict
 
 
 def create_analysis_input_mc_true_beam(mc : ntuple.Data, args : argparse.Namespace | dict, uncategorised : bool = False):
+    """ Create analysis input mc true beam.
+
+        Args:
+            mc (ntuple.Data): MC ntuple whose leading true particle is selected as the beam pion.
+            args (argparse.Namespace | dict): Configuration for process definitions, reweighting, and energy corrections.
+            uncategorised (bool): Include events not matched by a configured process definition.
+
+        Returns:
+            Any: Analysis input populated with the true-beam MC sample and its truth-process masks.
+    """
     args_c = common.args_to_dict(args)
 
     masks = [mc.true_particles.pdg[:, 0] == 211]

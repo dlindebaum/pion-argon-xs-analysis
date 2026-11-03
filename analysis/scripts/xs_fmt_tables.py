@@ -100,6 +100,11 @@ signal ={
 
 
 def criteria_defs():
+    """ Build the configured selection-cut definitions.
+
+        Returns:
+            dict[str, dict | None]: Cut definitions keyed by selection, including None for selections without cuts.
+    """
     defs = {}
     for k,v in selections.items():
         s_args = getattr(args, v)["mc_arguments"]
@@ -114,6 +119,14 @@ def criteria_defs():
 
 
 def fmt_op(op):
+    """ Shorten equality operators for use in formatted selection labels.
+
+        Args:
+            op (str): Comparison operator to format.
+
+        Returns:
+            str: The shortened equality operator or the unchanged operator.
+    """
     if op == "==":
         return op[0]
     else:
@@ -121,6 +134,15 @@ def fmt_op(op):
 
 
 def selection_names_criteria(df : pd.DataFrame, name : str):
+    """ Map selection rows to display names that include their configured cuts.
+
+        Args:
+            df (pd.DataFrame): Table whose index contains selection names.
+            name (str): Selection category used to look up configured cut definitions.
+
+        Returns:
+            Original: selection names mapped to formatted display labels.
+    """
     defs = criteria_defs()
     # print(f"{defs=}")
     fancy_names = {}
@@ -146,12 +168,31 @@ def selection_names_criteria(df : pd.DataFrame, name : str):
 
 
 def eff_err(p, n):
+    """ Calculate cumulative binomial efficiency uncertainties.
+
+        Args:
+            p (array-like): Efficiency values for successive selections.
+            n (array-like): Corresponding event counts.
+
+        Returns:
+            pd.Series: Cumulative uncertainties combined in quadrature.
+    """
     p_err = (p * (1 - p) / n)**0.5
     p_err = pd.Series([common.quadsum(p_err[:i+1]) for i in range(len(p_err))])
     return p_err
 
 
 def create_tables(path : str, selection_name : str, signal : str = None):
+    """ Load and prepare count, purity, and efficiency tables for one selection.
+
+        Args:
+            path (str): Analysis work directory containing the MC and data tables.
+            selection_name (str): Selection directory and key to load.
+            signal (str): Signal column to format, or None to omit the signal table.
+
+        Returns:
+            tuple[pd.DataFrame | None, pd.DataFrame | None]: Signal tables and total-count tables; either may be None when unavailable.
+    """
 
     tables_mc = {}
     tables_data = {}
@@ -213,7 +254,13 @@ def create_tables(path : str, selection_name : str, signal : str = None):
     return signal_tables, total_counts
 
 
-def FormatTable(filename, bf_column : bool = True):
+def format_table(filename, bf_column : bool = True):
+    """ Format a LaTeX table file in place with column alignment and horizontal rules.
+
+        Args:
+            filename (str): Path to the LaTeX table file.
+            bf_column (bool): Whether to bold the first column and left-align it.
+    """
     with open(filename) as file:
         lines = list(file.readlines())
         new_lines = []
@@ -267,6 +314,14 @@ def FormatTable(filename, bf_column : bool = True):
 
 
 def bq_xy(values : dict):
+    """ Format beam-quality fit values for the transverse position components.
+
+        Args:
+            values (dict): Fit values and uncertainties keyed by component.
+
+        Returns:
+            Formatted: x- and y-position fit values.
+    """
     t = {}
     for i, e in zip(["mu", "sigma"], [1, 2]):
         for j in ["x", "y"]:
@@ -276,6 +331,14 @@ def bq_xy(values : dict):
 
 
 def bq_angle(values : dict):
+    """ Format beam-quality fit values for the direction components.
+
+        Args:
+            values (dict): Direction means and uncertainties keyed by component.
+
+        Returns:
+            Formatted: direction fit values for the x, y, and z components.
+    """
     t = {}
     for j in ["x", "y", "z"]:
         v = values[f"mu_dir_{j}"]
@@ -286,6 +349,14 @@ def bq_angle(values : dict):
 
 
 def brw_table(brw : dict):
+    """ Build a one-row table of beam-reweighting fit parameters.
+
+        Args:
+            brw (dict): Parameters with value and error entries.
+
+        Returns:
+            pd.DataFrame: One-row table of rounded fit parameters.
+    """
     table = {}
     for i, p in enumerate(brw):
         table[f"$p_{{{i}}}$"] = common.round_value_to_error(brw[p]["value"], brw[p]["error"])
@@ -294,6 +365,14 @@ def brw_table(brw : dict):
     return table
 
 def upl_table(upl : dict):
+    """ Build a one-row table of upstream-loss fit parameters.
+
+        Args:
+            upl (dict): Parameter values and errors keyed by parameter name.
+
+        Returns:
+            pd.DataFrame: One-row table of rounded fit parameters.
+    """
     table = {}
     for i in range(args.upstream_loss_response.n_params):
         table[f"$p_{{{i}}}$"] = common.round_value_to_error(upl["value"][f"p{i}"], upl["error"][f"p{i}"])
@@ -301,6 +380,14 @@ def upl_table(upl : dict):
     return table
 
 def copy_table(source : str, dest : str, new_name : str = None, bf_cols : bool = True):
+    """ Copy a LaTeX table to a destination and format the copied file.
+
+        Args:
+            source (str): Path to the source LaTeX file.
+            dest (str): Destination directory.
+            new_name (str): Optional destination filename.
+            bf_cols (bool): Whether to bold and left-align the first column.
+    """
     name = source.split("/")[-1]
 
     if new_name: name = new_name.split(".tex")[0] + ".tex"
@@ -309,11 +396,19 @@ def copy_table(source : str, dest : str, new_name : str = None, bf_cols : bool =
     with open(source) as f:
         with open(f"{dest}{name}", "w") as of:
             of.writelines(f.readlines())
-    FormatTable(f"{dest}{name}", bf_cols)
+    format_table(f"{dest}{name}", bf_cols)
     return
 
 
 def brw_selection(path):
+    """ Combine and relabel beam-reweighting data and simulation selections.
+
+        Args:
+            path (str): Analysis work directory containing beam-reweighting tables.
+
+        Returns:
+            pd.DataFrame: Combined selection table with display-friendly row names.
+    """
     selection_data = read_hdf5(f"{path}/beam_reweight/selection_data.hdf5")
     selection_mc = read_hdf5(f"{path}/beam_reweight/selection_mc.hdf5")
 
@@ -333,15 +428,15 @@ def main(args : argparse.Namespace):
 
     os.makedirs(f"{out}upstream/", exist_ok = True)
     upl_table(read_json(f"{path}/upstream_loss/fit_parameters.json")).style.hide(axis = "index").to_latex(f"{out}upstream/fit.tex")
-    FormatTable(f"{out}upstream/fit.tex", False)
+    format_table(f"{out}upstream/fit.tex", False)
 
     os.makedirs(f"{out}beam_reweight/", exist_ok = True)
     brw_selection(path).style.to_latex(f"{out}beam_reweight/selection.tex")
-    FormatTable(f"{out}beam_reweight/selection.tex")
+    format_table(f"{out}beam_reweight/selection.tex")
 
     brw = brw_table(read_json(f"{path}/beam_reweight/gaussian.json"))
     brw.style.hide(axis = "index").to_latex(f"{out}/beam_reweight/fit.tex")
-    FormatTable(f"{out}/beam_reweight/fit.tex", False)
+    format_table(f"{out}/beam_reweight/fit.tex", False)
 
     fmt_tables = {}
     for s in signal:
@@ -353,9 +448,9 @@ def main(args : argparse.Namespace):
         os.makedirs(outp, exist_ok = True)
         if fmt_tables[f][0] is not None:
             fmt_tables[f][0].style.format(precision = 3).to_latex(f"{outp}/signal_table.tex")
-            FormatTable(f"{outp}/signal_table.tex")
+            format_table(f"{outp}/signal_table.tex")
         fmt_tables[f][1].style.format(precision = 1).to_latex(f"{outp}/total_counts.tex")
-        FormatTable(f"{outp}/total_counts.tex") 
+        format_table(f"{outp}/total_counts.tex") 
 
 
     bq = {i : read_json(f"{path}/beam_quality/{i}_beam_quality_fit_values.json") for i in ["mc", "data"]}
@@ -365,9 +460,9 @@ def main(args : argparse.Namespace):
     t_xy = pd.DataFrame([bq_xy(bq[m]) for m in ["mc", "data"]], index = ["MC", "Data"])
     t_angle = pd.DataFrame([bq_angle(bq[m]) for m in ["mc", "data"]], index = ["MC", "Data"])
     t_xy.style.to_latex(f"{outp}/xy.tex")
-    FormatTable(f"{outp}/xy.tex")
+    format_table(f"{outp}/xy.tex")
     t_angle.style.to_latex(f"{outp}/angle.tex")
-    FormatTable(f"{outp}/angle.tex")
+    format_table(f"{outp}/angle.tex")
 
     for f in common.ls_recursive(f"{path}/shower_energy_correction/"):
         if f.split("/")[-1].split(".")[0] == "table":

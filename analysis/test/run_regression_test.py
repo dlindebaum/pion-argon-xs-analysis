@@ -18,11 +18,11 @@ from python.analysis.io import write_json, read_json
 from python.analysis.common import timer
 
 def file_search(path : str, data_cfg : dict) -> None:
-    """ Search for files based on the names provided in the configuration, then update the paths in the configuration data.
+    """ Find configured input files recursively and update their paths in the configuration.
 
-    Args:
-        path (str): Path to search for. Search is done recursively.
-        data_cfg (dict): Configuration data.
+        Args:
+            path (str): Root directory to search recursively.
+            data_cfg (dict): File-configuration entries whose file paths should be resolved.
     """
     for f in data_cfg:
         name = f["file"].split("/")[-1]

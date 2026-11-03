@@ -41,12 +41,12 @@ from rich import print
 def compute_quantities(mc : ntuple.Data, args : dict) -> dict[dict, dict]:
     """ Compute Quantities used for the cross section measurement.
 
-    Args:
-        mc (ntuple.Data): mc events.
-        args (dict): application arguments.
+        Args:
+            mc (ntuple.Data): mc events.
+            args (dict): application arguments.
 
-    Returns:
-        dict[dict, dict]: dictionary of quantities, one for reco and truth.
+        Returns:
+            dict[dict, dict]: dictionary of quantities, one for reco and truth.
     """
     with alive_bar(title = "computng reco quantities") as bar:
         reco_upstream_loss = beam.upstream.upstream_energy_loss(kinematics.KE(mc.recoParticles.beam_inst_momentum, Particle.from_pdgid(211).mass), args["upstream_loss_correction_params"]["value"], args["upstream_loss_response"])
@@ -67,6 +67,19 @@ def compute_quantities(mc : ntuple.Data, args : dict) -> dict[dict, dict]:
 
 
 def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
+    """ Collect true/reconstructed toy-model quantities for one MC ntuple chunk.
+
+        Args:
+            i (int): Index of the chunk being processed.
+            file_desc (ntuple.FileDescriptor): Descriptor for the input ntuple file.
+            n_events (int): Maximum number of events to read.
+            start (int): First event index to read.
+            selected_events (Any): Optional event subset supplied by the processing runner.
+            args (dict): Resolved selection, energy-loss, and region configuration.
+
+        Returns:
+            dict: Kinematic quantities, pion masks, region assignments, and selection observables.
+    """
     mc = ntuple.Data(file_desc, n_events, start)
 
     true_pion_mask = mc.true_particles.pdg[:, 0] == 211
@@ -92,6 +105,15 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
 
 def create_fit_tables(params, errors):
+    """ Format fitted parameter values and uncertainties as a one-row table.
+
+        Args:
+            params (Sequence[float]): Fitted parameter values.
+            errors (Sequence[float]): Uncertainties corresponding to the parameters.
+
+        Returns:
+            pd.DataFrame: One-row table of formatted parameter estimates.
+    """
     table = {}
     for i, (p, e) in enumerate(zip(params, errors)):
         sf = len(str(float(f"{e:.1g}")))
@@ -107,18 +129,18 @@ def create_fit_tables(params, errors):
 def resolution_study(plot_book : plotting.PlotBook, reco_quantity : ak.Array, true_quantity : ak.Array, mask : ak.Array = None, label = "quantity(units)", plot_range = None, residual_range = None, fit_functions : list[fitting.FitFunction] = [fitting.gaussian, fitting.student_t]) -> dict:
     """ Study of residuals of cross section inputs, used to smear toy observables. Done by fitting a curve to the residual, returning the fit parameters.
 
-    Args:
-        plot_book (plotting.PlotBook): object to save plots to pdf file
-        reco_quantity (ak.Array): reco quantity
-        true_quantity (ak.Array): truth quantity
-        mask (ak.Array, optional): mask to apply to quantity. Defaults to None.
-        label (str, optional): plot label. Defaults to "quantity(units)".
-        plot_range (_type_, optional): plot range. Defaults to None.
-        residual_range (_type_, optional): range of residual to fit to. Defaults to None.
-        fit_functions (list[fitting.FitFunction], optional): fit functions to try fit to the residuals. Defaults to [fitting.gaussian, fitting.student_t].
+        Args:
+            plot_book (plotting.PlotBook): object to save plots to pdf file
+            reco_quantity (ak.Array): reco quantity
+            true_quantity (ak.Array): truth quantity
+            mask (ak.Array): mask to apply to quantity. Defaults to None.
+            label (str, optional): plot label. Defaults to "quantity(units)".
+            plot_range (_type_, optional): plot range. Defaults to None.
+            residual_range (_type_, optional): range of residual to fit to. Defaults to None.
+            fit_functions (list[fitting.FitFunction]): fit functions to try fit to the residuals. Defaults to [fitting.gaussian, fitting.student_t].
 
-    Returns:
-        dict: fit parameters for each fit functions. 
+        Returns:
+            dict: fit parameters for each fit functions.
     """
     residual = reco_quantity - true_quantity
     if mask is not None:
@@ -165,11 +187,13 @@ def smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : 
     """ Smearing study, fits functions to residuals of cross section quantities and saves the fit parameters of the best fit to file.
         (Best is double crystal ball).
 
-    Args:
-        cross_section_quantities (dict): cross section quantities
-        true_pion_mask (ak.Array): true inelastic pion mask
-        args (argparse.Namespace): application arguments
-        labels (dict): plot x labels
+        Args:
+            cross_section_quantities (dict): cross section quantities
+            true_pion_mask (ak.Array): true inelastic pion mask
+            args (argparse.Namespace): application arguments
+            labels (dict): plot x labels
+            out (str): Output directory for plots and fitted parameter files.
+
     """
     selected_quantities = {}
     for k, v in cross_section_quantities.items():
@@ -200,11 +224,11 @@ def smearing(cross_section_quantities : dict, true_pion_mask : ak.Array, args : 
 def get_total_pion_inel_masks(mc : ntuple.Data) -> ak.Array:
     """ Returns the mask which selects true inelastic pi+.
 
-    Args:
-        mc (ntuple.Data): mc events.
+        Args:
+            mc (ntuple.Data): mc events.
 
-    Returns:
-        ak.Array: mask.
+        Returns:
+            ak.Array: mask.
     """
     particle_tags = tags.generate_true_beam_particle_tags(mc)
     return particle_tags["$\\pi^{+}$:inel"].mask
@@ -213,14 +237,14 @@ def get_total_pion_inel_masks(mc : ntuple.Data) -> ak.Array:
 def get_total_pion_counts(pion_mask : ak.Array, quantities : dict[str, ak.Array], bins : dict[str, np.array], ranges : dict[str, list]) -> np.array:
     """ Counts number of pi+ in bins of each quantity.
 
-    Args:
-        pion_mask (ak.Array): pion mask.
-        quantities (dict[str, ak.Array]): quantities.
-        bins (dict[str, np.array]): bins for each quantity.
-        ranges (dict[str, list]): ranges for each quantity.
+        Args:
+            pion_mask (ak.Array): pion mask.
+            quantities (dict[str, ak.Array]): quantities.
+            bins (dict[str, np.array]): bins for each quantity.
+            ranges (dict[str, list]): ranges for each quantity.
 
-    Returns:
-        np.array: _description_
+        Returns:
+            np.array: pi+ counts.
     """
     counts = {q : np.histogram(np.array(quantities[q][pion_mask]), bins[q], range = ranges[q])[0] for q in quantities}
     return counts
@@ -229,13 +253,16 @@ def get_total_pion_counts(pion_mask : ak.Array, quantities : dict[str, ak.Array]
 def beam_selection_efficiency(quantities : dict, pion_inel_mask : ak.Array, beam_selection_mask : ak.Array, args : argparse.Namespace, ranges : dict, labels : dict, bins : dict, out : str):
     """ Study which looks at the beam selection efficiency as a function of each cross section quantity, then saves the per bin efficiencies to file to use for the toy simulation.
 
-    Args:
-        quantities (dict): cross section quantities
-        pion_inel_mask (ak.Array): true inelastic pion mask without any selection
-        args (argparse.Namespace): application arguments
-        ranges (dict): plot ranges
-        labels (dict): plot xlabels 
-        bins (dict): plot bins
+        Args:
+            quantities (dict): Cross-section observables, separated by reconstructed and true values.
+            pion_inel_mask (ak.Array): true inelastic pion mask without any selection
+            beam_selection_mask (ak.Array): Mask identifying events passing beam selection.
+            args (argparse.Namespace): application arguments
+            ranges (dict): plot ranges
+            labels (dict): plot xlabels
+            bins (dict): plot bins
+            out (str): Output directory for efficiency plots and tables.
+
     """
     initial_counts_true = get_total_pion_counts(pion_inel_mask, quantities, bins, ranges)
 
@@ -272,12 +299,14 @@ def beam_selection_efficiency(quantities : dict, pion_inel_mask : ak.Array, beam
 
 @common.timer
 def reco_region_selection(region_selections : dict[dict], args : argparse.Namespace, out : str):
-    """ Study which computes a correlation matrix ofthe event faction for reco regions and true regions.
-        Saved to file to be used in toy simulation.
+    """ Measure reconstructed-region fractions and region-identification efficiencies.
+                    Save the resulting fractions and diagnostic plots for toy simulation.
 
-    Args:
-        mc (ntuple.Data): mc events.
-        args (argparse.Namespace): application arguments.
+        Args:
+            region_selections (dict[dict]): Region assignment mappings for each selection scenario.
+            args (argparse.Namespace): Resolved application configuration.
+            out (str): Output directory for region plots and fraction tables.
+
     """
     os.makedirs(out + "reco_regions/", exist_ok = True)
     pdf = plotting.PlotBook(out + "reco_regions/reco_regions_study")
@@ -323,11 +352,14 @@ def reco_region_selection(region_selections : dict[dict], args : argparse.Namesp
 
 @common.timer
 def mean_track_scoreKDE(mean_track_score : ak.Array, true_processes : dict[ak.Array], args : argparse.Namespace, out : str):
-    """ Derives mean track score kernels from mc.
+    """ Fit and save mean-track-score kernel density estimates by true process.
 
-    Args:
-        mc (ntuple.Data): mc sample
-        args (argparse.Namespace): application arguments.
+        Args:
+            mean_track_score (ak.Array): Event-level mean reconstructed track scores.
+            true_processes (dict[ak.Array]): Masks identifying true processes.
+            args (argparse.Namespace): application arguments.
+            out (str): Output directory for KDE data and diagnostic plots.
+
     """
     true_processes_filtered = {k : v for k, v in true_processes.items() if k != "uncategorised"}
     process_tags = tags.exclusive_process_tags(true_processes_filtered)
@@ -356,15 +388,15 @@ def mean_track_scoreKDE(mean_track_score : ak.Array, true_processes : dict[ak.Ar
 def fit_beam_profile(KE_init : np.array, func : fitting.FitFunction, KE_range : list, bins : int, book : plotting.PlotBook = plotting.PlotBook.null()) -> dict:
     """ Fit the MC beam profile for use increating KE init.
 
-    Args:
-        KE_init (np.array): initial kinetic energy.
-        func (fitting.FitFunction): fit function
-        KE_range (list): kinetic energy range
-        bins (int): bin numbers
-        book (plotting.PlotBook, optional): plot book. Defaults to plotting.PlotBook.null().
+        Args:
+            KE_init (np.array): Initial kinetic energies used to construct the beam profile.
+            func (fitting.FitFunction): Function fitted to the kinetic-energy distribution.
+            KE_range (list): Lower and upper kinetic-energy bounds for the fit.
+            bins (int): Number of bins in the fit histogram.
+            book (plotting.PlotBook): Plot book receiving diagnostic plots.
 
-    Returns:
-        dict: _description_
+        Returns:
+            dict: Serialized fit parameters and their formatted table.
     """
     x = np.linspace(min(KE_range), max(KE_range), bins)
     y = np.histogram(KE_init, bins = x)[0]
@@ -385,14 +417,16 @@ def fit_beam_profile(KE_init : np.array, func : fitting.FitFunction, KE_range : 
 
 @common.timer
 def beam_profile_study(quantities : dict, args : argparse.Namespace, true_beam_mask : ak.Array, func : fitting.FitFunction, KE_range : list, out : str):
-    """ Try to fit various fit functions to the MC beam profile.
+    """ Fit the configured function to the true MC beam-energy profile and save results.
 
-    Args:
-        quantities (dict): analysis quanitites.
-        args (argparse.Namespace): application arguments.
-        true_beam_mask (ak.Array): mask which selects true beam pions.
-        func (fitting.FitFunction): fit function to try.
-        KE_range (list): kinetic energy range.
+        Args:
+            quantities (dict): analysis quanitites.
+            args (argparse.Namespace): application arguments.
+            true_beam_mask (ak.Array): mask which selects true beam pions.
+            func (fitting.FitFunction): fit function to try.
+            KE_range (list): kinetic energy range.
+            out (str): Output directory for the profile parameters and fit table.
+
     """
     os.makedirs(out + "beam_profile/", exist_ok = True)
     with plotting.PlotBook(out + "beam_profile/beam_profile.pdf") as book:

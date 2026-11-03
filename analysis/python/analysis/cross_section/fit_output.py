@@ -12,7 +12,21 @@ import uproot
 from python.analysis import common, samples, slices
 
 class MaCh3FitOutput:
+    """Load MaCh3 posterior parameter samples and reshape them by process and energy-bin pair.
+
+        Args:
+            file (str): ROOT file containing MaCh3 covariance and posterior trees.
+            process_definitions (samples.SampleDefinition): Process definitions mapping short labels to process names.
+            energy_slices (slices.Slices): Energy-slice binning used by the fit.
+    """
     def __init__(self, file : str, process_definitions : samples.SampleDefinition, energy_slices : slices.Slices):
+        """Read parameter labels and the newest posterior tree from the MaCh3 ROOT output.
+
+            Args:
+                file (str): ROOT file containing MaCh3 covariance and posterior trees.
+                process_definitions (samples.SampleDefinition): Process definitions mapping short labels to process names.
+                energy_slices (slices.Slices): Energy-slice binning used by the fit.
+        """
         self.process_definitions = process_definitions
         self.energy_slices = energy_slices
         with uproot.open(file) as fit_output:
@@ -31,12 +45,12 @@ class MaCh3FitOutput:
     def __fmt_bin__(self, str_bin : str, slices : slices.Slices) -> int:
         """ Convert back from the binning scheme in MaCh3 to Slices.
 
-        Args:
-            str_bin (str): Bin label.
-            slices (Slices): Energy slices.
+            Args:
+                str_bin (str): Bin label.
+                slices (slices.Slices): Energy slices.
 
-        Returns:
-            int: Energy Slices.
+            Returns:
+                int: Slice index, with underflow mapped to zero and overflow mapped to ``len(slices.edges)``.
         """
         if str_bin == "Under":
             int_bin = 0
@@ -51,8 +65,8 @@ class MaCh3FitOutput:
         """ Produce posterior tensors for each process.
             Dimensions are n,n,m, where n is the number of slices, m is the number of MCMC steps.
 
-        Returns:
-            dict[np.ndarray]: Dictionary of posterior tensors.
+            Returns:
+                dict[np.ndarray]: Dictionary of posterior tensors.
         """
         posterior_tensor = {}
         for k, v in self.posteriors.items():

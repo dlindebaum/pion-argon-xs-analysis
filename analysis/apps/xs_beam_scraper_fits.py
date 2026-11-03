@@ -21,6 +21,19 @@ from python.analysis import plotting
 from python.analysis.beam import scraper
 
 def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
+    """ Extract beam-energy and position values used by the scraper fit.
+
+        Args:
+            i (int): Index of the chunk being processed.
+            file_desc (ntuple.FileDescriptor): Descriptor for the input ntuple file.
+            n_events (int): Maximum number of events to read.
+            start (int): First event index to read.
+            selected_events (Any): Optional event subset supplied by the processing runner.
+            args (dict): Resolved beam-selection configuration.
+
+        Returns:
+            dict: Reconstructed beam energy, true front-face energy, and energy residual.
+    """
     mc =  ntuple.Data(file_desc, n_events, start)
     for s in args["beam_selection"]["selections"]:
         if s == "BeamScraperCut": break

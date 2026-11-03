@@ -14,6 +14,14 @@ from python.analysis.beam import scraper
 
 
 def merge_selection_masks(output):
+    """ Concatenate selection masks from chunks that belong to the same input file.
+
+        Args:
+            output (Any): Multiprocessing results keyed by selection, including file names and per-chunk masks.
+
+        Returns:
+            Any: The results dictionary with masks grouped and concatenated by input file.
+    """
     files = output["name"]
 
     masks ={}
@@ -65,11 +73,11 @@ def merge_selection_masks(output):
 def merge_multiproccess_output(outputs : list) -> dict:
     """ Merge multiprocessing output into a single dictionary.
 
-    Args:
-        outputs (list): outputs from multiprocessing job.
+        Args:
+            outputs (list): outputs from multiprocessing job.
 
-    Returns:
-        dict: merged output
+        Returns:
+            dict: merged output
     """
     merged_output = {}
 
@@ -127,9 +135,9 @@ def merge_multiproccess_output(outputs : list) -> dict:
 def write_masks(output : dict, out : str):
     """ Save selection masks to dill file
 
-    Args:
-        output (dict): masks
-        out (str): output file directory
+        Args:
+            output (dict): masks
+            out (str): output file directory
     """
     os.makedirs(out, exist_ok = True)
 
@@ -150,20 +158,31 @@ def make_output(value : ak.Array, event_tags : tags.Tags, cuts : list = [], op :
     """ Output dictionary for multiprocessing class, if we want to be fancy this can be a dataclass instead.
         Generally the data stored in this dictionary should be before any cuts are applied, for plotting purposes.
 
-    Args:
-        value (ak.Array): value which is being studied
-        tags (tags.Tags): tags which categorise the value
-        cuts (list, optional): cut values used on this data. Defaults to [].
-        cuts (list, optional): operation of cut. Defaults to [].
-        fs_tags (tags.Tags, optional): final state tags to the data. Defaults to None.
+        Args:
+            value (ak.Array): value which is being studied
+            event_tags (tags.Tags): Truth tags associated with the values before selection cuts.
+            cuts (list): operation of cut. Defaults to [].
+            op (list): Comparison operators corresponding to ``cuts``.
+            fs_tags (tags.Tags): final state tags to the data. Defaults to None.
 
-    Returns:
-        dict: dictionary of data.
+        Returns:
+            dict: dictionary of data.
     """
     return {"value" : value, "tags" : event_tags, "cuts" : cuts, "op" : op, "fs_tags" : fs_tags}
 
 
 def analyse_beam_fiducial_cut(events : ntuple.Data, beam_instrumentation : bool, functions : dict, args : dict):
+    """ Apply configured beam-fiducial cuts and collect masks, plotted values, tags, and a cut table.
+
+        Args:
+            events (ntuple.Data): Event sample to evaluate and filter.
+            beam_instrumentation (bool): Whether the sample uses beam instrumentation rather than truth beam tags.
+            functions (dict): Cut-name-to-callable mapping for fiducial selections.
+            args (dict): Per-cut keyword arguments passed to the configured selection functions.
+
+        Returns:
+            Any: Output data by cut, a cut-performance DataFrame, and the masks produced by configured cuts.
+    """
     output = {}
     masks = {}
     cut_table = cuts.CutHandler(events, particle_tags = tags.generate_true_beam_particle_tags(events) if beam_instrumentation is False else None)
@@ -192,13 +211,14 @@ def analyse_beam_selection(events : ntuple.Data, beam_instrumentation : bool, fu
     """ Manually applies the beam selection while storing the value being cut on, cut values and truth tags in order to do plotting
         and produce performance tables.
 
-    Args:
-        events (ntuple.Data): events to look at
-        beam_instrumentation (bool): use beam instrumentation for beam particle selection
-        beam_quality_fits (dict): fit values for the beam quality selection
+        Args:
+            events (ntuple.Data): events to look at
+            beam_instrumentation (bool): use beam instrumentation for beam particle selection
+            functions (dict): Cut-name-to-callable mapping for beam selections.
+            args (dict): Per-cut keyword arguments passed to the configured selection functions.
 
-    Returns:
-        dict: output data.
+        Returns:
+            tuple[dict, pd.DataFrame, dict]: output data.
     """
     output = {}
     cut_table = cuts.CutHandler(events, particle_tags = tags.generate_true_beam_particle_tags(events) if beam_instrumentation is False else None)
@@ -247,13 +267,16 @@ def analyse_beam_selection(events : ntuple.Data, beam_instrumentation : bool, fu
 
 
 def analyse_pfo_selection(events : ntuple.Data, data : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
-    """ Analyse PFO selection.
+    """ Apply configured PFO cuts and collect cut values, truth tags, and performance statistics.
 
-    Args:
-        events (ntuple.Data): events to look at
+        Args:
+            events (ntuple.Data): Event sample whose reconstructed PFOs are selected.
+            data (bool): Whether the sample is data; data samples do not receive MC truth tags.
+            functions (dict): Cut-name-to-callable mapping for PFO selections.
+            args (dict): Per-cut keyword arguments passed to the configured selection functions.
 
-    Returns:
-        dict: output data
+        Returns:
+            tuple[dict, pd.DataFrame]: Per-cut output values and tags, plus the cut-performance table.
     """
     output = {}
     cut_table = cuts.CutHandler(events, particle_tags = tags.generate_true_particle_tags_interesting_pfos(events))
@@ -281,11 +304,14 @@ def analyse_pfo_selection(events : ntuple.Data, data : bool, functions : dict, a
 def analyse_pi_plus_selection(events : ntuple.Data, data : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
     """ Analyse the daughter pi+ selection.
 
-    Args:
-        events (ntuple.Data): events to look at
+        Args:
+            events (ntuple.Data): events to look at
+            data (bool): Whether the sample is data; data samples do not receive MC truth tags.
+            functions (dict): Cut-name-to-callable mapping for daughter-pion selections.
+            args (dict): Per-cut keyword arguments passed to the configured selection functions.
 
-    Returns:
-        dict: output data
+        Returns:
+            tuple[dict, pd.DataFrame]: Per-cut output values and tags, plus the cut-performance table.
     """
     output = {}
     cut_table = cuts.CutHandler(events, particle_tags = tags.generate_true_particle_tags_pi_plus(events))
@@ -313,11 +339,14 @@ def analyse_pi_plus_selection(events : ntuple.Data, data : bool, functions : dic
 def analyse_photon_candidate_selection(events : ntuple.Data, data : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
     """ Analyse the photon candidate selection.
 
-    Args:
-        events (ntuple.Data): events to look at
+        Args:
+            events (ntuple.Data): events to look at
+            data (bool): Whether the sample is data; data samples do not receive MC truth tags.
+            functions (dict): Cut-name-to-callable mapping for photon-candidate selections.
+            args (dict): Per-cut keyword arguments passed to the configured selection functions.
 
-    Returns:
-        dict: output data
+        Returns:
+            tuple[dict, pd.DataFrame]: Per-cut output values and tags, plus the cut-performance table.
     """
     output = {}
     cut_table = cuts.CutHandler(events, particle_tags = tags.generate_true_particle_tags_pi0_shower(events) if data is False else None)
@@ -343,18 +372,24 @@ def analyse_photon_candidate_selection(events : ntuple.Data, data : bool, functi
 
 
 def analyse_pi0_selection(events : ntuple.Data, data : bool, functions : dict, args : dict, photon_mask : ak.Array) -> tuple[dict, pd.DataFrame]:
-    """ Analyse the pi0 selection.
+    """ Apply configured pi0 cuts to photon candidates and collect cut-level outputs and tags.
 
-    Args:
-        events (ntuple.Data): events to look at
-        data (bool): is the ntuple file data or MC
-        correction (callable, optional): shower energy correction. Defaults to None.
-        correction_params (dict, optional): shower energy correction parameters. Defaults to None.
+        Args:
+            events (ntuple.Data): Event sample containing reconstructed shower pairs.
+            data (bool): Whether the sample is data; MC samples receive truth pi0 tags.
+            functions (dict): Cut-name-to-callable mapping for pi0 selection steps.
+            args (dict): Per-cut keyword arguments passed to the configured selection functions.
+            photon_mask (ak.Array): Per-PFO mask of photon candidates used to construct the pairs.
 
-    Returns:
-        dict: output data
-    """    
+        Returns:
+            tuple[dict, pd.DataFrame]: Per-cut output values and tags, plus the cut-performance table.
+    """
     def null_tag():
+        """ Build the placeholder tag used when truth pi0 tags are unavailable for data.
+
+            Returns:
+                tags.Tags: Tags collection with a ``null`` mask defined by ``events.event_num < -1``.
+        """
         tag = tags.Tags()
         tag["null"] = tags.Tag(mask = (events.event_num < -1))
         return tag
@@ -393,15 +428,15 @@ def analyse_pi0_selection(events : ntuple.Data, data : bool, functions : dict, a
 def analyse_regions(events : ntuple.Data, photon_mask : ak.Array, is_data : bool, correction : callable = None, correction_params : dict = None) -> tuple[dict, dict]:
     """ Create masks which desribe the truth and reco regions for various exlusive cross sections.
 
-    Args:
-        events (ntuple.Data): events to look at
-        photon_mask (ak.Array): mask for pi0 photon shower candidates
-        is_data (bool): is this a data ntuple?
-        correction (callable, optional): shower energy correction. Defaults to None.
-        correction_params (str, optional): shower energy correction parameters file. Defaults to None.
+        Args:
+            events (ntuple.Data): events to look at
+            photon_mask (ak.Array): mask for pi0 photon shower candidates
+            is_data (bool): is this a data ntuple?
+            correction (callable): shower energy correction. Defaults to None.
+            correction_params (dict): shower energy correction parameters file. Defaults to None.
 
-    Returns:
-        tuple[dict, dict]: truth and reco regions
+        Returns:
+            tuple[dict, dict]: truth and reco regions
     """
     truth_regions = event.create_regions(events.true_particles.n_pi0, events.true_particles.n_pi_plus + events.true_particles.n_pi_minus) if is_data == False else None
 
@@ -419,14 +454,14 @@ def analyse_regions(events : ntuple.Data, photon_mask : ak.Array, is_data : bool
 def create_pfo_masks(sample : ntuple.Data, selections : dict, args_type : str, extra_args : dict = None) -> dict[np.array]:
     """ Create PFO masks to save to file.
 
-    Args:
-        mc (ntuple.Data): sample.
-        selections (dict): PFO selections.
-        args_type (str): use Data or MC arguments.
-        extra_args (dict, optional): any additional arguments to add. Defaults to None.
+        Args:
+            sample (ntuple.Data): sample.
+            selections (dict): PFO selections.
+            args_type (str): use Data or MC arguments.
+            extra_args (dict): any additional arguments to add. Defaults to None.
 
-    Returns:
-        masks: dictionary of masks.
+        Returns:
+            dict[np.array]: dictionary of masks.
     """
     masks = {}
     for n, c, v in zip(selections["selections"].keys(), selections["selections"].values(), selections[args_type].values()):

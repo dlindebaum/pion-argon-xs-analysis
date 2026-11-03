@@ -19,6 +19,19 @@ from python.analysis.selection import beam
 from python.analysis.beam import quality
 
 def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
+    """ Apply pre-quality beam selections and extract beam-track observables.
+
+        Args:
+            i (int): Index of the chunk being processed.
+            file_desc (ntuple.FileDescriptor): Descriptor for the input ntuple file.
+            n_events (int): Maximum number of events to read.
+            start (int): First event index to read.
+            selected_events (Any): Optional event subset supplied by the processing runner.
+            args (dict): Resolved beam-selection and beam-quality configuration.
+
+        Returns:
+            dict: Start/end positions and normalized beam directions for selected events.
+    """
     events = ntuple.Data(file_desc, n_events, start)
 
     #? should this be made configurable i.e. pass config and apply all selections before the beam quality cuts if it is in the list?

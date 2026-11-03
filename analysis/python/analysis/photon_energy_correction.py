@@ -13,20 +13,59 @@ from python.analysis import fitting, plotting
 from python.analysis.plotting import plots
 
 def apply_linear_correction(x, p0):
+    """Scale reconstructed shower energy by dividing it by a fitted correction factor.
+
+        Args:
+            x (Any): Reconstructed energy values.
+            p0 (Any): Fitted linear correction factor.
+
+        Returns:
+            Any: Energy values divided by ``p0``.
+    """
     return x / p0
 
 class ResponseFit(fitting.FitFunction):
+    """Fit the logarithmic response model ``p0 * log(x - p1) + p2``.
+    """
     n_params = 3
 
     @staticmethod
     def func(x, p0, p1, p2):
+        """Evaluate the logarithmic response model at ``x``.
+
+            Args:
+                x (Any): Reconstructed energy values, shifted by ``p1`` inside the logarithm.
+                p0 (Any): Logarithm scale.
+                p1 (Any): Horizontal offset.
+                p2 (Any): Additive offset.
+
+            Returns:
+                Any: ``p0 * log(x - p1) + p2``.
+        """
         return p0 * np.log(x - p1) + p2
 
     @staticmethod
     def p0(x, y):
+        """Return no initial parameter estimate; this fit supplies no custom starting values.
+
+            Args:
+                x (Any): Independent data values; unused.
+                y (Any): Dependent data values; unused.
+        """
         return None
 
 def response_correction(x, p0, p1, p2):
+    """Correct reconstructed energy using the fitted logarithmic response plus unity.
+
+        Args:
+            x (Any): Reconstructed energy values.
+            p0 (Any): Logarithm scale parameter.
+            p1 (Any): Horizontal offset parameter.
+            p2 (Any): Additive offset parameter.
+
+        Returns:
+            Any: ``x / (ResponseFit.func(x, p0, p1, p2) + 1)``.
+    """
     return x / (ResponseFit.func(x, p0, p1, p2) + 1)
 
 
@@ -40,11 +79,11 @@ shower_energy_correction = {
 def create_pfo_masks(masks : dict[ak.Array]) -> ak.Array:
     """ combine a dicitonary of masks into a single mask.
 
-    Args:
-        masks (dict[ak.Array]): masks.
+        Args:
+            masks (dict[ak.Array]): masks.
 
-    Returns:
-        ak.Array: combined mask.
+        Returns:
+            ak.Array: combined mask.
     """
     mask = None
     for m in masks:
@@ -56,6 +95,15 @@ def create_pfo_masks(masks : dict[ak.Array]) -> ak.Array:
 
 
 def photon_selection(df : pd.DataFrame, book : plotting.PlotBook = plotting.PlotBook.null()):
+    """Plot shower-energy fractional errors and return rows whose true mother is a neutral pion.
+
+        Args:
+            df (pd.DataFrame): Photon rows with truth-mother, selection, and energy columns.
+            book (plotting.PlotBook): Plot book that receives the diagnostic figures.
+
+        Returns:
+            Any: The subset of ``df`` with ``true_mother == 111``.
+    """
     pi0_mother = df.true_mother == 111
     counts = {"pi0_daughter" : len(pi0_mother[df.pi0_photon]), "other" : len(df.pi0_photon) - len(df.pi0_photon[df.pi0_photon])}
     print(counts)
@@ -71,17 +119,28 @@ def photon_selection(df : pd.DataFrame, book : plotting.PlotBook = plotting.Plot
 
 
 def line(x, m):
+    """Evaluate a line through the origin with slope ``m``.
+
+        Args:
+            x (Any): Independent values.
+            m (Any): Line slope.
+
+        Returns:
+            Any: ``m * x``.
+    """
     return m * x
 
 
 def binned_dataframe(df : pd.DataFrame, bins : list, energy_range : list) -> list:
     """ split a dataframe into a list of dataframes based on reco energy bins
 
-    Args:
-        bins (list): bin edges
+        Args:
+            df (pd.DataFrame): Event data containing reconstructed shower energy and true energy.
+            bins (list): bin edges
+            energy_range (list): Range whose upper bound limits the true energy retained in each reconstructed-energy bin.
 
-    Returns:
-        list: list of binned data frames
+        Returns:
+            list: list of binned data frames
     """
     binned_data = []
     for i in range(1, len(bins)):
@@ -92,12 +151,16 @@ def binned_dataframe(df : pd.DataFrame, bins : list, energy_range : list) -> lis
 
 def linear_fit(df : pd.DataFrame, bins : np.ndarray, energy_range : list, book : plotting.PlotBook = plotting.PlotBook.null()) -> float:
     """ perform linear fit of true energy vs reco energy, equivalent to the correction done in the microboone simulation paper.
-        #TODO implment using fitting module instead.
-    Args:
-        bins (list): reco energy bins
+                     #TODO implment using fitting module instead.
 
-    Returns:
-        float: gradient of linear fit (correction)
+        Args:
+            df (pd.DataFrame): Event data containing reconstructed shower energy and true energy.
+            bins (np.ndarray): reco energy bins
+            energy_range (list): Range whose upper bound limits true energy when calculating the binned mean response.
+            book (plotting.PlotBook): Plot book used to save the fit and comparison figures.
+
+        Returns:
+            float: gradient of linear fit (correction)
     """
     x = (bins[1:] + bins[:-1]) / 2
     y = np.array([d.true_energy.mean() for d in binned_dataframe(df, bins, energy_range)])
@@ -128,8 +191,10 @@ def linear_fit(df : pd.DataFrame, bins : np.ndarray, energy_range : list, book :
 def linear_fit_performance(df : pd.DataFrame, linear_correction : float, book : plotting.PlotBook = plotting.PlotBook.null()):
     """ Performance plots and metrics of linear correction.
 
-    Args:
-        linear_correction (float): correction from fit
+        Args:
+            df (pd.DataFrame): Events with reconstructed and true shower energies.
+            linear_correction (float): Factor used to divide reconstructed energy.
+            book (plotting.PlotBook): Plot book that receives the comparison figures.
     """
     corrected_energy = apply_linear_correction(df.reco_shower_energy, linear_correction)
 
@@ -150,6 +215,17 @@ def linear_fit_performance(df : pd.DataFrame, linear_correction : float, book : 
 
 
 def iter_binned_df(df : pd.DataFrame, variable : str, v_range: list, reco_bins : list) -> pd.DataFrame:
+    """Yield the selected variable values separately for each reconstructed-energy bin.
+
+        Args:
+            df (pd.DataFrame): Event table containing the requested variable and reconstructed energy.
+            variable (str): Column to select from each bin.
+            v_range (list): Inclusive range limits used to filter the variable values (bounds are strict).
+            reco_bins (list): Reconstructed-energy bin edges (bin bounds are strict).
+
+        Returns:
+            pd.DataFrame: An iterator yielding one filtered Series per reconstructed-energy bin.
+    """
     for i in range(1, len(reco_bins)):
         binned_data = df[(df.reco_shower_energy > reco_bins[i-1]) & (df.reco_shower_energy < reco_bins[i])]
         ranged_data = binned_data[(binned_data[variable] > min(v_range)) & (binned_data[variable] < max(v_range))]
@@ -157,6 +233,17 @@ def iter_binned_df(df : pd.DataFrame, variable : str, v_range: list, reco_bins :
 
 
 def calculate_mean(df : pd.DataFrame, variable : str, v_range: list, reco_bins : list) -> np.ndarray:
+    """Calculate the mean of a variable in each reconstructed-energy bin.
+
+        Args:
+            df (pd.DataFrame): Event table containing the variable and reconstructed energy.
+            variable (str): Column whose mean is calculated.
+            v_range (list): Strict lower and upper limits for values included in each bin.
+            reco_bins (list): Reconstructed-energy bin edges.
+
+        Returns:
+            np.ndarray: Mean value for each reconstructed-energy bin.
+    """
     means = []
     for column in iter_binned_df(df, variable, v_range, reco_bins):
         means.append(column.mean())
@@ -164,6 +251,17 @@ def calculate_mean(df : pd.DataFrame, variable : str, v_range: list, reco_bins :
 
 
 def calculate_sem(df : pd.DataFrame, variable : str, v_range: list, reco_bins : list) -> np.ndarray:
+    """Calculate the standard error of the mean of a variable in each reconstructed-energy bin.
+
+        Args:
+            df (pd.DataFrame): Event table containing the variable and reconstructed energy.
+            variable (str): Column whose standard error is calculated.
+            v_range (list): Strict lower and upper limits for values included in each bin.
+            reco_bins (list): Reconstructed-energy bin edges.
+
+        Returns:
+            np.ndarray: Per-bin standard deviation divided by the square root of the bin count.
+    """
     sem = []
     for column in iter_binned_df(df, variable, v_range, reco_bins):
         sem.append(column.std() / np.sqrt(len(column)))
@@ -171,6 +269,16 @@ def calculate_sem(df : pd.DataFrame, variable : str, v_range: list, reco_bins : 
 
 
 def create_bins_df(value : pd.Series, n_entries, v_range : list = None) -> np.ndarray:
+    """Choose sorted-value edges at fixed entry intervals, optionally forcing the outer limits.
+
+        Args:
+            value (pd.Series): Values used to derive bin edges.
+            n_entries (Any): Number of sorted entries between successive selected edges.
+            v_range (list): Optional range whose minimum and maximum replace the first and last edges.
+
+        Returns:
+            np.ndarray: Selected bin-edge values.
+    """
     sorted_value = value.sort_values()
     n_bins = len(sorted_value) // n_entries
 
@@ -185,6 +293,16 @@ def create_bins_df(value : pd.Series, n_entries, v_range : list = None) -> np.nd
 
 
 def calculate_central_values(df : pd.date_range, bins : np.ndarray, book : plotting.PlotBook) -> dict:
+    """Extract binned fractional-error central values with Student-t, Gaussian, and mean estimates.
+
+        Args:
+            df (pd.date_range): Event data containing reconstructed energy and fractional error.
+            bins (np.ndarray): Reconstructed-energy bin edges.
+            book (plotting.PlotBook): Plot book used to save fit and summary figures.
+
+        Returns:
+            dict: Central-value estimates and uncertainties keyed by fit method, plus binned mean results.
+    """
     central_values = {}
 
     with plotting.styles.PlotStyler().update(font_scale = 1.3):
@@ -199,6 +317,16 @@ def calculate_central_values(df : pd.date_range, bins : np.ndarray, book : plott
 
 
 def response_fits(central_values : dict, bins : np.ndarray, book : plotting.PlotBook) -> dict:
+    """Fit ``ResponseFit`` to each supplied set of binned central values and save fit plots.
+
+        Args:
+            central_values (dict): Mapping of estimator names to per-bin values and uncertainties.
+            bins (np.ndarray): Reconstructed-energy bin edges used to form fit x-values.
+            book (plotting.PlotBook): Plot book used to save fit figures.
+
+        Returns:
+            dict: Fit parameter values and errors for each estimator.
+    """
     x = (bins[1:] + bins[:-1]) / 2
     response_params = {}
 
@@ -223,6 +351,16 @@ def response_fits(central_values : dict, bins : np.ndarray, book : plotting.Plot
 
 
 def method_comparison(df : pd.DataFrame, linear_correction : float, response_params : dict, bins : np.ndarray, energy_range : list, book : plotting.PlotBook):
+    """Compare uncorrected and Gaussian-response shower energies using diagnostic plots and summaries.
+
+        Args:
+            df (pd.DataFrame): Events with reconstructed and true shower energies.
+            linear_correction (float): Factor used to compute the linear-corrected energy; that series is omitted from the final comparisons.
+            response_params (dict): Response-fit parameters; the plotted correction currently uses the ``gaussian`` entry.
+            bins (np.ndarray): Reconstructed-energy bin edges for fractional-error summaries.
+            energy_range (list): Energy range used in the comparison plots.
+            book (plotting.PlotBook): Plot book used to save comparison figures.
+    """
     energies = {"uncorrected" : df.reco_shower_energy, "linear" : df.reco_shower_energy / linear_correction}
 
     for p in response_params:

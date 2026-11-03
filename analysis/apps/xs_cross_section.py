@@ -23,6 +23,19 @@ from python.analysis import slices
 from python.analysis.cross_section import analysis_input, fit_output, plots
 
 def extract_cross_sections(analysis_input : analysis_input.AnalysisInput, energy_slices : slices.Slices, process_definitions : samples.SampleDefinition, fiducial_volume : tuple[float], posterior_tensors : np.ndarray, exclude_fiducial_volume : bool = False):
+    """ Calculate total and signal-process cross sections from analysis inputs.
+
+        Args:
+            analysis_input (analysis_input.AnalysisInput): Event-level analysis input.
+            energy_slices (slices.Slices): Energy binning and slice geometry.
+            process_definitions (samples.SampleDefinition): Signal-process definitions.
+            fiducial_volume (tuple[float]): Spatial bounds of the fiducial volume.
+            posterior_tensors (np.ndarray): Optional fitted event posterior weights.
+            exclude_fiducial_volume (bool): Whether to use energies at the front face and interaction point.
+
+        Returns:
+            dict: Calculated cross-section values and uncertainties by process.
+    """
     dEdX = bethe_bloch.mean_dEdX(energy_slices.pos - energy_slices.width/2, Particle.from_pdgid(211))
 
     args = {
