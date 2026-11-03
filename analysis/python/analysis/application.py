@@ -369,11 +369,11 @@ class ApplicationArguments:
         """ Parses command line arguements.
 
             Args:
-                args (argparse.Namespace): arguements to parse
+                args (argparse.Namespace): Arguements to parse.
                 override_out (bool): Derive a default output path and trailing slash when true.
 
             Returns:
-                argparse.Namespace: parsed arguements
+                argparse.Namespace: Parsed arguements.
         """
         if hasattr(args, "config"):
             args_copy = argparse.Namespace()
@@ -416,8 +416,8 @@ class ApplicationArguments:
         """ Creates a dictionary of selection functions and their argumenets as specified in the analysise configuration file.
 
             Args:
-                value (dict): dicionary describing a particular selection, key value is the function name, value is a list of function arguements.
-                module (module): which python module does this selection belong to.
+                value (dict): Dicionary describing a particular selection, key value is the function name, value is a list of function arguements.
+                module (module): Which python module does this selection belong to.
 
             Returns:
                 dict: Dictionary of selection functions.
@@ -436,10 +436,10 @@ class ApplicationArguments:
         """ Reads analysis configuration file and unpacks/serializes relavent objects.
 
             Args:
-                config (dict): file path
+                config (dict): File path.
 
             Returns:
-                argparse.Namespace: unpacked configuration
+                argparse.Namespace: Unpacked configuration.
         """
         args = argparse.Namespace()
         for head, value in config.items():
@@ -616,7 +616,7 @@ def processing(samples : list[ntuple.Sample], outdir : str, args : argparse.Name
             outdir (str): Output directory for stored processing outputs.
             args (argparse.Namespace): Application arguments.
             func (callable): Process to run.
-            merge (bool): whether to merge the processing outputs.
+            merge (bool): Whether to merge the processing outputs.
             outname (str): Output file name. Defaults to "output".
 
         Returns:

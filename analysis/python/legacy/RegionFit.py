@@ -32,7 +32,7 @@ def Model(n_channels: int, KE_int_templates: np.ndarray, mean_track_score_templa
                 mc_stat_unc (bool): Whether to attach statistical-error modifiers.
 
             Returns:
-                dict: pyhf channel specification.
+                dict: Pyhf channel specification.
         """
         ch = {
             "name": channel_name,
@@ -295,7 +295,7 @@ def EstimateCounts(postfit_pred: cabinetry.model_utils.ModelPrediction) -> tuple
             postfit_pred (cabinetry.model_utils.ModelPrediction): Post-fit model prediction.
 
         Returns:
-            tuple[np.ndarray, np.ndarray]: matrix and corresponding bin-uncertainty matrix.
+            tuple[np.ndarray, np.ndarray]: Matrix and corresponding bin-uncertainty matrix.
     """
     if any([c["name"] == "mean_track_score" for c in postfit_pred.model.spec["channels"]]):
         KE_int_prediction = SliceModelPrediction(postfit_pred, slice(-1), "KE_int_postfit")
@@ -317,7 +317,7 @@ def EstimateBackgroundAllRegions(postfit_pred: cabinetry.model_utils.ModelPredic
             signal_process (str): Region label excluded as signal; other regions are treated as background.
 
         Returns:
-            tuple[np.ndarray, np.ndarray]: yields and uncertainties summed across regions.
+            tuple[np.ndarray, np.ndarray]: Yields and uncertainties summed across regions.
     """
     N, N_err = EstimateCounts(postfit_pred)
     N = np.sum(N, 0)
@@ -338,7 +338,7 @@ def EstimateBackgroundInRegions(postfit_pred: cabinetry.model_utils.ModelPredict
             data (AnalysisInput): Input whose region labels define the signal-process names.
 
         Returns:
-            tuple[dict, dict]: of background yields and uncertainties keyed by region label.
+            tuple[dict, dict]: Of background yields and uncertainties keyed by region label.
     """
     N, N_err = EstimateCounts(postfit_pred)
     processes = list(data.regions.keys())

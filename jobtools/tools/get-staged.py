@@ -5,8 +5,8 @@ Created on: 20/04/2022 11:34
 Author: Shyam Bhuller
 
 Description: Checks which files have been prestaged, and then stores them into a file so you can run an analysis on them.
-Usage: python get_staged.py <samweb definition>
-Note: to actually prestage root files use cache_state.py.
+Usage: Python get_staged.py <samweb definition>.
+Note: To actually prestage root files use cache_state.py.
 """
 import sys
 import subprocess

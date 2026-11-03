@@ -199,7 +199,7 @@ def PiPlusSelection(events : Data, cut = [0.5, 2.8], op = [">", "<"], return_pro
 
         Args:
             events (Data): Event data containing reconstructed track dE/dx values.
-            cut (Any): dE/dx threshold or lower/upper bounds for pion candidates.
+            cut (Any): dE/dX threshold or lower/upper bounds for pion candidates.
             op (Any): Comparison operator, or operators corresponding to the bounds.
             return_property (bool): If true, return median dE/dx values alongside the mask.
 
@@ -215,7 +215,7 @@ def ProtonSelection(events : Data, cut = 2.8, op = ">", return_property : bool =
 
         Args:
             events (Data): Event data containing reconstructed track dE/dx values.
-            cut (Any): dE/dx threshold or thresholds for proton candidates.
+            cut (Any): dE/dX threshold or thresholds for proton candidates.
             op (Any): Comparison operator, or operators for a range cut.
             return_property (bool): If true, return median dE/dx values alongside the mask.
 

@@ -38,25 +38,25 @@ def get_true_ff_KE(KE_tpc : ak.Array, length_to_ff : ak.Array) -> ak.Array:
         plus the energy lost between the first trajectory point in the TPC and trajectory point before.
 
         Args:
-            KE_tpc (ak.Array): kinetic energy at the first trajectory point in the TPC
-            length_to_ff (ak.Array): distance from first trajectory point in the TPC and the one before it. idea is to use this as an approximation of the distance to the front face of the TPC
+            KE_tpc (ak.Array): Kinetic energy at the first trajectory point in the TPC.
+            length_to_ff (ak.Array): Distance from first trajectory point in the TPC and the one before it. Idea is to use this as an approximation of the distance to the front face of the TPC.
 
         Returns:
-            ak.Array: true kinetic energy at the front face of the TPC
+            ak.Array: True kinetic energy at the front face of the TPC.
     """
     dEdX = bethe_bloch.mean_dEdX(KE_tpc, Particle.from_pdgid(211))
     return KE_tpc + dEdX * length_to_ff
 
 
 def dist_into_tpc(arr : ak.Array, ind : int) -> ak.Array:
-    """ Calculates the distance between the trajectory point after ind and ind. Required for akward arrays
+    """ Calculates the distance between the trajectory point after ind and ind. Required for akward arrays.
 
         Args:
-            arr (ak.Array): trajectory points
-            ind (int): index of point which is just before the TPC
+            arr (ak.Array): Trajectory points.
+            ind (int): Index of point which is just before the TPC.
 
         Returns:
-            ak.Array: distance between points
+            ak.Array: Distance between points.
     """
     outside_tpc = arr[ind]
     if ind + 1 >= ak.count(arr):
@@ -67,10 +67,10 @@ def dist_into_tpc(arr : ak.Array, ind : int) -> ak.Array:
 
 
 def ff_value(arr : ak.Array, ind : int) -> any:
-    """ returns a quantity of any trajectory point at the first trajectory point in the TPC.
+    """ Returns a quantity of any trajectory point at the first trajectory point in the TPC.
 
         Args:
-            arr (ak.Array): values
+            arr (ak.Array): Values.
             ind (int): Index of the trajectory point immediately before the first point in the TPC.
 
         Returns:
@@ -86,14 +86,14 @@ def get_scraper_fits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream 
     """ Fit gaussians to front facing kinetic energies to extract values required to define events as beam scrapers.
 
         Args:
-            ke_bins (list): bins of Kinetic energy to split the sample in.
-            beam_inst_KE (ak.Array): beam instrumentation kinetic energy.
-            delta_KE_upstream (ak.Array): difference in the front facing KE and beam kinetic energy.
-            fit_bins (int): number of bins to histogram the data for the fit.
-            residual_range (list): plot range.
+            ke_bins (list): Bins of Kinetic energy to split the sample in.
+            beam_inst_KE (ak.Array): Beam instrumentation kinetic energy.
+            delta_KE_upstream (ak.Array): Difference in the front facing KE and beam kinetic energy.
+            fit_bins (int): Number of bins to histogram the data for the fit.
+            residual_range (list): Plot range.
 
         Returns:
-            dict: fit parameters
+            dict: Fit parameters.
     """
     plot = plots.multi_plot(len(ke_bins) - 1)
 
@@ -143,7 +143,7 @@ def beam_scraper_plots(beam_inst_KE_bins : list, output_mc : dict[ak.Array], scr
     """ Scatter plots of events to show beam scraper events as a function of the XY position at the beam instrumentation.
 
         Args:
-            beam_inst_KE_bins (list): beam kinetic energy bins.
+            beam_inst_KE_bins (list): Beam kinetic energy bins.
             output_mc (dict[ak.Array]): MC beam-instrument positions, kinetic energies, and upstream energy differences.
             scraper_fits (dict): Per-energy-bin fitted means and widths used for the scraper threshold.
 

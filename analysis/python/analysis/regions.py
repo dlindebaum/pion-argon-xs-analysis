@@ -23,7 +23,7 @@ def region_selection(events : ntuple.Data, args : Namespace | dict, is_mc : bool
         Args:
             events (ntuple.Data): Events before beam pion selection.
             args (Namespace | dict): Application arguements.
-            is_mc (bool): if Ntuple is MC or Data.
+            is_mc (bool): If Ntuple is MC or Data.
             region_type (samples.SampleDefinition): Override region definition. Defaults to None.
             process_type (samples.SampleDefinition): Override process definition. Defaults to None.
             removed (bool): Include the removed events as "Uncategorised". Defaults to False.
@@ -87,7 +87,7 @@ def count_in_regions(true_regions : dict, reco_regions : dict, selection_efficin
             selection_efficincy (np.ndarray): Selection efficiency to apply to the masks. Defaults to None.
 
         Returns:
-            np.ndarray: counts.
+            np.ndarray: Counts.
     """
     counts = []
     for t in true_regions:
@@ -107,7 +107,7 @@ def get_total_pion_inel_masks(mc : ntuple.Data) -> ak.Array:
             mc (ntuple.Data): MC events.
 
         Returns:
-            ak.Array: mask.
+            ak.Array: Mask.
     """
     particle_tags = tags.generate_true_beam_particle_tags(mc)
     return particle_tags["$\\pi^{+}$:inel"].mask

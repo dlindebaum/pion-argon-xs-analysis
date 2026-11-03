@@ -22,18 +22,18 @@ from python.analysis.plotting import plots
 class FitFunction(ABC):
     """ An abstract class for defining function pass to Fit(). Contains the following:
 
-        n_params: number of parameters which describe the function e.g. a normalised gaussian has two
-        func: implementation of the function itself
-        p0: Initial values for the fitting, can be set to return None
-        bounds: the allowed range of each fit parameter, to turn off, return (-np.inf, np.inf)
-        mu: the mean value of the function, only needed for PDFs
-        sigma: the rms value of the function, only needed for PDFs
-        var: variance for the function, only needed for PDFs
+        n_params: Number of parameters which describe the function e.g. a normalised gaussian has two.
+        func: Implementation of the function itself.
+        p0: Initial values for the fitting, can be set to return None.
+        bounds: The allowed range of each fit parameter, to turn off, return (-np.inf, np.inf).
+        mu: The mean value of the function, only needed for PDFs.
+        sigma: The rms value of the function, only needed for PDFs.
+        var: Variance for the function, only needed for PDFs.
     """
     @property
     @abstractmethod
     def n_params(self):
-        """ number of fit parameters
+        """ Number of fit parameters.
         """
         pass
 
@@ -280,7 +280,7 @@ class student_t(FitFunction):
                 p3 (Any): Scale parameter (not used in the variance calculation).
 
             Returns:
-                Any: p2/(p2 - 2) for p2 > 2, infinity for 1 < p2 <= 2, otherwise NaN.
+                Any: P2/(p2 - 2) for p2 > 2, infinity for 1 < p2 <= 2, otherwise NaN.
         """
         if p2 > 2:
             return p2 / (p2 - 2)
@@ -1023,16 +1023,16 @@ def rejection_sampling(num : int, low : float, high : float, func : FitFunction,
     """ Performs Rejection sampling for a given function which describes a pdf.
 
         Args:
-            num (int): number of samples to generate.
-            low (float): minimum range.
-            high (float): maximum range.
-            func (FitFunction): function which desribes a pdf, by default should be a function whose amplitude or scale parameter is p0.
-            params (dict): parameters of the function.
-            scale_param (str): name of amplitude/scale parameter. Defaults to "p0".
+            num (int): Number of samples to generate.
+            low (float): Minimum range.
+            high (float): Maximum range.
+            func (FitFunction): Function which desribes a pdf, by default should be a function whose amplitude or scale parameter is p0.
+            params (dict): Parameters of the function.
+            scale_param (str): Name of amplitude/scale parameter. Defaults to "p0".
             rng (np.random.default_rng): Random generator used to draw candidate values; a default generator is created if omitted.
 
         Returns:
-            np.array: sampled values.
+            np.array: Sampled values.
     """
 
     if rng is None:
@@ -1054,24 +1054,24 @@ def fit(x : np.array, y_obs : np.array, y_err : np.array, func : FitFunction, me
     """ Implementation of scipy's curve fit, with some constraints, checks to handle nan data and optional plotting.
 
         Args:
-            x (np.array): x data
-            y_obs (np.array): y data
-            y_err (np.array): error in y
-            func (FitFunction): function to fit to data
-            method (str, optional): fit method, see scipy's documentation. Defaults to "trf".
-            maxfev (_type_, optional): max number of iterations, see scipy's documentation. Defaults to int(10E4).
-            plot (bool): make a plot of the data and the fitted function. Defaults to False.
-            xlabel (str): plot x label. Defaults to "".
-            ylabel (str): plot y label. Defaults to "".
-            ylim (list): y limit of plot. Defaults to None.
-            plot_style (str): plot style of the oberved data points, either "hist" or "scatter". Defaults to "scatter".
-            title (str): plot title.s Defaults to "".
-            plot_range (list): plot range. Defaults to None.
-            return_chi_sqr (bool): additionally returns chi_sqr ndf and p value in a tuple (chi_sqr, ndf, p), defaults to False
+            x (np.array): X data.
+            y_obs (np.array): Y data.
+            y_err (np.array): Error in y.
+            func (FitFunction): Function to fit to data.
+            method (str, optional): Fit method, see scipy's documentation. Defaults to "trf".
+            maxfev (_type_, optional): Max number of iterations, see scipy's documentation. Defaults to int(10E4).
+            plot (bool): Make a plot of the data and the fitted function. Defaults to False.
+            xlabel (str): Plot x label. Defaults to "".
+            ylabel (str): Plot y label. Defaults to "".
+            ylim (list): Y limit of plot. Defaults to None.
+            plot_style (str): Plot style of the oberved data points, either "hist" or "scatter". Defaults to "scatter".
+            title (str): Plot title.s Defaults to "".
+            plot_range (list): Plot range. Defaults to None.
+            return_chi_sqr (bool): Additionally returns chi_sqr ndf and p value in a tuple (chi_sqr, ndf, p), defaults to False.
             loc (Any): Matplotlib legend location for the fit-metrics legend when plotting is enabled.
 
         Returns:
-            tuple[np.array, np.array]: fit parameters and errors in the parameters
+            tuple[np.array, np.array]: Fit parameters and errors in the parameters.
     """
 
     y_obs = np.array(y_obs, dtype = float) # ensure the input is an array of numpy floats
@@ -1155,13 +1155,13 @@ def extract_central_values_df(df : pd.DataFrame, bin_variable : str, variable : 
 
         Args:
             df (pd.DataFrame): Input table containing the binning and fitted variables.
-            bin_variable (str): variable to bin in
-            variable (str): variable to fit to
-            v_range (list): variable range
-            funcs (FitFunction): functions to try fit
+            bin_variable (str): Variable to bin in.
+            variable (str): Variable to fit to.
+            v_range (list): Variable range.
+            funcs (FitFunction): Functions to try fit.
             data_bins (list): Edges defining the bins of bin_variable.
-            hist_bins (int): number of bins for variable histograms
-            log (bool): verbose printout. Defaults to False.
+            hist_bins (int): Number of bins for variable histograms.
+            log (bool): Verbose printout. Defaults to False.
             rms_err (bool): Whether to estimate the central-value error from the fitted RMS.
             weights (np.ndarray): Optional per-row weights applied when histogramming the fitted variable.
             outer_legend (bool): Whether to place a shared legend outside the individual subplots.

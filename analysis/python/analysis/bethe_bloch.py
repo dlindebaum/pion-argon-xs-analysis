@@ -38,11 +38,11 @@ class DensityCorrectionParameters:
         """ Correction to account for the fact a particles electric field flattens and spreads as the energy increases.
 
             Args:
-                beta (float | ak.Array): velocity
-                gamma (float | ak.Array): relativistic factor
+                beta (float | ak.Array): Velocity.
+                gamma (float | ak.Array): Relativistic factor.
 
             Returns:
-                float | ak.Array: density correction value
+                float | ak.Array: Density correction value.
         """
         y = np.log10(beta * gamma)
 
@@ -67,11 +67,11 @@ def mean_dEdX(KE : float | ak.Array, particle : Particle) -> float | ak.Array:
     """ Calculate the mean dEdX for a particle with given kinetic energy.
 
         Args:
-            KE (float | ak.Array): particle kinetic energy
-            particle (Particle): particle type
+            KE (float | ak.Array): Particle kinetic energy.
+            particle (Particle): Particle type.
 
         Returns:
-            float | ak.Array: mean dEdX
+            float | ak.Array: Mean dEdX.
     """
     gamma = (KE / particle.mass) + 1
     beta = (1 - (1/gamma)**2)**0.5
@@ -119,14 +119,14 @@ def interp_KE_to_mean_dEdX(inital_KE : float, stepsize : float, particle : Parti
 
 
 def interp_range_to_KE(KE_init : float, precision = 0.05) -> interp1d:
-    """ Create an interpolation object for the range of a particle and its kinetic energy
+    """ Create an interpolation object for the range of a particle and its kinetic energy.
 
         Args:
-            KE_init (float): kinetic energy
-            precision (float, optional): position step. Defaults to 0.05.
+            KE_init (float): Kinetic energy.
+            precision (float, optional): Position step. Defaults to 0.05.
 
         Returns:
-            interp1d: interpolated map of range and KE
+            interp1d: Interpolated map of range and KE.
     """
     KE = [KE_init]
     track_length = [0]
@@ -144,12 +144,12 @@ def KE_end(KE_init : ak.Array, track_length : ak.Array, n : int) -> ak.Array:
     """ Compute the interacting energy from the particles initial kinetic energy and track length.
 
         Args:
-            KE_init (ak.Array): initial kinetic energies
-            track_length (ak.Array): track lengths
-            n (int): number of iterations, higher results in more accurate values but takes exponentially longer.
+            KE_init (ak.Array): Initial kinetic energies.
+            track_length (ak.Array): Track lengths.
+            n (int): Number of iterations, higher results in more accurate values but takes exponentially longer.
 
         Returns:
-            ak.Array: interacting KEs
+            ak.Array: Interacting KEs.
     """
     interpolated_energy_loss = interp_KE_to_mean_dEdX(2*max(KE_init), 1) # precompute the energy loss and create a function to interpolate between them
     steps = track_length/n
@@ -165,12 +165,12 @@ def range_from_KE(KE_init : np.ndarray, particle : Particle, precision : float =
     """ Compute the range of particles from the  initial kinetic energy.
 
         Args:
-            KE_init (np.ndarray): initial kinetic energies
-            particle (Particle): particle type
-            precision (float): position step. Defaults to 1.
+            KE_init (np.ndarray): Initial kinetic energies.
+            particle (Particle): Particle type.
+            precision (float): Position step. Defaults to 1.
 
         Returns:
-            ak.Array: ranges
+            ak.Array: Ranges.
     """
     interpolated_energy_loss = interp_KE_to_mean_dEdX(2*max(KE_init), precision/2, particle) # precompute the energy loss and create a function to interpolate between them
     KE = np.array(KE_init)

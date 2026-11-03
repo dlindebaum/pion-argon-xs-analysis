@@ -110,7 +110,7 @@ def generate_function_arguments(files : list[ntuple.FileDescriptor], n_batches :
             event_indices (list): One event-index value per file. That file's value is passed to each of its batches; ``None`` supplies ``None`` for every job.
 
         Returns:
-            list: Five parallel lists, in order: file descriptor, batch size, starting event offset within the file, event-index value, and ``args``. Each column contains one entry per job.
+            list: Five parallel lists, in order: File descriptor, batch size, starting event offset within the file, event-index value, and ``args``. Each column contains one entry per job.
     """
     batches = []
     start = []
@@ -143,7 +143,7 @@ def mutliprocess(func : callable, files : list[ntuple.FileDescriptor], n_batches
     """ Run a worker function over ntuple batches using a process pool.
 
         Args:
-            func (callable): Worker called once per batch. It receives positional arguments in this order: process number, file descriptor, batch size, starting event offset, event-index value, and ``args``.
+            func (callable): Worker called once per batch. It receives positional arguments in this order: Process number, file descriptor, batch size, starting event offset, event-index value, and ``args``.
             files (list[ntuple.FileDescriptor]): Input ntuple files.
             n_batches (int): Desired number of batches per file, or ``None`` to derive it from ``n_events``.
             n_events (int): Desired number of events per batch, or ``None`` to derive it from ``n_batches``.
@@ -165,9 +165,9 @@ def mutliprocess(func : callable, files : list[ntuple.FileDescriptor], n_batches
 def merge_outputs(outputs : list[dict]) -> dict:
     """ Merge batch-output dictionaries by combining values with matching keys.
 
-                  Nested dictionaries are merged recursively. Duplicate leaf values are
-                  combined according to their type: Awkward arrays are concatenated, tags
-                  are merged, lists are extended, and other values are collected into lists.
+                  Nested dictionaries are merged recursively. Duplicate leaf values are.
+                  combined according to their type: Awkward arrays are concatenated, tags.
+                  Are merged, lists are extended, and other values are collected into lists.
 
         Args:
             outputs (list[dict]): Dictionaries returned by the batch workers.

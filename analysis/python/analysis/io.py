@@ -19,10 +19,10 @@ def read_dill(file : str):
     """ Opens and serialises object saved as a dill file. May be remaned to a more general method if dill files are used more commonly.
 
         Args:
-            file (str): dill file
+            file (str): Dill file.
 
         Returns:
-            any: loaded object
+            any: Loaded object.
     """
     with open(file, "rb") as f:
         obj = dill.load(f)
@@ -33,8 +33,8 @@ def write_dill(file : str, obj : dict):
     """ Saves object to file.
 
         Args:
-            file (str): file name
-            obj (dict): object to save
+            file (str): File name.
+            obj (dict): Object to save.
     """
     with open(file, "wb") as f:
         dill.dump(obj, f)
@@ -44,10 +44,10 @@ def read_json(file : str) -> dict:
     """ Loads a json file.
 
         Args:
-            file (str): file path
+            file (str): File path.
 
         Returns:
-            dict: unpacked json
+            dict: Unpacked json.
     """
     with open(file, "rb") as f:
         config = json.load(f)
@@ -55,11 +55,11 @@ def read_json(file : str) -> dict:
 
 
 def write_json(params : any, file : str):
-    """ Saves an object to a json file. params should be an object serialisable by json (no numpy arrays etc.).
+    """ Saves an object to a json file. Params should be an object serialisable by json (no numpy arrays etc.).
 
         Args:
-            params (any): correction parameters.
-            file (str): file path.
+            params (any): Correction parameters.
+            file (str): File path.
     """
     with open(file, "w") as f:
         json.dump(params, f, indent = 2)
@@ -70,8 +70,8 @@ def write_hdf5(dictionary : dict, file : str):
     """ Write dictionary to a HDF5 file.
 
         Args:
-            dictionary (dict): dictionary to save
-            file (str): file
+            dictionary (dict): Dictionary to save.
+            file (str): File.
     """
     with pd.HDFStore(file) as hdf:
         for k, v in dictionary.items():
@@ -83,10 +83,10 @@ def read_hdf5(file : str):
     """ Reads a HDF5 file and unpacks the contents into pandas dataframes.
 
         Args:
-            file (str): file path.
+            file (str): File path.
 
         Returns:
-            pd.DataFrame: if hdf5 file only has 1 key dict : if hdf5 file contains more than 1 key
+            pd.DataFrame: if hdf5 file only has 1 key dict : If hdf5 file contains more than 1 key.
     """
     keys = []
     with tables.open_file(file, driver = "H5FD_CORE") as hdf5file:
@@ -99,7 +99,7 @@ def read_hdf5(file : str):
 
 
 class RootIO:
-    """ Interface to ROOT file using uproot
+    """ Interface to ROOT file using uproot.
 
         Args:
             _filename (str): ROOT file to read from or write to.
@@ -107,9 +107,9 @@ class RootIO:
             _start (int): First entry to read when limiting the number of events.
 
         Attributes:
-            filename (str): ROOT filename
-            n_events (int): number of events to read. Defaults to -1 (all events)
-            start (int): starting point to read from. Defaults to None.
+            filename (str): ROOT filename.
+            n_events (int): Number of events to read. Defaults to -1 (all events).
+            start (int): Starting point to read from. Defaults to None.
             Methods:
             get (ak.Array): Load the first available requested branch from the ROOT tree.
             list_ntuples: Print or return branch names from the analysis tree.
@@ -136,7 +136,7 @@ class RootIO:
                 d (dict[dict | ak.Array]): Nested dictionary of awkward arrays.
 
             Returns:
-                dict: converted dictionary. Dictionary is flattened to prevent overwrites in TTree entries.
+                dict: Converted dictionary. Dictionary is flattened to prevent overwrites in TTree entries.
         """
         d_new = {}
         for k, v in d.items():
@@ -183,10 +183,10 @@ class RootIO:
         """ Load ntuple from root file as awkward array.
 
             Args:
-                item (str): ntuple name in root file
+                item (str): Ntuple name in root file.
 
             Returns:
-                ak.Array: ntuple loaded
+                ak.Array: Ntuple loaded.
         """
         with uproot.open(self.filename) as file:
             try:
@@ -224,10 +224,10 @@ class RootIO:
 
 
     def list_ntuples(self, search: str = "", return_keys=False):
-        """ list all NTuple entries produced by the analyser.
+        """ List all NTuple entries produced by the analyser.
 
             Args:
-                search (str): filter NTuple by name (not case sensitive). Defaults to "".
+                search (str): Filter NTuple by name (not case sensitive). Defaults to "".
                 return_keys (Any): Return matching names instead of printing them.
 
             Returns:

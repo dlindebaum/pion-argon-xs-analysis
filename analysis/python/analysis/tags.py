@@ -83,10 +83,10 @@ class TagIterator:
 
     @property
     def values(self) -> list:
-        """ returns a list of values for all tags.
+        """ Returns a list of values for all tags.
 
             Returns:
-                list: list of values for each tag
+                list: List of values for each tag.
         """
         return [getattr(v, self.__value) for _, v in self.__parent.items()]
 
@@ -125,14 +125,14 @@ def merge_tags(tags : list[Tags]) -> Tags:
 
 
 def particle_masks(pdgs : ak.Array, to_tag : list) -> dict:
-    """ produces a dictionry of masks based on particle pdg codes to tag specified by the user.
+    """ Produces a dictionry of masks based on particle pdg codes to tag specified by the user.
 
         Args:
-            pdgs (ak.Array): array of pdg codes
-            to_tag (list): particle pgd codes to tag
+            pdgs (ak.Array): Array of pdg codes.
+            to_tag (list): Particle pgd codes to tag.
 
         Returns:
-            dict: particle tags
+            dict: Particle tags.
     """
     masks = {}
     for t in to_tag:
@@ -144,10 +144,10 @@ def other_mask(masks : dict) -> ak.Array:
     """ Creates a mask which selects indices not already tagged by a set of masks.
 
         Args:
-            masks (dict): masks which tag data
+            masks (dict): Masks which tag data.
 
         Returns:
-            ak.Array: mask which tags any untagged data.
+            ak.Array: Mask which tags any untagged data.
     """
     other = None
     for m in masks:
@@ -165,7 +165,7 @@ def generate_true_particle_tags(events : "Data") -> Tags:
             events ('Data'): Events to look at.
 
         Returns:
-            Tags: tags
+            Tags: Tags.
     """
     particles_to_tag = [
         211, -211, 13, -13, 11, -11, 22, 2212, 321
@@ -192,7 +192,7 @@ def generate_true_beam_particle_tags(events : "Data") -> Tags:
             events ('Data'): Events to look at.
 
         Returns:
-            Tags: tags
+            Tags: Tags.
     """
     particles_to_tag = [
         211, -13, -11, 2212, 321
@@ -227,7 +227,7 @@ def generate_true_particle_tags_pi_plus(events : "Data") -> Tags:
             events ('Data'): Events to look at.
 
         Returns:
-            Tags: tags
+            Tags: Tags.
     """
     particles_to_tag = [
         211, -211, 13, -13, -11, 22, 2212
@@ -325,7 +325,7 @@ def generate_true_particle_tags_pi0_shower(events : "Data") -> Tags:
             events ('Data'): Events to look at.
 
         Returns:
-            Tags: tags
+            Tags: Tags.
     """
     particles_to_tag = [
         211, -211, 13, -13, 11, -11, 22, 2212
@@ -360,14 +360,14 @@ def generate_pi0_tags(events : "Data", photon_pfos : ak.Array) -> Tags:
             two photons from the same pi0
             two photons from two different pi0s
             one photon from a pi0
-            no photons from a pi0
+            no photons from a pi0.
 
         Args:
             events ('Data'): Events to look at..
-            photon_pfos (ak.Array): mask which select PFOs that are photon showers
+            photon_pfos (ak.Array): Mask which select PFOs that are photon showers.
 
         Returns:
-            Tags: tags
+            Tags: Tags.
     """
     pi0_photon = events.true_particles_bt.mother_pdg == 111
 

@@ -31,16 +31,16 @@ def __is_mask_compatiable__(var : any, mask : ak.Array, verbose : bool = False):
     """Check whether a boolean mask has dimensions compatible with an array.
 
         Args:
-            var (any): Array or record array that the mask would index. For
-                record arrays, the first field is used to determine shape.
-            mask (ak.Array): Boolean mask whose event and nested dimensions are
-                compared with ``var``.
-            verbose (bool): Print the compared shapes and compatibility
-                decisions when true. Defaults to False.
+            var (any): Array or record array that the mask would index. For.
+                Record arrays, the first field is used to determine shape.
+            mask (ak.Array): Boolean mask whose event and nested dimensions are.
+                Compared with ``var``.
+            verbose (bool): Print the compared shapes and compatibility.
+                Decisions when true. Defaults to False.
 
         Returns:
-            bool: Whether ``var`` can be indexed with ``mask`` without a
-                dimension or per-event length mismatch. Returns ``None`` only
+            bool: Whether ``var`` can be indexed with ``mask`` without a.
+                Dimension or per-event length mismatch. Returns ``None`` only
                 if shape analysis reaches no explicit compatibility branch.
     """
     mask_shape = ak.num(mask, -1)
@@ -82,10 +82,10 @@ def __generic_filter__(data, filters: list, verbose : bool = True):
     """ Applies boolean masks (filters) to data.
 
         Args:
-            data (any): data class which has instance variables with compatible shapes to the filters
-            filters (list): list of filters
-            verbose (bool): Print the data and each variable being tested for
-                filtering. Defaults to True.
+            data (any): Data class which has instance variables with compatible shapes to the filters.
+            filters (list): List of filters.
+            verbose (bool): Print the data and each variable being tested for.
+                Filtering. Defaults to True.
     """
     if verbose: print(data)
     for f in filters:
@@ -105,10 +105,10 @@ def file_len(file : str) -> int:
     """ Get number of events of an PDSP Analyser Ntuple file.
 
         Args:
-            file (str): path of Ntuple.
+            file (str): Path of Ntuple.
 
         Returns:
-            int: Number of events
+            int: Number of events.
     """
     return len(io.RootIO(file).get(["EventID", "event"]))
 
@@ -124,51 +124,51 @@ class Data:
     """ Class to hold all event information read from the NTuple.
 
         Args:
-            file_descriptor (FileDescriptor): File path, ntuple layout, and
-                momentum scale used to construct the reader. If omitted, no
+            file_descriptor (FileDescriptor): File path, ntuple layout, and.
+                Momentum scale used to construct the reader. If omitted, no
                 file-backed event data are loaded.
-            n_events (int): Maximum number of entries to load; ``-1`` requests
-                all available entries. Defaults to -1.
-            start (int): First entry to read from the file. Must be
-                non-negative. Defaults to 0.
+            n_events (int): Maximum number of entries to load; ``-1`` requests.
+                All available entries. Defaults to -1.
+            start (int): First entry to read from the file. Must be.
+                Non-negative. Defaults to 0.
             verbose (bool): Whether to print filtering and shape diagnostics.
                 Defaults to False.
 
         Attributes:
             io (IO): IO class which is used for interfacing with the NTuple file (using uproot).
-            filename (str): NTuple file path passed to the reader. Defaults to
+            filename (str): NTuple file path passed to the reader. Defaults to.
                 None when no file descriptor is supplied.
-            n_events (int): Maximum number of events to study. Defaults to -1
-                (all available events).
-            start (int): Zero-based entry offset in the ROOT file. Defaults to
+            n_events (int): Maximum number of events to study. Defaults to -1.
+                (All available events).
+            start (int): Zero-based entry offset in the ROOT file. Defaults to.
                 0.
-            run (ak.Array): run number of each event.
-            sub_run (ak.Array): sub run number of each event.
-            event_num (ak.Array): event number of each event.
-            true_particles (TrueParticles): class to hold truth information.
-            recoParticles (RecoParticles): class to hold reco information.
-            true_particles_bt (TrueParticlesBT): class to hold backtracked truth information.
+            run (ak.Array): Run number of each event.
+            sub_run (ak.Array): Sub run number of each event.
+            event_num (ak.Array): Event number of each event.
+            true_particles (TrueParticles): Class to hold truth information.
+            recoParticles (RecoParticles): Class to hold reco information.
+            true_particles_bt (TrueParticlesBT): Class to hold backtracked truth information.
 
             Property Methods:
-            sorted_true_energy_mask (ak.Array): Indices of true photons ordered
-                by ascending energy.
+            sorted_true_energy_mask (ak.Array): Indices of true photons ordered.
+                By ascending energy.
 
             Methods:
-            find_events (dict): Return run, subrun, and event identifiers
-                selected by a boolean event mask.
-            mc_matching (tuple | Data | None): Match reconstructed showers
-                to true photons and either return masks, filter a copy, or
+            find_events (dict): Return run, subrun, and event identifiers.
+                Selected by a boolean event mask.
+            mc_matching (tuple | Data | None): Match reconstructed showers.
+                To true photons and either return masks, filter a copy, or
                 filter this instance in place.
-            match_by_angle_bt (tuple): Match showers to backtracked particles
-                by angular separation and return indices with an event mask.
-            create_specific_event_filter (ak.Array): Build a boolean mask from
-                requested subrun and event-number pairs.
-            filter (Data | None): Apply reconstructed and truth filters in
-                place or return a filtered copy.
-            apply_beam_filter (None): Filter the event sample to entries with
-                a beam PFO and a valid beam endpoint.
-            merge_pfo_cheat (tuple): Merge PFPs that backtrack to the same
-                truth particle and return the merged data with a validity mask.
+            match_by_angle_bt (tuple): Match showers to backtracked particles.
+                By angular separation and return indices with an event mask.
+            create_specific_event_filter (ak.Array): Build a boolean mask from.
+                Requested subrun and event-number pairs.
+            filter (Data | None): Apply reconstructed and truth filters in.
+                Place or return a filtered copy.
+            apply_beam_filter (None): Filter the event sample to entries with.
+                A beam PFO and a valid beam endpoint.
+            merge_pfo_cheat (tuple): Merge PFPs that backtrack to the same.
+                Truth particle and return the merged data with a validity mask.
             merge_shower (Data): Merge showers using reconstructed information.
             merge_shower_bt (Data): Merge showers using backtracked matching.
     """
@@ -178,13 +178,13 @@ class Data:
         """Create a file-backed event container and its particle-data views.
 
             Args:
-                file_descriptor (FileDescriptor): File path, ntuple layout, and
-                    momentum scale used to construct the reader. If omitted, no
+                file_descriptor (FileDescriptor): File path, ntuple layout, and.
+                    Momentum scale used to construct the reader. If omitted, no
                     file-backed event data are loaded.
-                n_events (int): Maximum number of entries to load; ``-1`` requests
-                    all available entries. Defaults to -1.
-                start (int): First entry to read from the file. Must be
-                    non-negative. Defaults to 0.
+                n_events (int): Maximum number of entries to load; ``-1`` requests.
+                    All available entries. Defaults to -1.
+                start (int): First entry to read from the file. Must be.
+                    Non-negative. Defaults to 0.
                 verbose (bool): Whether to print filtering and shape diagnostics.
                     Defaults to False.
         """
@@ -234,8 +234,8 @@ class Data:
         """Return indices of true photons ordered by ascending energy.
 
             Returns:
-                ak.Array: Per-event indices produced by sorting the true
-                    photon energies from lowest to highest.
+                ak.Array: Per-event indices produced by sorting the true.
+                    Photon energies from lowest to highest.
         """
         return ak.argsort(self.true_particles.energy[self.true_particles.true_photon_mask], ascending=True)
 
@@ -243,10 +243,10 @@ class Data:
         """ Returns the run, subrun and event number for events which pass a particlular filter.
 
             Args:
-                event_filter (ak.Array): mask which selects events (1D array)
+                event_filter (ak.Array): Mask which selects events (1D array).
 
             Returns:
-                dict: event, subrun and run.
+                dict: Event, subrun and run.
         """
         if ak.ravel(event_filter).type.type != ak.types.PrimitiveType("bool"):
             raise TypeError(
@@ -264,12 +264,12 @@ class Data:
             calculates mask of unmatched showers, needed for shower merging.
 
             Args:
-                cut (float, optional): cut on angle for event selection. Defaults to 0.25.
-                apply_filters (bool): if true applies matching filters to self, false returns the filters for the user to use. Defaults to True.
-                return_copy (bool): if true returns a filtered copy of the class, false applies to self. Defaults to False.
+                cut (float, optional): Cut on angle for event selection. Defaults to 0.25.
+                apply_filters (bool): If true applies matching filters to self, false returns the filters for the user to use. Defaults to True.
+                return_copy (bool): If true returns a filtered copy of the class, false applies to self. Defaults to False.
 
             Returns:
-                tuple | Data | None: If ``apply_filters`` is false, returns
+                tuple | Data | None: If ``apply_filters`` is false, returns.
                 ``(matched_mask, unmatched_mask, selection_mask)``. If filters
                 are applied with ``return_copy=True``, returns a filtered
                 ``Data`` copy; otherwise it filters this instance and returns
@@ -353,10 +353,10 @@ class Data:
         """ Equivlant to shower matching/angluar closeness cut, but for backtracked MC.
 
             Returns:
-                tuple: indices of reco particles with the smallest angular closeness ak.Array: boolean mask of events which pass the angle cut
+                tuple: indices of reco particles with the smallest angular closeness ak.Array: Boolean mask of events which pass the angle cut.
 
             Raises:
-                Exception: if all reco PFP's backtracked to the same true particle
+                Exception: If all reco PFP's backtracked to the same true particle.
         """
         null_direction = self.recoParticles.shower_direction.x == - \
             999  # boolean mask of PFP's with undefined direction
@@ -402,16 +402,16 @@ class Data:
 
     def create_specific_event_filter(self, event_nums: list) -> ak.Array:
         """ Create boolean mask which selects specific events and subruns to look at.
-            example: if you want to look at subrun 1 events 5, 6, 8 then event_nums is
+            example: If you want to look at subrun 1 events 5, 6, 8 then event_nums is.
             [(1, 5), (1, 6), (1, 8)]
             or the first event of subruns 1, 40 and 268:
-            [(1, 1), (40, 1), (268, 1)]
+            [(1, 1), (40, 1), (268, 1)].
 
             Args:
-                event_nums (list): list of tuples of the form (subrun, event_num)
+                event_nums (list): List of tuples of the form (subrun, event_num).
 
             Returns:
-                ak.Array: boolean mask of selected events
+                ak.Array: Boolean mask of selected events.
         """
         re = ak.concatenate([ak.unflatten(self.sub_run, 1),
                             ak.unflatten(self.event_num, 1)], 1)
@@ -426,13 +426,13 @@ class Data:
         """ Filter events or entries per event.
 
             Args:
-                reco_filters (list): list of filters to apply to reconstructed data. Defaults to [].
-                true_filters (list): list of filters to apply to true data. Defaults to [].
-                return_copy (bool): if true return a copy of filtered events, else change self
+                reco_filters (list): List of filters to apply to reconstructed data. Defaults to [].
+                true_filters (list): List of filters to apply to true data. Defaults to [].
+                return_copy (bool): If true return a copy of filtered events, else change self.
 
             Returns:
-                Data | None: A filtered ``Data`` copy when ``return_copy`` is
-                true; otherwise filters this instance in place and returns
+                Data | None: A filtered ``Data`` copy when ``return_copy`` is.
+                True; otherwise filters this instance in place and returns
                 ``None``.
         """
         if return_copy is False:
@@ -495,18 +495,18 @@ class Data:
         """ Merges all PFPs which backtrack to the same True particle.
 
             Args:
-                merge_method (int): method to calculate merged momenta/energy
+                merge_method (int): Method to calculate merged momenta/energy.
         """
         def sum_hits(hits: ak.Array):
             """Sum hit values along the innermost axis.
 
                 Args:
-                    hits (ak.Array): Per-PFO hit-count array to combine for
-                        each merged particle.
+                    hits (ak.Array): Per-PFO hit-count array to combine for.
+                        Each merged particle.
 
                 Returns:
-                    ak.Array: Hit-value sums for each event and merged
-                        particle.
+                    ak.Array: Hit-value sums for each event and merged.
+                        Particle.
             """
             sum_hits = ak.where(hits < 0, 0, hits)  # exclude null data
             sum_hits = ak.sum(hits, -1)
@@ -640,11 +640,11 @@ class Data:
         """ Merge shower not matched to MC to the spatially closest matched shower.
 
             Args:
-                matched (ak.Array): matched shower indicies
-                unmatched (ak.Array): boolean mask of unmatched showers
+                matched (ak.Array): Matched shower indicies.
+                unmatched (ak.Array): Boolean mask of unmatched showers.
 
             Returns:
-                Data: events with matched reco showers after merging
+                Data: Events with matched reco showers after merging.
         """
 
         events_matched = self.filter([matched], return_copy=True)
@@ -692,10 +692,10 @@ class Data:
         """ Merge showers using bactacked matching.
 
             Args:
-                best_match (ak.Array): mask of starting showers
+                best_match (ak.Array): Mask of starting showers.
 
             Returns:
-                Data: events with merged showers
+                Data: Events with merged showers.
         """
         if bool(ak.all(ak.num(self.recoParticles.shower_energy[self.recoParticles.shower_energy != -999]) == 2)) is True:
             counts = 0
@@ -783,7 +783,7 @@ class Data:
         """Return the cut table generated for this event sample.
 
             Args:
-                **kwargs (Any): Keyword arguments forwarded to
+                **kwargs (Any): Keyword arguments forwarded to.
                     ``cut_table.get_table``.
 
             Returns:
@@ -797,16 +797,16 @@ class ParticleData(ABC):
     """ Template for data classes which store particle information in events.
 
         Args:
-            events (Data): Parent event container that supplies the ntuple
-                reader, verbosity setting, and event-level filters.
+            events (Data): Parent event container that supplies the ntuple.
+                Reader, verbosity setting, and event-level filters.
 
         Attributes:
-            events (Data): parent class.
-            filters (list): list of filters applied/to apply to data
+            events (Data): Parent class.
+            filters (list): List of filters applied/to apply to data.
 
             Abstrct Methods:
             __init__:
-            calculate_pair_quantities: Calculate Shower pair quantities. #! shower pair quantities should be its own data class
+            calculate_pair_quantities: Calculate Shower pair quantities. #! Shower pair quantities should be its own data class.
             Methods:
             read_data: Reads data from NTuple to hidden attribute specific to the subclass.
             Filter (object): Filter data.
@@ -816,8 +816,8 @@ class ParticleData(ABC):
         """Attach the parent event container and initialize queued filters.
 
             Args:
-                events (Data): Parent event container whose ntuple data are
-                    exposed by this particle-data object.
+                events (Data): Parent event container whose ntuple data are.
+                    Exposed by this particle-data object.
         """
         self.events = events  # keep reference of parent class
         self.filters = []  # list of filters to apply to newly loaded data
@@ -834,8 +834,8 @@ class ParticleData(ABC):
         """Apply queued event masks to a loaded particle-data attribute.
 
             Args:
-                var (str): Name of the hidden particle-data attribute to which
-                    queued filters should be applied.
+                var (str): Name of the hidden particle-data attribute to which.
+                    Queued filters should be applied.
         """
         var_name = f"_{type(self).__name__}__{var}"
         for f in self.filters:
@@ -851,10 +851,10 @@ class ParticleData(ABC):
             which can then be called by the property method.
 
             Args:
-                name (str): variable name
-                ntuple_name (Any): Branch name to load, or three branch names
-                    for the x, y, and z components when ``is_vector`` is true.
-                is_vector (bool): Zip the three loaded branches into an
+                name (str): Variable name.
+                ntuple_name (Any): Branch name to load, or three branch names.
+                    For the x, y, and z components when ``is_vector`` is true.
+                is_vector (bool): Zip the three loaded branches into an.
                     Awkward record array when true. Defaults to False.
         """
         var_name = f"_{type(self).__name__}__{name}"  # variable name which chose to be hidden
@@ -875,13 +875,13 @@ class ParticleData(ABC):
         """Apply event masks to particle-data attributes in place or on a copy.
 
             Args:
-                filters (list): list of filters to apply to particle data.
-                return_copy (bool): Return a new instance with the filters
-                    applied when true; otherwise mutate this object. Defaults
+                filters (list): List of filters to apply to particle data.
+                return_copy (bool): Return a new instance with the filters.
+                    Applied when true; otherwise mutate this object. Defaults
                     to True.
 
             Returns:
-                ParticleData | None: A filtered instance when
+                ParticleData | None: A filtered instance when.
                 ``return_copy`` is true; otherwise applies the filters in place
                 and returns ``None``.
         """
@@ -905,25 +905,25 @@ class TrueParticleData(ParticleData):
     """ Particle data class for truth information.
 
         Args:
-            events (Data): Parent event container whose true-particle branches
-                are exposed by this object.
+            events (Data): Parent event container whose true-particle branches.
+                Are exposed by this object.
 
         Attributes:
-            (1 hidden attribute for each property method)
+            (1 hidden attribute for each property method).
             Property Methods:
-            pdg (ak.Array): pdg code
-            number (ak.Array): particle number
-            mother (ak.Array): number of mother particle
-            mother_pdg (ak.Array): mother pdg code
+            pdg (ak.Array): Pdg code.
+            number (ak.Array): Particle number.
+            mother (ak.Array): Number of mother particle.
+            mother_pdg (ak.Array): Mother pdg code.
             mass (ak.Array):
             energy (ak.Array):
             momentum (ak.Record):
             direction (ak.Record):
             shower_start_pos (ak.Record):
             end_pos (ak.Record):
-            pi0_mc (bool): check if we are looking at pure pi0 MC or beam MC
-            primary_pi0_mask (ak.Array): Pi0 produced from beam or generated by particle gun
-            true_photon_mask (ak.Array): get mask of photons which are daughter of the primary pi0
+            pi0_mc (bool): Check if we are looking at pure pi0 MC or beam MC.
+            primary_pi0_mask (ak.Array): Pi0 produced from beam or generated by particle gun.
+            true_photon_mask (ak.Array): Get mask of photons which are daughter of the primary pi0.
 
             Methods:
             calculate_pair_quantities (tuple): Calculate true shower pair quantities.
@@ -933,8 +933,8 @@ class TrueParticleData(ParticleData):
         """Initialize the truth-particle view of the parent event sample.
 
             Args:
-                events (Data): Parent event container whose true-particle
-                    branches are exposed by this object.
+                events (Data): Parent event container whose true-particle.
+                    Branches are exposed by this object.
         """
         super().__init__(events)
 
@@ -942,8 +942,8 @@ class TrueParticleData(ParticleData):
         """Combine a PDSP beam branch with its daughter and granddaughter branches.
 
             Args:
-                name (str): Hidden attribute name in which to cache the
-                    concatenated values.
+                name (str): Hidden attribute name in which to cache the.
+                    Concatenated values.
                 beam (str): Branch containing the beam particle's values.
                 daughter (str): Branch containing daughter-particle values.
                 grand_daughter (str): Branch containing granddaughter values.
@@ -961,10 +961,10 @@ class TrueParticleData(ParticleData):
                 name (str): Hidden attribute name in which to cache the vector.
                 beam (str): Three branch names for the beam particle's x, y,
                     and z components.
-                daughter (str): Three branch names for the daughter
-                    particles' x, y, and z components.
-                grand_daughter (str): Three branch names for the
-                    granddaughter particles' x, y, and z components.
+                daughter (str): Three branch names for the daughter.
+                    Particles' x, y, and z components.
+                grand_daughter (str): Three branch names for the.
+                    Granddaughter particles' x, y, and z components.
         """
         var_name = f"_{type(self).__name__}__{name}"
         if hasattr(self.events, "io") and not hasattr(self, var_name):
@@ -981,7 +981,7 @@ class TrueParticleData(ParticleData):
         """Return the true beam kinetic energy at each recorded trajectory point.
 
             Returns:
-                ak.Array: Beam-trajectory kinetic-energy values from the
+                ak.Array: Beam-trajectory kinetic-energy values from the.
                     ``true_beam_traj_KE`` branch.
         """
         self.read_data("beam_traj_KE", "true_beam_traj_KE")
@@ -992,8 +992,8 @@ class TrueParticleData(ParticleData):
         """Return the true beam trajectory positions as x, y, and z components.
 
             Returns:
-                ak.Record: Vector record assembled from the true beam trajectory
-                    coordinate branches.
+                ak.Record: Vector record assembled from the true beam trajectory.
+                    Coordinate branches.
         """
         self.read_data("beam_traj_pos", ["true_beam_traj_X", "true_beam_traj_Y", "true_beam_traj_Z"], is_vector = True)
         return getattr(self, f"_{type(self).__name__}__beam_traj_pos")
@@ -1018,8 +1018,8 @@ class TrueParticleData(ParticleData):
         """Return the identifier of each true particle.
 
             Returns:
-                ak.Array: Particle identifiers assembled from PDSP branches or
-                    read from the shower-merging ``g4_num`` branch.
+                ak.Array: Particle identifiers assembled from PDSP branches or.
+                    Read from the shower-merging ``g4_num`` branch.
         """
         if self.events.ntuple_type == NtupleType.PDSP:
             self.pdsp_data("number", "true_beam_ID", "true_beam_daughter_ID", "true_beam_Pi0_decay_ID")
@@ -1032,8 +1032,8 @@ class TrueParticleData(ParticleData):
         """Return the mother-particle identifier for each true particle.
 
             Returns:
-                ak.Array: Mother identifiers read from the shower-merging
-                    branch or constructed for PDSP beam, daughter, and
+                ak.Array: Mother identifiers read from the shower-merging.
+                    Branch or constructed for PDSP beam, daughter, and
                     granddaughter particles.
         """
         var_name = f"_{type(self).__name__}__mother"
@@ -1053,8 +1053,8 @@ class TrueParticleData(ParticleData):
         """Return the PDG code of each true particle's mother.
 
             Returns:
-                ak.Array: Mother PDG codes from ``g4_mother_Pdg`` for
-                    shower-merging ntuples. PDSP ntuples raise
+                ak.Array: Mother PDG codes from ``g4_mother_Pdg`` for.
+                    Shower-merging ntuples. PDSP ntuples raise
                     ``AttributeError`` because this field is unavailable.
         """
         if self.events.ntuple_type == NtupleType.PDSP:
@@ -1069,8 +1069,8 @@ class TrueParticleData(ParticleData):
         """Return each true particle's mass.
 
             Returns:
-                ak.Array: Mass values read from the shower-merging branch or
-                    obtained by mapping PDG codes to particle masses for PDSP
+                ak.Array: Mass values read from the shower-merging branch or.
+                    Obtained by mapping PDG codes to particle masses for PDSP
                     ntuples.
         """
         if self.events.ntuple_type == NtupleType.SHOWER_MERGING:
@@ -1101,8 +1101,8 @@ class TrueParticleData(ParticleData):
         """Return each true particle's energy.
 
             Returns:
-                ak.Array: Energy values read from the shower-merging branch or
-                    calculated for PDSP particles from momentum magnitude and
+                ak.Array: Energy values read from the shower-merging branch or.
+                    Calculated for PDSP particles from momentum magnitude and
                     mass.
         """
         if self.events.ntuple_type == NtupleType.SHOWER_MERGING:
@@ -1118,8 +1118,8 @@ class TrueParticleData(ParticleData):
         """Return each true particle's three-momentum.
 
             Returns:
-                ak.Record: Momentum vector built from PDSP start-momentum
-                    branches (scaled to MeV) or shower-merging component
+                ak.Record: Momentum vector built from PDSP start-momentum.
+                    Branches (scaled to MeV) or shower-merging component
                     branches.
         """
         var_name = f"_{type(self).__name__}__momentum"
@@ -1137,8 +1137,8 @@ class TrueParticleData(ParticleData):
         """Return unit direction vectors derived from true-particle momentum.
 
             Returns:
-                ak.Record: Normalized momentum vectors with x, y, and z
-                    components.
+                ak.Record: Normalized momentum vectors with x, y, and z.
+                    Components.
         """
         if not hasattr(self, f"_{type(self).__name__}__direction"):
             self.__direction = vector.normalize(self.momentum)
@@ -1149,8 +1149,8 @@ class TrueParticleData(ParticleData):
         """Return the starting position of each true particle.
 
             Returns:
-                ak.Record: Position vectors assembled from PDSP start-coordinate
-                    branches or shower-merging start-coordinate branches.
+                ak.Record: Position vectors assembled from PDSP start-coordinate.
+                    Branches or shower-merging start-coordinate branches.
         """
         if self.events.ntuple_type == NtupleType.PDSP:
             self.pdsp_data_vector("shower_start_pos", ["true_beam_startX", "true_beam_startY", "true_beam_startZ"], ["true_beam_daughter_startX", "true_beam_daughter_startY", "true_beam_daughter_startZ"], ["true_beam_Pi0_decay_startX", "true_beam_Pi0_decay_startY", "true_beam_Pi0_decay_startZ"])
@@ -1163,8 +1163,8 @@ class TrueParticleData(ParticleData):
         """Return the endpoint of each true particle.
 
             Returns:
-                ak.Record: Position vectors assembled from PDSP end-coordinate
-                    branches or shower-merging end-coordinate branches.
+                ak.Record: Position vectors assembled from PDSP end-coordinate.
+                    Branches or shower-merging end-coordinate branches.
         """
         if self.events.ntuple_type == NtupleType.PDSP:
             self.pdsp_data_vector("end_pos", ["true_beam_endX", "true_beam_endY", "true_beam_endZ"], ["true_beam_daughter_endX", "true_beam_daughter_endY", "true_beam_daughter_endZ"], ["true_beam_Pi0_decay_startX", "true_beam_Pi0_decay_startY", "true_beam_Pi0_decay_startZ"])
@@ -1177,8 +1177,8 @@ class TrueParticleData(ParticleData):
         """Return the PDSP count of daughter pi-zero particles.
 
             Returns:
-                type: Values read from ``true_daughter_nPi0``. This field is
-                    unavailable in shower-merging ntuples.
+                type: Values read from ``true_daughter_nPi0``. This field is.
+                    Unavailable in shower-merging ntuples.
         """
         if self.events.ntuple_type == NtupleType.SHOWER_MERGING:
             raise AttributeError(
@@ -1192,8 +1192,8 @@ class TrueParticleData(ParticleData):
         """Return the PDSP count of daughter positive pions.
 
             Returns:
-                type: Values read from ``true_daughter_nPiPlus``. This field is
-                    unavailable in shower-merging ntuples.
+                type: Values read from ``true_daughter_nPiPlus``. This field is.
+                    Unavailable in shower-merging ntuples.
         """
         if self.events.ntuple_type == NtupleType.SHOWER_MERGING:
             raise AttributeError(
@@ -1207,8 +1207,8 @@ class TrueParticleData(ParticleData):
         """Return the PDSP count of daughter negative pions.
 
             Returns:
-                type: Values read from ``true_daughter_nPiMinus``. This field
-                    is unavailable in shower-merging ntuples.
+                type: Values read from ``true_daughter_nPiMinus``. This field.
+                    Is unavailable in shower-merging ntuples.
         """
         if self.events.ntuple_type == NtupleType.SHOWER_MERGING:
             raise AttributeError(
@@ -1222,8 +1222,8 @@ class TrueParticleData(ParticleData):
         """Return the PDSP count of daughter protons.
 
             Returns:
-                type: Values read from ``true_daughter_nProton``. This field is
-                    unavailable in shower-merging ntuples.
+                type: Values read from ``true_daughter_nProton``. This field is.
+                    Unavailable in shower-merging ntuples.
         """
         if self.events.ntuple_type == NtupleType.SHOWER_MERGING:
             raise AttributeError(
@@ -1237,8 +1237,8 @@ class TrueParticleData(ParticleData):
         """Return the PDSP count of daughter neutrons.
 
             Returns:
-                type: Values read from ``true_daughter_nNeutron``. This field
-                    is unavailable in shower-merging ntuples.
+                type: Values read from ``true_daughter_nNeutron``. This field.
+                    Is unavailable in shower-merging ntuples.
         """
         if self.events.ntuple_type == NtupleType.SHOWER_MERGING:
             raise AttributeError(
@@ -1252,8 +1252,8 @@ class TrueParticleData(ParticleData):
         """Return the PDSP count of daughter nuclei.
 
             Returns:
-                type: Values read from ``true_daughter_nNucleus``. This field
-                    is unavailable in shower-merging ntuples.
+                type: Values read from ``true_daughter_nNucleus``. This field.
+                    Is unavailable in shower-merging ntuples.
         """
         if self.events.ntuple_type == NtupleType.SHOWER_MERGING:
             raise AttributeError(
@@ -1277,8 +1277,8 @@ class TrueParticleData(ParticleData):
         """Return the first true beam trajectory index with positive z.
 
             Returns:
-                ak.Array: Per-event index of the first trajectory point whose
-                    z coordinate is greater than zero.
+                ak.Array: Per-event index of the first trajectory point whose.
+                    Z coordinate is greater than zero.
         """
         return ak.argmax(self.beam_traj_pos.z > 0, -1, keepdims = True)
 
@@ -1287,7 +1287,7 @@ class TrueParticleData(ParticleData):
         """Return true beam kinetic energy at the first positive-z trajectory point.
 
             Returns:
-                ak.Array: Per-event kinetic energy selected by
+                ak.Array: Per-event kinetic energy selected by.
                     ``beam_ind_in_tpc`` from ``beam_traj_KE``.
         """
         return ak.flatten(self.beam_traj_KE[self.beam_ind_in_tpc])
@@ -1306,8 +1306,8 @@ class TrueParticleData(ParticleData):
         """Sum consecutive true beam trajectory distances within the z range.
 
             Returns:
-                ak.Array: Per-event track length calculated from points selected
-                    by ``in_tpc_z``.
+                ak.Array: Per-event track length calculated from points selected.
+                    By ``in_tpc_z``.
         """
         pos_in_tpc = self.beam_traj_pos[self.in_tpc_z]
         return ak.sum(vector.dist(pos_in_tpc[:, 1:], pos_in_tpc[:, :-1]), -1)
@@ -1331,8 +1331,8 @@ class TrueParticleData(ParticleData):
         """Select primary pi-zero particles in the current truth sample.
 
             Returns:
-                ak.Array: Boolean mask selecting particle 1 for pi0-gun MC, or
-                    particles with mother 1 and PDG code 111 for beam MC.
+                ak.Array: Boolean mask selecting particle 1 for pi0-gun MC, or.
+                    Particles with mother 1 and PDG code 111 for beam MC.
         """
         if self.pi0_mc:
             return np.logical_and(self.number == 1, self.pdg == 111)
@@ -1346,7 +1346,7 @@ class TrueParticleData(ParticleData):
         """Select true photons produced by the primary pi-zero decay.
 
             Returns:
-                ak.Array: Boolean mask selecting primary photon daughters with
+                ak.Array: Boolean mask selecting primary photon daughters with.
                     PDG code 22, using the primary pi-zero identifiers for
                     beam MC samples.
         """
@@ -1386,7 +1386,7 @@ class TrueParticleData(ParticleData):
         """ Calculate true shower pair quantities.
 
             Returns:
-                tuple: calculated quantities
+                tuple: Calculated quantities.
         """
         mask_pi0 = self.primary_pi0_mask
         if ak.all(ak.num(mask_pi0[mask_pi0]) <= 1) == False:
@@ -1421,58 +1421,58 @@ class RecoParticleData(ParticleData):
     """ Particle data class for reconstructed information.
 
         Args:
-            events (Data): Parent event container whose reconstructed-particle
-                branches are exposed by this object.
+            events (Data): Parent event container whose reconstructed-particle.
+                Branches are exposed by this object.
 
         Attributes:
-            (1 hidden attribute for each property method)
+            (1 hidden attribute for each property method).
 
             Property Methods:
-            beam_number (ak.Array): beam PFO number
-            slice_id (ak.Array): slice the PFO corresponds to
-            beam_slice_id (ak.Array): slice the beam PFO corresponds to
-            beam_cosmic_score (ak.Array): whether the reconstruction chain used was for a neutrino vertex (beam) or cosmics
-            beam_end_pos (ak.Record): end point of the beam particle
-            beam_start_pos (ak.Record): start point of the beam particle
-            beam_calo_wire (ak.Array): wire numbers of beam calorimetry
-            beam_michel_score (ak.Array): beam particle michel score
-            beam_n_hits (ak.Array): beam particle number of hits
-            beam_dEdx (ak.Array): beam particle dEdx
-            pandora_tag (ak.Array): label given to particles by pandora; track, shower or -999
-            number (ak.Array): PFO number
-            mother (ak.Array): number of mother PFO
-            n_hits (ak.Array): number of hits
-            n_hits_collection (ak.Array): number of collection plane hits
+            beam_number (ak.Array): Beam PFO number.
+            slice_id (ak.Array): Slice the PFO corresponds to.
+            beam_slice_id (ak.Array): Slice the beam PFO corresponds to.
+            beam_cosmic_score (ak.Array): Whether the reconstruction chain used was for a neutrino vertex (beam) or cosmics.
+            beam_end_pos (ak.Record): End point of the beam particle.
+            beam_start_pos (ak.Record): Start point of the beam particle.
+            beam_calo_wire (ak.Array): Wire numbers of beam calorimetry.
+            beam_michel_score (ak.Array): Beam particle michel score.
+            beam_n_hits (ak.Array): Beam particle number of hits.
+            beam_dEdx (ak.Array): Beam particle dEdx.
+            pandora_tag (ak.Array): Label given to particles by pandora; track, shower or -999.
+            number (ak.Array): PFO number.
+            mother (ak.Array): Number of mother PFO.
+            n_hits (ak.Array): Number of hits.
+            n_hits_collection (ak.Array): Number of collection plane hits.
             energy (ak.Array):
             momentum (ak.Record):
             shower_direction (ak.Record):
             shower_start_pos (ak.Record):
-            shower_length (ak.Array): length of shower (if applicable)
-            showerConeAngle (ak.Array): width of shower (if applicable)
-            em_score (ak.Array): shower like score
-            track_score (ak.Array): track like score
-            cnn_score (ak.Array): em_score/(em_score + track_score)
-            space_points (ak.Record): hit space points
-            channel (ak.Array): hit channel
-            peak_time (ak.Array): hit peak time
-            integral (ak.Array): hit integral
-            hit_energy (ak.Array): hit energy
-            track_dEdX (ak.Array): dEdX (if PFO is interpreted as track like)
+            shower_length (ak.Array): Length of shower (if applicable).
+            showerConeAngle (ak.Array): Width of shower (if applicable).
+            em_score (ak.Array): Shower like score.
+            track_score (ak.Array): Track like score.
+            cnn_score (ak.Array): Em_score/(em_score + track_score).
+            space_points (ak.Record): Hit space points.
+            channel (ak.Array): Hit channel.
+            peak_time (ak.Array): Hit peak time.
+            integral (ak.Array): Hit integral.
+            hit_energy (ak.Array): Hit energy.
+            track_dEdX (ak.Array): DEdX (if PFO is interpreted as track like).
 
 
             Methods:
             calculate_pair_quantities (tuple): Calculate reconstructed shower pair quantities.
-            get_pair_values (ak.Array): Get shower pair values, in pairs
+            get_pair_values (ak.Array): Get shower pair values, in pairs.
             all_shower_pairs (list): Get all unique shower pair combinations.
-            shower_pairs_by_hits (ak.list): get shower pairs by leading in energy #! not used
+            shower_pairs_by_hits (ak.list): Get shower pairs by leading in energy #! Not used.
     """
 
     def __init__(self, events: Data) -> None:
         """Initialize the reconstructed-particle view of the parent event sample.
 
             Args:
-                events (Data): Parent event container whose reconstructed
-                    particle branches are exposed by this object.
+                events (Data): Parent event container whose reconstructed.
+                    Particle branches are exposed by this object.
         """
         super().__init__(events)
 
@@ -1481,8 +1481,8 @@ class RecoParticleData(ParticleData):
         """Return the PFO identifier assigned to the beam particle.
 
             Returns:
-                ak.Array: Per-event beam PFO identifiers read from the
-                    available beam-number branch.
+                ak.Array: Per-event beam PFO identifiers read from the.
+                    Available beam-number branch.
         """
         self.read_data("beam_number", ["beamNum", "reco_beam_PFP_ID"])
         return getattr(self, f"_{type(self).__name__}__beam_number")
@@ -1502,7 +1502,7 @@ class RecoParticleData(ParticleData):
         """Return the beam candidate's cosmic-classification score.
 
             Returns:
-                ak.Array: Per-event values from
+                ak.Array: Per-event values from.
                     ``reco_daughter_allShower_beamCosmicScore``.
         """
         self.read_data("beam_cosmic_score",
@@ -1514,8 +1514,8 @@ class RecoParticleData(ParticleData):
         """Return the space-charge-corrected beam endpoint.
 
             Returns:
-                ak.Record: Per-event x, y, and z endpoint coordinates loaded
-                    from the SCE-corrected beam branches.
+                ak.Record: Per-event x, y, and z endpoint coordinates loaded.
+                    From the SCE-corrected beam branches.
         """
         ntuples = [
             ["reco_beam_calo_endX"],
@@ -1530,8 +1530,8 @@ class RecoParticleData(ParticleData):
         """Return the uncorrected beam endpoint.
 
             Returns:
-                ak.Record: Per-event x, y, and z endpoint coordinates loaded
-                    from the beam endpoint branches.
+                ak.Record: Per-event x, y, and z endpoint coordinates loaded.
+                    From the beam endpoint branches.
         """
         ntuples = [
             ["reco_beam_endX"],
@@ -1546,8 +1546,8 @@ class RecoParticleData(ParticleData):
         """Return the space-charge-corrected beam start position.
 
             Returns:
-                ak.Record: Per-event x, y, and z start coordinates loaded from
-                    the SCE-corrected beam branches.
+                ak.Record: Per-event x, y, and z start coordinates loaded from.
+                    The SCE-corrected beam branches.
         """
         ntuples = [
             ["reco_beam_calo_startX"], # the first name in the list is prioritised.
@@ -1562,8 +1562,8 @@ class RecoParticleData(ParticleData):
         """Return the uncorrected beam start position.
 
             Returns:
-                ak.Record: Per-event x, y, and z start coordinates loaded from
-                    the beam start-position branches.
+                ak.Record: Per-event x, y, and z start coordinates loaded from.
+                    The beam start-position branches.
         """
         ntuples = [
             ["reco_beam_startX"], # the first name in the list is prioritised.
@@ -1578,7 +1578,7 @@ class RecoParticleData(ParticleData):
         """Return the beam calorimetry position coordinates.
 
             Returns:
-                ak.Record: Per-event x, y, and z positions assembled from
+                ak.Record: Per-event x, y, and z positions assembled from.
                     ``reco_beam_calo_X``, ``reco_beam_calo_Y``, and
                     ``reco_beam_calo_Z``.
         """
@@ -1600,7 +1600,7 @@ class RecoParticleData(ParticleData):
         """Return the beam-vertex Michel-electron score.
 
             Returns:
-                ak.Array: Per-event values from
+                ak.Array: Per-event values from.
                     ``reco_beam_vertex_michel_score``.
         """
         self.read_data("beam_michel_score", "reco_beam_vertex_michel_score")
@@ -1611,7 +1611,7 @@ class RecoParticleData(ParticleData):
         """Return the collection-plane track score for the beam PFO.
 
             Returns:
-                ak.Array: Per-event values from
+                ak.Array: Per-event values from.
                     ``reco_beam_PFP_trackScore_collection``.
         """
         self.read_data("beam_track_score", "reco_beam_PFP_trackScore_collection")
@@ -1642,7 +1642,7 @@ class RecoParticleData(ParticleData):
         """Return calibrated, space-charge-corrected beam dE/dx values.
 
             Returns:
-                ak.Array: Per-event values from
+                ak.Array: Per-event values from.
                     ``reco_beam_calibrated_dEdX_SCE``.
         """
         self.read_data("beam_dEdX_calibrated", "reco_beam_calibrated_dEdX_SCE")
@@ -1653,7 +1653,7 @@ class RecoParticleData(ParticleData):
         """Return the beam-event reconstructability flag.
 
             Returns:
-                ak.Array: Per-event values from
+                ak.Array: Per-event values from.
                     ``reco_reconstructable_beam_event``.
         """
         self.read_data("reco_reconstructable_beam_event", "reco_reconstructable_beam_event")
@@ -1714,8 +1714,8 @@ class RecoParticleData(ParticleData):
         """Return the beam-instrumentation direction vectors.
 
             Returns:
-                ak.Record: Per-event x, y, and z components assembled from
-                    instrumentation direction branches.
+                ak.Record: Per-event x, y, and z components assembled from.
+                    Instrumentation direction branches.
         """
         ntuples = [
             ["beam_inst_dirX"], # the first name in the list is prioritised.
@@ -1731,7 +1731,7 @@ class RecoParticleData(ParticleData):
         """Return the beam-instrumentation position vectors.
 
             Returns:
-                ak.Record: Per-event x, y, and z coordinates assembled from
+                ak.Record: Per-event x, y, and z coordinates assembled from.
                     ``beam_inst_X``, ``beam_inst_Y``, and ``beam_inst_Z``.
         """
         self.read_data("beam_inst_pos", ["beam_inst_X", "beam_inst_Y", "beam_inst_Z"], is_vector = True)
@@ -1742,7 +1742,7 @@ class RecoParticleData(ParticleData):
         """Return the PDG hypotheses recorded by beam instrumentation.
 
             Returns:
-                ak.Array: Per-event candidate values from
+                ak.Array: Per-event candidate values from.
                     ``beam_inst_PDG_candidates``.
         """
         self.read_data("beam_inst_pdg_candidates", "beam_inst_PDG_candidates")
@@ -1753,8 +1753,8 @@ class RecoParticleData(ParticleData):
         """Return Pandora's particle-type tag for each reconstructed PFO.
 
             Returns:
-                ak.Array: Tag values from ``pandoraTag`` identifying the
-                    reconstruction classification.
+                ak.Array: Tag values from ``pandoraTag`` identifying the.
+                    Reconstruction classification.
         """
         self.read_data("pandora_tag", "pandoraTag") # This information is not stored for daughter PFOs in PDSPAnalyser
         return getattr(self, f"_{type(self).__name__}__pandora_tag")
@@ -1774,8 +1774,8 @@ class RecoParticleData(ParticleData):
         """Return the identifier of each reconstructed PFO.
 
             Returns:
-                ak.Array: PFO identifiers from the available reconstructed
-                    particle ID branch.
+                ak.Array: PFO identifiers from the available reconstructed.
+                    Particle ID branch.
         """
         self.read_data("number", ["reco_PFP_ID", "reco_daughter_PFP_ID"])
         return getattr(self, f"_{type(self).__name__}__number")
@@ -1815,8 +1815,8 @@ class RecoParticleData(ParticleData):
         """Return the start-position vector for each reconstructed track.
 
             Returns:
-                ak.Record: Per-track x, y, and z coordinates assembled from
-                    the track-start branches.
+                ak.Record: Per-track x, y, and z coordinates assembled from.
+                    The track-start branches.
         """
         ntuples = [
             "reco_daughter_allTrack_startX",
@@ -1831,8 +1831,8 @@ class RecoParticleData(ParticleData):
         """Return the start-position vector for each reconstructed shower.
 
             Returns:
-                ak.Record: Per-shower x, y, and z coordinates assembled from
-                    the shower-start branches.
+                ak.Record: Per-shower x, y, and z coordinates assembled from.
+                    The shower-start branches.
         """
         ntuples = [
             "reco_daughter_allShower_startX",
@@ -1847,8 +1847,8 @@ class RecoParticleData(ParticleData):
         """Return the initial direction vector for each reconstructed track.
 
             Returns:
-                ak.Record: Per-track x, y, and z components assembled from the
-                    track-start direction branches.
+                ak.Record: Per-track x, y, and z components assembled from the.
+                    Track-start direction branches.
         """
         ntuples = [
             "reco_daughter_allTrack_startDirX",
@@ -1863,8 +1863,8 @@ class RecoParticleData(ParticleData):
         """Return the direction vector for each reconstructed shower.
 
             Returns:
-                ak.Record: Per-shower x, y, and z components assembled from
-                    the shower direction branches.
+                ak.Record: Per-shower x, y, and z components assembled from.
+                    The shower direction branches.
         """
         ntuples = [
             "reco_daughter_allShower_dirX",
@@ -1879,8 +1879,8 @@ class RecoParticleData(ParticleData):
         """Return the endpoint vector for each reconstructed track.
 
             Returns:
-                ak.Record: Per-track x, y, and z coordinates assembled from
-                    the track-end branches.
+                ak.Record: Per-track x, y, and z coordinates assembled from.
+                    The track-end branches.
         """
         ntuples = [
             "reco_daughter_allTrack_endX",
@@ -1905,8 +1905,8 @@ class RecoParticleData(ParticleData):
         """Calculate shower momentum from reconstructed energy and direction.
 
             Returns:
-                ak.Record: Momentum vectors; entries with a null direction or
-                    negative energy are replaced with the null vector.
+                ak.Record: Momentum vectors; entries with a null direction or.
+                    Negative energy are replaced with the null vector.
         """
         if not hasattr(self, f"_{type(self).__name__}__shower_momentum"):
             mom = vector.prod(self.shower_energy, self.shower_direction)
@@ -1971,8 +1971,8 @@ class RecoParticleData(ParticleData):
         """Return the reconstructed space-point coordinates for PFO hits.
 
             Returns:
-                ak.Record: Hit-position coordinates assembled from the
-                    reconstructed space-point branches.
+                ak.Record: Hit-position coordinates assembled from the.
+                    Reconstructed space-point branches.
         """
         ntuples = [
             "reco_daughter_allShower_spacePointX",
@@ -1987,8 +1987,8 @@ class RecoParticleData(ParticleData):
         """Return the readout channel associated with each reconstructed hit.
 
             Returns:
-                ak.Array: Channel values from the reconstructed shower hit
-                    branch.
+                ak.Array: Channel values from the reconstructed shower hit.
+                    Branch.
         """
         self.read_data("channel", "reco_daughter_allShower_hit_channel") # not in PDSPAnalyser
         return getattr(self, f"_{type(self).__name__}__channel")
@@ -1998,8 +1998,8 @@ class RecoParticleData(ParticleData):
         """Return the peak time of each reconstructed shower hit.
 
             Returns:
-                ak.Array: Values from the reconstructed shower hit peak-time
-                    branch.
+                ak.Array: Values from the reconstructed shower hit peak-time.
+                    Branch.
         """
         self.read_data("peak_time", "reco_daughter_allShower_hit_peakTime") # not in PDSPAnalyser
         return getattr(self, f"_{type(self).__name__}__peak_time")
@@ -2009,8 +2009,8 @@ class RecoParticleData(ParticleData):
         """Return the charge integral for each reconstructed shower hit.
 
             Returns:
-                ak.Array: Values from the reconstructed shower hit integral
-                    branch.
+                ak.Array: Values from the reconstructed shower hit integral.
+                    Branch.
         """
         self.read_data("integral", "reco_daughter_allSHower_hit_integral") # not in PDSPAnalyser
         return getattr(self, f"_{type(self).__name__}__integral")
@@ -2020,8 +2020,8 @@ class RecoParticleData(ParticleData):
         """Return the reconstructed energy associated with each shower hit.
 
             Returns:
-                ak.Array: Values from the reconstructed shower hit energy
-                    branch.
+                ak.Array: Values from the reconstructed shower hit energy.
+                    Branch.
         """
         self.read_data("hit_energy", "reco_daughter_allShower_hit_energy") # not in PDSPAnalyser
         return getattr(self, f"_{type(self).__name__}__hit_energy")
@@ -2091,8 +2091,8 @@ class RecoParticleData(ParticleData):
         """Return the degrees of freedom for pion-hypothesis track fits.
 
             Returns:
-                ak.Array: Values from the pion track-fit degrees-of-freedom
-                    branch.
+                ak.Array: Values from the pion track-fit degrees-of-freedom.
+                    Branch.
         """
         self.read_data("track_chi2_pion_ndof", "reco_daughter_allTrack_Chi2_ndof_pion")
         return getattr(self, f"_{type(self).__name__}__track_chi2_pion_ndof")
@@ -2112,8 +2112,8 @@ class RecoParticleData(ParticleData):
         """Return the degrees of freedom for muon-hypothesis track fits.
 
             Returns:
-                ak.Array: Values from the muon track-fit degrees-of-freedom
-                    branch.
+                ak.Array: Values from the muon track-fit degrees-of-freedom.
+                    Branch.
         """
         self.read_data("track_chi2_muon_ndof", "reco_daughter_allTrack_Chi2_ndof_muon")
         return getattr(self, f"_{type(self).__name__}__track_chi2_muon_ndof")
@@ -2143,7 +2143,7 @@ class RecoParticleData(ParticleData):
         """Return the Michel score at each reconstructed track vertex.
 
             Returns:
-                ak.Array: Values from
+                ak.Array: Values from.
                     ``reco_daughter_allTrack_vertex_michel_score``.
         """
         self.read_data("track_vertex_michel", "reco_daughter_allTrack_vertex_michel_score")
@@ -2164,8 +2164,8 @@ class RecoParticleData(ParticleData):
         """Return Pandora's reconstruction tag for the beam PFO.
 
             Returns:
-                ak.Array: Per-event beam tags read from PDSP data or selected
-                    from the shower-merging PFO tags; missing tags are filled
+                ak.Array: Per-event beam tags read from PDSP data or selected.
+                    From the shower-merging PFO tags; missing tags are filled
                     with ``-999``.
         """
         if self.events.ntuple_type == NtupleType.SHOWER_MERGING:
@@ -2182,8 +2182,8 @@ class RecoParticleData(ParticleData):
         """Calculate beam track length from its calorimetry trajectory points.
 
             Returns:
-                ak.Array: Per-event sum of distances between consecutive beam
-                    calorimetry positions.
+                ak.Array: Per-event sum of distances between consecutive beam.
+                    Calorimetry positions.
         """
         setattr(self, f"_{type(self).__name__}__beam_track_length", self.track_length(self.beam_calo_pos))
         return getattr(self, f"_{type(self).__name__}__beam_track_length")
@@ -2192,14 +2192,14 @@ class RecoParticleData(ParticleData):
         """Sum distances between consecutive points in each trajectory.
 
             Args:
-                trajectory_points (Any): Per-event sequence of ordered
-                    three-dimensional trajectory points.
-                threshold (Any): Maximum number of events processed per chunk
-                    before concatenating chunk results. Defaults to 200000.
+                trajectory_points (Any): Per-event sequence of ordered.
+                    Three-dimensional trajectory points.
+                threshold (Any): Maximum number of events processed per chunk.
+                    Before concatenating chunk results. Defaults to 200000.
 
             Returns:
-                Any: Per-event trajectory lengths computed as the sum of
-                    distances between adjacent points.
+                Any: Per-event trajectory lengths computed as the sum of.
+                    Distances between adjacent points.
         """
         if ak.num(trajectory_points, 0) > threshold:
             n_chunks =  ak.num(trajectory_points, 0) // threshold
@@ -2217,8 +2217,8 @@ class RecoParticleData(ParticleData):
         """ Calculate reconstructed shower pair quantities.
 
             Args:
-                use_bt (bool): Sort reconstructed showers using backtracked
-                    truth energies when true; otherwise use the true-photon
+                use_bt (bool): Sort reconstructed showers using backtracked.
+                    Truth energies when true; otherwise use the true-photon
                     energy ordering from the parent event data. Defaults to
                     False.
 
@@ -2275,11 +2275,11 @@ class RecoParticleData(ParticleData):
         """ Get shower pair values, in pairs.
 
             Args:
-                pairs (list): shower pairs per event
-                value (ak.Array): values to retrieve
+                pairs (list): Shower pairs per event.
+                value (ak.Array): Values to retrieve.
 
             Returns:
-                ak.Array: paired showers values per event
+                ak.Array: Paired showers values per event.
         """
         paired = []
         for i in range(len(pairs)):
@@ -2298,10 +2298,10 @@ class RecoParticleData(ParticleData):
         """ Get all unique shower pair combinations.
 
             Args:
-                nd (ak.Array): number of daughters in an event
+                nd (ak.Array): Number of daughters in an event.
 
             Returns:
-                list: Jagged array of pairs per event
+                list: Jagged array of pairs per event.
         """
         pairs = []
         for i in range(len(nd)):
@@ -2314,12 +2314,12 @@ class RecoParticleData(ParticleData):
         """Pair reconstructed showers by descending collection-plane hit count.
 
             Args:
-                hits (ak.Array): Per-event collection-plane hit counts for
-                    reconstructed daughter PFPs.
+                hits (ak.Array): Per-event collection-plane hit counts for.
+                    Reconstructed daughter PFPs.
 
             Returns:
-                list: Per-event lists containing at most one pair: the indices
-                    of the two highest-hit showers, or an empty list when an
+                list: Per-event lists containing at most one pair: The indices.
+                    Of the two highest-hit showers, or an empty list when an
                     event has fewer than two showers.
         """
         showers = ak.argsort(
@@ -2336,45 +2336,45 @@ class TrueParticleDataBT(ParticleData):
     """ Particle data class for backtracked truth information.
 
         Args:
-            events (Data): Parent event container whose reconstructed-particle
-                truth-by-hits branches are exposed by this object.
+            events (Data): Parent event container whose reconstructed-particle.
+                Truth-by-hits branches are exposed by this object.
 
         Attributes:
-            (1 hidden attribute for each property method)
+            (1 hidden attribute for each property method).
             Property Methods:
-            number (ak.Array): backtracked particle number
-            mother (ak.Array): backtracked particle number of mother
-            pdg (ak.Array): pdg code of backtracked particle
-            mother_pdg (ak.Array): pdg code of mother of backtracked particle
+            number (ak.Array): Backtracked particle number.
+            mother (ak.Array): Backtracked particle number of mother.
+            pdg (ak.Array): Pdg code of backtracked particle.
+            mother_pdg (ak.Array): Pdg code of mother of backtracked particle.
             shower_start_pos (ak.Record):
             end_pos (ak.Record):
             momentum (ak.Record):
             energy (ak.Array):
-            energy_by_hits (ak.Array): energy of the true particle, calculated from the true hits
+            energy_by_hits (ak.Array): Energy of the true particle, calculated from the true hits.
             direction (ak.Record):
-            hit_in_reco_cluster (ak.Array): total hits in a reco cluster
-            n_hits (ak.Array): true particle hits
-            sharedHits (ak.Array): hits shared by both reco and backtracked true particle
-            true_beam_vertex (ak.Record): end poisition of backtracked true beam particle
-            purity (ak.Array): fraction of shared hits in reconstructed object
-            completeness (ak.Array): fraction of shared hits in the backtrackted true particle
-            hit_in_reco_cluster_collection (ak.Array): total hits in a reco cluster
-            n_hits_collection (ak.Array): true particle hits
-            shared_hits_collection (ak.Array): hits shared by both reco and backtracked true particle
-            true_beam_vertex_collection (ak.Record): end poisition of backtracked true beam particle
-            purity_collection (ak.Array): fraction of shared hits in reconstructed object
-            completeness_collection (ak.Array): fraction of shared hits in the backtrackted true particle
-            space_points (ak.Record): hit space points
-            channel (ak.Array): hit channel
-            peak_time (ak.Array): hit peak time
-            integral (ak.Array): hit integral
-            hit_energy (ak.Array): hit energy
+            hit_in_reco_cluster (ak.Array): Total hits in a reco cluster.
+            n_hits (ak.Array): True particle hits.
+            sharedHits (ak.Array): Hits shared by both reco and backtracked true particle.
+            true_beam_vertex (ak.Record): End poisition of backtracked true beam particle.
+            purity (ak.Array): Fraction of shared hits in reconstructed object.
+            completeness (ak.Array): Fraction of shared hits in the backtrackted true particle.
+            hit_in_reco_cluster_collection (ak.Array): Total hits in a reco cluster.
+            n_hits_collection (ak.Array): True particle hits.
+            shared_hits_collection (ak.Array): Hits shared by both reco and backtracked true particle.
+            true_beam_vertex_collection (ak.Record): End poisition of backtracked true beam particle.
+            purity_collection (ak.Array): Fraction of shared hits in reconstructed object.
+            completeness_collection (ak.Array): Fraction of shared hits in the backtrackted true particle.
+            space_points (ak.Record): Hit space points.
+            channel (ak.Array): Hit channel.
+            peak_time (ak.Array): Hit peak time.
+            integral (ak.Array): Hit integral.
+            hit_energy (ak.Array): Hit energy.
 
-            partice_number (ak.Array): placeholder for ROOT files which don't have the particle number stored as NTuples
-            single_match (ak.Array): mask of events with only 1 unique backtracked particle
+            partice_number (ak.Array): Placeholder for ROOT files which don't have the particle number stored as NTuples.
+            single_match (ak.Array): Mask of events with only 1 unique backtracked particle.
 
             Methods:
-            GetUniqueParticleNumbers (ak.Array): Get unique array of particle numbers
+            GetUniqueParticleNumbers (ak.Array): Get unique array of particle numbers.
             calculate_pair_quantities (tuple): Calculate backtracked shower pair quantities.
     """
 
@@ -2382,8 +2382,8 @@ class TrueParticleDataBT(ParticleData):
         """Initialize the backtracked-truth view of the parent event sample.
 
             Args:
-                events (Data): Parent event container whose backtracked truth
-                    branches are exposed by this object.
+                events (Data): Parent event container whose backtracked truth.
+                    Branches are exposed by this object.
         """
         super().__init__(events)
 
@@ -2402,8 +2402,8 @@ class TrueParticleDataBT(ParticleData):
         """Return the identifier of each backtracked particle's mother.
 
             Returns:
-                ak.Array: Mother identifiers from the available
-                    true-by-hits mother or parent-ID branch.
+                ak.Array: Mother identifiers from the available.
+                    True-by-hits mother or parent-ID branch.
         """
         self.read_data("mother", ["reco_daughter_PFP_true_byHits_Mother", "reco_daughter_PFP_true_byHits_parID"])
         return getattr(self, f"_{type(self).__name__}__mother")
@@ -2423,8 +2423,8 @@ class TrueParticleDataBT(ParticleData):
         """Return the PDG code of each backtracked particle's mother.
 
             Returns:
-                ak.Array: Values from the available true-by-hits mother-PDG or
-                    parent-PDG branch.
+                ak.Array: Values from the available true-by-hits mother-PDG or.
+                    Parent-PDG branch.
         """
         self.read_data("mother_pdg", ["reco_daughter_PFP_true_byHits_Mother_pdg", "reco_daughter_PFP_true_byHits_parPDG"])
         return getattr(self, f"_{type(self).__name__}__mother_pdg")
@@ -2434,8 +2434,8 @@ class TrueParticleDataBT(ParticleData):
         """Return the starting position of the truth particle matched to each PFO.
 
             Returns:
-                ak.Record: x, y, and z coordinates assembled from the
-                    true-by-hits start-position branches.
+                ak.Record: X, y, and z coordinates assembled from the.
+                    True-by-hits start-position branches.
         """
         ntuples = [
             "reco_daughter_PFP_true_byHits_startX",
@@ -2450,8 +2450,8 @@ class TrueParticleDataBT(ParticleData):
         """Return the endpoint of the truth particle matched to each PFO.
 
             Returns:
-                ak.Record: x, y, and z coordinates assembled from the
-                    true-by-hits end-position branches.
+                ak.Record: X, y, and z coordinates assembled from the.
+                    True-by-hits end-position branches.
         """
         ntuples = [
             "reco_daughter_PFP_true_byHits_endX",
@@ -2466,8 +2466,8 @@ class TrueParticleDataBT(ParticleData):
         """Return the momentum vector of the truth particle matched to each PFO.
 
             Returns:
-                ak.Record: x, y, and z components loaded from the available
-                    true-by-hits momentum branches.
+                ak.Record: X, y, and z components loaded from the available.
+                    True-by-hits momentum branches.
         """
         ntuples = [
             ["reco_daughter_PFP_true_byHits_pX", "reco_daughter_PFP_true_byHits_startPx"],
@@ -2482,8 +2482,8 @@ class TrueParticleDataBT(ParticleData):
         """Return unit direction vectors computed from backtracked momentum.
 
             Returns:
-                ak.Record: Normalized momentum vectors with x, y, and z
-                    components.
+                ak.Record: Normalized momentum vectors with x, y, and z.
+                    Components.
         """
         if not hasattr(self, f"_{type(self).__name__}__direction"):
             self.__direction = vector.normalize(self.momentum)
@@ -2506,7 +2506,7 @@ class TrueParticleDataBT(ParticleData):
         """Return the uncorrected energy-by-hits estimate for each particle.
 
             Returns:
-                ak.Array: Values from
+                ak.Array: Values from.
                     ``reco_daughter_PFP_true_byHits_EnergyByHits``; used by
                     shower-merging ntuples.
         """
@@ -2518,8 +2518,8 @@ class TrueParticleDataBT(ParticleData):
         """Return the correction applied to each energy-by-hits estimate.
 
             Returns:
-                ak.Array: Values from the true-by-hits energy-correction
-                    branch; used by shower-merging ntuples.
+                ak.Array: Values from the true-by-hits energy-correction.
+                    Branch; used by shower-merging ntuples.
         """
         self.read_data("energy_by_hits_correction", "reco_daughter_PFP_true_byHits_EnergyByHits_correction")
         return getattr(self, f"_{type(self).__name__}__energy_by_hits_correction") # for shower merging only
@@ -2529,8 +2529,8 @@ class TrueParticleDataBT(ParticleData):
         """Return the energy-by-hits estimate after subtracting its correction.
 
             Returns:
-                ak.Array: Uncorrected energy-by-hits values minus the
-                    corresponding correction, or ``None`` if either input is
+                ak.Array: Uncorrected energy-by-hits values minus the.
+                    Corresponding correction, or ``None`` if either input is
                     unavailable.
         """
         if type(self.energy_by_hits_uncorrected) == ak.highlevel.Array and type(self.energy_by_hits_correction) == ak.highlevel.Array:
@@ -2545,8 +2545,8 @@ class TrueParticleDataBT(ParticleData):
         """Calculate a momentum vector using energy-by-hits and the truth direction.
 
             Returns:
-                ak.Record: Momentum vectors formed from energy-by-hits and
-                    normalized truth momentum; invalid directions or negative
+                ak.Record: Momentum vectors formed from energy-by-hits and.
+                    Normalized truth momentum; invalid directions or negative
                     starting energies produce null vectors.
         """
         if not hasattr(self, f"_{type(self).__name__}__momentum_by_hits"):
@@ -2564,8 +2564,8 @@ class TrueParticleDataBT(ParticleData):
         """Return the number of true-particle hits found in each reconstructed cluster.
 
             Returns:
-                ak.Array: Values from the true-by-hits hits-in-reconstructed-
-                    cluster branch.
+                ak.Array: Values from the true-by-hits hits-in-reconstructed-.
+                    Cluster branch.
         """
         self.read_data("hit_in_reco_cluster", "reco_daughter_PFP_true_byHits_hitsInRecoCluster")
         return getattr(self, f"_{type(self).__name__}__hit_in_reco_cluster") # PDSPAnalyser does not store this
@@ -2575,8 +2575,8 @@ class TrueParticleDataBT(ParticleData):
         """Return the total true-particle hit count matched to each PFO.
 
             Returns:
-                ak.Array: Values from the true-by-hits particle hit-count
-                    branch.
+                ak.Array: Values from the true-by-hits particle hit-count.
+                    Branch.
         """
         self.read_data("n_hits", "reco_daughter_PFP_true_byHits_nHits")
         return getattr(self, f"_{type(self).__name__}__n_hits") # PDSPAnalyser does not store this
@@ -2596,8 +2596,8 @@ class TrueParticleDataBT(ParticleData):
         """Return collection-plane true-particle hits in each reconstructed cluster.
 
             Returns:
-                ak.Array: Values from the collection-plane hits-in-cluster
-                    branch.
+                ak.Array: Values from the collection-plane hits-in-cluster.
+                    Branch.
         """
         self.read_data("hit_in_reco_cluster_collection", "reco_daughter_PFP_true_byHits_hitsInRecoCluster_collection")
         return getattr(self, f"_{type(self).__name__}__hit_in_reco_cluster_collection") # for shower merging only
@@ -2607,8 +2607,8 @@ class TrueParticleDataBT(ParticleData):
         """Return the collection-plane hit count for each backtracked particle.
 
             Returns:
-                ak.Array: Values from the true-by-hits collection hit-count
-                    branch.
+                ak.Array: Values from the true-by-hits collection hit-count.
+                    Branch.
         """
         self.read_data("n_hits_collection", "reco_daughter_PFP_true_byHits_nHits_collection")
         return getattr(self, f"_{type(self).__name__}__n_hits_collection") # for shower merging only
@@ -2628,8 +2628,8 @@ class TrueParticleDataBT(ParticleData):
         """Return the backtracked true beam endpoint coordinates.
 
             Returns:
-                ak.Record: x, y, and z coordinates assembled from the
-                    true-by-hits beam endpoint branches.
+                ak.Record: X, y, and z coordinates assembled from the.
+                    True-by-hits beam endpoint branches.
         """
         ntuples = [
             "reco_beam_PFP_true_byHits_endX",
@@ -2644,8 +2644,8 @@ class TrueParticleDataBT(ParticleData):
         """Return the fraction of reconstructed-cluster hits shared with truth.
 
             Returns:
-                ak.Array: Shared hits divided by hits in the reconstructed
-                    cluster for shower-merging data, or the stored PDSP purity.
+                ak.Array: Shared hits divided by hits in the reconstructed.
+                    Cluster for shower-merging data, or the stored PDSP purity.
         """
         if not hasattr(self, f"_{type(self).__name__}__purity"):
             if self.events.ntuple_type == NtupleType.SHOWER_MERGING:
@@ -2663,8 +2663,8 @@ class TrueParticleDataBT(ParticleData):
         """Return the fraction of backtracked truth hits present in the PFO.
 
             Returns:
-                ak.Array: Shared hits divided by total true-particle hits for
-                    shower-merging data, or the stored PDSP completeness.
+                ak.Array: Shared hits divided by total true-particle hits for.
+                    Shower-merging data, or the stored PDSP completeness.
         """
         if not hasattr(self, f"_{type(self).__name__}__completeness"):
             if self.events.ntuple_type == NtupleType.SHOWER_MERGING:
@@ -2682,8 +2682,8 @@ class TrueParticleDataBT(ParticleData):
         """Return collection-plane hit purity for each reconstructed PFO.
 
             Returns:
-                ak.Array: Collection-plane shared hits divided by hits in the
-                    reconstructed cluster, or ``None`` when the inputs are
+                ak.Array: Collection-plane shared hits divided by hits in the.
+                    Reconstructed cluster, or ``None`` when the inputs are
                     unavailable.
         """
         if not hasattr(self, f"_{type(self).__name__}__purity_collection"):
@@ -2699,8 +2699,8 @@ class TrueParticleDataBT(ParticleData):
         """Return collection-plane hit completeness for each reconstructed PFO.
 
             Returns:
-                ak.Array: Collection-plane shared hits divided by total
-                    collection-plane truth hits, or ``None`` when inputs are
+                ak.Array: Collection-plane shared hits divided by total.
+                    Collection-plane truth hits, or ``None`` when inputs are
                     unavailable.
         """
         if not hasattr(self, f"_{type(self).__name__}__completeness_collection"):
@@ -2716,8 +2716,8 @@ class TrueParticleDataBT(ParticleData):
         """Return hit space-point coordinates for the backtracked particle.
 
             Returns:
-                type: x, y, and z coordinates assembled from true-by-hits
-                    space-point branches.
+                type: X, y, and z coordinates assembled from true-by-hits.
+                    Space-point branches.
         """
         ntuples = [
             "reco_daughter_PFP_true_byHits_spacePointX",
@@ -2772,8 +2772,8 @@ class TrueParticleDataBT(ParticleData):
         """Return the backtracked PDG code of the reconstructed beam particle.
 
             Returns:
-                ak.Array: Values from the available beam true-by-hits PDG
-                    branch.
+                ak.Array: Values from the available beam true-by-hits PDG.
+                    Branch.
         """
         self.read_data("beam_pdg", ["reco_beam_PFP_true_byHits_pdg", "reco_beam_true_byHits_PDG"])
         return getattr(self, f"_{type(self).__name__}__beam_pdg")
@@ -2803,8 +2803,8 @@ class TrueParticleDataBT(ParticleData):
         """Identify backtracked particles that are daughters of a beam pi-zero.
 
             Returns:
-                ak.Array: Boolean mask based on the backtracked mother PDG code
-                    and the identifiers of primary pi-zero particles in the
+                ak.Array: Boolean mask based on the backtracked mother PDG code.
+                    And the identifiers of primary pi-zero particles in the
                     event truth record.
         """
         if not hasattr(self, f"_{type(self).__name__}__is_beam_pi0"):
@@ -2826,10 +2826,10 @@ class TrueParticleDataBT(ParticleData):
 
     @property
     def partice_number(self) -> ak.Array:
-        """ Gets the true particle number of each true particle backtracked to reco
+        """ Gets the true particle number of each true particle backtracked to reco.
 
             Returns:
-                ak.Array: awkward array of true particle indices
+                ak.Array: Awkward array of true particle indices.
         """
         photonEnergies = self.events.true_particles.energy[
             self.events.true_particles.true_photon_mask]  # assign true particle number by comparing energies
@@ -2859,7 +2859,7 @@ class TrueParticleDataBT(ParticleData):
             in the back tracker.
 
             Returns:
-                ak.Array: boolean mask
+                ak.Array: Boolean mask.
         """
         unique_index = self.get_unique_particle_numbers(self.partice_number)
         match = ak.num(unique_index) < 2
@@ -2867,13 +2867,13 @@ class TrueParticleDataBT(ParticleData):
 
     def get_unique_particle_numbers(self, index: ak.Array) -> ak.Array:
         """ Gets the unique true particle numbers backtracked to each reco particle.
-            e.g. if indices are [1, 2, 1, 3, 3, 3], unique is [1, 2, 3]
+            e.g. if indices are [1, 2, 1, 3, 3, 3], unique is [1, 2, 3].
 
             Args:
-                index (ak.Array): particle numbers of the true particles which were backtracked.
+                index (ak.Array): Particle numbers of the true particles which were backtracked.
 
             Returns:
-                ak.Array: unique particle numbers
+                ak.Array: Unique particle numbers.
         """
         max_n_PFP = ak.max(
             ak.num(index))  # get the larget number of PFParticles in an event
@@ -2896,7 +2896,7 @@ class TrueParticleDataBT(ParticleData):
         """ Calculate reconstructed shower pair quantities.
 
             Returns:
-                tuple: calculated quantities + array which masks null shower pairs
+                tuple: Calculated quantities + array which masks null shower pairs.
         """
         sort_energy = ak.argsort(self.energy)
         sorted_pairs = ak.unflatten(self.energy[sort_energy], 1, 0)
@@ -2947,12 +2947,12 @@ class ShowerPairs:
     """Pair reconstructed PFPs and expose paired reconstructed and truth quantities.
 
         Args:
-            events (Data): Event sample providing reconstructed and backtracked
-                particle data.
+            events (Data): Event sample providing reconstructed and backtracked.
+                Particle data.
             pair_coords (Any): Precomputed pairs of PFP indices. When omitted,
                 all unique reconstructed-PFP pairs are generated.
-            shower_pair_mask (ak.Array): Per-event boolean masks from which
-                pairs of selected PFP indices are generated. Takes precedence
+            shower_pair_mask (ak.Array): Per-event boolean masks from which.
+                Pairs of selected PFP indices are generated. Takes precedence
                 over ``pair_coords`` when provided.
 
         Attributes:
@@ -2967,27 +2967,27 @@ class ShowerPairs:
             OpeningAngle
             Mass
             Pi0Mom
-            FractionalError
+            FractionalError.
             Property Methods:
-            reco_lead_energy (ak.Array) : reco leading pair energy
-            reco_sub_energy (ak.Array) : reco subleading pair energy
-            reco_angle (ak.Array) : reco opening angle
-            reco_mass (ak.Array) : reco invariant mass
-            reco_pi0_mom (ak.Array) : reco sum momentum magnitude
-            true_lead_energy (ak.Array) : true leading pair energy
-            true_sub_energy (ak.Array) : true subleading pair energy
-            true_angle (ak.Array) : true opening angle
-            true_mass (ak.Array) : true invariant mass
-            true_pi0_mom (ak.Array) : true sum momentum magnitude
-            error_lead_energy (ak.Array) : error leading pair energy
-            error_sub_energy (ak.Array) : error subleading pair energy
-            error_angle (ak.Array) : error opening angle
-            error_mass (ak.Array) : errore invariant mass
-            error_pi0_mom (ak.Array) : error sum momentum magnitude
+            reco_lead_energy (ak.Array) : Reco leading pair energy.
+            reco_sub_energy (ak.Array) : Reco subleading pair energy.
+            reco_angle (ak.Array) : Reco opening angle.
+            reco_mass (ak.Array) : Reco invariant mass.
+            reco_pi0_mom (ak.Array) : Reco sum momentum magnitude.
+            true_lead_energy (ak.Array) : True leading pair energy.
+            true_sub_energy (ak.Array) : True subleading pair energy.
+            true_angle (ak.Array) : True opening angle.
+            true_mass (ak.Array) : True invariant mass.
+            true_pi0_mom (ak.Array) : True sum momentum magnitude.
+            error_lead_energy (ak.Array) : Error leading pair energy.
+            error_sub_energy (ak.Array) : Error subleading pair energy.
+            error_angle (ak.Array) : Error opening angle.
+            error_mass (ak.Array) : Errore invariant mass.
+            error_pi0_mom (ak.Array) : Error sum momentum magnitude.
             Methods:
-            SortByBacktrackedEnergy : create leading and sub leading masks
-            calculate_all (pd.DataFrame) : calculates all quantities
-            save_to_csv : saves quantities to a csv
+            SortByBacktrackedEnergy : Create leading and sub leading masks.
+            calculate_all (pd.DataFrame) : Calculates all quantities.
+            save_to_csv : Saves quantities to a csv.
     """
 
     def __init__(self, events: Data, pair_coords = None,
@@ -2995,12 +2995,12 @@ class ShowerPairs:
         """Build PFP pairs and order their members by the available energy values.
 
             Args:
-                events (Data): Event sample providing reconstructed and
-                    backtracked particle data.
-                pair_coords (Any): Precomputed pairs of PFP indices. When
-                    omitted, all unique reconstructed-PFP pairs are generated.
-                shower_pair_mask (ak.Array): Per-event boolean masks from
-                    which pairs of selected PFP indices are generated. Takes
+                events (Data): Event sample providing reconstructed and.
+                    Backtracked particle data.
+                pair_coords (Any): Precomputed pairs of PFP indices. When.
+                    Omitted, all unique reconstructed-PFP pairs are generated.
+                shower_pair_mask (ak.Array): Per-event boolean masks from.
+                    Which pairs of selected PFP indices are generated. Takes
                     precedence over ``pair_coords`` when provided.
         """
         self.events = events
@@ -3037,7 +3037,7 @@ class ShowerPairs:
         """ Orders the argcombinations by the shower with higher energy.
 
             Args:
-                backtracked (bool): sort by backtreacked energy, otherwise reco energy. Defaults to True.
+                backtracked (bool): Sort by backtreacked energy, otherwise reco energy. Defaults to True.
         """
         if backtracked:
             pd_e = self.events.true_particles_bt.energy
@@ -3058,13 +3058,13 @@ class ShowerPairs:
         """ Angle between shower pair directions.
 
             Args:
-                dir0 (ak.Array): Direction vectors of the first shower in
-                    each pair.
-                dir1 (ak.Array): Direction vectors of the second shower in
-                    each pair.
+                dir0 (ak.Array): Direction vectors of the first shower in.
+                    Each pair.
+                dir1 (ak.Array): Direction vectors of the second shower in.
+                    Each pair.
 
             Returns:
-                ak.Array: angles (rad).
+                ak.Array: Angles (rad).
         """
         mag0 = vector.magnitude(dir0)
         mag1 = vector.magnitude(dir1)
@@ -3077,11 +3077,11 @@ class ShowerPairs:
             Args:
                 energy0 (ak.Array): Energy of the first shower in each pair.
                 energy1 (ak.Array): Energy of the second shower in each pair.
-                angle (ak.Array): Opening angle in radians between each
-                    shower pair.
+                angle (ak.Array): Opening angle in radians between each.
+                    Shower pair.
 
             Returns:
-                ak.Array: mass (MeV)
+                ak.Array: Mass (MeV).
         """
         return (2 * energy0 * energy1 * (1 - np.cos(angle)))**0.5
 
@@ -3094,7 +3094,7 @@ class ShowerPairs:
                 p_1 (ak.Array): Momentum vector of the second shower.
 
             Returns:
-                ak.Array: sum momentum (MeV)
+                ak.Array: Sum momentum (MeV).
         """
         return vector.add(p_0, p_1)
 
@@ -3113,14 +3113,14 @@ class ShowerPairs:
 
     @staticmethod
     def fractional_error(reco: ak.Array, true: ak.Array) -> ak.Array:
-        """ percentage difference between reco and truth.
+        """ Percentage difference between reco and truth.
 
             Args:
-                reco (ak.Array): reconstructed value
-                true (ak.Array): true value
+                reco (ak.Array): Reconstructed value.
+                true (ak.Array): True value.
 
             Returns:
-                ak.Array: fractional error (%)
+                ak.Array: Fractional error (%).
         """
         def f(r, t):
             """Compute the component-wise fractional difference from truth.
@@ -3318,7 +3318,7 @@ class ShowerPairs:
         """Return collection-plane backtracked hit purity for subleading PFOs.
 
             Returns:
-                Any: Collection-plane purity values selected by
+                Any: Collection-plane purity values selected by.
                     ``subleading``.
         """
         return self.events.true_particles_bt.purity_collection[self.subleading]
@@ -3328,7 +3328,7 @@ class ShowerPairs:
         """Return collection-plane backtracked hit completeness for leading PFOs.
 
             Returns:
-                Any: Collection-plane completeness values selected by
+                Any: Collection-plane completeness values selected by.
                     ``leading``.
         """
         return self.events.true_particles_bt.completeness_collection[self.leading]
@@ -3338,7 +3338,7 @@ class ShowerPairs:
         """Return collection-plane backtracked hit completeness for subleading PFOs.
 
             Returns:
-                Any: Collection-plane completeness values selected by
+                Any: Collection-plane completeness values selected by.
                     ``subleading``.
         """
         return self.events.true_particles_bt.completeness_collection[self.subleading]
@@ -3359,8 +3359,8 @@ class ShowerPairs:
         """Calculate reconstructed invariant mass for each shower pair.
 
             Returns:
-                Any: Per-pair invariant masses from the two reconstructed
-                    shower energies and their opening angle.
+                Any: Per-pair invariant masses from the two reconstructed.
+                    Shower energies and their opening angle.
         """
         return ShowerPairs.mass(
             self.events.recoParticles.shower_energy[self.leading],
@@ -3372,8 +3372,8 @@ class ShowerPairs:
         """Sum the reconstructed energies of each shower pair.
 
             Returns:
-                Any: Per-pair sums of the leading and subleading shower
-                    energies.
+                Any: Per-pair sums of the leading and subleading shower.
+                    Energies.
         """
         return ShowerPairs.energy(
             self.events.recoParticles.shower_energy[self.leading],
@@ -3384,8 +3384,8 @@ class ShowerPairs:
         """Add the leading reconstructed shower momentum to itself.
 
             Returns:
-                Any: Per-pair vector sum computed from the leading shower
-                    momentum twice.
+                Any: Per-pair vector sum computed from the leading shower.
+                    Momentum twice.
         """
         return ShowerPairs.pi0_mom(
             self.events.recoParticles.shower_momentum[self.leading],
@@ -3416,8 +3416,8 @@ class ShowerPairs:
         """Calculate the signed closest separation of the two reconstructed shower lines.
 
             Returns:
-                Any: Per-pair signed perpendicular separation derived from
-                    shower directions and start positions.
+                Any: Per-pair signed perpendicular separation derived from.
+                    Shower directions and start positions.
         """
         return ShowerPairs.closest_approach(
             self.events.recoParticles.shower_direction[self.leading],
@@ -3430,8 +3430,8 @@ class ShowerPairs:
         """Calculate the distance between reconstructed shower start positions.
 
             Returns:
-                Any: Per-pair Euclidean distances between the leading and
-                    subleading shower starts.
+                Any: Per-pair Euclidean distances between the leading and.
+                    Subleading shower starts.
         """
         return vector.dist(
             self.events.recoParticles.shower_start_pos[self.leading],
@@ -3442,8 +3442,8 @@ class ShowerPairs:
         """Return the shared reconstruction slice ID for each shower pair.
 
             Returns:
-                Any: The slice ID when both PFPs share a slice, or ``-1`` when
-                    their slice IDs differ.
+                Any: The slice ID when both PFPs share a slice, or ``-1`` when.
+                    Their slice IDs differ.
         """
         first_slice = self.events.recoParticles.slice_id[self.leading]
         second_slice = self.events.recoParticles.slice_id[self.subleading]
@@ -3487,8 +3487,8 @@ class ShowerPairs:
         """Calculate the invariant mass of each backtracked truth pair.
 
             Returns:
-                Any: Per-pair invariant masses from the two backtracked
-                    particle energies and their truth opening angle.
+                Any: Per-pair invariant masses from the two backtracked.
+                    Particle energies and their truth opening angle.
         """
         return ShowerPairs.mass(
             self.events.true_particles_bt.energy[self.leading],
@@ -3511,8 +3511,8 @@ class ShowerPairs:
         """Sum the backtracked momentum vectors of the two PFPs in each pair.
 
             Returns:
-                Any: Per-pair vector sums of leading and subleading truth
-                    momenta.
+                Any: Per-pair vector sums of leading and subleading truth.
+                    Momenta.
         """
         return ShowerPairs.pi0_mom(
             self.events.true_particles_bt.momentum[self.leading],
@@ -3543,8 +3543,8 @@ class ShowerPairs:
         """Calculate the signed closest separation of the two truth trajectories.
 
             Returns:
-                Any: Per-pair signed perpendicular separation derived from
-                    backtracked directions and start positions.
+                Any: Per-pair signed perpendicular separation derived from.
+                    Backtracked directions and start positions.
         """
         return ShowerPairs.closest_approach(
             self.events.true_particles_bt.direction[self.leading],
@@ -3557,8 +3557,8 @@ class ShowerPairs:
         """Calculate the distance between backtracked truth start positions.
 
             Returns:
-                Any: Per-pair Euclidean distances between the leading and
-                    subleading truth-particle starts.
+                Any: Per-pair Euclidean distances between the leading and.
+                    Subleading truth-particle starts.
         """
         return vector.dist(
             self.events.true_particles_bt.shower_start_pos[self.leading],
@@ -3590,7 +3590,7 @@ class ShowerPairs:
         """Use the reconstructed shower opening angle for the energy-by-hits comparison.
 
             Returns:
-                Any: The same per-pair angle values returned by
+                Any: The same per-pair angle values returned by.
                     ``reco_angle``.
         """
         return self.reco_angle
@@ -3600,8 +3600,8 @@ class ShowerPairs:
         """Calculate pair invariant mass using backtracked energy-by-hits values.
 
             Returns:
-                Any: Per-pair invariant masses from the two energy-by-hits
-                    values and ``cheated_angle``.
+                Any: Per-pair invariant masses from the two energy-by-hits.
+                    Values and ``cheated_angle``.
         """
         return ShowerPairs.mass(
             self.events.true_particles_bt.energy_by_hits[self.leading],
@@ -3613,8 +3613,8 @@ class ShowerPairs:
         """Sum the backtracked energy-by-hits estimates for each pair.
 
             Returns:
-                Any: Per-pair sums of the leading and subleading energy-by-hits
-                    values. This property definition is shadowed later in the
+                Any: Per-pair sums of the leading and subleading energy-by-hits.
+                    Values. This property definition is shadowed later in the
                     class by the ``cheated_energy`` fractional-error property.
         """
         return ShowerPairs.energy(
@@ -3626,8 +3626,8 @@ class ShowerPairs:
         """Sum the backtracked energy-by-hits momentum vectors in each pair.
 
             Returns:
-                Any: Per-pair vector sums of the leading and subleading
-                    momentum-by-hits vectors.
+                Any: Per-pair vector sums of the leading and subleading.
+                    Momentum-by-hits vectors.
         """
         return ShowerPairs.pi0_mom(
             self.events.true_particles_bt.momentum_by_hits[self.leading],
@@ -3658,7 +3658,7 @@ class ShowerPairs:
         """Reuse the backtracked truth trajectories' closest-approach value.
 
             Returns:
-                Any: The same per-pair signed separation returned by
+                Any: The same per-pair signed separation returned by.
                     ``true_closest_approach``.
         """
         return self.true_closest_approach
@@ -3687,8 +3687,8 @@ class ShowerPairs:
         """Calculate the fractional energy error for each subleading shower.
 
             Returns:
-                Any: ``(reconstructed / truth) - 1`` for each subleading
-                    shower.
+                Any: ``(reconstructed / truth) - 1`` for each subleading.
+                    Shower.
         """
         return ShowerPairs.fractional_error(self.reco_sub_energy, self.true_sub_energy)
 
@@ -3724,8 +3724,8 @@ class ShowerPairs:
         """Calculate the component-wise fractional error in pair momentum.
 
             Returns:
-                Any: Per-pair x, y, and z fractional differences between
-                    reconstructed and backtracked truth momentum.
+                Any: Per-pair x, y, and z fractional differences between.
+                    Reconstructed and backtracked truth momentum.
         """
         return ShowerPairs.fractional_error(self.reco_pi0_mom, self.true_pi0_mom)
 
@@ -3734,8 +3734,8 @@ class ShowerPairs:
         """Calculate the fractional error in pair momentum magnitude.
 
             Returns:
-                Any: ``(reconstructed magnitude / truth magnitude) - 1`` per
-                    pair.
+                Any: ``(reconstructed magnitude / truth magnitude) - 1`` per.
+                    Pair.
         """
         return ShowerPairs.fractional_error(self.reco_pi0_mom_mag, self.true_pi0_mom_mag)
 
@@ -3744,8 +3744,8 @@ class ShowerPairs:
         """Calculate the fractional difference in signed closest-approach values.
 
             Returns:
-                Any: ``(reconstructed / truth) - 1`` for each pair's signed
-                    perpendicular separation.
+                Any: ``(reconstructed / truth) - 1`` for each pair's signed.
+                    Perpendicular separation.
         """
         return ShowerPairs.fractional_error(self.reco_closest_approach,
                                            self.true_closest_approach)
@@ -3765,7 +3765,7 @@ class ShowerPairs:
         """ Calculates all possible quantities and stores the results in a dataframe.
 
             Returns:
-                pd.DataFrame: dataframe.
+                pd.DataFrame: Dataframe.
         """
         #* search terms are based on the prefix (caae sensitive) of the property methods, when adding new quantities they should conform to this standard
         search_terms = ["reco", "true", "cheated", "error"]
@@ -3801,7 +3801,7 @@ class ShowerPairs:
             Will overwrite existing files!
 
             Args:
-                name (str): file name (exluding extentions). Defaults to "shower-pair-quantities".
+                name (str): File name (exluding extentions). Defaults to "shower-pair-quantities".
         """
         self.calculate_all().to_csv(name.split(".csv")[0] + ".csv")
 

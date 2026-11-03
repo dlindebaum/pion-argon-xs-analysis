@@ -4,7 +4,7 @@ Created on: 17/01/2024 13:46
 
 Author: Shyam Bhuller
 
-Description: app which performs cross checks for the region fit using toys.
+Description: App which performs cross checks for the region fit using toys.
 """
 import argparse
 import os
@@ -238,14 +238,14 @@ def smooth_step(x : np.ndarray, high : float, low : float, split : float, smooth
     """ Generate points for a smoothstep function.
 
         Args:
-            x (np.ndarray): x values.
+            x (np.ndarray): X values.
             high (float): High value of the smoothstep.
             low (float): Low value of the smoothstep.
             split (float): Where the step occurs in x.
             smooth_amount (float): Amount to smooth the step by 0 results in a step function.
 
         Returns:
-            np.ndarray: y values of smooth step function.
+            np.ndarray: Y values of smooth step function.
     """
     step = np.where(x >= split, high, low)
     if smooth_amount == 0:
@@ -266,7 +266,7 @@ def create_modified_xs(xs_sim : cross_section.geant.GeantCrossSections, process 
             smooth_amount (float): Amount to smooth the step by 0 results in a step function.
 
         Returns:
-            dict: dictionary with KE and modified cross section.
+            dict: Dictionary with KE and modified cross section.
     """
     if process == "single_pion_production":
         xs_quasi = xs_sim.quasielastic * smooth_step(xs_sim.KE, high, low, split, smooth_amount)

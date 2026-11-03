@@ -23,13 +23,13 @@ class EventDisplay:
             plot_3D (bool): Create the three-dimensional detector view.
 
         Attributes:
-            xlim (tuple): xRange of plots.
-            ylim (tuple): yRange of plots.
-            zlim (tuple): zRange of plots.
-            fig2D (matplotlib.figure.Figure): figure for 2D plots.
-            zy (matplotlib.axes._subplots.AxesSubplot): z-y detector projection.
-            zx (matplotlib.axes._subplots.AxesSubplot): z-x detector projection.
-            fig3D (matplotlib.figure.Figure): figure for 3D plots.
+            xlim (tuple): XRange of plots.
+            ylim (tuple): YRange of plots.
+            zlim (tuple): ZRange of plots.
+            fig2D (matplotlib.figure.Figure): Figure for 2D plots.
+            zy (matplotlib.axes._subplots.AxesSubplot): Z-y detector projection.
+            zx (matplotlib.axes._subplots.AxesSubplot): Z-x detector projection.
+            fig3D (matplotlib.figure.Figure): Figure for 3D plots.
             ax3D (mpl_toolkits.mplot3d.axes3d.Axes3D): 3D plot.
 
             Methods:
@@ -80,9 +80,9 @@ class EventDisplay:
         """ Set axes range to dectector bounds.
 
             Args:
-                x (tuple): x bound. Defaults to xlim.
-                y (tuple): y bound. Defaults to ylim.
-                z (tuple): z bound. Defaults to zlim.
+                x (tuple): X bound. Defaults to xlim.
+                y (tuple): Y bound. Defaults to ylim.
+                z (tuple): Z bound. Defaults to zlim.
         """
         if hasattr(self, "fig2D"):
             self.zx.set_xlim(z)
@@ -99,14 +99,14 @@ class EventDisplay:
         """ Plot a PFO in the event display.
 
             Args:
-                points (ak.Array): hit space point positions
-                marker (str): style of points
-                colour (str): colour of points
+                points (ak.Array): Hit space point positions.
+                marker (str): Style of points.
+                colour (str): Colour of points.
                 alpha (float): Marker transparency.
-                pointSize (int): size of points. Defaults to 2.
+                pointSize (int): Size of points. Defaults to 2.
                 startPoint (ak.Record): PFO start point. Defaults to None.
-                direction (ak.Record): direction of point. Defaults to None.
-                pdg (int): pdg code of point. Defaults to None.
+                direction (ak.Record): Direction of point. Defaults to None.
+                pdg (int): Pdg code of point. Defaults to None.
         """
         points = points[points.x != -999] # don't plot null space point values
 
@@ -142,10 +142,10 @@ class EventDisplay:
         """ Draw a single point.
 
             Args:
-                point (ak.Record): point position
-                marker (str): point style
-                colour (str): point colour
-                pointSize (int): point size. Defaults to 2.
+                point (ak.Record): Point position.
+                marker (str): Point style.
+                colour (str): Point colour.
+                pointSize (int): Point size. Defaults to 2.
         """
         if hasattr(self, "fig2D"):
             self.zx.scatter(point.z, point.x, pointSize, marker=marker, color=colour)
@@ -160,10 +160,10 @@ class EventDisplay:
         """ Draw a line.
 
             Args:
-                start (ak.Record): start position of line
-                end (ak.Record): end position of line
-                colour (str): colour of line
-                lineStyle (str, optional): line style. Defaults to "-".
+                start (ak.Record): Start position of line.
+                end (ak.Record): End position of line.
+                colour (str): Colour of line.
+                lineStyle (str, optional): Line style. Defaults to "-".
         """
         if hasattr(self, "fig2D"):
             self.zx.plot([start.z, end.z], [start.x, end.x], lineStyle, color = colour)

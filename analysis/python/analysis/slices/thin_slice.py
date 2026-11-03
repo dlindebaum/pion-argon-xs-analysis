@@ -27,12 +27,12 @@ def counting_experiment(end_pos : ak.Array, channel : ak.Array, slices : Slices)
     """ Creates the interacting and incident histograms.
 
         Args:
-            end_pos (ak.Array): end position of particle or "interaction vertex"
-            channel (ak.Array): mask which selects particles which interact in the channel you are interested in
-            slices (Slices): spatial slices
+            end_pos (ak.Array): End position of particle or "interaction vertex".
+            channel (ak.Array): Mask which selects particles which interact in the channel you are interested in.
+            slices (Slices): Spatial slices.
 
         Returns:
-            tuple[ak.Array, ak.Array]: n_interact and n_incident histograms
+            tuple[ak.Array, ak.Array]: N_interact and n_incident histograms.
     """
     deprecation_warning()
 
@@ -50,12 +50,12 @@ def mean_slice_energy(energy : ak.Array, end_pos : ak.Array, slices : Slices) ->
     """ Compute the average energy in a spatial slice.
 
         Args:
-            energy (ak.Array): particle energies over its lifetime in the tpc
-            end_pos (ak.Array): end position of particle or "interaction vertex"
-            slices (Slices): spatial slices
+            energy (ak.Array): Particle energies over its lifetime in the tpc.
+            end_pos (ak.Array): End position of particle or "interaction vertex".
+            slices (Slices): Spatial slices.
 
         Returns:
-            tuple[ak.Array, ak.Array]: means slice energy, error in the mean slice energy
+            tuple[ak.Array, ak.Array]: Means slice energy, error in the mean slice energy.
     """
     deprecation_warning()
     beam_traj_slice = slices.pos_to_num(end_pos)
@@ -80,12 +80,12 @@ def total_cross_section(n_incident : np.ndarray, n_interact : np.ndarray, slice_
     """ Returns cross section in mb.
 
         Args:
-            n_incident (np.ndarray): incident histogram
-            n_interact (np.ndarray): interacting histogram
-            slice_width (float): spatial width of thin slice
+            n_incident (np.ndarray): Incident histogram.
+            n_interact (np.ndarray): Interacting histogram.
+            slice_width (float): Spatial width of thin slice.
 
         Returns:
-            tuple[np.ndarray, np.ndarray]: cross section, statistical uncertainty
+            tuple[np.ndarray, np.ndarray]: Cross section, statistical uncertainty.
     """
     deprecation_warning()
     xs = np.log(n_incident / (n_incident - n_interact)) # calculate a dimensionless cross section
@@ -105,13 +105,13 @@ def cross_section(n_int_exclusive : np.ndarray, n_int_inclusive : np.ndarray, n_
     """ Cross section of exclusive process.
 
         Args:
-            n_int_exclusive (np.ndarray): exclusive interactions
-            n_int_inclusive (np.ndarray): interactions
-            n_inc_inclusive (np.ndarray): incident counts
-            slice_width (float): slice width
+            n_int_exclusive (np.ndarray): Exclusive interactions.
+            n_int_inclusive (np.ndarray): Interactions.
+            n_inc_inclusive (np.ndarray): Incident counts.
+            slice_width (float): Slice width.
 
         Returns:
-            tuple[np.ndarray, np.ndarray]: cross section and error
+            tuple[np.ndarray, np.ndarray]: Cross section and error.
     """
     deprecation_warning()
     NA = 6.02214076e23

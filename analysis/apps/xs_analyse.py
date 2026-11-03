@@ -84,13 +84,13 @@ def create_init_params(model : pyhf.Model, analysis_input : cross_section.analys
     """ Create initial parameters for the region fit, using the proportion of reco regions and template to get a rough estimate of the process rates.
 
         Args:
-            model (pyhf.Model): fit model
-            analysis_input (cross_section.analysis_input.AnalysisInput): analysis input
-            energy_slices (slices.Slies): energy slices
-            mean_track_score_bins (np.array): mean track score bins
+            model (pyhf.Model): Fit model.
+            analysis_input (cross_section.analysis_input.AnalysisInput): Analysis input.
+            energy_slices (slices.Slies): Energy slices.
+            mean_track_score_bins (np.array): Mean track score bins.
 
         Returns:
-            np.array: initial parameter values
+            np.array: Initial parameter values.
     """
     prefit_pred = cabinetry.model_utils.prediction(model)
     template_KE = [np.sum(prefit_pred.model_yields[i], 0) for i in range(len(prefit_pred.model_yields))][:-1]

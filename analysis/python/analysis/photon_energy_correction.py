@@ -77,13 +77,13 @@ shower_energy_correction = {
 
 #! replace with selection tools equivalent
 def create_pfo_masks(masks : dict[ak.Array]) -> ak.Array:
-    """ combine a dicitonary of masks into a single mask.
+    """ Combine a dicitonary of masks into a single mask.
 
         Args:
-            masks (dict[ak.Array]): masks.
+            masks (dict[ak.Array]): Masks.
 
         Returns:
-            ak.Array: combined mask.
+            ak.Array: Combined mask.
     """
     mask = None
     for m in masks:
@@ -132,15 +132,15 @@ def line(x, m):
 
 
 def binned_dataframe(df : pd.DataFrame, bins : list, energy_range : list) -> list:
-    """ split a dataframe into a list of dataframes based on reco energy bins
+    """ Split a dataframe into a list of dataframes based on reco energy bins.
 
         Args:
             df (pd.DataFrame): Event data containing reconstructed shower energy and true energy.
-            bins (list): bin edges
+            bins (list): Bin edges.
             energy_range (list): Range whose upper bound limits the true energy retained in each reconstructed-energy bin.
 
         Returns:
-            list: list of binned data frames
+            list: List of binned data frames.
     """
     binned_data = []
     for i in range(1, len(bins)):
@@ -150,17 +150,17 @@ def binned_dataframe(df : pd.DataFrame, bins : list, energy_range : list) -> lis
 
 
 def linear_fit(df : pd.DataFrame, bins : np.ndarray, energy_range : list, book : plotting.PlotBook = plotting.PlotBook.null()) -> float:
-    """ perform linear fit of true energy vs reco energy, equivalent to the correction done in the microboone simulation paper.
+    """ Perform linear fit of true energy vs reco energy, equivalent to the correction done in the microboone simulation paper.
                      #TODO implment using fitting module instead.
 
         Args:
             df (pd.DataFrame): Event data containing reconstructed shower energy and true energy.
-            bins (np.ndarray): reco energy bins
+            bins (np.ndarray): Reco energy bins.
             energy_range (list): Range whose upper bound limits true energy when calculating the binned mean response.
             book (plotting.PlotBook): Plot book used to save the fit and comparison figures.
 
         Returns:
-            float: gradient of linear fit (correction)
+            float: Gradient of linear fit (correction).
     """
     x = (bins[1:] + bins[:-1]) / 2
     y = np.array([d.true_energy.mean() for d in binned_dataframe(df, bins, energy_range)])

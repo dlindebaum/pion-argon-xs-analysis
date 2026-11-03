@@ -42,10 +42,10 @@ def pfo_counts(masks : dict) -> ak.Array:
     """ Compute counts for objects which pass the masks.
 
         Args:
-            masks (dict): selection masks
+            masks (dict): Selection masks.
 
         Returns:
-            ak.Array: number of selected PFOs in each event
+            ak.Array: Number of selected PFOs in each event.
     """
     return ak.sum(combine_masks(masks), -1)
 
@@ -55,7 +55,7 @@ def count_mask(m: ak.Array) -> tuple:
         and the number which are True.
 
         Args:
-            m (ak.Array): boolean mask.
+            m (ak.Array): Boolean mask.
 
         Returns:
             tuple: (number of entries, number of entries which are true).
@@ -67,10 +67,10 @@ def counts_wrapper(f):
     """ Wrapper for selection functions which checks the number of entries that pass a cut.
 
         Args:
-            f (function): selection function.
+            f (function): Selection function.
 
         Returns:
-            any: output of f.
+            any: Output of f.
     """
     @wraps(f)
     def wrapper(*args, **kwargs):
@@ -85,16 +85,16 @@ def combine_selections(events : ntuple.Data, selection: list, levels: int, args:
     """ Combine selection masks across events or PFOs and optionally record cut efficiencies.
 
         Args:
-            events (ntuple.Data): events to study
-            selection (list): list of selections
-            levels (int): what kind of data is the selection being made on, 0 is event, 1 is PFO.
-            args (list): Additional keyword arguments to be passed to the selection functions
-            verbose (bool): verbose output. Defaults to False.
-            return_table (bool): return performance table. Defaults to False.
+            events (ntuple.Data): Events to study.
+            selection (list): List of selections.
+            levels (int): What kind of data is the selection being made on, 0 is event, 1 is PFO.
+            args (list): Additional keyword arguments to be passed to the selection functions.
+            verbose (bool): Verbose output. Defaults to False.
+            return_table (bool): Return performance table. Defaults to False.
 
     Returns:
-        ak.Array: boolean mask
-        ak.Array, pd.Dataframe: boolean mask and performance table
+        ak.Array: Boolean mask.
+        ak.Array, pd.Dataframe: Boolean mask and performance table.
     """
     if levels == 0:
         total = ak.count(events.event_num)
@@ -142,13 +142,13 @@ def create_mask(values, operations, property, return_property : bool) -> ak.Arra
     """ Create a boolean mask of a property.
 
         Args:
-            values (Any): a single value or multiple values in a list
-            operations (Any): a string representing the boolean operation or a list of strings, see cuts_to_func for more.
-            property (Any): array to create mask with
-            return_property (bool): returns property along with the mask
+            values (Any): A single value or multiple values in a list.
+            operations (Any): A string representing the boolean operation or a list of strings, see cuts_to_func for more.
+            property (Any): Array to create mask with.
+            return_property (bool): Returns property along with the mask.
 
         Returns:
-            ak.Array: mask and optionally the property
+            ak.Array: Mask and optionally the property.
     """
     mask = cuts_to_func(values, operations)(property)
     if return_property is True:
@@ -166,7 +166,7 @@ def del_prop(obj, property_name: str) -> None:
 
         Args:
             obj (Any): RecoPaticleData Object from which to remove the property.
-            property_name (str): str Property to be deleted (should match the name of the property).
+            property_name (str): Str Property to be deleted (should match the name of the property).
     """
     del(obj.__dict__["_RecoPaticleData__" + property_name])
     return
@@ -239,14 +239,14 @@ def cuts_to_func(values, *operations, func_str=None):
         following:
         ```
         cut_func = cuts_to_func([3, 8], [">=", "<"])
-        cut_func(x)
+        cut_func(x).
         ```
         At index 0 of values and operations, we see `3` and `">="`, so we
         require `x >= 3`. At index 1, we see `8` and `"<"`, so we also
         require `x < 8`.
 
         Args:
-            values (Any): list List of cut values to be used.
+            values (Any): List List of cut values to be used.
             *operations (Any): list List of strings containing the operations which should be applied with the value at the equivalent index in `values`. Must have the same length as `values`. Allowed strings are: {"==", "!=", "<", "<=", ">", ">="}.
             func_str (Any): str, optional Custom cut function in python as a string. The property to be cut must be name "x". Values in `values` are referenced by calling the corresponding index of the value as "_{index}_". E.g. to require `x == values[0]`, the string should be `"x == _0_"`. Default is None.
 
@@ -315,14 +315,14 @@ def multi_cuts_to_func(values, *operations, func_str=None):
         `x == 0 and y > 1`, we run the following:
         ```
         cut_func = cuts_to_func([0, 1], ["==", ">"])
-        cut_func([x, y])
+        cut_func([x, y]).
         ```
         At index 0 of values and operations, we see `x` and `"=="`, and we
         pass `x` at index 0, so we require `x == 0`. At index 1, we see `1`
         and `">"`, and pass `y` so we also require `y > 1`.
 
         Args:
-            values (Any): list List of cut values to be used.
+            values (Any): List List of cut values to be used.
             operations (Any): list List of strings containing the operations which should be applied with the value at the equivalent index in `values`. Must have the same length as `values`. Allowed strings are: {"==", "!=", "<", "<=", ">", ">="}.
             func_str (Any): str, optional Custom cut function in python as a string. Values in `values` are referenced by calling the corresponding index of the value as "_{index}_". Properties to be cut are label by some owercase letters surrounded by underscores, i.e. "_a_". Multiple properties are passed as a list to the resulting function. Values are taken in alphabetical order (so `_a_` points to `x[0]` and `_b_` to `x[2]` if `x` is the input list). E.g. to require `x[1] < values[1] and x[0] == values[0]`, the string would be: `"_b_ < _1_ and _a_ == _0_"`. Default is None.
 
@@ -388,11 +388,11 @@ def cuts_to_str(values, *operations, func_str=None, name_format=False):
         For example, to show we have the cut `"3 <= x < 8"` (equivalent to
         `"(x >= 3) and (x < 8)"`), we run the following:
         ```
-        cuts_to_str([3, 8], [">=", "<"])
+        cuts_to_str([3, 8], [">=", "<"]).
         ```
         Which returns:
         ```
-        "3 <= x < 8"
+        "3 <= x < 8".
         ```
         At index 0 of values and operations, we see `3` and `">="`, so we
         require `x >= 3`. At index 1, we see `8` and `"<"`, so we also
@@ -402,7 +402,7 @@ def cuts_to_str(values, *operations, func_str=None, name_format=False):
             values (Any): List of cut values to be used.
             operations (Any): List of strings containing the operations which should be applied with the value at the equivalent index in `values`. Must have the same length as `values`. Allowed strings are: {"==", "!=", "<", "<=", ">", ">="}.
             func_str (Any): str, optional Custom cut function in python as a string. Values in `values` are referenced by calling the corresponding index of the value as "_{index}_". E.g. to require `x == values[0]`, the string should be `"x == _0_"`. Default is None.
-            name_format (Any): bool, optional If True, the string will include a ", " before the cut display, unless only one cut is present. If only 1 cut is present, the leading "x" is skipped, i.e. "x > 5" -> " > 5". This purpose is to auotmatically format the result if used in the following
+            name_format (Any): bool, optional If True, the string will include a ", " before the cut display, unless only one cut is present. If only 1 cut is present, the leading "x" is skipped, i.e. "x > 5" -> " > 5". This purpose is to auotmatically format the result if used in the following.
 
         Returns:
             str: A string repesntation of the passed function.
@@ -445,11 +445,11 @@ def multi_cuts_to_str(param_names, values, *operations, func_str=None):
         For example, to show we have the cut on properties `x` and `y`
         satisfing `x == 0 and y > 1`, we run the following:
         ```
-        cuts_to_str_multi(['x', 'y'], [0, 1], ["==", ">"])
+        cuts_to_str_multi(['x', 'y'], [0, 1], ["==", ">"]).
         ```
         Which returns:
         ```
-        "(x == 0) and (y > 1)"
+        "(x == 0) and (y > 1)".
         ```
 
         At index 0 of values and operations, we see `x` and `"=="`, and we
@@ -457,8 +457,8 @@ def multi_cuts_to_str(param_names, values, *operations, func_str=None):
         and `">"`, and pass `y` so we also require `y > 1`.
 
         Args:
-            param_names (Any): list List of property names.
-            values (Any): list List of cut values to be used.
+            param_names (Any): List List of property names.
+            values (Any): List List of cut values to be used.
             *operations (Any): list List of strings containing the operations which should be applied with the value at the equivalent index in `values`. Must have the same length as `values`. Allowed strings are: {"==", "!=", "<", "<=", ">", ">="}.
             func_str (Any): str, optional Custom cut function in python as a string. Values in `values` are referenced by calling the corresponding index of the value as "_{index}_". Properties to be cut are label by some owercase letters surrounded by underscores, i.e. "_a_". Multiple properties are passed as a list to the resulting function. Values are taken in alphabetical order (so `_a_` points to `param_names[0]` and `_b_` to `param_names[2]`). E.g. to require `(param_names[1] < values[1]) and (param_names[0] == values[0])` , the string would be: `"_b_ < _1_ and _a_ == _0_"`. Alternatively, write the paramter names directly into the string. Default is None.
 
@@ -561,9 +561,9 @@ def find_beam_separations(events):
 
 
 def get_mother_pdgs(events):
-    """ DEPRECATED: use events.true_particles(BT).mother_pdg
+    """ DEPRECATED: Use events.true_particles(BT).mother_pdg.
 
-        Loops through each event (warning: slow) and creates a reco-type
+        Loops through each event (warning: Slow) and creates a reco-type
         array of PDG codes of mother particle. E.g. a photon from a pi0
         will be assigned a PDG code 111.
 
@@ -574,8 +574,8 @@ def get_mother_pdgs(events):
 
         Anything which cannot have a mother PDG code assigned is given 0.
 
-        Future warning: Mother PDG codes are planned to be added into the
-        ntuple data making this function redundant.
+        Future warning: Mother PDG codes are planned to be added into the.
+        Ntuple data making this function redundant.
 
         Args:
             events (Any): Data Set of events to produce the mother PDG codes for.

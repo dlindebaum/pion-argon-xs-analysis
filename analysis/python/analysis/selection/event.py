@@ -21,10 +21,10 @@ def generate_true_final_state_tags(events : Data = None) -> tags.Tags:
     """ Generate truth tags for final state of the beam interaction.
 
         Args:
-            events (Data): events to look at. Defaults to None.
+            events (Data): Events to look at. Defaults to None.
 
         Returns:
-            tags.Tags: tags
+            tags.Tags: Tags.
     """
     t = tags.Tags()
     t["charge_exchange" ] = tags.Tag("$1\\pi^{0} + 0\\pi^{+}$"              , "charge_exchange" , "#8EBA42", generate_truth_tags(events, 1, 0      , only_diphoton = False) if events is not None else None, 0)
@@ -271,8 +271,8 @@ def load_and_cut_data(
         optional truth-count cuts are controlled by the arguments below.
 
         Args:
-            path (Any): str Path to the .root file to be loaded.
-            ntuple_type (Any): str {"PDSPAnalyser", "shower_merging"} What type of ntuple loaded. Default is PDSPAnalyser.
+            path (Any): Str Path to the .root file to be loaded.
+            ntuple_type (Any): Str {"PDSPAnalyser", "shower_merging"} What type of ntuple loaded. Default is PDSPAnalyser.
             batch_size (Any): int, optional Sets how many events to read. Default is -1 (all).
             batch_start (Any): int, optional Sets which event to start reading from. Default is -1 (first event).
             beam_selection (Any): Whether to apply the default reconstructed beam selection.
@@ -388,11 +388,11 @@ def count_diphoton_decays(events, beam_daughters=True):
     """ Returns the number of truth pi0 particles which decay to yy in each
         event in `events`.
 
-        pi0 -> yy
+        Pi0 -> yy.
 
         Args:
             events (Any): Data Events in which to count pi0 occurances.
-            beam_daughters (Any): boolean, optional Whether to only accept a pi0 if it is a daughter of the beam particle. Default is True.
+            beam_daughters (Any): Boolean, optional Whether to only accept a pi0 if it is a daughter of the beam particle. Default is True.
 
         Returns:
             counts: ak.Array containing the number of truth pi0 diphoton decays for each event.
@@ -459,7 +459,7 @@ def count_non_beam_charged_pi(events, beam_daughters=True):
 
         Args:
             events (Any): Data Events in which to count pi+ occurances.
-            beam_daughters (Any): boolean, optional Whether to only accept a pi+ if it is a daughter of the beam particle. Default is True.
+            beam_daughters (Any): Boolean, optional Whether to only accept a pi+ if it is a daughter of the beam particle. Default is True.
 
         Returns:
             counts: ak.Array Array containing the number of pi+ particles for each event.
@@ -562,7 +562,7 @@ def count_charged_pi_candidates(
             events (Any): Data Events in which to count pi+ occurances.
             track_cut (Any): float, optional Track score required for pi+ candidates. If not set, the default value in the `pfo` module is used.
             n_hits_cut (Any): int, optional Minimum number of hits required in pi+ candidates. If not set, the default value in the `pfo` module is used.
-            dEdX_cuts (Any): tuple (lower, upper), optional Lower and upper bounds for energy deposition rate required by pi+ candidates. If not set, the default values in the `pfo` module is used.
+            dEdX_cuts (Any): Tuple (lower, upper), optional Lower and upper bounds for energy deposition rate required by pi+ candidates. If not set, the default values in the `pfo` module is used.
             min_dEdX (Any): float, optional Minimum energy deposition rate required by pi+ candidates. If not set, the default value in the `pfo` module is used. Overwritten by `dEdX_cuts` if specified.
             max_dEdX (Any): float, optional Maximum energy deposition rate required by pi+ candidates. If not set, the default value in the `pfo` module is used. Overwritten by `dEdX_cuts` if specified.
             energy_cut (Any): Optional minimum reconstructed shower energy for counted candidates.
@@ -639,8 +639,8 @@ def generate_truth_tags(
             events (Data): Data Events to be tagged.
             n_pi0 (Any): None, int, or tuple Required number of pi0s that decay into two photons in an event for the event to pass the tag.
             n_pi_charged (Any): None, int, or tuple Required number of non-beam pi+ particles in an event for the event to pass the tag.
-            beam_daughters (Any): boolean, optional Whether to only accept a PFO if it is a daughter of the beam particle. Default is True.
-            only_diphoton (Any): boolean, optional Whether to only count a pi0 is it decay into two photons. Default is True.
+            beam_daughters (Any): Boolean, optional Whether to only accept a PFO if it is a daughter of the beam particle. Default is True.
+            only_diphoton (Any): Boolean, optional Whether to only count a pi0 is it decay into two photons. Default is True.
             pi0_count (Any): ak.Array, None, optional Pre-created array of counts of pi0s in `events`. Computation time can be reduce if running multiple tags by creating this first using `EventSelection.count_diphoton_decays`, and passing the result here. If None, the counts will be calculated within this function. Default is None.
             pi_charged_count (Any): ak.Array, None, optional Pre-created array of counts of pi+s in `events`. Computation time can be reduce if running multiple tags by creating this first using `EventSelection.count_non_beam_charged_pi`, and passing the result here. If None, the counts will be calculated within this function. Default is None.
 
@@ -700,7 +700,7 @@ def generate_reco_tags(
             events (Data): Data Events to be tagged.
             n_pi0 (Any): None, int, or tuple Required number of pi0s that decay into two photons in an event for the event to pass the tag.
             n_pi_charged (Any): None, int, or tuple Required number of non-beam pi+ particles in an event for the event to pass the tag.
-            exactly_two_photons (Any): boolean, optional Whether or not to only count pi0 candiadtes if there are exactly 2 shower candidates in a event. This limits the count to 1 per event. Default is False.
+            exactly_two_photons (Any): Boolean, optional Whether or not to only count pi0 candiadtes if there are exactly 2 shower candidates in a event. This limits the count to 1 per event. Default is False.
             pi0_count (Any): ak.Array, None, optional Pre-created array of counts of pi0s in `events`. Computation time can be reduce if running multiple tags by creating this first using `EventSelection.count_diphoton_decays`, and passing the result here. If None, the counts will be calculated within this function. Default is None.
             pi_charged_count (Any): ak.Array, None, optional Pre-created array of counts of pi+s in `events`. Computation time can be reduce if running multiple tags by creating this first using `EventSelection.count_non_beam_charged_pi`, and passing the result here. If None, the counts will be calculated within this function. Default is None.
 
@@ -760,7 +760,7 @@ def candidate_photon_pfo_selection(
         distance from beam vertex and impact parameter with beam vertex.
 
         Args:
-            events (Data): Data Events containing the PFOs to cut on. cut record : list, optional Record of the number of events cut. Default list avoids errors if not used.
+            events (Data): Data Events containing the PFOs to cut on. Cut record : list, optional Record of the number of events cut. Default list avoids errors if not used.
             cut_record (Any): Mutable selection-history table updated with counts for each applied cut.
             n_hits_cut (Any): int, optional Minimum number of hits required by a PFO to pass the cut. Deafult is 80.
             cnn_cut (Any): float, optional Minimum CNN score required by a PFO to pass the cut. Default is 0.5.

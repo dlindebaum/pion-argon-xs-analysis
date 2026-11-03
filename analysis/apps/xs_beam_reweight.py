@@ -4,7 +4,7 @@ Created on: 02/12/2023 13:14
 
 Author: Shyam Bhuller
 
-Description: reweighting parameters for beam momentum.
+Description: Reweighting parameters for beam momentum.
 """
 import argparse
 import os

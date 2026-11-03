@@ -56,11 +56,11 @@ def efficiency(selected_count : np.array, total_count : np.array) -> tuple[np.ar
     """ Calcualtes selection efficiency and binomial error.
 
         Args:
-            selected_count (np.array): number of selected events
-            total_count (np.array): number of total events
+            selected_count (np.array): Number of selected events.
+            total_count (np.array): Number of total events.
 
         Returns:
-            tuple[np.array, np.array]: efficiency, error
+            tuple[np.array, np.array]: Efficiency, error.
     """
     p = selected_count / total_count
     p = np.nan_to_num(p)
@@ -332,7 +332,7 @@ def dict_inverse(d : dict) -> dict:
 
 
 def clip_jagged(array, min, max):
-    """ Clips a jagged (awkward) array, if the type of aray is an awkward array, returns as an awkward array, otherwise it returns a list of nested arrays
+    """ Clips a jagged (awkward) array, if the type of aray is an awkward array, returns as an awkward array, otherwise it returns a list of nested arrays.
 
         Args:
             array (Any): Nested values to clip elementwise.

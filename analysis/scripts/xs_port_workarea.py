@@ -25,7 +25,7 @@ def update_cfg_paths(cfg : str, old : str, new : str) -> tuple[dict, str]:
             new (str): Replacement path prefix.
 
         Returns:
-            tuple[dict, str]: configuration data and its new file path.
+            tuple[dict, str]: Configuration data and its new file path.
     """
     cfg_str = json.dumps(read_json(cfg))
     new_cfg = json.loads(cfg_str.replace(old, new))

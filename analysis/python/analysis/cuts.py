@@ -260,8 +260,8 @@ class CutHandler():
             and return a table of tracked particles when asked.
 
             Args:
-                evts (Any): ntuple.Data, optional Initial events the masks are being applied from. If not set here, it must be set for getting a table using `self.set_init_evts(evts)`. Default is None.
-                particles_to_tag (list): list, optional List of pdg codes to be tracked by the tables. Default is [211, -211, 13, -13,11, -11, 22, 2212, 321]
+                evts (Any): Ntuple.Data, optional Initial events the masks are being applied from. If not set here, it must be set for getting a table using `self.set_init_evts(evts)`. Default is None.
+                particles_to_tag (list): list, optional List of pdg codes to be tracked by the tables. Default is [211, -211, 13, -13,11, -11, 22, 2212, 321].
                 particle_tags (tags.Tags): Optional particle tags used to add per-particle counts to cut-flow tables.
 
             Returns:
@@ -377,7 +377,7 @@ class CutHandler():
             `evts.recoParticles.number` from it.
 
             Args:
-                evts (Any): ntuple.Data Initial events the masks are being applied from.
+                evts (Any): Ntuple.Data Initial events the masks are being applied from.
         """
         self._init_data = ak.ones_like(evts.recoParticles.number, dtype=bool)
         self._init_data_sig = self._get_mask_signature(self._init_data)
@@ -502,7 +502,7 @@ class CutHandler():
 
             Args:
                 mask (ak.Array): ak.Array Boolean mask of the cut applied.
-                name (str): str Name indicating what the cut did.
+                name (str): Str Name indicating what the cut did.
         """
         this_sig = self._get_mask_signature(mask)
         self._simultaneous.append(self._validate_signature(this_sig, return_simul=True))
@@ -546,7 +546,7 @@ class CutHandler():
             final_concat_index: int = None,
             initial_true_index: int = None,
             final_true_index: int = None):
-        """ Returns the stored masks
+        """ Returns the stored masks.
 
             Args:
                 initial_concat_index (int): int, optional Concatenation from which to begin fetching masks. Will be overwritten by `true_index_start` if passed. Default is 0.
@@ -555,7 +555,7 @@ class CutHandler():
                 final_true_index (int): int, optional Index to finish fetching masks (the supplied index will not be included). Only used if `true_index_start` is passed. Default is None.
 
             Returns:
-                list: List of requested masks
+                list: List of requested masks.
         """
         if initial_true_index is None:
             initial_true_index = self.concat_indicies[initial_concat_index]
@@ -571,10 +571,10 @@ class CutHandler():
 
     def get_masks_dict(self) -> dict:
         """ Returns the masks and if applicable their names in a dictionary.
-            if no name was provided for the mask, a number is assigned.
+            If no name was provided for the mask, a number is assigned.
 
             Returns:
-                dict: dcitionary of masks
+                dict: Dcitionary of masks.
         """
         masks = {}
         for i, (n, m) in enumerate(zip(self._names, self._masks)):
@@ -705,7 +705,7 @@ class CutHandler():
                 initial_true_index (int): int, optional Selects an arbitray mask as the starting point from which to generate the table. This can be used selections have not been grouped via concatenations. Current mask index can be seen using `self.curr_mask_index`. This will override `initial_concat_index` if set. Default is None.
                 final_true_index (int): int, optional Selects an arbitray mask as the final point at which to stop generating the table. Indexed mask will _not_ be included. Current mask index can be seen using `self.curr_mask_index`. This will override `final_concat_index1` if `initial_concat_index` is set. Default is None.
                 latex (bool): bool, optional If `True`, result is a string which may be copied directly into LaTeX. Default is False.
-                particles_list (list): list, optional List of pdg codes of particles to be included in the table. Default is [211, -211, 13, -13,11, -11, 22, 2212, 321]
+                particles_list (list): list, optional List of pdg codes of particles to be included in the table. Default is [211, -211, 13, -13,11, -11, 22, 2212, 321].
                 events (bool): bool, optional If `True`, columns indicating the number of events present are included. Default is True.
                 pfos (bool): bool, optional If `True`, columns indicating the total number of PFOs present are included. Default is True.
                 counts (bool): bool, optional If `True`, columns indicating the number of occurances for each tracked item are included. Default is True.
@@ -714,7 +714,7 @@ class CutHandler():
                 ave_per_event (bool): bool, optional If `True`, columns indicating the mean number of occurances per event for each tracked item are included. Not included for events data. Default is True.
 
             Returns:
-                Table: of results as a DataFrame if `latex` is False, or a string if `latex` is True.
+                Table: Of results as a DataFrame if `latex` is False, or a string if `latex` is True.
         """
         self._gen_table()
 

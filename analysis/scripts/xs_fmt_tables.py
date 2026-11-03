@@ -141,7 +141,7 @@ def selection_names_criteria(df : pd.DataFrame, name : str):
             name (str): Selection category used to look up configured cut definitions.
 
         Returns:
-            Original: selection names mapped to formatted display labels.
+            Original: Selection names mapped to formatted display labels.
     """
     defs = criteria_defs()
     # print(f"{defs=}")
@@ -320,7 +320,7 @@ def bq_xy(values : dict):
             values (dict): Fit values and uncertainties keyed by component.
 
         Returns:
-            Formatted: x- and y-position fit values.
+            Formatted: X- and y-position fit values.
     """
     t = {}
     for i, e in zip(["mu", "sigma"], [1, 2]):
@@ -337,7 +337,7 @@ def bq_angle(values : dict):
             values (dict): Direction means and uncertainties keyed by component.
 
         Returns:
-            Formatted: direction fit values for the x, y, and z components.
+            Formatted: Direction fit values for the x, y, and z components.
     """
     t = {}
     for j in ["x", "y", "z"]:

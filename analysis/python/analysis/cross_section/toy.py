@@ -30,14 +30,14 @@ class Toy:
 
     @staticmethod
     def get_region(toy : pd.DataFrame, region : str) -> pd.DataFrame:
-        """ get region/process masks from data frame.
+        """ Get region/process masks from data frame.
 
             Args:
-                toy (pd.DataFrame): Toy
-                region (str): region regex, either "truth_region_" or "reco_region_"
+                toy (pd.DataFrame): Toy.
+                region (str): Region regex, either "truth_region_" or "reco_region_".
 
             Returns:
-                pd.DataFrame: dataframe of masks
+                pd.DataFrame: Dataframe of masks.
         """
         regions = toy.filter(regex = region)
         new_col_names = {}
@@ -51,7 +51,7 @@ class Toy:
         """ Compute the confusion matrix for the reco/truth regions.
 
             Returns:
-                np.ndarray: confusion matrix
+                np.ndarray: Confusion matrix.
         """
         reco_regions = Toy.get_region(self.df, "reco_regions_")
         true_regions = Toy.get_region(self.df, "truth_regions_")
@@ -78,10 +78,10 @@ class Toy:
         """ Get names of each region as labelled in the dataframe column.
 
             Args:
-                name (str): column regex
+                name (str): Column regex.
 
             Returns:
-                list[str]: names
+                list[str]: Names.
         """
         labels = self.df.filter(regex = name).columns
         return [s.split(name)[-1] for s in labels]
@@ -145,13 +145,13 @@ class Toy:
         """ Plot an observable from the toy in each region for each process.
 
             Args:
-                observable (pd.Series): observable to plot
-                reco_regions (pd.DataFrame): reco regions
-                true_regions (pd.DataFrame): true regions
-                label (str): x label
-                norm (bool): normalise plots. Defaults to False.
-                stacked (bool): stack histograms. Defaults to False.
-                histtype (str, optional): histogram style. Defaults to "step".
+                observable (pd.Series): Observable to plot.
+                reco_regions (pd.DataFrame): Reco regions.
+                true_regions (pd.DataFrame): True regions.
+                label (str): X label.
+                norm (bool): Normalise plots. Defaults to False.
+                stacked (bool): Stack histograms. Defaults to False.
+                histtype (str, optional): Histogram style. Defaults to "step".
         """
         for _, r in plots.iter_multi_plot(reco_regions.columns):
             tmp_regions = {t : true_regions[t].values & reco_regions[r].values & (observable > 0) for t in true_regions.columns} # filter the reco events for this region only

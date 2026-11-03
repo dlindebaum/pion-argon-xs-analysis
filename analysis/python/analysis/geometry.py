@@ -3,7 +3,7 @@ Created on: 24/09/2026 14:23
 
 Author: Shyam Bhuller
 
-Description:  module that contains detector geometry classes.
+Description:  Module that contains detector geometry classes.
 """
 
 class TPCGeometry:
@@ -31,7 +31,7 @@ class TPCGeometry:
         """ Check is value is outside x bounds of the TPC.
 
             Args:
-                x (float | list): x values.
+                x (float | list): X values.
 
             Returns:
                 bool | list[bool]: True if the value is outside the bounds, False otherwise.
@@ -43,7 +43,7 @@ class TPCGeometry:
         """ Check is value is outside y bounds of the TPC.
 
             Args:
-                y (float | list): y values.
+                y (float | list): Y values.
 
             Returns:
                 bool | list[bool]: True if the value is outside the bounds, False otherwise.
@@ -55,7 +55,7 @@ class TPCGeometry:
         """ Check is value is outside z bounds of the TPC.
 
             Args:
-                z (float | list): z values.
+                z (float | list): Z values.
 
             Returns:
                 bool | list[bool]: True if the value is outside the bounds, False otherwise.
@@ -67,9 +67,9 @@ class TPCGeometry:
         """ Check if positions are outside bounds of the TPC.
 
             Args:
-                x (float | list): x values.
-                y (float | list): y values.
-                z (float | list): z values.
+                x (float | list): X values.
+                y (float | list): Y values.
+                z (float | list): Z values.
 
             Returns:
                 bool | list[bool]: True if the value is outside the bounds, False otherwise.
@@ -78,7 +78,7 @@ class TPCGeometry:
 
 
 class ProtoDUNESPGeometry(TPCGeometry):
-    """TPC geometry with ProtoDUNE-SP bounds: x=[-350, 350], y=[0, 600], and z=[0, 700].
+    """TPC geometry with ProtoDUNE-SP bounds: X=[-350, 350], y=[0, 600], and z=[0, 700].
     """
     x = [-350, 350]
     y = [0, 600]

@@ -32,58 +32,58 @@ def iterative_unfold(data=None, data_err=None, response=None,
                      return_iterations=False, callbacks=None):
     """Performs iterative unfolding. Custom method which returns the covariance matrix.
 
-    Parameters
+    Parameters.
     ----------
-    data : array_like
+    data : Array_like.
         Input observed data distribution.
-    data_err : array_like
+    data_err : Array_like.
         Uncertainties of the input observed data distribution. Must be the
         same shape as ``data``.
-    response : array_like
+    response : Array_like.
         Response matrix.
-    response_err : array_like
+    response_err : Array_like.
         Uncertainties of response matrix. Must be the same shape as
         ``response``.
-    efficiencies : array_like
+    efficiencies : Array_like.
         Detection efficiencies for the cause distribution.
-    efficiencies_err : array_like
+    efficiencies_err : Array_like.
         Uncertainties of detection efficiencies. Must be the same shape as
         ``efficiencies``.
-    prior : array_like, optional
+    prior : Array_like, optional.
         Prior distribution to use in unfolding. If None, then a uniform
         (or flat) prior will be used. If array_like, then must have the same
         shape as ``efficiencies`` (default is None).
-    ts : {'ks', 'chi2', 'bf', 'rmd'}
+    ts : {'ks', 'chi2', 'bf', 'rmd'}.
         Test statistic to use for stopping condition (default is 'ks').
         For more information about the available test statistics, see the
         `Test Statistics API documentation <api.rst#test-statistics>`__.
-    ts_stopping : float, optional
+    ts_stopping : float, optional.
         Test statistic stopping condition. At each unfolding iteration, the
         test statistic is computed between the current and previous iteration.
         Once the test statistic drops below ts_stopping, the unfolding
         procedure is stopped (default is 0.01).
-    max_iter : int, optional
+    max_iter : int, optional.
         Maximum number of iterations to allow (default is 100).
-    cov_type : {'multinomial', 'poisson'}
+    cov_type : {'multinomial', 'poisson'}.
         Whether to use the Multinomial or Poisson form for the covariance
         matrix (default is 'multinomial').
-    return_iterations : bool, optional
+    return_iterations : bool, optional.
         Whether to return unfolded distributions for each iteration
         (default is False).
-    callbacks : list, optional
+    callbacks : list, optional.
         List of ``pyunfold.callbacks.Callback`` instances to be applied during
         unfolding (default is None, which means no Callbacks are applied).
 
-    Returns
+    Returns.
     -------
-    unfolded_result : dict
+    unfolded_result : Dict.
         Returned if ``return_iterations`` is False (default). Dictionary
         containing the final unfolded distribution, associated uncertainties,
         and test statistic information.
 
         The returned ``dict`` has the following keys:
 
-            unfolded
+            Unfolded
                 Final unfolded cause distribution
             stat_err
                 Statistical uncertainties on the unfolded cause distribution
@@ -97,9 +97,9 @@ def iterative_unfold(data=None, data_err=None, response=None,
             num_iterations
                 Number of unfolding iterations
             unfolding_matrix
-                Unfolding matrix
+                Unfolding matrix.
 
-    unfolding_iters : pandas.DataFrame
+    unfolding_iters : pandas.DataFrame.
         Returned if ``return_iterations`` is True. DataFrame containing the
         unfolded distribution, associated uncertainties, test statistic
         information, etc. at each iteration.
@@ -162,25 +162,25 @@ def iterative_unfold(data=None, data_err=None, response=None,
 
 def _unfold_custom(prior=None, mixer=None, ts_func=None, max_iter=100,
             callbacks=None):
-    """Perform iterative unfolding. Custom version of the method which just returns the covariance method in addition to the regular output
+    """Perform iterative unfolding. Custom version of the method which just returns the covariance method in addition to the regular output.
 
-    Parameters
+    Parameters.
     ----------
-    prior : array_like
+    prior : Array_like.
         Initial cause distribution.
-    mixer : pyunfold.Mix.Mixer
+    mixer : Pyunfold.Mix.Mixer.
         Mixer to perform the unfolding.
-    ts_func : pyunfold.Utils.TestStat
+    ts_func : Pyunfold.Utils.TestStat.
         Test statistic object.
-    max_iter : int, optional
+    max_iter : int, optional.
         Maximum allowed number of iterations to perform.
-    callbacks : list, optional
+    callbacks : list, optional.
         List of ``pyunfold.callbacks.Callback`` instances to be applied during
         unfolding (default is None, which means no Callbacks are applied).
 
-    Returns
+    Returns.
     -------
-    unfolding_iters : pandas.DataFrame
+    unfolding_iters : pandas.DataFrame.
         DataFrame containing the unfolded result for each iteration.
         Each row in unfolding_result corresponds to an iteration.
     """
@@ -261,7 +261,7 @@ def ResponseMatrix(observed : np.ndarray, true : np.ndarray, bins : np.ndarray, 
             remove_overflow (bool): Whether the first row and column are removed before normalization.
 
         Returns:
-            tuple[np.ndarray, np.ndarray]: response matrix and its statistical errors.
+            tuple[np.ndarray, np.ndarray]: Response matrix and its statistical errors.
     """
     if efficiencies is None:
         efficiencies = np.ones(len(bins) - 1 - int(remove_overflow))

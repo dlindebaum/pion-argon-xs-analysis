@@ -68,7 +68,7 @@ class process_criteria(CriteriaList):
 
 @dataclass 
 class process_criteria_exp(CriteriaList):
-    """ Expanded criteria for true process definitions
+    """ Expanded criteria for true process definitions.
     """
     pi_beam : Criteria # beam particle is pion
     beam_escapes : Criteria # beam particle escapes fiducial volume
@@ -155,7 +155,7 @@ class four_signal_process(SampleDefinition):
 
 
 class three_signal_process(SampleDefinition):
-    """ Signal defintion more widely used in PDSP analyses
+    """ Signal defintion more widely used in PDSP analyses.
     """
     criteria_list = process_criteria
     definitions = {

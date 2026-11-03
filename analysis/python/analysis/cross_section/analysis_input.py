@@ -130,7 +130,7 @@ class AnalysisInput:
         """ Save to dill file.
 
             Args:
-                file (str): file path.
+                file (str): File path.
         """
         io.write_dill(file, self)
         return
@@ -140,7 +140,7 @@ class AnalysisInput:
         """ Save to a ROOT File as a flat TTree.
 
             Args:
-                file (str): file path.
+                file (str): File path.
         """
         file_writer = io.RootIO(file)
         file_writer.write_data(vars(self), None, True)
@@ -174,7 +174,7 @@ class AnalysisInput:
         """ Load analysis input from dill file.
 
             Args:
-                file (str): file path.
+                file (str): File path.
 
             Returns:
                 'AnalysisInput': The object loaded from the file.
@@ -190,14 +190,14 @@ class AnalysisInput:
         """ Calculate exclusive interaction histogram using the energy slice method.
 
             Args:
-                energy_slice (slices.Slices): energy slices
-                process (np.ndarray): exclusive process mask
-                mask (np.ndarray): additional mask. Defaults to None.
-                reco (bool): use reco KE?. Defaults to True.
-                weights (np.ndarray): event weights. Defaults to None.
+                energy_slice (slices.Slices): Energy slices.
+                process (np.ndarray): Exclusive process mask.
+                mask (np.ndarray): Additional mask. Defaults to None.
+                reco (bool): Use reco KE?. Defaults to True.
+                weights (np.ndarray): Event weights. Defaults to None.
 
             Returns:
-                np.ndarray: exclusive interaction histogram.
+                np.ndarray: Exclusive interaction histogram.
         """
         common.deprecation_warning()
         if mask is None: mask = np.ones(len(self.KE_int_reco), dtype = bool)
@@ -217,8 +217,8 @@ class AnalysisInput:
         """ Create ID from sample masks. Counts from 0 and includes override for uncategorised events.
 
             Args:
-                sample_masks (dict[np.ndarray]): sample masks, such as reco regions.
-                uncategorised (int): id for uncategorised objects. Defaults to -1.
+                sample_masks (dict[np.ndarray]): Sample masks, such as reco regions.
+                uncategorised (int): Id for uncategorised objects. Defaults to -1.
 
             Returns:
                 ak.Array: Per-event integer ID, set by the last matching mask in insertion order or to ``uncategorised`` if none matches.
@@ -234,7 +234,7 @@ class AnalysisInput:
         """ Create analysis input from a toy sample.
 
             Args:
-                toy (Toy): toy sample
+                toy (Toy): Toy sample.
 
             Returns:
                 'AnalysisInput': An analysis-input container populated from the toy's masks and observables.
@@ -291,7 +291,7 @@ class AnalysisInput:
         """ Create analysis input from an ntuple sample.
 
             Args:
-                events (ntuple.Data): ntuple sample
+                events (ntuple.Data): Ntuple sample.
                 upstream_energy_loss_params (dict): Parameters for correcting reconstructed front-face kinetic energy.
                 reco_regions (dict[np.ndarray]): Reconstructed region masks, if available.
                 true_regions (dict[np.ndarray]): Truth-level process masks, if available.
@@ -478,14 +478,14 @@ class AnalysisInput:
 
 
     def create_train_test_samples(self, seed : int, train_fraction : float = None) -> dict:
-        """ Split analysis input into two samples
+        """ Split analysis input into two samples.
 
             Args:
-                seed (int): seed for random permutation
-                train_fraction (float): fraction of events to assign to train, if None, sample is split 50/50. Defaults to None.
+                seed (int): Seed for random permutation.
+                train_fraction (float): Fraction of events to assign to train, if None, sample is split 50/50. Defaults to None.
 
             Returns:
-                dict: train and test samples.
+                dict: Train and test samples.
         """
         rng = np.random.default_rng(seed)
         sample = rng.permutation(len(self.KE_init_reco))
@@ -503,13 +503,13 @@ class AnalysisInput:
         """ Calculate Histogrames required for the cross section measurement using energy slicing. Note exclusive interaction histogram is without background subtraction.
 
             Args:
-                energy_slice (slices.Slices): energy slices
-                exclusive_process (str): exclusive process
-                reco (bool): use reco information?
-                mask (np.ndarray): additional mask. Defaults to None.
+                energy_slice (slices.Slices): Energy slices.
+                exclusive_process (str): Exclusive process.
+                reco (bool): Use reco information?
+                mask (np.ndarray): Additional mask. Defaults to None.
 
             Returns:
-                dict[np.ndarray]: histograms
+                dict[np.ndarray]: Histograms.
         """
         common.deprecation_warning()
         KE_int = self.KE_int_true if reco is False else self.KE_int_reco
@@ -547,7 +547,7 @@ class AnalysisInput:
                 fiducial_volume (tuple[float]): Fiducial volume, if None, ignores the fiducial volume mask.
 
             Returns:
-                ak.Array: outside ROI mask.
+                ak.Array: Outside ROI mask.
         """
         if fiducial_volume is not None:
             init_mask = self.end_z_true < min(fiducial_volume)
@@ -563,12 +563,12 @@ def beam_pion_selection(events : ntuple.Data, args : argparse.Namespace | dict, 
         #! This needs to be somewhere else. It really is a helper to apply any beam selection from configuration to a sample (perhaps in ntuples or selection/common?)
 
         Args:
-            events (ntuple.Data): analysis ntuple
-            args (argparse.Namespace | dict): analysis configuration
-            is_mc (bool): is the ntuple mc or data?
+            events (ntuple.Data): Analysis ntuple.
+            args (argparse.Namespace | dict): Analysis configuration.
+            is_mc (bool): Is the ntuple mc or data?
 
         Returns:
-            ntuple.Data: selected events.
+            ntuple.Data: Selected events.
     """
 
     args_c = common.args_to_dict(args)
@@ -611,7 +611,7 @@ def create_analysis_input(sample : ntuple.Data, args : argparse.Namespace | dict
             is_mc (bool): Whether the ntuple should use MC selections and truth-process regions.
 
         Returns:
-            AnalysisInput: analysis input.
+            AnalysisInput: Analysis input.
     """
     args_c = common.args_to_dict(args)
 

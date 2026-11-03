@@ -11,8 +11,8 @@ def calculate_batches(args : Namespace) -> dict[str, any]:
     """Build the multiprocessing options from the application arguments.
 
         Args:
-            args (Namespace): Parsed application arguments containing the input
-                ntuple files and CPU count. The current implementation leaves
+            args (Namespace): Parsed application arguments containing the input.
+                Ntuple files and CPU count. The current implementation leaves
                 event and batch limits unset and uses ``args.cpus`` as threads.
 
         Returns:
@@ -51,8 +51,8 @@ def run_process(ntuple_files : list[ntuple.FileDescriptor], is_data : bool, args
             merge (bool): Whether to merge the outputs of the processing. Defaults to True.
 
         Returns:
-            list[dict] | dict: Per-file processing outputs when ``merge`` is
-                false, or the dictionary returned by
+            list[dict] | dict: Per-file processing outputs when ``merge`` is.
+                False, or the dictionary returned by
                 ``processing.merge_outputs`` when ``merge`` is true.
     """
     func_args = vars(args)
@@ -68,18 +68,18 @@ def select_sample(events: ntuple.Data, nDaughters: int, merge: bool = False, bac
 
         Args:
             events (ntuple.Data): Event sample to select and process.
-            nDaughters (int): Required number of reconstructed PFPs, passed to
-                the pi0 selection mask.
+            nDaughters (int): Required number of reconstructed PFPs, passed to.
+                The pi0 selection mask.
             merge (bool): Whether to merge matched showers. Defaults to False.
-            backtracked (bool): Whether to match and merge using backtracked
-                truth information instead of the ordinary MC matching.
+            backtracked (bool): Whether to match and merge using backtracked.
+                Truth information instead of the ordinary MC matching.
             cheatMerging (bool): When ``backtracked`` and ``merge`` are true,
                 whether to merge PFPs using their shared backtracked particle
                 identity rather than angular matching.
 
         Returns:
-            ntuple.Data: A filtered event sample. With ``merge=False``, only
-                matched PFPs remain; with ``merge=True``, matched or merged
+            ntuple.Data: A filtered event sample. With ``merge=False``, only.
+                Matched PFPs remain; with ``merge=True``, matched or merged
                 shower data are returned.
     """
     valid = pi0_mc_mask(events, nDaughters)  # get mask of events
@@ -117,15 +117,15 @@ def n_pfp_mask(events: ntuple.Data, n_objects: int = None) -> ak.Array:
     """Select events by the number of reconstructed showers with valid geometry.
 
         Args:
-            events (ntuple.Data): Sample whose reconstructed shower directions
-                and start positions are checked for the ``-999`` null sentinel.
-            n_objects (int): Exact valid-shower count to require. A negative
-                value requires more than its absolute value; ``None`` requires
+            events (ntuple.Data): Sample whose reconstructed shower directions.
+                And start positions are checked for the ``-999`` null sentinel.
+            n_objects (int): Exact valid-shower count to require. A negative.
+                Value requires more than its absolute value; ``None`` requires
                 more than one. Defaults to None.
 
         Returns:
-            ak.Array: Boolean event mask indicating whether each event meets
-                the requested valid-shower count.
+            ak.Array: Boolean event mask indicating whether each event meets.
+                The requested valid-shower count.
     """
     null_dir = events.recoParticles.shower_direction.x != -999
     null_pos = events.recoParticles.shower_start_pos.x != -999
@@ -146,12 +146,12 @@ def pi0_two_body_decay_mask(events: ntuple.Data) -> ak.Array:
     """Select events whose primary pi0 daughters contain exactly two photons.
 
         Args:
-            events (ntuple.Data): Sample providing the true-photon mask for
-                each event.
+            events (ntuple.Data): Sample providing the true-photon mask for.
+                Each event.
 
         Returns:
-            ak.Array: Boolean event mask that is true when the selected primary
-                pi0 decay has two photons, excluding three-body Dalitz decays.
+            ak.Array: Boolean event mask that is true when the selected primary.
+                Pi0 decay has two photons, excluding three-body Dalitz decays.
     """
     mask = ak.num(
         events.true_particles.true_photon_mask[events.true_particles.true_photon_mask], -1) == 2  # exclude pi0 -> e+ + e- + photons
@@ -164,15 +164,15 @@ def pi0_mc_mask(events: ntuple.Data, n_objects: int = None) -> ak.Array:
     """Select pi0 MC events by valid reconstructed showers and two-photon decay.
 
         Args:
-            events (ntuple.Data): Sample to test for valid shower geometry and
-                the primary pi0 two-photon decay mode.
-            n_objects (int): Shower-count requirement passed to
+            events (ntuple.Data): Sample to test for valid shower geometry and.
+                The primary pi0 two-photon decay mode.
+            n_objects (int): Shower-count requirement passed to.
                 :func:`n_pfp_mask`; negative values require a minimum count.
                 Defaults to None.
 
         Returns:
-            ak.Array: Boolean mask combining the reconstructed-shower count
-                and true two-photon decay selections.
+            ak.Array: Boolean mask combining the reconstructed-shower count.
+                And true two-photon decay selections.
     """
     r_mask = n_pfp_mask(events, n_objects)
     t_mask = pi0_two_body_decay_mask(events)
@@ -184,15 +184,15 @@ def fractional_error(reco: ak.Array, true: ak.Array, null: ak.Array) -> tuple:
     """Select events by mask and flatten reconstructed-to-true fractional errors.
 
         Args:
-            reco (ak.Array): Reconstructed quantity array, flattened over its
-                pair axis before event selection.
-            true (ak.Array): Corresponding truth quantity array; empty selected
-                events are replaced with ``nan`` before division.
-            null (ak.Array): Boolean event-selection mask applied to both
-                reconstructed and truth arrays before flattening.
+            reco (ak.Array): Reconstructed quantity array, flattened over its.
+                Pair axis before event selection.
+            true (ak.Array): Corresponding truth quantity array; empty selected.
+                Events are replaced with ``nan`` before division.
+            null (ak.Array): Boolean event-selection mask applied to both.
+                Reconstructed and truth arrays before flattening.
 
         Returns:
-            tuple: Three flattened NumPy arrays in the order fractional error
+            tuple: Three flattened NumPy arrays in the order fractional error.
                 ``(reco / true) - 1``, reconstructed value, and truth value.
     """
     true = true[null]
@@ -209,10 +209,10 @@ def calculate_quantities(events: ntuple.Data, backtracked_truth: bool = False) -
     """Calculate truth, reconstructed, and fractional-error shower-pair quantities.
 
         Args:
-            events (ntuple.Data): Selected events containing reconstructed and
-                truth shower-pair information.
-            backtracked_truth (bool): Use backtracked truth pair quantities
-                instead of the ordinary true-particle quantities.
+            events (ntuple.Data): Selected events containing reconstructed and.
+                Truth shower-pair information.
+            backtracked_truth (bool): Use backtracked truth pair quantities.
+                Instead of the ordinary true-particle quantities.
 
         Returns:
             tuple: Three lists of NumPy arrays in the order truth values,
@@ -251,15 +251,15 @@ def shower_merge_performance(events: ntuple.Data, best_match: ak.Array) -> float
     """Measure the percentage of merged PFPs assigned to the correct truth particle.
 
         Args:
-            events (ntuple.Data): Events with reconstructed shower and
-                backtracked particle information after merging.
+            events (ntuple.Data): Events with reconstructed shower and.
+                Backtracked particle information after merging.
             best_match (ak.Array): Per-event indices of the two target PFPs;
                 other valid PFPs are associated with the target whose shower
                 direction has the smaller angular separation.
 
         Returns:
-            float: Percentage of associated PFPs whose backtracked particle
-                number matches that of the corresponding target PFP. Returns
+            float: Percentage of associated PFPs whose backtracked particle.
+                Number matches that of the corresponding target PFP. Returns
                 ``100`` when there are no PFPs to assess.
     """
     if bool(ak.all(ak.num(events.recoParticles.shower_energy[events.recoParticles.shower_energy != -999]) == 2)) is True:

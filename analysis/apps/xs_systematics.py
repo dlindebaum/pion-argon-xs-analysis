@@ -4,7 +4,7 @@ Created on: 09/04/2024 13:53
 
 Author: Shyam Bhuller
 
-Description: app to calculate systematic uncertainties for cross section measurement
+Description: App to calculate systematic uncertainties for cross section measurement.
 """
 import argparse
 from abc import ABC, abstractmethod
@@ -131,7 +131,7 @@ class MCMethod(ABC):
                 config (dict): Configuration for the generated toy data.
 
             Returns:
-                tuple[dict, dict]: cross sections and their corresponding truth values.
+                tuple[dict, dict]: Cross sections and their corresponding truth values.
         """
         pass
 
@@ -878,7 +878,7 @@ class NormalisationSystematic(MCMethod):
                 config (dict): Toy-generation configuration with process scale factors.
 
             Returns:
-                tuple[dict, dict]: and true cross sections for the experiment.
+                tuple[dict, dict]: And true cross sections for the experiment.
         """
         x = self.args.energy_slices.pos[:-1] - self.args.energy_slices.width / 2
 
@@ -1282,7 +1282,7 @@ def final_plots(cv, systematics_table : dict[pd.DataFrame], energy_slices, book 
             alt_xs (bool): Whether to also compare against the alternative Geant prediction.
 
         Returns:
-            Nominal: and alternative goodness-of-fit tables.
+            Nominal: And alternative goodness-of-fit tables.
     """
     goodness_of_fit = {}
     if alt_xs:

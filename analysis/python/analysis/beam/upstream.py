@@ -9,12 +9,12 @@ def upstream_energy_loss(KE_inst : ak.Array, params : np.ndarray, function : fit
     """ Compute the upstream loss based on a repsonse function and it's fit parameters.
 
         Args:
-            KE_inst (ak.Array): kinetic energy measured by the beam instrumentation
-            params (np.ndarray): function paramters
-            function (fitting.FitFunction): repsonse function, defaults to fitting.poly2d.
+            KE_inst (ak.Array): Kinetic energy measured by the beam instrumentation.
+            params (np.ndarray): Function paramters.
+            function (fitting.FitFunction): Repsonse function, defaults to fitting.poly2d.
 
         Returns:
-            ak.Array: upstream energy loss
+            ak.Array: Upstream energy loss.
     """
     return function.func(KE_inst, **params)
 
@@ -31,12 +31,12 @@ def numerical_cv(bins : np.array, KE_reco_inst : np.array, KE_true_ff : np.array
     """ Central value in reco bin using the arithmetic mean.
 
         Args:
-            bins (np.array): bin edges
-            KE_reco_inst (np.array): reco KE at instrumentation
-            KE_true_ff (np.array): true front facing KE
+            bins (np.array): Bin edges.
+            KE_reco_inst (np.array): Reco KE at instrumentation.
+            KE_true_ff (np.array): True front facing KE.
 
         Returns:
-            tuple[np.array, np.array]: arithmetc mean in each bin, error in the mean
+            tuple[np.array, np.array]: Arithmetc mean in each bin, error in the mean.
     """
     binned_data = {"KE_inst": [], "KEff_true" : [], "KE_first_true" : []}
     for i in range(len(bins)-1):

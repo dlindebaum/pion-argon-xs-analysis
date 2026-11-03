@@ -109,13 +109,13 @@ class Slices:
 
 
     def __call__(self, x) -> Slice:
-        """ Get the slice number for a set of values
+        """ Get the slice number for a set of values.
 
             Args:
-                x (Any): Values
+                x (Any): Values.
 
             Returns:
-                Slice: numbers
+                Slice: Numbers.
         """
         return self.__create_slice__(self.__convert__(x))
 
@@ -124,13 +124,13 @@ class Slices:
         """ Creates slices from slice numbers.
 
             Args:
-                i (int): slice number
+                i (int): Slice number.
 
             Returns:
-                Slice: ith slice
+                Slice: Ith slice.
 
             Raises:
-                StopIteration
+                StopIteration.
         """
         if i >= len(self.edges) - 1:
             raise StopIteration
@@ -145,7 +145,7 @@ class Slices:
         """ Return all slice numbers.
 
             Returns:
-                np.ndarray: slice numbers
+                np.ndarray: Slice numbers.
         """
         return np.array([ s.num for s in self], dtype = int)
 
@@ -154,7 +154,7 @@ class Slices:
         """ Return all slice numbers.
 
             Returns:
-                np.ndarray: slice numbers
+                np.ndarray: Slice numbers.
         """
         return np.array([self.underflow_num] + [s.num for s in self] + [self.overflow_num], dtype = int)
 
@@ -163,7 +163,7 @@ class Slices:
         """ Return all slice positions. Within the valid slice range.
 
             Returns:
-                np.ndarray: slice positions
+                np.ndarray: Slice positions.
         """
         return np.array([s.pos for s in self])
 
@@ -172,7 +172,7 @@ class Slices:
         """ Return widths of each slice.
 
             Returns:
-                np.ndarray: slice widths
+                np.ndarray: Slice widths.
         """
         if reversed:
             return self.edges[:-1] - self.edges[1:]
@@ -214,13 +214,13 @@ class Slices:
 
 
     def pos_to_num(self, pos):
-        """ Convert slice positions to numbers
+        """ Convert slice positions to numbers.
 
             Args:
-                pos (Any): positions
+                pos (Any): Positions.
 
             Returns:
-                Any: slice numbers
+                Any: Slice numbers.
         """
         slice_num = self.__convert__(pos)
         if hasattr(pos, "__iter__"):

@@ -4,7 +4,7 @@ Created on: 03/03/2023 14:30
 Author: Shyam Bhuller
 
 Description: Contains cuts for Beam Particle Selection.
-TODO depreciate BeamQualityCut
+TODO depreciate BeamQualityCut.
 """
 import awkward as ak
 import numpy as np
@@ -133,7 +133,7 @@ def PiBeamSelection(events: Data, use_beam_inst : bool = False, return_property 
             return_property (bool): If true, also return the identified beam PDG values.
 
         Returns:
-            ak.Array: boolean mask.
+            ak.Array: Boolean mask.
     """
 
     return BeamTriggerSelection(events, [211, 13, -13], use_beam_inst, return_property)
@@ -143,13 +143,13 @@ def PandoraTagCut(events: Data, cut : int = 13, op = "==", return_property : boo
     """ Cut on Pandora slice tag, selects track like beam particles.
 
         Args:
-            events (Data): events to study.
+            events (Data): Events to study.
             cut (int): Pandora slice-tag value or values to compare.
             op (Any): Comparison operator applied to the slice tag.
             return_property (bool): If true, return slice-tag values alongside the mask.
 
         Returns:
-            ak.Array: boolean mask.
+            ak.Array: Boolean mask.
     """
     return create_mask(cut, op, events.recoParticles.beam_pandora_tag, return_property)
 
@@ -158,11 +158,11 @@ def CaloSizeCut(events: Data, return_property : bool = False) -> ak.Array:
     """ Cut which checks the beam particle has a calorimetry object (required for median dEdX cut).
 
         Args:
-            events (Data): events to study.
+            events (Data): Events to study.
             return_property (bool): If true, return the number of valid calorimetry points alongside the mask.
 
         Returns:
-            ak.Array: boolean mask.
+            ak.Array: Boolean mask.
     """
     calo_wire = events.recoParticles.beam_calo_wire
     # Analyser fills the empty entry with a -999
@@ -176,14 +176,14 @@ def BeamQualityCut(events: Data, fits : dict, dxy_cut : list = [-3, 3], dz_cut :
                      Selects beam particles with values consistent to the beam plug.
 
         Args:
-            events (Data): events to study.
+            events (Data): Events to study.
             fits (dict): Beam-fit means, widths, reference direction, and calorimetry truncation position.
             dxy_cut (list): Lower and upper bounds on normalized transverse displacement from the fitted beam position.
             dz_cut (list): Lower and upper bounds on normalized longitudinal displacement from the fitted beam position.
             costh_cut (list): Lower and upper bounds on the cosine between the measured and fitted beam directions.
 
         Returns:
-            ak.Array: boolean mask.
+            ak.Array: Boolean mask.
     """
     start_pos, end_pos = get_truncated_pos(events, fits["truncate"])
 
@@ -226,8 +226,8 @@ def DxyCut(events: Data, fits : dict, cut, op = "<", return_property : bool = Fa
     """ Cut on start position transverse to the z direction.
 
         Args:
-            events (Data): events to study
-            fits (dict): fit parameter values
+            events (Data): Events to study.
+            fits (dict): Fit parameter values.
             cut (Any): Threshold or thresholds applied to the normalized transverse displacement.
             op (str, optional): Comparison operator(s) used for the displacement cut. Defaults to "<".
             return_property (bool): Whether to return the displacement values with the mask. Defaults to False.
@@ -247,8 +247,8 @@ def DzCut(events: Data, fits : dict, cut, op = [">", "<"], return_property : boo
     """ Cut on start z position.
 
         Args:
-            events (Data): events to study
-            fits (dict): fit parameter values
+            events (Data): Events to study.
+            fits (dict): Fit parameter values.
             cut (Any): Threshold or bounds applied to normalized longitudinal displacement.
             op (str, optional): Comparison operator(s) used for the displacement cut. Defaults to [">", "<"].
             return_property (bool): Whether to return normalized displacement values with the mask. Defaults to False.
@@ -266,8 +266,8 @@ def CosThetaCut(events: Data, fits : dict, cut, op = ">", return_property : bool
     """ Cut on direction of beam particle wrt to the average direction.
 
         Args:
-            events (Data): events to study
-            fits (dict): fit parameter values
+            events (Data): Events to study.
+            fits (dict): Fit parameter values.
             cut (Any): Threshold or bounds applied to the cosine with the fitted beam direction.
             op (str, optional): Comparison operator(s) for the cosine cut. Defaults to ">".
             return_property (bool): Whether to return cosine values with the mask. Defaults to False.
@@ -294,13 +294,13 @@ def APA3Cut(events: Data, cut : float = 220, op = "<", return_property : bool = 
     """ Cuts on beam end z position to select beam particles which end in APA3.
 
         Args:
-            events (Data): events to study.
+            events (Data): Events to study.
             cut (float): Threshold or thresholds applied to the beam end z coordinate.
             op (Any): Comparison operator, or operators for a range cut.
             return_property (bool): If true, return beam end z values alongside the mask.
 
         Returns:
-            ak.Array: boolean mask.
+            ak.Array: Boolean mask.
     """
     return create_mask(cut, op, events.recoParticles.beam_end_pos_sce.z, return_property)
 
@@ -309,30 +309,30 @@ def MichelScoreCut(events: Data, cut : float = 0.55, op = "<", return_property :
     """ Cut on michel score to remove muon like beam particles.
 
         Args:
-            events (Data): events to study.
+            events (Data): Events to study.
             cut (float): Threshold or thresholds applied to Michel score per beam hit.
             op (Any): Comparison operator, or operators for a range cut.
             return_property (bool): If true, return the normalized Michel score alongside the mask.
 
         Returns:
-            ak.Array: boolean mask.
+            ak.Array: Boolean mask.
     """
     score = ak.where(events.recoParticles.beam_n_hits != 0, events.recoParticles.beam_michel_score / events.recoParticles.beam_n_hits, -999)
     return create_mask(cut, op, score, return_property)
 
 
 def MedianDEdXCut(events: Data, cut : float = 2.4, op = "<", truncate : float = None, return_property : bool = False) -> ak.Array:
-    """ cut on median dEdX to exlude proton background.
+    """ Cut on median dEdX to exlude proton background.
 
         Args:
-            events (Data): events to study.
+            events (Data): Events to study.
             cut (float): Threshold or thresholds applied to the median beam dE/dx.
             op (Any): Comparison operator, or operators for a range cut.
             truncate (float): Optional z position at which to begin the calorimetry dE/dx calculation.
             return_property (bool): If true, return median dE/dx values alongside the mask.
 
         Returns:
-            ak.Array: boolean mask.
+            ak.Array: Boolean mask.
     """
     if truncate is None:
         dEdX = events.recoParticles.beam_dEdX
@@ -348,8 +348,8 @@ def BeamScraperCut(events : Data, KE_range : int, fits : dict, cut : float = 1.5
                      (front facing means the first calorimetry point in the TPC).
 
         Args:
-            events (Data): events to study
-            KE_range (int): index of kinetic energy range in fit_values.
+            events (Data): Events to study.
+            KE_range (int): Index of kinetic energy range in fit_values.
             fits (dict): Beam-instrumentation fit parameters for the selected kinetic-energy bin.
             cut (float): Threshold on the normalized radial position discrepancy; defaults to 1.5.
             op (Any): Comparison operator, or operators for a range cut.
@@ -376,7 +376,7 @@ def HasFinalStatePFOsCut(events: Data, return_property : bool = False) -> ak.Arr
     """ Selects events which have final state PFOs that are well reconstructed.
 
         Args:
-            events (Data): events to look at
+            events (Data): Events to look at.
             return_property (bool): If true, return the number of quality-selected PFOs with the mask.
 
         Returns:
@@ -399,14 +399,14 @@ def create_default_selection(events: Data,
                      (includes pi+ beam selection for now as well).
 
         Args:
-            events (Data): events to study
-            use_beam_inst (bool): use beam instrumentation for particle_id
-            beam_quality_fits (dict): fit parameters for beam quality cuts
+            events (Data): Events to study.
+            use_beam_inst (bool): Use beam instrumentation for particle_id.
+            beam_quality_fits (dict): Fit parameters for beam quality cuts.
             scraper (bool): Whether to include the beam-instrumentation scraper cut.
             scraper_fits (dict): Fit parameters indexed by kinetic-energy bin for the scraper cut.
             scraper_KE_range (int): Kinetic-energy range index selecting the scraper-fit parameters.
             scraper_cut (float): Threshold on the normalized scraper-position discrepancy.
-            verbose (bool): verbose printout
+            verbose (bool): Verbose printout.
             return_table (bool): Whether to return a cut-performance table with the combined mask.
 
         Returns:

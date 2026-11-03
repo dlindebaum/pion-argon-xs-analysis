@@ -287,10 +287,10 @@ def make_pi0_selection_plots(output_mc : dict, output_data : dict, out_dir : str
     """ Pi0 selection plots.
 
         Args:
-            output_mc (dict): mc to plot
-            output_data (dict): data to plot
-            out_dir (str): output directory
-            norm (float): plot normalisation
+            output_mc (dict): Mc to plot.
+            output_data (dict): Data to plot.
+            out_dir (str): Output directory.
+            norm (float): Plot normalisation.
             nbins (int): Number of bins.
     """
     norm = False if output_data is None else norm
@@ -333,9 +333,9 @@ def make_region_plots(outputs_mc_masks : dict, outputs_data_masks : dict, out_di
     """ Correlation matrices for truth and reco region selection.
 
         Args:
-            outputs_mc_masks (dict): mc masks for each region
-            outputs_data_masks (dict): data masks for each region
-            out_dir (str): output directory
+            outputs_mc_masks (dict): Mc masks for each region.
+            outputs_data_masks (dict): Data masks for each region.
+            out_dir (str): Output directory.
     """
     with plotting.PlotBook(out_dir + "regions.pdf") as pdf:
         # Visualise the regions
@@ -357,9 +357,9 @@ def make_tables(output : dict, out : str, sample : str):
     """ Create cutflow tables.
 
         Args:
-            output (dict): output data
-            out (str): output name
-            sample (str): sample name i.e. mc or data
+            output (dict): Output data.
+            out (str): Output name.
+            sample (str): Sample name i.e. mc or data.
     """
     for s in output:
         print(f"{s=}")

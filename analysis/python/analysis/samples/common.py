@@ -20,7 +20,7 @@ Criteria = namedtuple("criteria", ["op", "value"]) # criteria is defined using a
 
 @dataclass
 class CriteriaList(ABC):
-    """ A list of Criteria
+    """ A list of Criteria.
     """
     pass
 
@@ -39,7 +39,7 @@ class SampleDefinition:
         """ Based on the definitions and criteria list, generate masks to categorise events when provided the particle counts.
 
             Args:
-                particle_counts (dict[ak.Array]): particle counts. keys should be the different particle types, and must match what is used by criteria_list.
+                particle_counts (dict[ak.Array]): Particle counts. Keys should be the different particle types, and must match what is used by criteria_list.
                 uncategorised (bool, optional): Create a new category for particles that do not fall into the pre-defined categories . Defaults to False.
 
             Returns:

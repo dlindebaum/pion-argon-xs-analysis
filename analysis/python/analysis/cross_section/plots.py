@@ -14,9 +14,9 @@ def plot_cross_section(xs : dict[tuple], energy_slices : slices.Slices, cross_se
         # TODO allow more than one process to be plot for same figure plots? (name match the process to xs key for chi2 comparison)
 
         Args:
-            xs (dict[tuple]): cross section measurements. Struture is tuple of arrays, weere index 0 is the value, and 1 is the error.
+            xs (dict[tuple]): Cross section measurements. Struture is tuple of arrays, weere index 0 is the value, and 1 is the error.
             energy_slices (slices.Slices): Energy slices.
-            cross_section_name (str): process name to plot from GEANT4 simulation.
+            cross_section_name (str): Process name to plot from GEANT4 simulation.
             xs_sim_range (tuple[float]): Energy range to plot for the simulation cross section (MeV). Defaults to None (full range).
     """
     geant_xs = geant.GeantCrossSections(energy_range=xs_sim_range)

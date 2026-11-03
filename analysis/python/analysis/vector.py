@@ -15,12 +15,12 @@ def vector(x, y, z) -> ak.Record:
     """ Creates a vector like record.
 
         Args:
-            x (Any): x component
-            y (Any): y component
-            z (Any): z component
+            x (Any): X component.
+            y (Any): Y component.
+            z (Any): Z component.
 
         Returns:
-            ak.Record: record structurd like a 3-vector
+            ak.Record: Record structurd like a 3-vector.
     """
     return ak.zip({"x" : x, "y" : y, "z" : z})
 
@@ -29,10 +29,10 @@ def magnitude(vec : ak.Record) -> ak.Array:
     """ Magnitude of 3-vector.
 
         Args:
-            vec (ak.Record): vector
+            vec (ak.Record): Vector.
 
         Returns:
-            ak.Array: array of magnitudes
+            ak.Array: Array of magnitudes.
     """
     return (vec.x**2 + vec.y**2 + vec.z**2)**0.5
 
@@ -41,37 +41,37 @@ def normalize(vec : ak.Record) -> ak.Record:
     """ Normalize a vector (get direction).
 
         Args:
-            vec (ak.Record): a vector
+            vec (ak.Record): A vector.
 
         Returns:
-            ak.Record: norm of vector
+            ak.Record: Norm of vector.
     """
     m = magnitude(vec)
     return vector( vec.x / m, vec.y / m, vec.z / m )
 
 
 def dot(a : ak.Record, b : ak.Record) -> ak.Array:
-    """ dot product of 3-vectors.
+    """ Dot product of 3-vectors.
 
         Args:
-            a (ak.Record): first vector
-            b (ak.Record): second vector
+            a (ak.Record): First vector.
+            b (ak.Record): Second vector.
 
         Returns:
-            ak.Array: array of dot products
+            ak.Array: Array of dot products.
     """
     return (a.x * b.x) + (a.y * b.y) + (a.z * b.z)
 
 
 def cross(a : ak.Record, b : ak.Record) -> ak.Array:
-    """ cross product of 3-vectors.
+    """ Cross product of 3-vectors.
 
         Args:
-            a (ak.Record): first vector
-            b (ak.Record): second vector
+            a (ak.Record): First vector.
+            b (ak.Record): Second vector.
 
         Returns:
-            ak.Array: array of cross products
+            ak.Array: Array of cross products.
     """
     x = a.y*b.z - b.y*a.z
     y = a.z*b.x - b.z*a.x
@@ -83,11 +83,11 @@ def prod(s, v : ak.Record) -> ak.Record:
     """ Product of scalar and vector.
 
         Args:
-            s (ak.Array or single number): scalar
-            v (ak.Record): vector
+            s (ak.Array or single number): Scalar.
+            v (ak.Record): Vector.
 
         Returns:
-            ak.Record: s * v
+            ak.Record: S * v.
     """
     return vector(s * v.x, s * v.y, s * v.z)
 
@@ -96,11 +96,11 @@ def angle(a : ak.Record, b : ak.Record) -> ak.Array:
     """ Compute angle between two vectors.
 
         Args:
-            a (ak.Record): a vector
-            b (ak.Record): another vector
+            a (ak.Record): A vector.
+            b (ak.Record): Another vector.
 
         Returns:
-            ak.Array: angle between a and b
+            ak.Array: Angle between a and b.
     """
     return np.arccos(dot(a, b) / (magnitude(a) * magnitude(b)))
 
@@ -109,11 +109,11 @@ def add(a : ak.Record, b : ak.Record):
     """ Compute vector addition of two vectors.
 
         Args:
-            a (ak.Record): a vector
-            b (ak.Record): another vector
+            a (ak.Record): A vector.
+            b (ak.Record): Another vector.
 
         Returns:
-            ak.Array: addition of a and b
+            ak.Array: Addition of a and b.
     """
     return ak.zip({"x": a.x + b.x, "y": a.y + b.y, "z": a.z + b.z})
 
@@ -122,11 +122,11 @@ def sub(a : ak.Record, b : ak.Record):
     """ Compute vector subtraction (displacement) of two vectors.
 
         Args:
-            a (ak.Record): a vector
-            b (ak.Record): another vector
+            a (ak.Record): A vector.
+            b (ak.Record): Another vector.
 
         Returns:
-            ak.Array: displacement between a and b
+            ak.Array: Displacement between a and b.
     """
     return ak.zip({"x": a.x - b.x, "y": a.y - b.y, "z": a.z - b.z})
 
@@ -135,11 +135,11 @@ def dist(a : ak.Record, b : ak.Record):
     """ Compute cartesian distance between two vectors.
 
         Args:
-            a (ak.Record): a vector
-            b (ak.Record): another vector
+            a (ak.Record): A vector.
+            b (ak.Record): Another vector.
 
         Returns:
-            ak.Array: distance between a and b
+            ak.Array: Distance between a and b.
     """
     return magnitude(sub(a, b))
 
@@ -148,10 +148,10 @@ def reciprocal(v : ak.Record) -> ak.Record:
     """ Compute the reciprocal of each component for a vector.
 
         Args:
-            v (ak.Record): a vector
+            v (ak.Record): A vector.
 
         Returns:
-            ak.Record: vector of reciprocal values.
+            ak.Record: Vector of reciprocal values.
     """
     return ak.zip({"x" : 1/v.x, "y" : 1/v.y, "z" : 1/v.z})
 
@@ -173,10 +173,10 @@ def power(a : ak.Record, e : float) -> ak.Record:
     """ Raise each component by an exponent.
 
         Args:
-            a (ak.Record): a vector
-            e (float): exponent
+            a (ak.Record): A vector.
+            e (float): Exponent.
 
         Returns:
-            ak.Record: vector of values raised to a power.
+            ak.Record: Vector of values raised to a power.
     """
     return ak.zip({"x" : a.x ** e, "y" : a.y ** e, "z" : a.z ** e})

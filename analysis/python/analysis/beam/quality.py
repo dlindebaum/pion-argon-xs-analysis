@@ -12,11 +12,11 @@ def fit_vector(v : ak.Record, bins : int) -> tuple[dict, dict, dict, dict]:
     """ Gaussian fit to each component in the vector.
 
         Args:
-            v (ak.Record): vector
-            bins (int): number of bins
+            v (ak.Record): Vector.
+            bins (int): Number of bins.
 
         Returns:
-            tuple[dict, dict, dict, dict]: fit paramaters for each component.
+            tuple[dict, dict, dict, dict]: Fit paramaters for each component.
     """
     mu = {}
     mu_err = {}
@@ -72,12 +72,12 @@ def plot_range(mu : float, sigma : float, tolerance : float = 5) -> list:
     """ Compute range of plot based on properties of the Gaussian.
 
         Args:
-            mu (float): mean
-            sigma (float): rms
-            tolerance (float): how many standard deviations to extend the range by. Defaults to 5.
+            mu (float): Mean.
+            sigma (float): Rms.
+            tolerance (float): How many standard deviations to extend the range by. Defaults to 5.
 
         Returns:
-            list: plot range
+            list: Plot range.
     """
     return sorted([mu - tolerance * sigma, mu + tolerance * sigma])
 

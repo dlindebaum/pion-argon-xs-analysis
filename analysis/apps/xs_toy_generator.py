@@ -87,11 +87,11 @@ def p_int(sigma : np.array, l : float) -> np.array:
     """ Formula to calcualte the interaction probability for the thin slab approximation.
 
         Args:
-            sigma (np.array): cross section as a function of energy
-            l (float): slab thickness
+            sigma (np.array): Cross section as a function of energy.
+            l (float): Slab thickness.
 
         Returns:
-            np.array: interaction proabability
+            np.array: Interaction proabability.
     """
     return 1 - np.exp(-1E-27 * sigma * 6.02214076e23 * bethe_bloch.Constants.rho * l / bethe_bloch.Constants.A)
 
@@ -145,7 +145,7 @@ def generate_stacked_pdfs(l : float, path = geant.GEANT_XS, scale_factors : dict
                     such that rejection sampling can be used to allocate an exclusive process for a given inclusive process.
 
         Args:
-            l (float): slice thickness
+            l (float): Slice thickness.
             path (str): Path to the Geant cross-section input.
             scale_factors (dict): Per-process normalization factors.
             modified_PDFs (dict[np.array]): Optional replacement cross-section curves keyed by process.
@@ -176,15 +176,15 @@ def generate_initial_KEs(n : int, particle : Particle, cv : float, width : float
         Currently supported profiles are "uniform" and "gaussian".
 
         Args:
-            n (int): number of particles/events.
-            particle (Particle): particle type
-            cv (float): central value of profile
-            width (float): width of profile
-            profile (str | dict): profile type
+            n (int): Number of particles/events.
+            particle (Particle): Particle type.
+            cv (float): Central value of profile.
+            width (float): Width of profile.
+            profile (str | dict): Profile type.
             rng (np.random.Generator): Random generator used for sampling.
 
         Returns:
-            np.array: initial kinetic energies.
+            np.array: Initial kinetic energies.
     """
     if rng is None:
         rng = np.random.default_rng()
@@ -214,7 +214,7 @@ def simulate(seed : int, KE_init : np.array, step_size : float, pdfs : dict, sme
             smearing_params (dict): Resolution models used to smear generated observables.
 
         Returns:
-            tuple: interacting kinetic energy, interacting position, whether it interacted or decay, exclusive process
+            tuple: Interacting kinetic energy, interacting position, whether it interacted or decay, exclusive process.
     """
     rng = np.random.default_rng(seed)
 
@@ -259,10 +259,10 @@ def simulate(seed : int, KE_init : np.array, step_size : float, pdfs : dict, sme
 
 
 def count_processes(proc : np.array):
-    """ Count unique processes for particles
+    """ Count unique processes for particles.
 
         Args:
-            proc (np.array): array of processes
+            proc (np.array): Array of processes.
     """
     for p in Counter(proc):
         vprint(p, sum(proc == p))
@@ -272,10 +272,10 @@ def create_masks(toy : pd.DataFrame) -> dict:
     """ Creates masks for each inclusive process and exclusive process based on particle tags from the toy mc.
 
         Args:
-            toy (pd.DataFrame): toy mc to look at
+            toy (pd.DataFrame): Toy mc to look at.
 
         Returns:
-            dict: masks of processes
+            dict: Masks of processes.
     """
     masks = {}
     for c in np.unique(toy.exclusive_process)[1:]:
@@ -290,12 +290,12 @@ def smearing(n : int, resolutions : dict, rng : np.random.Generator) -> pd.DataF
         Emulates detector effects.
 
         Args:
-            n (int): number of events
-            resolutions (dict): smearing parameters
+            n (int): Number of events.
+            resolutions (dict): Smearing parameters.
             rng (np.random.Generator): Random-number generator used to sample each observable's smearing distribution.
 
         Returns:
-            pd.DataFrame: smearing terms
+            pd.DataFrame: Smearing terms.
     """
     return pd.DataFrame({
         "KE_int_smearing" : fitting.rejection_sampling(n, min(resolutions["KE_int"]["range"]), max(resolutions["KE_int"]["range"]), resolutions["KE_int"]["function"], resolutions["KE_int"]["values"], rng = rng),
@@ -308,11 +308,11 @@ def apply_smearing(df : pd.DataFrame, smearings : pd.DataFrame) -> pd.DataFrame:
     """ Add detector smearing to true obserables.
 
         Args:
-            df (pd.DataFrame): simulated data
-            smearings (pd.DataFrame): generated smearings
+            df (pd.DataFrame): Simulated data.
+            smearings (pd.DataFrame): Generated smearings.
 
         Returns:
-            pd.DataFrame: smeared observables i.e. reco.
+            pd.DataFrame: Smeared observables i.e. reco.
     """
     KE_init_smeared = df.KE_init + smearings.KE_init_smearing
     z_int_smeared = df.z_int + smearings.z_int_smearing
@@ -330,13 +330,13 @@ def beam_selection_efficiency(toy : pd.DataFrame, key : str, beam_selection_para
         based on the selection efficiency of a particular observable.
 
         Args:
-            toy (pd.DataFrame): toy
-            key (str): observable
-            beam_selection_params (dict): selection efficiencies
+            toy (pd.DataFrame): Toy.
+            key (str): Observable.
+            beam_selection_params (dict): Selection efficiencies.
             rng (np.random.Generator): Random-number generator used to accept or reject events according to the efficiency.
 
         Returns:
-            np.array: mask of events which pass the selection.
+            np.array: Mask of events which pass the selection.
     """
     bin_width = (beam_selection_params["bins"][key][1:].values - beam_selection_params["bins"][key][:-1].values)[0]
     probability_index = np.digitize(toy[key].values, beam_selection_params["bins"][key] + 2 * bin_width)
@@ -352,12 +352,12 @@ def generate_reco_regions(exclusive_process : pd.Series, fractions : pd.DataFram
         Truth regions are remade because they differ slighly from the exclusive process.
 
         Args:
-            exclusive_process (pd.Series): exclusive processes.
-            fractions (pd.DataFrame): fractions of reco regions in true regions.
+            exclusive_process (pd.Series): Exclusive processes.
+            fractions (pd.DataFrame): Fractions of reco regions in true regions.
             rng (np.random.Generator): Random-number generator used to sample a reconstructed region for each event.
 
         Returns:
-            pd.DataFrame: region masks.
+            pd.DataFrame: Region masks.
     """
     exclusive_processes = np.unique(exclusive_process.values)
 
@@ -412,15 +412,15 @@ def generate_reco_regions(exclusive_process : pd.Series, fractions : pd.DataFram
 
 def generate_mean_track_scores(kde : gaussian_kde, n : int, seed : int = None) -> np.array:
     """ Generates Mean track scores from the stats.gaussian_kde object.
-        if mean track scores exceed the range 0, 1, the scores are resampled.
+        If mean track scores exceed the range 0, 1, the scores are resampled.
 
         Args:
-            kde (gaussian_kde): Kernel density estimate
-            n (int): sample size to generate
+            kde (gaussian_kde): Kernel density estimate.
+            n (int): Sample size to generate.
             seed (int): Seed for reproducible KDE sampling; ``None`` uses an unseeded resampling sequence.
 
         Returns:
-            np.array: sampled mean track scores
+            np.array: Sampled mean track scores.
     """
     # scipy.stats.gaussian_kde.resample() uses numpy RandomState seeding rules:
     # integer seeds must be in [0, 2**32 - 1]. We may pass large integers
@@ -444,12 +444,12 @@ def mean_track_score(exclusive_process : pd.Series, kdes : dict, seed : int) -> 
     """ Create the Mean track score distributions for each toy event.
 
         Args:
-            exclusive_process (pd.Series): exclusive process masks
-            kdes (dict): dictionary of kernel density estimates
+            exclusive_process (pd.Series): Exclusive process masks.
+            kdes (dict): Dictionary of kernel density estimates.
             seed (int): Base seed used to generate reproducible scores for each exclusive process.
 
         Returns:
-            np.array: mean track scores
+            np.array: Mean track scores.
     """
     scores = np.array([None]*len(exclusive_process))
     exclusive_processes = np.unique(exclusive_process.values)

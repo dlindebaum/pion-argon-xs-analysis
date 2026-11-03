@@ -56,10 +56,10 @@ class GeantCrossSections:
         """ Statisitical error of the simulation, done using binomial uncertainties. Only works if n_cascades is known.
 
             Args:
-                xs (str): cross section process
+                xs (str): Cross section process.
 
             Returns:
-                np.ndarray: statistical error
+                np.ndarray: Statistical error.
         """
         if (self.n_cascades is None) or (not hasattr(self, xs + "_frac")):
             return 0 * getattr(self, xs)
@@ -82,10 +82,10 @@ class GeantCrossSections:
         """ Plot cross sections. To be used in conjunction with other plots for comparisons.
 
             Args:
-                xs (str): cross section channel to plot, if given all, will plot all cross section channels
-                color (str): colour of single plot. Defaults to None.
-                label (str): label of plot, if None, the channel name is used. Defaults to None.
-                title (str): title of plot, set to the channel name if label is provided. Defaults to None.
+                xs (str): Cross section channel to plot, if given all, will plot all cross section channels.
+                color (str): Colour of single plot. Defaults to None.
+                label (str): Label of plot, if None, the channel name is used. Defaults to None.
+                title (str): Title of plot, set to the channel name if label is provided. Defaults to None.
                 simplified_pion_production (bool): Add quasielastic, double-charge-exchange, and pion-production channels for the pion-production curve.
         """
         if xs == "all":
@@ -107,10 +107,10 @@ class GeantCrossSections:
 
 
     def get_interpolated_curve(self, process : str) -> interp1d:
-        """ returns interpolated cross section curve as function of KE.
+        """ Returns interpolated cross section curve as function of KE.
 
             Args:
-                process (str): cross section process
+                process (str): Cross section process.
 
             Returns:
                 interp1d: Callable interpolating the requested cross section over kinetic energy, with extrapolation enabled.
