@@ -27,6 +27,19 @@ from python.analysis import plotting
 warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning) # hide pesky pandas warnings (performance is actually ok)
 
 def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
+    """ Select photon candidates and collect their reconstructed and true properties.
+
+        Args:
+            i (int): Index of the chunk being processed.
+            file_desc (ntuple.FileDescriptor): Descriptor for the input ntuple file.
+            n_events (int): Maximum number of events to read.
+            start (int): First event index to read.
+            selected_events (Any): Optional event subset supplied by the processing runner.
+            args (dict): Resolved beam, photon, and PFO-selection configuration.
+
+        Returns:
+            dict: Flattened photon properties and associated pi0/final-state tags.
+    """
     output = {}
 
     events = ntuple.Data(file_desc, n_events, start)
@@ -34,13 +47,13 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
     for s, a in zip(args["beam_selection"]["selections"].values(), args["beam_selection"]["mc_arguments"].values()):
         print(s)
         mask = s(events, **a)
-        events.Filter([mask], [mask])
+        events.filter([mask], [mask])
     photon_masks = {}
     if args["valid_pfo_selection"] is True:
         for k, s, a in zip(args["photon_selection"]["selections"].keys(), args["photon_selection"]["selections"].values(), args["photon_selection"]["mc_arguments"].values()):
             photon_masks[k] = s(events, **a)
-    photon_mask = selection.CombineMasks(photon_masks)
-    events.Filter([photon_mask])
+    photon_mask = selection.combine_masks(photon_masks)
+    events.filter([photon_mask])
     print("making pairs")
     pairs = selection.event.NPhotonCandidateSelection(events, photon_mask[photon_mask], 2)
 
@@ -57,7 +70,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
         "true" : ["direction", "shower_start_pos", "energy"]
     }
 
-    for (k, param), particleData in zip(params.items(), {"reco" : events.recoParticles, "true" : events.trueParticlesBT}.values()):
+    for (k, param), particleData in zip(params.items(), {"reco" : events.recoParticles, "true" : events.true_particles_bt}.values()):
         for p in param:
             if hasattr(particleData, p):
                 v = getattr(particleData, p)
@@ -69,16 +82,16 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
                     else:
                         output[f"{k}_{p}"] = ak.flatten(v)
 
-    output["true_mother"] = ak.flatten(events.trueParticlesBT.motherPdg)
-    pfo_tags = tags.GenerateTrueParticleTagsPi0Shower(events)
+    output["true_mother"] = ak.flatten(events.true_particles_bt.mother_pdg)
+    pfo_tags = tags.generate_true_particle_tags_pi0_shower(events)
     output["pi0_photon"] = ak.flatten(pfo_tags["$\\gamma$:beam $\\pi^0$"].mask | pfo_tags["$\\gamma$:other $\\pi^0$"].mask)
 
-    pi0_tags = tags.GeneratePi0Tags(events, photon_mask[photon_mask] & pairs)
+    pi0_tags = tags.generate_pi0_tags(events, photon_mask[photon_mask] & pairs)
     for t in pi0_tags:
         pi0_tags[t].mask = pi0_tags[t].mask[pairs]
     output["pi0_tags"] = pi0_tags
     
-    fs_tags = selection.event.GenerateTrueFinalStateTags(events)
+    fs_tags = selection.event.generate_true_final_state_tags(events)
     for t in fs_tags:
         fs_tags[t].mask = fs_tags[t].mask[pairs]
     output["final_state_tags"] = fs_tags
@@ -87,11 +100,11 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
 @common.timer
 def main(args):
-    plotting.styles.PlotStyler.SetPlotStyle(False)
+    plotting.styles.PlotStyler.set_plot_style(False)
     out = args.out + "shower_energy_correction/"
 
     if (not os.path.isfile(out + "photon_energies.hdf5")) or args.regen:
-        output = ntuple.RunProcess(args.ntuple_files["mc"], False, args, run)
+        output = ntuple.run_process(args.ntuple_files["mc"], False, args, run)
 
         output_photons = pd.DataFrame({i : output[i] for i in output if "shower_pairs" not in i and "tags" not in i})
         output_pairs = pd.DataFrame({i : output[i] for i in output if "shower_pairs" in i and "tags" not in i})
@@ -106,13 +119,13 @@ def main(args):
         output_pairs.to_hdf(out + "photon_energies.hdf5", "photon_pairs")
         output_tags.to_hdf(out + "photon_energies.hdf5", "tags")
 
-    df = io.ReadHDF5(out + "photon_energies.hdf5")["all_photons"]
+    df = io.read_hdf5(out + "photon_energies.hdf5")["all_photons"]
     df["residual"] = df.reco_shower_energy - df.true_energy
     df["fractional_error"] = (df.reco_shower_energy / df.true_energy) - 1
 
     with plotting.PlotBook(out + "plots.pdf") as book:
         #* initial plots
-        pec.PhotonSelection(df, book)
+        pec.photon_selection(df, book)
 
         #* linear correction
         if args.shower_correction["energy_range"] is None:
@@ -129,7 +142,7 @@ def main(args):
         bins = np.linspace(*energy_range, 11)
         print(f"{bins=}")
         linear_correction = pec.linear_fit(df, bins, energy_range, book)
-        pec.LinearFitPerformance(df, linear_correction, book)
+        pec.linear_fit_performance(df, linear_correction, book)
 
 
         #* response correction
@@ -137,13 +150,13 @@ def main(args):
         #* response correction
         bins = np.array(pec.create_bins_df(df.reco_shower_energy, int(len(df.reco_shower_energy)//11), energy_range), dtype = int)
 
-        central_values = pec.CalculateCentralValues(df, bins, book)
-        response_params = pec.ResponseFits(central_values, bins, book)
-        central_values = pec.CalculateCentralValues(df, bins, book)
-        response_params = pec.ResponseFits(central_values, bins, book)
+        central_values = pec.calculate_central_values(df, bins, book)
+        response_params = pec.response_fits(central_values, bins, book)
+        central_values = pec.calculate_central_values(df, bins, book)
+        response_params = pec.response_fits(central_values, bins, book)
 
-        tab = pec.MethodComparison(df, linear_correction, response_params, bins, energy_range, book)
-        tab = pec.MethodComparison(df, linear_correction, response_params, bins, energy_range, book)
+        tab = pec.method_comparison(df, linear_correction, response_params, bins, energy_range, book)
+        tab = pec.method_comparison(df, linear_correction, response_params, bins, energy_range, book)
     
     tab.T.style.format(precision = 3).to_latex(out + "table.tex")
 
@@ -158,18 +171,18 @@ def main(args):
         sf = [len(f'{p["error"][f"p{i}"]:.1g}') - 1 for i in range(len(p["value"]))]
         table = pd.DataFrame({f"$p_{{{i}}}$" : f'{p["value"][f"p{i}"]:.{sf[i]}f} $\\pm$ {p["error"][f"p{i}"]:.1g}' for i in range(len(p["value"]))}, index = [0])
         table.style.hide(axis = "index").to_latex(out + name + ".tex")
-        io.SaveConfiguration(p, out + name + ".json")
+        io.write_json(p, out + name + ".json")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Applies beam particle selection and saves properties of photon shower candidate PFOs to hdf5 file (MC only)", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    application.ApplicationArguments.Processing(parser)
-    application.ApplicationArguments.Output(parser)
-    application.ApplicationArguments.Config(parser)
-    application.ApplicationArguments.Regen(parser)
+    application.ApplicationArguments.processing(parser)
+    application.ApplicationArguments.output(parser)
+    application.ApplicationArguments.config(parser)
+    application.ApplicationArguments.regen(parser)
 
     args = parser.parse_args()
-    args = application.ApplicationArguments.ResolveArgs(args)
+    args = application.ApplicationArguments.resolve_args(args)
 
     print(vars(args))
     main(args)

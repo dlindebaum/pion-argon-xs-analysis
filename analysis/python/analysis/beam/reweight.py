@@ -6,57 +6,101 @@ from python.analysis import common, fitting, plotting
 from python.analysis.plotting import plots
 
 
-def RatioWeights(beam_inst_P : np.ndarray, func : str, params : list, truncate : int = 10):
-    weights = 1/getattr(fitting, func)(beam_inst_P, *params)
+def calculate_weights(beam_inst_p : np.ndarray, func : str, params : list, truncate : int = 10):
+    """Evaluate the inverse of a named fitting function and cap weights at ``truncate``.
+
+        Args:
+            beam_inst_p (np.ndarray): Reconstructed beam-instrument momentum values.
+            func (str): Name of a function in ``analysis.fitting`` to evaluate.
+            params (list): Positional parameters passed to that function after momentum.
+            truncate (int): Maximum returned weight.
+
+        Returns:
+            Any: Elementwise reciprocal fit values, capped above at ``truncate``.
+    """
+    weights = 1/getattr(fitting, func)(beam_inst_p, *params)
     weights = np.where(weights > truncate, truncate, weights)
     return weights
 
 
-def ReWeight(p_MC, p_Data, p_nominal : float, bins : int = 10, p_range : np.array = np.array([0.75, 1.25]), book : plotting.PlotBook = plotting.PlotBook.null()):
-    p_mc, edges = np.histogram(np.array(p_MC), bins, range = p_nominal * p_range)
-    p_data = np.histogram(np.array(p_Data), bins, range = p_nominal * p_range)[0]
+def reweight(p_mc, p_data, p_nominal : float, bins : int = 10, p_range : np.array = np.array([0.75, 1.25]), book : plotting.PlotBook = plotting.PlotBook.null()):
+    """Fit candidate functions to the binned, normalized data-to-MC momentum ratio.
 
-    with plots.RatioPlot((edges[1:] + edges[:-1]) / 2, p_data, p_mc, np.sqrt(p_data), np.sqrt(p_mc), "$P_{inst}^{reco}$ (MeV)", "Data/MC") as ratio_plot:
-        plots.Plot(ratio_plot.x, ratio_plot.y1, yerr = ratio_plot.y1_err, newFigure = False)
-        plots.Plot(ratio_plot.x, ratio_plot.y2, yerr = ratio_plot.y2_err, newFigure = False, ylabel = "Counts")
-    book.Save()
+        Args:
+            p_mc (Any): Simulated beam-instrument momentum values.
+            p_data (Any): Data beam-instrument momentum values.
+            p_nominal (float): Central momentum that scales the histogram range.
+            bins (int): Number of momentum histogram bins.
+            p_range (np.array): Multiplicative lower and upper range factors around ``p_nominal``.
+            book (plotting.PlotBook): Plot book used to save ratio and fit figures.
+
+        Returns:
+            Any: Fit results keyed by candidate function name.
+    """
+    p_mc, edges = np.histogram(np.array(p_mc), bins, range = p_nominal * p_range)
+    p_data = np.histogram(np.array(p_data), bins, range = p_nominal * p_range)[0]
+
+    with plots.ratio_plot((edges[1:] + edges[:-1]) / 2, p_data, p_mc, np.sqrt(p_data), np.sqrt(p_mc), "$P_{inst}^{reco}$ (MeV)", "Data/MC") as ratio_plot:
+        plots.plot(ratio_plot.x, ratio_plot.y1, yerr = ratio_plot.y1_err, new_figure = False)
+        plots.plot(ratio_plot.x, ratio_plot.y2, yerr = ratio_plot.y2_err, new_figure = False, ylabel = "Counts")
+    book.save()
 
     scale = sum(ratio_plot.y1) / sum(ratio_plot.y2)
 
     ratio = scale * np.nan_to_num(common.nandiv(ratio_plot.y2, ratio_plot.y1), posinf = 0)
     ratio_err = np.nan_to_num(abs(ratio * np.sqrt(common.nandiv(ratio_plot.y1_err, ratio_plot.y1)**2 + common.nandiv(ratio_plot.y2_err, ratio_plot.y2)**2)))
 
-    plots.Plot(ratio_plot.x, ratio, yerr = ratio_err, xlabel = "$P_{inst}^{reco}$ (MeV)", ylabel = "$r$")
-    book.Save()
+    plots.plot(ratio_plot.x, ratio, yerr = ratio_err, xlabel = "$P_{inst}^{reco}$ (MeV)", ylabel = "$r$")
+    book.save()
 
     results = {}
     for f in [fitting.gaussian, fitting.student_t, fitting.poly2d, fitting.crystal_ball, fitting.double_crystal_ball, fitting.double_gaussian]:
         plots.plt.figure()
-        results[f.__name__] = fitting.Fit(ratio_plot.x[ratio > 0], ratio[ratio > 0], ratio_err[ratio > 0], f, plot = True, xlabel = "$P_{inst}^{reco}$(MeV)", ylabel = "$r$")
-        book.Save()
+        results[f.__name__] = fitting.fit(ratio_plot.x[ratio > 0], ratio[ratio > 0], ratio_err[ratio > 0], f, plot = True, xlabel = "$P_{inst}^{reco}$(MeV)", ylabel = "$r$")
+        book.save()
     return results
 
 
-def ReWeightResults(sideband_mc : dict, sideband_data : dict, args : argparse.Namespace, bins : int, reweight_results : dict, reweight_func : str, book : plotting.PlotBook = plotting.PlotBook.null()):
-    weights = RatioWeights(np.array(sideband_mc["p_inst"]), reweight_func, reweight_results[reweight_func][0], args.beam_reweight["strength"])
+def reweight_results(sideband_mc : dict, sideband_data : dict, args : argparse.Namespace, bins : int, reweight_fits : dict, reweight_func : str, book : plotting.PlotBook = plotting.PlotBook.null()):
+    """Calculate sideband-MC momentum weights and save nominal and reweighted data/MC comparisons.
+
+        Args:
+            sideband_mc (dict): Sideband simulation arrays and tags, including ``p_inst``.
+            sideband_data (dict): Sideband data arrays and tags, including ``p_inst``.
+            args (argparse.Namespace): Analysis settings for momentum, normalization, and weight strength.
+            bins (int): Number of bins in the momentum comparison plots.
+            reweight_fits (dict): Fit results indexed by reweight-function name.
+            reweight_func (str): Fit function used to calculate event weights.
+            book (plotting.PlotBook): Plot book used to save the comparisons.
+    """
+    weights = calculate_weights(np.array(sideband_mc["p_inst"]), reweight_func, reweight_fits[reweight_func][0], args.beam_reweight["strength"])
 
     plot_range = [args.beam_momentum * 0.75, args.beam_momentum * 1.25]
 
-    plots.PlotHist(weights, range = [0, 3], xlabel = "weights", truncate = True)
-    book.Save()
+    plots.plot_hist(weights, range = [0, 3], xlabel = "weights", truncate = True)
+    book.save()
 
-    plots.PlotTagged(sideband_mc["p_inst"], sideband_mc["tags"], data2 = sideband_data["p_inst"], x_range = plot_range, norm = args.norm, data_weights = None, bins = bins, x_label = "$P_{inst}^{reco}$ (MeV)", ncols = 1)
+    plots.plot_tagged(sideband_mc["p_inst"], sideband_mc["tags"], data2 = sideband_data["p_inst"], x_range = plot_range, norm = args.norm, data_weights = None, bins = bins, x_label = "$P_{inst}^{reco}$ (MeV)", ncols = 1)
     plots.plt.title("nominal", pad = 15)
-    book.Save()
+    book.save()
 
-    plots.PlotTagged(sideband_mc["p_inst"], sideband_mc["tags"], data2 = sideband_data["p_inst"], x_range = plot_range, norm = args.norm, data_weights = weights, bins = bins, x_label = "$P_{inst}^{reco}$ (MeV)", ncols = 1)
+    plots.plot_tagged(sideband_mc["p_inst"], sideband_mc["tags"], data2 = sideband_data["p_inst"], x_range = plot_range, norm = args.norm, data_weights = weights, bins = bins, x_label = "$P_{inst}^{reco}$ (MeV)", ncols = 1)
     plots.plt.title(f"reweighted : {reweight_func}", pad = 15)
-    book.Save()
+    book.save()
     return
 
 
-def SmearingFactors(sample, weights : np.array = None):
-    average = np.average(sample.recoParticles.beam_inst_P, weights=weights)
-    variance = np.average((sample.recoParticles.beam_inst_P-average)**2, weights=weights)
+def smearing_factors(sample, weights : np.array = None):
+    """Calculate the weighted mean and standard deviation of reconstructed beam momentum.
+
+        Args:
+            sample (Any): Sample containing ``recoParticles.beam_inst_momentum``.
+            weights (np.array): Optional event weights used in both averages.
+
+        Returns:
+            Any: Weighted momentum mean and standard deviation.
+    """
+    average = np.average(sample.recoParticles.beam_inst_momentum, weights=weights)
+    variance = np.average((sample.recoParticles.beam_inst_momentum-average)**2, weights=weights)
     std = np.sqrt(variance)
     return average, std

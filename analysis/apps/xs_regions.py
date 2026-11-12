@@ -15,40 +15,53 @@ from rich import print
 
 
 def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
+    """ Evaluate reconstructed and true regions for one MC ntuple chunk.
+
+        Args:
+            i (int): Index of the chunk being processed.
+            file_desc (ntuple.FileDescriptor): Descriptor for the input ntuple file.
+            n_events (int): Maximum number of events to read.
+            start (int): First event index to read.
+            selected_events (Any): Optional event subset supplied by the processing runner.
+            args (dict): Resolved region-selection configuration.
+
+        Returns:
+            dict: Region definitions mapped to reconstructed and true region assignments.
+    """
     mc = ntuple.Data(file_desc, n_events, start)
 
     ri = {}
     for r, v in samples.regions.items():
         print(r)
-        reco_regions, true_regions = regions.RegionSelection(mc, args, True, v, None, True) # should we generate permutations of the true process as well?
+        reco_regions, true_regions = regions.region_selection(mc, args, True, v, None, True) # should we generate permutations of the true process as well?
         ri[r] = {"reco_regions" : reco_regions, "true_regions" : true_regions}
 
     return ri
 
 @common.timer
 def main(args : argparse.Namespace):
-    plotting.styles.PlotStyler.SetPlotStyle(True)
+    plotting.styles.PlotStyler.set_plot_style(True)
     out = args.out + "region_plots/"
     os.makedirs(out, exist_ok = True)
 
-    output_mc = application.ApplicationProcessing(["mc"], out, args, run, True)["mc"]
+    output_mc = application.processing(["mc"], out, args, run, True)["mc"]
 
     print(f"{output_mc=}")
 
-    regions.RecoRegionSelection(output_mc, out)
+    regions.region_study(output_mc, out)
     return
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Analyses MC ntuples in order to visualise the region identifications.")
 
-    application.ApplicationArguments.Config(parser, True)
-    application.ApplicationArguments.Output(parser)
-    application.ApplicationArguments.Regen(parser)
-    application.ApplicationArguments.Processing(parser)
+    application.ApplicationArguments.config(parser, True)
+    application.ApplicationArguments.output(parser)
+    application.ApplicationArguments.regen(parser)
+    application.ApplicationArguments.processing(parser)
 
     args = parser.parse_args()
-    args = application.ApplicationArguments.ResolveArgs(args)
+    args = application.ApplicationArguments.resolve_args(args)
 
     print(vars(args))
     main(args)

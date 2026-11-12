@@ -304,18 +304,37 @@ template_config = {
 
 
 class ApplicationArguments:
+    """Provide helpers for defining and resolving command-line and JSON analysis configuration.
+    """
     @staticmethod
-    def Processing(parser : argparse.ArgumentParser):
+    def processing(parser : argparse.ArgumentParser):
+        """Add command-line options for event batches, per-batch event limits, and worker threads.
+
+            Args:
+                parser (argparse.ArgumentParser): Parser to which the processing options are added.
+        """
         parser.add_argument("-b", "--batches", dest = "batches", type = int, default = None, help = "Number of batches to split n tuple files into when parallel processing processing data.")
         parser.add_argument("-e", "--events", dest = "events", type = int, default = None, help = "Number of events to process when parallel processing data.")
         parser.add_argument("-t", "--threads", dest = "threads", type = int, default = 1, help = "Number of threads to use when processsing.")
 
     @staticmethod
-    def Regen(parser : argparse.ArgumentParser):
+    def regen(parser : argparse.ArgumentParser):
+        """Add the flag that forces regeneration of stored processing outputs.
+
+            Args:
+                parser (argparse.ArgumentParser): Parser to which the regeneration option is added.
+        """
         parser.add_argument("-r", "--regen", dest = "regen", action = "store_true", help = "Regenerate any stored data.")
 
     @staticmethod
-    def Output(parser : argparse.ArgumentParser, default : str = None, file : bool = False):
+    def output(parser : argparse.ArgumentParser, default : str = None, file : bool = False):
+        """Add the output path option, with help text for either a file or directory.
+
+            Args:
+                parser (argparse.ArgumentParser): Parser to which the output option is added.
+                default (str): Default output path.
+                file (bool): Describe the output as a filename rather than a directory.
+        """
         if file is True:
             help = "output file name."
         else:
@@ -324,30 +343,43 @@ class ApplicationArguments:
         return
 
     @staticmethod
-    def Plots(parser : argparse.ArgumentParser):
+    def plots(parser : argparse.ArgumentParser):
+        """Add plot histogram-bin and annotation options.
+
+            Args:
+                parser (argparse.ArgumentParser): Parser to which the plot options are added.
+        """
         parser.add_argument("--nbins", dest = "nbins", type = int, default = 50, help = "Number of bins to make for histogram plots.")
         parser.add_argument("-a", "--annotation", dest = "annotation", type = str, default = None, help = "Annotation to add to plots.")
         return
 
     @staticmethod
-    def Config(parser : argparse.ArgumentParser, required : bool = False, default : any = None):
+    def config(parser : argparse.ArgumentParser, required : bool = False, default : any = None):
+        """Add the path option for an analysis JSON configuration file.
+
+            Args:
+                parser (argparse.ArgumentParser): Parser to which the configuration option is added.
+                required (bool): Require a configuration path on the command line.
+                default (any): Default configuration path.
+        """
         parser.add_argument("-c", "--config", dest = "config", type = str, default = default, required = required, help = "Analysis configuration file, if supplied will override command line arguments.")
 
     @staticmethod
-    def ResolveArgs(args : argparse.Namespace, override_out : bool = True) -> argparse.Namespace:
+    def resolve_args(args : argparse.Namespace, override_out : bool = True) -> argparse.Namespace:
         """ Parses command line arguements.
 
-        Args:
-            args (argparse.Namespace): arguements to parse
+            Args:
+                args (argparse.Namespace): Arguements to parse.
+                override_out (bool): Derive a default output path and trailing slash when true.
 
-        Returns:
-            argparse.Namespace: parsed arguements
+            Returns:
+                argparse.Namespace: Parsed arguements.
         """
         if hasattr(args, "config"):
             args_copy = argparse.Namespace()
             for a, v in args._get_kwargs():
                 setattr(args_copy, a, v)
-            args = ApplicationArguments.ResolveConfig(io.LoadConfiguration(args.config))
+            args = ApplicationArguments.resolve_config(io.read_json(args.config))
             for a, v in args_copy._get_kwargs():
                 if a not in args:
                     setattr(args, a, v)
@@ -380,15 +412,15 @@ class ApplicationArguments:
         return args
 
     @staticmethod
-    def __CreateSelection(value : dict, module) -> dict:
-        """ Creates a dictionary of selection functions and their argumenets as specified in the analysise configuration file. 
+    def __create_selection(value : dict, module) -> dict:
+        """ Creates a dictionary of selection functions and their argumenets as specified in the analysise configuration file.
 
-        Args:
-            value (dict): dicionary describing a particular selection, key value is the function name, value is a list of function arguements.
-            module (module): which python module does this selection belong to.
+            Args:
+                value (dict): Dicionary describing a particular selection, key value is the function name, value is a list of function arguements.
+                module (module): Which python module does this selection belong to.
 
-        Returns:
-            _type_: _description_
+            Returns:
+                dict: Dictionary of selection functions.
         """
         selection = {"selections" : {}, "arguments" : {}}
         for func, opt in value.items():
@@ -400,14 +432,14 @@ class ApplicationArguments:
         return selection
 
     @staticmethod
-    def ResolveConfig(config : dict) -> argparse.Namespace:
+    def resolve_config(config : dict) -> argparse.Namespace:
         """ Reads analysis configuration file and unpacks/serializes relavent objects.
 
-        Args:
-            config (dict): file path
+            Args:
+                config (dict): File path.
 
-        Returns:
-            argparse.Namespace: unpacked configuration
+            Returns:
+                argparse.Namespace: Unpacked configuration.
         """
         args = argparse.Namespace()
         for head, value in config.items():
@@ -422,26 +454,26 @@ class ApplicationArguments:
                 args.process_args = value["process_args"]
                 args.region_args = value["region_args"]
             elif head == "BEAM_PARTICLE_SELECTION":
-                args.beam_selection = ApplicationArguments.__CreateSelection(value, selection.beam)
+                args.beam_selection = ApplicationArguments.__create_selection(value, selection.beam)
             elif head == "HAS_FINAL_STATE_PFO_SELECTION":
                 args.has_final_state_pfo_selection = value["enable"]
             elif head == "VALID_PFO_SELECTION":
                 args.valid_pfo_selection = value["enable"]
             elif head == "FINAL_STATE_PIPLUS_SELECTION":
-                args.piplus_selection = ApplicationArguments.__CreateSelection(value, selection.pfo)
+                args.piplus_selection = ApplicationArguments.__create_selection(value, selection.pfo)
             elif head == "FINAL_STATE_PHOTON_SELECTION":
-                args.photon_selection = ApplicationArguments.__CreateSelection(value, selection.pfo)
+                args.photon_selection = ApplicationArguments.__create_selection(value, selection.pfo)
             elif head == "FINAL_STATE_LOOSE_PION_SELECTION":
-                args.loose_pion_selection = ApplicationArguments.__CreateSelection(value, selection.pfo)
+                args.loose_pion_selection = ApplicationArguments.__create_selection(value, selection.pfo)
             elif head == "FINAL_STATE_LOOSE_PHOTON_SELECTION":
-                args.loose_photon_selection = ApplicationArguments.__CreateSelection(value, selection.pfo)
+                args.loose_photon_selection = ApplicationArguments.__create_selection(value, selection.pfo)
             elif head == "FINAL_STATE_PI0_SELECTION":
-                args.pi0_selection = ApplicationArguments.__CreateSelection(value, selection.event)
+                args.pi0_selection = ApplicationArguments.__create_selection(value, selection.event)
             elif head == "BEAM_QUALITY_FITS":
                 if "mc" in value:
-                    args.mc_beam_quality_fit = io.LoadConfiguration(value["mc"]) # generally expected to have MC at a minimum
+                    args.mc_beam_quality_fit = io.read_json(value["mc"]) # generally expected to have MC at a minimum
                 if "data" in value:
-                    args.data_beam_quality_fit = io.LoadConfiguration(value["data"])
+                    args.data_beam_quality_fit = io.read_json(value["data"])
                 args.beam_quality_truncate = value["truncate"]
             elif head == "BEAM_SCRAPER_FITS":
                 args.beam_scraper_energy_range = value["energy_range"]
@@ -449,7 +481,7 @@ class ApplicationArguments:
                 if not hasattr(args.beam_scraper_energy_bins, "__iter__"):
                     raise Exception("energy_bins must be a list of beam energy bin ranges in MeV")
                 if "mc" in value:
-                    args.mc_beam_scraper_fit = io.LoadConfiguration(value["mc"])
+                    args.mc_beam_scraper_fit = io.read_json(value["mc"])
             elif head == "ENERGY_CORRECTION":
                 args.shower_correction = {}
                 for k, v in value.items():
@@ -461,17 +493,17 @@ class ApplicationArguments:
                     raise Exception("Upstream energy loss KE bins need to be provided (in MeV)")
                 args.upstream_loss_bins = value["bins"]
                 if "correction_params" in value:
-                    args.upstream_loss_correction_params = io.LoadConfiguration(value["correction_params"])
+                    args.upstream_loss_correction_params = io.read_json(value["correction_params"])
             elif head == "BEAM_REWEIGHT":
                 args.beam_reweight = {}
                 if value["params"] is not None:
-                    args.beam_reweight["params"] = io.LoadConfiguration(value["params"])
+                    args.beam_reweight["params"] = io.read_json(value["params"])
                 args.beam_reweight["strength"] = value["strength"]
 
             elif head == "SELECTION_MASKS":
                 args.selection_masks = {}
                 for k, v in value.items():
-                    args.selection_masks[k] = {i : io.LoadObject(j) for i, j in v.items()}
+                    args.selection_masks[k] = {i : io.read_dill(j) for i, j in v.items()}
             elif head == "TOY_PARAMETERS":
                 args.toy_parameters = {}
                 for k, v in value.items():
@@ -510,9 +542,9 @@ class ApplicationArguments:
             else:
                 setattr(args, head, value) # allow for generic configurations in the json file
         if hasattr(args, "beam_selection"):
-            ApplicationArguments.DataMCSelectionArgs(args)
+            ApplicationArguments.data_mc_selection_args(args)
         if hasattr(args, "pi0_selection"):
-            ApplicationArguments.AddEnergyCorrection(args)
+            ApplicationArguments.add_energy_correction(args)
         if hasattr(args, "beam_selection"):
             if "PiBeamSelection" in args.beam_selection["mc_arguments"]:
                 args.beam_selection["data_arguments"]["PiBeamSelection"]["use_beam_inst"] = True # make sure to set the correct settings for data.
@@ -525,10 +557,15 @@ class ApplicationArguments:
 
 
     @staticmethod
-    def AddEnergyCorrection(args):
+    def add_energy_correction(args):
+        """Load the configured shower correction and attach it to data and MC pi0-selection arguments.
+
+            Args:
+                args (Any): Resolved analysis configuration containing shower and pi0 selection options.
+        """
         if hasattr(args, "shower_correction") and (args.shower_correction["correction_params"] != None):
             method = photon_energy_correction.shower_energy_correction[args.shower_correction["correction"]]
-            params = io.LoadConfiguration(args.shower_correction["correction_params"])
+            params = io.read_json(args.shower_correction["correction_params"])
         else:
             method = None
             params = None
@@ -540,7 +577,15 @@ class ApplicationArguments:
         args.pi0_selection["data_arguments"]["Pi0MassSelection"]["correction_params"] = params
 
     @staticmethod
-    def DataMCSelectionArgs(args : argparse.Namespace):
+    def data_mc_selection_args(args : argparse.Namespace):
+        """Copy common selection arguments into data/MC settings and attach applicable fit parameters.
+
+            Args:
+                args (argparse.Namespace): Resolved configuration whose selection arguments are split by sample.
+
+            Returns:
+                Any: The mutated namespace with separate data and MC selection arguments.
+        """
         for a in vars(args):
             if ("selection" in a) and (type(getattr(args, a)) == dict):
                 if "arguments" in getattr(args, a): 
@@ -563,25 +608,25 @@ class ApplicationArguments:
         return args
 
 
-def ApplicationProcessing(samples : list[ntuple.Sample], outdir : str, args : argparse.Namespace, func : callable, merge : bool, outname : str = "output") -> list[dict] | dict:
+def processing(samples : list[ntuple.Sample], outdir : str, args : argparse.Namespace, func : callable, merge : bool, outname : str = "output") -> list[dict] | dict:
     """ Processing specifically for Applications where there is an option to reload processed data rather than fully reprocessing Ntuples.
 
-    Args:
-        samples (list[Sample]): What sample types to process, can be Data, MC or both.
-        outdir (str): Output directory for stored processing outputs.
-        args (argparse.Namespace): Application arguments.
-        func (callable): Process to run.
-        merge (bool): whether to merge the processing outputs.
-        outname (str, optional): Output file name. Defaults to "output".
+        Args:
+            samples (list[ntuple.Sample]): What sample types to process, can be Data, MC or both.
+            outdir (str): Output directory for stored processing outputs.
+            args (argparse.Namespace): Application arguments.
+            func (callable): Process to run.
+            merge (bool): Whether to merge the processing outputs.
+            outname (str): Output file name. Defaults to "output".
 
-    Returns:
-        list[dict] | dict: Processing outputs, either loaded from file or processed at runtime.
+        Returns:
+            list[dict] | dict: Processing outputs, either loaded from file or processed at runtime.
     """
     if (args.regen is True) or (os.path.isfile(f"{outdir}{outname}.dill") is False):
         print("Processing Ntuples")
-        outputs = {s : ntuple.RunProcess(args.ntuple_files[s], s == ntuple.Sample.DATA, args, func, merge) for s in samples}
-        io.SaveObject(f"{outdir}{outname}.dill", outputs)
+        outputs = {s : ntuple.run_process(args.ntuple_files[s], s == ntuple.Sample.DATA, args, func, merge) for s in samples}
+        io.write_dill(f"{outdir}{outname}.dill", outputs)
     else:
         print("Loading existing outputs")
-        outputs = io.LoadObject(f"{outdir}{outname}.dill")
+        outputs = io.read_dill(f"{outdir}{outname}.dill")
     return outputs

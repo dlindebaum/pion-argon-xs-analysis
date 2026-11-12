@@ -19,6 +19,19 @@ from python.analysis.selection import beam
 from python.analysis.beam import quality
 
 def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int, selected_events, args : dict) -> dict:
+    """ Apply pre-quality beam selections and extract beam-track observables.
+
+        Args:
+            i (int): Index of the chunk being processed.
+            file_desc (ntuple.FileDescriptor): Descriptor for the input ntuple file.
+            n_events (int): Maximum number of events to read.
+            start (int): First event index to read.
+            selected_events (Any): Optional event subset supplied by the processing runner.
+            args (dict): Resolved beam-selection and beam-quality configuration.
+
+        Returns:
+            dict: Start/end positions and normalized beam directions for selected events.
+    """
     events = ntuple.Data(file_desc, n_events, start)
 
     #? should this be made configurable i.e. pass config and apply all selections before the beam quality cuts if it is in the list?
@@ -32,23 +45,23 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
             else:
                 print(f"{s=}")
                 mask = args["beam_selection"]["selections"][s](events, **args["beam_selection"][func_args][s])
-                events.Filter([mask], [mask])
+                events.filter([mask], [mask])
     else:
         # do default selections prior to beam quality
         mask = beam.PiBeamSelection(events, args["data"])
-        events.Filter([mask], [mask])
+        events.filter([mask], [mask])
 
         mask = beam.PandoraTagCut(events)
-        events.Filter([mask], [mask])
+        events.filter([mask], [mask])
 
         mask = beam.CaloSizeCut(events)
-        events.Filter([mask], [mask])
+        events.filter([mask], [mask])
 
         mask = beam.HasFinalStatePFOsCut(events)
-        events.Filter([mask], [mask])
+        events.filter([mask], [mask])
 
     #* fit gaussians to the start positions
-    start_pos, end_pos = beam.GetTruncatedPos(events, args["beam_quality_truncate"])
+    start_pos, end_pos = beam.get_truncated_pos(events, args["beam_quality_truncate"])
     beam_dir = vector.normalize(vector.sub(end_pos, start_pos))
     return {"start_pos" : start_pos, "end_pos" : end_pos, "beam_dir": beam_dir}
 
@@ -57,28 +70,28 @@ def main(args):
     outdir = args.out + "beam_quality/"
     os.makedirs(outdir, exist_ok = True)
 
-    outputs = application.ApplicationProcessing(list(args.ntuple_files.keys()), outdir, args, run, True)
+    outputs = application.processing(list(args.ntuple_files.keys()), outdir, args, run, True)
 
-    fit_values = {s : quality.Fits(args, outputs[s], outdir, s) for s in outputs}
+    fit_values = {s : quality.fits(args, outputs[s], outdir, s) for s in outputs}
 
     if "data" not in outputs.keys():
         outputs["data"] = None
         fit_values["data"] = None
     
-    quality.MakePlots(outputs["mc"], fit_values["mc"], outputs["data"], fit_values["data"], outdir, args.beam_quality_truncate)
+    quality.make_plots(outputs["mc"], fit_values["mc"], outputs["data"], fit_values["data"], outdir, args.beam_quality_truncate)
 
     return
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Computes Guassian fit paramters needed for the beam quality cuts in the beam particle selection.", formatter_class = argparse.RawDescriptionHelpFormatter)
 
-    application.ApplicationArguments.Config(parser, True)
-    application.ApplicationArguments.Processing(parser)
-    application.ApplicationArguments.Output(parser)
-    application.ApplicationArguments.Regen(parser)
+    application.ApplicationArguments.config(parser, True)
+    application.ApplicationArguments.processing(parser)
+    application.ApplicationArguments.output(parser)
+    application.ApplicationArguments.regen(parser)
 
     args = parser.parse_args()
 
-    args = application.ApplicationArguments.ResolveArgs(args)
+    args = application.ApplicationArguments.resolve_args(args)
     print(vars(args))
     main(args)

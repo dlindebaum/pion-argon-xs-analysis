@@ -23,6 +23,19 @@ from python.analysis import slices
 from python.analysis.cross_section import analysis_input, fit_output, plots
 
 def extract_cross_sections(analysis_input : analysis_input.AnalysisInput, energy_slices : slices.Slices, process_definitions : samples.SampleDefinition, fiducial_volume : tuple[float], posterior_tensors : np.ndarray, exclude_fiducial_volume : bool = False):
+    """ Calculate total and signal-process cross sections from analysis inputs.
+
+        Args:
+            analysis_input (analysis_input.AnalysisInput): Event-level analysis input.
+            energy_slices (slices.Slices): Energy binning and slice geometry.
+            process_definitions (samples.SampleDefinition): Signal-process definitions.
+            fiducial_volume (tuple[float]): Spatial bounds of the fiducial volume.
+            posterior_tensors (np.ndarray): Optional fitted event posterior weights.
+            exclude_fiducial_volume (bool): Whether to use energies at the front face and interaction point.
+
+        Returns:
+            dict: Calculated cross-section values and uncertainties by process.
+    """
     dEdX = bethe_bloch.mean_dEdX(energy_slices.pos - energy_slices.width/2, Particle.from_pdgid(211))
 
     args = {
@@ -69,9 +82,9 @@ def extract_cross_sections(analysis_input : analysis_input.AnalysisInput, energy
 
 
 def main(args : application.argparse.Namespace):
-    plotting.styles.PlotStyler.SetPlotStyle(dark = True)
+    plotting.styles.PlotStyler.set_plot_style(dark = True)
 
-    ais = {k : io.LoadObject(v) for k, v in args.analysis_input.items() if "mc" in k}
+    ais = {k : io.read_dill(v) for k, v in args.analysis_input.items() if "mc" in k}
 
     prefit_cross_sections = extract_cross_sections(ais["mc_cheated"], args.energy_slices, args.process_definitions, args.fiducial_volume, None, True)
 
@@ -87,18 +100,18 @@ def main(args : application.argparse.Namespace):
     with plotting.PlotBook(f"{outdir}cross_section_plots") as book:
         if postfit_cross_sections is None:
             for k, v in prefit_cross_sections.items():
-                plots.PlotCrossSection({"prefit" : v}, args.energy_slices, k, [1000, 2000])
-                book.Save()
+                plots.plot_cross_section({"prefit" : v}, args.energy_slices, k, [1000, 2000])
+                book.save()
         else:
             for k, v in postfit_cross_sections.items():
-                plots.PlotCrossSectionSteps(v, k, prefit_cross_sections[k])
-                book.Save()
+                plots.plot_cross_section_steps(v, k, prefit_cross_sections[k])
+                book.save()
 
-                plots.PlotCrossSectionMinMax(v, prefit_cross_sections[k], k, args.energy_slices)
-                book.Save()
+                plots.plot_cross_section_minmax(v, prefit_cross_sections[k], k, args.energy_slices)
+                book.save()
 
-                plots.PlotCrossSectionCL(v, prefit_cross_sections[k], k, args.energy_slices)
-                book.Save()
+                plots.plot_cross_section_cl(v, prefit_cross_sections[k], k, args.energy_slices)
+                book.save()
     return
 
 
@@ -106,10 +119,10 @@ if __name__ == "__main__":
 
     parser = application.argparse.ArgumentParser(description = "Computes normalisation for beam pion analysis.", formatter_class = application.argparse.RawDescriptionHelpFormatter)
 
-    application.ApplicationArguments.Config(parser, True)
+    application.ApplicationArguments.config(parser, True)
     # application.ApplicationArguments.Processing(parser) do we need multiprocessing? Likely not.
-    application.ApplicationArguments.Output(parser)
+    application.ApplicationArguments.output(parser)
 
-    args = application.ApplicationArguments.ResolveArgs(parser.parse_args())
+    args = application.ApplicationArguments.resolve_args(parser.parse_args())
     print(vars(args))
     main(args)

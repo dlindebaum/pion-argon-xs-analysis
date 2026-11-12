@@ -13,7 +13,15 @@ from python.analysis import cuts, io, ntuple, photon_energy_correction, tags
 from python.analysis.beam import scraper
 
 
-def MergeSelectionMasks(output):
+def merge_selection_masks(output):
+    """ Concatenate selection masks from chunks that belong to the same input file.
+
+        Args:
+            output (Any): Multiprocessing results keyed by selection, including file names and per-chunk masks.
+
+        Returns:
+            Any: The results dictionary with masks grouped and concatenated by input file.
+    """
     files = output["name"]
 
     masks ={}
@@ -65,11 +73,11 @@ def MergeSelectionMasks(output):
 def merge_multiproccess_output(outputs : list) -> dict:
     """ Merge multiprocessing output into a single dictionary.
 
-    Args:
-        outputs (list): outputs from multiprocessing job.
+        Args:
+            outputs (list): Outputs from multiprocessing job.
 
-    Returns:
-        dict: merged output
+        Returns:
+            dict: Merged output.
     """
     merged_output = {}
 
@@ -124,12 +132,12 @@ def merge_multiproccess_output(outputs : list) -> dict:
     rprint(merged_output)
     return merged_output
 
-def SaveMasks(output : dict, out : str):
-    """ Save selection masks to dill file
+def write_masks(output : dict, out : str):
+    """ Save selection masks to dill file.
 
-    Args:
-        output (dict): masks
-        out (str): output file directory
+        Args:
+            output (dict): Masks.
+            out (str): Output file directory.
     """
     os.makedirs(out, exist_ok = True)
 
@@ -143,31 +151,42 @@ def SaveMasks(output : dict, out : str):
                 masks[k][f] = i
     
     for k in masks:
-        io.SaveObject(out + f"{k}_selection_masks.dill", masks[k])
+        io.write_dill(out + f"{k}_selection_masks.dill", masks[k])
 
 
-def MakeOutput(value : ak.Array, event_tags : tags.Tags, cuts : list = [], op : list = [], fs_tags : tags.Tags = None) -> dict:
+def make_output(value : ak.Array, event_tags : tags.Tags, cuts : list = [], op : list = [], fs_tags : tags.Tags = None) -> dict:
     """ Output dictionary for multiprocessing class, if we want to be fancy this can be a dataclass instead.
         Generally the data stored in this dictionary should be before any cuts are applied, for plotting purposes.
 
-    Args:
-        value (ak.Array): value which is being studied
-        tags (tags.Tags): tags which categorise the value
-        cuts (list, optional): cut values used on this data. Defaults to [].
-        cuts (list, optional): operation of cut. Defaults to [].
-        fs_tags (tags.Tags, optional): final state tags to the data. Defaults to None.
+        Args:
+            value (ak.Array): Value which is being studied.
+            event_tags (tags.Tags): Truth tags associated with the values before selection cuts.
+            cuts (list): Operation of cut. Defaults to [].
+            op (list): Comparison operators corresponding to ``cuts``.
+            fs_tags (tags.Tags): Final state tags to the data. Defaults to None.
 
-    Returns:
-        dict: dictionary of data.
+        Returns:
+            dict: Dictionary of data.
     """
     return {"value" : value, "tags" : event_tags, "cuts" : cuts, "op" : op, "fs_tags" : fs_tags}
 
 
-def AnalyseBeamFiducialCut(events : ntuple.Data, beam_instrumentation : bool, functions : dict, args : dict):
+def analyse_beam_fiducial_cut(events : ntuple.Data, beam_instrumentation : bool, functions : dict, args : dict):
+    """ Apply configured beam-fiducial cuts and collect masks, plotted values, tags, and a cut table.
+
+        Args:
+            events (ntuple.Data): Event sample to evaluate and filter.
+            beam_instrumentation (bool): Whether the sample uses beam instrumentation rather than truth beam tags.
+            functions (dict): Cut-name-to-callable mapping for fiducial selections.
+            args (dict): Per-cut keyword arguments passed to the configured selection functions.
+
+        Returns:
+            Any: Output data by cut, a cut-performance DataFrame, and the masks produced by configured cuts.
+    """
     output = {}
     masks = {}
-    cut_table = cuts.CutHandler(events, particle_tags = tags.GenerateTrueBeamParticleTags(events) if beam_instrumentation is False else None)
-    output["no_selection"] = MakeOutput(None, tags.GenerateTrueBeamParticleTags(events), None, None, event.GenerateTrueFinalStateTags(events))
+    cut_table = cuts.CutHandler(events, particle_tags = tags.generate_true_beam_particle_tags(events) if beam_instrumentation is False else None)
+    output["no_selection"] = make_output(None, tags.generate_true_beam_particle_tags(events), None, None, event.generate_true_final_state_tags(events))
     if "TrueFiducialCut" in args:
         masks = {k : functions[k](events, **v) for k, v in args.items() if k in ["APA3Cut", "TrueFiducialCut"]}
         for a in ["APA3Cut", "TrueFiducialCut"]:
@@ -175,50 +194,51 @@ def AnalyseBeamFiducialCut(events : ntuple.Data, beam_instrumentation : bool, fu
             cut_table.add_mask(mask, a)
             cut_values = args[a]["cut"] if "cut" in args[a] else None
             operations = args[a]["op"] if "op" in args[a] else None
-            output[a] = MakeOutput(property, tags.GenerateTrueBeamParticleTags(events), cut_values, operations)
+            output[a] = make_output(property, tags.generate_true_beam_particle_tags(events), cut_values, operations)
 
-            events.Filter([mask], [mask])
-            output[a]["fs_tags"] = event.GenerateTrueFinalStateTags(events)
+            events.filter([mask], [mask])
+            output[a]["fs_tags"] = event.generate_true_final_state_tags(events)
 
     #* true particle population
-    output["final_tags"] = MakeOutput(None, tags.GenerateTrueBeamParticleTags(events), None, None, event.GenerateTrueFinalStateTags(events))
+    output["final_tags"] = make_output(None, tags.generate_true_beam_particle_tags(events), None, None, event.generate_true_final_state_tags(events))
 
     df = cut_table.get_table(init_data_name = "no selection", pfos = False, percent_remain = False, relative_percent = False, ave_per_event = False)
 
     return output, df, masks
 
 
-def AnalyseBeamSelection(events : ntuple.Data, beam_instrumentation : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame, dict]:
+def analyse_beam_selection(events : ntuple.Data, beam_instrumentation : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame, dict]:
     """ Manually applies the beam selection while storing the value being cut on, cut values and truth tags in order to do plotting
         and produce performance tables.
 
-    Args:
-        events (ntuple.Data): events to look at
-        beam_instrumentation (bool): use beam instrumentation for beam particle selection
-        beam_quality_fits (dict): fit values for the beam quality selection
+        Args:
+            events (ntuple.Data): Events to look at.
+            beam_instrumentation (bool): Use beam instrumentation for beam particle selection.
+            functions (dict): Cut-name-to-callable mapping for beam selections.
+            args (dict): Per-cut keyword arguments passed to the configured selection functions.
 
-    Returns:
-        dict: output data.
+        Returns:
+            tuple[dict, pd.DataFrame, dict]: Output data.
     """
     output = {}
-    cut_table = cuts.CutHandler(events, particle_tags = tags.GenerateTrueBeamParticleTags(events) if beam_instrumentation is False else None)
+    cut_table = cuts.CutHandler(events, particle_tags = tags.generate_true_beam_particle_tags(events) if beam_instrumentation is False else None)
 
-    output["no_selection"] = MakeOutput(None, tags.GenerateTrueBeamParticleTags(events), None, None, event.GenerateTrueFinalStateTags(events))
-    output["no_selection_endz"] = MakeOutput(events.recoParticles.beam_endPos_SCE.z, tags.GenerateTrueBeamParticleTags(events), None, None)
+    output["no_selection"] = make_output(None, tags.generate_true_beam_particle_tags(events), None, None, event.generate_true_final_state_tags(events))
+    output["no_selection_endz"] = make_output(events.recoParticles.beam_end_pos_sce.z, tags.generate_true_beam_particle_tags(events), None, None)
 
     masks = {k : functions[k](events, **v) for k, v in args.items()}
 
     #* pi+ beam selection
     mask = beam.PiBeamSelection(events, **args["PiBeamSelection"])
     cut_table.add_mask(mask, "PiBeamSelection")
-    counts = tags.GenerateTrueBeamParticleTags(events)
+    counts = tags.generate_true_beam_particle_tags(events)
     for i in counts:
         counts[i] = ak.sum(counts[i].mask)
-    output["PiBeamSelection"] = MakeOutput(counts, tags.GenerateTrueBeamParticleTags(events), None, None)
-    events.Filter([mask], [mask])
-    output["PiBeamSelection"]["fs_tags"] = event.GenerateTrueFinalStateTags(events)
+    output["PiBeamSelection"] = make_output(counts, tags.generate_true_beam_particle_tags(events), None, None)
+    events.filter([mask], [mask])
+    output["PiBeamSelection"]["fs_tags"] = event.generate_true_final_state_tags(events)
 
-    output["PiBeamSelection_endz"] = MakeOutput(events.recoParticles.beam_endPos_SCE.z, tags.GenerateTrueBeamParticleTags(events), None, None)
+    output["PiBeamSelection_endz"] = make_output(events.recoParticles.beam_end_pos_sce.z, tags.generate_true_beam_particle_tags(events), None, None)
 
     for a in args:
         if a in ["PiBeamSelection", "TrueFiducialCut"]: continue
@@ -227,146 +247,161 @@ def AnalyseBeamSelection(events : ntuple.Data, beam_instrumentation : bool, func
         cut_table.add_mask(mask, a)
         cut_values = args[a]["cut"] if "cut" in args[a] else None
         operations = args[a]["op"] if "op" in args[a] else None
-        output[a] = MakeOutput(property, tags.GenerateTrueBeamParticleTags(events), cut_values, operations)
+        output[a] = make_output(property, tags.generate_true_beam_particle_tags(events), cut_values, operations)
 
         if (a == "BeamScraperCut") and (beam_instrumentation == False):
             if beam_instrumentation == False:
-                scraper_id = scraper.IsScraper(events, args[a]["fits"])
-                output[a + "_scraper_tag"] = MakeOutput(None, tags.BeamScraperTag(scraper_id), None, None)
+                scraper_id = scraper.is_scraper(events, args[a]["fits"])
+                output[a + "_scraper_tag"] = make_output(None, tags.beam_scraper_tag(scraper_id), None, None)
 
-        events.Filter([mask], [mask])
-        output[a]["fs_tags"] = event.GenerateTrueFinalStateTags(events)
+        events.filter([mask], [mask])
+        output[a]["fs_tags"] = event.generate_true_final_state_tags(events)
 
-    output["selection_endz"] = MakeOutput(events.recoParticles.beam_endPos_SCE.z, tags.GenerateTrueBeamParticleTags(events), None, None)
+    output["selection_endz"] = make_output(events.recoParticles.beam_end_pos_sce.z, tags.generate_true_beam_particle_tags(events), None, None)
 
     #* true particle population
-    output["final_tags"] = MakeOutput(None, tags.GenerateTrueBeamParticleTags(events), None, None, event.GenerateTrueFinalStateTags(events))
+    output["final_tags"] = make_output(None, tags.generate_true_beam_particle_tags(events), None, None, event.generate_true_final_state_tags(events))
 
     df = cut_table.get_table(init_data_name = "no selection", pfos = False, percent_remain = False, relative_percent = False, ave_per_event = False)
     return output, df, masks
 
 
-def AnalysePFOSelection(events : ntuple.Data, data : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
-    """ Analyse PFO selection.
+def analyse_pfo_selection(events : ntuple.Data, data : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
+    """ Apply configured PFO cuts and collect cut values, truth tags, and performance statistics.
 
-    Args:
-        events (ntuple.Data): events to look at
+        Args:
+            events (ntuple.Data): Event sample whose reconstructed PFOs are selected.
+            data (bool): Whether the sample is data; data samples do not receive MC truth tags.
+            functions (dict): Cut-name-to-callable mapping for PFO selections.
+            args (dict): Per-cut keyword arguments passed to the configured selection functions.
 
-    Returns:
-        dict: output data
+        Returns:
+            tuple[dict, pd.DataFrame]: Per-cut output values and tags, plus the cut-performance table.
     """
     output = {}
-    cut_table = cuts.CutHandler(events, particle_tags = tags.GenerateTrueParticleTagsInterestingPFOs(events))
+    cut_table = cuts.CutHandler(events, particle_tags = tags.generate_true_particle_tags_interesting_pfos(events))
 
     for a in args:
         if a in ["NHitsCut", "BeamParticleIPCut"]:
-            output[a + "_completeness"] = MakeOutput(events.trueParticlesBT.completeness, [])
+            output[a + "_completeness"] = make_output(events.true_particles_bt.completeness, [])
 
         mask, property = functions[a](events, **args[a], return_property = True)
         cut_table.add_mask(mask, a)
         cut_values = args[a]["cut"] if "cut" in args[a] else None
         operations = args[a]["op"] if "op" in args[a] else None
-        output[a] = MakeOutput(property, tags.GenerateTrueParticleTagsInterestingPFOs(events), cut_values, operations)
-        events.Filter([mask], [mask])
-        output[a]["fs_tags"] = event.GenerateTrueFinalStateTags(events)    
+        output[a] = make_output(property, tags.generate_true_particle_tags_interesting_pfos(events), cut_values, operations)
+        events.filter([mask], [mask])
+        output[a]["fs_tags"] = event.generate_true_final_state_tags(events)    
 
     #* true particle population
-    output["final_tags"] = MakeOutput(None, tags.GenerateTrueParticleTagsInterestingPFOs(events), None, None)
+    output["final_tags"] = make_output(None, tags.generate_true_particle_tags_interesting_pfos(events), None, None)
     
     df = cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, events = False)
     print(df)
     return output, df
 
 
-def AnalysePiPlusSelection(events : ntuple.Data, data : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
+def analyse_pi_plus_selection(events : ntuple.Data, data : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
     """ Analyse the daughter pi+ selection.
 
-    Args:
-        events (ntuple.Data): events to look at
+        Args:
+            events (ntuple.Data): Events to look at.
+            data (bool): Whether the sample is data; data samples do not receive MC truth tags.
+            functions (dict): Cut-name-to-callable mapping for daughter-pion selections.
+            args (dict): Per-cut keyword arguments passed to the configured selection functions.
 
-    Returns:
-        dict: output data
+        Returns:
+            tuple[dict, pd.DataFrame]: Per-cut output values and tags, plus the cut-performance table.
     """
     output = {}
-    cut_table = cuts.CutHandler(events, particle_tags = tags.GenerateTrueParticleTagsPiPlus(events))
+    cut_table = cuts.CutHandler(events, particle_tags = tags.generate_true_particle_tags_pi_plus(events))
 
     for a in args:
         if a == "NHitsCut":
-            output[a + "_completeness"] = MakeOutput(events.trueParticlesBT.completeness, [])
+            output[a + "_completeness"] = make_output(events.true_particles_bt.completeness, [])
 
         mask, property = functions[a](events, **args[a], return_property = True)
         cut_table.add_mask(mask, a)
         cut_values = args[a]["cut"] if "cut" in args[a] else None
         operations = args[a]["op"] if "op" in args[a] else None
-        output[a] = MakeOutput(property, tags.GenerateTrueParticleTagsPiPlus(events), cut_values, operations)
-        events.Filter([mask], [mask])
-        output[a]["fs_tags"] = event.GenerateTrueFinalStateTags(events)    
+        output[a] = make_output(property, tags.generate_true_particle_tags_pi_plus(events), cut_values, operations)
+        events.filter([mask], [mask])
+        output[a]["fs_tags"] = event.generate_true_final_state_tags(events)    
 
     #* true particle population
-    output["final_tags"] = MakeOutput(None, tags.GenerateTrueParticleTagsPiPlus(events), None, None)
+    output["final_tags"] = make_output(None, tags.generate_true_particle_tags_pi_plus(events), None, None)
     
     df = cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, events = False)
     print(df)
     return output, df
 
 
-def AnalysePhotonCandidateSelection(events : ntuple.Data, data : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
+def analyse_photon_candidate_selection(events : ntuple.Data, data : bool, functions : dict, args : dict) -> tuple[dict, pd.DataFrame]:
     """ Analyse the photon candidate selection.
 
-    Args:
-        events (ntuple.Data): events to look at
+        Args:
+            events (ntuple.Data): Events to look at.
+            data (bool): Whether the sample is data; data samples do not receive MC truth tags.
+            functions (dict): Cut-name-to-callable mapping for photon-candidate selections.
+            args (dict): Per-cut keyword arguments passed to the configured selection functions.
 
-    Returns:
-        dict: output data
+        Returns:
+            tuple[dict, pd.DataFrame]: Per-cut output values and tags, plus the cut-performance table.
     """
     output = {}
-    cut_table = cuts.CutHandler(events, particle_tags = tags.GenerateTrueParticleTagsPi0Shower(events) if data is False else None)
+    cut_table = cuts.CutHandler(events, particle_tags = tags.generate_true_particle_tags_pi0_shower(events) if data is False else None)
 
     for a in args:
         if a in ["NHitsCut", "BeamParticleIPCut"]:
-            output[a + "_completeness"] = MakeOutput(events.trueParticlesBT.completeness, [])
+            output[a + "_completeness"] = make_output(events.true_particles_bt.completeness, [])
 
         mask, property = functions[a](events, **args[a], return_property = True)
         cut_table.add_mask(mask, a)
         cut_values = args[a]["cut"] if "cut" in args[a] else None
         operations = args[a]["op"] if "op" in args[a] else None
-        output[a] = MakeOutput(property, tags.GenerateTrueParticleTagsPi0Shower(events), cut_values, operations)
-        events.Filter([mask], [mask])
-        output[a]["fs_tags"] = event.GenerateTrueFinalStateTags(events)    
+        output[a] = make_output(property, tags.generate_true_particle_tags_pi0_shower(events), cut_values, operations)
+        events.filter([mask], [mask])
+        output[a]["fs_tags"] = event.generate_true_final_state_tags(events)    
 
     #* true particle population
-    output["final_tags"] = MakeOutput(None, tags.GenerateTrueParticleTagsPi0Shower(events), None, None)
+    output["final_tags"] = make_output(None, tags.generate_true_particle_tags_pi0_shower(events), None, None)
 
     df = cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, events = False)
     print(df)
     return output, df
 
 
-def AnalysePi0Selection(events : ntuple.Data, data : bool, functions : dict, args : dict, photon_mask : ak.Array) -> tuple[dict, pd.DataFrame]:
-    """ Analyse the pi0 selection.
+def analyse_pi0_selection(events : ntuple.Data, data : bool, functions : dict, args : dict, photon_mask : ak.Array) -> tuple[dict, pd.DataFrame]:
+    """ Apply configured pi0 cuts to photon candidates and collect cut-level outputs and tags.
 
-    Args:
-        events (ntuple.Data): events to look at
-        data (bool): is the ntuple file data or MC
-        correction (callable, optional): shower energy correction. Defaults to None.
-        correction_params (dict, optional): shower energy correction parameters. Defaults to None.
+        Args:
+            events (ntuple.Data): Event sample containing reconstructed shower pairs.
+            data (bool): Whether the sample is data; MC samples receive truth pi0 tags.
+            functions (dict): Cut-name-to-callable mapping for pi0 selection steps.
+            args (dict): Per-cut keyword arguments passed to the configured selection functions.
+            photon_mask (ak.Array): Per-PFO mask of photon candidates used to construct the pairs.
 
-    Returns:
-        dict: output data
-    """    
+        Returns:
+            tuple[dict, pd.DataFrame]: Per-cut output values and tags, plus the cut-performance table.
+    """
     def null_tag():
+        """ Build the placeholder tag used when truth pi0 tags are unavailable for data.
+
+            Returns:
+                tags.Tags: Tags collection with a ``null`` mask defined by ``events.event_num < -1``.
+        """
         tag = tags.Tags()
-        tag["null"] = tags.Tag(mask = (events.eventNum < -1))
+        tag["null"] = tags.Tag(mask = (events.event_num < -1))
         return tag
 
     output = {}
     photonCandidates = ak.Array(photon_mask)
-    cut_table = cuts.CutHandler(events, particle_tags = tags.GeneratePi0Tags(events, photon_mask) if data is False else None)
+    cut_table = cuts.CutHandler(events, particle_tags = tags.generate_pi0_tags(events, photon_mask) if data is False else None)
 
     for a in args:
         if a == "Pi0MassSelection":
             mask, property = functions[a](events, **args[a], return_property = True, photon_mask = photonCandidates)
-            output["mass_event_tag"] = MakeOutput(None, event.GenerateTrueFinalStateTags(events), None, None)
+            output["mass_event_tag"] = make_output(None, event.generate_true_final_state_tags(events), None, None)
         else:
             mask, property = functions[a](events, **args[a], return_property = True, photon_mask = photonCandidates)
         if a != "NPhotonCandidateSelection":
@@ -374,41 +409,41 @@ def AnalysePi0Selection(events : ntuple.Data, data : bool, functions : dict, arg
         cut_table.add_mask(mask, a)
         cut_values = args[a]["cut"] if "cut" in args[a] else None
         operations = args[a]["op"] if "op" in args[a] else None
-        pi0_tags = null_tag() if data else tags.GeneratePi0Tags(events, photonCandidates)
-        output[a] = MakeOutput(property, pi0_tags, cut_values, operations)
-        events.Filter([mask], [mask])
+        pi0_tags = null_tag() if data else tags.generate_pi0_tags(events, photonCandidates)
+        output[a] = make_output(property, pi0_tags, cut_values, operations)
+        events.filter([mask], [mask])
         photonCandidates = photonCandidates[mask]
-        output[a]["fs_tags"] = event.GenerateTrueFinalStateTags(events)
+        output[a]["fs_tags"] = event.generate_true_final_state_tags(events)
 
     #* final counts
-    output["event_tag"] = MakeOutput(None, event.GenerateTrueFinalStateTags(events), None, None)
-    pi0_tags = null_tag() if data else tags.GeneratePi0Tags(events, photonCandidates)
-    output["final_tags"] = MakeOutput(None, pi0_tags, None, None)
+    output["event_tag"] = make_output(None, event.generate_true_final_state_tags(events), None, None)
+    pi0_tags = null_tag() if data else tags.generate_pi0_tags(events, photonCandidates)
+    output["final_tags"] = make_output(None, pi0_tags, None, None)
 
     df = cut_table.get_table(init_data_name = "Beam particle selection", percent_remain = False, relative_percent = False, ave_per_event = False, pfos = False)
     print(df)
     return output, df
 
 
-def AnalyseRegions(events : ntuple.Data, photon_mask : ak.Array, is_data : bool, correction : callable = None, correction_params : dict = None) -> tuple[dict, dict]:
+def analyse_regions(events : ntuple.Data, photon_mask : ak.Array, is_data : bool, correction : callable = None, correction_params : dict = None) -> tuple[dict, dict]:
     """ Create masks which desribe the truth and reco regions for various exlusive cross sections.
 
-    Args:
-        events (ntuple.Data): events to look at
-        photon_mask (ak.Array): mask for pi0 photon shower candidates
-        is_data (bool): is this a data ntuple?
-        correction (callable, optional): shower energy correction. Defaults to None.
-        correction_params (str, optional): shower energy correction parameters file. Defaults to None.
+        Args:
+            events (ntuple.Data): Events to look at.
+            photon_mask (ak.Array): Mask for pi0 photon shower candidates.
+            is_data (bool): Is this a data ntuple?
+            correction (callable): Shower energy correction. Defaults to None.
+            correction_params (dict): Shower energy correction parameters file. Defaults to None.
 
-    Returns:
-        tuple[dict, dict]: truth and reco regions
+        Returns:
+            tuple[dict, dict]: Truth and reco regions.
     """
-    truth_regions = event.create_regions(events.trueParticles.nPi0, events.trueParticles.nPiPlus + events.trueParticles.nPiMinus) if is_data == False else None
+    truth_regions = event.create_regions(events.true_particles.n_pi0, events.true_particles.n_pi_plus + events.true_particles.n_pi_minus) if is_data == False else None
 
     if correction_params is None:
         params = None
     else:
-        params = io.LoadConfiguration(correction_params)
+        params = io.read_json(correction_params)
 
     reco_pi0_counts = event.count_pi0_candidates(events, exactly_two_photons = True, photon_mask = photon_mask, correction = photon_energy_correction.shower_energy_correction[correction], correction_params = params)
     reco_pi_plus_counts_mom_cut = event.count_charged_pi_candidates(events, energy_cut = None)
@@ -416,17 +451,17 @@ def AnalyseRegions(events : ntuple.Data, photon_mask : ak.Array, is_data : bool,
     return truth_regions, reco_regions
 
 
-def CreatePFOMasks(sample : ntuple.Data, selections : dict, args_type : str, extra_args : dict = None) -> dict[np.array]:
+def create_pfo_masks(sample : ntuple.Data, selections : dict, args_type : str, extra_args : dict = None) -> dict[np.array]:
     """ Create PFO masks to save to file.
 
-    Args:
-        mc (ntuple.Data): sample.
-        selections (dict): PFO selections.
-        args_type (str): use Data or MC arguments.
-        extra_args (dict, optional): any additional arguments to add. Defaults to None.
+        Args:
+            sample (ntuple.Data): Sample.
+            selections (dict): PFO selections.
+            args_type (str): Use Data or MC arguments.
+            extra_args (dict): Any additional arguments to add. Defaults to None.
 
-    Returns:
-        masks: dictionary of masks.
+        Returns:
+            dict[np.array]: Dictionary of masks.
     """
     masks = {}
     for n, c, v in zip(selections["selections"].keys(), selections["selections"].values(), selections[args_type].values()):

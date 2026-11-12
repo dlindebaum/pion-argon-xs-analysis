@@ -32,58 +32,58 @@ def iterative_unfold(data=None, data_err=None, response=None,
                      return_iterations=False, callbacks=None):
     """Performs iterative unfolding. Custom method which returns the covariance matrix.
 
-    Parameters
+    Parameters.
     ----------
-    data : array_like
+    data : Array_like.
         Input observed data distribution.
-    data_err : array_like
+    data_err : Array_like.
         Uncertainties of the input observed data distribution. Must be the
         same shape as ``data``.
-    response : array_like
+    response : Array_like.
         Response matrix.
-    response_err : array_like
+    response_err : Array_like.
         Uncertainties of response matrix. Must be the same shape as
         ``response``.
-    efficiencies : array_like
+    efficiencies : Array_like.
         Detection efficiencies for the cause distribution.
-    efficiencies_err : array_like
+    efficiencies_err : Array_like.
         Uncertainties of detection efficiencies. Must be the same shape as
         ``efficiencies``.
-    prior : array_like, optional
+    prior : Array_like, optional.
         Prior distribution to use in unfolding. If None, then a uniform
         (or flat) prior will be used. If array_like, then must have the same
         shape as ``efficiencies`` (default is None).
-    ts : {'ks', 'chi2', 'bf', 'rmd'}
+    ts : {'ks', 'chi2', 'bf', 'rmd'}.
         Test statistic to use for stopping condition (default is 'ks').
         For more information about the available test statistics, see the
         `Test Statistics API documentation <api.rst#test-statistics>`__.
-    ts_stopping : float, optional
+    ts_stopping : float, optional.
         Test statistic stopping condition. At each unfolding iteration, the
         test statistic is computed between the current and previous iteration.
         Once the test statistic drops below ts_stopping, the unfolding
         procedure is stopped (default is 0.01).
-    max_iter : int, optional
+    max_iter : int, optional.
         Maximum number of iterations to allow (default is 100).
-    cov_type : {'multinomial', 'poisson'}
+    cov_type : {'multinomial', 'poisson'}.
         Whether to use the Multinomial or Poisson form for the covariance
         matrix (default is 'multinomial').
-    return_iterations : bool, optional
+    return_iterations : bool, optional.
         Whether to return unfolded distributions for each iteration
         (default is False).
-    callbacks : list, optional
+    callbacks : list, optional.
         List of ``pyunfold.callbacks.Callback`` instances to be applied during
         unfolding (default is None, which means no Callbacks are applied).
 
-    Returns
+    Returns.
     -------
-    unfolded_result : dict
+    unfolded_result : Dict.
         Returned if ``return_iterations`` is False (default). Dictionary
         containing the final unfolded distribution, associated uncertainties,
         and test statistic information.
 
         The returned ``dict`` has the following keys:
 
-            unfolded
+            Unfolded
                 Final unfolded cause distribution
             stat_err
                 Statistical uncertainties on the unfolded cause distribution
@@ -97,9 +97,9 @@ def iterative_unfold(data=None, data_err=None, response=None,
             num_iterations
                 Number of unfolding iterations
             unfolding_matrix
-                Unfolding matrix
+                Unfolding matrix.
 
-    unfolding_iters : pandas.DataFrame
+    unfolding_iters : pandas.DataFrame.
         Returned if ``return_iterations`` is True. DataFrame containing the
         unfolded distribution, associated uncertainties, test statistic
         information, etc. at each iteration.
@@ -162,25 +162,25 @@ def iterative_unfold(data=None, data_err=None, response=None,
 
 def _unfold_custom(prior=None, mixer=None, ts_func=None, max_iter=100,
             callbacks=None):
-    """Perform iterative unfolding. Custom version of the method which just returns the covariance method in addition to the regular output
+    """Perform iterative unfolding. Custom version of the method which just returns the covariance method in addition to the regular output.
 
-    Parameters
+    Parameters.
     ----------
-    prior : array_like
+    prior : Array_like.
         Initial cause distribution.
-    mixer : pyunfold.Mix.Mixer
+    mixer : Pyunfold.Mix.Mixer.
         Mixer to perform the unfolding.
-    ts_func : pyunfold.Utils.TestStat
+    ts_func : Pyunfold.Utils.TestStat.
         Test statistic object.
-    max_iter : int, optional
+    max_iter : int, optional.
         Maximum allowed number of iterations to perform.
-    callbacks : list, optional
+    callbacks : list, optional.
         List of ``pyunfold.callbacks.Callback`` instances to be applied during
         unfolding (default is None, which means no Callbacks are applied).
 
-    Returns
+    Returns.
     -------
-    unfolding_iters : pandas.DataFrame
+    unfolding_iters : pandas.DataFrame.
         DataFrame containing the unfolded result for each iteration.
         Each row in unfolding_result corresponds to an iteration.
     """
@@ -233,16 +233,16 @@ def _unfold_custom(prior=None, mixer=None, ts_func=None, max_iter=100,
  ##############################################################
 
 def CorrelationMarix(observed : np.ndarray, true : np.ndarray, bins : np.ndarray, remove_overflow : bool = True) -> np.ndarray:
-    """ Caclulate Correlation matrix of observed and true parameters.
+    """ Calculate the observed-versus-true two-dimensional histogram.
 
-    Args:
-        observed (np.ndarray): observed data (reco).
-        true (np.ndarray): true data (truth).
-        bins (np.ndarray): bins.
-        remove_overflow (bool, optional): remove the first bins which are interpreted as overflow. Defaults to True.
+        Args:
+            observed (np.ndarray): Reconstructed values.
+            true (np.ndarray): Corresponding truth values.
+            bins (np.ndarray): Bin edges used for both histogram axes.
+            remove_overflow (bool): Whether to remove the first row and column.
 
-    Returns:
-        np.ndarray: Correlation matrix.
+        Returns:
+            np.ndarray: Two-dimensional counts indexed by observed and true bins.
     """
     corr = np.histogram2d(np.array(observed), np.array(true), bins = bins)[0]
     if remove_overflow is True:
@@ -251,17 +251,17 @@ def CorrelationMarix(observed : np.ndarray, true : np.ndarray, bins : np.ndarray
 
 
 def ResponseMatrix(observed : np.ndarray, true : np.ndarray, bins : np.ndarray, efficiencies : np.ndarray = None, remove_overflow : bool = False) -> tuple[np.ndarray, np.ndarray]:
-    """ Caclulate Correlation matrix of observed and true parameters.
+    """ Build a column-normalized response matrix and its statistical errors.
 
-    Args:
-        observed (np.ndarray): observed data (reco).
-        true (np.ndarray): true data (truth).
-        bins (np.ndarray): bins.
-        efficiencies (np.ndarray, optional): selection efficiency. Defaults to None.
-        remove_overflow (bool, optional): remove the first bins which are interpreted as overflow. Defaults to True.
+        Args:
+            observed (np.ndarray): Reconstructed values.
+            true (np.ndarray): Corresponding truth values.
+            bins (np.ndarray): Bin edges used for both histogram axes.
+            efficiencies (np.ndarray): Optional per-truth-bin efficiencies.
+            remove_overflow (bool): Whether the first row and column are removed before normalization.
 
-    Returns:
-        tuple[np.ndarray, np.ndarray]: response matrix and the statistical error in the response matrix
+        Returns:
+            tuple[np.ndarray, np.ndarray]: Response matrix and its statistical errors.
     """
     if efficiencies is None:
         efficiencies = np.ones(len(bins) - 1 - int(remove_overflow))
@@ -284,12 +284,16 @@ def ResponseMatrix(observed : np.ndarray, true : np.ndarray, bins : np.ndarray, 
 
  #? move to Plots?
 def PlotMatrix(matrix : np.ndarray, energy_slices : Slices, title : str = None, c_label : str = None, text : bool = False, text_colour = "k", cmap = "plasma"):
-    """ Plot numpy matrix.
+    """ Plot a matrix using energy-bin labels on both axes.
 
-    Args:
-        matrix (np.ndarray): matrix
-        title (str, optional): plot title. Defaults to None.
-        c_label (str, optional): colourbar label. Defaults to None.
+        Args:
+            matrix (np.ndarray): Matrix displayed as an image.
+            energy_slices (Slices): Energy-slice definition used for axis tick labels.
+            title (str): Optional plot title.
+            c_label (str): Optional colorbar label.
+            text (bool): Whether to annotate each cell with its value.
+            text_colour (str): Color used for cell annotations.
+            cmap (str): Matplotlib colormap name.
     """
     x = energy_slices.pos_overflow - energy_slices.width/2
     #* cause = true, effect = reco
@@ -311,24 +315,25 @@ def PlotMatrix(matrix : np.ndarray, energy_slices : Slices, title : str = None, 
 
 
 def CalculateResponseMatrices(template : cross_section.AnalysisInput, process : str, energy_slice : Slices, regions : bool = False, book : Plots.PlotBook = None, efficiencies : dict[np.ndarray] = None) -> dict[np.ndarray]:
-    """ Calculate response matrix of energy histograms from analysis input.
+    """ Calculate response matrices for energy distributions in an analysis input.
 
-    Args:
-        template (AnalysisInput): template analysis input
-        process (str): exclusive process
-        energy_slice (Slices): energy slices
-        book (Plots.PlotBook, optional): plot book. Defaults to None.
-        efficiencies (dict[np.ndarray], optional): selection efficiencies. Defaults to None.
+        Args:
+            template (cross_section.AnalysisInput): Input containing reconstructed and true energies.
+            process (str): Exclusive-process key used when calculating a single-process matrix.
+            energy_slice (Slices): Energy-slice and binning definition.
+            regions (bool): Whether to calculate separate matrices for each region.
+            book (Plots.PlotBook): Optional plot book used to save diagnostic plots.
+            efficiencies (dict[np.ndarray]): Optional efficiencies indexed by matrix key.
 
-    Returns:
-        dict[np.ndarray]: response matrices with errors for each histogram
+        Returns:
+            dict[np.ndarray]: Response-matrix and uncertainty pairs, keyed by histogram or region.
     """
     slice_bins = energy_slice.slice_bins
 
     outside_tpc_mask = template.outside_fv_reco | template.outside_fv_true
 
-    true_slices = EnergySlice.SliceNumbers(template.KE_int_true, template.KE_init_true, outside_tpc_mask, energy_slice)
-    reco_slices = EnergySlice.SliceNumbers(template.KE_int_reco, template.KE_init_reco, outside_tpc_mask, energy_slice)
+    true_slices = EnergySlice.slice_numbers(template.KE_int_true, template.KE_init_true, outside_tpc_mask, energy_slice)
+    reco_slices = EnergySlice.slice_numbers(template.KE_int_reco, template.KE_init_reco, outside_tpc_mask, energy_slice)
 
     if regions:
         channel = {i : (template.exclusive_process[i])[~outside_tpc_mask] for i in template.regions}
@@ -359,32 +364,41 @@ def CalculateResponseMatrices(template : cross_section.AnalysisInput, process : 
     if book is not None:
         for k in resp:
             Unfold.PlotMatrix(corr[k], energy_slice, title = f"Response marix: {labels[k]}", c_label = "Counts")
-            book.Save()
+            book.save()
             Unfold.PlotMatrix(resp[k][0], energy_slice, title = f"Normalised response matrix: {labels[k]}", c_label = "$P(E_{i}|C_{j})$")
-            book.Save()
+            book.save()
 
     return resp
 
 
 def Unfold(observed : dict[np.ndarray], observed_err : dict[np.ndarray], response_matrices : dict[np.ndarray], priors : dict[np.ndarray] = None, ts_stop = 0.01, max_iter = 100, ts = "ks", regularizers : dict[UnivariateSpline] = None, verbose : bool = False, efficiencies : dict[np.ndarray] = None, covariance : str = "multinomial") -> dict[dict]:
-    """ Run iterative bayesian unfolding for each histogram.
+    """ Unfold each observed histogram using its response matrix.
 
-    Args:
-        observed (dict[np.ndarray]): observed data
-        observed_err (dict[np.ndarray]): observed data error
-        response_matrices (dict[np.ndarray]): repsonse matrices
-        priors (dict[np.ndarray], optional): pior distributions. Defaults to None.
-        ts_stop (float, optional): tolerance of test statistic. Defaults to 0.01.
-        max_iter (int, optional): maximum number of iterations. Defaults to 100.
-        ts (str, optional): test statistic type. Defaults to "ks".
-        regularizers (dict[UnivariateSpline], optional): splines to regularise the priors. Defaults to None.
-        verbose (bool, optional): verbose printout. Defaults to False.
-        efficiencies (dict[np.ndarray], optional): selection efficiencies. Defaults to None.
+        Args:
+            observed (dict[np.ndarray]): Observed distributions keyed by histogram name.
+            observed_err (dict[np.ndarray]): Uncertainties corresponding to the observed distributions.
+            response_matrices (dict[np.ndarray]): Response-matrix and error pairs keyed by histogram name.
+            priors (dict[np.ndarray]): Optional prior distributions keyed by histogram name.
+            ts_stop (float): Test-statistic threshold for stopping iterations.
+            max_iter (int): Maximum number of iterations.
+            ts (str): Test statistic used to determine convergence.
+            regularizers (dict[UnivariateSpline]): Optional spline regularizers keyed by histogram name.
+            verbose (bool): Whether to print histogram names and iteration logs.
+            efficiencies (dict[np.ndarray]): Optional efficiency and uncertainty pairs by histogram.
+            covariance (str): Covariance model passed to the unfolding algorithm.
 
-    Returns:
-        dict: unfolding results for each histogram.
+        Returns:
+            dict[dict]: Unfolding results keyed by histogram name.
     """
     def make_cb(key):
+        """ Assemble the callbacks configured for one histogram.
+
+            Args:
+                key (str): Histogram key used to select its regularizer.
+
+            Returns:
+                list: Logger and regularizer callbacks enabled for this histogram.
+        """
         cb = []
         if verbose: cb.append(Logger())
         if regularizers is not None:
@@ -417,15 +431,16 @@ def Unfold(observed : dict[np.ndarray], observed_err : dict[np.ndarray], respons
 
 
 def PlotUnfoldingResults(obs : np.ndarray, obs_err : np.ndarray, true : np.ndarray, results : dict, energy_slices : Slices, title : str, book : Plots.PlotBook = Plots.PlotBook.null()):
-    """ Plot unfolded histogram in comparison to observed and true.
+    """ Plot observed, unfolded, and true energy distributions.
 
-    Args:
-        obs (np.ndarray): observation
-        true (np.ndarray): truth
-        results (dict): unfolding results
-        energy_bins (np.ndarray): energy bins
-        label (str): x label (units of MeV are automatically applied)
-        book (Plots.PlotBook, optional): plot book. Defaults to Plots.PlotBook.null().
+        Args:
+            obs (np.ndarray): Observed reconstructed distribution.
+            obs_err (np.ndarray): Uncertainties on the observed distribution.
+            true (np.ndarray): True distribution used for comparison.
+            results (dict): Unfolding result containing unfolded values and diagnostics.
+            energy_slices (Slices): Energy-slice definition for the plots.
+            title (str): Plot title.
+            book (Plots.PlotBook): Plot book to which the plots are saved.
     """
     if "num_iterations" in results:
         label = f"Data unfolded, {results['num_iterations']} iterations"
@@ -444,23 +459,23 @@ def PlotUnfoldingResults(obs : np.ndarray, obs_err : np.ndarray, true : np.ndarr
     print(f"unfolded: {ks.calc(results['unfolded'], true)}")
 
 
-    cross_section.PlotXSHists(energy_slices, true, None, True, 1/sum(true), label = "MC true (initial prior)", ylabel = "Fractional counts", color = "C1", newFigure = False)
-    cross_section.PlotXSHists(energy_slices, obs, obs_err, True, 1/sum(obs), label = "Data reco", ylabel = "Fractional counts", color = "k")
-    cross_section.PlotXSHists(energy_slices, results["unfolded"], results["stat_err"], True, 1 / sum(results["unfolded"]), label =  label, color = "C4", ylabel = "Fractional counts", newFigure = False, title = title)
+    cross_section.plot_xs_hists(energy_slices, true, None, True, 1/sum(true), label = "MC true (initial prior)", ylabel = "Fractional counts", color = "C1", new_figure = False)
+    cross_section.plot_xs_hists(energy_slices, obs, obs_err, True, 1/sum(obs), label = "Data reco", ylabel = "Fractional counts", color = "k")
+    cross_section.plot_xs_hists(energy_slices, results["unfolded"], results["stat_err"], True, 1 / sum(results["unfolded"]), label =  label, color = "C4", ylabel = "Fractional counts", new_figure = False, title = title)
     Plots.plt.legend(loc = "upper left")
-    book.Save() 
+    book.save() 
     if "unfolding_matrix" in results:
         Unfold.PlotMatrix(results["unfolding_matrix"], energy_slices, title = "Unfolded matrix: " + label, c_label = "$P(C_{j}|E_{i})$", text = True, text_colour = "red")
-        book.Save()
+        book.save()
 
         Unfold.PlotMatrix((results["unfolding_matrix"].T * obs).T, energy_slices, "Migrations : " + label, c_label = "Counts")
-        book.Save()
+        book.save()
 
     if "covariance_matrix" in results:
         Unfold.PlotMatrix(results["covariance_matrix"], energy_slices, title = "Covariance matrix: " + label, c_label = "Counts")
-        book.Save()
+        book.save()
 
         Unfold.PlotMatrix(np.corrcoef(results["covariance_matrix"]), energy_slices, title = "Correlation matrix: " + label, c_label = "Correlation coefficient", text = True, text_colour = "k", cmap = "coolwarm")
-        book.Save()
+        book.save()
 
     return

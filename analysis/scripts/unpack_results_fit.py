@@ -6,7 +6,7 @@ import tarfile
 from rich import print
 
 from python.analysis.common import ls_recursive
-from python.analysis.io import LoadObject, SaveObject
+from python.analysis.io import read_dill, write_dill
 
 def main(args : argparse.Namespace):
 
@@ -30,7 +30,7 @@ def main(args : argparse.Namespace):
     for f in out_names:
         for sf in ls_recursive(f):
             if sf.split("/")[-1] == "results.dill":
-                results.append(LoadObject(sf))
+                results.append(read_dill(sf))
                 break
     
     # merge results
@@ -52,7 +52,7 @@ def main(args : argparse.Namespace):
 
     merged["true_cv"] = results[0]["true_cv"] # shpuld be identical for all outputs
 
-    SaveObject(args.directory + "results.dill", merged)
+    write_dill(args.directory + "results.dill", merged)
     return
 
 if __name__ == "__main__":

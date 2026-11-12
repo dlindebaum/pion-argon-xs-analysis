@@ -1,4 +1,10 @@
-"""Input/output helpers for object and config persistence."""
+"""
+Created on: 30/10/2026 16:05
+
+Author: Shyam Bhuller
+
+Description: Functions and classes for reading from / writing to differnt file types.
+"""
 import json
 import warnings
 
@@ -9,63 +15,63 @@ import tables
 import uproot
 
 
-def LoadObject(file : str):
+def read_dill(file : str):
     """ Opens and serialises object saved as a dill file. May be remaned to a more general method if dill files are used more commonly.
 
-    Args:
-        file (str): dill file
+        Args:
+            file (str): Dill file.
 
-    Returns:
-        any: loaded object
+        Returns:
+            any: Loaded object.
     """
     with open(file, "rb") as f:
         obj = dill.load(f)
     return obj
 
 
-def SaveObject(file : str, obj : dict):
+def write_dill(file : str, obj : dict):
     """ Saves object to file.
 
-    Args:
-        file (str): file name
-        obj (dict): object to save
+        Args:
+            file (str): File name.
+            obj (dict): Object to save.
     """
     with open(file, "wb") as f:
         dill.dump(obj, f)
     return
 
-def LoadConfiguration(file : str) -> dict:
+def read_json(file : str) -> dict:
     """ Loads a json file.
 
-    Args:
-        file (str): file path
+        Args:
+            file (str): File path.
 
-    Returns:
-        dict: unpacked json 
+        Returns:
+            dict: Unpacked json.
     """
     with open(file, "rb") as f:
         config = json.load(f)
     return config
 
 
-def SaveConfiguration(params : any, file : str):
-    """ Saves an objects to a json file. params should be an object serialisable by json (no numpy arrays etc.).
+def write_json(params : any, file : str):
+    """ Saves an object to a json file. Params should be an object serialisable by json (no numpy arrays etc.).
 
-    Args:
-        params (any): correction parameters.
-        file (str): file path.
+        Args:
+            params (any): Correction parameters.
+            file (str): File path.
     """
     with open(file, "w") as f:
         json.dump(params, f, indent = 2)
     return
 
 
-def DictToHDF5(dictionary : dict, file : str):
+def write_hdf5(dictionary : dict, file : str):
     """ Write dictionary to a HDF5 file.
 
-    Args:
-        dictionary (dict): dictionary to save
-        file (str): file
+        Args:
+            dictionary (dict): Dictionary to save.
+            file (str): File.
     """
     with pd.HDFStore(file) as hdf:
         for k, v in dictionary.items():
@@ -73,15 +79,14 @@ def DictToHDF5(dictionary : dict, file : str):
     return
 
 
-def ReadHDF5(file : str):
+def read_hdf5(file : str):
     """ Reads a HDF5 file and unpacks the contents into pandas dataframes.
 
-    Args:
-        file (str): file path.
+        Args:
+            file (str): File path.
 
-    Returns:
-        pd.DataFrame : if hdf5 file only has 1 key
-        dict : if hdf5 file contains more than 1 key
+        Returns:
+            pd.DataFrame: if hdf5 file only has 1 key dict : If hdf5 file contains more than 1 key.
     """
     keys = []
     with tables.open_file(file, driver = "H5FD_CORE") as hdf5file:
@@ -93,32 +98,45 @@ def ReadHDF5(file : str):
         return {k : pd.read_hdf(file, k) for k in keys}
 
 
-class IO:
-    """ Interface to ROOT file using uproot
-    Attributes:
-        filename (str): ROOT filename
-        nEvents (int): number of events to read. Defaults to -1 (all events)
-        start (int): starting point to read from. Defaults to None.
-    Methods:
-        Get (ak.Array): Load nTuple from root file as awkward array.
-        ListNTuples : list all NTuple entries produced by the analyser.
+class RootIO:
+    """ Interface to ROOT file using uproot.
+
+        Args:
+            _filename (str): ROOT file to read from or write to.
+            _n_events (int): Maximum number of entries to read; non-positive values read all entries.
+            _start (int): First entry to read when limiting the number of events.
+
+        Attributes:
+            filename (str): ROOT filename.
+            n_events (int): Number of events to read. Defaults to -1 (all events).
+            start (int): Starting point to read from. Defaults to None.
+            Methods:
+            get (ak.Array): Load the first available requested branch from the ROOT tree.
+            list_ntuples: Print or return branch names from the analysis tree.
     """
 
-    def __init__(self, _filename: str, _nEvents: int = -1, _start: int = None):
+    def __init__(self, _filename: str, _n_events: int = -1, _start: int = None):
+        """Store the file path and optional entry range for subsequent reads.
+
+            Args:
+                _filename (str): ROOT file to read from or write to.
+                _n_events (int): Maximum number of entries to read; non-positive values read all entries.
+                _start (int): First entry to read when limiting the number of events.
+        """
         self.filename = _filename
         self.start = _start
-        self.nEvents = _nEvents
+        self.n_events = _n_events
 
     @staticmethod
     def convert_types(d : dict[dict | ak.Array]) -> dict:
         """ Convert the types from a nested dictionary of awkward arrays being written to a ROOT file.
-            Optional types (data where there was/is a null entry) is converted to a standard Awkward array type.
+                                 Optional types (data where there was/is a null entry) is converted to a standard Awkward array type.
 
-        Args:
-            d (dict): Nested dictionary of awkward arrays. 
+            Args:
+                d (dict[dict | ak.Array]): Nested dictionary of awkward arrays.
 
-        Returns:
-            dict: converted dictionary. Dictionary is flattened to prevent overwrites in TTree entries.
+            Returns:
+                dict: Converted dictionary. Dictionary is flattened to prevent overwrites in TTree entries.
         """
         d_new = {}
         for k, v in d.items():
@@ -126,7 +144,7 @@ class IO:
                 print(f"Info: data entry {k} is None, this entry will be dropped.")
                 continue
             if type(v) == dict:
-                for k1, v1 in IO.convert_types(v).items():
+                for k1, v1 in RootIO.convert_types(v).items():
                     d_new[f"{k}_{k1}"] = v1
             elif isinstance(v.type.content, ak.types.OptionType):
                 d_new[k] = ak.Array(v.layout.project())
@@ -135,13 +153,13 @@ class IO:
         return d_new
 
 
-    def WriteData(self, vectors : dict = None, histograms : dict = None, overwrite : bool = False):
+    def write_data(self, vectors : dict = None, histograms : dict = None, overwrite : bool = False):
         """ Write TTree to a new root file.
 
-        Args:
-            vectors (dict, optional): Dictionary of vectors. Vectors must be the same size, can be a nested dictionary of np or Awkward arrays. Defaults to None.
-            histograms (dict, optional): Dictionary of Histogram like objects (e.g. output of np.histogram). Can be variable in size. Defaults to None.
-            overwrite (bool, optional): Overwrites output file. Defaults to False.
+            Args:
+                vectors (dict): Dictionary of vectors. Vectors must be the same size, can be a nested dictionary of np or Awkward arrays. Defaults to None.
+                histograms (dict): Dictionary of Histogram like objects (e.g. output of np.histogram). Can be variable in size. Defaults to None.
+                overwrite (bool): Overwrites output file. Defaults to False.
         """
         split = self.filename.split("/")
         path = "/".join(split[:-1] + [split[-1].split(".")[0] + ".root"])
@@ -161,19 +179,19 @@ class IO:
         return
 
 
-    def LoadData(self, item: str) -> ak.Array:
-        """ Load nTuple from root file as awkward array.
+    def read_data(self, item: str) -> ak.Array:
+        """ Load ntuple from root file as awkward array.
 
-        Args:
-            item (str): nTuple name in root file
+            Args:
+                item (str): Ntuple name in root file.
 
-        Returns:
-            ak.Array: nTuple loaded
+            Returns:
+                ak.Array: Ntuple loaded.
         """
         with uproot.open(self.filename) as file:
             try:
-                if self.nEvents > 0:
-                    for batch in file["pduneana/beamana"].iterate(entry_start = self.start, entry_stop = self.start + self.nEvents, step_size = self.nEvents, filter_name = item):
+                if self.n_events > 0:
+                    for batch in file["pduneana/beamana"].iterate(entry_start = self.start, entry_stop = self.start + self.n_events, step_size = self.n_events, filter_name = item):
                         if len(batch) > 0:
                             return batch[item]
                         else:
@@ -185,23 +203,35 @@ class IO:
                 return None
 
 
-    def Get(self, item):
+    def get(self, item):
+        """Read a branch, or try a list of alternative branch names in order.
+
+            Args:
+                item (Any): Branch name or ordered list of candidate branch names.
+
+            Returns:
+                Any: The first branch found as an Awkward array, or ``None`` if none of the candidates exists.
+        """
         if type(item) is list:
             for i in item:
-                out = self.LoadData(i)
+                out = self.read_data(i)
                 if out is not None:
                     return out
             if out is None:
                 warnings.warn(f"ntuple names {item} could not be found in the file.")
         else:
-            return self.LoadData(item)
+            return self.read_data(item)
 
 
-    def ListNTuples(self, search: str = "", return_keys=False):
-        """ list all NTuple entries produced by the analyser.
+    def list_ntuples(self, search: str = "", return_keys=False):
+        """ List all NTuple entries produced by the analyser.
 
-        Args:
-            search (str, optional): filter NTuple by name (not case sensitive). Defaults to "".
+            Args:
+                search (str): Filter NTuple by name (not case sensitive). Defaults to "".
+                return_keys (Any): Return matching names instead of printing them.
+
+            Returns:
+                    Any: Matching branch names when ``return_keys`` is true; otherwise prints them and returns ``None``.
         """
         with uproot.open(self.filename) as file:
             names = file["pduneana/beamana"].keys()

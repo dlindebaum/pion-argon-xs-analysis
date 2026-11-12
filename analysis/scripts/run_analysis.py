@@ -25,14 +25,28 @@ from apps import (
     xs_generate_fit_model
     )
 
-from python.analysis.ntuple import CalculateBatches, file_len
+from python.analysis.ntuple import calculate_batches, file_len
 from python.analysis.application import ApplicationArguments, argparse, template_config
-from python.analysis.io import SaveConfiguration, LoadConfiguration
+from python.analysis.io import write_json, read_json
 
 
-def template_toy_config(toy_parameters_dir : str, nEvents : int, seed : int, max_cpus : int, step : float, p_init : float, region_selection : str):
+def template_toy_config(toy_parameters_dir : str, n_events : int, seed : int, max_cpus : int, step : float, p_init : float, region_selection : str):
+    """ Build the default configuration dictionary for a toy sample.
+
+        Args:
+            toy_parameters_dir (str): Directory containing the toy parameter files.
+            n_events (int): Number of events to generate.
+            seed (int): Random seed for the toy generation.
+            max_cpus (int): Maximum number of CPUs to use.
+            step (float): Momentum or energy step used by the toy configuration.
+            p_init (float): Initial particle momentum.
+            region_selection (str): Name of the reconstruction-region selection.
+
+        Returns:
+            Any: Toy-generation settings and paths to their input files.
+    """
     template = {
-        "events" : nEvents,
+        "events" : n_events,
         "step" : step,
         "p_init" : p_init,
         "beam_profile" : f"{toy_parameters_dir}/beam_profile/beam_profile.json",
@@ -57,25 +71,58 @@ def template_toy_config(toy_parameters_dir : str, nEvents : int, seed : int, max
 
 
 def update_config(config, update : dict):
-    json_config = LoadConfiguration(config)
+    """ Apply updates to a JSON configuration file.
+
+        Args:
+            config (str): Path to the JSON configuration file to update.
+            update (dict): Configuration keys and values to merge into the file.
+    """
+    json_config = read_json(config)
     json_config.update(update)
-    SaveConfiguration(json_config, config)
+    write_json(json_config, config)
     print(f"{config} has been updated")
     return
 
 
 def update_args(processing_args : dict = {}):
-    new_args = ApplicationArguments.ResolveArgs(original_args)
+    """ Resolve the original command-line arguments and apply processing overrides.
+
+        Args:
+            processing_args (dict): Attribute names and values to apply to the resolved arguments.
+
+        Returns:
+            argparse.Namespace: Resolved arguments with the supplied overrides.
+    """
+    new_args = ApplicationArguments.resolve_args(original_args)
     for k, v in processing_args.items():
         setattr(new_args, k, v)
     return new_args
 
 
 def check_run(args : argparse.Namespace, step : str):
+    """ Determine whether a step is requested and is not excluded.
+
+        Args:
+            args (argparse.Namespace): Arguments containing run, force, and skip options.
+            step (str): Analysis step name to check.
+
+        Returns:
+            bool: Whether the step should run.
+    """
     return ((step in args.run) or (args.force is True)) and (step not in args.skip)
 
 
 def step_plan(args : argparse.Namespace, no_data : bool, n_data : list):
+    """ Plan analysis steps based on existing outputs and requested options.
+
+        Args:
+            args (argparse.Namespace): Resolved analysis configuration and run options.
+            no_data (bool): Whether no data input files were specified.
+            n_data (list): Event counts for the data input files.
+
+        Returns:
+            list[str]: Names of the analysis steps selected for execution.
+    """
     existing = os.listdir(args.out) if os.path.isdir(args.out) else []
     steps = [
         ("normalisation", (not no_data) and ((args.norm is None) or ("beam_norm" not in existing))),
@@ -85,7 +132,7 @@ def step_plan(args : argparse.Namespace, no_data : bool, n_data : list):
         ("selection", not hasattr(args, "selection_masks")),
         ("reweight", ("params" not in args.beam_reweight) and (not no_data)),
         ("upstream_correction", not hasattr(args, "upstream_loss_correction_params")),
-        ("region_plots", hasattr(args, "region_plots") and ("region_plots" not in existing)),
+        ("region_plots", ("region_plots" not in existing)),
         ("analysis_input", (not hasattr(args, "analysis_input")) and (len(n_data) > 0)),
         ("mach3_input", ("mach3_input" not in existing) and (len(n_data) > 0)),
         ("fit_model", ("fit_model" not in existing)),
@@ -109,7 +156,7 @@ def step_plan(args : argparse.Namespace, no_data : bool, n_data : list):
 def main(args):
     os.makedirs(args.out, exist_ok = True)
     if args.create_config:
-        SaveConfiguration(template_config, os.path.join(args.out, args.create_config))
+        write_json(template_config, os.path.join(args.out, args.create_config))
         print(f"template configuration saved as {args.out + args.create_config}")
         exit()
     else:
@@ -123,7 +170,7 @@ def main(args):
         if no_data:
             print("no data file was specified, 'normalisation' and 'beam_reweight' will not run")
 
-        processing_args = CalculateBatches(args)
+        processing_args = calculate_batches(args)
         args = update_args(processing_args)
 
         planned_steps = step_plan(args, no_data, n_data)
@@ -145,7 +192,7 @@ def main(args):
             xs_normalisation.main(args)
             output_path = args.out + "beam_norm/"
             print("outputs: " + output_path)
-            norm = LoadConfiguration(os.path.abspath(output_path + "norm.json"))
+            norm = read_json(os.path.abspath(output_path + "norm.json"))
             update_config(args.config, {"norm" : norm["norm"]})
             args = update_args(processing_args) # reload config to continue
         if args.stop == "normalisation": return
@@ -339,9 +386,9 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-C", "--create_config", type = str, help = "Create a template configuration with the default selection")
-    ApplicationArguments.Config(parser)
-    ApplicationArguments.Output(parser, "analysis/")
-    ApplicationArguments.Regen(parser)
+    ApplicationArguments.config(parser)
+    ApplicationArguments.output(parser, "analysis/")
+    ApplicationArguments.regen(parser)
     parser.add_argument("--skip", type = str, nargs = "+", default = [], choices = analysis_options)
     parser.add_argument("--run", type = str, nargs = "+", default = [], choices = analysis_options)
     parser.add_argument("--force", action = "store_true")

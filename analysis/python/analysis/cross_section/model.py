@@ -3,6 +3,16 @@
 from python.analysis import slices, samples
 
 def make_systematic(proc_info : tuple, init_bin : tuple, end_bin : tuple):
+    """Render a MaCh3 YAML normalization systematic for one process and initial/end-energy-bin pair.
+
+        Args:
+            proc_info (tuple): Process label and metadata containing mode and z-region limits.
+            init_bin (tuple): Initial-energy bin label and lower/upper bounds.
+            end_bin (tuple): End-energy bin label and lower/upper bounds.
+
+        Returns:
+            Any: YAML text defining the systematic and its kinematic cuts.
+    """
     init_low, init_high = init_bin[1]
     end_low, end_high = end_bin[1]
     z_low, z_high = proc_info[1]["z_region"]
@@ -35,6 +45,14 @@ def make_systematic(proc_info : tuple, init_bin : tuple, end_bin : tuple):
 """
 
 def slices_to_model_bins(energy_slices : slices.Slices) -> dict[tuple]:
+    """Map energy-slice positions to contiguous MaCh3 bin ranges with underflow and overflow labels.
+
+        Args:
+            energy_slices (slices.Slices): Slice edges used to form model-bin intervals.
+
+        Returns:
+            dict[tuple]: Bin labels mapped to adjacent edge pairs, plus ``Under`` and ``Over`` ranges.
+    """
     model_bins = [0] + list(energy_slices.edges[::-1]) + [999999]
     # model_bins = np.where(model_bins == energy_slices.underflow_pos, 0, model_bins)
     # model_bins = np.where(model_bins == energy_slices.overflow_pos, 999999, model_bins)
@@ -52,6 +70,15 @@ def slices_to_model_bins(energy_slices : slices.Slices) -> dict[tuple]:
 
 
 def get_process_info(process : samples.SampleDefinition, fiducial_volume : list[float]) -> dict:
+    """Collect each process's mode and z-region bounds inferred from its first selection definition.
+
+        Args:
+            process (samples.SampleDefinition): Process definitions and their short labels and modes.
+            fiducial_volume (list[float]): Fiducial z limits used for non-escaping processes.
+
+        Returns:
+            dict: Per-process metadata containing ``mode`` and ``z_region`` entries.
+    """
     model_process_info = {}
 
     for k, v in process.definitions.items():
@@ -67,4 +94,3 @@ def get_process_info(process : samples.SampleDefinition, fiducial_volume : list[
             fv = (0, 999) # if beam_escapes is not included, then disregard the fv.
         model_process_info[process.short_name[k]] = {"mode" : process.mode[k], "z_region" : fv}
     return model_process_info
-

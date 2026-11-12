@@ -13,10 +13,22 @@ GEANT_XS = os.environ["PYTHONPATH"] + "/data/g4_xs_pi_KE_100.root"
 
 class GeantCrossSections:
     """ Object for accessing Geant 4 cross sections from the root file generated with Geant4Reweight tools.
+
+        Args:
+            file (str): ROOT file containing Geant4Reweight cross-section graphs.
+            energy_range (list): Optional inclusive kinetic-energy range to load.
+            n_cascades (int): Number of cascades used to estimate statistical errors, if known.
     """
     labels = {"abs_KE;1" : "absorption", "inel_KE;1" : "quasielastic", "cex_KE;1" : "charge_exchange", "dcex_KE;1" : "double_charge_exchange", "prod_KE;1" : "pion_production", "total_inel_KE;1" : "total_inelastic"}
 
     def __init__(self, file : str = GEANT_XS, energy_range : list = None, n_cascades : int = None) -> None:
+        """Load cross-section channels and energy values from the Geant4 ROOT file.
+
+            Args:
+                file (str): ROOT file containing Geant4Reweight cross-section graphs.
+                energy_range (list): Optional inclusive kinetic-energy range to load.
+                n_cascades (int): Number of cascades used to estimate statistical errors, if known.
+        """
         with uproot.open(file) as ufile: # open root file
             self.KE = ufile["abs_KE;1"].all_members["fX"] # load kinetic energy from one channel (shared for all cross section channels)
 
@@ -40,14 +52,14 @@ class GeantCrossSections:
         pass
 
 
-    def Stat_Error(self, xs : str) -> np.ndarray:
+    def stat_error(self, xs : str) -> np.ndarray:
         """ Statisitical error of the simulation, done using binomial uncertainties. Only works if n_cascades is known.
 
-        Args:
-            xs (str): cross section process
+            Args:
+                xs (str): Cross section process.
 
-        Returns:
-            np.ndarray: statistical error
+            Returns:
+                np.ndarray: Statistical error.
         """
         if (self.n_cascades is None) or (not hasattr(self, xs + "_frac")):
             return 0 * getattr(self, xs)
@@ -55,25 +67,29 @@ class GeantCrossSections:
             return getattr(self, xs) * np.sqrt(getattr(self, xs + "_frac") / self.n_cascades)
 
 
-    def __PlotAll(self, title : str = None):
-        """ Plot all cross section channels.
+    def __plot_all(self, title : str = None):
+        """Add each loaded cross-section channel to the current figure.
+
+            Args:
+                title (str): Optional title applied to the overlaid channel plots.
         """
         for k in self.labels.values():
-            plots.Plot(self.KE, getattr(self, k), label = common.remove_(k), newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\\sigma$ (mb)", title = title)
-            # plots.plt.fill_between(self.KE, getattr(self, k) - self.Stat_Error(k), getattr(self, k) + self.Stat_Error(k), color = plots.plt.gca()._get_lines.get_next_color())
+            plots.plot(self.KE, getattr(self, k), label = common.remove_(k), new_figure = False, xlabel = "$KE$ (MeV)", ylabel = "$\\sigma$ (mb)", title = title)
+            # plots.plt.fill_between(self.KE, getattr(self, k) - self.stat_error(k), getattr(self, k) + self.stat_error(k), color = plots.plt.gca()._get_lines.get_next_color())
 
 
-    def Plot(self, xs : str, color : str = None, label : str = None, title : str = None, simplified_pion_production : bool = False):
+    def plot(self, xs : str, color : str = None, label : str = None, title : str = None, simplified_pion_production : bool = False):
         """ Plot cross sections. To be used in conjunction with other plots for comparisons.
 
-        Args:
-            xs (str): cross section channel to plot, if given all, will plot all cross section channels
-            color (str, optional): colour of single plot. Defaults to None.
-            label (str, optional): label of plot, if None, the channel name is used. Defaults to None.
-            title (str, optional): title of plot, set to the channel name if label is provided. Defaults to None.
+            Args:
+                xs (str): Cross section channel to plot, if given all, will plot all cross section channels.
+                color (str): Colour of single plot. Defaults to None.
+                label (str): Label of plot, if None, the channel name is used. Defaults to None.
+                title (str): Title of plot, set to the channel name if label is provided. Defaults to None.
+                simplified_pion_production (bool): Add quasielastic, double-charge-exchange, and pion-production channels for the pion-production curve.
         """
         if xs == "all":
-            self.__PlotAll(title = title)
+            self.__plot_all(title = title)
         else:
             if label is None:
                 label = common.remove_(xs)
@@ -86,18 +102,18 @@ class GeantCrossSections:
                 y = self.quasielastic + self.double_charge_exchange + self.pion_production
             else:
                 y = getattr(self, xs)
-            plots.Plot(self.KE, y, label = label, title = title, newFigure = False, xlabel = "$KE$ (MeV)", ylabel = "$\\sigma$  (mb)", color = color)
-            # plots.plt.fill_between(self.KE, getattr(self, xs) - self.Stat_Error(xs), getattr(self, xs) + self.Stat_Error(xs), color = plots.plt.gca()._get_lines.get_next_color())
+            plots.plot(self.KE, y, label = label, title = title, new_figure = False, xlabel = "$KE$ (MeV)", ylabel = "$\\sigma$  (mb)", color = color)
+            # plots.plt.fill_between(self.KE, getattr(self, xs) - self.stat_error(xs), getattr(self, xs) + self.stat_error(xs), color = plots.plt.gca()._get_lines.get_next_color())
 
 
-    def GetInterpolatedCurve(self, process : str) -> interp1d:
-        """ returns interpolated cross section curve as function of KE.
+    def get_interpolated_curve(self, process : str) -> interp1d:
+        """ Returns interpolated cross section curve as function of KE.
 
-        Args:
-            process (str): cross section process
+            Args:
+                process (str): Cross section process.
 
-        Returns:
-            interp1d: _description_
+            Returns:
+                interp1d: Callable interpolating the requested cross section over kinetic energy, with extrapolation enabled.
         """
         if process == "single_pion_production":
             sigma = self.quasielastic + self.double_charge_exchange

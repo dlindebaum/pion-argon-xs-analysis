@@ -8,9 +8,14 @@ from rich import print
 import pandas as pd
 
 from python.analysis.common import ls_recursive
-from python.analysis.io import ReadHDF5, DictToHDF5
+from python.analysis.io import read_hdf5, write_hdf5
 
 def main(args : argparse.Namespace):
+    """ Extract job archives and merge pull-result tables into one HDF5 file.
+
+        Args:
+            args (argparse.Namespace): Parsed arguments containing the job output directory.
+    """
 
     # uncompress files
     out_names = []
@@ -32,7 +37,7 @@ def main(args : argparse.Namespace):
     for f in out_names:
         for sf in ls_recursive(f):
             if sf.split("/")[-1] == "pull_results.hdf5":
-                results.append(ReadHDF5(sf))
+                results.append(read_hdf5(sf))
                 break
 
     # merge results
@@ -45,7 +50,7 @@ def main(args : argparse.Namespace):
                 merged[k].append(v) 
     merged = {k : pd.concat(objs = v, axis = "index").reset_index(drop = True) for k, v in merged.items()}
     print(merged)
-    DictToHDF5(merged, args.directory + "pull_results.hdf5")
+    write_hdf5(merged, args.directory + "pull_results.hdf5")
     return
 
 if __name__ == "__main__":

@@ -1,4 +1,10 @@
-"""Region definitions and utilities."""
+"""
+Created on: 30/10/2026 16:08
+
+Author: Shyam Bhuller
+
+Description: Functions to help produce region and process masks.
+"""
 import os
 
 from argparse import Namespace
@@ -11,18 +17,20 @@ from python.analysis import common, ntuple, plotting, samples, selection, tags
 from python.analysis.plotting import plots
 
 @common.timer
-def RegionSelection(events : ntuple.Data, args : Namespace | dict, is_mc : bool, region_type : samples.SampleDefinition = None, process_type : samples.SampleDefinition = None, removed : bool = False) -> dict[np.ndarray]:
+def region_selection(events : ntuple.Data, args : Namespace | dict, is_mc : bool, region_type : samples.SampleDefinition = None, process_type : samples.SampleDefinition = None, removed : bool = False) -> dict[np.ndarray]:
     """ Get reco and true regions (if possible) for ntuple.
 
-    Args:
-        events (Master.Data): events before beam pion selection.
-        args (Namespace): application arguements
-        is_mc (bool): if ntuple is MC or Data.
+        Args:
+            events (ntuple.Data): Events before beam pion selection.
+            args (Namespace | dict): Application arguements.
+            is_mc (bool): If Ntuple is MC or Data.
+            region_type (samples.SampleDefinition): Override region definition. Defaults to None.
+            process_type (samples.SampleDefinition): Override process definition. Defaults to None.
+            removed (bool): Include the removed events as "Uncategorised". Defaults to False.
 
-    Returns:
-        tuple[dict, dict]: regions
+        Returns:
+            dict[np.ndarray]: Regions.
     """
-
     args_c = common.args_to_dict(args)
 
     if is_mc:
@@ -32,26 +40,26 @@ def RegionSelection(events : ntuple.Data, args : Namespace | dict, is_mc : bool,
 
     selection_masks = args_c["selection_masks"][key]
 
-    events_copy = events.Filter(returnCopy = True)
+    events_copy = events.filter(return_copy = True)
     
     if "fiducial" in selection_masks and (len(selection_masks["fiducial"]) > 0):
-        mask = selection.CombineMasks(selection_masks["fiducial"][events_copy.filename])
-        events_copy.Filter([mask], [mask])
+        mask = selection.combine_masks(selection_masks["fiducial"][events_copy.filename])
+        events_copy.filter([mask], [mask])
 
-    mask = selection.CombineMasks(selection_masks["beam"][events_copy.filename])
-    events_copy.Filter([mask], [mask])
+    mask = selection.combine_masks(selection_masks["beam"][events_copy.filename])
+    events_copy.filter([mask], [mask])
 
     # counts = {}
     # for obj in selection_masks:
     #     if obj in ["beam", "null_pfo", "fiducial"]: continue
-    #     counts[f"n_{obj}"] = SelectionTools.GetPFOCounts(selection_masks[obj][events.filename])
+    #     counts[f"n_{obj}"] = SelectionTools.pfo_counts(selection_masks[obj][events.filename])
 
     if region_type is None:
         region_def = args_c["region_definitions"]
     else:
         region_def = region_type
 
-    reco_regions = region_def.CreateDefinitions(region_def.criteria_list.get_criteria_values(events_copy, selection_masks, **args["region_args"]), uncategorised = removed)
+    reco_regions = region_def.create_definitions(region_def.criteria_list.get_criteria_values(events_copy, selection_masks, **args["region_args"]), uncategorised = removed)
     
     if is_mc:
         if process_type is None:
@@ -59,7 +67,7 @@ def RegionSelection(events : ntuple.Data, args : Namespace | dict, is_mc : bool,
         else:
             process_def = process_type
 
-        true_regions = process_def.CreateDefinitions(process_def.criteria_list.get_criteria_values(events_copy, **args["process_args"]), uncategorised = removed)
+        true_regions = process_def.create_definitions(process_def.criteria_list.get_criteria_values(events_copy, **args["process_args"]), uncategorised = removed)
 
         for k in true_regions:
             true_regions[k] = true_regions[k]
@@ -70,16 +78,16 @@ def RegionSelection(events : ntuple.Data, args : Namespace | dict, is_mc : bool,
         return reco_regions
 
 
-def CountInRegions(true_regions : dict, reco_regions : dict, selection_efficincy : np.ndarray = None) -> np.ndarray:
+def count_in_regions(true_regions : dict, reco_regions : dict, selection_efficincy : np.ndarray = None) -> np.ndarray:
     """ Computes the counts of each combination of reco and true regions.
 
-    Args:
-        true_regions (dict): true region masks
-        reco_regions (dict): reco region masks
-        return_counts (bool, optional): return matrix of counts. Defaults to False.
+        Args:
+            true_regions (dict): True region masks.
+            reco_regions (dict): Reco region masks.
+            selection_efficincy (np.ndarray): Selection efficiency to apply to the masks. Defaults to None.
 
-    Returns:
-        np.ndarray: counts.
+        Returns:
+            np.ndarray: Counts.
     """
     counts = []
     for t in true_regions:
@@ -92,26 +100,25 @@ def CountInRegions(true_regions : dict, reco_regions : dict, selection_efficincy
     return counts
 
 @common.timer
-def GetTotalPionInelMasks(mc : ntuple.Data) -> ak.Array:
+def get_total_pion_inel_masks(mc : ntuple.Data) -> ak.Array:
     """ Returns the mask which selects true inelastic pi+.
 
-    Args:
-        mc (Master.Data): mc events.
+        Args:
+            mc (ntuple.Data): MC events.
 
-    Returns:
-        ak.Array: mask.
+        Returns:
+            ak.Array: Mask.
     """
-    particle_tags = tags.GenerateTrueBeamParticleTags(mc)
+    particle_tags = tags.generate_true_beam_particle_tags(mc)
     return particle_tags["$\\pi^{+}$:inel"].mask
 
 @common.timer
-def RecoRegionSelection(region_selections : dict[dict], out : str):
-    """ Study which computes a correlation matrix ofthe event faction for reco regions and true regions.
-        Saved to file to be used in toy simulation.
+def region_study(region_selections : dict[dict], out : str):
+    """Plot reco-vs-truth region matrices and save per-region fractions and purity-efficiency summaries.
 
-    Args:
-        mc (Master.Data): mc events.
-        args (Namespace): application arguments.
+        Args:
+            region_selections (dict[dict]): Region masks grouped by sample, with ``reco_regions`` and ``true_regions`` entries.
+            out (str): Output directory for the region plots, HDF5 fraction tables, and LaTeX summary.
     """
     os.makedirs(out + "reco_regions/", exist_ok = True)
     pdf = plotting.PlotBook(out + "reco_regions/reco_regions_study")
@@ -124,13 +131,13 @@ def RecoRegionSelection(region_selections : dict[dict], out : str):
 
         process_keys = [k for k in true_regions if k != "uncategorised"]
         if pe_index_labels is None:
-            process_tags = tags.ExclusiveProcessTags({k : None for k in process_keys})
+            process_tags = tags.exclusive_process_tags({k : None for k in process_keys})
             pe_index_labels = process_tags.name_simple.values
 
-        counts = np.array(CountInRegions(true_regions, reco_regions))
+        counts = np.array(count_in_regions(true_regions, reco_regions))
         plots.plt.figure(figsize = [3 * 6.4, 3 * 4.8])
-        plots.PlotConfusionMatrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "True process", x_label = "Reco region", title = common.remove_(r), newFigure = False)
-        pdf.Save()
+        plots.plot_confusion_matrix(counts, list(reco_regions.keys()), list(true_regions.keys()), y_label = "True process", x_label = "Reco region", title = common.remove_(r), new_figure = False)
+        pdf.save()
 
         (a,b)=counts.shape
         diff = a-b
@@ -144,7 +151,7 @@ def RecoRegionSelection(region_selections : dict[dict], out : str):
         pe[common.remove_(r)] = ((np.diag(counts) / np.sum(counts, 0)) * (np.diag(counts) / np.sum(counts, 1)))[:len(true_regions) - 1] # -1 to exlcude the uncategorised species. (purity x efficiency not needed)
 
         reco_regions.pop("uncategorised")
-        counts = CountInRegions(true_regions, reco_regions)
+        counts = count_in_regions(true_regions, reco_regions)
 
         fractions_df = counts / np.sum(counts, axis = 1)[:, np.newaxis]
         fractions_df = pd.DataFrame(np.array(fractions_df).T, columns = true_regions, index = reco_regions) # columns are the true regions, so index over those to get the fractions

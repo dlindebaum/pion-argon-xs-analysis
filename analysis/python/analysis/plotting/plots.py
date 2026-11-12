@@ -1,5 +1,5 @@
 """
-Created on Fri Mar 26 12:16:29 2021
+Created on Fri Mar 26 12:16:29 2021.
 
 Author: Shyam Bhuller
 
@@ -20,7 +20,11 @@ from python.analysis import common, tags, vector
 
 class PlotConfig():
 
+    """Store styling and histogram defaults used by the plotting helpers.
+    """
     def __init__(self):
+        """Set the default figure, axis, text, and histogram styling options.
+        """
         self.PLT_STYLE = "fivethirtyeight"
         self.FIG_SIZE = (14, 10)
         self.FIG_FACECOLOR = 'white'
@@ -71,36 +75,33 @@ class PlotConfig():
         }
 
     def __str__(self):
+        """Format the configuration attributes as newline-separated name/value pairs.
+
+            Returns:
+                str: Newline-separated configuration attribute names and values.
+        """
         return "\n".join(["{} = {}".format(str(var), vars(self)[var]) for var in vars(self)])
 
     def copy(self):
+        """Return a deep copy of this plot configuration.
+
+            Returns:
+                PlotConfig: Deep copy of this configuration object.
+        """
         return copy_lib.deepcopy(self)
 
     def setup_figure(self, sub_rows=1, sub_cols=1, title=None, **kwargs):
-        """
-        Create a figure and axes instance with the supplied parameters
-        and title.
+        """ Create a figure and axes instance with the supplied parameters
+            and title.
 
-        Parameters
-        ----------
-        sub_rows : int, optional
-            Number of rows to have in the figure. Default is 1.
-        sub_cols : int, optional
-            Number of columns to have in the figure. Default is 1.
-        title : str or None, optional
-            Overall title to display over the figure. Default is None.
-        **kwargs
-            All additional keyword arguments are passed to the
-            pyplot.subplots call.
+            Args:
+                sub_rows (Any): int, optional Number of rows to have in the figure. Default is 1.
+                sub_cols (Any): int, optional Number of columns to have in the figure. Default is 1.
+                title (Any): str or None, optional Overall title to display over the figure. Default is None. **kwargs All additional keyword arguments are passed to the pyplot.subplots call.
+                **kwargs (Any): Keyword arguments forwarded to matplotlib.pyplot.subplots.
 
-        Returns
-        -------
-        fig : pyplot.Figure
-            Created figure.
-        axs : array of Axes
-            An array containing an array of the axes in the figure of
-            shape `(sub_rows, sub_cols)`. This will be an array
-            containing one axis if `sub_rows = sub_cols = 1`.
+            Returns:
+                fig: pyplot.Figure Created figure. Axs : Array of Axes An array containing an array of the axes in the figure of shape `(sub_rows, sub_cols)`. This will be an array containing one axis if `sub_rows = sub_cols = 1`.
         """
         # TODO add a scaling function to adjust all test sizes etc,
         # base on either single scalling, or input dimensions
@@ -150,33 +151,19 @@ class PlotConfig():
         return fig, axs
 
     def gen_kwargs(self, type="plot", index=0, **kwargs):
-        """
-        Generates keyword arguments to format a plot with the style
-        of this `PlotConfig` instance.
+        """ Generates keyword arguments to format a plot with the style
+            of this `PlotConfig` instance.
 
-        The results of this function are intended to be unpacked and
-        passed to a `plt.plot` (or similar) call.
+            The results of this function are intended to be unpacked and
+            passed to a `plt.plot` (or similar) call.
 
-        Parameters
-        ----------
-        type : {"plot", "line", "hist"}, optional
-            Type of plot being formatted. "plot" is most generally
-            applicable. Default is plot.
-        index : int, optional
-            Index of the line on the axis. Controls the colour. Default
-            is 0.
-        **kwargs
-            All additional keyword arguments are returned by this
-            function, and can overwrite generated parameters.
+            Args:
+                type (Any): {"plot", "line", "hist"}, optional Type of plot being formatted. "plot" is most generally applicable. Default is plot.
+                index (Any): int, optional Index of the line on the axis. Controls the colour. Default is 0. **kwargs All additional keyword arguments are returned by this function, and can overwrite generated parameters.
+                **kwargs (Any): Plot-style keyword arguments added to the generated dictionary, overriding defaults when names conflict.
 
-        Returns
-        -------
-        fig : pyplot.Figure
-            Created figure.
-        axs : array of Axes
-            An array containing an array of the axes in the figure of
-            shape `(sub_rows, sub_cols)`. This will be an array
-            containing one axis if `sub_rows = sub_cols = 1`.
+            Returns:
+                fig: pyplot.Figure Created figure. Axs : Array of Axes An array containing an array of the axes in the figure of shape `(sub_rows, sub_cols)`. This will be an array containing one axis if `sub_rows = sub_cols = 1`.
         """
         final_kwargs = {
             "linewidth": self.LINEWIDTH
@@ -202,41 +189,18 @@ class PlotConfig():
         return final_kwargs
 
     def format_axis(self, *ax, xlabel=None, ylabel=None, xlim=None, ylim=None, legend=True, xlog=None, ylog=None):
-        """
-        Formats the supplied axis with the style of this `PlotConfig`
-        instance.
+        """ Formats the supplied axis with the style of this `PlotConfig`
+            instance.
 
-        Parameters:
-        *ax : pyplot.Axes or array of Axes
-            Axes to be formatted. If not supplied, the current axis
-            will be obtained via `plt.gca()`.
-        xlabel : str or None, optional
-            Label to be displayed on the x axis. If None, no label is
-            printed. Default is None.
-        ylabel : str or None, optional
-            Label to be displayed on the y axis. If None, no label is
-            printed. Default is None.
-        xlim : tuple or None, optional
-            Range to be displayed along the x axis in form (lower
-            limit, upper limit). If None, the default pyplot limits are
-            used. Default is None.
-        ylim : tuple or None, optional
-            Range to be displayed along the y axis in form (lower
-            limit, upper limit). If None, the default pyplot limits are
-            used. Default is None.
-        legend : bool, optional
-            Whether or not to display a legend if plot labels have been
-            passed. Default is True.
-        xlog : bool or None, optional
-            Option to override the default x axis log scale of this
-            `PlotConfig` instance via True or False. If None, the
-            default settings of the `PlotConfig` instance is used.
-            Default is None.
-        ylog : bool or None, optional
-            Option to override the default y axis log scale of this
-            `PlotConfig` instance via True or False. If None, the
-            default settings of the `PlotConfig` instance is used.
-            Default is None.
+            Args:
+                *ax (Any): Pyplot.Axes or array of Axes Axes to be formatted. If not supplied, the current axis will be obtained via `plt.gca()`.
+                xlabel (Any): str or None, optional Label to be displayed on the x axis. If None, no label is printed. Default is None.
+                ylabel (Any): str or None, optional Label to be displayed on the y axis. If None, no label is printed. Default is None.
+                xlim (Any): tuple or None, optional Range to be displayed along the x axis in form (lower limit, upper limit). If None, the default pyplot limits are used. Default is None.
+                ylim (Any): tuple or None, optional Range to be displayed along the y axis in form (lower limit, upper limit). If None, the default pyplot limits are used. Default is None.
+                legend (Any): bool, optional Whether or not to display a legend if plot labels have been passed. Default is True.
+                xlog (Any): bool or None, optional Option to override the default x axis log scale of this `PlotConfig` instance via True or False. If None, the default settings of the `PlotConfig` instance is used. Default is None.
+                ylog (Any): bool or None, optional Option to override the default y axis log scale of this `PlotConfig` instance via True or False. If None, the default settings of the `PlotConfig` instance is used. Default is None.
         """
         if len(ax) == 0 or (len(ax) == 1 and ax[0] is None):
             # Overrides for log scales needs to be before xlim call
@@ -290,22 +254,14 @@ class PlotConfig():
         return
 
     def end_plot(self, save_name=None):
-        """
-        Ends a plot by saving it if `save_name` is specified and
-        displaying the plot if the `PlotConfig` instance has
-        `SHOW_PLOT=True`.
-        The figure will only be closed if the current figure was saved
-        or shown to avoid accidental plot removal.
+        """ Ends a plot by saving it if `save_name` is specified and
+            displaying the plot if the `PlotConfig` instance has
+            `SHOW_PLOT=True`.
+            The figure will only be closed if the current figure was saved
+            or shown to avoid accidental plot removal.
 
-        Parameters
-        ----------
-        save_name : str or None, optional
-            Name to save the plot by. If the name contains a "/", the
-            save_name will be assumed to be a full path and saved
-            accordingly (N.B. designed for bash style file names),
-            otherwise, the plot will be saved under the
-            `PlotConfig.SAVE_FOLDER + save_name`. If None, the file
-            will not be saved. Default is None.
+            Args:
+                save_name (Any): str or None, optional Name to save the plot by. If the name contains a "/", the save_name will be assumed to be a full path and saved accordingly (N.B. designed for bash style file names), otherwise, the plot will be saved under the `PlotConfig.SAVE_FOLDER + save_name`. If None, the file will not be saved. Default is None.
         """
         # Need to get this to work with multiple figures open
         plt.tight_layout()
@@ -331,23 +287,15 @@ class PlotConfig():
         return
 
     def get_bins(self, data, array=False):
-        """
-        Returns the bins to use for a given set of data as defined by
-        `BINS` of the `PlotConfig` instance.
+        """ Returns the bins to use for a given set of data as defined by
+            `BINS` of the `PlotConfig` instance.
 
-        Parameters
-        ----------
-        data : array-like
-            Data to be binned
-        array : bool, optional
-            Whether to return an array of bin edges or a number of
-            bins. Default is False.
+            Args:
+                data (Any): Array-like Data to be binned.
+                array (Any): bool, optional Whether to return an array of bin edges or a number of bins. Default is False. Returns.
 
-        Returns
-        bins : int or np.ndarray
-            Returns the number of bins to divide the full range of data
-            by if `array` is `False`, else returns an array of bin
-            edges.
+            Returns:
+                int | np.ndarray | None: Bin count, bin edges when array is true, or None for constant data without array edges.
         """
         if len(np.unique(data)) != 1:
             if self.BINS == "best":
@@ -367,6 +315,14 @@ class PlotConfig():
     def _get_best_bins(self, data):
         # Test to deal with case where the InterQuartile Range
         #   is wholly contained in one data point
+        """ Get best bins.
+
+            Args:
+                data (Any): Samples whose histogram bin count is being selected.
+
+            Returns:
+                tuple: Freedman-Diaconis bin count and corresponding bin width.
+        """
         iqrange = iqr(data)
         if iqrange == 0.:
             iqrange = np.max(data) - np.min(data)
@@ -378,25 +334,17 @@ class PlotConfig():
 
     @staticmethod
     def expand_bins(bins, data):
-        """
-        Given an array of bin edges, expands the bins by extending the
-        lower (upper) bin edges by the factors of width of the lower
-        (upper) bin until the new set of `data` is contined within the
-        new bins.
+        """ Given an array of bin edges, expands the bins by extending the
+            lower (upper) bin edges by the factors of width of the lower
+            (upper) bin until the new set of `data` is contined within the
+            new bins.
 
-        Parameters
-        ----------
-        bins : np.ndarray
-            Previous set of bin edges.
-        data : array-like
-            New data to encapsulate in the binning
+            Args:
+                bins (Any): np.ndarray Previous set of bin edges.
+                data (Any): Array-like New data to encapsulate in the binning.
 
-        Returns
-        -------
-        new_bins : np.ndarray
-            New bin edges which encapsulate the full range of `data` by
-            adding additional bins below/above the existing edges in
-            `bins` 
+            Returns:
+                new_bins: np.ndarray New bin edges which encapsulate the full range of `data` by adding additional bins below/above the existing edges in `bins`
         """
         if min(data) < bins[0]:
             low_bin_width = bins[1] - bins[0]
@@ -411,7 +359,17 @@ class PlotConfig():
 
 
 class HistogramBatchPlotter():
+    """Accumulate weighted histogram counts across batches and plot the combined histograms.
+
+        Args:
+            plot_config (Any): Optional PlotConfig controlling the style of generated histograms.
+    """
     def __init__(self, plot_config=None):
+        """Set the plot configuration and initialize per-histogram bin and count stores.
+
+            Args:
+                plot_config (Any): Optional PlotConfig controlling the style of generated histograms.
+        """
         if plot_config is None:
             self.plt_cfg = PlotConfig()
         else:
@@ -422,11 +380,14 @@ class HistogramBatchPlotter():
         return
 
     def _extend_bins(self, new_data, hist_name=None):
-        """
-        We let the initial plot construct whatever the standard bins are.
+        """ We let the initial plot construct whatever the standard bins are.
 
-        This function takes the previous bins and expands them with bins
-        of the same width as used from the initial batch.
+            This function takes the previous bins and expands them with bins
+            of the same width as used from the initial batch.
+
+            Args:
+                new_data (Any): New samples whose range may extend beyond the stored histogram bins.
+                hist_name (Any): Key identifying the histogram whose bins and counts to extend.
         """
         bins = self.bins[hist_name]
         data = self.binned_data[hist_name]
@@ -467,15 +428,19 @@ class HistogramBatchPlotter():
         return
 
     def add_batch(self, data, hist_name=None, bins=None, range=None, weights=None):
-        """
-        Adds the supplied data to the histogram of the given name.
-        If no plot name is given, it will be assumed all data
-        relates to only one plot.
+        """ Adds the supplied data to the histogram of the given name.
+            If no plot name is given, it will be assumed all data
+            relates to only one plot.
 
-        Parameters
-        ----------
-        data
-        hist_name
+            Args:
+                data (Any): Samples to accumulate into the named histogram.
+                hist_name (Any): Key identifying the histogram to create or update.
+                bins (Any): Bin count or edges used when creating a histogram; ignored for an existing histogram.
+                range (Any): Optional lower and upper sample limits for histogramming.
+                weights (Any): Optional per-sample weights passed to numpy.histogram.
+
+            Returns:
+                tuple: Updated histogram counts and their bin edges.
         """
         new_plot = hist_name not in self.binned_data.keys()
 
@@ -506,23 +471,16 @@ class HistogramBatchPlotter():
         return self.binned_data[hist_name], self.bins[hist_name]
 
     def plot_hist(self, *ax, hist_name=None, plot_config=None, **plot_kwargs):
-        """
-        Make a histogram plot of stored data.
+        """ Make a histogram plot of stored data.
 
-        Parameters
-        ----------
-        *ax : pyplot.Axis
-            Axis to plot the hist on. If not specified, a new figure is
-            created.
-        hist_name : str or None, optional
-            Identifier of the data to be plotted. Default is None.
-        plot_config : PlotConfig or None, optional
-            Plot configuration to use to produce the plot. If None, the
-            `plt_cfg` in this `HistogramBatchPlotter` is used. Default
-            is None.
-        **plot_kwargs
-            All additional keyword arguments are passed to the `hist()`
-            call.
+            Args:
+                *ax (Any): Pyplot.Axis Axis to plot the hist on. If not specified, a new figure is created.
+                hist_name (Any): str or None, optional Identifier of the data to be plotted. Default is None.
+                plot_config (Any): PlotConfig or None, optional Plot configuration to use to produce the plot. If None, the `plt_cfg` in this `HistogramBatchPlotter` is used. Default is None. **plot_kwargs All additional keyword arguments are passed to the `hist()` call.
+                **plot_kwargs (Any): Additional keyword arguments for plot kwargs.
+
+            Returns:
+                Any: Matplotlib histogram return value for the stored counts and bins.
         """
         if plot_config is None:
             plot_config = self.plt_cfg
@@ -549,20 +507,18 @@ class HistogramBatchPlotter():
             )
 
     def make_hist_figure(self, hist_name=None, save_name=None, xlabel=None, ylabel=None, title=None):
-        """
-        Produces a new figure using the histogram(s) data from
-        `hist_name`.
+        """ Produces a new figure using the histogram(s) data from
+            `hist_name`.
 
-        Parameters
-        ----------
-        hist_name : list, str, or None, optional
-            Identifier of the data to be plotted. If a list is passed,
-            all supplied data will be plotted on the same axis.
-            Default is None.
-        save_name : str or None, optional
-        xlabel
-        ylabel
-        title
+            Args:
+                hist_name (Any): List, str, or None, optional Identifier of the data to be plotted. If a list is passed, all supplied data will be plotted on the same axis. Default is None.
+                save_name (Any): str or None, optional xlabel ylabel title.
+                xlabel (Any): Label for the horizontal axis.
+                ylabel (Any): Label for the vertical axis.
+                title (Any): Figure title.
+
+            Returns:
+                tuple: Matplotlib figure and axes containing the requested histograms.
         """
         if not isinstance(hist_name, list):
             hist_name = [hist_name]
@@ -580,6 +536,20 @@ class HistogramBatchPlotter():
 
 
 class PairHistsBatchPlotter(HistogramBatchPlotter):
+    """Accumulate and plot paired-PFO histograms, including stacked and normalized views.
+
+        Args:
+            prop_name (Any): Property name used in axis labels and the saved-image filename.
+            units (Any): Units appended to the plotted property name.
+            plot_config (Any): Optional base PlotConfig copied to style the generated plot variants.
+            unique_save_id (Any): Optional filename suffix that distinguishes this plot batch.
+            inc_stacked (Any): Whether to create an additional stacked histogram.
+            inc_norm (Any): Whether to create density-normalized histograms.
+            inc_log (Any): Whether to create histograms with a logarithmic y-axis.
+            bins (Any): One or more bin counts or edge arrays for the histogram variants.
+            range (Any): One or more histogram ranges; numeric upper limits are converted to ranges starting at zero.
+            **kwargs (Any): Additional histogram keyword arguments stored and passed to the plotting calls.
+    """
     def __init__(
         self,
         prop_name, units,
@@ -589,59 +559,33 @@ class PairHistsBatchPlotter(HistogramBatchPlotter):
         bins=100, range=None,
         **kwargs
     ):
-        """
-        Creates a PairHistsBatchPlotter instance to store and plot data as
-        histograms from batched data.
+        """ Creates a PairHistsBatchPlotter instance to store and plot data as
+            histograms from batched data.
 
-        `plot_config` contains the baseline PlotConfig instance to use for plotting,
-        which will be tweaked by the options below to produce the corresponding
-        plots.
+            `plot_config` contains the baseline PlotConfig instance to use for plotting,
+            which will be tweaked by the options below to produce the corresponding
+            plots.
 
-        Whether to produce stacked, normalised, and log scale plots is controlled
-        by `inc_stacked`, `inc_norm`, and `inc_log` respectively.
+            Whether to produce stacked, normalised, and log scale plots is controlled
+            by `inc_stacked`, `inc_norm`, and `inc_log` respectively.
 
-        `bins` and `range` can be supplied as lists of values (that could be passed
-        to a pyplot function). If a list is passed, the options supplied will be
-        iterated through, and a plot will be produced for each value given.
-        `bin_size`, `bins`, and `range` must all either have same length, or not be
-        a list.
+            `bins` and `range` can be supplied as lists of values (that could be passed
+            to a pyplot function). If a list is passed, the options supplied will be
+            iterated through, and a plot will be produced for each value given.
+            `bin_size`, `bins`, and `range` must all either have same length, or not be
+            a list.
 
-        Parameters
-        ----------
-        prop_name : str
-            Name of the property plotted for title and saved file.
-        units : str
-            Unit the property is measured.
-        plot_config : PlotConfig, optional
-            Base plot configuration to use. If not passed, a new instance
-            will be created.
-        unique_save_id : str, optional
-            Extra string to add into the save name to avoid
-            overwriting. Default is ''.
-        inc_stacked : bool, optional
-            Whether to include a stacked histogram plot. Default is False.
-        inc_norm : bool, optional
-            Whether to include a normalised histogram. Default is True.
-        inc_log : bool, optional
-            Whether to include logarithmic scale histograms. Will
-            also produce a logarithmic normalised plot if `inc_norm`
-            is True. Default is True.
-        bins : int, np.ndarray, or list, optional
-            Number of bins if ``int``, or bin edges if ``ndarray``.
-            Default is 100. Note if using multiple bins, these must be
-            passed as a list, not an array.
-        range : float, None, tuple, or list, optional
-            Range over which to produce the plot. Float values will be
-            converted to tuples with a ower bound of 0. Default is None.
-        weights : ak.Array, np.ndarray, or None, optional
-            Weights to used for each value of the `property`. Default
-            is None.
-
-        Other Parameters
-        ----------------
-        **kwargs
-            Any additional keyword arguments to be passed to the ``plt.hist``
-            calls. The same arguments will be passed to all plots.
+            Args:
+                prop_name (Any): Property name used in axis labels and the saved-image filename.
+                units (Any): Units appended to the plotted property name.
+                plot_config (Any): PlotConfig, optional Base plot configuration to use. If not passed, a new instance will be created.
+                unique_save_id (Any): str, optional Extra string to add into the save name to avoid overwriting. Default is ''.
+                inc_stacked (Any): Whether to include a stacked histogram plot. Default is False.
+                inc_norm (Any): Whether to include a density-normalized histogram. Default is True.
+                inc_log (Any): Whether to include logarithmic-scale histograms; also produces a normalized log plot when inc_norm is true. Default is True.
+                bins (Any): Number of bins or bin edges; pass multiple choices as a list. Default is 100.
+                range (Any): Optional range or ranges for plotting; numeric upper limits are converted to ranges starting at zero. Default is None.
+                **kwargs (Any): Additional histogram keyword arguments stored and passed to the plotting calls.
         """
         # `bin_size` CURRENTLY NOT USED: We don't enforce the bins for each signal type to have the same widths
         # bin_size : str, list, or None, optional
@@ -729,19 +673,12 @@ class PairHistsBatchPlotter(HistogramBatchPlotter):
         return
 
     def add_batch(self, data, sig_count, weights=None):
-        """
-        Adds the `data` from a batch to the histograms, given the `sig_count`s.
+        """ Adds the `data` from a batch to the histograms, given the `sig_count`s.
 
-        Parameters
-        ----------
-        data : ak.Array
-        Data from a batch to be added.
-
-        sig_count : ak.Array
-        Number of signal particles present in each point in `data`.
-
-        weights : ak.Array, optional
-        Weightings of `data` points.
+            Args:
+                data (Any): ak.Array Data from a batch to be added.
+                sig_count (Any): ak.Array Number of signal particles present in each point in `data`.
+                weights (Any): ak.Array, optional Weightings of `data` points.
         """
         if self.includes_stacked:  # Need to keep track of the raw weights if producing a stacked plot
             raw_weights = weights
@@ -783,9 +720,8 @@ class PairHistsBatchPlotter(HistogramBatchPlotter):
         return
 
     def make_figures(self):
-        """
-        Plots all the stored data into figures, as defined by the parameters
-        from initialisation.
+        """ Plots all the stored data into figures, as defined by the parameters
+            from initialisation.
         """
         for params_index, params in enumerate(self._range_bins_list):
             curr_range = params["range"]
@@ -844,30 +780,31 @@ class PairHistsBatchPlotter(HistogramBatchPlotter):
 
 
 def _adjust_text_colour(value, colour, norm, offset=0.2, max_reduction=0.7):
+    """Scale an RGB colour according to a normalized value to improve text contrast.
+
+        Args:
+            value (Any): Scalar passed to the normalization function.
+            colour (Any): RGB color tuple to scale.
+            norm (Any): Matplotlib normalization mapping value to a normalized scalar.
+            offset (Any): Amount added to the normalized value before rounding.
+            max_reduction (Any): Maximum fraction by which to reduce each RGB component.
+
+        Returns:
+            tuple: RGB components scaled by the computed contrast factor.
+    """
     scaling = 1-np.round(norm(value)+offset) * max_reduction
     return tuple(val * scaling for val in colour)
 
 
-def Save(name: str = "plot", directory: str = "", dpi = 300):
-    """ Saves the last created plot to file. Run after one the functions below.
-
-    Args:
-        name (str, optional): Name of plot. Defaults to "plot".
-        directory (str, optional): directory to save plot in.
-    """
-    plt.savefig(directory + name + ".png", dpi = dpi, bbox_inches='tight')
-    plt.close()
-
-
-def FigureDimensions(x : int, orientation : str = "horizontal") -> tuple[int]:
+def figure_dimensions(x : int, orientation : str = "horizontal") -> tuple[int]:
     """ Compute dimensions for a multiplot which makes the grid as "square" as possible.
 
-    Args:
-        x (int): number of plots in multiplot
-        orientation (str, optional): which axis of the grid is longer. Defaults to "horizontal".
+        Args:
+            x (int): Number of plots in multiplot.
+            orientation (str): Which axis of the grid is longer. Defaults to "horizontal".
 
-    Returns:
-        tuple[int]: length of each grid axes
+        Returns:
+            tuple[int]: Length of each grid axes.
     """
     nearest_square = int(np.ceil(x**0.5)) # get the nearest square number, always round up to ensure there is enough space in the grid to contain all the plots
 
@@ -883,16 +820,18 @@ def FigureDimensions(x : int, orientation : str = "horizontal") -> tuple[int]:
     return dim
 
 
-def MultiPlot(n : int, xlim : tuple = None, ylim : tuple = None, orientation = "horizontal"):
+def multi_plot(n : int, xlim : tuple = None, ylim : tuple = None, orientation = "horizontal"):
     """ Generator for subplots.
 
-    Args:
-        n (int): number of plots
-
-    Yields:
-        Iterator[int]: ith plot
+        Args:
+            n (int): Number of plots.
+            xlim (tuple): Optional x-axis limits applied to each subplot.
+            ylim (tuple): Optional y-axis limits applied to each subplot.
+            orientation (Any): Whether the subplot grid is wider ("horizontal") or taller ("vertical").
+        Yields:
+            Iterator[int]: Ith plot.
     """
-    dim = FigureDimensions(n, orientation)
+    dim = figure_dimensions(n, orientation)
     fig, ax = plt.subplots(figsize = [6.4 * dim[1], 4.8 * dim[0]],frameon=False)
     fig.patch.set_visible(False)
     ax.axis('off')
@@ -903,28 +842,56 @@ def MultiPlot(n : int, xlim : tuple = None, ylim : tuple = None, orientation = "
         yield i
 
 
-def IterMultiPlot(x, xlim : tuple = None, ylim : tuple = None, threshold = 100):
+def iter_multi_plot(x, xlim : tuple = None, ylim : tuple = None, threshold = 100):
     """ Generator for subplots but also iterates with the data to plot to reduce boilerplate.
 
-    Args:
-        x (_type_): data set to plot, must be multidimensional and contains less than 100 samples i.e. plots to make
+        Args:
+            x (_type_): Sequence of samples, one per subplot.
+            xlim (tuple): Optional x-axis limits applied to each subplot.
+            ylim (tuple): Optional y-axis limits applied to each subplot.
+            threshold (Any): Maximum number of samples/subplots allowed.
+        Raises:
+            Exception: If the length of x is too large.
 
-    Raises:
-        Exception: if the length of x is too large
 
-    Yields:
-        tuple: ith plot and sample to plot.
+
+
+        Yields:
+            tuple: Ith plot and sample to plot.
     """
     if len(x) > threshold:
         raise Exception("Too many plots specified, did you pass the correct shape data?")
-    for i, j in zip(MultiPlot(len(x), xlim, ylim), x):
+    for i, j in zip(multi_plot(len(x), xlim, ylim), x):
         yield i, j
 
 
-def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None, xerr = None, yerr = None, capsize : float = 3, zorder : int = None, style : str = "scatter", rasterized : bool = False):
+def plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, new_figure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, color : str = None, xerr = None, yerr = None, capsize : float = 3, zorder : int = None, style : str = "scatter", rasterized : bool = False):
     """ Make scatter plot.
+
+        Args:
+            x (Any): Horizontal coordinates or bin centers.
+            y (Any): Values corresponding to x.
+            xlabel (str): Horizontal-axis label.
+            ylabel (str): Vertical-axis label.
+            title (str): Axes title.
+            label (str): Legend label for this series.
+            marker (str): Marker style for scatter points.
+            linestyle (str): Line style for plotted data.
+            markersize (float): Scatter marker size.
+            alpha (float): Plot transparency.
+            new_figure (bool): Whether to create a new figure before plotting.
+            x_scale (str): Matplotlib scale for the horizontal axis.
+            y_scale (str): Matplotlib scale for the vertical axis.
+            annotation (str): Optional text placed in the axes.
+            color (str): Plot color.
+            xerr (Any): Optional horizontal uncertainties.
+            yerr (Any): Optional vertical uncertainties.
+            capsize (float): Error-bar cap size.
+            zorder (int): Drawing order for the plotted artists.
+            style (str): Rendering mode: "scatter", "step", or "bar".
+            rasterized (bool): Whether to rasterize the scatter artist.
     """
-    if newFigure is True:
+    if new_figure is True:
         plt.figure()
 
     if style == "bar":
@@ -976,27 +943,67 @@ def Plot(x, y, xlabel: str = None, ylabel: str = None, title: str = None, label:
     plt.tight_layout()
 
 
-def PlotComparison(x, y, labels: list, xlabel: str = "", ylabel: str = "", title: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, newFigure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, xerr = None, yerr = None, capsize : float = 3):
+def plot_comparison(x, y, labels: list, xlabel: str = "", ylabel: str = "", title: str = "", marker: str = "", linestyle: str = "-", markersize : float = 6, alpha : float = 1, new_figure: bool = True, x_scale : str = "linear", y_scale : str = "linear", annotation: str = None, xerr = None, yerr = None, capsize : float = 3):
     """ Make multiple scatter plots in the same axes.
+
+        Args:
+            x (Any): Per-series horizontal coordinates.
+            y (Any): Per-series values corresponding to x.
+            labels (list): Legend labels, one for each plotted series.
+            xlabel (str): Horizontal-axis label.
+            ylabel (str): Vertical-axis label.
+            title (str): Axes title.
+            marker (str): Marker style for scatter points.
+            linestyle (str): Line style for plotted data.
+            markersize (float): Scatter marker size.
+            alpha (float): Plot transparency.
+            new_figure (bool): Whether to create a new figure before plotting.
+            x_scale (str): Matplotlib scale for the horizontal axis.
+            y_scale (str): Matplotlib scale for the vertical axis.
+            annotation (str): Optional text placed in the axes.
+            xerr (Any): Optional horizontal uncertainties for each series.
+            yerr (Any): Optional vertical uncertainties for each series.
+            capsize (float): Error-bar cap size.
     """
-    if newFigure is True: plt.figure()
+    if new_figure is True: plt.figure()
     for i in range(len(labels)):
-        Plot(x[i], y[i], xlabel, ylabel, title, labels[i], marker, linestyle, markersize, alpha, False, x_scale, y_scale, None, None, xerr, yerr, capsize)
+        plot(x[i], y[i], xlabel, ylabel, title, labels[i], marker, linestyle, markersize, alpha, False, x_scale, y_scale, None, None, xerr, yerr, capsize)
     plt.tight_layout()
     if annotation is not None:
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
-def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None, alpha : int = 1, histtype : str = "bar", sf : int = 2, density : bool = False, x_scale : str = "linear", y_scale : str = "linear", newFigure : bool = True, annotation : str = None, stacked : bool = False, color = None, range : list = None, truncate : bool = False, weights : ak.Array = None):
+def plot_hist(data, bins = 100, xlabel : str = "", title : str = "", label = None, alpha : int = 1, histtype : str = "bar", sf : int = 2, density : bool = False, x_scale : str = "linear", y_scale : str = "linear", new_figure : bool = True, annotation : str = None, stacked : bool = False, color = None, range : list = None, truncate : bool = False, weights : ak.Array = None):
     """ Plot 1D histograms.
-    Returns:
-        np.arrays : bin heights and edges
+
+        Args:
+            data (Any): Samples to histogram.
+            bins (Any): Bin count or bin edges passed to matplotlib.
+            xlabel (str): Horizontal-axis label.
+            title (str): Axes title.
+            label (Any): Legend label for the histogram.
+            alpha (int): Histogram transparency.
+            histtype (str): Matplotlib histogram rendering style.
+            sf (int): Decimal places used to round the displayed bin width.
+            density (bool): Whether to normalize the histogram to a density.
+            x_scale (str): Matplotlib scale for the horizontal axis.
+            y_scale (str): Matplotlib scale for the vertical axis.
+            new_figure (bool): Whether to create a new figure before plotting.
+            annotation (str): Optional text placed in the axes.
+            stacked (bool): Whether multiple datasets are stacked.
+            color (Any): Histogram color or colors.
+            range (list): Optional lower and upper limits for the histogram range.
+            truncate (bool): Whether to clip the input data to range before histogramming.
+            weights (ak.Array): Optional per-sample weights.
+
+        Returns:
+            np.arrays: Bin heights and edges.
     """
-    if newFigure is True: plt.figure()
+    if new_figure is True: plt.figure()
     if truncate == True:
         if range is None:
             raise Exception("if truncate is true, range must be provided")
-        data = common.ClipJagged(data, min(range), max(range))
+        data = common.clip_jagged(data, min(range), max(range))
 
     height, edges, _ = plt.hist(data, bins, label = label, alpha = alpha, density = density, histtype = histtype, stacked = stacked, color = color, range = range if range and len(range) == 2 else None, weights = weights)
     binWidth = round((edges[-1] - edges[0]) / len(edges), sf)
@@ -1017,7 +1024,27 @@ def PlotHist(data, bins = 100, xlabel : str = "", title : str = "", label = None
     return height, edges
 
 
-def PlotHist2DMarginal(data_x, data_y, bins: int = 100, x_range: list = None, y_range: list = None, z_range: list = [None, None], xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", x_scale: str = "linear", y_scale: str = "linear", annotation: str = None, cmap : str = "viridis", norm : bool = True, whitespace : float = 0.0):
+def plot_hist_2d_marginal(data_x, data_y, bins: int = 100, x_range: list = None, y_range: list = None, z_range: list = [None, None], xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", x_scale: str = "linear", y_scale: str = "linear", annotation: str = None, cmap : str = "viridis", norm : bool = True, whitespace : float = 0.0):
+    """ Plot hist 2d marginal.
+
+        Args:
+            data_x (Any): Samples to histogram along the horizontal axis.
+            data_y (Any): Corresponding samples to histogram along the vertical axis.
+            bins (int): Number of bins along each axis.
+            x_range (list): Optional horizontal-axis histogram range.
+            y_range (list): Optional vertical-axis histogram range.
+            z_range (list): Optional lower and upper limits for the 2D histogram color scale.
+            xlabel (str): Horizontal-axis label.
+            ylabel (str): Vertical-axis label.
+            title (str): Axes title.
+            label (str): Legend label for the histogram.
+            x_scale (str): Matplotlib scale for the horizontal axis.
+            y_scale (str): Matplotlib scale for the vertical axis.
+            annotation (str): Optional text placed in the axes.
+            cmap (str): Matplotlib colormap for the histogram and projections.
+            norm (bool): Whether to use logarithmic color normalization for the 2D histogram.
+            whitespace (float): Spacing between the main plot and its marginal projections.
+    """
     plt.subplots(2, 2, figsize = (6.4, 4.8 * 1.2), gridspec_kw={"height_ratios" : [1, 5], "width_ratios" : [4, 1], "wspace" : whitespace, "hspace" : whitespace} , sharex = False, sharey = False) # set to that the ratio plot is 1/5th the default plot height
     plt.subplot(2, 2, 2).set_visible(False) # top right
 
@@ -1025,7 +1052,7 @@ def PlotHist2DMarginal(data_x, data_y, bins: int = 100, x_range: list = None, y_
 
     not_nan = (~np.isnan(data_x)) & (~np.isnan(data_y))
 
-    h, (x_e, y_e) = PlotHist2D(data_x[not_nan], data_y[not_nan], bins, x_range, y_range, z_range, xlabel, ylabel, title, label, x_scale, y_scale, False, annotation, cmap, norm, False)
+    h, (x_e, y_e) = plot_hist_2d(data_x[not_nan], data_y[not_nan], bins, x_range, y_range, z_range, xlabel, ylabel, title, label, x_scale, y_scale, False, annotation, cmap, norm, False)
 
     plt.subplot(2, 2, 1) # top right (x projection)
     ny, _, _ = plt.hist(x_e[:-1], bins = x_e, weights = np.sum(h, 1), density = True)
@@ -1057,13 +1084,32 @@ def PlotHist2DMarginal(data_x, data_y, bins: int = 100, x_range: list = None, y_
     return
 
 
-def PlotHist2D(data_x, data_y, bins: int = 100, x_range: list = None, y_range: list = None, z_range: list = [None, None], xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", x_scale: str = "linear", y_scale: str = "linear", newFigure: bool = True, annotation: str = None, cmap : str = "viridis", norm : bool = True, colorbar : bool = True):
+def plot_hist_2d(data_x, data_y, bins: int = 100, x_range: list = None, y_range: list = None, z_range: list = [None, None], xlabel: str = "", ylabel: str = "", title: str = "", label: str = "", x_scale: str = "linear", y_scale: str = "linear", new_figure: bool = True, annotation: str = None, cmap : str = "viridis", norm : bool = True, colorbar : bool = True):
     """ Plot 2D histograms.
 
-    Returns:
-        np.arrays : bin heights and edges
+        Args:
+            data_x (Any): Samples to histogram along the horizontal axis.
+            data_y (Any): Corresponding samples to histogram along the vertical axis.
+            bins (int): Number of bins along each axis.
+            x_range (list): Optional horizontal-axis histogram range.
+            y_range (list): Optional vertical-axis histogram range.
+            z_range (list): Optional lower and upper limits for the color scale.
+            xlabel (str): Horizontal-axis label.
+            ylabel (str): Vertical-axis label.
+            title (str): Axes title.
+            label (str): Legend label for the histogram.
+            x_scale (str): Matplotlib scale for the horizontal axis.
+            y_scale (str): Matplotlib scale for the vertical axis.
+            new_figure (bool): Whether to create a new figure before plotting.
+            annotation (str): Optional text placed in the axes.
+            cmap (str): Matplotlib colormap for the histogram.
+            norm (bool): Whether to use logarithmic color normalization.
+            colorbar (bool): Whether to display the colorbar.
+
+        Returns:
+            np.arrays: Bin heights and edges.
     """
-    if newFigure is True:
+    if new_figure is True:
         plt.figure()
 
     # plot data with a logarithmic color scale
@@ -1087,14 +1133,28 @@ def PlotHist2D(data_x, data_y, bins: int = 100, x_range: list = None, y_range: l
     return height, [xedges, yedges]
 
 
-def PlotHistComparison(datas, labels: list, x_range: list = [], bins: int = 100, xlabel: str = "", title: str = "", alpha: int = 1, histtype: str = "step", x_scale: str = "linear", y_scale: str = "linear", sf: int = 2, density: bool = True, annotation: str = None, newFigure: bool = True, colours : list = None, weights : list = None):
-    """ Plots multiple histograms on one plot
+def plot_hist_comparison(datas, labels: list, x_range: list = [], bins: int = 100, xlabel: str = "", title: str = "", alpha: int = 1, histtype: str = "step", x_scale: str = "linear", y_scale: str = "linear", sf: int = 2, density: bool = True, annotation: str = None, new_figure: bool = True, colours : list = None, weights : list = None):
+    """ Plots multiple histograms on one plot.
 
-    Args:
-        datas (any): list of data sets to plot
-        x_range (list, optional): plot range for all data. Defaults to [].
+        Args:
+            datas (any): List of data sets to plot.
+            labels (list): Legend labels corresponding to the datasets.
+            x_range (list): Plot range for all data. Defaults to [].
+            bins (int): Number of bins for the first dataset; the remaining histograms reuse its edges.
+            xlabel (str): Horizontal-axis label.
+            title (str): Axes title.
+            alpha (int): Histogram transparency.
+            histtype (str): Matplotlib histogram rendering style.
+            x_scale (str): Matplotlib scale for the horizontal axis.
+            y_scale (str): Matplotlib scale for the vertical axis.
+            sf (int): Decimal places used to round the displayed bin width.
+            density (bool): Whether to normalize each histogram to a density.
+            annotation (str): Optional text placed in the axes.
+            new_figure (bool): Whether to create a new figure before plotting.
+            colours (list): Optional colors corresponding to the datasets.
+            weights (list): Optional per-dataset sample weights.
     """
-    if newFigure is True:
+    if new_figure is True:
         plt.figure()
     if colours is None:
         colours = [None]*len(labels)
@@ -1108,10 +1168,10 @@ def PlotHistComparison(datas, labels: list, x_range: list = [], bins: int = 100,
             data = data[mask]
             if weight is not None: weight = weight[mask]
         if i == 0:
-            _, edges = PlotHist(
-                data, bins, xlabel, title, labels[i], alpha, histtype, sf, density, color = colours[i], range = x_range, newFigure=False, weights = weight)
+            _, edges = plot_hist(
+                data, bins, xlabel, title, labels[i], alpha, histtype, sf, density, color = colours[i], range = x_range, new_figure=False, weights = weight)
         else:
-            PlotHist(data, edges, xlabel, title, labels[i], alpha, histtype, sf, density, color = colours[i], range = x_range, newFigure=False, weights = weight)
+            plot_hist(data, edges, xlabel, title, labels[i], alpha, histtype, sf, density, color = colours[i], range = x_range, new_figure=False, weights = weight)
     plt.xscale(x_scale)
     plt.yscale(y_scale)
     plt.tight_layout()
@@ -1119,14 +1179,27 @@ def PlotHistComparison(datas, labels: list, x_range: list = [], bins: int = 100,
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
-def PlotHist2DComparison(x : list, y : list, x_range : list, y_range : list, xlabels = None, ylabels = None, titles = None, bins = 50, cmap = "plasma", func = None, orientation = "horizontal"):
+def plot_hist_2d_comparison(x : list, y : list, x_range : list, y_range : list, xlabels = None, ylabels = None, titles = None, bins = 50, cmap = "plasma", func = None, orientation = "horizontal"):
     """ Plots multiple 2D histograms with a shared colour bar.
+
+        Args:
+            x (list): Per-histogram samples for the horizontal axis.
+            y (list): Corresponding per-histogram samples for the vertical axis.
+            x_range (list): Horizontal-axis histogram range shared by all panels.
+            y_range (list): Vertical-axis histogram range shared by all panels.
+            xlabels (Any): Horizontal-axis label for each panel; defaults to empty labels.
+            ylabels (Any): Vertical-axis label for each panel; defaults to empty labels.
+            titles (Any): Title for each panel; defaults to empty titles.
+            bins (Any): Number of bins along both axes.
+            cmap (Any): Matplotlib colormap shared by all panels.
+            func (Any): Optional callable used instead of matplotlib.pyplot.hist2d.
+            orientation (Any): Whether the panel grid is wider ("horizontal") or taller ("vertical").
     """
     if xlabels is None: xlabels = [""]*len(x)
     if ylabels is None: ylabels = [""]*len(y)
     if titles is None: titles = [""] * len(x)
 
-    dim = FigureDimensions(len(x), orientation)
+    dim = figure_dimensions(len(x), orientation)
     fig_size = (6.4 * dim[1], 4.8 * dim[0])
     ranges = [x_range, y_range]
 
@@ -1151,12 +1224,28 @@ def PlotHist2DComparison(x : list, y : list, x_range : list, y_range : list, xla
     fig.colorbar(im, cax = cbar_ax)
 
 
-def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : list = None, stacked = False, data_label : str = "Data", mc_labels = "MC", xlabel : str = None, title : str = None, yscale : str = "linear", legend_loc : str = "best", ncols : int = 2, norm : bool = False, sf : int = 2, colour : str = None, alpha : float = None, truncate : bool = False, mc_weights : np.array = None):
+def plot_hist_data_mc(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : list = None, stacked = False, data_label : str = "Data", mc_labels = "MC", xlabel : str = None, title : str = None, yscale : str = "linear", legend_loc : str = "best", ncols : int = 2, norm : bool = False, sf : int = 2, colour : str = None, alpha : float = None, truncate : bool = False, mc_weights : np.array = None):
     """ Make Data MC histograms as seen in most typical particle physics analyses (but looks better).
 
-    Args:
-        data (ak.Array): data sample
-        mc (ak.Array): MC sample
+        Args:
+            data (ak.Array): Data sample.
+            mc (ak.Array): MC sample.
+            bins (int): Number of histogram bins for data and simulated samples.
+            x_range (list): Optional lower and upper range shared by the data and MC histograms.
+            stacked (Any): Whether to stack tagged MC histograms; "ascending" reverses their stack order.
+            data_label (str): Legend label for the data series.
+            mc_labels (Any): MC legend label or per-component labels for tagged MC.
+            xlabel (str): Horizontal-axis label.
+            title (str): Figure title.
+            yscale (str): Matplotlib scale for the count axis.
+            legend_loc (str): Matplotlib legend location.
+            ncols (int): Number of columns in the legend.
+            norm (bool): False for no scaling, True to scale MC to data counts, or a positive numeric MC scale factor.
+            sf (int): Decimal places used to round the displayed bin width.
+            colour (str): Optional MC histogram color.
+            alpha (float): Histogram transparency.
+            truncate (bool): Whether to clip data and MC values to x_range before histogramming.
+            mc_weights (np.array): Optional MC sample weights (or one weight array per tagged component).
     """
     plt.subplots(2, 1, figsize = (6.4, 4.8 * 1.2), gridspec_kw={"height_ratios" : [5, 1]} , sharex = True) # set to that the ratio plot is 1/5th the default plot height
 
@@ -1219,11 +1308,11 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     plt.yscale(yscale)
     plt.title(title)
 
-    binWidth = round((edges[-1] - edges[0]) / len(edges), sf)
+    bin_width = round((edges[-1] - edges[0]) / len(edges), sf)
     if norm == False:
-        yl = "Number of entries (bin width=" + str(binWidth) + ")"
+        yl = "Number of entries (bin width=" + str(bin_width) + ")"
     else:
-        yl = "Normalised number of entries (bin width=" + str(binWidth) + ")"
+        yl = "Normalised number of entries (bin width=" + str(bin_width) + ")"
     plt.ylabel(yl)
 
     h_data, edges = np.histogram(np.array(data), bins = edges, range = x_range) # bin the data in terms of MC
@@ -1258,9 +1347,28 @@ def PlotHistDataMC(data : ak.Array, mc : ak.Array, bins : int = 100, x_range : l
     plt.subplot(211) # do this to set the current figure to the main plot
 
 
-def PlotHist2DImshow(x : ak.Array, y : ak.Array, bins : int = 100, x_range : list = None, y_range : list = None, c_range : list = None, xlabel : str = None, ylabel : str = None, title : str = None, c_scale : str = "linear", norm : str = None, newFigure : bool = True, colorbar : bool = True, cmap : str = "viridis"):
+def plot_hist_2d_imshow(x : ak.Array, y : ak.Array, bins : int = 100, x_range : list = None, y_range : list = None, c_range : list = None, xlabel : str = None, ylabel : str = None, title : str = None, c_scale : str = "linear", norm : str = None, new_figure : bool = True, colorbar : bool = True, cmap : str = "viridis"):
     """ Same as Hist2D, but uses numpy.histogram2d and imshow to allow more options for plot normalisation,
         but is harder to use in subplots.
+
+        Args:
+            x (ak.Array): Samples for the horizontal coordinate.
+            y (ak.Array): Corresponding samples for the vertical coordinate.
+            bins (int): Number of bins along each axis.
+            x_range (list): Optional horizontal-axis histogram range.
+            y_range (list): Optional vertical-axis histogram range.
+            c_range (list): Optional lower and upper display limits for the color scale.
+            xlabel (str): Horizontal-axis label.
+            ylabel (str): Vertical-axis label.
+            title (str): Axes title.
+            c_scale (str): Color normalization scale, either "linear" or "log".
+            norm (str): Normalize histogram values by rows or columns, or leave counts unchanged.
+            new_figure (bool): Whether to create a new figure before plotting.
+            colorbar (bool): Whether to display the colorbar.
+            cmap (str): Matplotlib colormap for the histogram.
+
+        Returns:
+            tuple: Raw 2D histogram counts and the horizontal and vertical bin-edge arrays.
     """
     h, x_e, y_e = np.histogram2d(np.array(x), np.array(y), bins = bins, range = [x_range, y_range])
 
@@ -1278,7 +1386,7 @@ def PlotHist2DImshow(x : ak.Array, y : ak.Array, bins : int = 100, x_range : lis
     else:
         cnorm = matplotlib.colors.Normalize(vmin = min(c_range), vmax = max(c_range))
 
-    if newFigure is True: plt.figure()
+    if new_figure is True: plt.figure()
 
     plt.imshow(h_norm.T, origin = "lower", extent=[min(x_e), max(x_e), min(y_e), max(y_e)], norm = cnorm, aspect = "auto", cmap = cmap)
     plt.grid(False)
@@ -1289,12 +1397,29 @@ def PlotHist2DImshow(x : ak.Array, y : ak.Array, bins : int = 100, x_range : lis
     return h, (x_e, y_e)
 
 
-def PlotHist2DImshowMarginal(data_x, data_y, bins: int = 100, x_range: list = None, y_range: list = None, xlabel: str = "", ylabel: str = "", title: str = "", cmap : str = "viridis", norm : bool = True, whitespace : float = 0.0, c_range : list = None, c_scale : str = "linear"):
+def plot_hist_2d_imshow_marginal(data_x, data_y, bins: int = 100, x_range: list = None, y_range: list = None, xlabel: str = "", ylabel: str = "", title: str = "", cmap : str = "viridis", norm : bool = True, whitespace : float = 0.0, c_range : list = None, c_scale : str = "linear"):
+    """ Plot hist 2d imshow marginal.
+
+        Args:
+            data_x (Any): Samples for the horizontal coordinate.
+            data_y (Any): Corresponding samples for the vertical coordinate.
+            bins (int): Number of bins along each axis.
+            x_range (list): Optional horizontal-axis histogram range.
+            y_range (list): Optional vertical-axis histogram range.
+            xlabel (str): Horizontal-axis label.
+            ylabel (str): Vertical-axis label.
+            title (str): Figure title.
+            cmap (str): Matplotlib colormap for the 2D histogram.
+            norm (bool): Normalization mode passed through to plot_hist_2d_imshow.
+            whitespace (float): Spacing between the main plot and its marginal projections.
+            c_range (list): Optional lower and upper display limits for the color scale.
+            c_scale (str): Color normalization scale, either "linear" or "log".
+    """
     plt.subplots(2, 2, figsize = (6.4, 4.8 * 1.2), gridspec_kw={"height_ratios" : [1, 5], "width_ratios" : [4, 1], "wspace" : whitespace, "hspace" : whitespace} , sharex = False, sharey = False) # set to that the ratio plot is 1/5th the default plot height
     plt.subplot(2, 2, 2).set_visible(False) # top right
 
     plt.subplot(2, 2, 3) # bottom left (main plot)
-    h, (x_e, y_e) = PlotHist2DImshow(data_x, data_y, bins, x_range, y_range, c_range, xlabel, ylabel, title, c_scale, norm, False, False, cmap)
+    h, (x_e, y_e) = plot_hist_2d_imshow(data_x, data_y, bins, x_range, y_range, c_range, xlabel, ylabel, title, c_scale, norm, False, False, cmap)
 
     plt.subplot(2, 2, 1) # top right (x projection)
     plt.hist(x_e[:-1], bins = x_e, weights = np.sum(h, 1), density = True)
@@ -1316,21 +1441,22 @@ def PlotHist2DImshowMarginal(data_x, data_y, bins: int = 100, x_range: list = No
     return
 
 
-def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y_tick_labels : list[str] = None, title : str = None, newFigure : bool = True, cmap : str = "cool", x_label : str = None, y_label : str = None, detailed_info : bool = True):
-    """ Plots confusion matrix
+def plot_confusion_matrix(counts : np.ndarray, x_tick_labels : list[str] = None, y_tick_labels : list[str] = None, title : str = None, new_figure : bool = True, cmap : str = "cool", x_label : str = None, y_label : str = None, detailed_info : bool = True):
+    """ Plots confusion matrix.
 
-    Args:
-        counts (np.ndarray, optional): confusion matrix of counts.
-        x_tick_labels (list[str], optional): labels for categories in the x axis. Defaults to None.
-        y_tick_labels (list[str], optional): labels for categories in the y axis. Defaults to None.
-        title (str, optional): plot title. Defaults to None.
-        newFigure (bool, optional): create plot in new figure. Defaults to True.
-        cmap (str, optional): colour map. Defaults to "cool".
-        x_label (str, optional): x label. Defaults to None.
-        y_label (str, optional): y label. Defaults to None.
+        Args:
+            counts (np.ndarray): Confusion matrix of counts.
+            x_tick_labels (list[str]): Labels for categories in the x axis. Defaults to None.
+            y_tick_labels (list[str]): Labels for categories in the y axis. Defaults to None.
+            title (str): Plot title. Defaults to None.
+            new_figure (bool): Create plot in new figure. Defaults to True.
+            cmap (str): Colour map. Defaults to "cool".
+            x_label (str): X label. Defaults to None.
+            y_label (str): Y label. Defaults to None.
+            detailed_info (bool): Whether to annotate each cell with count, row-normalized efficiency, and column-normalized purity.
     """
     fractions = counts / np.sum(counts, axis = 1)[:, np.newaxis]
-    if newFigure: plt.figure()
+    if new_figure: plt.figure()
     c_norm = counts/np.sum(counts, axis = 0)
     
     fractions_err = (fractions * (1 - fractions) / np.sum(counts, axis = 1)[:, np.newaxis])**0.5
@@ -1377,25 +1503,37 @@ def PlotConfusionMatrix(counts : np.ndarray, x_tick_labels : list[str] = None, y
     plt.tight_layout()
 
 
-def DrawMultiCutPosition(value : float | list[float], arrow_loc : float = 0.8, arrow_length : float = 0.2, face : str | list[str] = "right", flip : bool = False, color = "black", annotate : bool = False):
+def draw_multi_cut_position(value : float | list[float], arrow_loc : float = 0.8, arrow_length : float = 0.2, face : str | list[str] = "right", flip : bool = False, color = "black", annotate : bool = False):
+    """ Draw multi cut position.
+
+        Args:
+            value (float | list[float]): Cut threshold(s) to draw.
+            arrow_loc (float): Arrow position as a fraction of the axis dimension.
+            arrow_length (float): Arrow length in the units of the cut variable.
+            face (str | list[str]): Direction for each cut arrow ("left" or "right").
+            flip (bool): Whether to draw the cut across the y-axis instead of the x-axis.
+            color (Any): Color of the cut line, arrow, and optional value label.
+            annotate (bool): Whether to label the cut threshold on the plot.
+    """
     if type(value) == list and type(face) == list:
         for i in range(max(2, len(value))):
-            DrawCutPosition(value[i], arrow_loc, arrow_length, face[i], flip, color, annotate)
+            draw_cut_position(value[i], arrow_loc, arrow_length, face[i], flip, color, annotate)
     else:
-        DrawCutPosition(value, arrow_loc, arrow_length, face, flip, color, annotate)
+        draw_cut_position(value, arrow_loc, arrow_length, face, flip, color, annotate)
     return
 
 
-def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float = 0.2, face : str = "right", flip : bool = False, color = "black", annotate : bool = False):
+def draw_cut_position(value : float, arrow_loc : float = 0.8, arrow_length : float = 0.2, face : str = "right", flip : bool = False, color = "black", annotate : bool = False):
     """ Illustrates a cut on a plot. Direction of the arrow indidcates which portion of the plot passes the cut.
 
-    Args:
-        value (float): value of the cut
-        arrow_loc (float, optional): where along the line to place the arrow. Defaults to 0.8.
-        arrow_length (float, optional): length of the arrow, must be in units of the cut. Defaults to 0.2.
-        face (str, optional): which way the arrow faces, options are ["left", "right", "<"(left), ">"(right)] . Defaults to "right".
-        flip (bool, optional): flip the arrow to the y axis. Defaults to False.
-        color (str, optional): colour of the line and arrow. Defaults to "black".
+        Args:
+            value (float): Value of the cut.
+            arrow_loc (float): Where along the line to place the arrow. Defaults to 0.8.
+            arrow_length (float): Length of the arrow, must be in units of the cut. Defaults to 0.2.
+            face (str): Which way the arrow faces, options are ["left", "right", "<"(left), ">"(right)] . Defaults to "right".
+            flip (bool): Flip the arrow to the y axis. Defaults to False.
+            color (str, optional): Colour of the line and arrow. Defaults to "black".
+            annotate (bool): Whether to label the cut threshold on the plot.
     """
 
     if face in ["right", ">"]:
@@ -1422,19 +1560,28 @@ def DrawCutPosition(value : float, arrow_loc : float = 0.8, arrow_length : float
     plt.annotate("", xy = xy1, xytext = xy0, arrowprops=dict(facecolor = color, edgecolor = color, arrowstyle = "->"), xycoords= transform)
 
 
-def PlotTagged(data : np.array, sample_tags : tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False, title : str = "", newFigure : bool = True, stacked : bool = True, alpha : float = None, truncate : bool = False, histtype : str = "stepfilled", reverse_sort : bool = False, data_weights : np.array = None):
+def plot_tagged(data : np.array, sample_tags : tags.Tags, bins = 100, x_range : list = None, y_scale : str = "linear", x_label : str = "", loc : str = "best", ncols : int = 2, data2 : np.array = None, norm : bool = False, title : str = "", new_figure : bool = True, stacked : bool = True, alpha : float = None, truncate : bool = False, histtype : str = "stepfilled", reverse_sort : bool = False, data_weights : np.array = None):
     """ Makes a stacked histogram and splits the sample based on tags.
 
-    Args:
-        data (np.array): data to plot
-        tags (tags.Tags): tags for the data.
-        bins (int, optional): number of bins. Defaults to 100.
-        range (list, optional): plot range. Defaults to None.
-        y_scale (str, optional): y axis scale. Defaults to "linear".
-        x_label (str, optional): x label. Defaults to "".
-        loc (str, optional): legend location. Defaults to "best".
-        ncols (int, optional): number of columns in legend. Defaults to 2.
-        data2 (np.array): second sample to plot. if specified it will make a data MC plot (data is MC, data2 is Data).
+        Args:
+            data (np.array): Data to plot.
+            sample_tags (tags.Tags): Tag masks, names, and colors used to split and label the sample.
+            bins (int, optional): Number of bins. Defaults to 100.
+            x_range (list): Optional lower and upper histogram limits.
+            y_scale (str): Y axis scale. Defaults to "linear".
+            x_label (str): X label. Defaults to "".
+            loc (str): Legend location. Defaults to "best".
+            ncols (int): Number of columns in legend. Defaults to 2.
+            data2 (np.array): Second sample to plot. If specified it will make a data MC plot (data is MC, data2 is Data).
+            norm (bool): Whether to density-normalize the histogram; for a data/MC plot, a positive number sets the MC scale.
+            title (str): Figure title.
+            new_figure (bool): Whether to create a new figure before plotting.
+            stacked (bool): Whether to stack the tag-specific histograms.
+            alpha (float): Histogram transparency.
+            truncate (bool): Whether to clip sample values to x_range before histogramming.
+            histtype (str): Matplotlib histogram rendering style.
+            reverse_sort (bool): Whether to reverse the default descending tag-count order.
+            data_weights (np.array): Optional weights, aligned with data and split by each tag mask.
     """
     split_data = [ak.ravel(data[sample_tags[t].mask]) for t in sample_tags]
 
@@ -1460,14 +1607,20 @@ def PlotTagged(data : np.array, sample_tags : tags.Tags, bins = 100, x_range : l
             colours[i] = "C" + str(i)
 
     if data2 is None:
-        PlotHist(split_data, stacked = stacked, label = [common.remove_(i) for i in sorted_tags.name.values], bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, newFigure = newFigure, alpha = alpha, truncate = truncate, histtype = histtype, weights = split_weights)
+        plot_hist(split_data, stacked = stacked, label = [common.remove_(i) for i in sorted_tags.name.values], bins = bins, y_scale = y_scale, xlabel = x_label, range = x_range, color = colours, density = bool(norm), title = title, new_figure = new_figure, alpha = alpha, truncate = truncate, histtype = histtype, weights = split_weights)
         plt.legend(loc = loc, ncols = ncols, labelspacing = 0.25,  columnspacing = 0.25)
     else:
-        PlotHistDataMC(ak.ravel(data2), split_data, bins, x_range, stacked, "Data", sorted_tags.name.values, x_label, title, y_scale, loc, ncols, norm, colour = colours, alpha = alpha, truncate = truncate, mc_weights = split_weights)
+        plot_hist_data_mc(ak.ravel(data2), split_data, bins, x_range, stacked, "Data", sorted_tags.name.values, x_label, title, y_scale, loc, ncols, norm, colour = colours, alpha = alpha, truncate = truncate, mc_weights = split_weights)
 
 
-def UniqueData(data):
+def unique_data(data):
     """ Formats data to be plotted as a bar plot based on unique values and how often they occur.
+
+        Args:
+            data (Any): Values whose distinct categories and occurrence counts are returned.
+
+        Returns:
+            tuple: String labels for unique values and their occurrence counts, excluding empty-list values.
     """
     unique, counts = np.unique(data, return_counts=True)
     counts = list(counts)
@@ -1480,13 +1633,28 @@ def UniqueData(data):
     return unique_labels, counts
 
 
-def PlotBar(data, width: float = 0.4, xlabel: str = "", title: str = "", label: str = "", alpha: float = 1, newFigure: bool = True, annotation: str = None, bar_labels : bool = True, color = None):
+def plot_bar(data, width: float = 0.4, xlabel: str = "", title: str = "", label: str = "", alpha: float = 1, new_figure: bool = True, annotation: str = None, bar_labels : bool = True, color = None):
     """ Plot a bar graph or unique items in data.
+
+        Args:
+            data (Any): Values whose unique categories and frequencies are plotted.
+            width (float): Width of each bar.
+            xlabel (str): Horizontal-axis label.
+            title (str): Axes title.
+            label (str): Legend label.
+            alpha (float): Bar transparency.
+            new_figure (bool): Whether to create a new figure before plotting.
+            annotation (str): Optional text placed in the axes.
+            bar_labels (bool): Whether to label each bar with its count.
+            color (Any): Bar color or colors.
+
+        Returns:
+            tuple: Unique value labels and their counts.
     """
-    if newFigure is True:
+    if new_figure is True:
         plt.figure()
 
-    unique, counts = UniqueData(data)
+    unique, counts = unique_data(data)
     bar = plt.bar(unique, counts, width, label=label, alpha=alpha, color = color)
     if bar_labels: plt.bar_label(bar, counts)
     plt.ylabel("Counts")
@@ -1500,14 +1668,31 @@ def PlotBar(data, width: float = 0.4, xlabel: str = "", title: str = "", label: 
     return unique, counts
 
 
-def PlotBarComparision(data_1, data_2, width: float = 0.4, xlabel: str = "", title: str = "", label_1: str = "", label_2: str = "", newFigure: bool = True, annotation: str = None, ylabel : str = None, fraction : bool = False, barlabel : bool = True):
+def plot_bar_comparison(data_1, data_2, width: float = 0.4, xlabel: str = "", title: str = "", label_1: str = "", label_2: str = "", new_figure: bool = True, annotation: str = None, ylabel : str = None, fraction : bool = False, barlabel : bool = True):
     """ Plot two bar plots of the same data type side-by-side.
+
+        Args:
+            data_1 (Any): First sample of categorical values to count.
+            data_2 (Any): Second sample of categorical values to count and compare.
+            width (float): Width of each side-by-side bar.
+            xlabel (str): Horizontal-axis label.
+            title (str): Axes title.
+            label_1 (str): Legend label for the first sample.
+            label_2 (str): Legend label for the second sample.
+            new_figure (bool): Whether to create a new figure before plotting.
+            annotation (str): Optional text placed in the axes.
+            ylabel (str): Vertical-axis label; defaults to counts or fractional counts.
+            fraction (bool): Whether to normalize each sample's category counts to fractions.
+            barlabel (bool): Whether to label each bar with its plotted value.
+
+        Returns:
+            tuple: Each sample's aligned category labels and original counts.
     """
-    if newFigure is True:
+    if new_figure is True:
         plt.figure()
 
-    unique_1, counts_1 = UniqueData(data_1)
-    unique_2, counts_2 = UniqueData(data_2)
+    unique_1, counts_1 = unique_data(data_1)
+    unique_2, counts_2 = unique_data(data_2)
 
     m = None
     if(len(unique_2) > len(unique_1)):
@@ -1563,12 +1748,18 @@ def PlotBarComparision(data_1, data_2, width: float = 0.4, xlabel: str = "", tit
     return [unique_1, counts_1], [unique_2, counts_2]
 
 
-def PlotStackedBar(bars, labels, xlabel : str = None, colours : list = None, alpha : float = 1, label_title : str = None, width : float = 0.8, annotation : str = None):
+def plot_stacked_bar(bars, labels, xlabel : str = None, colours : list = None, alpha : float = 1, label_title : str = None, width : float = 0.8, annotation : str = None):
     """ Plot stacked bar chart.
 
-    Args:
-        bars : bar plot data for each sample, is a list of a list of two numpy arrays, first is the labels, second is the counts.
-        labels : sample labels
+        Args:
+            bars (Any): Bar plot data for each sample, is a list of a list of two numpy arrays, first is the labels, second is the counts.
+            labels (Any): Sample labels.
+            xlabel (str): Horizontal-axis label.
+            colours (list): Optional colors for the stacked samples.
+            alpha (float): Bar transparency.
+            label_title (str): Legend title.
+            width (float): Width of each bar.
+            annotation (str): Optional text placed in the axes.
     """
     bar = []
     for i in range(len(bars)):
@@ -1607,8 +1798,17 @@ def PlotStackedBar(bars, labels, xlabel : str = None, colours : list = None, alp
         plt.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction')
 
 
-def PlotTags(sample_tags : tags.Tags, xlabel : str = "name", fraction : bool = True, newFigure : bool = True, display_values : bool = False):
-    if newFigure: plt.figure()    
+def plot_tags(sample_tags : tags.Tags, xlabel : str = "name", fraction : bool = True, new_figure : bool = True, display_values : bool = False):
+    """ Plot tags.
+
+        Args:
+            sample_tags (tags.Tags): Tag masks, names, and colors whose counts are plotted.
+            xlabel (str): Horizontal-axis label.
+            fraction (bool): Whether to normalize tag counts to fractions.
+            new_figure (bool): Whether to create a new figure before plotting.
+            display_values (bool): Whether to label bars with their plotted counts or fractions.
+    """
+    if new_figure: plt.figure()    
     counts = [ak.sum(m) for m in sample_tags.mask.values]
     yl = "Counts"
     if fraction is True:
@@ -1621,8 +1821,30 @@ def PlotTags(sample_tags : tags.Tags, xlabel : str = "name", fraction : bool = T
     plt.xticks(rotation = 30)
 
 
-class RatioPlot():
+class ratio_plot():
+    """Collect two series and draw their ratio beneath a shared-x main plot.
+
+        Args:
+            x (Any): Shared horizontal coordinates for both series.
+            y1 (Any): Denominator series plotted in the main panel.
+            y2 (Any): Numerator series whose ratio to y1 is drawn below.
+            y1_err (Any): Optional uncertainties for the denominator series.
+            y2_err (Any): Optional uncertainties for the numerator series.
+            xlabel (Any): Horizontal-axis label shared by both panels.
+            ylabel (Any): Label for the lower-panel ratio y2/y1.
+    """
     def __init__(self, x = None, y1 = None, y2 = None, y1_err = None, y2_err = None, xlabel = "x", ylabel = "y2/y1") -> None:
+        """Store the series, uncertainties, and axis labels used by the ratio plot.
+
+            Args:
+                x (Any): Shared horizontal coordinates for both series.
+                y1 (Any): Denominator series plotted in the main panel.
+                y2 (Any): Numerator series whose ratio to y1 is drawn below.
+                y1_err (Any): Optional uncertainties for the denominator series.
+                y2_err (Any): Optional uncertainties for the numerator series.
+                xlabel (Any): Horizontal-axis label shared by both panels.
+                ylabel (Any): Label for the lower-panel ratio y2/y1.
+        """
         self.x = x
         self.y1 = y1
         self.y1_err = y1_err
@@ -1631,11 +1853,20 @@ class RatioPlot():
         self.xlabel = xlabel
         self.ylabel = ylabel
     def __enter__(self) -> None:
+        """Create a two-panel figure and select its main plotting axes.
+        """
         plt.subplots(2, 1, figsize = (6.4, 4.8 * 1.2), gridspec_kw={"height_ratios" : [5, 1]} , sharex = True) # set to that the ratio plot is 1/5th the default plot height
         plt.subplot(211)
         
         return self
     def __exit__(self, type, value, traceback) -> None:
+        """Draw the series ratio and propagated uncertainty in the lower panel.
+
+            Args:
+                type (Any): Exception type supplied by the context-manager protocol, or None.
+                value (Any): Exception instance supplied by the context-manager protocol, or None.
+                traceback (Any): Exception traceback supplied by the context-manager protocol, or None.
+        """
         plt.subplot(212)
         if self.x is None:
             raise Exception("x has not been assigned")
@@ -1655,13 +1886,18 @@ class RatioPlot():
         else:
             ratio_err = abs(ratio * np.sqrt(common.nandiv(self.y1_err, self.y1)**2 + common.nandiv(self.y2_err, self.y2)**2))
 
-        Plot(self.x, ratio, yerr = ratio_err, xlabel = self.xlabel, ylabel = self.ylabel, marker = "o", color = "black", linestyle = "", newFigure = False)
+        plot(self.x, ratio, yerr = ratio_err, xlabel = self.xlabel, ylabel = self.ylabel, marker = "o", color = "black", linestyle = "", new_figure = False)
         ticks = [0, 0.5, 1, 1.5, 2] # hardcode the yaxis to have 5 ticks
         plt.yticks(ticks, np.char.mod("%.2f", ticks))
         plt.ylim(0, 2)
 
         return True
     def subplot(n):
+        """Select the numbered subplot in the two-row figure layout.
+
+            Args:
+                n (Any): Subplot position in the two-row figure.
+        """
         plt.subplot(int(f"21{n}"))
 
 
@@ -1670,57 +1906,33 @@ def simple_sig_bkg_hist(
     path="/users/wx21978/projects/pion-phys/plots/photon_pairs/", unique_save_id="",
     y_scaling='log', bin_size=None, bins=100, range=None, **kwargs
 ):
-    """
-    Produces a set of plots of the supplied `property` with configurable
-    scalings, bins and ranges.
+    """ Produces a set of plots of the supplied `property` with configurable
+        scalings, bins and ranges.
 
-    Data to be plotted comes from `property`, and a `sig_mask` to indicate
-    background vs. signal. Signal and background are plotted on the same axis
-    for comparison.
+        Data to be plotted comes from `property`, and a `sig_mask` to indicate
+        background vs. signal. Signal and background are plotted on the same axis
+        for comparison.
 
-    `prop_name` and `units` are required to correctly label and title the plot.
+        `prop_name` and `units` are required to correctly label and title the plot.
 
-    `y_scaling`, `bin_size`, `bins`, and `range` can all be supplied as lists of
-    values (that could be passed to a pyplot function). If a list is passed,
-    the options supplied will be iterated through, and a plot will be produced
-    for each value given. `bin_size`, `bins`, and `range` must all either have
-    same length, or not be a list.
+        `y_scaling`, `bin_size`, `bins`, and `range` can all be supplied as lists of
+        values (that could be passed to a pyplot function). If a list is passed,
+        the options supplied will be iterated through, and a plot will be produced
+        for each value given. `bin_size`, `bins`, and `range` must all either have
+        same length, or not be a list.
 
-    Parameters
-    ----------
-    prop_name : str
-        Name of the property plotted for title and saved file.
-    units : str
-        Unit the property is measured.
-    property : ak.Array or np.ndarray
-        Array containing the values to be plotted.
-    sig_mask : ak.Array or np.ndarray
-        Mask which indicates which of the values in `property`
-        correspond to signal data.
-    path : str, optional
-        Directory in which to save the final plot(s). Default is
-        '/users/wx21978/projects/pion-phys/plots/photon_pairs/'.
-    unique_save_id : str, optional
-        Extra string to add into the save name to avoid
-        overwriting. Default is ''.
-    y_scaling : str or list, optional
-        Type of scalings to use on the y-axis. Should be
-        'linear' or 'log'. Default is 'log'
-    bin_size : str, list, or None, optional
-        The size of the bins. If None, this will be automatically
-        calculated, but can be manually specified, i.e. if using
-        custom/variable bin widths. Default is None.
-    bins : int, np.ndarray, or list, optional
-        Number of bins if ``int``, or bin edges if ``ndarray``.
-        Default is 100.
-    range : float, None, tuple, or list, optional
-        Range over which to produce the plot. Default is None.
-
-    Other Parameters
-    ----------------
-    **kwargs
-        Any additional keyword arguments to be passed to the ``plt.hist``
-        calls. The same arguments will be passed to all plots.
+        Args:
+            prop_name (Any): Str Name of the property plotted for title and saved file.
+            units (Any): Str Unit the property is measured.
+            property (Any): ak.Array or np.ndarray Array containing the values to be plotted.
+            sig_mask (Any): ak.Array or np.ndarray Mask which indicates which of the values in `property` correspond to signal data.
+            path (Any): str, optional Directory in which to save the final plot(s). Default is '/users/wx21978/projects/pion-phys/plots/photon_pairs/'.
+            unique_save_id (Any): str, optional Extra string to add into the save name to avoid overwriting. Default is ''.
+            y_scaling (Any): Str or list, optional Type of scalings to use on the y-axis. Should be 'linear' or 'log'. Default is 'log'.
+            bin_size (Any): Str, list, or None, optional The size of the bins. If None, this will be automatically calculated, but can be manually specified, i.e. if using custom/variable bin widths. Default is None.
+            bins (Any): Int, np.ndarray, or list, optional Number of bins if ``int``, or bin edges if ``ndarray``. Default is 100.
+            range (Any): Float, None, tuple, or list, optional Range over which to produce the plot. Default is None.
+            **kwargs (Any): Matplotlib histogram keyword arguments forwarded to both signal and background histograms.
     """
     if path[-1] != '/':
         path += '/'
@@ -1776,68 +1988,39 @@ def plot_pair_hists(
     bin_size=None, bins=100,
     range=None, weights=None, **kwargs
 ):
-    """
-    Produces a set of plots of the supplied `property` of a pair of PFOs with
-    configurable types of plot, scalings, bins, ranges, weights.
+    """ Produces a set of plots of the supplied `property` of a pair of PFOs with
+        configurable types of plot, scalings, bins, ranges, weights.
 
-    Data to be plotted comes from `property`, and a `sig_count` indicates
-    how many signal type PFOs went into the given pair. 0, 1, and 2 signals
-    are plotted on the same axis for comparison.
+        Data to be plotted comes from `property`, and a `sig_count` indicates
+        how many signal type PFOs went into the given pair. 0, 1, and 2 signals
+        are plotted on the same axis for comparison.
 
-    `prop_name` and `units` are required to correctly label and title the plots.
+        `prop_name` and `units` are required to correctly label and title the plots.
 
-    Whether to produce stacked, normalised, and log scale plots is controlled
-    by `inc_stacked`, `inc_norm`, and `inc_log` respectively.
+        Whether to produce stacked, normalised, and log scale plots is controlled
+        by `inc_stacked`, `inc_norm`, and `inc_log` respectively.
 
-    `bin_size`, `bins`, `range`, and `weights` can all be supplied as lists of
-    values (that could be passed to a pyplot function). If a list is passed,
-    the options supplied will be iterated through, and a plot will be produced
-    for each value given. `bin_size`, `bins`, and `range` must all either have
-    same length, or not be a list.
+        `bin_size`, `bins`, `range`, and `weights` can all be supplied as lists of
+        values (that could be passed to a pyplot function). If a list is passed,
+        the options supplied will be iterated through, and a plot will be produced
+        for each value given. `bin_size`, `bins`, and `range` must all either have
+        same length, or not be a list.
 
-    Parameters
-    ----------
-    prop_name : str
-        Name of the property plotted for title and saved file.
-    units : str
-        Unit the property is measured.
-    property : ak.Array or np.ndarray
-        Array containing the pair values to be plotted.
-    sig_count : ak.Array or np.ndarray
-        And array with the same shape as `property` to indicate how
-        many signal PFOs exist in the pair.
-    path : str, optional
-        Directory in which to save the final plots. Default is
-        '/users/wx21978/projects/pion-phys/plots/photon_pairs/'.
-    unique_save_id : str, optional
-        Extra string to add into the save name to avoid
-        overwriting. Default is ''.
-    inc_stacked : bool, optional
-        Whether to include a stacked histogram plot. Default is False.
-    inc_norm : bool, optional
-        Whether to include a normalised histogram. Default is True.
-    inc_log : bool, optional
-        Whether to include logarithmic scale histograms. Will
-        also produce a logarithmic normalised plot if `inc_norm`
-        is True. Default is True.
-    bin_size : str, list, or None, optional
-        The size of the bins. If None, this will be automatically
-        calculated, but can be manually specified, i.e. if using
-        custom/variable bin widths. Default is None.
-    bins : int, np.ndarray, or list, optional
-        Number of bins if ``int``, or bin edges if ``ndarray``.
-        Default is 100.
-    range : float, None, tuple, or list, optional
-        Range over which to produce the plot. Default is None.
-    weights : ak.Array, np.ndarray, list, or None, optional
-        Weights to used for each value of the `property`. Default
-        is None.
-
-    Other Parameters
-    ----------------
-    **kwargs
-        Any additional keyword arguments to be passed to the ``plt.hist``
-        calls. The same arguments will be passed to all plots.
+        Args:
+            prop_name (Any): Str Name of the property plotted for title and saved file.
+            units (Any): Str Unit the property is measured.
+            property (Any): ak.Array or np.ndarray Array containing the pair values to be plotted.
+            sig_count (Any): ak.Array or np.ndarray And array with the same shape as `property` to indicate how many signal PFOs exist in the pair.
+            path (Any): str, optional Directory in which to save the final plots. Default is '/users/wx21978/projects/pion-phys/plots/photon_pairs/'.
+            unique_save_id (Any): str, optional Extra string to add into the save name to avoid overwriting. Default is ''.
+            inc_stacked (Any): bool, optional Whether to include a stacked histogram plot. Default is False.
+            inc_norm (Any): bool, optional Whether to include a normalised histogram. Default is True.
+            inc_log (Any): bool, optional Whether to include logarithmic scale histograms. Will also produce a logarithmic normalised plot if `inc_norm` is True. Default is True.
+            bin_size (Any): Str, list, or None, optional The size of the bins. If None, this will be automatically calculated, but can be manually specified, i.e. if using custom/variable bin widths. Default is None.
+            bins (Any): Int, np.ndarray, or list, optional Number of bins if ``int``, or bin edges if ``ndarray``. Default is 100.
+            range (Any): Float, None, tuple, or list, optional Range over which to produce the plot. Default is None.
+            weights (Any): ak.Array, np.ndarray, list, or None, optional Weights to used for each value of the `property`. Default is None.
+            **kwargs (Any): Matplotlib histogram keyword arguments forwarded to the pair-category histograms.
     """
 
     if path[-1] != '/':
@@ -1983,41 +2166,24 @@ def plot_rank_hist(
     path="/users/wx21978/projects/pion-phys/plots/photon_pairs/", unique_save_id="",
     y_scaling='log', bins=None, **kwargs
 ):
-    """
-    Produces a plot displaying a set of ranks (positions) as a histogram.
+    """ Produces a plot displaying a set of ranks (positions) as a histogram.
 
-    Ranked data must already be calculated and gets passed as `ranking`.
+        Ranked data must already be calculated and gets passed as `ranking`.
 
-    `prop_name` is required to correctly title and save the plot.
+        `prop_name` is required to correctly title and save the plot.
 
-    `y_scaling` can be supplied as list of scalings ('log' and 'linear'). If a
-    list is passed, the options supplied will be iterated through, and a plot
-    will be produced for each value given.
+        `y_scaling` can be supplied as list of scalings ('log' and 'linear'). If a
+        list is passed, the options supplied will be iterated through, and a plot
+        will be produced for each value given.
 
-    Parameters
-    ----------
-    prop_name : str
-        Name of the property plotted for title and saved file.
-    ranking : ak.Array or np.ndarray
-        Array containing the ranks to be plotted.
-    path : str, optional
-        Directory in which to save the final plot(s). Default is
-        '/users/wx21978/projects/pion-phys/plots/photon_pairs/'.
-    unique_save_id : str, optional
-        Extra string to add into the save name to avoid
-        overwriting. Default is ''.
-    y_scaling : str or list, optional
-        Type of scalings to use on the y-axis. Should be
-        'linear' or 'log'. Default is 'log'
-    bins : int, np.ndarray, or None, optional
-        Number of bins if ``int``, or bin edges if ``ndarray``.
-        Gives one bin per ranking if None. Default is None.
-
-    Other Parameters
-    ----------------
-    **kwargs
-        Any additional keyword arguments to be passed to the ``plt.hist``
-        calls. The same arguments will be passed to all plots.
+        Args:
+            prop_name (Any): Str Name of the property plotted for title and saved file.
+            ranking (Any): ak.Array or np.ndarray Array containing the ranks to be plotted.
+            path (Any): str, optional Directory in which to save the final plot(s). Default is '/users/wx21978/projects/pion-phys/plots/photon_pairs/'.
+            unique_save_id (Any): str, optional Extra string to add into the save name to avoid overwriting. Default is ''.
+            y_scaling (Any): Str or list, optional Type of scalings to use on the y-axis. Should be 'linear' or 'log'. Default is 'log'.
+            bins (Any): Int, np.ndarray, or None, optional Number of bins if ``int``, or bin edges if ``ndarray``. Gives one bin per ranking if None. Default is None.
+            **kwargs (Any): Matplotlib histogram keyword arguments forwarded to the ranking histogram.
     """
 
     if path[-1] != '/':
@@ -2048,40 +2214,23 @@ def make_truth_comparison_plots(
     path="/users/wx21978/projects/pion-phys/plots/photon_pairs/truth_method_comparisions/",
     **kwargs
 ):
-    """
-    Produces a set of plots displaying the errors of a set of PFOs with respect to the truth
-    PFO they are representing. Errors in energy for the leading (highest energy) and sub-
-    leading (lowest energy) photon are displayed in separate plots, and the cosine of the
-    angular differences between the PFOs and truth particles is displayed for both photons
-    on the same plot.
+    """ Produces a set of plots displaying the errors of a set of PFOs with respect to the truth
+        PFO they are representing. Errors in energy for the leading (highest energy) and sub-
+        leading (lowest energy) photon are displayed in separate plots, and the cosine of the
+        angular differences between the PFOs and truth particles is displayed for both photons
+        on the same plot.
 
-    `photons_indicies` can be a dictionary to allow comparision of multiple methods of generating
-    truth photons to be compared on the same plot.
+        `photons_indicies` can be a dictionary to allow comparision of multiple methods of generating
+        truth photons to be compared on the same plot.
 
-    Parameters
-    ----------
-    events : Data
-        Events from which data is gathered.
-    photon_indicies : dict or np.ndarray
-        Indicies of the selected best particles. May be passed as a dictionary containing
-        numpy arrays labelled by the method used to generate the indicies for comparision.
-    valid_events : list, np.ndarray, ak.Array(), or None
-        1D set of boolean values to optionally excluded known invalid events. Default is
-        None.
-    prop_label : str or None, optional
-        Optional name of property to appear in legend if `photons_indicies` is not a
-        dictionary.
-    inc_log : bool, optional
-        Whether to include logarithmically scaled plots. Default is True.
-    path : str, optional
-        Directory in which to save the final plots. Default is
-        '/users/wx21978/projects/pion-phys/plots/photon_pairs/truth_method_comparisions/'.
-
-    Other Parameters
-    ----------------
-    **kwargs
-        Any additional keyword arguments to be passed to the ``plt.hist`` calls. The same
-        arguments will be passed to all plots.
+        Args:
+            events (Any): Data Events from which data is gathered.
+            photon_indicies (Any): Dict or np.ndarray Indicies of the selected best particles. May be passed as a dictionary containing numpy arrays labelled by the method used to generate the indicies for comparision.
+            valid_events (Any): List, np.ndarray, ak.Array(), or None 1D set of boolean values to optionally excluded known invalid events. Default is None.
+            prop_label (Any): str or None, optional Optional name of property to appear in legend if `photons_indicies` is not a dictionary.
+            inc_log (Any): bool, optional Whether to include logarithmically scaled plots. Default is True.
+            path (Any): str, optional Directory in which to save the final plots. Default is '/users/wx21978/projects/pion-phys/plots/photon_pairs/truth_method_comparisions/'.
+            **kwargs (Any): Matplotlib histogram keyword arguments forwarded to the truth-comparison histograms.
     """
     if path[-1] != '/':
         path += '/'
@@ -2093,9 +2242,9 @@ def make_truth_comparison_plots(
 
     # Ideally, we can use the trueParticle (not trueparticleBT} data, since trueParticle is likely
     #   already loaded, and trueParticleBT likely hasn't been
-    true_energies = events.trueParticlesBT.energy[valid_events]
-    # true_energies_mom = vector.magnitude(events.trueParticlesBT.momentum)[valid_events]
-    true_dirs = events.trueParticlesBT.direction[valid_events]
+    true_energies = events.true_particles_bt.energy[valid_events]
+    # true_energies_mom = vector.magnitude(events.true_particles_bt.momentum)[valid_events]
+    true_dirs = events.true_particles_bt.direction[valid_events]
 
     reco_energies = events.recoParticles.shower_energy[valid_events]
     reco_dirs = events.recoParticles.shower_direction[valid_events]
@@ -2131,12 +2280,12 @@ def make_truth_comparison_plots(
 
         # This might contain some useful stuff for moving to trueParticle informatio, rather than trueParticleBT
         # err_true_photon_i = np.zeros(np.sum(valid_events))
-        # photon_i_ids = events.trueParticlesBT.number[valid_events][photon_i_indicies]
+        # photon_i_ids = events.true_particles_bt.number[valid_events][photon_i_indicies]
         # reco_energy_full = reco_energies[photon_i_indicies]
         # index = np.arange(photon_indicies[prop][:,0].shape[0])[valid_events]
         # for j in range(np.sum(valid_events)):
-        #     true_ids = events.trueParticles.number[index[j]].to_numpy()
-        #     true_energy = events.trueParticles.energy[index[j]].to_numpy()
+        #     true_ids = events.true_particles.number[index[j]].to_numpy()
+        #     true_energy = events.true_particles.energy[index[j]].to_numpy()
 
         #     true_energy_i = true_energy[true_ids == photon_i_ids[j]]
         #     # true_energy_ii = true_energy[true_ids == pfo_truth_ids[photon_ii_indicies]]
@@ -2223,34 +2372,17 @@ def plot_region_data(
         compare_max=0,
         log_norm=False,
         colourblind=False):
-    """
-    Creates a plot of the population of the tagged regions.
+    """ Creates a plot of the population of the tagged regions.
 
-    Regions should be created using `EventSelection.create_regions()`.
+        Regions should be created using `EventSelection.create_regions()`.
 
-    Parameters
-    ----------
-    regions_dict : dict
-        Dictionary of containing a mask of which events fall in which
-        classification regions. This should be created using
-        `EventSelection.creat_regions()`.
-    plt_cfg : plots.PlotConfig, optional
-        `PlotConfig` instance to control plotting parameters. Default
-        is a new PlotConfig instance (no showing or saving).
-    title : str or None, optional
-        Title to display above the plot. If None, no title is shown.
-        Default is None.
-    compare_max : int or float, optional
-        Maximum value that will be shown on the colour bar. Used to
-        keep the colour scaling consistent if comparing multiple plots.
-        This will not reduce the maximum colour value if it is set
-        below the highest populated region. Default is 0.
-    log_norm : boolean, optional
-        Whether to use log scaling in the colour mapping. Default is
-        False.
-    colourblind : boolean, optional
-        Changes the text colour to blue to improve constrast. Default
-        is False.
+        Args:
+            regions_dict (Any): Dict Dictionary of containing a mask of which events fall in which classification regions. This should be created using `EventSelection.creat_regions()`.
+            plt_cfg (Any): Plots.PlotConfig, optional `PlotConfig` instance to control plotting parameters. Default is a new PlotConfig instance (no showing or saving).
+            title (Any): str or None, optional Title to display above the plot. If None, no title is shown. Default is None.
+            compare_max (Any): Int or float, optional Maximum value that will be shown on the colour bar. Used to keep the colour scaling consistent if comparing multiple plots. This will not reduce the maximum colour value if it is set below the highest populated region. Default is 0.
+            log_norm (Any): Boolean, optional Whether to use log scaling in the colour mapping. Default is False.
+            colourblind (Any): Boolean, optional Changes the text colour to blue to improve constrast. Default is False.
     """
     x = np.array([0, 0, 1, 1, 2, 2])
     y = np.array([0, 1, 0, 1, 0, 1])
@@ -2313,34 +2445,18 @@ def compare_truth_reco_regions(
         title=None,
         log_norm=False,
         colourblind=False):
-    """
-    Comparing the classification coincidences between some
-    `reco_regions` and `truth_regions`.
+    """ Comparing the classification coincidences between some
+        `reco_regions` and `truth_regions`.
 
-    Regions should be created using `EventSelection.create_regions()`.
+        Regions should be created using `EventSelection.create_regions()`.
 
-    Parameters
-    ----------
-    reco_regions : dict
-        Dictionary of containing a mask of which events fall in which
-        classification regions from reconstructed data. This should be
-        created using `EventSelection.creat_regions()`.
-    reco_regions : dict
-        Dictionary of containing a mask of which events fall in which
-        classification regions from truth data. This should be created
-        using `EventSelection.creat_regions()`.
-    plt_cfg : plots.PlotConfig, optional
-        `PlotConfig` instance to control plotting parameters. Default
-        is a new PlotConfig instance (no showing or saving).
-    title : str or None, optional
-        Title to display above the plot. If None, no title is shown.
-        Default is None.
-    log_norm : boolean, optional
-        Whether to use log scaling in the colour mapping. Default is
-        False.
-    colourblind : boolean, optional
-        Changes the text colour to blue to improve constrast. Default
-        is False.
+        Args:
+            reco_regions (Any): Dict Dictionary of containing a mask of which events fall in which classification regions from truth data. This should be created using `EventSelection.creat_regions()`.
+            truth_regions (Any): Mapping from truth-region names to event masks.
+            plt_cfg (Any): Plots.PlotConfig, optional `PlotConfig` instance to control plotting parameters. Default is a new PlotConfig instance (no showing or saving).
+            title (Any): str or None, optional Title to display above the plot. If None, no title is shown. Default is None.
+            log_norm (Any): Boolean, optional Whether to use log scaling in the colour mapping. Default is False.
+            colourblind (Any): Boolean, optional Changes the text colour to blue to improve constrast. Default is False.
     """
     index_dict = {
         "absorption":0,

@@ -14,7 +14,16 @@ import pandas as pd
 
 from python.analysis import ntuple, vector
 
-def CombineMasks(masks : dict, operator : str = "and") -> ak.Array:
+def combine_masks(masks : dict, operator : str = "and") -> ak.Array:
+    """ Combine all masks in a mapping with a logical AND or OR.
+
+        Args:
+            masks (dict): Named boolean arrays to combine.
+            operator (str): Logical operation, either ``"and"`` or ``"or"``.
+
+        Returns:
+            ak.Array: Elementwise combination of the supplied masks.
+    """
     mask = None
     for m in masks:
         if mask is None:
@@ -29,65 +38,66 @@ def CombineMasks(masks : dict, operator : str = "and") -> ak.Array:
     return mask
 
 
-def GetPFOCounts(masks : dict) -> ak.Array:
-    """ Compute counts for objects which pass the masks. 
+def pfo_counts(masks : dict) -> ak.Array:
+    """ Compute counts for objects which pass the masks.
 
-    Args:
-        masks (dict): selection masks
+        Args:
+            masks (dict): Selection masks.
 
-    Returns:
-        ak.Array: number of selected PFOs in each event
+        Returns:
+            ak.Array: Number of selected PFOs in each event.
     """
-    return ak.sum(CombineMasks(masks), -1)
+    return ak.sum(combine_masks(masks), -1)
 
 
-def CountMask(m: ak.Array) -> tuple:
+def count_mask(m: ak.Array) -> tuple:
     """ Counts the total number of entries in a boolean mask,
         and the number which are True.
 
-    Args:
-        m (ak.Array): boolean mask.
+        Args:
+            m (ak.Array): Boolean mask.
 
-    Returns:
-        tuple: (number of entries, number of entries which are true).
+        Returns:
+            tuple: (number of entries, number of entries which are true).
     """
     return ak.count(m), ak.count(m[m])
 
 
-def CountsWrapper(f):
+def counts_wrapper(f):
     """ Wrapper for selection functions which checks the number of entries that pass a cut.
 
-    Args:
-        f (function): selection function.
-    Returns:
-        any: output of f.
+        Args:
+            f (function): Selection function.
+
+        Returns:
+            any: Output of f.
     """
     @wraps(f)
     def wrapper(*args, **kwargs):
         m = f(*args, **kwargs)
-        c = CountMask(m)
+        c = count_mask(m)
         print(f"number of entries before|after {f.__name__}: {c[0]}|{c[1]}")
         return m
     return wrapper
 
 
-def CombineSelections(events : ntuple.Data, selection: list, levels: int, args: list = None, verbose: bool = False, return_table: bool = False) -> ak.Array:
-    """ Combines multiple beam particle selections.
+def combine_selections(events : ntuple.Data, selection: list, levels: int, args: list = None, verbose: bool = False, return_table: bool = False) -> ak.Array:
+    """ Combine selection masks across events or PFOs and optionally record cut efficiencies.
 
-    Args:
-        events (Data): events to study
-        selection (list): list of selections
-        levels (int): what kind of data is the selection being made on, 0 is event, 1 is PFO.
-        args (list): Additional keyword arguments to be passed to the selection functions
-        verbose (bool, optional): verbose output. Defaults to False.
-        return_table (bool, optional): return performance table. Defaults to False.
+        Args:
+            events (ntuple.Data): Events to study.
+            selection (list): List of selections.
+            levels (int): What kind of data is the selection being made on, 0 is event, 1 is PFO.
+            args (list): Additional keyword arguments to be passed to the selection functions.
+            verbose (bool): Verbose output. Defaults to False.
+            return_table (bool): Return performance table. Defaults to False.
 
     Returns:
-        ak.Array: boolean mask
-        ak.Array, pd.Dataframe: boolean mask and performance table
+        ak.Array: Boolean mask.
+        ak.Array, pd.Dataframe: Boolean mask and performance table.
     """
     if levels == 0:
-        total = ak.count(events.eventNum)
+        total = ak.count(events.event_num)
     else:
         total = ak.count(events.recoParticles.number)
 
@@ -128,17 +138,17 @@ def CombineSelections(events : ntuple.Data, selection: list, levels: int, args: 
         return mask
 
 
-def CreateMask(values, operations, property, return_property : bool) -> ak.Array:
+def create_mask(values, operations, property, return_property : bool) -> ak.Array:
     """ Create a boolean mask of a property.
 
-    Args:
-        values: a single value or multiple values in a list
-        operations: a string representing the boolean operation or a list of strings, see cuts_to_func for more.
-        property: array to create mask with
-        return_property: returns property along with the mask
+        Args:
+            values (Any): A single value or multiple values in a list.
+            operations (Any): A string representing the boolean operation or a list of strings, see cuts_to_func for more.
+            property (Any): Array to create mask with.
+            return_property (bool): Returns property along with the mask.
 
-    Returns:
-        ak.Array: mask and optionally the property
+        Returns:
+            ak.Array: Mask and optionally the property.
     """
     mask = cuts_to_func(values, operations)(property)
     if return_property is True:
@@ -148,41 +158,31 @@ def CreateMask(values, operations, property, return_property : bool) -> ak.Array
 
 
 def del_prop(obj, property_name: str) -> None:
-    """
-    Deletes a properties from the supplied `RecoPaticleData` type
-    object.
+    """ Deletes a properties from the supplied `RecoPaticleData` type
+        object.
 
-    Requires the `obj` to have a property
-    ``_RecoPaticleData__{property_name}``.
+        Requires the `obj` to have a property
+        ``_RecoPaticleData__{property_name}``.
 
-    Parameters
-    ----------
-    obj : RecoPaticleData
-        Object from which to remove the property.
-    property_name : str
-        Property to be deleted (should match the name of the property).
+        Args:
+            obj (Any): RecoPaticleData Object from which to remove the property.
+            property_name (str): Str Property to be deleted (should match the name of the property).
     """
     del(obj.__dict__["_RecoPaticleData__" + property_name])
     return
 
 
 def np_to_ak_indicies(indicies: np.ndarray) -> ak.Array:
-    """
-    Takes a numpy array of indicies for slicing and converts them to a
-    format compatible with awkward arrays which selected PFOs in an
-    event base on the index, rather than events themselves based on the
-    index.
+    """ Takes a numpy array of indicies for slicing and converts them to a
+        format compatible with awkward arrays which selected PFOs in an
+        event base on the index, rather than events themselves based on the
+        index.
 
-    Parameters
-    ----------
-    indicies: np.ndarray
-        Array of indicies for conversion.
+        Args:
+            indicies (np.ndarray): np.ndarray Array of indicies for conversion.
 
-    Returns
-    -------
-    ak_indicies : ak.Array
-        Array of indicies which selected PFOs when slicing an awkward
-        array.
+        Returns:
+            ak.Array: ak.Array Array of indicies which selected PFOs when slicing an awkward array.
     """
     # 1. Expands the dimensions to ensure you hit one index per event
     # 2. Convert to list - this is necessary to ensure the final
@@ -194,12 +194,29 @@ def np_to_ak_indicies(indicies: np.ndarray) -> ak.Array:
 
 
 def _insert_values_to_func_str(func_str, values):
+    """ Replace indexed value placeholders in a cut expression with their values.
+
+        Args:
+            func_str (Any): Expression containing placeholders such as ``_0_``.
+            values (Any): Values substituted for the corresponding indexed placeholders.
+
+        Returns:
+            Any: Expression with indexed placeholders replaced by their values.
+    """
     for i in range(len(values)):
         func_str = func_str.replace(f"_{i}_", f"{values[i]}")
     return func_str
 
 
 def _count_and_insert_params_to_func_str(func_str):
+    """ Replace distinct lowercase parameter placeholders with indexed property references.
+
+        Args:
+            func_str (Any): Expression containing parameter placeholders such as ``_a_`` and ``_b_``.
+
+        Returns:
+            Any: Expression with parameter placeholders converted to ``x[index]`` references.
+    """
     split_func = func_str.split("_")
     params = [ord(p) for i, p in enumerate(split_func) if (len(p) == 1) and (p not in split_func[:i]) and p.islower()]
     params.sort()
@@ -210,46 +227,31 @@ def _count_and_insert_params_to_func_str(func_str):
 
 
 def cuts_to_func(values, *operations, func_str=None):
-    """
-    Generates a cut function to generate a mask when called on some
-    property.
-
-    A cut function is defined through some set of `values` and
-    corresponding `operations`, or a `func_str` to define a more
-    complex function.
-    
-    For example, to test whether my property `x` satisfies
-    `3 <= x < 8` (equivalent to  `x >= 3 and x < 8`), we run the
-    following:
-    ```
-    cut_func = cuts_to_func([3, 8], [">=", "<"])
-    cut_func(x)
-    ```
-    At index 0 of values and operations, we see `3` and `">="`, so we
-    require `x >= 3`. At index 1, we see `8` and `"<"`, so we also
-    require `x < 8`.
-    
-    Parameters
-    ----------
-    values : list
-        List of cut values to be used.
-    *operations : list
-        List of strings containing the operations which should be
-        applied with the value at the equivalent index in `values`.
-        Must have the same length as `values`. Allowed strings are: 
-        {"==", "!=", "<", "<=", ">", ">="}.
-    func_str : str, optional
-        Custom cut function in python as a string. The property to be
-        cut must be name "x". Values in `values` are referenced by
-        calling the corresponding index of the value as "_{index}_".
-        E.g. to require `x == values[0]`, the string should be
-        `"x == _0_"`. Default is None.
-    
-    Returns
-    -------
-    function
-        Function which returns a boolean mask when applied to a
+    """ Generates a cut function to generate a mask when called on some
         property.
+
+        A cut function is defined through some set of `values` and
+        corresponding `operations`, or a `func_str` to define a more
+        complex function.
+
+        For example, to test whether my property `x` satisfies
+        `3 <= x < 8` (equivalent to  `x >= 3 and x < 8`), we run the
+        following:
+        ```
+        cut_func = cuts_to_func([3, 8], [">=", "<"])
+        cut_func(x).
+        ```
+        At index 0 of values and operations, we see `3` and `">="`, so we
+        require `x >= 3`. At index 1, we see `8` and `"<"`, so we also
+        require `x < 8`.
+
+        Args:
+            values (Any): List List of cut values to be used.
+            *operations (Any): list List of strings containing the operations which should be applied with the value at the equivalent index in `values`. Must have the same length as `values`. Allowed strings are: {"==", "!=", "<", "<=", ">", ">="}.
+            func_str (Any): str, optional Custom cut function in python as a string. The property to be cut must be name "x". Values in `values` are referenced by calling the corresponding index of the value as "_{index}_". E.g. to require `x == values[0]`, the string should be `"x == _0_"`. Default is None.
+
+        Returns:
+            function: Function which returns a boolean mask when applied to a property.
     """
     ops = {
         "==": operator.eq,
@@ -271,7 +273,23 @@ def cuts_to_func(values, *operations, func_str=None):
         if len(operations) != len(values):
             raise ValueError("values and operations must have equivalent lengths")
         def cut_func(property_to_cut):
+            """ Apply the configured comparisons to one property array.
+
+                Args:
+                    property_to_cut (Any): Property values tested against the configured cut values.
+
+                Returns:
+                    Any: Boolean array that is true where all configured comparisons pass.
+            """
             def next_cut(index):
+                """ Evaluate this comparison and recursively combine preceding comparisons.
+
+                    Args:
+                        index (Any): Index of the current cut value and comparison operator.
+
+                    Returns:
+                        Any: Boolean result of the current and all preceding comparisons.
+                """
                 curr_cut = ops[operations[index]](property_to_cut, values[index])
                 if index <= 0:
                     return curr_cut
@@ -285,50 +303,31 @@ def cuts_to_func(values, *operations, func_str=None):
 
 
 def multi_cuts_to_func(values, *operations, func_str=None):
-    """
-    Generates a cut function to generate a mask when called on some
-    properties.
+    """ Generates a cut function to generate a mask when called on some
+        properties.
 
-    A cut function is defined through some set of `values` and
-    corresponding `operations`, or a `func_str` to define a more
-    complex function. The generated function must be passed a list of
-    properties to be cut upon, with the same length as `values`.
-    
-    For example, to test whether my properties `x` and `y` satisfy
-    `x == 0 and y > 1`, we run the following:
-    ```
-    cut_func = cuts_to_func([0, 1], ["==", ">"])
-    cut_func([x, y])
-    ```
-    At index 0 of values and operations, we see `x` and `"=="`, and we
-    pass `x` at index 0, so we require `x == 0`. At index 1, we see `1`
-    and `">"`, and pass `y` so we also require `y > 1`.
-    
-    Parameters
-    ----------
-    values : list
-        List of cut values to be used.
-    *operations : list
-        List of strings containing the operations which should be
-        applied with the value at the equivalent index in `values`.
-        Must have the same length as `values`. Allowed strings are: 
-        {"==", "!=", "<", "<=", ">", ">="}.
-    func_str : str, optional
-        Custom cut function in python as a string. Values in `values`
-        are referenced by calling the corresponding index of the value
-        as "_{index}_". Properties to be cut are label by some 
-        owercase letters surrounded by underscores, i.e. "_a_".
-        Multiple properties are passed as a list to the resulting
-        function. Values are taken in alphabetical order (so `_a_`
-        points to `x[0]` and `_b_` to `x[2]` if `x` is the input list).
-        E.g. to require `x[1] < values[1] and x[0] == values[0]`, the
-        string would be: `"_b_ < _1_ and _a_ == _0_"`. Default is None.
-    
-    Returns
-    -------
-    function
-        Function which returns a boolean mask when applied to a
-        property.
+        A cut function is defined through some set of `values` and
+        corresponding `operations`, or a `func_str` to define a more
+        complex function. The generated function must be passed a list of
+        properties to be cut upon, with the same length as `values`.
+
+        For example, to test whether my properties `x` and `y` satisfy
+        `x == 0 and y > 1`, we run the following:
+        ```
+        cut_func = cuts_to_func([0, 1], ["==", ">"])
+        cut_func([x, y]).
+        ```
+        At index 0 of values and operations, we see `x` and `"=="`, and we
+        pass `x` at index 0, so we require `x == 0`. At index 1, we see `1`
+        and `">"`, and pass `y` so we also require `y > 1`.
+
+        Args:
+            values (Any): List List of cut values to be used.
+            operations (Any): list List of strings containing the operations which should be applied with the value at the equivalent index in `values`. Must have the same length as `values`. Allowed strings are: {"==", "!=", "<", "<=", ">", ">="}.
+            func_str (Any): str, optional Custom cut function in python as a string. Values in `values` are referenced by calling the corresponding index of the value as "_{index}_". Properties to be cut are label by some owercase letters surrounded by underscores, i.e. "_a_". Multiple properties are passed as a list to the resulting function. Values are taken in alphabetical order (so `_a_` points to `x[0]` and `_b_` to `x[2]` if `x` is the input list). E.g. to require `x[1] < values[1] and x[0] == values[0]`, the string would be: `"_b_ < _1_ and _a_ == _0_"`. Default is None.
+
+        Returns:
+            function: Function which returns a boolean mask when applied to a property.
     """
     ops = {
         "==": operator.eq,
@@ -350,7 +349,23 @@ def multi_cuts_to_func(values, *operations, func_str=None):
         if len(operations) != len(values):
             raise ValueError("values and operations must have equivalent lengths")
         def cut_func(properties_to_cut):
+            """ Apply the configured comparisons to the supplied property arrays.
+
+                Args:
+                    properties_to_cut (Any): Property arrays corresponding to the configured cut values.
+
+                Returns:
+                    Any: Boolean array that is true where all configured comparisons pass.
+            """
             def next_cut(index):
+                """ Evaluate this comparison and recursively combine preceding comparisons.
+
+                    Args:
+                        index (Any): Index of the current cut value and comparison operator.
+
+                    Returns:
+                        Any: Boolean result of the current and all preceding comparisons.
+                """
                 curr_cut = ops[operations[index]](properties_to_cut, values[index])
                 if index <= 0:
                     return curr_cut
@@ -365,52 +380,32 @@ def multi_cuts_to_func(values, *operations, func_str=None):
 
 
 def cuts_to_str(values, *operations, func_str=None, name_format=False):
-    """
-    Generates a string respresentation of some cut.
+    """ Generates a string respresentation of some cut.
+        A cut function is defined through some set of `values` and
+        corresponding `operations`, or a `func_str` to define a more
+        complex function.
 
-    A cut function is defined through some set of `values` and
-    corresponding `operations`, or a `func_str` to define a more
-    complex function.
-    
-    For example, to show we have the cut `"3 <= x < 8"` (equivalent to
-    `"(x >= 3) and (x < 8)"`), we run the following:
-    ```
-    cuts_to_str([3, 8], [">=", "<"])
-    ```
-    Which returns:
-    ```
-    "3 <= x < 8"
-    ```
-    At index 0 of values and operations, we see `3` and `">="`, so we
-    require `x >= 3`. At index 1, we see `8` and `"<"`, so we also
-    require `x < 8`.
-    
-    Parameters
-    ----------
-    values : list
-        List of cut values to be used.
-    *operations : list
-        List of strings containing the operations which should be
-        applied with the value at the equivalent index in `values`.
-        Must have the same length as `values`. Allowed strings are: 
-        {"==", "!=", "<", "<=", ">", ">="}.
-    func_str : str, optional
-        Custom cut function in python as a string. Values in `values`
-        are referenced by calling the corresponding index of the value
-        as "_{index}_". E.g. to require `x == values[0]`, the string
-        should be `"x == _0_"`. Default is None.
-    name_format : bool, optional
-        If True, the string will include a ", " before the cut display,
-        unless only one cut is present. If only 1 cut is present, the
-        leading "x" is skipped, i.e. "x > 5" -> " > 5". This purpose is
-        to auotmatically format the result if used in the following
-        way: `"property x" + cuts_to_str(values, operations)`. Default
-        is False.
-    
-    Returns
-    -------
-    str
-        A string repesntation of the passed function.
+        For example, to show we have the cut `"3 <= x < 8"` (equivalent to
+        `"(x >= 3) and (x < 8)"`), we run the following:
+        ```
+        cuts_to_str([3, 8], [">=", "<"]).
+        ```
+        Which returns:
+        ```
+        "3 <= x < 8".
+        ```
+        At index 0 of values and operations, we see `3` and `">="`, so we
+        require `x >= 3`. At index 1, we see `8` and `"<"`, so we also
+        require `x < 8`.
+
+        Args:
+            values (Any): List of cut values to be used.
+            operations (Any): List of strings containing the operations which should be applied with the value at the equivalent index in `values`. Must have the same length as `values`. Allowed strings are: {"==", "!=", "<", "<=", ">", ">="}.
+            func_str (Any): str, optional Custom cut function in python as a string. Values in `values` are referenced by calling the corresponding index of the value as "_{index}_". E.g. to require `x == values[0]`, the string should be `"x == _0_"`. Default is None.
+            name_format (Any): bool, optional If True, the string will include a ", " before the cut display, unless only one cut is present. If only 1 cut is present, the leading "x" is skipped, i.e. "x > 5" -> " > 5". This purpose is to auotmatically format the result if used in the following.
+
+        Returns:
+            str: A string repesntation of the passed function.
     """
     str_ini = ", " if name_format else ""
     if func_str is None:
@@ -439,58 +434,36 @@ def cuts_to_str(values, *operations, func_str=None, name_format=False):
 
 
 def multi_cuts_to_str(param_names, values, *operations, func_str=None):
-    """
-    Generates a string respresentation of some cut.
+    """ Generates a string respresentation of some cut.
 
-    A cut function is defined through some set of `values` and
-    corresponding `operations`, or a `func_str` to define a more
-    complex function. A set of `param_names` define the names given to
-    the properties.
-    
+        A cut function is defined through some set of `values` and
+        corresponding `operations`, or a `func_str` to define a more
+        complex function. A set of `param_names` define the names given to
+        the properties.
 
-    For example, to show we have the cut on properties `x` and `y`
-    satisfing `x == 0 and y > 1`, we run the following:
-    ```
-    cuts_to_str_multi(['x', 'y'], [0, 1], ["==", ">"])
-    ```
-    Which returns:
-    ```
-    "(x == 0) and (y > 1)"
-    ```
 
-    At index 0 of values and operations, we see `x` and `"=="`, and we
-    pass `x` at index 0, so we require `x == 0`. At index 1, we see `1`
-    and `">"`, and pass `y` so we also require `y > 1`.
-    
-    Parameters
-    ----------
-    param_names : list
-        List of property names.
-    values : list
-        List of cut values to be used.
-    *operations : list
-        List of strings containing the operations which should be
-        applied with the value at the equivalent index in `values`.
-        Must have the same length as `values`. Allowed strings are: 
-        {"==", "!=", "<", "<=", ">", ">="}.
-    func_str : str, optional
-        Custom cut function in python as a string. Values in `values`
-        are referenced by calling the corresponding index of the value
-        as "_{index}_". Properties to be cut are label by some 
-        owercase letters surrounded by underscores, i.e. "_a_".
-        Multiple properties are passed as a list to the resulting
-        function. Values are taken in alphabetical order (so `_a_`
-        points to `param_names[0]` and `_b_` to `param_names[2]`). E.g.
-        to require
-        `(param_names[1] < values[1]) and (param_names[0] == values[0])`
-        , the string would be: `"_b_ < _1_ and _a_ == _0_"`.
-        Alternatively, write the paramter names directly into the
-        string. Default is None.
-    
-    Returns
-    -------
-    str
-        A string repesntation of the passed function.
+        For example, to show we have the cut on properties `x` and `y`
+        satisfing `x == 0 and y > 1`, we run the following:
+        ```
+        cuts_to_str_multi(['x', 'y'], [0, 1], ["==", ">"]).
+        ```
+        Which returns:
+        ```
+        "(x == 0) and (y > 1)".
+        ```
+
+        At index 0 of values and operations, we see `x` and `"=="`, and we
+        pass `x` at index 0, so we require `x == 0`. At index 1, we see `1`
+        and `">"`, and pass `y` so we also require `y > 1`.
+
+        Args:
+            param_names (Any): List List of property names.
+            values (Any): List List of cut values to be used.
+            *operations (Any): list List of strings containing the operations which should be applied with the value at the equivalent index in `values`. Must have the same length as `values`. Allowed strings are: {"==", "!=", "<", "<=", ">", ">="}.
+            func_str (Any): str, optional Custom cut function in python as a string. Values in `values` are referenced by calling the corresponding index of the value as "_{index}_". Properties to be cut are label by some owercase letters surrounded by underscores, i.e. "_a_". Multiple properties are passed as a list to the resulting function. Values are taken in alphabetical order (so `_a_` points to `param_names[0]` and `_b_` to `param_names[2]`). E.g. to require `(param_names[1] < values[1]) and (param_names[0] == values[0])` , the string would be: `"_b_ < _1_ and _a_ == _0_"`. Alternatively, write the paramter names directly into the string. Default is None.
+
+        Returns:
+            str: A string repesntation of the passed function.
     """
     if func_str is None:
         if len(operations) != 1:
@@ -513,7 +486,15 @@ def multi_cuts_to_str(param_names, values, *operations, func_str=None):
         return formatted_func
     
 
-def Median(x : ak.Array):
+def median(x : ak.Array):
+    """ Calculate the median value along the last axis of each event's array.
+
+        Args:
+            x (ak.Array): Per-event arrays of values to sort and reduce.
+
+        Returns:
+            Any: Per-event median values, using ``-999`` for empty arrays.
+    """
     s = ak.sort(x, -1)
     count = ak.num(s, -1)
 
@@ -532,22 +513,15 @@ def Median(x : ak.Array):
 
 
 def get_impact_parameter(direction, start_pos, beam_vertex):
-    """
-    Finds the impact parameter between a PFO and beam vertex.
+    """ Finds the impact parameter between a PFO and beam vertex.
 
-    Parameters
-    ----------
-    direction : ak.zip({'x':ak.Array, 'y':ak.Array, 'z':ak.Array})
-        Direction of PFO.
-    start_pos : ak.zip({'x':ak.Array, 'y':ak.Array, 'z':ak.Array})
-        Initial point of the PFO.
-    beam_vertex : ak.zip({'x':ak.Array, 'y':ak.Array, 'z':ak.Array})
-        Beam interaction point.
+        Args:
+            direction (Any): ak.zip({'x':ak.Array, 'y':ak.Array, 'z':ak.Array}) Direction of PFO.
+            start_pos (Any): ak.zip({'x':ak.Array, 'y':ak.Array, 'z':ak.Array}) Initial point of the PFO.
+            beam_vertex (Any): ak.zip({'x':ak.Array, 'y':ak.Array, 'z':ak.Array}) Beam interaction point.
 
-    Returns
-    -------
-    m : ak.Array
-        Impact parameter between the PFO and beam vertex.
+        Returns:
+            m: ak.Array Impact parameter between the PFO and beam vertex.
     """
     rel_pos = vector.sub(beam_vertex, start_pos)
     cross = vector.cross(rel_pos, direction)
@@ -555,84 +529,66 @@ def get_impact_parameter(direction, start_pos, beam_vertex):
 
 
 def find_beam_impact_parameters(events : ntuple.Data):
-    """
-    Finds the impact parameter of each reconstructed PFO in `events`
-    with the reconstructed beam vertex.
+    """ Finds the impact parameter of each reconstructed PFO in `events`
+        with the reconstructed beam vertex.
 
-    Parameters
-    ----------
-    events : Data
-        Events containing PFOs for which to calculate the impact
-        parameters with the beam.
+        Args:
+            events (ntuple.Data): Data Events containing PFOs for which to calculate the impact parameters with the beam.
 
-    Returns
-    -------
-    impacts : ak.Array
-        Impact parameters between the PFOs and beam vertex.
+        Returns:
+            impacts: ak.Array Impact parameters between the PFOs and beam vertex.
     """
     starts = events.recoParticles.shower_start_pos
-    beam_vertex = events.recoParticles.beam_endPos
+    beam_vertex = events.recoParticles.beam_end_pos
     directions = events.recoParticles.shower_direction
     return get_impact_parameter(
         directions, starts, beam_vertex)
 
 
 def find_beam_separations(events):
-    """
-    Finds the separations of each start position of each reconstructed
-    PFO in `events` and the reconstructed beam vertex.
+    """ Finds the separations of each start position of each reconstructed
+        PFO in `events` and the reconstructed beam vertex.
 
-    Parameters
-    ----------
-    events : Data
-        Events containing PFOs for which to calcualte the beam
-        separations.
+        Args:
+            events (Any): Data Events containing PFOs for which to calcualte the beam separations.
 
-    Returns
-    -------
-    separations : ak.Array
-        Separations between the PFOs starts and beam vertex.
+        Returns:
+            separations (ak.Array): Separations between the PFOs starts and beam vertex.
     """
     starts = events.recoParticles.shower_start_pos
-    beam_vertex = events.recoParticles.beam_endPos # Note: this is uncorrected for space charge effects beacuase no PFO position were corrected in the reconstruction.
+    beam_vertex = events.recoParticles.beam_end_pos # Note: this is uncorrected for space charge effects beacuase no PFO position were corrected in the reconstruction.
     return vector.dist(starts, beam_vertex)
 
 
 def get_mother_pdgs(events):
-    """
-    DEPRECATED: use events.trueParticles(BT).motherPdg
+    """ DEPRECATED: Use events.true_particles(BT).mother_pdg.
 
-    Loops through each event (warning: slow) and creates a reco-type
-    array of PDG codes of mother particle. E.g. a photon from a pi0
-    will be assigned a PDG code 111.
+        Loops through each event (warning: Slow) and creates a reco-type
+        array of PDG codes of mother particle. E.g. a photon from a pi0
+        will be assigned a PDG code 111.
 
-    Mother particle is defined as the mother of the truth particle
-    which the PFO was backtracked to.
+        Mother particle is defined as the mother of the truth particle
+        which the PFO was backtracked to.
 
-    Beam particle is hard-coded to have a PDG code of 211.
+        Beam particle is hard-coded to have a PDG code of 211.
 
-    Anything which cannot have a mother PDG code assigned is given 0.
+        Anything which cannot have a mother PDG code assigned is given 0.
 
-    Future warning: Mother PDG codes are planned to be added into the
-    ntuple data making this function redundant.
+        Future warning: Mother PDG codes are planned to be added into the.
+        Ntuple data making this function redundant.
 
-    Parameters
-    ----------
-    events : Data
-        Set of events to produce the mother PDG codes for.
+        Args:
+            events (Any): Data Set of events to produce the mother PDG codes for.
 
-    Returns
-    -------
-    mother_pdgs : ak.Array
-        PDG code of the mother of the truth particle that backtracked
-        to the PFO.
+        Returns:
+            mother_pdgs: ak.Array PDG code of the mother of the truth particle that backtracked to the PFO.
     """
     # This loops through every event and assigned the pdg code of the
     # mother. Assigns 211 (pi+) to daughters of the beam, and 0 to
     # everything which is not found
-    mother_ids = events.trueParticles.mother
-    truth_ids = events.trueParticles.number
-    truth_pdgs = events.trueParticles.pdg
+    mother_ids = events.true_particles.mother
+    truth_ids = events.true_particles.number
+    truth_pdgs = events.true_particles.pdg
     mother_pdgs = mother_ids.to_list()
     # ts = time.time()
     for i in range(ak.num(mother_ids, axis=0)):
@@ -652,19 +608,19 @@ def get_mother_pdgs(events):
     return mother_pdgs
 
 __all__ = [
-    "CombineMasks",
-    "GetPFOCounts",
-    "CountMask",
-    "CountsWrapper",
-    "CombineSelections",
-    "CreateMask",
+    "combine_masks",
+    "pfo_counts",
+    "count_mask",
+    "counts_wrapper",
+    "combine_selections",
+    "create_mask",
     "del_prop",
     "np_to_ak_indicies",
     "cuts_to_func",
     "multi_cuts_to_func",
     "cuts_to_str",
     "multi_cuts_to_str",
-    "Median",
+    "median",
     "get_impact_parameter",
     "find_beam_impact_parameters",
     "find_beam_separations",

@@ -7,14 +7,14 @@ Author: Shyam Bhuller
 Description: Merges pandas dataframes which are stored in hdf5 format.
 """
 from rich import print
-from python.analysis.io import ReadHDF5, DictToHDF5
+from python.analysis.io import read_hdf5, write_hdf5
 
 import pandas as pd
 
 import argparse
 
 def main(hdf5s : str, output : str):
-    dfs = [ReadHDF5(hdf5) for hdf5 in hdf5s]
+    dfs = [read_hdf5(hdf5) for hdf5 in hdf5s]
     types = list(set([type(df) for df in dfs]))
     if len(types) == 1:
         if types[0] == dict:
@@ -28,7 +28,7 @@ def main(hdf5s : str, output : str):
             df = {k : pd.concat(v, ignore_index = True) for k, v in df_dicts.items()}
             print(df)
             if output is not None:
-                DictToHDF5(df, output)
+                write_hdf5(df, output)
         else:
             df = pd.concat(map(pd.read_hdf, hdf5s), ignore_index=True)
             print(df)

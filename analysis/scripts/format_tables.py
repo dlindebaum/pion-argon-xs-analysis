@@ -4,7 +4,7 @@ Created on: 21/06/2023 15:11
 
 Author: Shyam Bhuller
 
-Description: To help deal with table glorp
+Description: To help deal with table glorp.
 """
 import argparse
 import numpy as np
@@ -15,11 +15,11 @@ def split_rows(row : str) -> list[str]:
     """ Takes a line read from a latex table and splits the row wherever there is a & symbol,
         if the line has no & symbols, it returns an empty list so naturally strips unwanted lines.
 
-    Args:
-        row (str): line from latex file
+        Args:
+            row (str): A line read from a LaTeX table.
 
-    Returns:
-        list[str]: split rows.
+        Returns:
+            list[str]: Split rows.
     """
     split_row = []
     last = -1
@@ -35,11 +35,11 @@ def split_rows(row : str) -> list[str]:
 def format(string : str) -> str:
     """ Formats strings by stripping any latex formatting, if numeric it will also convert the string to a float or int.
 
-    Args:
-        string (str): string to format
+        Args:
+            string (str): String to format.
 
-    Returns:
-        str: formatted string
+        Returns:
+            str: Formatted string.
     """
     replacements = {
     "{}": "",
@@ -62,14 +62,14 @@ def format(string : str) -> str:
     return tmp
 
 
-def TablesToArrays(tables : list) -> list:
+def tables_to_arrays(tables : list) -> list:
     """ Takes a set of Latex tables (line by line) and converts it to an array of the table elements, formatting the contents.
 
     Args:
-        tables (list): set of tables
+        tables (list): Set of tables.
 
     Returns:
-        list: set of table element arrays
+        list: Set of table element arrays.
     """
     split_tables = []
     for i in range(len(tables)):
@@ -82,17 +82,17 @@ def TablesToArrays(tables : list) -> list:
     return np.array(split_tables)
 
 
-def MergeTableArrayElements(split_tables : np.array) -> tuple[np.array]:
+def merge_table_array_elements(split_tables : np.array) -> tuple[np.array]:
     """ Takes a set of table element arrays and merges the elements such that each entry in the table is a tuple rather than a single entry i.e.
         [ A | B ], [ A | B ]         [   A   |   B   ]
         [ 0 | 1 ], [ 3 | 2 ] becomes [ (0,3) | (1,2) ].
-        It will split the table into merged elements, row labels and columns labels
+        It will split the table into merged elements, row labels and columns labels.
 
     Args:
-        split_tables (np.array): set of table element arrays
+        split_tables (np.array): Set of table element arrays.
 
     Returns:
-        tuple[np.array]: merged elements, row labels, column labels.
+        tuple[np.array]: Merged elements, row labels, column labels.
     """
     merged_elements = []
 
@@ -107,11 +107,11 @@ def MergeTableArrayElements(split_tables : np.array) -> tuple[np.array]:
     return np.array(merged_elements), row_labels, column_headers
 
 
-def ReformatElements(elements : np.array) -> list[str]:
+def reformat_elements(elements : np.array) -> list[str]:
     """ Reformats the merged elements by first converting the object into a string (floats are rounded to 3 decimal places).
 
     Args:
-        elements (np.array): elements of table
+        elements (np.array): Elements of table.
 
     Returns:
         list[str]: Latex formatted elements.
@@ -131,14 +131,14 @@ def ReformatElements(elements : np.array) -> list[str]:
     return merged_elements_str
 
 
-def MergeElementRows(elements_str : list) -> list[str]:
+def merge_element_rows(elements_str : list) -> list[str]:
     """ Merges the elements column wise to reproduce a single Latex table row.
 
     Args:
-        elements_str (list): table elements in string format
+        elements_str (list): Table elements in string format.
 
     Returns:
-        _type_: Latex table rows
+        list[str]: Latex table rows.
     """
     merged_table_rows = []
     for j in range(len(elements_str)):
@@ -149,15 +149,15 @@ def MergeElementRows(elements_str : list) -> list[str]:
     return merged_table_rows
 
 
-def ReformatColumns(column_headers : np.array, n : int) -> str:
-    """ Reformats columns of the original tables to multi columns and joins them into a single Latex table row
+def reformat_columns(column_headers : np.array, n : int) -> str:
+    """ Reformats columns of the original tables to multi columns and joins them into a single Latex table row.
 
-    Args:
-        column_headers (np.array): column headers
-        n (int) : number of items in each table element
+        Args:
+            column_headers (np.array): Column labels from the first input table.
+            n (int): Number of source tables combined in each cell.
 
-    Returns:
-        str: Latex table row
+        Returns:
+            str: A LaTeX row containing the formatted column headers.
     """
     columns_str = "(legend) " # top left corner is given a legend desribing the contents of each element
     for c in column_headers[1:]: # skip first column which has no entry and is only supossed to be one column
@@ -169,14 +169,14 @@ def ReformatColumns(column_headers : np.array, n : int) -> str:
     return columns_str
 
 
-def ReformatRowLabels(row_labels : np.array) -> list[str]:
+def reformat_row_labels(row_labels : np.array) -> list[str]:
     """ Takes original row labels and replaces them with their fancy counterparts.
 
-    Args:
-        row_labels (np.array): original row labels
+        Args:
+            row_labels (np.array): Original row labels.
 
-    Returns:
-        list[str]: fancy row labels
+        Returns:
+            list[str]: Display-friendly row labels.
     """
     mapping = {
         "" : "",
@@ -187,7 +187,7 @@ def ReformatRowLabels(row_labels : np.array) -> list[str]:
         "dxy" : "$\\delta_{xy}$",
         "dz" : "$\\delta_{z}$",
         "cos_theta" : "$\\cos(\\theta)$",
-        "beam_endPos_z" : "beam end z",
+        "beam_end_pos_z" : "beam end z",
         "michel_score" : "michel score",
         "median_dEdX" : "median $dEdX$",
         "track_score" : "track score",
@@ -203,16 +203,16 @@ def ReformatRowLabels(row_labels : np.array) -> list[str]:
     return fancy_row_labels
 
 
-def CreateMergedTable(merged_rows : list, formatted_columns : str, row_labels : np.array) -> list[str]:
+def create_merged_table(merged_rows : list, formatted_columns : str, row_labels : np.array) -> list[str]:
     """ Takes the new rows, columns and tables and creates the merged latex table.
 
     Args:
-        merged_rows (list): new rows of tables
-        formatted_columns (str): formatted column headers
-        row_labels (np.array): formatted row labels
+        merged_rows (list): New rows of tables.
+        formatted_columns (str): Formatted column headers.
+        row_labels (np.array): Formatted row labels.
 
     Returns:
-        list[str]: new Latex table
+        list[str]: New Latex table.
     """
     merged_table = [formatted_columns]
     for label, rows in zip(row_labels[1:], merged_rows):
@@ -220,14 +220,14 @@ def CreateMergedTable(merged_rows : list, formatted_columns : str, row_labels : 
     return merged_table
 
 
-def AddLatexCode(merged_table : list, column_headers : np.array, n : int, add_resize_box : bool = True, table_col_sep : int = 2, hskip : bool = True) -> list[str]:
+def add_latex_code(merged_table : list, column_headers : np.array, n : int, add_resize_box : bool = True, table_col_sep : int = 2, hskip : bool = True) -> list[str]:
     """ Adds latex code to the table so it actually compiles.
 
     Args:
-        merged_table (list): Latex table (without latex code)
-        column_headers (np.array): column headers
-        n (int): number of items per element
-        add_resize_box (bool, optional): should resize box be added? Defaults to True.
+        merged_table (list): Latex table (without latex code).
+        column_headers (np.array): Column headers.
+        n (int): Number of items per element.
+        add_resize_box (bool, optional): Should resize box be added? Defaults to True.
 
     Returns:
         list[str]: Latex table with tabular code.
@@ -265,15 +265,15 @@ def main(args):
         with open(file, "r") as f:
             tables.append(f.readlines())
 
-    split_tables = TablesToArrays(tables)
+    split_tables = tables_to_arrays(tables)
 
-    merged_elements, row_labels, column_headers = MergeTableArrayElements(split_tables)
+    merged_elements, row_labels, column_headers = merge_table_array_elements(split_tables)
 
-    merged_table_rows = MergeElementRows(ReformatElements(merged_elements))
+    merged_table_rows = merge_element_rows(reformat_elements(merged_elements))
 
-    merged_table = CreateMergedTable(merged_table_rows, ReformatColumns(column_headers, len(args.files)), ReformatRowLabels(row_labels))
+    merged_table = create_merged_table(merged_table_rows, reformat_columns(column_headers, len(args.files)), reformat_row_labels(row_labels))
 
-    final_table = AddLatexCode(merged_table, column_headers, len(args.files))
+    final_table = add_latex_code(merged_table, column_headers, len(args.files))
 
     with open(args.out, "w") as f:
         f.writelines(final_table)

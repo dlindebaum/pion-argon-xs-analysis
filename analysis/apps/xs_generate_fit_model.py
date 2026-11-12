@@ -14,6 +14,16 @@ from rich import print
 from python.analysis import application, samples, slices
 
 def make_systematic(proc_info : tuple, init_bin : tuple, end_bin : tuple):
+    """ Format one MaCh3 normalization systematic for a process and energy-bin pair.
+
+        Args:
+            proc_info (tuple): Process name and its mode/fiducial-region metadata.
+            init_bin (tuple): Initial-energy bin name and lower/upper edges.
+            end_bin (tuple): End-energy bin name and lower/upper edges.
+
+        Returns:
+            str: YAML block defining the requested systematic.
+    """
     init_low, init_high = init_bin[1]
     end_low, end_high = end_bin[1]
     z_low, z_high = proc_info[1]["z_region"]
@@ -46,6 +56,14 @@ def make_systematic(proc_info : tuple, init_bin : tuple, end_bin : tuple):
 """
 
 def slices_to_model_bins(energy_slices : slices.Slices) -> dict[tuple]:
+    """ Convert analysis energy slices to MaCh3 initial/end bin ranges.
+
+        Args:
+            energy_slices (slices.Slices): Analysis energy-slice definition.
+
+        Returns:
+            dict[tuple]: Ordered bin labels mapped to lower and upper energy edges.
+    """
     model_bins = [0] + list(energy_slices.edges[::-1]) + [999999]
     # model_bins = np.where(model_bins == energy_slices.underflow_pos, 0, model_bins)
     # model_bins = np.where(model_bins == energy_slices.overflow_pos, 999999, model_bins)
@@ -63,6 +81,15 @@ def slices_to_model_bins(energy_slices : slices.Slices) -> dict[tuple]:
 
 
 def get_process_info(process : samples.SampleDefinition, fiducial_volume : list[float]) -> dict:
+    """ Derive MaCh3 mode and z-region metadata for each sample process.
+
+        Args:
+            process (samples.SampleDefinition): Process definitions and mode mappings.
+            fiducial_volume (list[float]): Lower and upper bounds of the fiducial region.
+
+        Returns:
+            dict: Process short names mapped to their MaCh3 mode and z-region bounds.
+    """
     model_process_info = {}
 
     for k, v in process.definitions.items():
@@ -100,9 +127,9 @@ def main(args : application.argparse.Namespace):
 if __name__ == "__main__":
 
     parser = application.argparse.ArgumentParser("Creates systematics yaml file for use with MaCh3.")
-    application.ApplicationArguments.Config(parser)
-    application.ApplicationArguments.Output(parser)
+    application.ApplicationArguments.config(parser)
+    application.ApplicationArguments.output(parser)
 
-    args = application.ApplicationArguments.ResolveArgs(parser.parse_args())
+    args = application.ApplicationArguments.resolve_args(parser.parse_args())
     print(vars(args))
     main(args)
