@@ -48,7 +48,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
 @common.timer
 def main(args):
-    plotting.styles.PlotStyler.set_plot_style(extend_colors = True)
+    plotting.styles.set_plot_style(extend_colors = True)
     outdir = args.out + "beam_norm/"
     os.makedirs(outdir, exist_ok = True)
 

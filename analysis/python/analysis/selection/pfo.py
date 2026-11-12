@@ -4,7 +4,6 @@ Created on: 07/03/2023 14:43
 Author: Shyam Bhuller
 
 Description: Lists cuts which selects PFOs in an event or events.
-TODO Documentation.
 """
 import awkward as ak
 import numpy as np
@@ -241,6 +240,7 @@ def Chi2ProtonSelection(events : Data, cut = 80, op = "<", return_property : boo
     chi2_ndf = events.recoParticles.track_chi2_proton / events.recoParticles.track_chi2_proton_ndof
     return create_mask(cut, op, chi2_ndf, return_property)
 
+
 def TrackLengthSelection(events : Data, cut = 27.1, op = ">", return_property : bool = False):
     """ Compare reconstructed PFO track lengths with one or more thresholds.
 
@@ -254,47 +254,6 @@ def TrackLengthSelection(events : Data, cut = 27.1, op = ">", return_property : 
             Any: Per-PFO comparison mask, optionally paired with track lengths.
     """
     return create_mask(cut, op, events.recoParticles.track_len, return_property)
-
-def initial_pi0_photon_selection(
-        events : Data,
-        em_cut : float = 0.5,
-        n_hits_cut : int = 80,
-        distance_bounds_cm : tuple = [3, 90],
-        max_impact_cm : float = 20,
-        veto_beam_particle : bool = True,
-        verbose : bool = False,
-        return_table : bool = False):
-    """ Combine photon-quality, beam-distance, and impact-parameter cuts for pi0 candidates.
-
-        Args:
-            events (Data): Event data containing reconstructed photon-candidate PFOs.
-            em_cut (float): Maximum ``track_score`` threshold passed to ``EMScoreCut``.
-            n_hits_cut (int): Minimum hit count required for a candidate.
-            distance_bounds_cm (tuple): Lower and upper beam-distance bounds, in centimeters.
-            max_impact_cm (float): Maximum beam-relative impact parameter, in centimeters.
-            veto_beam_particle (bool): Whether to exclude the beam PFO from candidates.
-            verbose (bool): Whether to print the cut-by-cut selection summary.
-            return_table (bool): Whether to return the cut-performance table with the mask.
-
-        Returns:
-            Any: Combined PFO mask, optionally paired with the cut-performance table.
-    """
-    selections = [
-        EMScoreCut,
-        NHitsCut,
-        BeamParticleDistanceCut,
-        BeamParticleIPCut
-    ]
-    arguments = [
-        {"cut": em_cut},
-        {"cut": n_hits_cut},
-        {"cut": distance_bounds_cm},
-        {"cut": max_impact_cm}
-    ]
-    if veto_beam_particle:
-        selections.append(VetoBeamParticle)
-        arguments.append({})
-    return combine_selections(events, selections, 1, arguments, verbose, return_table)
 
 
 def daughter_pi_plus_selection(
@@ -331,42 +290,6 @@ def daughter_pi_plus_selection(
     ]
     if events.ntuple_type == NtupleType.SHOWER_MERGING:
         print("Apply beam daughter cuts")
-        selections.insert(0, BeamDaughterCut)
-        arguments.insert(0, {}) # the cut changes slightly depending on the ntuple type we use.
-    return combine_selections(events, selections, 1, arguments, verbose, return_table)
-
-
-def daughter_proton_selection(
-        events : Data,
-        track_cut : float = 0.5,
-        n_hits_cut : int = 20,
-        dEdX : float = 2.8,
-        verbose : bool = False,
-        return_table : bool = False):
-    """ Select reconstructed daughter PFOs consistent with protons.
-
-        Args:
-            events (Data): Event data containing reconstructed PFOs.
-            track_cut (float): Minimum track score required for a candidate.
-            n_hits_cut (int): Minimum number of hits required for a candidate.
-            dEdX (float): Minimum median track dE/dx for the proton selection.
-            verbose (bool): Whether to print the cut-by-cut selection summary.
-            return_table (bool): Whether to return the cut-performance table with the mask.
-
-        Returns:
-            Any: Combined candidate mask, optionally paired with the cut-performance table.
-    """
-    selections = [
-        TrackScoreCut,
-        NHitsCut,
-        ProtonSelection
-    ]
-    arguments = [
-        {"cut" : track_cut},
-        {"cut" : n_hits_cut},
-        {"cut" : dEdX}
-    ]
-    if events.ntuple_type == NtupleType.SHOWER_MERGING:
         selections.insert(0, BeamDaughterCut)
         arguments.insert(0, {}) # the cut changes slightly depending on the ntuple type we use.
     return combine_selections(events, selections, 1, arguments, verbose, return_table)

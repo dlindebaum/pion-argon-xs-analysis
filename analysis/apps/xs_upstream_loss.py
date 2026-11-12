@@ -50,7 +50,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
 
 def main(args : argparse.Namespace):
-    plotting.styles.PlotStyler.set_plot_style(False)
+    plotting.styles.set_plot_style(False)
     outdir = args.out + "upstream_loss/"
     os.makedirs(outdir, exist_ok = True)
 

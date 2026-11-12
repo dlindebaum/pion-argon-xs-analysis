@@ -437,7 +437,7 @@ def beam_profile_study(quantities : dict, args : argparse.Namespace, true_beam_m
 
 @common.timer
 def main(args : argparse.Namespace):
-    plotting.styles.PlotStyler.set_plot_style(True)
+    plotting.styles.set_plot_style(True)
     out = args.out + "toy_parameters/"
     os.makedirs(out, exist_ok = True)
 

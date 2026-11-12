@@ -139,29 +139,6 @@ def plot_xs_hists(energy_slices, hist_counts : np.ndarray, hist_counts_err : np.
     return
 
 
-def hyp_test_xs(cv, error, process, energy_slice, file = geant.GEANT_XS):
-    """Compare measured central values with an interpolated Geant cross section using a weighted chi-square test.
-
-        Args:
-            cv (Any): Measured cross-section central values.
-            error (Any): Uncertainties corresponding to ``cv``.
-            process (Any): Geant cross-section channel to use as the null hypothesis.
-            energy_slice (Any): Slice geometry defining the measurement energy positions.
-            file (Any): ROOT file containing Geant cross-section curves.
-
-        Returns:
-            Any: Dictionary containing the reduced weighted chi-square (``w_chi2``) and chi-square survival probability (``p``).
-    """
-    common.deprecation_warning()
-    xs_sim = geant.GeantCrossSections(file, energy_range = [energy_slice.min_pos - energy_slice.width, energy_slice.max_pos])
-    sim_curve_interp = xs_sim.get_interpolated_curve(process)
-    x = energy_slice.pos[:-1] - energy_slice.width/2
-
-    w_chi_sqr = common.weighted_chi_sqr(cv, sim_curve_interp(x), error)
-
-    p = stats.chi2.sf((len(x)-1) * w_chi_sqr, len(x) - 1)
-    return {"w_chi2" : w_chi_sqr, "p" : p}
-
 def plot_xs_cpmparison(xs : dict[np.ndarray], energy_slice, process : str = None, colors : dict[str] = None, xs_sim_color : str = "k", title : str = None, simulation_label : str = "simulation", chi2 : bool = True, new_figure : bool = True, cv_only : bool = False, marker_size : float = 6):
     """Plot measured cross-section series against a Geant simulation and compute each series' weighted chi-square.
 

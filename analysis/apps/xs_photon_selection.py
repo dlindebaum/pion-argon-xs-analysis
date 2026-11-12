@@ -100,7 +100,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
 @common.timer
 def main(args):
-    plotting.styles.PlotStyler.set_plot_style(False)
+    plotting.styles.set_plot_style(False)
     out = args.out + "shower_energy_correction/"
 
     if (not os.path.isfile(out + "photon_energies.hdf5")) or args.regen:

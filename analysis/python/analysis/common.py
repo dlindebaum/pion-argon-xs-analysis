@@ -108,6 +108,7 @@ def dimension(shape : ak.Array | np.ndarray):
     else:
         return 0
 
+
 def match_dimension(mask_shape : ak.Array | np.ndarray, var_shape : ak.Array | np.ndarray):
     """Apply ``ak.num`` repeatedly until an array's dimension matches the mask's.
 
@@ -130,6 +131,7 @@ def match_dimension(mask_shape : ak.Array | np.ndarray, var_shape : ak.Array | n
         current_dim = dimension(new_shape)
         counter += 1
     return new_shape
+
 
 def args_to_dict(args : argparse.Namespace | dict) -> dict:
     """Convert an argparse namespace to its attribute dictionary, or pass a dictionary through.
@@ -186,6 +188,7 @@ def fpower(num : np.ndarray, exp, real : bool = True):
     y = num.astype("complex")**exp
     if real: y = y.real
     return y
+
 
 def nandiv(num, den) -> np.ndarray:
     """Divide elementwise, treating zero denominators as NaN.

@@ -11,6 +11,8 @@ from collections import namedtuple
 import awkward as ak
 import numpy as np
 
+from ..common import deprecation_warning
+
 class Slices:
     """ Cross section counting experiment slices.
         Each slice acts as an interacting target for a particle moving through a medium.
@@ -150,15 +152,6 @@ class Slices:
         return np.array([ s.num for s in self], dtype = int)
 
     @property
-    def num_all(self) -> np.ndarray:
-        """ Return all slice numbers.
-
-            Returns:
-                np.ndarray: Slice numbers.
-        """
-        return np.array([self.underflow_num] + [s.num for s in self] + [self.overflow_num], dtype = int)
-
-    @property
     def pos(self) -> np.ndarray:
         """ Return all slice positions. Within the valid slice range.
 
@@ -186,6 +179,7 @@ class Slices:
             Returns:
                 np.ndarray: Slice positions plus an adjacent-width extrapolation, inserted first for reversed slices.
         """
+        deprecation_warning()
         widths = abs(self.edges[1:] - self.edges[:-1])
         i = 0 if self.reversed else -1
         ov = self.edges[i] + widths[i]
@@ -193,15 +187,6 @@ class Slices:
             return np.insert(self.pos, i, ov)
         else:
             return np.append(self.pos, ov)
-
-    @property
-    def pos_bins(self):
-        """Return the sorted position edges including the extrapolated overflow position.
-
-            Returns:
-                Any: Sorted values from ``pos_overflow``.
-        """
-        return np.sort(self.pos_overflow)
 
     @property
     def slice_bins(self) -> np.ndarray:

@@ -88,19 +88,3 @@ def reweight_results(sideband_mc : dict, sideband_data : dict, args : argparse.N
     plots.plt.title(f"reweighted : {reweight_func}", pad = 15)
     book.save()
     return
-
-
-def smearing_factors(sample, weights : np.array = None):
-    """Calculate the weighted mean and standard deviation of reconstructed beam momentum.
-
-        Args:
-            sample (Any): Sample containing ``recoParticles.beam_inst_momentum``.
-            weights (np.array): Optional event weights used in both averages.
-
-        Returns:
-            Any: Weighted momentum mean and standard deviation.
-    """
-    average = np.average(sample.recoParticles.beam_inst_momentum, weights=weights)
-    variance = np.average((sample.recoParticles.beam_inst_momentum-average)**2, weights=weights)
-    std = np.sqrt(variance)
-    return average, std

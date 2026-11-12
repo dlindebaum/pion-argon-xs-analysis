@@ -186,33 +186,6 @@ class AnalysisInput:
             raise Exception("not an analysis input file")
 
 
-    def n_interact(self, energy_slice : slices.Slices, process: np.ndarray, mask : np.ndarray = None, reco : bool = True, weights : np.ndarray = None) -> np.ndarray:
-        """ Calculate exclusive interaction histogram using the energy slice method.
-
-            Args:
-                energy_slice (slices.Slices): Energy slices.
-                process (np.ndarray): Exclusive process mask.
-                mask (np.ndarray): Additional mask. Defaults to None.
-                reco (bool): Use reco KE?. Defaults to True.
-                weights (np.ndarray): Event weights. Defaults to None.
-
-            Returns:
-                np.ndarray: Exclusive interaction histogram.
-        """
-        common.deprecation_warning()
-        if mask is None: mask = np.ones(len(self.KE_int_reco), dtype = bool)
-        if reco is True:
-            KE_int = self.KE_int_reco
-            KE_init = self.KE_init_reco
-            outside_fv = self.outside_fv_reco
-        else:
-            KE_int = self.KE_int_true
-            KE_init = self.KE_init_true
-            outside_fv = self.outside_fv_true
-        n_interact = slices.energy_slice.counting_experiment_old(KE_int[mask], KE_init[mask], outside_fv[mask], process[mask], energy_slice, interact_only = True, weights = weights[mask] if weights is not None else weights)
-        return n_interact
-
-
     def id_from_samples(self, sample_masks : dict[np.ndarray], uncategorised : int = -1) -> ak.Array:
         """ Create ID from sample masks. Counts from 0 and includes override for uncategorised events.
 
@@ -497,47 +470,6 @@ class AnalysisInput:
 
         return {
             "train" : self.select_sample(sample[:fraction]), "test" : self.select_sample(sample[fraction:])}
-
-
-    def create_histograms(self, energy_slice : slices.Slices, exclusive_process : str, reco : bool, mask : np.ndarray = None) -> dict[np.ndarray]:
-        """ Calculate Histogrames required for the cross section measurement using energy slicing. Note exclusive interaction histogram is without background subtraction.
-
-            Args:
-                energy_slice (slices.Slices): Energy slices.
-                exclusive_process (str): Exclusive process.
-                reco (bool): Use reco information?
-                mask (np.ndarray): Additional mask. Defaults to None.
-
-            Returns:
-                dict[np.ndarray]: Histograms.
-        """
-        common.deprecation_warning()
-        KE_int = self.KE_int_true if reco is False else self.KE_int_reco
-        KE_init = self.KE_init_true if reco is False else self.KE_init_reco
-
-        if mask is None: mask = np.zeros_like(self.outside_fv_reco, dtype = bool)
-
-        if self.outside_fv_true is None:
-            outside_tpc = self.outside_fv_reco | mask
-        else:
-            outside_tpc = self.outside_fv_true | mask
-
-        if self.exclusive_process is not None:
-            channel_mask = self.exclusive_process[exclusive_process]
-        else:
-            channel_mask = self.regions[exclusive_process]
-
-        #! keep just in case
-        # if efficiency is True:
-        #     KE_int = KE_int[toy.df.beam_selection_mask]
-        #     KE_init = KE_init[toy.df.beam_selection_mask]
-        #     outside_tpc = outside_tpc[toy.df.beam_selection_mask]
-        #     channel_mask = channel_mask[toy.df.beam_selection_mask]
-
-        n_initial, n_interact_inelastic, n_interact_exclusive, n_incident = slices.energy_slice.counting_experiment_old(KE_int, KE_init, outside_tpc, channel_mask, energy_slice, weights = self.weights)
-
-        output = {"init" : n_initial, "int" : n_interact_inelastic, "int_ex" : n_interact_exclusive, "inc" : n_incident}
-        return output
 
 
     def get_outside_mask(self, fiducial_volume : tuple[float]) -> ak.Array:

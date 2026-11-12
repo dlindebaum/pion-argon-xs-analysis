@@ -108,7 +108,7 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
 @common.timer
 def main(args : argparse.Namespace):
-    plotting.styles.PlotStyler.set_plot_style(extend_colors = True, dpi = 100)
+    plotting.styles.set_plot_style(extend_colors = True, dpi = 100)
     out = args.out + "beam_reweight/"
     os.makedirs(out, exist_ok = True)
 
