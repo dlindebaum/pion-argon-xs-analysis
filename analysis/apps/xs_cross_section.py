@@ -82,7 +82,7 @@ def extract_cross_sections(analysis_input : analysis_input.AnalysisInput, energy
 
 
 def main(args : application.argparse.Namespace):
-    plotting.styles.PlotStyler.set_plot_style(dark = True)
+    plotting.styles.set_plot_style(dark = True)
 
     ais = {k : io.read_dill(v) for k, v in args.analysis_input.items() if "mc" in k}
 

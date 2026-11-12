@@ -42,6 +42,7 @@ class EventDisplay:
     xlim = (-350, 350)
     ylim = (0, 600)
     zlim = (0, 700)
+
     def __init__(self, event_id : str, run : str, subrun : str, plot_2D : bool = True, plot_3D : bool = True):
         """Create event-labeled 2D and/or 3D Matplotlib detector views.
 
@@ -76,6 +77,7 @@ class EventDisplay:
             self.ax3D.set_title(title, y = 1, pad = -10)
         return
 
+
     def detector_bounds(self, x : tuple = xlim, y : tuple = ylim, z : tuple = zlim):
         """ Set axes range to dectector bounds.
 
@@ -94,6 +96,7 @@ class EventDisplay:
             self.ax3D.set_xlim3d(x)
             self.ax3D.set_ylim3d(z)
             self.ax3D.set_zlim3d(y)
+
 
     def pfo(self, points : ak.Array, marker : str, colour : str, alpha : float = 1, pointSize : int = 2, startPoint : ak.Record = None, direction : ak.Record = None, pdg : int = None):
         """ Plot a PFO in the event display.
@@ -138,6 +141,7 @@ class EventDisplay:
         
         return
 
+
     def point(self, point : ak.Record, marker : str, colour : str, pointSize : int = 2):
         """ Draw a single point.
 
@@ -156,6 +160,7 @@ class EventDisplay:
         
         return
 
+
     def line(self, start : ak.Record, end : ak.Record, colour : str, lineStyle="-"):
         """ Draw a line.
 
@@ -173,6 +178,7 @@ class EventDisplay:
             self.ax3D.plot([start.x, end.x], [start.z, end.z], [start.y, end.y], lineStyle, color = colour)
         
         return
+
 
     def text(self, point : ak.Record, text : str, fontsize : int = 16, colour = "black"):
         """Draw a text label at a point in each enabled detector view.

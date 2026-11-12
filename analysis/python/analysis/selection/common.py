@@ -157,21 +157,6 @@ def create_mask(values, operations, property, return_property : bool) -> ak.Arra
         return mask
 
 
-def del_prop(obj, property_name: str) -> None:
-    """ Deletes a properties from the supplied `RecoPaticleData` type
-        object.
-
-        Requires the `obj` to have a property
-        ``_RecoPaticleData__{property_name}``.
-
-        Args:
-            obj (Any): RecoPaticleData Object from which to remove the property.
-            property_name (str): Str Property to be deleted (should match the name of the property).
-    """
-    del(obj.__dict__["_RecoPaticleData__" + property_name])
-    return
-
-
 def np_to_ak_indicies(indicies: np.ndarray) -> ak.Array:
     """ Takes a numpy array of indicies for slicing and converts them to a
         format compatible with awkward arrays which selected PFOs in an
@@ -614,7 +599,6 @@ __all__ = [
     "counts_wrapper",
     "combine_selections",
     "create_mask",
-    "del_prop",
     "np_to_ak_indicies",
     "cuts_to_func",
     "multi_cuts_to_func",

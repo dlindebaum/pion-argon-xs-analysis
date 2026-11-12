@@ -93,7 +93,7 @@ def make_plots(output_mc : dict[ak.Array], mc_fits : dict, output_data : dict[ak
             out (str): Output directory prefix for ``beam_quality_fits.pdf``.
             truncate (float): Truncation setting used to label the plotted beam sample.
     """
-    plotting.styles.PlotStyler.set_plot_style()
+    plotting.styles.set_plot_style()
 
     label_name = "Beam" if truncate is None else "Truncated beam"
 

@@ -100,19 +100,6 @@ def count_in_regions(true_regions : dict, reco_regions : dict, selection_efficin
     return counts
 
 @common.timer
-def get_total_pion_inel_masks(mc : ntuple.Data) -> ak.Array:
-    """ Returns the mask which selects true inelastic pi+.
-
-        Args:
-            mc (ntuple.Data): MC events.
-
-        Returns:
-            ak.Array: Mask.
-    """
-    particle_tags = tags.generate_true_beam_particle_tags(mc)
-    return particle_tags["$\\pi^{+}$:inel"].mask
-
-@common.timer
 def region_study(region_selections : dict[dict], out : str):
     """Plot reco-vs-truth region matrices and save per-region fractions and purity-efficiency summaries.
 

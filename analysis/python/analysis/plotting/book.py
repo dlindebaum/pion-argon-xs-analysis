@@ -27,6 +27,7 @@ class PlotBook:
         if open: self.open()
         self.is_open = True
 
+
     def __enter__(self):
         """Return the plot book for use as a context manager.
 
@@ -34,6 +35,7 @@ class PlotBook:
                 Any: This plot book.
         """
         return self
+
 
     def __exit__(self, type, value, traceback):
         """Close the PDF when leaving a context manager block.
@@ -46,11 +48,13 @@ class PlotBook:
         self.close()
         self.is_open = False
 
+
     def watermark(self):
         """Draw the configured watermark at the center of the current Matplotlib axes.
         """
         plt.text(0.5, 0.5, self.watermark, transform=plt.gca().transAxes, fontsize=38, color='gray', alpha=0.5, ha='center', va='center', rotation=30, zorder = np.inf)
         return
+
 
     def save(self):
         """Append the current figure to the open PDF, attempting to call the watermark attribute when configured.
@@ -66,6 +70,7 @@ class PlotBook:
             except AttributeError:
                 pass
 
+
     def open(self):
         """Open the configured output path as a multipage PDF, unless already open.
         """
@@ -75,6 +80,7 @@ class PlotBook:
         else:
             warnings.warn("pdf has already been opened")
         return
+
 
     def close(self):
         """Close the multipage PDF and remove its writer, warning if it was not open.

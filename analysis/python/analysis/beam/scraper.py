@@ -33,55 +33,6 @@ def is_scraper(mc : ntuple.Data, beam_scraper_args : dict) -> ak.Array:
     return scraper_ids
 
 
-def get_true_ff_KE(KE_tpc : ak.Array, length_to_ff : ak.Array) -> ak.Array:
-    """ True Front facing kinetic energy is the kinetic energy of the first particle trajectory point in the tpc,
-        plus the energy lost between the first trajectory point in the TPC and trajectory point before.
-
-        Args:
-            KE_tpc (ak.Array): Kinetic energy at the first trajectory point in the TPC.
-            length_to_ff (ak.Array): Distance from first trajectory point in the TPC and the one before it. Idea is to use this as an approximation of the distance to the front face of the TPC.
-
-        Returns:
-            ak.Array: True kinetic energy at the front face of the TPC.
-    """
-    dEdX = bethe_bloch.mean_dEdX(KE_tpc, Particle.from_pdgid(211))
-    return KE_tpc + dEdX * length_to_ff
-
-
-def dist_into_tpc(arr : ak.Array, ind : int) -> ak.Array:
-    """ Calculates the distance between the trajectory point after ind and ind. Required for akward arrays.
-
-        Args:
-            arr (ak.Array): Trajectory points.
-            ind (int): Index of point which is just before the TPC.
-
-        Returns:
-            ak.Array: Distance between points.
-    """
-    outside_tpc = arr[ind]
-    if ind + 1 >= ak.count(arr):
-        ff_tpc = outside_tpc
-    else:
-        ff_tpc = arr[ind + 1]
-    return ff_tpc - outside_tpc
-
-
-def ff_value(arr : ak.Array, ind : int) -> any:
-    """ Returns a quantity of any trajectory point at the first trajectory point in the TPC.
-
-        Args:
-            arr (ak.Array): Values.
-            ind (int): Index of the trajectory point immediately before the first point in the TPC.
-
-        Returns:
-            any: Value at ``ind + 1`` when that trajectory point exists, otherwise the value at ``ind``.
-    """
-    if ind + 1 >= ak.count(arr):
-        return arr[ind]
-    else:
-        return arr[ind + 1]
-
-
 def get_scraper_fits(ke_bins : list, beam_inst_KE : ak.Array, delta_KE_upstream : ak.Array, fit_bins : int, residual_range : list) -> dict:
     """ Fit gaussians to front facing kinetic energies to extract values required to define events as beam scrapers.
 
