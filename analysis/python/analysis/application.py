@@ -13,18 +13,6 @@ import awkward as ak
 
 from python.analysis import io, fitting, ntuple, photon_energy_correction, samples, selection, slices
 
-def get_template_config(config_path : str = os.environ["PYTHONPATH"] + "/config/xs_config_default.json") -> dict:
-    """ Load template analysis configuration.
-
-    Args:
-        analysis_path (str, optional): config_path. Defaults to os.environ["PYTHONPATH"]+"/config/xs_config_default.json".
-
-    Returns:
-        dict: Opened configuration. 
-    """
-    return io.read_json(config_path)
-
-
 class ApplicationArguments:
     """Provide helpers for defining and resolving command-line and JSON analysis configuration.
     """
@@ -271,7 +259,6 @@ class ApplicationArguments:
 
         return args
 
-
     @staticmethod
     def add_energy_correction(args):
         """Load the configured shower correction and attach it to data and MC pi0-selection arguments.
@@ -322,6 +309,18 @@ class ApplicationArguments:
             else:
                 continue
         return args
+
+
+def get_template_config(config_path : str = os.environ["PYTHONPATH"] + "/config/xs_config_default.json") -> dict:
+    """ Load template analysis configuration.
+
+    Args:
+        analysis_path (str, optional): config_path. Defaults to os.environ["PYTHONPATH"]+"/config/xs_config_default.json".
+
+    Returns:
+        dict: Opened configuration. 
+    """
+    return io.read_json(config_path)
 
 
 def processing(samples : list[ntuple.Sample], outdir : str, args : argparse.Namespace, func : callable, merge : bool, outname : str = "output") -> list[dict] | dict:
