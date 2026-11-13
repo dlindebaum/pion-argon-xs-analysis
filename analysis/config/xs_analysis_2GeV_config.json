@@ -46,7 +46,6 @@
     "fit_output": null
   },
   "norm": 0.592,
-  "pi_KE_lim": 100,
   "energy_method" : "track",
   "fiducial_volume": [
     30,
@@ -76,7 +75,7 @@
       2300
     ]
   },
-  "ENERGY_CORRECTION": {
+  "SHOWER_ENERGY_CORRECTION": {
     "correction_params": null,
     "energy_range": [
       0,
@@ -105,44 +104,9 @@
       2400
     ]
   },
-  "TOY_PARAMETERS": {
-    "beam_profile": "crystal_ball",
-    "smearing_residual_ranges": {
-      "KE_init": [-250, 250],
-      "KE_int": [-250, 250],
-      "z_int": [-25, 25]
-    },
-    "plot_ranges": {
-      "KE_init": [1200, 2400],
-      "KE_int": [0, 2200],
-      "z_int": [0, 700]
-    }
-  },
-  "FIT": {
-    "mc_stat_unc": true,
-    "mean_track_score": null,
-    "single_bin": true,
-    "regions": true,
-    "fix_np": false
-  },
-  "bkg_sub_mc_stat": true,
   "ESLICE": {
     "edges" : [1900, 1750, 1600, 1450, 1300]
   },
-  "UNFOLDING": {
-    "method": 1,
-    "ts_stop": 0.001,
-    "max_iter": 100,
-    "ts": "ks",
-    "covariance": "poisson",
-    "reg": {
-      "k": 2,
-      "s": 10000.0,
-      "enable": false
-    },
-    "mc_stat_unc": true
-  },
-  "signal_process": "charge_exchange",
   "BEAM_PARTICLE_SELECTION": {
     "TrueFiducialCut": {
       "enable": false,
@@ -345,21 +309,5 @@
       "op": "<"
     }
   },
-  "beam_momentum": 2000,
-  "P_inst_range": [
-    1000,
-    2500
-  ],
-  "KE_inst_range": [
-    1500,
-    2500
-  ],
-  "KE_init_range": [
-    1500,
-    2200
-  ],
-  "KE_int_range": [
-    1000,
-    2200
-  ]
+  "beam_momentum": 2000
 }

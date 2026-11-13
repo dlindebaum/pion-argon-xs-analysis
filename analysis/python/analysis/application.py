@@ -13,294 +13,16 @@ import awkward as ak
 
 from python.analysis import io, fitting, ntuple, photon_energy_correction, samples, selection, slices
 
-template_config = {
-        "NTUPLE_FILES":{
-            "mc" : [
-                {
-                    "file": "ABSOLUTE file path",
-                    "type": "PDSPAnalyser or shower_merging",
-                    "pmom": "momentum byte of the beam, may need a value different to 1 if MC was not generated properly"
-                }
-            ],
-            "data" : [
-                {
-                    "file": "ABSOLUTE file path",
-                    "type": "PDSPAnalyser or shower_merging",
-                    "pmom": 1
-                }
-            ]
-        },
-        "norm" : "normalisation to apply to MC when making Data/MC comparisons, usually defined as the ratio of pion-like triggers from the beam instrumentation", #! this should be inferred from one of the apps!
-        "pi_KE_lim": -1,
-        "fiducial_volume" : [0, 700],
-        "SAMPLE_DEFINITIONS": {
-            "region": "region definition to choose",
-            "region_args": {
-            "contains key value pairs of arguments needed to calculate the specified region" : None
-            },
-            "process": "region definition to choose",
-            "process_args": {
-            "contains key value pairs of arguments needed to calculate the specified process" : None
-            }
-        },
-        "BEAM_QUALITY_FITS": {
-            "truncate" : None,
-        },
-        "BEAM_SCRAPER_FITS":{
-            "energy_range" : None,
-            "energy_bins" : None
-        },
-        "ENERGY_CORRECTION":{
-            "correction_params" : None,
-            "energy_range" : None,
-            "correction" : "response"
-        },
-        "BEAM_REWEIGHT": {
-            "strength" : 3,
-            "params": None
-        },
-        "UPSTREAM_ENERGY_LOSS":{
-            "cv_function" : "gaussian",
-            "response" : "poly2d",
-            "bins" : None,
-        },
-        "TOY_PARAMETERS":{
-            "beam_profile" : "crystal_ball",
-            "smearing_residual_ranges" : {
-                "KE_init" : None,
-                "KE_int" : None,
-                "z_int" : None
-            },
-            "plot_ranges": {
-                "KE_init" : None,
-                "KE_int" : None,
-                "z_int" : None
-            }
-        },
-        "FIT":{
-            "mc_stat_unc" : True,
-            "mean_track_score" : None,
-            "single_bin" : True,
-            "regions": True,
-            "fix_np": False
-        },
-        "bkg_sub_mc_stat": True,
-        "ESLICE":{
-            "edges" : [None]
-        },
-        "UNFOLDING":{
-            "method" : 1,
-            "ts_stop" : 0.0001,
-            "max_iter" : 6,
-            "ts" : "ks",
-            "covariance" : "poisson",
-            "mc_stat_unc": True
-        },
-        "signal_process" : "charge_exchange",
-        "BEAM_PARTICLE_SELECTION":{
-            "PiBeamSelection":{
-                "enable" : True,
-                "use_beam_inst" : False
-            },
-            "PandoraTagCut":{
-                "enable" : True,
-                "cut" : 13,
-                "op" : "=="
-            },
-            "CaloSizeCut":{
-                "enable" : True
-            },
-            "HasFinalStatePFOsCut":{
-                "enable" : True
-            },
-            "DxyCut":{
-                "enable" : True,
-                "cut" : 3,
-                "op" : "<"
-            },
-            "DzCut":{
-                "enable" : True,
-                "cut" : [-3, 3],
-                "op" : [">", "<"]
-            },
-            "CosThetaCut":{
-                "enable" : True,
-                "cut" : 0.95,
-                "op" : ">"
-            },
-            "APA3Cut":{
-                "enable" : True,
-                "cut" : 220,
-                "op" : "<"
-            },
-            "MichelScoreCut":{
-                "enable" : True,
-                "cut" : 0.55,
-                "op" : "<"
-            },
-            "MedianDEdXCut":{
-                "enable" : True,
-                "cut" : 2.4,
-                "op" : "<",
-                "truncate": None
-            },
-            "BeamScraperCut":{
-                "enable" : True,
-                "KE_range" : 1,
-                "cut" : 1.5,
-                "op" : "<"
-            }
-        },
-        "VALID_PFO_SELECTION":{
-            "enable" : True
-        },
-        "FINAL_STATE_PIPLUS_SELECTION": {
-            "Chi2ProtonSelection": {
-            "enable": True,
-            "cut": 61.2,
-            "op": ">"
-            },
-            "TrackScoreCut": {
-            "enable": True,
-            "cut": 0.5,
-            "op": ">"
-            },
-            "NHitsCut": {
-            "enable": True,
-            "cut": 20,
-            "op": ">"
-            },
-            "PiPlusSelection": {
-            "enable": True,
-            "cut": [
-                0.5,
-                2.8
-            ],
-            "op": [
-                ">",
-                "<"
-            ]
-            }
-        },
-        "FINAL_STATE_PHOTON_SELECTION": {
-            "Chi2ProtonSelection": {
-            "enable": True,
-            "cut": 61.2,
-            "op": ">"
-            },
-            "TrackScoreCut": {
-            "enable": True,
-            "cut": 0.45,
-            "op": "<"
-            },
-            "NHitsCut": {
-            "enable": True,
-            "cut": 80,
-            "op": ">"
-            },
-            "BeamParticleDistanceCut": {
-            "enable": True,
-            "cut": [
-                3,
-                90
-            ],
-            "op": [
-                ">",
-                "<"
-            ]
-            },
-            "BeamParticleIPCut": {
-            "enable": True,
-            "cut": 20,
-            "op": "<"
-            }
-        },
-        "FINAL_STATE_PI0_SELECTION": {
-            "NPhotonCandidateSelection": {
-            "enable": True,
-            "cut": 2,
-            "op": "=="
-            },
-            "Pi0MassSelection": {
-            "enable": True,
-            "cut": [
-                50,
-                250
-            ],
-            "op": [
-                ">",
-                "<"
-            ]
-            },
-            "Pi0OpeningAngleSelection": {
-            "enable": True,
-            "cut": [
-                10,
-                80
-            ],
-            "op": [
-                ">",
-                "<"
-            ]
-            }
-        },
-        "FINAL_STATE_LOOSE_PHOTON_SELECTION": {
-            "Chi2ProtonSelection": {
-            "enable": True,
-            "cut": 61.2,
-            "op": ">"
-            },
-            "TrackScoreCut": {
-            "enable": True,
-            "cut": 0.45,
-            "op": "<"
-            },
-            "NHitsCut": {
-            "enable": True,
-            "cut": 31,
-            "op": ">"
-            },
-            "BeamParticleDistanceCut": {
-            "enable": True,
-            "cut": 114,
-            "op": "<"
-            },
-            "BeamParticleIPCut": {
-            "enable": True,
-            "cut": 80,
-            "op": "<"
-            }
-        },
-        "FINAL_STATE_LOOSE_PION_SELECTION": {
-            "Chi2ProtonSelection": {
-            "enable": True,
-            "cut": 61.2,
-            "op": ">"
-            },
-            "TrackScoreCut": {
-            "enable": True,
-            "cut": 0.39,
-            "op": ">"
-            },
-            "PiPlusSelection": {
-            "enable": True,
-            "cut": 6.3,
-            "op": "<"
-            }
-        },
-        "MACH3": {
-            "KE_int_binning" : {
-                "range" : [None, None],
-                "bin_width" : None
-            },
-            "fit_output" : None
-        },
-        "beam_momentum" : "nominal beam momentum in MeV",
-        "P_inst_range" : "plot range",
-        "KE_inst_range" : "plot range",
-        "KE_init_range" : "plot range",
-        "KE_int_range" : "plot range"
-    }
+def get_template_config(config_path : str = os.environ["PYTHONPATH"] + "/config/xs_config_default.json") -> dict:
+    """ Load template analysis configuration.
+
+    Args:
+        analysis_path (str, optional): config_path. Defaults to os.environ["PYTHONPATH"]+"/config/xs_config_default.json".
+
+    Returns:
+        dict: Opened configuration. 
+    """
+    return io.read_json(config_path)
 
 
 class ApplicationArguments:
@@ -482,7 +204,7 @@ class ApplicationArguments:
                     raise Exception("energy_bins must be a list of beam energy bin ranges in MeV")
                 if "mc" in value:
                     args.mc_beam_scraper_fit = io.read_json(value["mc"])
-            elif head == "ENERGY_CORRECTION":
+            elif head == "SHOWER_ENERGY_CORRECTION":
                 args.shower_correction = {}
                 for k, v in value.items():
                     args.shower_correction[k] = v
@@ -514,16 +236,10 @@ class ApplicationArguments:
                             if not ((hasattr(v1, "__iter__")) and (len(v1) == 2)):
                                 raise Exception(f"{k1} must be a list of two numbers.")
                         args.toy_parameters[k] = v
-            elif head == "FIT":
-                args.fit = {}
-                for k, v in value.items():
-                    args.fit[k] = v
             elif head == "ESLICE":
                 args.energy_slices = slices.Slices(ak.Array(value["edges"]))
             elif head == "ANALYSIS_INPUTS":
                 args.analysis_input = {k : v for k, v in value.items()}
-            elif head == "UNFOLDING":
-                args.unfolding = {k : v for k, v in value.items()}
             elif head == "MACH3":
                 args.mach3 = value
             elif head == "KINEMATIC_RANGES":

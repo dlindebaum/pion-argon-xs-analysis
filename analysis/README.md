@@ -76,7 +76,7 @@ Make a directory, and in the directory copy the pre-made 2 GeV configuration:
 ```
 mkdir analysis_simplified/
 cd analysis_simplified/
-cp <path to python repo>/pion-argon-xs-analysis/analysis/config/cex_analysis_2GeV_config.json .
+cp <path to python repo>/pion-argon-xs-analysis/analysis/config/xs_analysis_2GeV_config.json .
 ```
 
 In the following add the configuration information for the analysis inputs:
@@ -94,7 +94,7 @@ In the following add the configuration information for the analysis inputs:
 The fit model can be recreated for convenience (e.g. different binning), and to do so, run the following:
 
 ```
-xs_generate_fit_model.py -c cex_analysis_2GeV_config.json -o .
+xs_generate_fit_model.py -c xs_analysis_2GeV_config.json -o .
 ```
 
 You will find the fit model created in the workspace: `fit_model/PDSPFitModel.yaml`
@@ -139,7 +139,7 @@ Once the fit is performed, you should get an output root file `Test.root`. This 
 Run the following:
 
 ```
-xs_cross_section.py -c cex_analysis_2GeV_config.json -o .
+xs_cross_section.py -c xs_analysis_2GeV_config.json -o .
 ```
 
 
@@ -177,12 +177,12 @@ To create a template configuration called `analysis_config.json`, run the follow
 run_analysis.py -C analysis_config.json -o .
 ```
 
-This configuration requires entry of basic information such as data file location and some configurations settings some apps cannot run without. To work off a minimal application with the basic information (except MC file location) settings check `config/cex_analysis_2GeV_config.json`.
+This configuration requires entry of basic information such as data file location and some configurations settings some apps cannot run without. To work off a minimal application with the basic information (except MC file location) settings check `config/xs_analysis_2GeV_config.json`.
 
 For now, copy the minimal config file to your area:
 
 ```bash
-cp ../../config/cex_analysis_2GeV_config.json analysis_config.json
+cp ../../config/xs_analysis_2GeV_config.json analysis_config.json
 ```
 
 open the file and note the first three entries in the json file:
