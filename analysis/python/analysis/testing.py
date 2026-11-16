@@ -41,7 +41,8 @@ def create_hash_file(analysis_path : str, skip = ["pdf", "tex"], to_file : bool 
     hash_dict = {}
     for f in common.ls_recursive(analysis_path):
         file = f.split(analysis_path)[-1]
-        file, extension = file.split(".")
+        print(file.split("."))
+        file, extension = file.split(".")[-2:]
 
         app_outdir = file.split("/")[0]
         fname = file.split("/")[-1]
@@ -62,7 +63,7 @@ def create_hash_file(analysis_path : str, skip = ["pdf", "tex"], to_file : bool 
         print(f"Hash file written to {out}")
         io.write_json(hash_dict, out)
 
-    return hash
+    return hash_dict
 
 
 def compare_hashes(hash_dict_1 : dict, hash_dict_2 : dict) -> dict:
@@ -90,11 +91,9 @@ def compare_hashes(hash_dict_1 : dict, hash_dict_2 : dict) -> dict:
     return out
 
 
-def application_main(out_path : str):
-    def _application_main_(func : callable):
-        def wrapper(*args, **kwargs):
-            result = func(*args, **kwargs)
-            compare_hashes(REFERENCE_HASH_FILE, create_hash_file(out_path))
-            return result
-        return wrapper
-    return _application_main_
+def application_main(func : callable):
+    def wrapper(args):
+        result = func(args)
+        compare_hashes(io.read_json(REFERENCE_HASH_FILE), create_hash_file(args.out))
+        return result
+    return wrapper

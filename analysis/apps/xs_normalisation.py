@@ -15,6 +15,7 @@ import awkward as ak
 from rich import print
 
 from python.analysis import application
+from python.analysis import testing
 from python.analysis import common
 from python.analysis import io
 from python.analysis import ntuple
@@ -45,8 +46,8 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
         event_tags = None
     return {"mask" : mask, "tags" : event_tags}
 
-
 @common.timer
+@testing.application_main
 def main(args):
     plotting.styles.set_plot_style(extend_colors = True)
     outdir = args.out + "beam_norm/"
