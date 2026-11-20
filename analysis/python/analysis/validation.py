@@ -10,9 +10,16 @@ import os
 
 from _hashlib import HASH
 
+import dill
+
 from . import io, common
 
 REFERENCE_HASH_FILE = os.environ["PYTHONPATH"] + "/data/hash_dict.json"
+
+def create_hash_from_data(data : object) -> str:
+    byte_data = dill.dumps(data)
+    return hashlib.sha256(byte_data).hexdigest()
+
 
 def create_hash_from_file(file : str) -> str:
     """ Opens any file in binary format and convert to a SHA256 hex string.
@@ -91,9 +98,26 @@ def compare_hashes(hash_dict_1 : dict, hash_dict_2 : dict) -> dict:
     return out
 
 
-def application_main(func : callable):
-    def wrapper(args):
-        result = func(args)
-        compare_hashes(io.read_json(REFERENCE_HASH_FILE), create_hash_file(args.out))
-        return result
-    return wrapper
+def update_hash_file(hashes : dict, analysis_path : str) -> str:
+    file = f"{analysis_path}/.hash_dict.json"
+    if os.path.exists(file):
+        updated_hashes = merge_hash_dict([io.read_json(file), hashes])
+    else:
+        updated_hashes = hashes
+    io.write_json(updated_hashes, file)
+
+    return file
+
+
+def merge_hash_dict(dicts : list[dict]) -> dict:
+    merged_dict = {}
+    for d in dicts:
+        for k, v in d.items():
+            if k not in merged_dict:
+                merged_dict[k] = v
+            else:
+                if type(v) is dict:
+                    merged_dict[k] = merge_hash_dict([merged_dict[k], v])
+                else:
+                    merged_dict[k] = v
+    return merged_dict

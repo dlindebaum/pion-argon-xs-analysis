@@ -39,18 +39,17 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
     return ri
 
 @common.timer
+@application.main("region_plots")
 def main(args : argparse.Namespace):
     plotting.styles.set_plot_style(True)
     out = args.out + "region_plots/"
-    os.makedirs(out, exist_ok = True)
 
-    output_mc = application.processing(["mc"], out, args, run, True)["mc"]
+    output_mc = application.processing(["mc"], "region_plots", args, run, True)["mc"]
 
     print(f"{output_mc=}")
 
     regions.region_study(output_mc, out)
     return
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Analyses MC ntuples in order to visualise the region identifications.")

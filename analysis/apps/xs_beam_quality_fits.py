@@ -13,6 +13,7 @@ from rich import print
 
 from python.analysis import application
 from python.analysis import common
+from python.analysis import io
 from python.analysis import ntuple
 from python.analysis import vector
 from python.analysis.selection import beam
@@ -66,13 +67,23 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
     return {"start_pos" : start_pos, "end_pos" : end_pos, "beam_dir": beam_dir}
 
 @common.timer
+@application.main("beam_quality")
 def main(args):
     outdir = args.out + "beam_quality/"
-    os.makedirs(outdir, exist_ok = True)
-
-    outputs = application.processing(list(args.ntuple_files.keys()), outdir, args, run, True)
+    outputs = application.processing(list(args.ntuple_files.keys()), "beam_quality", args, run, True)
 
     fit_values = {s : quality.fits(args, outputs[s], outdir, s) for s in outputs}
+
+    fit_values = {}
+    hashes = {}
+    for s in outputs:
+        fit_values[s] = quality.fits(args, outputs[s], outdir, s)
+
+        #* write to json file
+        os.makedirs(args.out, exist_ok = True)
+        fname = s + "_beam_quality_fit_values.json"
+        hashes[fname] = io.write_json(fit_values[s], outdir + fname)
+        print(f"fit values written to {outdir + fname}")
 
     if "data" not in outputs.keys():
         outputs["data"] = None
@@ -80,7 +91,7 @@ def main(args):
     
     quality.make_plots(outputs["mc"], fit_values["mc"], outputs["data"], fit_values["data"], outdir, args.beam_quality_truncate)
 
-    return
+    return hashes
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Computes Guassian fit paramters needed for the beam quality cuts in the beam particle selection.", formatter_class = argparse.RawDescriptionHelpFormatter)

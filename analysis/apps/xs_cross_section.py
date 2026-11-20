@@ -80,7 +80,7 @@ def extract_cross_sections(analysis_input : analysis_input.AnalysisInput, energy
             # cross_sections[k] = slices.energy_slice.exclusive_cross_section(n_inc[1:-1], n_end[1:-1], n_end_all[1:-1], v[1:-1], dEdX, energy_slices.width)
     return cross_sections
 
-
+@application.main("cross_section")
 def main(args : application.argparse.Namespace):
     plotting.styles.set_plot_style(dark = True)
 
@@ -113,7 +113,6 @@ def main(args : application.argparse.Namespace):
                 plots.plot_cross_section_cl(v, prefit_cross_sections[k], k, args.energy_slices)
                 book.save()
     return
-
 
 if __name__ == "__main__":
 

@@ -15,7 +15,6 @@ import awkward as ak
 from rich import print
 
 from python.analysis import application
-from python.analysis import testing
 from python.analysis import common
 from python.analysis import io
 from python.analysis import ntuple
@@ -47,13 +46,11 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
     return {"mask" : mask, "tags" : event_tags}
 
 @common.timer
-@testing.application_main
+@application.main("normalisation")
 def main(args):
     plotting.styles.set_plot_style(extend_colors = True)
-    outdir = args.out + "beam_norm/"
-    os.makedirs(outdir, exist_ok = True)
-
-    outputs = application.processing(list(args.ntuple_files.keys()), outdir, args, run, True)
+    outdir = args.out + "normalisation/"
+    outputs = application.processing(list(args.ntuple_files.keys()), "normalisation", args, run, True)
 
     n_data = ak.sum(outputs["data"]["mask"])
     n_mc = ak.sum(outputs["mc"]["mask"])
@@ -63,9 +60,9 @@ def main(args):
         plotting.plots.plot_tags(outputs["mc"]["tags"], "True particle ID")
         book.save()
 
-    io.write_json({"norm" : norm, "mc" : int(n_mc), "data" : int(n_data)}, outdir + "norm.json")
-
-    return
+    fname = "norm.json"
+    hash = io.write_json({"norm" : norm, "mc" : int(n_mc), "data" : int(n_data)}, outdir + fname)
+    return {fname : hash}
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Computes normalisation for beam pion analysis.", formatter_class = argparse.RawDescriptionHelpFormatter)

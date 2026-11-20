@@ -51,12 +51,12 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
     return {"beam_inst_KE" : beam_inst_KE, "true_ffKE" : true_ffKE, "beam_inst_x" : beam_inst_x, "beam_inst_y" : beam_inst_y, "delta_KE_upstream" : delta_KE_upstream}
 
 @common.timer
+@application.main("beam_scraper")
 def main(args : argparse.Namespace):
     plotting.styles.set_plot_style(True)
     outdir = args.out + "beam_scraper/"
-    os.makedirs(outdir, exist_ok = True)
 
-    output_mc = application.processing(["mc"], outdir, args, run, True)["mc"]
+    output_mc = application.processing(["mc"], "beam_scraper", args, run, True)["mc"]
 
     residual_range = [-300, 300] # range of residual for plotsdefine 
     bins = 50
@@ -86,11 +86,10 @@ def main(args : argparse.Namespace):
     for i, k in enumerate(scraper_thresholds):
         json_dict[str(i)] = {**{"bins" : k}, **scraper_thresholds[k], **position_means[k]}
 
-    name = outdir + "mc_beam_scraper_fit_values.json"
-    io.write_json(json_dict, name)
+    name = "mc_beam_scraper_fit_values.json"
+    hashes = {name : io.write_json(json_dict, outdir + name)}
     print(f"fit values written to {name}")
-    return
-
+    return hashes
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Calculates parameters required to idenfify beam scrapers and apply the selection.")

@@ -14,6 +14,7 @@ import awkward as ak
 from particle import Particle
 
 from python.analysis import application
+from python.analysis import common
 from python.analysis import fitting
 from python.analysis import io
 from python.analysis import kinematics
@@ -48,13 +49,14 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
     
     return {"p_inst" : mc.recoParticles.beam_inst_momentum, "KE_ff" : mc.true_particles.beam_KE_front_face, "weights" : mc_weights}
 
-
+@common.timer
+@application.main("upstream_loss")
 def main(args : argparse.Namespace):
     plotting.styles.set_plot_style(False)
     outdir = args.out + "upstream_loss/"
     os.makedirs(outdir, exist_ok = True)
 
-    output_mc = application.processing(["mc"], outdir, args, run, True)["mc"]
+    output_mc = application.processing(["mc"], "upstream_loss", args, run, True)["mc"]
 
     if all(v is None for v in output_mc["weights"]):
         output_mc["weights"] = None
@@ -69,7 +71,7 @@ def main(args : argparse.Namespace):
         pdf.save()
 
         plotting.plots.plt.figure()
-        params = fitting.fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\\mu(\Delta E_{upstream})$ (MeV)", loc = "upper center")
+        params = fitting.fit(x, cv[0], cv[1], args.upstream_loss_response, maxfev = int(5E5), plot = True, xlabel = "$KE^{reco}_{inst}$ (MeV)", ylabel = "$\\mu(\\Delta E_{upstream})$ (MeV)", loc = "upper center")
         pdf.save()
 
         params_dict = {
@@ -83,9 +85,8 @@ def main(args : argparse.Namespace):
         pdf.save()
     plotting.plots.plt.close("all")
     print(f"fitted parameters : {params_dict}")
-    io.write_json(params_dict, outdir + "fit_parameters.json")
-    return
-
+    hashes = {"fit_parameters.json" : io.write_json(params_dict, outdir + "fit_parameters.json")}
+    return hashes
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Computes the upstream energy loss for beam particles after beam particle selection, then writes the fitted parameters to file.", formatter_class = argparse.RawDescriptionHelpFormatter)

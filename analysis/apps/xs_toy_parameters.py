@@ -5,6 +5,7 @@ Created on: 06/10/2023 00:05
 Author: Shyam Bhuller
 
 Description: Analyses MC ntuples in order to determine parameters used to emulate selection efficiency and detector effects for the toy model.
+#! Deprecated App.
 """
 
 import argparse

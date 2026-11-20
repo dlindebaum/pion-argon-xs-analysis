@@ -120,26 +120,31 @@ def run(i, file : ntuple.FileDescriptor, n_events, start, selected_events, args)
 
 
 @common.timer
+@application.main("selection")
 def main(args):
     plotting.styles.set_plot_style(extend_colors = True)
     outdir = args.out + "selection/"
-    os.makedirs(outdir, exist_ok = True)
 
-    output_mc = selection.processing.merge_selection_masks(selection.processing.merge_multiproccess_output(application.processing(["mc"], outdir, args, run, False, "output_mc")["mc"]))
+    hashes = {}
+
+    output_mc = selection.processing.merge_selection_masks(selection.processing.merge_multiproccess_output(application.processing(["mc"], "selection", args, run, False, outname = "output_mc")["mc"]))
 
     output_data = None
     if "data" in args.ntuple_files:
         if len(args.ntuple_files["data"]) > 0:
             if args.mc_only is False:
-                output_data = selection.processing.merge_selection_masks(selection.processing.merge_multiproccess_output(application.processing(["data"], outdir, args, run, False, "output_data")["data"]))
+                output_data = selection.processing.merge_selection_masks(selection.processing.merge_multiproccess_output(application.processing(["data"], "selection", args, run, False, outname = "output_data")["data"]))
 
     # tables
     selection.plots.make_tables(output_mc, args.out + "tables_mc/", "mc")
     if output_data is not None: selection.plots.make_tables(output_data, args.out + "tables_data/", "data")
 
+    hashes = {}
+
     # save masks used in selection
-    selection.processing.write_masks(output_mc, args.out + "masks_mc/")
-    if output_data is not None: selection.processing.write_masks(output_data, args.out + "masks_data/")
+    hashes = hashes | selection.processing.write_masks(output_mc, args.out + "masks_mc/")
+    if output_data is not None:
+        hashes = hashes | selection.processing.write_masks(output_data, args.out + "masks_data/")
 
     # output directories
     os.makedirs(outdir + "plots/", exist_ok = True)
@@ -181,8 +186,7 @@ def main(args):
         selection.plots.make_pi0_selection_plots(output_mc["pi0"]["data"], output_data["pi0"]["data"] if output_data else None, outdir + "plots/", norm = args.norm, nbins = 50)
     if output_mc["regions"]:
         selection.plots.make_region_plots(output_mc["regions"], output_data["regions"] if output_data else None, outdir + "plots/")
-    return
-
+    return hashes
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Applies beam particle selection, PFO selection, produces tables and basic plots.", formatter_class = argparse.RawDescriptionHelpFormatter)

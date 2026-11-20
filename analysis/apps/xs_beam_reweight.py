@@ -105,14 +105,13 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
 
     return output
 
-
 @common.timer
+@application.main("beam_reweight")
 def main(args : argparse.Namespace):
     plotting.styles.set_plot_style(extend_colors = True, dpi = 100)
     out = args.out + "beam_reweight/"
-    os.makedirs(out, exist_ok = True)
 
-    outputs = application.processing(list(args.ntuple_files.keys()), out, args, run, True)
+    outputs = application.processing(list(args.ntuple_files.keys()), "beam_reweight", args, run, True)
 
     for o in outputs:
         for t in outputs[o]["table"]:
@@ -135,16 +134,16 @@ def main(args : argparse.Namespace):
     with plotting.PlotBook(out + "plots/" + "reweight_fits.pdf", True) as book:
         results = reweight.reweight(output_mc["sideband"]["p_inst"], output_data["sideband"]["p_inst"], args.beam_momentum, 20, np.array([0.75, 1.25]), book = book)
 
+    hashes = {}
     for r in results:
         with plotting.PlotBook(out + "plots/" + f"reweight_results_{r}.pdf", True) as book:
             reweight.reweight_results(output_mc["sideband"], output_data["sideband"], args, 25, results, r, book = book)
             reweight.reweight_results(output_mc["analysis"], output_data["analysis"], args, 50, results, r, book = book)
             reweight_params = {f"p{i}" : {"value" : results[r][0][i], "error" : results[r][1][i]} for i in range(getattr(fitting, r).n_params)}
-            io.write_json(reweight_params, out + r + ".json")
+            hashes[r + ".json"] = io.write_json(reweight_params, out + r + ".json")
         plots.plt.close("all")
 
     reweight_params = io.read_json(out + "gaussian" + ".json")
-
 
     chi2_table = {}
     test_range = [1700, 2300]
@@ -170,7 +169,7 @@ def main(args : argparse.Namespace):
     table.to_hdf(out + "chi2_reweight.hdf5", key = "df")
     table.to_latex(out + "chi2_reweight.tex")
 
-    return
+    return hashes
 
 if __name__ == "__main__":
     args = argparse.ArgumentParser("Calculates reweighting parameters for beam momentum.")

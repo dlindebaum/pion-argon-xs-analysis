@@ -126,25 +126,29 @@ class AnalysisInput:
         return
 
 
-    def to_file(self, file : str):
+    def to_file(self, file : str) -> str:
         """ Save to dill file.
 
             Args:
                 file (str): File path.
+
+            Returns:
+                dict: Data content hash for comparison.
         """
-        io.write_dill(file, self)
-        return
+        return io.write_dill(file, self)
 
 
-    def to_root_file(self, file : str):
+    def to_root_file(self, file : str) -> str:
         """ Save to a ROOT File as a flat TTree.
 
             Args:
                 file (str): File path.
+
+            Returns:
+                dict: Data content hash for comparison.
         """
         file_writer = io.RootIO(file)
-        file_writer.write_data(vars(self), None, True)
-        return
+        return file_writer.write_data(vars(self), None, True)
 
 
     def to_split_root_files(self, directory : str, name : str):
