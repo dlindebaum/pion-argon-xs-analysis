@@ -26,7 +26,7 @@ from apps import (
     )
 
 from python.analysis.ntuple import calculate_batches, file_len
-from python.analysis.application import ApplicationArguments, argparse, template_config
+from python.analysis.application import ApplicationArguments, argparse, get_template_config
 from python.analysis.io import write_json, read_json
 
 
@@ -156,7 +156,7 @@ def step_plan(args : argparse.Namespace, no_data : bool, n_data : list):
 def main(args):
     os.makedirs(args.out, exist_ok = True)
     if args.create_config:
-        write_json(template_config, os.path.join(args.out, args.create_config))
+        write_json(get_template_config(), os.path.join(args.out, args.create_config))
         print(f"template configuration saved as {args.out + args.create_config}")
         exit()
     else:
@@ -253,7 +253,7 @@ def main(args):
                     new_config_entry[k] = os.path.abspath(output_path + v)
             new_config_entry["energy_range"] = args.shower_correction["energy_range"]
             new_config_entry["correction"] = "response"
-            update_config(args.config, {"ENERGY_CORRECTION" : new_config_entry})
+            update_config(args.config, {"SHOWER_ENERGY_CORRECTION" : new_config_entry})
             args = update_args(processing_args) # reload config to continue
         if args.stop == "photon_correction": return
 
