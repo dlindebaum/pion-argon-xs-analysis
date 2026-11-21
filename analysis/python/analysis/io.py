@@ -14,6 +14,7 @@ import pandas as pd
 import tables
 import uproot
 
+from python.analysis import validation, processing
 
 def read_dill(file : str):
     """ Opens and serialises object saved as a dill file. May be remaned to a more general method if dill files are used more commonly.
@@ -29,16 +30,20 @@ def read_dill(file : str):
     return obj
 
 
-def write_dill(file : str, obj : dict):
+def write_dill(file : str, obj : any) -> str:
     """ Saves object to file.
 
         Args:
             file (str): File name.
-            obj (dict): Object to save.
+            obj (any): Object to save.
+
+        Returns:
+            str: Data content hash for comparison.
     """
     with open(file, "wb") as f:
         dill.dump(obj, f)
-    return
+    return validation.create_hash_from_data(obj)
+
 
 def read_json(file : str) -> dict:
     """ Loads a json file.
@@ -54,39 +59,61 @@ def read_json(file : str) -> dict:
     return config
 
 
-def write_json(params : any, file : str):
+def write_json(obj : any, file : str) -> str:
     """ Saves an object to a json file. Params should be an object serialisable by json (no numpy arrays etc.).
 
         Args:
             params (any): Correction parameters.
             file (str): File path.
+
+        Returns:
+            str: Data content hash for comparison.
     """
     with open(file, "w") as f:
-        json.dump(params, f, indent = 2)
-    return
+        json.dump(obj, f, indent = 2)
+    return validation.create_hash_from_data(obj)
 
 
-def write_hdf5(dictionary : dict, file : str):
+def append_json(obj : any, file : str) -> str:
+    """ Appends an object to a json file. Params should be an object serialisable by json (no numpy arrays etc.).
+
+    Args:
+        obj (any): object to save.
+        file (str): json file to append to
+
+    Returns:
+        str: Data content hash for comparison.
+    """
+    dictionary = read_json(file)
+    dictionary.update(obj)
+    write_json(dictionary, file)
+    return validation.create_hash_from_data(dictionary)
+
+
+def write_hdf5(dictionary : dict, file : str) -> str:
     """ Write dictionary to a HDF5 file.
 
         Args:
             dictionary (dict): Dictionary to save.
             file (str): File.
+
+        Returns:
+            str: Data content hash for comparison.        
     """
     with pd.HDFStore(file) as hdf:
         for k, v in dictionary.items():
             hdf.put(k, v)
-    return
+    return validation.create_hash_from_data(dictionary)
 
 
-def read_hdf5(file : str):
+def read_hdf5(file : str) -> pd.DataFrame | dict[pd.DataFrame]:
     """ Reads a HDF5 file and unpacks the contents into pandas dataframes.
 
         Args:
             file (str): File path.
 
         Returns:
-            pd.DataFrame: if hdf5 file only has 1 key dict : If hdf5 file contains more than 1 key.
+            pd.DataFrame | dict[pd.DataFrame]: if hdf5 file only has 1 key dict : If hdf5 file contains more than 1 key.
     """
     keys = []
     with tables.open_file(file, driver = "H5FD_CORE") as hdf5file:
@@ -153,13 +180,16 @@ class RootIO:
         return d_new
 
 
-    def write_data(self, vectors : dict = None, histograms : dict = None, overwrite : bool = False):
+    def write_data(self, vectors : dict = None, histograms : dict = None, overwrite : bool = False) -> str:
         """ Write TTree to a new root file.
 
             Args:
                 vectors (dict): Dictionary of vectors. Vectors must be the same size, can be a nested dictionary of np or Awkward arrays. Defaults to None.
                 histograms (dict): Dictionary of Histogram like objects (e.g. output of np.histogram). Can be variable in size. Defaults to None.
                 overwrite (bool): Overwrites output file. Defaults to False.
+
+            Returns:
+                str: Data content hash for comparison.
         """
         split = self.filename.split("/")
         path = "/".join(split[:-1] + [split[-1].split(".")[0] + ".root"])
@@ -176,7 +206,7 @@ class RootIO:
                     file[k] = v
 
         print(f"TTree Written to {path}")
-        return
+        return validation.create_hash_from_data(vectors | histograms)
 
 
     def read_data(self, item: str) -> ak.Array:

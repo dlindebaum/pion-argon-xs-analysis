@@ -99,10 +99,12 @@ def run(i : int, file_desc : ntuple.FileDescriptor, n_events : int, start : int,
     return output
 
 @common.timer
+@application.main("shower_energy_correction")
 def main(args):
     plotting.styles.set_plot_style(False)
     out = args.out + "shower_energy_correction/"
 
+    #! inconsistency here; output should be dill files but instead this is a HDF5 dataframe, so application processing is bypassed.
     if (not os.path.isfile(out + "photon_energies.hdf5")) or args.regen:
         output = ntuple.run_process(args.ntuple_files["mc"], False, args, run)
 
@@ -115,7 +117,7 @@ def main(args):
         print(output_tags)
 
         os.makedirs(out, exist_ok = True)
-        output_photons.to_hdf(out + "photon_energies.hdf5", "all_photons")
+        output_photons.to_hdf(out + "photon_energies.hdf5", "all_photons") #! hdf5 files are not hashed
         output_pairs.to_hdf(out + "photon_energies.hdf5", "photon_pairs")
         output_tags.to_hdf(out + "photon_energies.hdf5", "tags")
 
@@ -144,7 +146,6 @@ def main(args):
         linear_correction = pec.linear_fit(df, bins, energy_range, book)
         pec.linear_fit_performance(df, linear_correction, book)
 
-
         #* response correction
         bins = np.array(pec.create_bins_df(df.reco_shower_energy, int(len(df.reco_shower_energy)//11), energy_range), dtype = int)
         #* response correction
@@ -167,11 +168,13 @@ def main(args):
         }
     for p in response_params}
 
+    hashes = {}
     for name, p in params.items():
         sf = [len(f'{p["error"][f"p{i}"]:.1g}') - 1 for i in range(len(p["value"]))]
         table = pd.DataFrame({f"$p_{{{i}}}$" : f'{p["value"][f"p{i}"]:.{sf[i]}f} $\\pm$ {p["error"][f"p{i}"]:.1g}' for i in range(len(p["value"]))}, index = [0])
         table.style.hide(axis = "index").to_latex(out + name + ".tex")
-        io.write_json(p, out + name + ".json")
+        hashes[name + ".json"] = io.write_json(p, out + name + ".json")
+    return hashes
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description = "Applies beam particle selection and saves properties of photon shower candidate PFOs to hdf5 file (MC only)", formatter_class = argparse.RawDescriptionHelpFormatter)

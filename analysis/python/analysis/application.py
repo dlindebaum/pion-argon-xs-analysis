@@ -9,9 +9,24 @@ import argparse
 import copy
 import os
 
+from functools import wraps
+
 import awkward as ak
 
-from python.analysis import io, fitting, ntuple, photon_energy_correction, samples, selection, slices
+from python.analysis import io, fitting, ntuple, photon_energy_correction, samples, selection, slices, validation
+
+
+def main(app_name):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(args):
+            result = func(args)  # Return a hash or dictionary of hashes
+            hf = validation.update_hash_file({app_name: result}, args.out)
+            #have a toggle for this? # validation.compare_hashes(io.read_json(validation.REFERENCE_HASH_FILE), io.read_json(hf))
+            return result
+        return wrapper
+    return decorator
+
 
 class ApplicationArguments:
     """Provide helpers for defining and resolving command-line and JSON analysis configuration.
@@ -323,12 +338,12 @@ def get_template_config(config_path : str = os.environ["PYTHONPATH"] + "/config/
     return io.read_json(config_path)
 
 
-def processing(samples : list[ntuple.Sample], outdir : str, args : argparse.Namespace, func : callable, merge : bool, outname : str = "output") -> list[dict] | dict:
+def processing(samples : list[ntuple.Sample], app_name : str, args : argparse.Namespace, func : callable, merge : bool, store : bool = True, outname : str = "output") -> list[dict] | dict:
     """ Processing specifically for Applications where there is an option to reload processed data rather than fully reprocessing Ntuples.
 
         Args:
             samples (list[ntuple.Sample]): What sample types to process, can be Data, MC or both.
-            outdir (str): Output directory for stored processing outputs.
+            app_name (str): Output directory for stored processing outputs.
             args (argparse.Namespace): Application arguments.
             func (callable): Process to run.
             merge (bool): Whether to merge the processing outputs.
@@ -337,11 +352,17 @@ def processing(samples : list[ntuple.Sample], outdir : str, args : argparse.Name
         Returns:
             list[dict] | dict: Processing outputs, either loaded from file or processed at runtime.
     """
-    if (args.regen is True) or (os.path.isfile(f"{outdir}{outname}.dill") is False):
+    outdir = f"{args.out}/{app_name}/"
+    os.makedirs(outdir, exist_ok = True)
+    out_path = f"{outdir}/{outname}.dill"
+    if (args.regen is True) or (os.path.isfile(out_path) is False):
+        os.makedirs(outdir, exist_ok = True)
         print("Processing Ntuples")
         outputs = {s : ntuple.run_process(args.ntuple_files[s], s == ntuple.Sample.DATA, args, func, merge) for s in samples}
-        io.write_dill(f"{outdir}{outname}.dill", outputs)
+        if store is True:
+            out_hash = io.write_dill(out_path, outputs)
+            validation.update_hash_file({app_name : {f"{outname}.dill" : out_hash}}, args.out)
     else:
         print("Loading existing outputs")
-        outputs = io.read_dill(f"{outdir}{outname}.dill")
+        outputs = io.read_dill(out_path)
     return outputs

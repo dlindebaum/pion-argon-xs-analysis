@@ -106,7 +106,7 @@ def get_process_info(process : samples.SampleDefinition, fiducial_volume : list[
         model_process_info[process.short_name[k]] = {"mode" : process.mode[k], "z_region" : fv}
     return model_process_info
 
-
+@application.main("fit_model")
 def main(args : application.argparse.Namespace):
 
     model_bins = slices_to_model_bins(args.energy_slices)
@@ -119,10 +119,9 @@ def main(args : application.argparse.Namespace):
         f.write("Systematics:\n")
         for end_bin, init_bin in itertools.combinations_with_replacement(model_bins.items(), 2):
             for proc_info in process_info.items():
-                f.write(make_systematic(proc_info, init_bin, end_bin))
+                f.write(make_systematic(proc_info, init_bin, end_bin)) #! yaml files are not hashed currently.
     
     return
-
 
 if __name__ == "__main__":
 

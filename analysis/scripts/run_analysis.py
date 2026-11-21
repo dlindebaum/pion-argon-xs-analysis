@@ -125,7 +125,7 @@ def step_plan(args : argparse.Namespace, no_data : bool, n_data : list):
     """
     existing = os.listdir(args.out) if os.path.isdir(args.out) else []
     steps = [
-        ("normalisation", (not no_data) and ((args.norm is None) or ("beam_norm" not in existing))),
+        ("normalisation", (not no_data) and ((args.norm is None) or ("normalisation" not in existing))),
         ("beam_quality", (not hasattr(args, "mc_beam_quality_fit")) or ((len(n_data) > 0) and (not hasattr(args, "data_beam_quality_fit")))),
         ("beam_scraper", not hasattr(args, "mc_beam_scraper_fit")),
         ("photon_correction", hasattr(args, "shower_correction") and (args.shower_correction["correction_params"] is None)),
@@ -190,7 +190,7 @@ def main(args):
         if "normalisation" in planned_steps:
             print("calculate beam normalisation")
             xs_normalisation.main(args)
-            output_path = args.out + "beam_norm/"
+            output_path = args.out + "normalisation/"
             print("outputs: " + output_path)
             norm = read_json(os.path.abspath(output_path + "norm.json"))
             update_config(args.config, {"norm" : norm["norm"]})

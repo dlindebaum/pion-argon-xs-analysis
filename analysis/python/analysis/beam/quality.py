@@ -150,12 +150,5 @@ def fits(args : argparse.Namespace, output : dict, out : str, sample_name : str)
         "mu_dir_err_z" : mu_dir_err["z"],
         "truncate"     : args.beam_quality_truncate
     }
-    print(fit_values)
-
-    #* write to json file
-    os.makedirs(args.out, exist_ok = True)
-    name = out + sample_name + "_beam_quality_fit_values.json"
-    io.write_json(fit_values, name)
-    print(f"fit values written to {name}")
 
     return fit_values

@@ -132,7 +132,7 @@ def merge_multiproccess_output(outputs : list) -> dict:
     rprint(merged_output)
     return merged_output
 
-def write_masks(output : dict, out : str):
+def write_masks(output : dict, out : str) -> dict[str]:
     """ Save selection masks to dill file.
 
         Args:
@@ -149,9 +149,8 @@ def write_masks(output : dict, out : str):
             masks[k] = {}
             for f, i in zip(files, v["masks"]):
                 masks[k][f] = i
-    
-    for k in masks:
-        io.write_dill(out + f"{k}_selection_masks.dill", masks[k])
+
+    return {f"{k}_selection_masks.dill" : io.write_dill(out + f"{k}_selection_masks.dill", masks[k]) for k in masks}
 
 
 def make_output(value : ak.Array, event_tags : tags.Tags, cuts : list = [], op : list = [], fs_tags : tags.Tags = None) -> dict:

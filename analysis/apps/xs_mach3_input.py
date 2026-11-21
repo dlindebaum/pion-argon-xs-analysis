@@ -13,6 +13,7 @@ import numpy as np
 from python.analysis import application, io
 from python.analysis.cross_section import analysis_input
 
+@application.main("mach3_input")
 def main(args : application.argparse.Namespace):
     out = args.out + "mach3_input/"
     os.makedirs(out, exist_ok = True)
@@ -20,6 +21,7 @@ def main(args : application.argparse.Namespace):
     mc = analysis_input.AnalysisInput.from_file(args.analysis_input["mc"])
     data = analysis_input.AnalysisInput.from_file(args.analysis_input["data"])
 
+    hashes = {}
     # MaCh3 file requires MC samples with information and the Data histograms.
     for n, m in data.regions.items():
         new_sample = mc.select_sample(mc.regions[n])
@@ -31,10 +33,11 @@ def main(args : application.argparse.Namespace):
             )
         hists = {f"{n}_DataHist" : np.histogram(np.array(data.KE_int_reco[m]), bins)}
 
-        fw = io.RootIO(f"{out}pdsp_R{n}.root")
-        fw.write_data(vars(new_sample), hists, True)
+        name = f"pdsp_R{n}.root"
+        fw = io.RootIO(out + name)
+        hashes[name] = fw.write_data(vars(new_sample), hists, True)
 
-    return
+    return hashes
 
 if __name__ == "__main__":
     parser = application.argparse.ArgumentParser("Create analysis input files from Ntuples.")
